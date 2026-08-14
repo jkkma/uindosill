@@ -183,17 +183,25 @@ public class ParakeetNativeLibraryTests
             // Expected on a machine without the CUDA native library.
         }
 
+        // Filtered to this call's own marker. Every root the loader builds is combined with every
+        // backend name, so a UINDOSILL_PARAKEET_NATIVE_DIR pointing at a directory with "vulkan" in
+        // its path would otherwise fail this test for a reason that has nothing to do with the order.
         var sawCuda = false;
         var sawCpu = false;
         var sawVulkan = false;
         foreach (var attempt in ParakeetNativeLibrary.AttemptedPaths)
         {
+            if (!attempt.Contains(marker, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             sawCuda |= attempt.Contains("cuda", StringComparison.Ordinal);
             sawCpu |= attempt.Contains("cpu", StringComparison.Ordinal);
             sawVulkan |= attempt.Contains("vulkan", StringComparison.Ordinal);
         }
 
-        Assert.SkipWhen(!sawCuda, "The native library is already loaded in this process.");
+        Assert.SkipWhen(!sawCuda, "The native library is already loaded in this process, so nothing was searched.");
         Assert.True(sawCpu, "CUDA should fall back to CPU.");
         Assert.False(sawVulkan, "CUDA should never fall back to Vulkan.");
     }

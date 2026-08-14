@@ -32,7 +32,12 @@ public sealed record ParakeetCppOptions
     /// </summary>
     public ComputeBackend Backend { get; init; } = ComputeBackend.Vulkan;
 
-    /// <summary>Fall back through Vulkan to CPU when the requested backend is not present.</summary>
+    /// <summary>
+    /// Fall back to another backend when the requested one is not present. Not a single chain: a
+    /// CUDA request falls back to CPU only, never to Vulkan, because asking for CUDA is deliberate
+    /// and silently substituting the other GPU tier would hide that it is not running. Nothing ever
+    /// falls back <em>into</em> CUDA. See <c>ParakeetNativeLibrary.BackendOrder</c>.
+    /// </summary>
     public bool AllowBackendFallback { get; init; } = true;
 
     /// <summary>Directory holding the native library, overriding the search order.</summary>
