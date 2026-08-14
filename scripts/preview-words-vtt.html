@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<!--
+  Loads an audio file and a .words.vtt beside it and shows the word highlight, so that the output
+  of `uindosill transcribe -f vtt-words` can be checked by watching it rather than by reading it.
+
+  Open the file directly; there is no server and nothing is uploaded. Both files are read locally.
+
+  Two views, deliberately:
+
+    - The video element renders the track itself and styles it with ::cue(:past) / ::cue(:future).
+      That is the real thing — it exercises the browser's own WebVTT parser, and it is what a
+      consumer of this file will do. It needs a <video> rather than an <audio>: browsers give an
+      audio element no rendering area, so there is nowhere to draw a cue. An audio-only file in a
+      video element plays fine and shows a black box.
+
+    - The panel below is drawn from the same file by the script here, on timeupdate. It exists
+      because Firefox implements neither :past nor :future, so a correct file shows no highlight at
+      all up there — and "no highlight" would otherwise be indistinguishable from bad timings.
+
+  If the two disagree, believe the top one about the browser and the bottom one about the file.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Word-timed WebVTT preview</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font: 15px/1.55 ui-sans-serif, system-ui, sans-serif;
+    max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+    background: #14161a; color: #e6e8ec;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
+  p.lede { color: #9aa0aa; margin: 0 0 1.5rem; }
+  fieldset { border: 1px solid #2c3038; border-radius: .5rem; padding: 1rem 1.25rem; margin: 0 0 1.5rem; }
+  legend { padding: 0 .5rem; color: #9aa0aa; font-size: .85rem; text-transform: uppercase; letter-spacing: .06em; }
+  label { display: block; margin: .5rem 0; }
+  label span { display: inline-block; min-width: 11rem; color: #9aa0aa; }
+  video { width: 100%; max-height: 22rem; background: #000; border-radius: .5rem; }
+
+  /* The point of the <c> spans. Without an element per word these select nothing at all. */
+  video::cue { color: #6b7280; }
+  video::cue(:past) { color: #f4f6f8; }
+  video::cue(:future) { color: #4b5159; }
+
+  #panel {
+    white-space: pre-wrap; font-size: 1.4rem; line-height: 1.7;
+    min-height: 5rem; padding: 1rem 1.25rem;
+    background: #0f1115; border: 1px solid #2c3038; border-radius: .5rem;
+  }
+  #panel .past { color: #7d838d; }
+  #panel .now { color: #14161a; background: #ffd45e; border-radius: .2rem; }
+  #panel .future { color: #4b5159; }
+  #status { color: #9aa0aa; font-size: .9rem; margin-top: .75rem; }
+  #status.bad { color: #ff8f6b; }
+  code { background: #1c1f26; padding: .1rem .35rem; border-radius: .25rem; }
+</style>
+</head>
+<body>
+
+<h1>Word-timed WebVTT preview</h1>
+<p class="lede">Pick the audio and the <code>.words.vtt</code> written beside it. Nothing leaves this machine.</p>
+
+<fieldset>
+  <legend>Files</legend>
+  <label><span>Audio or video</span><input type="file" id="media" accept="audio/*,video/*"></label>
+  <label><span>.words.vtt</span><input type="file" id="vtt" accept=".vtt,text/vtt"></label>
+  <div id="status">Waiting for both files.</div>
+</fieldset>
+
+<video id="player" controls playsinline></video>
+<div id="panel"></div>
+
+<script>
+'use strict';
+
+const player = document.getElementById('player');
+const panel = document.getElementById('panel');
+const status = document.getElementById('status');
+
+let cues = [];
+let track = null;
+let rendered = -1;
+
+/** HH:MM:SS.mmm to seconds. Hours are not a two-digit field: they do not wrap at 24. */
+function toSeconds(value) {
+  const parts = /^(\d+):(\d{2}):(\d{2})\.(\d{3})$/.exec(value.trim());
+  return parts ? (+parts[1]) * 3600 + (+parts[2]) * 60 + (+parts[3]) + (+parts[4]) / 1000 : null;
+}
+
+/**
+ * Splits a cue payload at its inline timestamps. A tag body counts as a timestamp only when it
+ * opens with a digit, which is the same test FFmpeg applies and is what separates one from a <c>.
+ * Everything between two timestamps is one chunk, so this holds whether or not the words are
+ * wrapped in spans.
+ */
+function chunk(payload, cueStart) {
+  const chunks = [];
+  let at = cueStart;
+  let text = '';
+  let i = 0;
+
+  while (i < payload.length) {
+    if (payload[i] === '<') {
+      const close = payload.indexOf('>', i);
+      if (close < 0) { break; }
+      const body = payload.slice(i + 1, close);
+      if (/^\d/.test(body)) {
+        if (text) { chunks.push({ text, at }); text = ''; }
+        at = toSeconds(body) ?? at;
+      }
+      i = close + 1;
+      continue;
+    }
+    text += payload[i];
+    i += 1;
+  }
+
+  if (text) { chunks.push({ text, at }); }
+  return chunks;
+}
+
+function parse(source) {
+  const parsed = [];
+
+  for (const block of source.replace(/\r\n/g, '\n').split(/\n{2,}/)) {
+    const lines = block.split('\n');
+    const arrow = lines.findIndex((line) => line.includes('-->'));
+    if (arrow < 0) { continue; }
+
+    const bounds = lines[arrow].split('-->');
+    const start = toSeconds(bounds[0]);
+    const end = toSeconds(bounds[1].trim().split(/\s+/)[0]);
+    if (start === null || end === null) { continue; }
+
+    const payload = lines.slice(arrow + 1).join('\n');
+    parsed.push({ start, end, payload, chunks: chunk(payload, start) });
+  }
+
+  return parsed;
+}
+
+function attach() {
+  if (track) { track.mode = 'disabled'; }
+  track = player.addTextTrack('captions', 'Words', 'en');
+  for (const cue of cues) {
+    // The payload goes in verbatim; the browser parses its tags when it renders it.
+    track.addCue(new VTTCue(cue.start, cue.end, cue.payload));
+  }
+  track.mode = 'showing';
+}
+
+function draw() {
+  const now = player.currentTime;
+  let index = cues.findIndex((cue) => now >= cue.start && now < cue.end);
+  if (index < 0) { index = cues.findLastIndex((cue) => cue.start <= now); }
+
+  if (index !== rendered) {
+    rendered = index;
+    panel.replaceChildren();
+    if (index < 0) { return; }
+    for (const piece of cues[index].chunks) {
+      const span = document.createElement('span');
+      span.textContent = piece.text;
+      span.dataset.at = String(piece.at);
+      panel.append(span);
+    }
+  }
+
+  if (index < 0) { return; }
+  const spans = panel.children;
+  let current = -1;
+  for (let i = 0; i < spans.length; i += 1) {
+    if (Number(spans[i].dataset.at) <= now) { current = i; }
+  }
+  for (let i = 0; i < spans.length; i += 1) {
+    spans[i].className = i < current ? 'past' : i === current ? 'now' : 'future';
+  }
+}
+
+function report(message, bad) {
+  status.textContent = message;
+  status.className = bad ? 'bad' : '';
+}
+
+document.getElementById('media').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) { return; }
+  player.src = URL.createObjectURL(file);
+  if (cues.length) { attach(); }
+  report(`${file.name} loaded${cues.length ? '' : ' — now pick the .words.vtt'}.`);
+});
+
+document.getElementById('vtt').addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) { return; }
+
+  const source = await file.text();
+  if (!source.startsWith('WEBVTT')) {
+    report(`${file.name} does not begin with WEBVTT.`, true);
+    return;
+  }
+
+  cues = parse(source);
+  rendered = -1;
+  const tagged = cues.reduce((total, cue) => total + cue.chunks.length - 1, 0);
+
+  if (player.src) { attach(); }
+  report(`${cues.length} cues, ${tagged} inline timestamps.` +
+    (tagged === 0 ? ' No word timings in this file — is it the plain .vtt?' : '') +
+    (player.src ? '' : ' Now pick the audio.'), tagged === 0);
+});
+
+player.addEventListener('timeupdate', draw);
+player.addEventListener('seeked', draw);
+</script>
+
+</body>
+</html>

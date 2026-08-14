@@ -40,7 +40,9 @@ internal static class NoticeCommand
     {
         foreach (var formatter in TranscriptFormats.All)
         {
-            context.WriteLine($"{formatter.Id,-6} {formatter.FileExtension,-6} {formatter.DisplayName}");
+            // Wide enough for "vtt-words" and ".words.vtt"; a format id is not an extension and
+            // the two columns no longer have the same width.
+            context.WriteLine($"{formatter.Id,-9} {formatter.FileExtension,-10} {formatter.DisplayName}");
         }
 
         return ExitCodes.Success;

@@ -48,6 +48,13 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# [TimeSpan]::Parse rejects "25:00:00.000" — hh is a 0-23 field there and a subtitle timecode's
+# hours deliberately do not wrap. Read the four fields directly instead.
+function ConvertFrom-VttTimecode([string] $value) {
+    $parts = $value.Trim() -split '[:.]'
+    return [TimeSpan]::new(0, [int]$parts[0], [int]$parts[1], [int]$parts[2], [int]$parts[3])
+}
+
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
 
@@ -240,33 +247,132 @@ try {
     # assumed to have used.
     Write-Host ''
     Write-Host '── outputs ─────────────────────────────────────' -ForegroundColor Green
-    $freshByExtension = @{}
-    foreach ($extension in $Formats.Split(',')) {
-        $ext = $extension.Trim()
-        $fresh = @(Get-ChildItem -LiteralPath $directory -Filter "$stem*.$ext" -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -ge $runStart } | Sort-Object LastWriteTime)
+    # A format id is not a file extension, and assuming it is reproduces gotcha 16 from a new
+    # direction. 'vtt-words' writes '<stem>.words.vtt', so a wildcard on '.vtt' matches that file
+    # as well as the plain one and the 'vtt' row reports whichever was written last — a size that
+    # looks like a measurement of one output and is a measurement of another. Map the id to the
+    # extension the writer actually uses, and match the whole name rather than a suffix.
+    $extensionByFormat = @{
+        'txt'          = '.txt'
+        'text'         = '.txt'
+        'plain'        = '.txt'
+        'srt'          = '.srt'
+        'subrip'       = '.srt'
+        'vtt'          = '.vtt'
+        'webvtt'       = '.vtt'
+        'vtt-words'    = '.words.vtt'
+        'webvtt-words' = '.words.vtt'
+        'words'        = '.words.vtt'
+        'json'         = '.json'
+        'md'           = '.md'
+        'markdown'     = '.md'
+    }
+
+    $freshByFormat = @{}
+    foreach ($requested in $Formats.Split(',')) {
+        $format = $requested.Trim().ToLowerInvariant()
+        if ($format.Length -eq 0) { continue }
+
+        $ext = if ($extensionByFormat.ContainsKey($format)) { $extensionByFormat[$format] } else { ".$format" }
+
+        # '<stem><ext>', or '<stem> (2)<ext>' from the rename policy, and nothing else.
+        $pattern = '^' + [regex]::Escape($stem) + '( \(\d+\))?' + [regex]::Escape($ext) + '$'
+        $fresh = @(Get-ChildItem -LiteralPath $directory -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match $pattern -and $_.LastWriteTime -ge $runStart } |
+            Sort-Object LastWriteTime)
 
         if ($fresh.Count -eq 0) {
-            Write-Host ("{0,-28} NOT WRITTEN BY THIS RUN" -f "$stem.$ext") -ForegroundColor Yellow
+            Write-Host ("{0,-28} NOT WRITTEN BY THIS RUN" -f "$stem$ext") -ForegroundColor Yellow
             continue
         }
 
-        $freshByExtension[$ext] = $fresh[-1].FullName
+        $freshByFormat[$format] = $fresh[-1].FullName
         foreach ($file in $fresh) {
             Write-Host ("{0,-28} {1,12:N0} bytes" -f $file.Name, $file.Length)
+        }
+    }
+
+    # The word-timed WebVTT is the first output whose bytes depend on the per-word timings rather
+    # than only on the text, and its constraints are ones a player enforces silently: a timestamp
+    # outside its cue, or not strictly after the one before it, is dropped by FFmpeg and honoured
+    # by a browser. Same file, two renderings. Checked here at whatever scale the input happens to
+    # be, because the unit tests run against a few dozen synthetic words.
+    if ($freshByFormat.ContainsKey('vtt-words')) {
+        Write-Host ''
+        Write-Host '── word-timed WebVTT ───────────────────────────' -ForegroundColor Green
+
+        $wordsVtt = Get-Content -LiteralPath $freshByFormat['vtt-words'] -Raw
+        $cues = 0; $tags = 0; $untagged = 0; $violations = @()
+
+        foreach ($block in ($wordsVtt -replace "`r`n", "`n") -split "`n`n") {
+            $lines = $block -split "`n"
+            $arrow = $lines | Where-Object { $_ -match '-->' } | Select-Object -First 1
+            if (-not $arrow) { continue }
+
+            $cues++
+            $bounds = $arrow -split ' --> '
+            $cueStart = ConvertFrom-VttTimecode $bounds[0]
+            $cueEnd = ConvertFrom-VttTimecode $bounds[1]
+            $payload = ($lines | Select-Object -Skip ([Array]::IndexOf($lines, $arrow) + 1)) -join "`n"
+
+            $previous = $cueStart
+            $inCue = 0
+
+            # A tag body is a timestamp only if it opens with a digit, which is how FFmpeg tells
+            # one from a <c> or a </c>.
+            foreach ($match in [regex]::Matches($payload, '<(\d[\d:.]*)>')) {
+                $at = ConvertFrom-VttTimecode $match.Groups[1].Value
+                $tags++; $inCue++
+                if ($at -le $cueStart -or $at -ge $cueEnd) {
+                    $violations += "$at outside cue $cueStart..$cueEnd"
+                }
+                elseif ($at -le $previous) {
+                    $violations += "$at does not follow $previous in cue $cueStart"
+                }
+                $previous = $at
+            }
+
+            if ($inCue -eq 0) { $untagged++ }
+        }
+
+        Write-Host ("cues                : {0:N0}, {1:N0} carrying no word timings" -f $cues, $untagged)
+        Write-Host ("inline timestamps   : {0:N0}" -f $tags)
+
+        if ($violations.Count -eq 0) {
+            Write-Host 'ordering            : every timestamp strictly inside its cue and strictly increasing' -ForegroundColor Green
+        }
+        else {
+            Write-Host ("ordering            : {0:N0} VIOLATIONS" -f $violations.Count) -ForegroundColor Red
+            $violations | Select-Object -First 5 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+        }
+
+        # The alignment check. A word landing against the wrong line produces a file that plays,
+        # reads correctly and highlights the wrong word, and this is the only thing that sees it.
+        if ($freshByFormat.ContainsKey('vtt')) {
+            $plain = Get-Content -LiteralPath $freshByFormat['vtt'] -Raw
+            $stripped = [regex]::Replace($wordsVtt, '<[^>]*>', '')
+            if ($stripped -ceq $plain) {
+                Write-Host 'alignment           : tags stripped, byte-identical to the plain vtt' -ForegroundColor Green
+            }
+            else {
+                Write-Host 'alignment           : STRIPPED OUTPUT DIFFERS FROM THE PLAIN VTT' -ForegroundColor Red
+            }
+        }
+        else {
+            Write-Host 'alignment           : not checked — add vtt to -Formats to compare against it'
         }
     }
 
     # The invariant checks. These are the same properties asserted in the unit tests, applied to
     # a real transcript at whatever scale this file happens to be, because timeline drift and
     # accumulation bugs only show up after a few hundred segments.
-    if (-not $freshByExtension.ContainsKey('json')) {
+    if (-not $freshByFormat.ContainsKey('json')) {
         Write-Host ''
         Write-Host 'No JSON output from this run, so the invariant checks were skipped. Add json to -Formats.' -ForegroundColor Yellow
         return
     }
 
-    $document = Get-Content -LiteralPath $freshByExtension['json'] -Raw | ConvertFrom-Json
+    $document = Get-Content -LiteralPath $freshByFormat['json'] -Raw | ConvertFrom-Json
     $segments = @($document.segments)
 
     if ($segments.Count -eq 0) {

@@ -11,7 +11,32 @@ public sealed record SubtitleCue
 
     public required IReadOnlyList<string> Lines { get; init; }
 
+    /// <summary>
+    /// The words behind each line, aligned one-to-one with <see cref="Lines"/>: joining
+    /// <c>LineWords[i]</c>'s trimmed texts with single spaces reproduces <c>Lines[i]</c> exactly.
+    /// Empty — not a list of empty lines — when the engine reported no word timestamps for the
+    /// segment this cue came from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These are the times the model reported, not times derived from <see cref="Start"/> and
+    /// <see cref="End"/>, and after <c>Tidy</c> has adjusted a cue for readability they can sit
+    /// outside its range. A consumer that needs them inside the range has to enforce that itself;
+    /// <c>WordTimedVttFormatter</c> is the worked example.
+    /// </para>
+    /// <para>
+    /// Record equality compares this list by reference — synthesised record equality uses the
+    /// default comparer, and for a list that means reference identity. It is a second member with
+    /// that property rather than a change in what equality means: <see cref="Lines"/> has always
+    /// behaved the same way. Nothing compares cues by equality today.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<IReadOnlyList<TranscriptWord>> LineWords { get; init; } = [];
+
     public string Text => string.Join(" ", Lines);
+
+    /// <summary>Every word of the cue in order, flattened across its lines.</summary>
+    public IEnumerable<TranscriptWord> Words => LineWords.SelectMany(line => line);
 }
 
 public sealed record SubtitleOptions
@@ -230,7 +255,25 @@ public static class SubtitleCueBuilder
 
     private static SubtitleCue CueFromWords(List<TranscriptWord> words, SubtitleOptions options)
     {
-        var text = string.Join(" ", words.Select(w => w.Text.Trim()).Where(t => t.Length > 0));
+        // One filter, applied once, feeding both the text and the word list. They have to agree
+        // token for token or every timestamp lands on the wrong word, and that failure is
+        // invisible in the output: each word is still there, each one just lights up early.
+        var kept = new List<TranscriptWord>(words.Count);
+        var tokens = new List<string>(words.Count);
+
+        foreach (var word in words)
+        {
+            var token = word.Text.Trim();
+            if (token.Length == 0)
+            {
+                continue;
+            }
+
+            kept.Add(word);
+            tokens.Add(token);
+        }
+
+        var text = string.Join(" ", tokens);
         var start = words[0].Start;
         var end = words[^1].End;
 
@@ -241,7 +284,24 @@ public static class SubtitleCueBuilder
             end = start + options.MinCueDuration;
         }
 
-        return new SubtitleCue { Start = start, End = end, Lines = WrapLines(text, options) };
+        if (tokens.Count == 0)
+        {
+            return new SubtitleCue { Start = start, End = end, Lines = [string.Empty] };
+        }
+
+        var wrapped = WrapTokens([.. tokens], text.Length, options);
+        var lines = new List<string>(wrapped.Count);
+        var lineWords = new List<IReadOnlyList<TranscriptWord>>(wrapped.Count);
+        var index = 0;
+
+        foreach (var line in wrapped)
+        {
+            lines.Add(string.Join(" ", line));
+            lineWords.Add(kept.GetRange(index, line.Length));
+            index += line.Length;
+        }
+
+        return new SubtitleCue { Start = start, End = end, Lines = lines, LineWords = lineWords };
     }
 
     private static void AppendProportionalCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)
@@ -326,37 +386,56 @@ public static class SubtitleCueBuilder
             return [string.Empty];
         }
 
-        if (options.MaxLines == 1 || text.Length <= options.MaxLineLength)
+        return [.. WrapTokens(words, text.Length, options).Select(line => string.Join(" ", line))];
+    }
+
+    /// <summary>
+    /// The wrap itself, returning each line's tokens rather than its joined string.
+    /// </summary>
+    /// <param name="length">
+    /// Length of the string these tokens came from. Passed in rather than recomputed so this makes
+    /// bit-for-bit the decision the string-based wrap has always made. Every caller's text is a
+    /// single-space join of exactly these tokens, so the two values are equal — but "provably the
+    /// same number" is worth more here than "equal by an argument", because the whole point of
+    /// this refactor is that the plain <c>vtt</c> and <c>srt</c> output does not move.
+    /// </param>
+    /// <remarks>
+    /// Splitting the wrap out is what makes word-level timings possible at all. The line contents
+    /// used to be recoverable only by re-splitting a finished line on whitespace and trusting that
+    /// the tokens still corresponded to the words they came from. They did — but only by
+    /// coincidence of two filters agreeing, and nothing would have reported it when they stopped.
+    /// </remarks>
+    private static List<string[]> WrapTokens(string[] words, int length, SubtitleOptions options)
+    {
+        if (options.MaxLines == 1 || length <= options.MaxLineLength)
         {
-            return [string.Join(" ", words)];
+            return [words];
         }
 
         if (options.MaxLines == 2)
         {
             var best = BalancedSplit(words);
-            return best is null
-                ? [string.Join(" ", words)]
-                : [string.Join(" ", words[..best.Value]), string.Join(" ", words[best.Value..])];
+            return best is null ? [words] : [words[..best.Value], words[best.Value..]];
         }
 
-        var lines = new List<string>();
+        var lines = new List<string[]>();
         var current = new List<string>();
-        var length = 0;
+        var running = 0;
         foreach (var word in words)
         {
-            var added = current.Count == 0 ? word.Length : length + 1 + word.Length;
+            var added = current.Count == 0 ? word.Length : running + 1 + word.Length;
             if (current.Count > 0 && added > options.MaxLineLength && lines.Count < options.MaxLines - 1)
             {
-                lines.Add(string.Join(" ", current));
+                lines.Add([.. current]);
                 current.Clear();
                 added = word.Length;
             }
 
             current.Add(word);
-            length = added;
+            running = added;
         }
 
-        lines.Add(string.Join(" ", current));
+        lines.Add([.. current]);
         return lines;
     }
 
@@ -431,6 +510,17 @@ public static class SubtitleCueBuilder
                 end = start + TimeSpan.FromMilliseconds(1);
             }
 
+            // A with-expression, so LineWords survives this untouched — deliberately, and it is
+            // the trap in the feature rather than a convenience. Start and End here are a
+            // readability decision: a 700 ms floor, a 1 ms gap, a clamp off the next cue's start.
+            // The word times are what the model reported. After this runs the two can disagree,
+            // and a word timestamp can sit outside the cue that carries it.
+            //
+            // They are not reconciled here, because the fix would have to be to move the word
+            // times, and a measurement bent to fit a presentation decision is no longer a
+            // measurement. WebVTT's rule — inline timestamps strictly inside the cue, strictly
+            // increasing — is enforced where it applies, in WordTimedVttFormatter, which drops a
+            // tag it cannot place legally rather than inventing one that fits.
             tidied.Add(cue with { Start = start, End = end });
         }
 
