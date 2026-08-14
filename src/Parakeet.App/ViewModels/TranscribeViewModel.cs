@@ -44,6 +44,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private CancellationTokenSource? _cancellation;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStart))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -84,6 +85,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     public bool HasJobs => Jobs.Count > 0;
 
+    /// <summary>An enabled Start button with an empty queue does nothing when pressed, which reads
+    /// as a broken button rather than an empty queue.</summary>
+    public bool CanStart => !IsRunning && HasJobs;
+
     public void AddFiles(IEnumerable<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -109,6 +114,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasJobs));
+        OnPropertyChanged(nameof(CanStart));
 
         StatusMessage = rejected.Count == 0
             ? added == 0 ? "Those files are already in the queue." : $"Added {added} file{(added == 1 ? string.Empty : "s")}."
@@ -127,6 +133,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         LiveTranscript = string.Empty;
         StatusMessage = null;
         OnPropertyChanged(nameof(HasJobs));
+        OnPropertyChanged(nameof(CanStart));
     }
 
     [RelayCommand]
