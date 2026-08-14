@@ -4,10 +4,11 @@ A Windows desktop app that transcribes audio and video files **locally** with NV
 Drop files in, get text out — plain text, SRT, VTT, JSON with timestamps, Markdown. No cloud, no
 Python, no account.
 
-> **Status: the CLI has produced correct transcripts from real weights on real Windows.** One
-> 30-second clip, CPU backend, parakeet.cpp v0.5.0, `tdt-0.6b-v3-f16`, **RTF 0.10** on a 32-core
-> x64 desktop. That is one measurement on one machine, not a benchmark. Long audio, every
-> quantisation, GPU backends and the desktop app are all still unrun. See
+> **Status: the CLI produces correct transcripts from real weights on real Windows.** Ten minutes
+> of podcast through Media Foundation, CPU backend, parakeet.cpp v0.5.0, `tdt-0.6b-v3-f16`:
+> **RTF 0.083** on a 32-core x64 desktop, 98 segments, no duplicated or dropped words at any
+> segment join. That is two runs on one machine, not a benchmark. Every quantisation below f16,
+> the GPU backends, audio past ten minutes and the desktop app are all still unrun. See
 > [docs/UNPROVEN.md](docs/UNPROVEN.md), which is the honest list.
 
 ## What it does
@@ -26,7 +27,7 @@ both.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 216 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 219 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

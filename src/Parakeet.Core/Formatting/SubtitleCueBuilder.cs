@@ -32,6 +32,17 @@ public sealed record SubtitleOptions
     /// <summary>Gap left between adjacent cues so players do not show them as one.</summary>
     public TimeSpan CueGap { get; init; } = TimeSpan.FromMilliseconds(1);
 
+    /// <summary>
+    /// A cue split off the end of a longer run must carry at least this many characters.
+    /// </summary>
+    /// <remarks>
+    /// Greedy filling leaves widows: a segment of 167 characters at a capacity of 84 splits into
+    /// 79, 82 and then a lone <c>"thing."</c> flashing on screen by itself. A segment that is
+    /// genuinely that short — <c>"Mm-hmm."</c>, <c>"Um"</c> — is left alone, because it is a real
+    /// utterance rather than a leftover.
+    /// </remarks>
+    public int MinTailCharacters { get; init; } = 16;
+
     public int Capacity => Math.Max(1, MaxLineLength * MaxLines);
 
     public void Validate()
@@ -95,6 +106,7 @@ public static class SubtitleCueBuilder
 
     private static void AppendWordTimedCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)
     {
+        var groups = new List<List<TranscriptWord>>();
         var pending = new List<TranscriptWord>();
         var pendingLength = 0;
 
@@ -112,8 +124,8 @@ public static class SubtitleCueBuilder
 
             if (pending.Count > 0 && (wouldOverflowText || wouldOverflowTime))
             {
-                cues.Add(CueFromWords(pending, options));
-                pending.Clear();
+                groups.Add(pending);
+                pending = [];
                 pendingLength = 0;
                 addedLength = wordText.Length;
             }
@@ -124,8 +136,82 @@ public static class SubtitleCueBuilder
 
         if (pending.Count > 0)
         {
-            cues.Add(CueFromWords(pending, options));
+            groups.Add(pending);
         }
+
+        RebalanceTail(groups, options);
+
+        foreach (var group in groups)
+        {
+            cues.Add(CueFromWords(group, options));
+        }
+    }
+
+    /// <summary>
+    /// Evens out the last two cues of a segment when greedy filling has stranded a word or two on
+    /// its own. Only ever touches a tail that came from a split, never a segment that was short to
+    /// begin with.
+    /// </summary>
+    private static void RebalanceTail(List<List<TranscriptWord>> groups, SubtitleOptions options)
+    {
+        if (groups.Count < 2)
+        {
+            return;
+        }
+
+        if (TextLength(groups[^1]) >= options.MinTailCharacters)
+        {
+            return;
+        }
+
+        var combined = new List<TranscriptWord>(groups[^2]);
+        combined.AddRange(groups[^1]);
+
+        var best = -1;
+        var bestCost = int.MaxValue;
+
+        for (var split = 1; split < combined.Count; split++)
+        {
+            var head = TextLength(combined, 0, split);
+            var tail = TextLength(combined, split, combined.Count);
+
+            // Both halves must still fit a cue, and the tail must clear the widow threshold.
+            if (head > options.Capacity || tail > options.Capacity || tail < options.MinTailCharacters)
+            {
+                continue;
+            }
+
+            var cost = Math.Abs(head - tail);
+            if (cost < bestCost)
+            {
+                bestCost = cost;
+                best = split;
+            }
+        }
+
+        if (best < 0)
+        {
+            // No legal rebalance — a single word longer than the capacity, for instance. Leaving
+            // the widow is better than producing a cue that cannot be displayed.
+            return;
+        }
+
+        groups[^2] = combined[..best];
+        groups[^1] = combined[best..];
+    }
+
+    private static int TextLength(List<TranscriptWord> words) => TextLength(words, 0, words.Count);
+
+    private static int TextLength(List<TranscriptWord> words, int from, int to)
+    {
+        var length = 0;
+        for (var i = from; i < to; i++)
+        {
+            var word = words[i].Text.Trim().Length;
+            length += length == 0 ? word : word + 1;
+        }
+
+        return length;
     }
 
     private static SubtitleCue CueFromWords(List<TranscriptWord> words, SubtitleOptions options)
