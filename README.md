@@ -18,13 +18,17 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 
 - **v1 is file transcription.** No global hotkeys, no text injection, no overlay HUD, no microphone
   capture.
-- **v2 is push-to-talk dictation.** Not built, not architected out —
-  [docs/V2-DICTATION.md](docs/V2-DICTATION.md) records what it will need.
+- **v2 is transcript summarization.** Not built. The decisions it turns on are open and are
+  recorded in [docs/V2-SUMMARIZATION.md](docs/V2-SUMMARIZATION.md).
+- **v3 is push-to-talk dictation.** Not built, not architected out —
+  [docs/V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
 
-That order is deliberate. The entire Win32 risk surface — global keyboard hooks that get flagged as
-keyloggers, text injection that fails silently under UIPI, overlay windows that steal focus — lives
-on the dictation path and none of it on the file path, while the inference engine is identical for
-both.
+That order is deliberate, and for two different reasons. The entire Win32 risk surface — global
+keyboard hooks that get flagged as keyloggers, text injection that fails silently under UIPI,
+overlay windows that steal focus — lives on the dictation path and none of it on the file path,
+which is why dictation is last. Summarization sits in front of it because it needs none of that: it
+reads a transcript this product already produces, and what it costs instead is a second native
+stack and an honesty problem, since a summary that is wrong is fluent rather than obviously broken.
 
 ## Quick start
 
@@ -115,7 +119,8 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 | [docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release. |
 | [docs/MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
 | [docs/LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution". |
-| [docs/V2-DICTATION.md](docs/V2-DICTATION.md) | What v2 will need, and the traps waiting there. |
+| [docs/V2-SUMMARIZATION.md](docs/V2-SUMMARIZATION.md) | The open decisions for v2, and the problem that makes it hard. |
+| [docs/V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [docs/PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
 
 ## Licence

@@ -21,7 +21,7 @@ public interface ITranscriptionEngine : IAsyncDisposable
     /// <summary>
     /// Transcribes an audio source, yielding segments as they are produced so a caller can
     /// render a long file incrementally. The same shape serves one utterance at a time for
-    /// push-to-talk dictation later.
+    /// push-to-talk dictation in v3.
     /// </summary>
     IAsyncEnumerable<TranscriptSegment> TranscribeAsync(
         IAudioSource audio,

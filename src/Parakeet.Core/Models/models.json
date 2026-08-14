@@ -123,7 +123,7 @@
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-f16.gguf",
       "sizeBytes": 1484324992,
       "sha256": "b64413c3886edf2b45eb3e757f911f1bc8020b7cf157622cd0bd0452c6d84aac",
-      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+      "purpose": "Streaming ASR. v3 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
     },
     {
       "id": "nemotron-3.5-asr-streaming-0.6b-q8_0",
@@ -132,7 +132,7 @@
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf",
       "sizeBytes": 983696512,
       "sha256": "ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1",
-      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+      "purpose": "Streaming ASR. v3 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
     },
     {
       "id": "nemotron-3.5-asr-streaming-0.6b-q6_k",
@@ -141,7 +141,7 @@
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q6_k.gguf",
       "sizeBytes": 855669856,
       "sha256": "dab1541a9dc7f73cf90f16f0c03c2ae376722a845d41d286be81ccfe17e9d13b",
-      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+      "purpose": "Streaming ASR. v3 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
     },
     {
       "id": "nemotron-3.5-asr-streaming-0.6b-q5_k",
@@ -150,7 +150,7 @@
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf",
       "sizeBytes": 784801888,
       "sha256": "7bb14605a707f821560952521034002c91653d676272a80dca0cd2aa886d0ab2",
-      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+      "purpose": "Streaming ASR. v3 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
     },
     {
       "id": "nemotron-3.5-asr-streaming-0.6b-q4_k",
@@ -159,7 +159,7 @@
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q4_k.gguf",
       "sizeBytes": 718102624,
       "sha256": "5ad85eb3f3014c1a300d67b7ccbd23c38c4c952405cbe33a861e19fb2775e84b",
-      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+      "purpose": "Streaming ASR. v3 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
     },
     {
       "id": "realtime_eou_120m-v1-f16",
