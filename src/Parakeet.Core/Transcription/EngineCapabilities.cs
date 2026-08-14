@@ -8,6 +8,16 @@ public sealed record EngineCapabilities
     /// <summary>Identifier of the loaded model, or null when nothing is loaded yet.</summary>
     public string? ModelId { get; init; }
 
+    /// <summary>
+    /// Quantisation of the loaded weights (<c>f16</c>, <c>q8_0</c>, …), when known.
+    /// </summary>
+    /// <remarks>
+    /// Carried through to the finished transcript. Quantisation quality on this engine is
+    /// unmeasured and the analogous ONNX INT8 export collapsed silently, so a transcript that
+    /// cannot say which weights produced it is not a result anybody can re-examine later.
+    /// </remarks>
+    public string? Quantisation { get; init; }
+
     /// <summary>Which compute backend the loaded native library is actually using.</summary>
     public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
 

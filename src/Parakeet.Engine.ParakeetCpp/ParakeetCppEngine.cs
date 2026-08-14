@@ -89,6 +89,7 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
         {
             EngineName = "parakeet.cpp",
             ModelId = options.ModelId,
+            Quantisation = options.Quantisation,
             Backend = options.Backend,
             SupportsWordTimestamps = true,
             SupportsBatchDecode = true,

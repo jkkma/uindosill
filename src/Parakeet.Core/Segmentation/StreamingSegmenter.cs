@@ -123,11 +123,15 @@ public sealed class StreamingSegmenter
     {
         ArgumentNullException.ThrowIfNull(completed);
 
+        var emittedBefore = completed.Count;
+        var padding = 0;
+
         if (_partialCount > 0)
         {
             // Zero-pad the tail to a whole frame so its energy is measured on the same basis
             // as every other frame rather than exaggerated by a short window.
-            Array.Clear(_partialFrame, _partialCount, _frameSamples - _partialCount);
+            padding = _frameSamples - _partialCount;
+            Array.Clear(_partialFrame, _partialCount, padding);
             ProcessFrame(_partialFrame, completed);
             _partialCount = 0;
         }
@@ -135,6 +139,29 @@ public sealed class StreamingSegmenter
         if (_state == State.Speech || _speechRun > 0)
         {
             EmitFrames(_frameDb.Count, completed, speechDetected: true);
+        }
+
+        // The padding above is measurement scaffolding, not audio. Left in place it makes the
+        // final segment end after the file does — a transcript whose last timestamp is past the
+        // end of the media, and a subtitle cue a player has nowhere to show.
+        if (padding > 0 && completed.Count > emittedBefore)
+        {
+            var last = completed[^1];
+            var real = last.Samples.Length - padding;
+
+            if (real > 0)
+            {
+                completed[^1] = new AudioSegment
+                {
+                    Index = last.Index,
+                    SampleRate = last.SampleRate,
+                    Start = last.Start,
+                    Samples = last.Samples[..real],
+                    SpeechDetected = last.SpeechDetected,
+                };
+
+                _segmentedSamples -= padding;
+            }
         }
 
         _state = State.Idle;
