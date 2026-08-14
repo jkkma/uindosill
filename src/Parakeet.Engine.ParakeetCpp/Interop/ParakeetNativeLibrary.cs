@@ -232,14 +232,21 @@ public static class ParakeetNativeLibrary
     {
         var roots = new List<string>();
 
-        if (_explicitDirectory is { Length: > 0 })
+        // Rooted, not taken as given. Windows resolves a native library's own imports from the
+        // directory it was loaded from, but only when the path handed to LoadLibrary is absolute.
+        // A relative --native-dir passes File.Exists — that resolves against the working directory
+        // — and then loads without the sibling search. CUDA is the only backend that ships
+        // siblings (cudart64_12.dll, cublas64_12.dll next to parakeet.dll), so it is the only one
+        // this breaks, and it breaks it into a bare load failure that the loader treats as "this
+        // backend is not here" before moving on to CPU without a word.
+        if (_explicitDirectory is { Length: > 0 } explicitDirectory)
         {
-            roots.Add(_explicitDirectory);
+            roots.Add(Rooted(explicitDirectory));
         }
 
         if (Environment.GetEnvironmentVariable(DirectoryEnvironmentVariable) is { Length: > 0 } fromEnvironment)
         {
-            roots.Add(fromEnvironment);
+            roots.Add(Rooted(fromEnvironment));
         }
 
         var baseDirectory = AppContext.BaseDirectory;
@@ -297,6 +304,24 @@ public static class ParakeetNativeLibrary
         }
     }
 
+    /// <summary>
+    /// Absolute form of a caller-supplied directory, or the string unchanged when it cannot be
+    /// rooted. A path malformed enough to defeat <see cref="Path.GetFullPath(string)"/> will fail
+    /// the <c>File.Exists</c> check and be listed among the paths tried, which tells the reader
+    /// more than an exception thrown out of a DllImport resolver.
+    /// </summary>
+    private static string Rooted(string directory)
+    {
+        try
+        {
+            return Path.GetFullPath(directory);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return directory;
+        }
+    }
+
     private static IEnumerable<ComputeBackend> BackendOrder()
     {
         yield return _requestedBackend;
@@ -306,8 +331,17 @@ public static class ParakeetNativeLibrary
             yield break;
         }
 
+        // Two exclusions, for two different reasons.
+        //
         // Never fall back *into* CUDA: it needs its own runtime files and a supported GPU, and
         // silently landing there turns a missing-file problem into a driver problem.
+        //
+        // And never fall back from CUDA into Vulkan. Asking for CUDA is deliberate — it costs a
+        // 553 MB runtime download to set up — so quietly substituting the other GPU tier would
+        // hide the fact that the thing you went to that trouble for is not running. The chain for
+        // a CUDA request is therefore CUDA then CPU, and the resulting drop from GPU speed to CPU
+        // speed is loud enough to notice. Anything reading this to mean "requested, then Vulkan,
+        // then CPU" is wrong for CUDA.
         if (_requestedBackend != ComputeBackend.Vulkan && _requestedBackend != ComputeBackend.Cuda)
         {
             yield return ComputeBackend.Vulkan;

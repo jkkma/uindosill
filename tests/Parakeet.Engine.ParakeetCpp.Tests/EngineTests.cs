@@ -120,6 +120,85 @@ public class ParakeetNativeLibraryTests
     }
 
     [Fact]
+    public void ARelativeNativeDirectoryIsSearchedAsAnAbsolutePath()
+    {
+        // Windows resolves a native library's own imports from the directory it was loaded from
+        // only when LoadLibrary was handed an absolute path. A relative --native-dir passes
+        // File.Exists, which resolves against the working directory, and then loads without the
+        // sibling search. CUDA is the only backend shipping siblings, so it is the only one that
+        // breaks — into a bare load failure the loader reads as "this backend is not here".
+        var marker = $"no-native-{Guid.NewGuid():N}";
+        ParakeetNativeLibrary.Configure(
+            ComputeBackend.Cuda,
+            allowFallback: false,
+            nativeDirectory: Path.Combine(marker, "nested"));
+
+        try
+        {
+            ParakeetNativeLibrary.EnsureLoadedAndCompatible();
+        }
+        catch (ParakeetNativeLoadException)
+        {
+            // Expected on a machine without the CUDA native library.
+        }
+
+        var searched = 0;
+        foreach (var attempt in ParakeetNativeLibrary.AttemptedPaths)
+        {
+            if (!attempt.Contains(marker, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            searched++;
+            Assert.True(Path.IsPathRooted(attempt), $"Searched a relative path: {attempt}");
+        }
+
+        // Matching on this call's own marker rather than on the shape of the name, so a stale
+        // entry left by another test cannot stand in for the one being asserted about.
+        Assert.SkipWhen(
+            searched == 0,
+            "The native library is already loaded in this process, so nothing was searched.");
+    }
+
+    [Fact]
+    public void AskingForCudaFallsBackToCpuAndNeverToVulkan()
+    {
+        // Asking for CUDA costs a 553 MB runtime download to set up, so substituting the other GPU
+        // tier would hide the failure behind a result that still looks fast. The drop to CPU is
+        // meant to be visible. docs/NATIVE-BINARIES.md said "requested, then Vulkan, then CPU",
+        // which was never true for CUDA.
+        var marker = $"no-native-{Guid.NewGuid():N}";
+        ParakeetNativeLibrary.Configure(
+            ComputeBackend.Cuda,
+            allowFallback: true,
+            nativeDirectory: Path.Combine(Path.GetTempPath(), marker));
+
+        try
+        {
+            ParakeetNativeLibrary.EnsureLoadedAndCompatible();
+        }
+        catch (ParakeetNativeLoadException)
+        {
+            // Expected on a machine without the CUDA native library.
+        }
+
+        var sawCuda = false;
+        var sawCpu = false;
+        var sawVulkan = false;
+        foreach (var attempt in ParakeetNativeLibrary.AttemptedPaths)
+        {
+            sawCuda |= attempt.Contains("cuda", StringComparison.Ordinal);
+            sawCpu |= attempt.Contains("cpu", StringComparison.Ordinal);
+            sawVulkan |= attempt.Contains("vulkan", StringComparison.Ordinal);
+        }
+
+        Assert.SkipWhen(!sawCuda, "The native library is already loaded in this process.");
+        Assert.True(sawCpu, "CUDA should fall back to CPU.");
+        Assert.False(sawVulkan, "CUDA should never fall back to Vulkan.");
+    }
+
+    [Fact]
     public void AbiMismatchMessageExplainsWhyItRefusesRatherThanAdapts()
     {
         var exception = new ParakeetAbiMismatchException(6, 5);
