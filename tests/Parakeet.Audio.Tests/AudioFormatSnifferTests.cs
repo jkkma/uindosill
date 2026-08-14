@@ -169,4 +169,32 @@ public class AudioSourcesTests
     [Fact]
     public void SupportedExtensionsAlwaysIncludeWave() =>
         Assert.Contains(".wav", AudioSources.SupportedExtensions);
+
+    [Fact]
+    public void TheWindowsDecoderIsCompiledIntoTheAssemblyTheApplicationsReference()
+    {
+        // This assembly used to multi-target net10.0 and net10.0-windows, with Media Foundation
+        // behind #if WINDOWS. Parakeet.Cli and Parakeet.App target plain net10.0, so they always
+        // resolved the flavour the decoder was compiled OUT of: mp3 and m4a were unreachable in
+        // every shipped build, on Windows, while CI stayed green because the -windows flavour
+        // compiled fine and nothing referenced it.
+        //
+        // Asserting on the type's presence rather than on behaviour is the point — the failure was
+        // that the code did not exist, not that it misbehaved. This test runs on Linux, which is
+        // exactly where the mistake was invisible.
+        var type = typeof(AudioSources).Assembly.GetType("Parakeet.Audio.MediaFoundationAudioSource");
+
+        Assert.NotNull(type);
+        Assert.NotNull(type!.GetMethod("Open", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static));
+    }
+
+    [Fact]
+    public void CompressedExtensionsAreOfferedOnWindows()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Media Foundation is a Windows decoder.");
+
+        Assert.Contains(".mp3", AudioSources.SupportedExtensions);
+        Assert.Contains(".m4a", AudioSources.SupportedExtensions);
+        Assert.Contains(".mp4", AudioSources.SupportedExtensions);
+    }
 }

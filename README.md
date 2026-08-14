@@ -50,7 +50,7 @@ uindosill bench recording.wav
 ```
 src/
   Parakeet.Core/               net10.0            contracts + pure logic; no NuGet, no platform, no UI
-  Parakeet.Audio/              net10.0(-windows)  WAV/RF64 parser + Media Foundation decoding
+  Parakeet.Audio/              net10.0            WAV/RF64 parser + Media Foundation decoding
   Parakeet.Engine.ParakeetCpp/ net10.0            the ONLY project that touches native interop
   Parakeet.Cli/                net10.0            transcribe / models / bench / doctor
   Parakeet.App/                net10.0            Avalonia desktop UI
