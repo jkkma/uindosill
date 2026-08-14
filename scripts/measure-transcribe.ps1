@@ -151,13 +151,28 @@ try {
             Write-Host ("{0,3}% {1,8:N0} MB  {2}" -f (10 * ($b + 1)), $means[$b], ('█' * $bars))
         }
 
-        # Compare the first tenth against the last. The model load dominates the very start, so a
-        # decode that holds steady shows a small positive delta and one that accumulates does not.
-        $growth = $means[$bucketCount - 1] - $means[0]
-        $growthPercent = 100 * $growth / $means[0]
-        $verdict = if ([Math]::Abs($growthPercent) -lt 10) { 'Green' } else { 'Yellow' }
+        # What matters is whether the curve is still rising at the end, not how the last tenth
+        # compares to the first. The model load and the heap warming up both land in the opening
+        # tenth, so a healthy run legitimately ends well above where it started while having
+        # peaked and settled in between — comparing the ends alone calls that a leak.
+        $peakBucket = 0
+        for ($b = 1; $b -lt $bucketCount; $b++) {
+            if ($means[$b] -gt $means[$peakBucket]) { $peakBucket = $b }
+        }
+
+        $fromStart = $means[$bucketCount - 1] - $means[0]
+        $fromPeak = $means[$bucketCount - 1] - $means[$peakBucket]
+
         Write-Host ''
-        Write-Host ("last tenth vs first: {0:+#,##0;-#,##0;0} MB ({1:+0.0;-0.0;0}%)" -f $growth, $growthPercent) -ForegroundColor $verdict
+        Write-Host ("last tenth vs first : {0:+#,##0;-#,##0;0} MB" -f $fromStart)
+        Write-Host ("peaked at           : {0}% of the run" -f (10 * ($peakBucket + 1)))
+
+        if ($peakBucket -ge $bucketCount - 2) {
+            Write-Host 'still rising at the end — memory may accumulate with length' -ForegroundColor Yellow
+        }
+        else {
+            Write-Host ("settled             : {0:N0} MB given back after the peak" -f [Math]::Abs($fromPeak)) -ForegroundColor Green
+        }
 
         if ($MemoryCsv) {
             $samples | Export-Csv -LiteralPath $MemoryCsv -NoTypeInformation
