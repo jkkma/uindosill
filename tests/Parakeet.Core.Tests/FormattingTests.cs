@@ -124,6 +124,46 @@ public class SubtitleCueBuilderTests
     }
 
     [Fact]
+    public void GreedyFillDoesNotStrandAWordAloneAtTheEndOfASegment()
+    {
+        // Taken from a real transcript: 167 characters at a capacity of 84 filled greedily to
+        // 79 + 82 + "thing.", leaving one word flashing on screen by itself.
+        const string Text =
+            "And and I just want to reiterate that the trial system in that game for learning combos " +
+            "is really, really well done. And I wish that other games would copy the same thing.";
+
+        var cues = SubtitleCueBuilder.Build([Segment(0, 8, Text)]);
+
+        Assert.True(cues.Count > 1, "the fixture should span several cues");
+        Assert.True(cues[^1].Text.Length >= 16, $"last cue is a widow: '{cues[^1].Text}'");
+
+        // Rebalancing must not lose or duplicate a single word.
+        Assert.Equal(
+            Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length,
+            cues.Sum(c => c.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length));
+    }
+
+    [Fact]
+    public void GenuinelyShortSegmentsAreLeftAlone()
+    {
+        // "Mm-hmm." is a real utterance, not a leftover, and must keep its own cue.
+        var cues = SubtitleCueBuilder.Build([Segment(0, 1, "Mm-hmm."), Segment(2, 3, "Um")]);
+
+        Assert.Equal(2, cues.Count);
+        Assert.Equal("Mm-hmm.", cues[0].Text);
+        Assert.Equal("Um", cues[1].Text);
+    }
+
+    [Fact]
+    public void RebalancingKeepsEveryCueWithinCapacity()
+    {
+        var text = string.Join(' ', Enumerable.Repeat("elephantine", 15)) + " x";
+        var cues = SubtitleCueBuilder.Build([Segment(0, 20, text)]);
+
+        Assert.All(cues, c => Assert.True(c.Text.Length <= SubtitleOptions.Default.Capacity, c.Text));
+    }
+
+    [Fact]
     public void LinesStayWithinTheCharacterLimit()
     {
         var text = string.Join(' ', Enumerable.Repeat("elephant", 30));
