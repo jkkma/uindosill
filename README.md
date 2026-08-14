@@ -30,7 +30,7 @@ both.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 223 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 247 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -48,6 +48,30 @@ uindosill models download tdt-0.6b-v3-q8_0
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
 ```
+
+### In a container with no toolchain
+
+Every test here runs on Linux with no weights and no display, which is a design constraint rather
+than a convenience — a test needing 670 MB of weights is one CI will never run. That constraint is
+what makes an ephemeral container a usable place to work, so the toolchain installs itself into
+one: `.claude/hooks/session-start.sh` unpacks a pinned SDK 10.0.400 and PowerShell 7.6.4 from
+`packages.microsoft.com` Debian packages, checks each against the SHA-256 the feed publishes, and
+warms the NuGet cache. Not the vendor's installer, because `dot.net` and every host it redirects
+to are refused by the network policy there; not the Ubuntu feed either, though the image is
+Ubuntu. The hook's header comment records both, and the digests are pinned for the same reason
+`docs/NATIVE-BINARIES.md` pins a parakeet.cpp release.
+
+So a session in such a container **builds the solution and runs the full suite**, and the `--fake`
+pipeline above works there end to end. What it cannot do is transcribe anything real: that needs
+the Windows natives and a model, neither of which is in the clone.
+
+The scripts divide along the same line rather than all being out of reach.
+`scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
+there — including against JSONs the `--fake` engine produced.
+`scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
+`scripts/vendor-cuda.ps1` reads a PE import table and is Windows throughout. For those last two,
+`pwsh` at least parses them, which is enough to keep a syntax error off the machine that can run
+them.
 
 ## Layout
 
