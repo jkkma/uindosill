@@ -227,11 +227,40 @@ public class TranscribeViewModelTests
 
 public class ModelsViewModelTests
 {
+    /// <summary>
+    /// A catalogue with one unpinned entry. The shipped catalogue no longer has one — every entry
+    /// is pinned against the repository's LFS digests — but the behaviour when an entry lacks a
+    /// digest still has to hold, because that is the state of any entry somebody adds later.
+    /// Sourcing these tests from the shipped data made them assert a fact about the data rather
+    /// than the behaviour, and pinning the catalogue would have broken them for the wrong reason.
+    /// </summary>
+    private static ModelCatalog UnpinnedCatalogue() => ModelCatalog.Parse("""
+        {
+          "schema": 1,
+          "models": [
+            {
+              "id": "test-unpinned",
+              "family": "parakeet-tdt-0.6b-v3",
+              "displayName": "Unpinned test entry",
+              "quantisation": "q8_0",
+              "fileName": "test-unpinned.gguf",
+              "url": "https://example.invalid/test-unpinned.gguf",
+              "sizeBytes": null,
+              "sha256": null,
+              "verified": false,
+              "license": "CC-BY-4.0",
+              "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
+              "languages": ["en"]
+            }
+          ]
+        }
+        """);
+
     [Fact]
     public void UnverifiedEntriesAreLabelledAsSuch()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
-        var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+        var viewModel = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue());
 
         var model = viewModel.Models.First(m => !m.Descriptor.Verified);
         Assert.Contains("Unverified", model.Provenance, StringComparison.Ordinal);
@@ -242,7 +271,7 @@ public class ModelsViewModelTests
     public async Task DownloadIsRefusedWithoutTheUnverifiedOptIn()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
-        var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default)
+        var viewModel = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue())
         {
             AllowUnverified = false,
         };
@@ -252,6 +281,19 @@ public class ModelsViewModelTests
 
         Assert.Contains("cannot be verified", viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.False(viewModel.Selected!.IsInstalled);
+    }
+
+    [Fact]
+    public void ShippedEntriesAreAllPinnedAndSaySo()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+
+        Assert.All(viewModel.Models, model =>
+        {
+            Assert.False(model.NeedsUnverifiedOptIn);
+            Assert.Contains("digest pinned", model.Provenance, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]

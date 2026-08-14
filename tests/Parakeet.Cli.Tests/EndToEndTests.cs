@@ -12,7 +12,7 @@ public class EndToEndTests
 {
     private sealed class Harness : IDisposable
     {
-        public Harness()
+        public Harness(ModelCatalog? catalog = null)
         {
             Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-cli").FullName;
             Out = new StringWriter();
@@ -22,7 +22,7 @@ public class EndToEndTests
                 Out = Out,
                 Error = Error,
                 Store = new LocalModelStore(Path.Combine(Directory, "models")),
-                Catalog = ModelCatalog.Default,
+                Catalog = catalog ?? ModelCatalog.Default,
                 Interactive = false,
             };
         }
@@ -228,7 +228,7 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task ModelsListShowsTheDirectoryAndFlagsUnverifiedEntries()
+    public async Task ModelsListShowsTheDirectory()
     {
         using var harness = new Harness();
 
@@ -237,6 +237,53 @@ public class EndToEndTests
 
         Assert.Equal(ExitCodes.Success, exit);
         Assert.Contains("Model directory:", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShippedEntriesAreNotFlaggedBecauseTheyArePinned()
+    {
+        using var harness = new Harness();
+
+        await harness.RunAsync("models", "list");
+        var output = harness.Out.ToString();
+
+        Assert.DoesNotContain("unverified catalogue entry", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("no digest", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnUnpinnedEntryIsStillFlaggedOnEveryLine()
+    {
+        // The shipped catalogue is fully pinned, so the flag can only be exercised against an
+        // entry that is not. Asserting it against the shipped data would have made this test a
+        // claim about the data rather than about the flag.
+        var catalog = ModelCatalog.Parse("""
+            {
+              "schema": 1,
+              "models": [
+                {
+                  "id": "test-unpinned",
+                  "family": "parakeet-tdt-0.6b-v3",
+                  "displayName": "Unpinned test entry",
+                  "quantisation": "q8_0",
+                  "fileName": "test-unpinned.gguf",
+                  "url": "https://example.invalid/test-unpinned.gguf",
+                  "sha256": null,
+                  "verified": false,
+                  "license": "CC-BY-4.0",
+                  "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
+                  "languages": ["en"]
+                }
+              ]
+            }
+            """);
+
+        using var harness = new Harness(catalog);
+
+        var exit = await harness.RunAsync("models", "list");
+        var output = harness.Out.ToString();
+
+        Assert.Equal(ExitCodes.Success, exit);
         Assert.Contains("unverified catalogue entry", output, StringComparison.Ordinal);
     }
 
