@@ -70,7 +70,7 @@ public sealed class ParakeetAbiMismatchException : Exception
 /// A load failure here is ordinary and recoverable. A <em>crash</em> here is not: a native
 /// compiled with an AVX2 baseline can execute BMI2/AVX instructions from a static initialiser
 /// and take the process down at load time on a pre-Haswell CPU, with no exception and no stack
-/// trace — it presents as "the app won't launch". That is why <c>parakeet doctor</c> probes
+/// trace — it presents as "the app won't launch". That is why <c>uindosill doctor</c> probes
 /// each backend in a child process instead of trying them in this one.
 /// </para>
 /// </remarks>
@@ -316,7 +316,11 @@ public static class ParakeetNativeLibrary
         {
             return Path.GetFullPath(directory);
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        // IOException covers ERROR_BAD_PATHNAME and ERROR_INVALID_NAME, which Windows surfaces as a
+        // plain IOException rather than an ArgumentException, and PathTooLongException derives from
+        // it. Letting one escape would propagate out of a lazily-enumerated candidate list and out of
+        // the DllImport resolver, which is the outcome this method exists to prevent.
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
         {
             return directory;
         }

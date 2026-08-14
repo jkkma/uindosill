@@ -122,11 +122,11 @@ public class FatbinScanner
 
     private static bool PlausibleSm(int sm)
     {
-        // Real compute capabilities only: 3.0 through 12.x, expressed as major*10 + minor.
-        // Blackwell consumer is 120. Anything outside this is a misparse, not a new GPU.
-        if (sm < 30 || sm > 129) return false;
-        int minor = sm % 10;
-        return minor <= 9;
+        // Real compute capabilities only, as an allowlist rather than a range: a range over
+        // 30..129 admits 99, 109 and 119, none of which exist, and a misparse landing on one of
+        // them would be reported as a GPU architecture. Blackwell consumer is 120.
+        return sm is 30 or 32 or 35 or 37 or 50 or 52 or 53 or 60 or 61 or 62
+            or 70 or 72 or 75 or 80 or 86 or 87 or 89 or 90 or 100 or 101 or 103 or 110 or 120 or 121;
     }
 
     // A cubin payload stored uncompressed is an ELF64 whose machine is EM_CUDA (190) and whose
@@ -546,6 +546,7 @@ try {
         $anyParsed = $false
         $sawSm120 = $false
         $anyDisagreement = $false
+        $totalRejected = 0
 
         foreach ($file in $candidates) {
             $scan = [FatbinScanner]::Scan($file.FullName)
@@ -574,7 +575,8 @@ try {
                     $scan.ElfConfirmed) -ForegroundColor Green
             }
             else {
-                Write-Host '    cross-check  none — every cubin payload is compressed' -ForegroundColor Yellow
+                Write-Host '    cross-check  none — no cubin payload could be read back (all compressed,' -ForegroundColor Yellow
+                Write-Host '                 or the payload offset is wrong)' -ForegroundColor Yellow
             }
             if ($cubin.Count -gt 0) {
                 Write-Host ("    cubin        {0}" -f (($cubin | ForEach-Object { "sm_$_" }) -join ', '))
@@ -591,6 +593,7 @@ try {
 
             if ($cubin -contains 120) { $sawSm120 = $true }
             if ($scan.ElfDisagreed -gt 0) { $anyDisagreement = $true }
+            $totalRejected += $scan.ContainersRejected
         }
 
         Write-Host ''
@@ -606,6 +609,14 @@ try {
         elseif ($sawSm120) {
             Write-Host 'sm_120 cubin present: this library has native Blackwell kernels and should run on an' -ForegroundColor Green
             Write-Host 'RTX 5080 with no JIT cost.' -ForegroundColor Green
+        }
+        elseif ($totalRejected -gt 0) {
+            # Rejection is all-or-nothing per container, so an sm_120 entry inside one that failed to
+            # walk is invisible here. That makes the architecture list a lower bound, and a confident
+            # "not present" would be a claim the scan cannot support.
+            Write-Host ("No sm_120 cubin in what parsed — but {0} container(s) were rejected, so the" -f $totalRejected) -ForegroundColor Yellow
+            Write-Host 'architecture list is a lower bound and this is NOT evidence that sm_120 is absent.' -ForegroundColor Yellow
+            Write-Host 'Run the transcription and read the result instead.' -ForegroundColor Yellow
         }
         else {
             Write-Host 'No sm_120 cubin. An RTX 5080 is compute capability 12.0, so every kernel has to come' -ForegroundColor Yellow
