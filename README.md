@@ -5,11 +5,13 @@ Drop files in, get text out — plain text, SRT, VTT, JSON with timestamps, Mark
 Python, no account.
 
 > **Status: the CLI and the desktop app both produce correct transcripts from real weights on real
-> Windows.** Ten minutes of podcast through Media Foundation, CPU backend, parakeet.cpp v0.5.0,
-> `tdt-0.6b-v3-f16`: **RTF 0.083** on a 32-core x64 desktop, 98 segments, no duplicated or dropped
-> words at any segment join. That is one machine, not a benchmark. Every quantisation below f16,
-> the GPU backends and audio past ten minutes are all still unrun. See
-> [docs/UNPROVEN.md](docs/UNPROVEN.md), which is the honest list.
+> Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
+> `tdt-0.6b-v3-f16`, on one 32-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
+> Vulkan, 0.0064 on CUDA** — 98 segments and 1,573 words on all three, no duplicated or dropped
+> words at any segment join. Three hours has been run end to end on CPU. That is one machine and
+> one file, not a benchmark: the Vulkan figure first recorded here was 0.023 and did not reproduce
+> an hour later, which is exactly why every number carries its backend and its caveats in
+> [docs/UNPROVEN.md](docs/UNPROVEN.md). Every quantisation below f16 is still unrun.
 
 ## What it does
 

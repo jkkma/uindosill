@@ -81,6 +81,37 @@ try {
 
     Write-Host "Transcribing $($audio.Path)" -ForegroundColor Cyan
     Write-Host "  model $Model, backend $Backend, formats $Formats"
+
+    # A GPU timing with no driver version attached cannot be reproduced or argued with later. The
+    # Vulkan figure first recorded for this file was 0.0230 and re-measured at 0.0109 on the same
+    # machine and the same binary, and the difference could not be explained because nothing had
+    # written down the driver or the clock state at the time. Cheap to record, impossible to
+    # recover afterwards.
+    if ($Backend -ne 'cpu') {
+        Write-Host ''
+        Write-Host '── device ──────────────────────────────────────' -ForegroundColor Green
+
+        if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+            $query = 'name,driver_version,pstate,clocks.sm,clocks.max.sm,temperature.gpu'
+            $reported = & nvidia-smi --query-gpu=$query --format=csv,noheader 2>$null
+            if ($LASTEXITCODE -eq 0 -and $reported) {
+                foreach ($gpu in @($reported)) {
+                    Write-Host ("  {0}" -f $gpu.Trim())
+                }
+
+                # Sampled before the run starts, so it describes the idle state rather than the
+                # state under load. It bounds the question rather than answering it.
+                Write-Host '  (sampled at rest — not the clock the run will actually see)'
+            }
+            else {
+                Write-Host '  nvidia-smi is on PATH but reported nothing'
+            }
+        }
+        else {
+            Write-Host '  no nvidia-smi on PATH — GPU and driver version not recorded for this run'
+        }
+    }
+
     Write-Host ''
 
     # Anything older than this is a leftover from an earlier run, not an output of this one. The
