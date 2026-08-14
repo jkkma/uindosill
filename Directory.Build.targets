@@ -1,0 +1,38 @@
+<Project>
+
+  <!--
+    Publish settings live in Directory.Build.targets, NOT Directory.Build.props.
+
+    props is imported at the TOP of every project, before the project body has run, so a
+    condition on a property the project sets (IsPublishableApp) is evaluated while that property
+    is still empty and silently does nothing. The result is a publish that succeeds, produces a
+    framework-dependent layout, and fails on every machine without the exact runtime installed —
+    the same green-in-CI, broken-everywhere shape as a dropped self-contained flag, arrived at
+    from the other direction. targets is imported at the BOTTOM, after the project body.
+
+    Verify with: dotnet publish src/Parakeet.Cli -c Release -r win-x64 -o out
+    A self-contained publish has hundreds of files. Eleven means this stopped working.
+  -->
+  <!--
+    Gated on RuntimeIdentifier as well as IsPublishableApp. A plain `dotnet build` sets no RID, and
+    a self-contained executable cannot be referenced by a non-self-contained one (NETSDK1151), so
+    unconditionally setting it here would stop the test projects from referencing the CLI and the
+    app at all. Anything with a RID is a real deployment and must be self-contained.
+  -->
+  <PropertyGroup Condition="'$(IsPublishableApp)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+
+    <!-- Deliberately off. Native dependencies make all three hostile: single-file extracts
+         natives to a temp path that breaks the backend directory layout, trimming cannot see
+         through P/Invoke, and NativeAOT plus a hand-loaded native library is a debugging
+         surface nobody needs. Do not turn these on without re-reading docs/GOTCHAS.md. -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot>false</PublishAot>
+
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The pure-managed RIFF/RF64 reader is the whole story on net10.0 and is what CI
+         exercises on Linux. Media Foundation (mp3/m4a/aac/mp4) only exists on the
+         -windows flavour, which keeps the Windows-only surface out of the portable
+         assembly instead of hiding it behind runtime checks. -->
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <RootNamespace>Parakeet.Audio</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <PackageReference Include="NAudio.Wasapi" />
+    <PackageReference Include="NAudio.Core" />
+  </ItemGroup>
+
+</Project>

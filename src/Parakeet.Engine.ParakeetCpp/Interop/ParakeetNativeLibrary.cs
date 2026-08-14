@@ -1,0 +1,335 @@
+using System.Runtime.InteropServices;
+using System.Text;
+using Parakeet.Core.Transcription;
+
+namespace Parakeet.Engine.ParakeetCpp.Interop;
+
+public sealed class ParakeetNativeLoadException : Exception
+{
+    public ParakeetNativeLoadException(string message)
+        : base(message)
+    {
+    }
+
+    public ParakeetNativeLoadException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    public ParakeetNativeLoadException()
+    {
+    }
+}
+
+public sealed class ParakeetAbiMismatchException : Exception
+{
+    public ParakeetAbiMismatchException(int expected, int actual)
+        : base($"parakeet.cpp reports ABI version {actual}; this build is written against version {expected}. " +
+               "Refusing to continue: the signatures and ownership rules differ between ABI versions, and " +
+               "guessing corrupts memory rather than failing cleanly.")
+    {
+        Expected = expected;
+        Actual = actual;
+    }
+
+    public ParakeetAbiMismatchException()
+    {
+    }
+
+    public ParakeetAbiMismatchException(string message)
+        : base(message)
+    {
+    }
+
+    public ParakeetAbiMismatchException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    public int Expected { get; }
+
+    public int Actual { get; }
+}
+
+/// <summary>
+/// Finds and loads the parakeet.cpp shared library, choosing a compute backend.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Backends live in sibling directories (<c>native/win-x64/vulkan</c>, <c>.../cuda</c>,
+/// <c>.../cpu</c>) rather than being selected by an environment variable inside one directory,
+/// so which binary is loaded is a property of the file system and can be inspected after the
+/// fact.
+/// </para>
+/// <para>
+/// Vulkan is the default GPU tier: it runs on NVIDIA, AMD and Intel with only a normal
+/// graphics driver, and skips the ~553 MB CUDA runtime download. CUDA is opt-in. CPU is the
+/// fallback and is never skipped.
+/// </para>
+/// <para>
+/// A load failure here is ordinary and recoverable. A <em>crash</em> here is not: a native
+/// compiled with an AVX2 baseline can execute BMI2/AVX instructions from a static initialiser
+/// and take the process down at load time on a pre-Haswell CPU, with no exception and no stack
+/// trace — it presents as "the app won't launch". That is why <c>parakeet doctor</c> probes
+/// each backend in a child process instead of trying them in this one.
+/// </para>
+/// </remarks>
+public static class ParakeetNativeLibrary
+{
+    /// <summary>Overrides the directory searched for the native library.</summary>
+    public const string DirectoryEnvironmentVariable = "UINDOSILL_PARAKEET_NATIVE_DIR";
+
+    /// <summary>Overrides the file name of the native library.</summary>
+    public const string FileNameEnvironmentVariable = "UINDOSILL_PARAKEET_LIBRARY";
+
+    private static readonly Lock Gate = new();
+    private static readonly List<string> Attempts = [];
+    private static bool _resolverInstalled;
+    private static ComputeBackend _requestedBackend = ComputeBackend.Vulkan;
+    private static bool _allowFallback = true;
+    private static string? _explicitDirectory;
+
+    /// <summary>Path of the library that was actually loaded, once one has been.</summary>
+    public static string? LoadedPath { get; private set; }
+
+    /// <summary>Backend directory the loaded library came from.</summary>
+    public static ComputeBackend? LoadedBackend { get; private set; }
+
+    /// <summary>Every path tried, in order. The content of a good load-failure message.</summary>
+    public static IReadOnlyList<string> AttemptedPaths
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return [.. Attempts];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sets the backend preference and installs the resolver. Must be called before the first
+    /// native call; changing the preference after a library is loaded has no effect, because a
+    /// process cannot unload and reload a different build of the same library safely.
+    /// </summary>
+    public static void Configure(
+        ComputeBackend backend = ComputeBackend.Vulkan,
+        bool allowFallback = true,
+        string? nativeDirectory = null)
+    {
+        lock (Gate)
+        {
+            _requestedBackend = backend;
+            _allowFallback = allowFallback;
+            _explicitDirectory = nativeDirectory;
+            EnsureResolverInstalled();
+        }
+    }
+
+    /// <summary>
+    /// Loads the library if it is not loaded and checks the ABI version.
+    /// </summary>
+    /// <exception cref="ParakeetNativeLoadException">No candidate could be loaded.</exception>
+    /// <exception cref="ParakeetAbiMismatchException">The library speaks a different ABI.</exception>
+    public static int EnsureLoadedAndCompatible()
+    {
+        lock (Gate)
+        {
+            EnsureResolverInstalled();
+        }
+
+        int abi;
+        try
+        {
+            abi = NativeMethods.parakeet_capi_abi_version();
+        }
+        catch (DllNotFoundException ex)
+        {
+            throw new ParakeetNativeLoadException(DescribeFailure(), ex);
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            throw new ParakeetNativeLoadException(
+                $"Loaded '{LoadedPath}' but it has no parakeet_capi_abi_version export. " +
+                "That file is not a parakeet.cpp C-ABI build.",
+                ex);
+        }
+
+        if (abi != NativeMethods.ExpectedAbiVersion)
+        {
+            throw new ParakeetAbiMismatchException(NativeMethods.ExpectedAbiVersion, abi);
+        }
+
+        return abi;
+    }
+
+    private static void EnsureResolverInstalled()
+    {
+        if (_resolverInstalled)
+        {
+            return;
+        }
+
+        NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, Resolve);
+        _resolverInstalled = true;
+    }
+
+    private static IntPtr Resolve(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (!string.Equals(libraryName, NativeMethods.LibraryName, StringComparison.Ordinal))
+        {
+            return IntPtr.Zero;
+        }
+
+        if (LoadedPath is not null && NativeLibrary.TryLoad(LoadedPath, out var already))
+        {
+            return already;
+        }
+
+        lock (Gate)
+        {
+            Attempts.Clear();
+
+            foreach (var (backend, directory) in CandidateDirectories())
+            {
+                foreach (var fileName in CandidateFileNames())
+                {
+                    var candidate = Path.Combine(directory, fileName);
+                    Attempts.Add(candidate);
+
+                    if (!File.Exists(candidate))
+                    {
+                        continue;
+                    }
+
+                    if (NativeLibrary.TryLoad(candidate, out var handle))
+                    {
+                        LoadedPath = candidate;
+                        LoadedBackend = backend;
+                        return handle;
+                    }
+                }
+            }
+
+            // Last resort: let the OS loader search its own paths. Useful for a developer with
+            // the library on PATH / LD_LIBRARY_PATH, never how a shipped build finds it.
+            foreach (var fileName in CandidateFileNames())
+            {
+                Attempts.Add($"{fileName} (default loader search path)");
+                if (NativeLibrary.TryLoad(fileName, assembly, searchPath, out var handle))
+                {
+                    LoadedPath = fileName;
+                    LoadedBackend = null;
+                    return handle;
+                }
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static IEnumerable<(ComputeBackend Backend, string Directory)> CandidateDirectories()
+    {
+        var roots = new List<string>();
+
+        if (_explicitDirectory is { Length: > 0 })
+        {
+            roots.Add(_explicitDirectory);
+        }
+
+        if (Environment.GetEnvironmentVariable(DirectoryEnvironmentVariable) is { Length: > 0 } fromEnvironment)
+        {
+            roots.Add(fromEnvironment);
+        }
+
+        var baseDirectory = AppContext.BaseDirectory;
+        roots.Add(Path.Combine(baseDirectory, "native", RuntimeInformation.RuntimeIdentifier));
+        roots.Add(Path.Combine(baseDirectory, "native"));
+        roots.Add(Path.Combine(baseDirectory, "runtimes", RuntimeInformation.RuntimeIdentifier, "native"));
+        roots.Add(baseDirectory);
+
+        foreach (var backend in BackendOrder())
+        {
+            var name = backend.ToString().ToLowerInvariant();
+            foreach (var root in roots)
+            {
+                yield return (backend, Path.Combine(root, name));
+            }
+        }
+
+        // A flat directory with no per-backend subdirectory: the shape a developer gets from
+        // unzipping one upstream release.
+        foreach (var root in roots)
+        {
+            yield return (_requestedBackend, root);
+        }
+    }
+
+    private static IEnumerable<ComputeBackend> BackendOrder()
+    {
+        yield return _requestedBackend;
+
+        if (!_allowFallback)
+        {
+            yield break;
+        }
+
+        // Never fall back *into* CUDA: it needs its own runtime files and a supported GPU, and
+        // silently landing there turns a missing-file problem into a driver problem.
+        if (_requestedBackend != ComputeBackend.Vulkan && _requestedBackend != ComputeBackend.Cuda)
+        {
+            yield return ComputeBackend.Vulkan;
+        }
+
+        if (_requestedBackend != ComputeBackend.Cpu)
+        {
+            yield return ComputeBackend.Cpu;
+        }
+    }
+
+    private static IEnumerable<string> CandidateFileNames()
+    {
+        if (Environment.GetEnvironmentVariable(FileNameEnvironmentVariable) is { Length: > 0 } fromEnvironment)
+        {
+            yield return fromEnvironment;
+        }
+
+        // Upstream has no Windows CI and publishes Windows binaries only at release-tag time, so
+        // the exact file name is pinned per vendored release in docs/NATIVE-BINARIES.md rather
+        // than assumed here. These are the shapes seen in the ggml family of projects.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            yield return "parakeet.dll";
+            yield return "libparakeet.dll";
+            yield return "parakeet_capi.dll";
+            yield return "parakeet-capi.dll";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            yield return "libparakeet.dylib";
+            yield return "libparakeet_capi.dylib";
+        }
+        else
+        {
+            yield return "libparakeet.so";
+            yield return "libparakeet_capi.so";
+        }
+    }
+
+    private static string DescribeFailure()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine(
+            "Could not load the parakeet.cpp native library. Vendor a pinned upstream release into the " +
+            "native/<rid>/<backend> directory (see docs/NATIVE-BINARIES.md), or point " +
+            $"{DirectoryEnvironmentVariable} at a directory containing it.");
+        builder.AppendLine("Paths tried:");
+
+        foreach (var attempt in AttemptedPaths)
+        {
+            builder.Append("  ").AppendLine(attempt);
+        }
+
+        return builder.ToString();
+    }
+}

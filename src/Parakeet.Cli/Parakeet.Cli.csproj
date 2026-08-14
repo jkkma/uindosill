@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Cli</RootNamespace>
+    <!-- Not "parakeet": the native library this loads is called parakeet.dll, and an executable
+         that drops a managed parakeet.dll next to it gives the native resolver a same-named
+         managed assembly to find first. It loads (a managed assembly is a valid PE), then fails
+         with a missing export, which reads as a corrupt native build rather than a name clash. -->
+    <AssemblyName>uindosill</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsPublishableApp>true</IsPublishableApp>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64</RuntimeIdentifiers>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+    <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
+    <ProjectReference Include="../Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

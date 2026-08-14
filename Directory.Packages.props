@@ -1,0 +1,36 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI. Avalonia 12.1.1 published 2026-07-29; plain net10.0 TFM on Windows, so the
+         desktop app cross-builds from Linux CI. Avalonia.Diagnostics is deliberately
+         absent: it has no 12.x release (latest is 11.3.20) and referencing it would
+         downgrade the Avalonia graph. -->
+    <PackageVersion Include="Avalonia" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.1" />
+
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+    <!-- NAudio 2.3.0 is the last stable line. 3.0 is preview-only with no GA date.
+         The NAudio metapackage is deliberately NOT used: it drags in NAudio.WinForms, whose
+         FrameworkReference on Microsoft.WindowsDesktop.App.WindowsForms cannot be resolved on a
+         Linux SDK, which would end cross-building the Windows target from CI. Media Foundation
+         lives in NAudio.Wasapi; NAudio.Core carries the sample-provider extensions. -->
+    <PackageVersion Include="NAudio.Wasapi" Version="2.3.0" />
+    <PackageVersion Include="NAudio.Core" Version="2.3.0" />
+
+    <!-- Avalonia.Headless.XUnit 12.x requires xUnit v3, not v2. -->
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  # Everything in this repository builds and tests on Linux with no weights and no display.
+  # That is a design constraint, not a convenience: a test that needs 670 MB of weights is a
+  # test CI will never run.
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Uindosill.slnx
+
+      - name: Build
+        run: dotnet build Uindosill.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Uindosill.slnx --configuration Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+
+  # The Windows executables cross-publish from Linux. This job exists to catch the failure the
+  # brief warns about and this repository has already made once: a RuntimeIdentifier no longer
+  # implies self-contained on .NET 8+, so a publish can be green and still framework-dependent.
+  # Counting the output files is the check.
+  publish-windows:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish CLI
+        run: dotnet publish src/Parakeet.Cli --configuration Release -r ${{ matrix.rid }} -o out/cli-${{ matrix.rid }}
+
+      - name: Publish desktop app
+        run: dotnet publish src/Parakeet.App --configuration Release -r ${{ matrix.rid }} -o out/app-${{ matrix.rid }}
+
+      - name: Assert the publish is genuinely self-contained
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in out/cli-${{ matrix.rid }} out/app-${{ matrix.rid }}; do
+            count=$(find "$dir" -type f | wc -l)
+            echo "$dir: $count files"
+            if [ ! -f "$dir/hostfxr.dll" ] || [ "$count" -lt 100 ]; then
+              echo "::error::$dir is not self-contained ($count files, hostfxr.dll missing)."
+              echo "A RuntimeIdentifier does not imply SelfContained on .NET 8+. See Directory.Build.targets."
+              exit 1
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uindosill-${{ matrix.rid }}
+          path: out/
+          retention-days: 7
+
+  # The seam that keeps an engine swap to one project is enforced by an MSBuild target inside
+  # Parakeet.Core.csproj. This proves the guard actually fires rather than trusting that it would.
+  core-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: A PackageReference in Parakeet.Core must fail the build
+        shell: bash
+        run: |
+          set -uo pipefail
+          cp src/Parakeet.Core/Parakeet.Core.csproj /tmp/core.csproj.bak
+          # No Version attribute: central package management would reject that first with
+          # NU1008, and this job is testing our guard, not NuGet's.
+          python3 - <<'PY'
+          path = "src/Parakeet.Core/Parakeet.Core.csproj"
+          text = open(path).read()
+          injected = '  <ItemGroup>\n    <PackageReference Include="NAudio.Core" />\n  </ItemGroup>\n\n</Project>'
+          open(path, "w").write(text.replace("</Project>", injected))
+          PY
+          if dotnet build src/Parakeet.Core/Parakeet.Core.csproj --nologo > /tmp/guard.log 2>&1; then
+            cp /tmp/core.csproj.bak src/Parakeet.Core/Parakeet.Core.csproj
+            echo "::error::Parakeet.Core accepted a NuGet dependency. The isolation guard is not working."
+            exit 1
+          fi
+          cp /tmp/core.csproj.bak src/Parakeet.Core/Parakeet.Core.csproj
+          grep -q "zero NuGet dependencies" /tmp/guard.log \
+            || { echo "::error::Build failed, but not with the isolation guard's message."; cat /tmp/guard.log; exit 1; }
+          echo "Guard fired as intended."
