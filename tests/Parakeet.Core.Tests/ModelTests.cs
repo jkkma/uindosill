@@ -42,6 +42,37 @@ public class ModelCatalogTests
     }
 
     [Fact]
+    public void EveryShippedEntryIsPinned()
+    {
+        // The catalogue used to ship entirely unpinned, so a user downloading 1.34 GiB of weights
+        // had nothing to check them against and had to opt out of verification to get them at all.
+        // The digests now come from the repository's LFS oids. This asserts the state rather than
+        // the intention, so adding an entry without one fails here instead of at somebody's
+        // download.
+        Assert.NotEmpty(ModelCatalog.Default.Models);
+
+        Assert.All(ModelCatalog.Default.Models, model =>
+        {
+            Assert.NotNull(model.Sha256);
+            Assert.True(ModelCatalog.IsSha256Hex(model.Sha256!), $"'{model.Id}' has a malformed digest");
+            Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
+            Assert.True(model.SizeBytes > 0, $"'{model.Id}' has no pinned size to compare against");
+        });
+    }
+
+    [Fact]
+    public void PinnedDigestsAreDistinct()
+    {
+        // Copying one entry to make another is easy and leaves two quantisations sharing a digest,
+        // which would then reject whichever was downloaded second with a corruption error.
+        var duplicate = ModelCatalog.Default.Models
+            .GroupBy(m => m.Sha256, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        Assert.True(duplicate is null, $"digest {duplicate?.Key} is pinned by {duplicate?.Count()} entries");
+    }
+
+    [Fact]
     public void ManifestWithoutModelsArrayIsRejected() =>
         Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse("""{"schema":1}"""));
 
