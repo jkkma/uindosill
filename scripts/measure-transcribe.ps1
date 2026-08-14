@@ -200,6 +200,25 @@ try {
     Write-Host ("exit code      : {0}" -f $process.ExitCode)
     Write-Host ("elapsed        : {0:hh\:mm\:ss}" -f $stopwatch.Elapsed)
 
+    # Said once, loudly, where the exit code is. Everything below this point describes a run that
+    # did not happen: elapsed is the time taken to fail, peak memory is the process starting up,
+    # and every output row will read NOT WRITTEN BY THIS RUN. The rows are individually honest and
+    # collectively read as a report, and a report of nothing looks a great deal like a report of
+    # something when it is eighty lines long. Not fatal, deliberately — the diagnostics above are
+    # worth having when a run fails, and gotcha 19 is the case for reading the exit code rather
+    # than the noise around it.
+    if ($process.ExitCode -ne 0) {
+        Write-Host ''
+        Write-Host '  THE RUN FAILED. Nothing below measures anything — see the error above.' -ForegroundColor Red
+
+        # The one that has actually happened, twice: -SkipBuild reusing an executable built from a
+        # different commit, which does not know a format this one is asking for.
+        if ($SkipBuild) {
+            Write-Host '  -SkipBuild is in use, so this is whatever was built last. Rebuild if you' -ForegroundColor Red
+            Write-Host '  have changed branch: dotnet build src/Parakeet.Cli -c Release' -ForegroundColor Red
+        }
+    }
+
     if ($peakBytes -gt 0) {
         Write-Host ("peak memory    : {0:N0} MB" -f ($peakBytes / 1MB))
     }
