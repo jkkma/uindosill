@@ -181,6 +181,17 @@ public static class SubtitleCueBuilder
                 continue;
             }
 
+            // And both must still respect the duration cap. Checking only characters is not
+            // enough: words either side of a long pause are cheap in characters and expensive in
+            // seconds, so a purely textual rebalance can span a silence and park a subtitle on
+            // screen for twelve seconds to save a one-word widow. That trade is the wrong way
+            // round — an over-long cue is worse than a short one.
+            if (Span(combined, 0, split) > options.MaxCueDuration
+                || Span(combined, split, combined.Count) > options.MaxCueDuration)
+            {
+                continue;
+            }
+
             var cost = Math.Abs(head - tail);
             if (cost < bestCost)
             {
@@ -191,14 +202,17 @@ public static class SubtitleCueBuilder
 
         if (best < 0)
         {
-            // No legal rebalance — a single word longer than the capacity, for instance. Leaving
-            // the widow is better than producing a cue that cannot be displayed.
+            // No legal rebalance — a word longer than the capacity, or a pause that no split can
+            // straddle within the duration cap. Leaving the widow is the better outcome.
             return;
         }
 
         groups[^2] = combined[..best];
         groups[^1] = combined[best..];
     }
+
+    private static TimeSpan Span(List<TranscriptWord> words, int from, int to) =>
+        to <= from ? TimeSpan.Zero : words[to - 1].End - words[from].Start;
 
     private static int TextLength(List<TranscriptWord> words) => TextLength(words, 0, words.Count);
 
