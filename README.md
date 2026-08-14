@@ -1,8 +1,8 @@
 # Uindosill
 
 A Windows desktop app that transcribes audio and video files **locally** with NVIDIA Parakeet.
-Drop files in, get text out — plain text, SRT, VTT, JSON with timestamps, Markdown. No cloud, no
-Python, no account.
+Drop files in, get text out — plain text, SRT, VTT, word-timed VTT for karaoke-style highlighting,
+JSON with timestamps, Markdown. No cloud, no Python, no account.
 
 > **Status: the CLI and the desktop app both produce correct transcripts from real weights on real
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
