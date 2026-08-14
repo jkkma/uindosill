@@ -31,4 +31,6 @@
     <InternalsVisibleTo Include="Parakeet.App.Tests" />
   </ItemGroup>
 
+  <Import Project="../../build/NativeAssets.targets" />
+
 </Project>

@@ -169,6 +169,26 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
+    public void LateProgressDoesNotResurrectAFinishedJob()
+    {
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(new JobResult
+        {
+            Job = new Parakeet.Core.Jobs.TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+        });
+
+        job.Apply(new Parakeet.Core.Transcription.TranscriptionProgress
+        {
+            Stage = Parakeet.Core.Transcription.TranscriptionStage.Decoding,
+            Processed = TimeSpan.FromSeconds(3),
+        });
+
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal("Done", job.Status);
+    }
+
+    [Fact]
     public void DefaultFormatsAreTextAndSubtitles()
     {
         var (viewModel, _) = Create();

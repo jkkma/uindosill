@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Copies the vendored parakeet.cpp binaries from the repository's native/ directory into the
+    build output, preserving the native/<rid>/<backend>/ shape the loader searches for.
+
+    Without this, `dotnet run` cannot find a library placed at the repository root: the loader
+    searches relative to AppContext.BaseDirectory, which for a normal build is
+    bin/<config>/<tfm>/, not the repository root.
+
+    Note the glob is evaluated when the project is evaluated, so a binary dropped into native/
+    after a build needs another build before it appears in the output.
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../native/**/*.dll;
+                   $(MSBuildThisFileDirectory)../native/**/*.so;
+                   $(MSBuildThisFileDirectory)../native/**/*.dylib"
+          Link="native/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

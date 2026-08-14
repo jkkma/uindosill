@@ -48,6 +48,15 @@ public sealed partial class JobViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(progress);
 
+        // Progress<T> posts through the synchronisation context, so a report raised just before
+        // the job finished can arrive just after it. Without this guard that late report puts a
+        // completed job back into "Running" and it stays there — the file is transcribed, the
+        // output is written, and the row says "Transcribing…" for ever.
+        if (IsFinished)
+        {
+            return;
+        }
+
         State = JobState.Running;
         IsIndeterminate = progress.Fraction is null;
         Progress = (progress.Fraction ?? 0) * 100;

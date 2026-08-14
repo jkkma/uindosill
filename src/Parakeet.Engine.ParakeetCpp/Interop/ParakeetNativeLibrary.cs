@@ -243,8 +243,14 @@ public static class ParakeetNativeLibrary
         }
 
         var baseDirectory = AppContext.BaseDirectory;
+
+        // Both the portable RID and the runtime's own. RuntimeInformation.RuntimeIdentifier can be
+        // version-specific (it reports "ubuntu.24.04-x64" on the CI image), so a layout laid out as
+        // "win-x64" would be missed if only that value were consulted.
+        roots.Add(Path.Combine(baseDirectory, "native", PortableRuntimeIdentifier));
         roots.Add(Path.Combine(baseDirectory, "native", RuntimeInformation.RuntimeIdentifier));
         roots.Add(Path.Combine(baseDirectory, "native"));
+        roots.Add(Path.Combine(baseDirectory, "runtimes", PortableRuntimeIdentifier, "native"));
         roots.Add(Path.Combine(baseDirectory, "runtimes", RuntimeInformation.RuntimeIdentifier, "native"));
         roots.Add(baseDirectory);
 
@@ -262,6 +268,32 @@ public static class ParakeetNativeLibrary
         foreach (var root in roots)
         {
             yield return (_requestedBackend, root);
+        }
+    }
+
+    /// <summary>
+    /// The portable RID — <c>win-x64</c>, <c>linux-arm64</c> — which is what the vendoring layout
+    /// in docs/NATIVE-BINARIES.md uses and what upstream names its release archives after.
+    /// </summary>
+    internal static string PortableRuntimeIdentifier
+    {
+        get
+        {
+            var os = OperatingSystem.IsWindows() ? "win"
+                : OperatingSystem.IsMacOS() ? "osx"
+                : OperatingSystem.IsLinux() ? "linux"
+                : "unknown";
+
+            var architecture = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "x64",
+                Architecture.Arm64 => "arm64",
+                Architecture.X86 => "x86",
+                Architecture.Arm => "arm",
+                _ => RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),
+            };
+
+            return $"{os}-{architecture}";
         }
     }
 
