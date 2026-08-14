@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,6 +32,13 @@ public sealed partial class OutputFormatViewModel : ObservableObject
 
 public sealed partial class TranscribeViewModel : ObservableObject
 {
+    /// <summary>
+    /// How often the growing transcript is pushed to the window while a file decodes. Fast enough
+    /// to read along with, slow enough that a three-hour file does not spend its time copying
+    /// strings and re-laying-out a text block.
+    /// </summary>
+    private const int TranscriptRefreshMilliseconds = 250;
+
     private readonly IEngineProvider _engines;
     private readonly Func<EngineSelection> _selection;
     private CancellationTokenSource? _cancellation;
@@ -245,20 +253,36 @@ public sealed partial class TranscribeViewModel : ObservableObject
         var progress = new Progress<TranscriptionProgress>(vm.Apply);
         var segments = new List<TranscriptSegment>();
 
-        await foreach (var segment in engine.TranscribeAsync(audio, options, progress, ct).ConfigureAwait(true))
+        // The transcript is streamed to the window as it is produced, because on a long recording
+        // the alternative is a progress bar and nothing to read for a quarter of an hour. It is
+        // published on a timer rather than per segment: rendering it every time costs a full copy
+        // of the text plus a re-layout of the whole block, so on a three-hour file that is roughly
+        // seventeen hundred copies of a string growing towards a third of a megabyte, and the
+        // window stops responding long before the decode finishes.
+        var lastPublished = Stopwatch.StartNew();
+
+        void Publish()
         {
-            segments.Add(segment);
-
-            // Streamed to the window as it is produced: on a long recording the alternative is a
-            // progress bar and nothing to read for twenty minutes.
-            text.Append(segment.Text).Append(' ');
             vm.Transcript = text.ToString();
-
             if (ReferenceEquals(SelectedJob, vm))
             {
                 LiveTranscript = vm.Transcript;
             }
         }
+
+        await foreach (var segment in engine.TranscribeAsync(audio, options, progress, ct).ConfigureAwait(true))
+        {
+            segments.Add(segment);
+            text.Append(segment.Text).Append(' ');
+
+            if (lastPublished.ElapsedMilliseconds >= TranscriptRefreshMilliseconds)
+            {
+                Publish();
+                lastPublished.Restart();
+            }
+        }
+
+        Publish();
 
         var document = new TranscriptDocument
         {
