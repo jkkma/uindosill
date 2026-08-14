@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
@@ -30,6 +31,31 @@ public class WindowTests
         var dropZone = window.FindControl<Border>("DropZone");
         Assert.NotNull(dropZone);
         Assert.True(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
+    }
+
+    [AvaloniaFact]
+    public void ModelsTabExposesTheControlsItsOwnTextRefersTo()
+    {
+        // The provenance notice says an unverified download "requires the explicit unverified
+        // opt-in below". The commands and the opt-in existed on the view model and were bound to
+        // nothing, so the tab was read-only and the notice pointed at a control that did not
+        // exist. Asserting on the bound surface, because the failure was that it was absent.
+        var viewModel = NewViewModel(out _);
+        viewModel.SelectedTab = 1;
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+
+        // A TabControl only realises the selected tab, so the Models controls do not exist in the
+        // visual tree until that tab is current and a layout pass has run.
+        window.UpdateLayout();
+
+        var buttons = window.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string).ToList();
+        var checkboxes = window.GetVisualDescendants().OfType<CheckBox>().Select(c => c.Content as string).ToList();
+
+        Assert.Contains(buttons, c => c is not null && c.Contains("Download", StringComparison.Ordinal));
+        Assert.Contains(buttons, c => c is not null && c.Contains("Remove", StringComparison.Ordinal));
+        Assert.Contains(checkboxes, c => c is not null && c.Contains("unverified", StringComparison.OrdinalIgnoreCase));
     }
 
     [AvaloniaFact]

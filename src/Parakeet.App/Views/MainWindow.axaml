@@ -30,7 +30,7 @@
           <DockPanel Grid.Column="0">
             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
               <Button Content="Start" Command="{Binding StartCommand}"
-                      IsEnabled="{Binding !IsRunning}" />
+                      IsEnabled="{Binding CanStart}" />
               <Button Content="Cancel" Command="{Binding CancelCommand}"
                       IsEnabled="{Binding IsRunning}" />
               <Button Content="Clear" Command="{Binding ClearCommand}"
@@ -126,20 +126,43 @@
         <GridSplitter Grid.Column="1" Background="Transparent" />
 
         <ScrollViewer Grid.Column="2">
-          <StackPanel Spacing="10" DataContext="{Binding Selected}" x:DataType="vm:ModelViewModel">
-            <TextBlock Text="{Binding DisplayName}" FontSize="18" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
-            <TextBlock Text="{Binding Notes}" TextWrapping="Wrap" />
+          <StackPanel Spacing="10" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding Selected.DisplayName}" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
+            <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" />
 
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="Licence" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Licence}" />
+              <TextBlock Text="{Binding Selected.Licence}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="Languages" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Languages}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" />
             </StackPanel>
+
+            <Separator Margin="0,6" />
+
+            <!-- The provenance notice above tells the reader that downloading an unverified entry
+                 needs an explicit opt-in. These are the controls it refers to; without them the
+                 notice was pointing at nothing and the tab could not manage anything at all. -->
+            <CheckBox Content="Allow unverified download (no pinned SHA-256 to check against)"
+                      IsChecked="{Binding AllowUnverified}"
+                      IsVisible="{Binding Selected.NeedsUnverifiedOptIn}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Download" Command="{Binding DownloadCommand}"
+                      IsEnabled="{Binding !Selected.IsBusy}" />
+              <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                      IsEnabled="{Binding Selected.IsBusy}" />
+              <Button Content="Remove" Command="{Binding RemoveCommand}"
+                      IsEnabled="{Binding Selected.IsInstalled}" />
+            </StackPanel>
+
+            <ProgressBar Value="{Binding Selected.Progress}" Maximum="100" Height="6"
+                         IsVisible="{Binding Selected.IsBusy}" />
+            <TextBlock Text="{Binding Selected.Status}" Opacity="0.75" FontSize="11" />
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
           </StackPanel>
         </ScrollViewer>
       </Grid>
