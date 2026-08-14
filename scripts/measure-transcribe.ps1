@@ -131,6 +131,13 @@ try {
         Write-Host 'peak memory    : not sampled (the run finished inside one poll interval)' -ForegroundColor Yellow
     }
 
+    # Working set is host RAM. On a GPU backend the weights live in device memory, which this
+    # counter cannot see, so the figure drops sharply and means something different -- it is not
+    # comparable with a CPU run and is not the machine's total memory use.
+    if ($Backend -ne 'cpu') {
+        Write-Host "                 (host RAM only — VRAM held by the $Backend backend is not counted)" -ForegroundColor Yellow
+    }
+
     # A peak is a high-water mark with no time axis, so it bounds memory without showing whether it
     # climbed. The profile below is the measurement that tells them apart.
     if ($samples.Count -ge 10) {
