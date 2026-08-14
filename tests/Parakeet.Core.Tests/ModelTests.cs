@@ -61,6 +61,78 @@ public class ModelCatalogTests
     }
 
     [Fact]
+    public void DeferredPinsAreRecordedAndUnreachable()
+    {
+        var catalog = ModelCatalog.Default;
+        Assert.NotEmpty(catalog.Deferred);
+
+        foreach (var pin in catalog.Deferred)
+        {
+            // Reachable by id would mean 'models download <id>' fetches a file whose licence
+            // nobody has established, which is the whole reason these are not catalogue entries.
+            Assert.False(catalog.TryGet(pin.Id, out _), $"deferred pin '{pin.Id}' is reachable by id");
+            Assert.DoesNotContain(catalog.Models, m => string.Equals(m.Id, pin.Id, StringComparison.OrdinalIgnoreCase));
+
+            Assert.True(ModelCatalog.IsSha256Hex(pin.Sha256));
+            Assert.True(pin.SizeBytes > 0);
+            Assert.NotEmpty(pin.Purpose);
+        }
+    }
+
+    [Fact]
+    public void DeferredPinsCarryNoLicenceClaim()
+    {
+        // DeferredModelPin has no licence or attribution property at all, so a pin cannot assert
+        // one by being filled in carelessly. Asserted against the type rather than the data,
+        // because the guarantee is structural: adding such a property is what would break it.
+        var properties = typeof(DeferredModelPin).GetProperties().Select(p => p.Name).ToList();
+
+        Assert.DoesNotContain(properties, n => n.Contains("Licen", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(properties, n => n.Contains("Attribution", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ADeferredIdThatCollidesWithAModelIsRejected() =>
+        Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse("""
+            {
+              "schema": 1,
+              "models": [
+                {
+                  "id": "collide", "family": "f", "displayName": "d", "quantisation": "f16",
+                  "fileName": "a.gguf", "url": "https://example.invalid/a.gguf",
+                  "license": "CC-BY-4.0", "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
+                  "languages": ["en"]
+                }
+              ],
+              "deferred": [
+                {
+                  "id": "collide", "family": "f", "fileName": "b.gguf",
+                  "url": "https://example.invalid/b.gguf", "sizeBytes": 1,
+                  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "purpose": "p"
+                }
+              ]
+            }
+            """));
+
+    [Fact]
+    public void ADeferredPinWithoutASizeIsRejected() =>
+        Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse("""
+            {
+              "schema": 1,
+              "models": [],
+              "deferred": [
+                {
+                  "id": "no-size", "family": "f", "fileName": "b.gguf",
+                  "url": "https://example.invalid/b.gguf",
+                  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "purpose": "p"
+                }
+              ]
+            }
+            """));
+
+    [Fact]
     public void PinnedDigestsAreDistinct()
     {
         // Copying one entry to make another is easy and leaves two quantisations sharing a digest,

@@ -99,4 +99,112 @@
       "notes": "Smallest. Also the most likely to fail silently: assume nothing about its accuracy until it is measured against f16 on long, real audio."
     }
   ]
+,
+  "deferredComment": [
+    "Files in the same repository whose digests are recorded so a later version does not have to",
+    "re-derive them. They are NOT catalogue entries and this build cannot install or select them.",
+    "",
+    "The reason they are not is licensing, not caution about quality. Every entry in \"models\"",
+    "carries a licence and an attribution id that resolves against Attribution.ById, because the",
+    "app shows that notice and CC BY is not satisfied by attribution alone. These two families are",
+    "not parakeet-tdt: Nemotron models commonly ship under the NVIDIA Open Model License rather",
+    "than CC BY 4.0, and realtime_eou has no stated provenance in the file listing at all. Naming",
+    "a licence for either would be inventing one, and it would put a false notice in front of a",
+    "user.",
+    "",
+    "So what is recorded is only what was read from the listing: name, exact size, SHA-256. To",
+    "promote one, establish the licence, register the attribution, and move it into \"models\"."
+  ],
+  "deferred": [
+    {
+      "id": "nemotron-3.5-asr-streaming-0.6b-f16",
+      "family": "nemotron-3.5-asr-streaming-0.6b",
+      "fileName": "nemotron-3.5-asr-streaming-0.6b-f16.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-f16.gguf",
+      "sizeBytes": 1484324992,
+      "sha256": "b64413c3886edf2b45eb3e757f911f1bc8020b7cf157622cd0bd0452c6d84aac",
+      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+    },
+    {
+      "id": "nemotron-3.5-asr-streaming-0.6b-q8_0",
+      "family": "nemotron-3.5-asr-streaming-0.6b",
+      "fileName": "nemotron-3.5-asr-streaming-0.6b-q8_0.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf",
+      "sizeBytes": 983696512,
+      "sha256": "ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1",
+      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+    },
+    {
+      "id": "nemotron-3.5-asr-streaming-0.6b-q6_k",
+      "family": "nemotron-3.5-asr-streaming-0.6b",
+      "fileName": "nemotron-3.5-asr-streaming-0.6b-q6_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q6_k.gguf",
+      "sizeBytes": 855669856,
+      "sha256": "dab1541a9dc7f73cf90f16f0c03c2ae376722a845d41d286be81ccfe17e9d13b",
+      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+    },
+    {
+      "id": "nemotron-3.5-asr-streaming-0.6b-q5_k",
+      "family": "nemotron-3.5-asr-streaming-0.6b",
+      "fileName": "nemotron-3.5-asr-streaming-0.6b-q5_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf",
+      "sizeBytes": 784801888,
+      "sha256": "7bb14605a707f821560952521034002c91653d676272a80dca0cd2aa886d0ab2",
+      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+    },
+    {
+      "id": "nemotron-3.5-asr-streaming-0.6b-q4_k",
+      "family": "nemotron-3.5-asr-streaming-0.6b",
+      "fileName": "nemotron-3.5-asr-streaming-0.6b-q4_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/nemotron-3.5-asr-streaming-0.6b-q4_k.gguf",
+      "sizeBytes": 718102624,
+      "sha256": "5ad85eb3f3014c1a300d67b7ccbd23c38c4c952405cbe33a861e19fb2775e84b",
+      "purpose": "Streaming ASR. v2 push-to-talk needs partial results while the key is held; this build decodes whole segments and cannot."
+    },
+    {
+      "id": "realtime_eou_120m-v1-f16",
+      "family": "realtime_eou_120m-v1",
+      "fileName": "realtime_eou_120m-v1-f16.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/realtime_eou_120m-v1-f16.gguf",
+      "sizeBytes": 266517952,
+      "sha256": "d1a2b12f12b8a096a57499c9111ed13b442a2b786e17a292c168be45088f0edc",
+      "purpose": "End-of-utterance detection, not transcription. It decides when a speaker has finished, which is the half of push-to-talk the energy-based segmenter here does not do."
+    },
+    {
+      "id": "realtime_eou_120m-v1-q8_0",
+      "family": "realtime_eou_120m-v1",
+      "fileName": "realtime_eou_120m-v1-q8_0.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/realtime_eou_120m-v1-q8_0.gguf",
+      "sizeBytes": 176001472,
+      "sha256": "62616b914d6f5a683a5dea672df055b57de5c49dddf871b8b44b9c814dc3d896",
+      "purpose": "End-of-utterance detection, not transcription. It decides when a speaker has finished, which is the half of push-to-talk the energy-based segmenter here does not do."
+    },
+    {
+      "id": "realtime_eou_120m-v1-q6_k",
+      "family": "realtime_eou_120m-v1",
+      "fileName": "realtime_eou_120m-v1-q6_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/realtime_eou_120m-v1-q6_k.gguf",
+      "sizeBytes": 153920416,
+      "sha256": "3c4df36abdf2526591236251dcb625a43a8a3d3525bad3791d0a9fa363d5db04",
+      "purpose": "End-of-utterance detection, not transcription. It decides when a speaker has finished, which is the half of push-to-talk the energy-based segmenter here does not do."
+    },
+    {
+      "id": "realtime_eou_120m-v1-q5_k",
+      "family": "realtime_eou_120m-v1",
+      "fileName": "realtime_eou_120m-v1-q5_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/realtime_eou_120m-v1-q5_k.gguf",
+      "sizeBytes": 141151648,
+      "sha256": "e6e83c13a41751d6130cde836690304cbc143347bdf12577e419018df2235398",
+      "purpose": "End-of-utterance detection, not transcription. It decides when a speaker has finished, which is the half of push-to-talk the energy-based segmenter here does not do."
+    },
+    {
+      "id": "realtime_eou_120m-v1-q4_k",
+      "family": "realtime_eou_120m-v1",
+      "fileName": "realtime_eou_120m-v1-q4_k.gguf",
+      "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/realtime_eou_120m-v1-q4_k.gguf",
+      "sizeBytes": 129133984,
+      "sha256": "ac9109d0e422bd8aafa899c0f58e1938f4a2846838797a29c04f6a8729033c3c",
+      "purpose": "End-of-utterance detection, not transcription. It decides when a speaker has finished, which is the half of push-to-talk the energy-based segmenter here does not do."
+    }
+  ]
 }

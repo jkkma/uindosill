@@ -13,9 +13,10 @@ public sealed class ModelCatalog
 {
     private readonly Dictionary<string, ModelDescriptor> _byId;
 
-    private ModelCatalog(IReadOnlyList<ModelDescriptor> models)
+    private ModelCatalog(IReadOnlyList<ModelDescriptor> models, IReadOnlyList<DeferredModelPin> deferred)
     {
         Models = models;
+        Deferred = deferred;
         _byId = models.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -24,7 +25,16 @@ public sealed class ModelCatalog
     /// <summary>The catalogue shipped with the application.</summary>
     public static ModelCatalog Default => DefaultCatalog.Value;
 
+    /// <summary>The models this build can select and install. Lookup by id searches only these.</summary>
     public IReadOnlyList<ModelDescriptor> Models { get; }
+
+    /// <summary>
+    /// Digests recorded for a later version, deliberately unreachable from <see cref="Models"/>,
+    /// <see cref="TryGet"/> and <see cref="Get"/>. See <see cref="DeferredModelPin"/> for why
+    /// these are a separate type rather than catalogue entries with a flag: a descriptor asserts a
+    /// licence, and for these files no licence has been established.
+    /// </summary>
+    public IReadOnlyList<DeferredModelPin> Deferred { get; }
 
     public ModelDescriptor? Recommended =>
         Models.FirstOrDefault(m => m.Recommended) ?? Models.FirstOrDefault();
@@ -62,7 +72,69 @@ public sealed class ModelCatalog
             throw new InvalidDataException($"Model manifest contains duplicate id '{duplicate.Key}'.");
         }
 
-        return new ModelCatalog(parsed);
+        var deferred = new List<DeferredModelPin>();
+        if (root.TryGetProperty("deferred", out var deferredElement))
+        {
+            if (deferredElement.ValueKind != JsonValueKind.Array)
+            {
+                throw new InvalidDataException("Model manifest's 'deferred' must be an array.");
+            }
+
+            foreach (var element in deferredElement.EnumerateArray())
+            {
+                deferred.Add(ParseDeferred(element));
+            }
+        }
+
+        // An id in both places would make the same string mean an installable model in one code
+        // path and an unlicensed pin in another.
+        var ids = parsed.Select(m => m.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var collision = deferred.FirstOrDefault(d => ids.Contains(d.Id));
+        if (collision is not null)
+        {
+            throw new InvalidDataException(
+                $"'{collision.Id}' appears as both a model and a deferred pin.");
+        }
+
+        return new ModelCatalog(parsed, deferred);
+    }
+
+    private static DeferredModelPin ParseDeferred(JsonElement element)
+    {
+        var id = RequireString(element, "id");
+
+        var url = RequireString(element, "url");
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidDataException($"Deferred pin '{id}' must have an absolute https url.");
+        }
+
+        var sha = RequireString(element, "sha256");
+        if (!IsSha256Hex(sha))
+        {
+            throw new InvalidDataException($"Deferred pin '{id}' has a sha256 that is not 64 hex characters.");
+        }
+
+        // A pin whose whole purpose is to be checkable later is worthless without both halves, so
+        // unlike a model entry these are required rather than optional.
+        var size = OptionalLong(element, "sizeBytes")
+            ?? throw new InvalidDataException($"Deferred pin '{id}' must record a sizeBytes.");
+
+        if (size <= 0)
+        {
+            throw new InvalidDataException($"Deferred pin '{id}' has a non-positive sizeBytes.");
+        }
+
+        return new DeferredModelPin
+        {
+            Id = id,
+            Family = RequireString(element, "family"),
+            FileName = RequireString(element, "fileName"),
+            Url = uri,
+            SizeBytes = size,
+            Sha256 = sha.ToLowerInvariant(),
+            Purpose = RequireString(element, "purpose"),
+        };
     }
 
     private static ModelDescriptor ParseModel(JsonElement element)
