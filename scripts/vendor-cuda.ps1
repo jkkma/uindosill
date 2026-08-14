@@ -84,15 +84,18 @@ function Write-Heading {
 #               0x08 u64 size of all entries that follow
 #
 #   entry       0x00 u16 kind          1 = PTX, 2 = ELF (cubin)
-#               0x02 u16 version
-#               0x04 u32 headerSize
-#               0x08 u64 padded payload size
+#               0x04 u32 headerSize    0x40 in every build seen
+#               0x08 u64 payload size
+#               0x10 u32 compressed size, 0 when the payload is stored raw
 #               0x1C u32 sm version    120 = sm_120
-#               0x20 u32 bit width     64
 #
-# The layout is not published by NVIDIA, so nothing here is believed without checking: a container
-# whose entries do not walk exactly to its stated end, or that yields an implausible architecture
-# or bit width, is discarded whole and counted as unparsed.
+# The layout is not published by NVIDIA, so nothing here is believed without checking. Two
+# independent checks have to pass. The entries must tile the container exactly — landing short or
+# long means the walk was reading something that merely started with the magic number — and where a
+# cubin payload is stored uncompressed it must begin with the ELF magic, be marked EM_CUDA, and
+# carry the same architecture in its own header that the fat binary entry claimed. A container that
+# fails is discarded whole and counted as unparsed, and the count of cross-checked cubins is
+# printed so the architecture list is never reported as fact on the strength of one guessed offset.
 $scannerSource = @'
 using System;
 using System.Collections.Generic;
@@ -112,6 +115,8 @@ public class FatbinScanner
         public List<Entry> Entries = new List<Entry>();
         public int ContainersParsed;
         public int ContainersRejected;
+        public int ElfConfirmed;
+        public int ElfDisagreed;
         public long Length;
     }
 
@@ -122,6 +127,18 @@ public class FatbinScanner
         if (sm < 30 || sm > 129) return false;
         int minor = sm % 10;
         return minor <= 9;
+    }
+
+    // A cubin payload stored uncompressed is an ELF64 whose machine is EM_CUDA (190) and whose
+    // architecture sits in the low byte of e_flags. Reading it back is what turns the entry-header
+    // offsets from a guess into something checked against the file itself.
+    private static int ElfArchitecture(byte[] d, long at, long available)
+    {
+        if (available < 0x34) return -1;
+        if (d[at] != 0x7F || d[at + 1] != 0x45 || d[at + 2] != 0x4C || d[at + 3] != 0x46) return -1;
+        if (d[at + 4] != 2) return -1;                                  // ELFCLASS64
+        if (BitConverter.ToUInt16(d, (int)(at + 0x12)) != 190) return -1; // EM_CUDA
+        return BitConverter.ToInt32(d, (int)(at + 0x30)) & 0xFF;        // e_flags, EF_CUDA_SM
     }
 
     public static Result Scan(string path)
@@ -148,26 +165,37 @@ public class FatbinScanner
             long cursor = i + 16;
             long end = cursor + fatSize;
             List<Entry> found = new List<Entry>();
+            int confirmed = 0;
+            int disagreed = 0;
             bool ok = true;
 
             while (cursor < end)
             {
-                if (cursor + 0x24 > data.LongLength) { ok = false; break; }
+                if (cursor + 0x20 > end) { ok = false; break; }
 
                 int kind = BitConverter.ToUInt16(data, (int)cursor);
                 int entryHeaderSize = BitConverter.ToInt32(data, (int)(cursor + 4));
                 long payload = BitConverter.ToInt64(data, (int)(cursor + 8));
+                int compressed = BitConverter.ToInt32(data, (int)(cursor + 0x10));
                 int sm = BitConverter.ToInt32(data, (int)(cursor + 0x1C));
-                int bits = BitConverter.ToInt32(data, (int)(cursor + 0x20));
 
                 if ((kind != 1 && kind != 2) ||
-                    entryHeaderSize < 0x24 || entryHeaderSize > 0x400 ||
-                    payload < 0 ||
-                    (bits != 32 && bits != 64) ||
+                    entryHeaderSize < 0x20 || entryHeaderSize > 0x400 ||
+                    payload < 0 || cursor + entryHeaderSize + payload > end ||
                     !PlausibleSm(sm))
                 {
                     ok = false;
                     break;
+                }
+
+                if (kind == 2 && compressed == 0)
+                {
+                    int elfSm = ElfArchitecture(data, cursor + entryHeaderSize, payload);
+                    if (elfSm >= 0)
+                    {
+                        if (elfSm == sm) confirmed++;
+                        else disagreed++;
+                    }
                 }
 
                 Entry e = new Entry();
@@ -188,6 +216,8 @@ public class FatbinScanner
             }
 
             result.ContainersParsed++;
+            result.ElfConfirmed += confirmed;
+            result.ElfDisagreed += disagreed;
             result.Entries.AddRange(found);
             i = end - 1;
         }
@@ -465,10 +495,26 @@ try {
         $missing = @()
 
         foreach ($import in ($imports | Sort-Object)) {
-            $isSystem = $import -match '^(api-ms-|ext-ms-|kernel32|user32|advapi32|msvcrt|ucrtbase|vcruntime|msvcp|ole32|oleaut32|shell32|shlwapi|ws2_32|bcrypt|crypt32|dbghelp|setupapi|cfgmgr32|powrprof|winmm|gdi32|version|rpcrt4|secur32|ntdll|combase|nvcuda)'
+            $isSystem = $import -match '^(api-ms-|ext-ms-|kernel32|user32|advapi32|msvcrt|ucrtbase|ole32|oleaut32|shell32|shlwapi|ws2_32|bcrypt|crypt32|dbghelp|setupapi|cfgmgr32|powrprof|winmm|gdi32|version|rpcrt4|secur32|ntdll|combase|nvcuda)'
+
+            # The Visual C++ redistributable, not Windows. It is on most machines and on none by
+            # right, and vcomp140 (OpenMP) is the one a machine can plausibly be missing while
+            # having the rest — which would fail the CUDA load and fall through to CPU in silence.
+            $isRedistributable = $import -match '^(vcruntime140|msvcp140|vcomp140|concrt140|vccorlib140)'
+
             $found = $present -contains $import.ToLowerInvariant()
             if ($found) {
                 Write-Host ("  {0,-40} present in this directory" -f $import) -ForegroundColor Green
+            }
+            elseif ($isRedistributable) {
+                $inSystem = Test-Path -LiteralPath (Join-Path $env:SystemRoot ("System32\" + $import))
+                if ($inSystem) {
+                    Write-Host ("  {0,-40} VC++ redistributable, in System32" -f $import)
+                }
+                else {
+                    Write-Host ("  {0,-40} VC++ redistributable, NOT INSTALLED" -f $import) -ForegroundColor Red
+                    $missing += $import
+                }
             }
             elseif ($isSystem) {
                 Write-Host ("  {0,-40} system / driver" -f $import)
@@ -499,6 +545,7 @@ try {
         $candidates = @($files | Where-Object { $_.Extension -eq '.dll' -and $_.Length -gt 1MB })
         $anyParsed = $false
         $sawSm120 = $false
+        $anyDisagreement = $false
 
         foreach ($file in $candidates) {
             $scan = [FatbinScanner]::Scan($file.FullName)
@@ -515,6 +562,20 @@ try {
 
             Write-Host ("  {0}" -f $file.Name) -ForegroundColor Cyan
             Write-Host ("    containers   {0} parsed, {1} rejected" -f $scan.ContainersParsed, $scan.ContainersRejected)
+
+            # Without at least one cubin whose own ELF header agrees, the architecture list below
+            # rests entirely on an offset nobody published. Say so rather than let it read as fact.
+            if ($scan.ElfDisagreed -gt 0) {
+                Write-Host ("    cross-check  {0} cubins agree, {1} DISAGREE — do not trust this list" -f `
+                    $scan.ElfConfirmed, $scan.ElfDisagreed) -ForegroundColor Red
+            }
+            elseif ($scan.ElfConfirmed -gt 0) {
+                Write-Host ("    cross-check  {0} cubins carry the same architecture in their own ELF header" -f `
+                    $scan.ElfConfirmed) -ForegroundColor Green
+            }
+            else {
+                Write-Host '    cross-check  none — every cubin payload is compressed' -ForegroundColor Yellow
+            }
             if ($cubin.Count -gt 0) {
                 Write-Host ("    cubin        {0}" -f (($cubin | ForEach-Object { "sm_$_" }) -join ', '))
             }
@@ -529,12 +590,18 @@ try {
             }
 
             if ($cubin -contains 120) { $sawSm120 = $true }
+            if ($scan.ElfDisagreed -gt 0) { $anyDisagreement = $true }
         }
 
         Write-Host ''
         if (-not $anyParsed) {
             Write-Host 'No fat binary container validated. This scan proves nothing either way — it does not' -ForegroundColor Yellow
             Write-Host 'establish that sm_120 is absent. Run the transcription and read the result instead.' -ForegroundColor Yellow
+        }
+        elseif ($anyDisagreement) {
+            Write-Host 'Architectures read from the fat binary headers contradict the cubins own ELF headers,' -ForegroundColor Red
+            Write-Host 'so this scan is being parsed wrongly and none of it can be believed. Ignore the list' -ForegroundColor Red
+            Write-Host 'above and take the transcription run as the answer.' -ForegroundColor Red
         }
         elseif ($sawSm120) {
             Write-Host 'sm_120 cubin present: this library has native Blackwell kernels and should run on an' -ForegroundColor Green
