@@ -34,7 +34,14 @@ param(
     [ValidateSet('cpu', 'vulkan', 'cuda')]
     [string] $Backend = 'cpu',
 
-    [string] $Formats = 'srt,txt,json',
+    # Both shapes PowerShell can hand this. Unquoted, `-Formats srt,txt,vtt-words` arrives as an
+    # array, because a comma is the array operator in argument mode; quoted, it arrives as one
+    # string. It has to be [string[]]: [CmdletBinding()] above makes this script an advanced
+    # function, and an advanced function refuses to collapse an array into a [string] parameter
+    # rather than joining it, so `[string] $Formats` failed the unquoted form outright with
+    # "Cannot process argument transformation on parameter 'Formats'". Latent until now only
+    # because every run recorded in docs/UNPROVEN.md took the default.
+    [string[]] $Formats = @('srt', 'txt', 'json'),
 
     [string] $Configuration = 'Release',
 
@@ -64,6 +71,22 @@ try {
         throw "Audio file not found: $Path"
     }
 
+    # Flatten both accepted shapes to one list. Joining first and splitting again handles the
+    # mixed case too — `-Formats srt,'txt,json'` is an array whose second element has a comma in
+    # it, and a caller has no reason to know that is unusual.
+    $formatIds = @(($Formats -join ',') -split ',' |
+        ForEach-Object { $_.Trim().ToLowerInvariant() } |
+        Where-Object { $_.Length -gt 0 })
+
+    if ($formatIds.Count -eq 0) {
+        throw 'No output formats requested. Pass -Formats with at least one id, e.g. srt,txt,json.'
+    }
+
+    # The CLI takes them comma separated on one argument. Passing the array straight into the
+    # argument list would splat one element per argument, and the CLI would read the extras as
+    # positional input paths rather than as formats.
+    $formatArgument = $formatIds -join ','
+
     if (-not $SkipBuild) {
         Write-Host 'Building...' -ForegroundColor Cyan
         dotnet build src/Parakeet.Cli -c $Configuration --nologo | Out-Null
@@ -82,12 +105,12 @@ try {
         'transcribe'
         '--backend'; $Backend
         '--model'; $Model
-        '-f'; $Formats
+        '-f'; $formatArgument
         $audio.Path
     )
 
     Write-Host "Transcribing $($audio.Path)" -ForegroundColor Cyan
-    Write-Host "  model $Model, backend $Backend, formats $Formats"
+    Write-Host "  model $Model, backend $Backend, formats $formatArgument"
 
     # A GPU timing with no driver version attached cannot be reproduced or argued with later. The
     # Vulkan figure first recorded for this file was 0.0230 and re-measured at 0.0110 on the same
@@ -269,10 +292,7 @@ try {
     }
 
     $freshByFormat = @{}
-    foreach ($requested in $Formats.Split(',')) {
-        $format = $requested.Trim().ToLowerInvariant()
-        if ($format.Length -eq 0) { continue }
-
+    foreach ($format in $formatIds) {
         $ext = if ($extensionByFormat.ContainsKey($format)) { $extensionByFormat[$format] } else { ".$format" }
 
         # '<stem><ext>', or '<stem> (2)<ext>' from the rename policy, and nothing else.
