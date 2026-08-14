@@ -155,6 +155,46 @@ public class SubtitleCueBuilderTests
     }
 
     [Fact]
+    public void RebalancingWillNotStraddleALongPauseToAvoidAWidow()
+    {
+        // From a real podcast transcript: "...get into local." then nine seconds of laughter, then
+        // "Yeah. Correct." Rebalancing on characters alone merged across the gap and produced a
+        // cue on screen for 11.9 seconds. An over-long cue is worse than a short one.
+        var words = new List<TranscriptWord>();
+        void Add(string text, double start, double end) => words.Add(new TranscriptWord
+        {
+            Text = text,
+            Start = TimeSpan.FromSeconds(start),
+            End = TimeSpan.FromSeconds(end),
+            Confidence = 0.9f,
+        });
+
+        var t = 205.0;
+        foreach (var word in "you switch to like passport bro content you can just keep the name get into local".Split(' '))
+        {
+            Add(word, t, t + 0.25);
+            t += 0.3;
+        }
+
+        Add("Yeah.", 219.0, 219.4);
+        Add("Correct.", 219.5, 220.2);
+
+        var segment = new TranscriptSegment
+        {
+            Start = TimeSpan.FromSeconds(205),
+            End = TimeSpan.FromSeconds(220.3),
+            Text = string.Join(' ', words.Select(w => w.Text)),
+            Words = words,
+        };
+
+        var cues = SubtitleCueBuilder.Build([segment]);
+
+        Assert.All(cues, c => Assert.True(
+            c.End - c.Start <= SubtitleOptions.Default.MaxCueDuration + TimeSpan.FromMilliseconds(1),
+            $"cue spans {(c.End - c.Start).TotalSeconds:0.##}s: '{c.Text}'"));
+    }
+
+    [Fact]
     public void RebalancingKeepsEveryCueWithinCapacity()
     {
         var text = string.Join(' ', Enumerable.Repeat("elephantine", 15)) + " x";
