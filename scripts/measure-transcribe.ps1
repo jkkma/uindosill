@@ -322,7 +322,7 @@ try {
         Write-Host '── word-timed WebVTT ───────────────────────────' -ForegroundColor Green
 
         $wordsVtt = Get-Content -LiteralPath $freshByFormat['vtt-words'] -Raw
-        $cues = 0; $tags = 0; $untagged = 0; $violations = @()
+        $cues = 0; $tags = 0; $untimed = 0; $tagged = 0; $possible = 0; $violations = @()
 
         foreach ($block in ($wordsVtt -replace "`r`n", "`n") -split "`n`n") {
             $lines = $block -split "`n"
@@ -335,14 +335,26 @@ try {
             $cueEnd = ConvertFrom-VttTimecode $bounds[1]
             $payload = ($lines | Select-Object -Skip ([Array]::IndexOf($lines, $arrow) + 1)) -join "`n"
 
+            # A cue built from word timings wraps every word in <c>; a cue the engine reported no
+            # word timestamps for has none at all. That is the discriminator, and counting tags
+            # alone cannot make it: a cue holding a single word carries no timestamp either, and
+            # reporting the two together says "the degradation path ran" when it did not.
+            $inCueWords = ([regex]::Matches($payload, '<c>')).Count
+            if ($inCueWords -eq 0) {
+                $untimed++
+            }
+            else {
+                $tagged += $inCueWords
+                $possible += $inCueWords - 1
+            }
+
             $previous = $cueStart
-            $inCue = 0
 
             # A tag body is a timestamp only if it opens with a digit, which is how FFmpeg tells
             # one from a <c> or a </c>.
             foreach ($match in [regex]::Matches($payload, '<(\d[\d:.]*)>')) {
                 $at = ConvertFrom-VttTimecode $match.Groups[1].Value
-                $tags++; $inCue++
+                $tags++
                 if ($at -le $cueStart -or $at -ge $cueEnd) {
                     $violations += "$at outside cue $cueStart..$cueEnd"
                 }
@@ -352,11 +364,19 @@ try {
                 $previous = $at
             }
 
-            if ($inCue -eq 0) { $untagged++ }
         }
 
-        Write-Host ("cues                : {0:N0}, {1:N0} carrying no word timings" -f $cues, $untagged)
-        Write-Host ("inline timestamps   : {0:N0}" -f $tags)
+        Write-Host ("cues                : {0:N0}, of which {1:N0} had no word timings to carry" -f $cues, $untimed)
+        Write-Host ("words tagged        : {0:N0}" -f $tagged)
+        Write-Host ("inline timestamps   : {0:N0} of {1:N0} possible, {2:N0} dropped" -f $tags, $possible, ($possible - $tags))
+
+        # Dropped is not a failure: the first word of every cue takes no timestamp by design, and
+        # Tidy can move a cue out from under word times it still carries, in which case the tag is
+        # skipped rather than nudged into range. It is worth seeing, because a large number would
+        # mean cues and words disagree far more often than this pipeline should allow.
+        if ($possible - $tags -gt 0) {
+            Write-Host ("                      (dropped tags are ones Tidy left outside their cue)")
+        }
 
         if ($violations.Count -eq 0) {
             Write-Host 'ordering            : every timestamp strictly inside its cue and strictly increasing' -ForegroundColor Green
