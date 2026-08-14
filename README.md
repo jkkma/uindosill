@@ -9,8 +9,9 @@ Python, no account.
 > `tdt-0.6b-v3-f16`, on one 32-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
 > Vulkan, 0.0064 on CUDA** — 98 segments and 1,573 words on all three, no duplicated or dropped
 > words at any segment join. Three hours has been run end to end on CPU. That is one machine and
-> one file, not a benchmark: the Vulkan figure first recorded here was 0.023 and did not reproduce
-> an hour later, which is exactly why every number carries its backend and its caveats in
+> one file, not a benchmark, and the Vulkan figure is steady-state: the *first* Vulkan run on a
+> fresh machine takes 14 s rather than 6.6 s, because the driver is compiling shaders inside the
+> number that looks like decode time. Every figure here carries its backend and its caveats in
 > [docs/UNPROVEN.md](docs/UNPROVEN.md). Every quantisation below f16 is still unrun.
 
 ## What it does
