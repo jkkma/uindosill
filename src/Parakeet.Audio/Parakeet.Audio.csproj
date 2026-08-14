@@ -1,11 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- The pure-managed RIFF/RF64 reader is the whole story on net10.0 and is what CI
-         exercises on Linux. Media Foundation (mp3/m4a/aac/mp4) only exists on the
-         -windows flavour, which keeps the Windows-only surface out of the portable
-         assembly instead of hiding it behind runtime checks. -->
-    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <!--
+      SINGLE target framework, deliberately.
+
+      This was net10.0;net10.0-windows with the Media Foundation reader behind #if WINDOWS. That
+      compiles, and it is wrong: Parakeet.Cli and Parakeet.App both target plain net10.0, so they
+      resolve the net10.0 flavour of this assembly — the one the Windows decoder is compiled OUT
+      of. Media Foundation was unreachable dead code in every build that shipped, and the app told
+      Windows users that "Media Foundation exists only on Windows". CI was green throughout,
+      because the -windows flavour built fine and nothing referenced it.
+
+      The Windows-only surface is now guarded at runtime with OperatingSystem.IsWindows(), which
+      the platform-compatibility analyser understands, so the code is present everywhere and only
+      runs where it can. NAudio.Wasapi resolves its netstandard2.0 asset here, which is the same
+      source as its net6.0-windows7.0 one and P/Invokes the same Windows libraries.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Parakeet.Audio</RootNamespace>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -14,7 +25,10 @@
     <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+  <ItemGroup>
+    <!-- NAudio.Wasapi carries MediaFoundationReader; NAudio.Core the sample-provider extensions.
+         The NAudio metapackage is not used: it drags in NAudio.WinForms, whose FrameworkReference
+         cannot be resolved on a Linux SDK, which would end cross-building from CI. -->
     <PackageReference Include="NAudio.Wasapi" />
     <PackageReference Include="NAudio.Core" />
   </ItemGroup>

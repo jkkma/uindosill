@@ -1,4 +1,3 @@
-#if WINDOWS
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -114,4 +113,3 @@ public sealed class MediaFoundationAudioSource : IAudioSource
         return ValueTask.CompletedTask;
     }
 }
-#endif

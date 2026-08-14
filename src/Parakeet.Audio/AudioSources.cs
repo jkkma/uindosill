@@ -46,34 +46,25 @@ public static class AudioSources
             return WavAudioSource.Open(path);
         }
 
-#if WINDOWS
+        // A runtime check, not a compile-time one. Compiling this away for a target framework the
+        // applications do not reference is how it came to be unreachable in every shipped build.
         if (OperatingSystem.IsWindows())
         {
             return MediaFoundationAudioSource.Open(path, detection);
         }
-#endif
 
         throw new UnsupportedAudioFormatException(Explain(path, detection));
     }
 
     /// <summary>Formats this build can open, for help text and file pickers.</summary>
-    public static IReadOnlyList<string> SupportedExtensions
-    {
-        get
-        {
-#if WINDOWS
-            if (OperatingSystem.IsWindows())
-            {
-                return
-                [
-                    ".wav", ".wave", ".rf64", ".bwf",
-                    ".mp3", ".m4a", ".m4b", ".aac", ".mp4", ".m4v", ".mov", ".wma", ".asf", ".wmv",
-                ];
-            }
-#endif
-            return [".wav", ".wave", ".rf64", ".bwf"];
-        }
-    }
+    public static IReadOnlyList<string> SupportedExtensions =>
+        OperatingSystem.IsWindows()
+            ?
+            [
+                ".wav", ".wave", ".rf64", ".bwf",
+                ".mp3", ".m4a", ".m4b", ".aac", ".mp4", ".m4v", ".mov", ".wma", ".asf", ".wmv",
+            ]
+            : [".wav", ".wave", ".rf64", ".bwf"];
 
     private static string Explain(string path, AudioFormatDetection detection)
     {
