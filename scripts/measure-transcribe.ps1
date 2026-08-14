@@ -76,16 +76,40 @@ try {
     Write-Host ''
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    $process = Start-Process -FilePath $exe -ArgumentList $arguments -NoNewWindow -PassThru -Wait
-    $stopwatch.Stop()
+    $process = Start-Process -FilePath $exe -ArgumentList $arguments -NoNewWindow -PassThru
 
-    $peakMb = $process.PeakWorkingSet64 / 1MB
+    # PeakWorkingSet64 has to be read while the process is still alive. Windows discards the
+    # counter when the process exits, and the property then reads back as zero rather than
+    # failing, so `Start-Process -Wait` reports a peak of 0 MB for a run that used gigabytes.
+    # The counter is a peak and never falls, so sampling it and keeping the highest value seen
+    # is exact — polling cannot miss a spike between samples the way sampling WorkingSet64 would.
+    $peakBytes = 0L
+    while (-not $process.HasExited) {
+        try {
+            $process.Refresh()
+            if ($process.PeakWorkingSet64 -gt $peakBytes) { $peakBytes = $process.PeakWorkingSet64 }
+        }
+        catch {
+            # The process exited between HasExited and Refresh. The last sample stands.
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    $process.WaitForExit()
+    $stopwatch.Stop()
 
     Write-Host ''
     Write-Host '── run ─────────────────────────────────────────' -ForegroundColor Green
     Write-Host ("exit code      : {0}" -f $process.ExitCode)
     Write-Host ("elapsed        : {0:hh\:mm\:ss}" -f $stopwatch.Elapsed)
-    Write-Host ("peak memory    : {0:N0} MB" -f $peakMb)
+
+    if ($peakBytes -gt 0) {
+        Write-Host ("peak memory    : {0:N0} MB" -f ($peakBytes / 1MB))
+    }
+    else {
+        Write-Host 'peak memory    : not sampled (the run finished inside one poll interval)' -ForegroundColor Yellow
+    }
 
     $stem = [IO.Path]::GetFileNameWithoutExtension($audio.Path)
     $directory = Split-Path -Parent $audio.Path
