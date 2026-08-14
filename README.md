@@ -40,7 +40,7 @@ library ([docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model
 ```bash
 uindosill doctor                          # what this machine has, and which backends load
 uindosill models list
-uindosill models download parakeet-tdt-0.6b-v3-q8_0
+uindosill models download tdt-0.6b-v3-q8_0
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
 ```
