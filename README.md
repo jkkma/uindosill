@@ -6,7 +6,7 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 
 > **Status: the CLI and the desktop app both produce correct transcripts from real weights on real
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
-> `tdt-0.6b-v3-f16`, on one 32-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
+> `tdt-0.6b-v3-f16`, on one 16-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
 > Vulkan, 0.0064 on CUDA** — 98 segments and 1,573 words on all three, no duplicated or dropped
 > words at any segment join. Three hours has been run end to end on CPU. That is one machine and
 > one file, not a benchmark, and the Vulkan figure is steady-state: the *first* Vulkan run on a
