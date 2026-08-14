@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+    <!-- Avalonia.Headless.XUnit 12.x requires xUnit v3, which is what this repository uses. -->
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Parakeet.App/Parakeet.App.csproj" />
+  </ItemGroup>
+
+</Project>

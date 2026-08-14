@@ -1,0 +1,26 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <!-- Native interop is the point of this repo; allow it explicitly rather than
+         per-project so an accidental omission cannot silently disable a project. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Product>Uindosill</Product>
+    <Company>Uindosill</Company>
+    <Copyright>Copyright (c) Uindosill contributors</Copyright>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <!-- Publish settings are in Directory.Build.targets, not here: a condition on a property the
+       project sets cannot be evaluated before the project has set it. See that file. -->
+
+</Project>

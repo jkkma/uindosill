@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Parakeet.App/Parakeet.App.csproj" />
+    <Project Path="src/Parakeet.Audio/Parakeet.Audio.csproj" />
+    <Project Path="src/Parakeet.Cli/Parakeet.Cli.csproj" />
+    <Project Path="src/Parakeet.Core/Parakeet.Core.csproj" />
+    <Project Path="src/Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Parakeet.App.Tests/Parakeet.App.Tests.csproj" />
+    <Project Path="tests/Parakeet.Audio.Tests/Parakeet.Audio.Tests.csproj" />
+    <Project Path="tests/Parakeet.Cli.Tests/Parakeet.Cli.Tests.csproj" />
+    <Project Path="tests/Parakeet.Core.Tests/Parakeet.Core.Tests.csproj" />
+    <Project Path="tests/Parakeet.Engine.ParakeetCpp.Tests/Parakeet.Engine.ParakeetCpp.Tests.csproj" />
+  </Folder>
+</Solution>

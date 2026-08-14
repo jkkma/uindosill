@@ -1,0 +1,34 @@
+# Build output
+bin/
+obj/
+artifacts/
+publish/
+*.user
+*.suo
+*.userprefs
+
+# Rider / VS / VS Code
+.idea/
+.vs/
+.vscode/
+
+# Test output
+TestResults/
+*.trx
+coverage*.xml
+*.coverage
+
+# Native binaries are vendored deliberately (see docs/NATIVE-BINARIES.md), never
+# committed: they are large, per-backend, and pinned to a specific upstream release.
+native/**/*.dll
+native/**/*.so
+native/**/*.dylib
+native/**/*.zip
+
+# Model weights and downloaded audio fixtures never belong in the repo.
+*.gguf
+tests/fixtures/large/
+
+# OS noise
+.DS_Store
+Thumbs.db

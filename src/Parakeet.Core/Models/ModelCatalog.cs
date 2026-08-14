@@ -1,0 +1,176 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Text.Json;
+
+namespace Parakeet.Core.Models;
+
+/// <summary>
+/// The set of models the app knows how to fetch. Loaded from a JSON manifest rather than
+/// written in code so that pinning a digest is a data change a release engineer can make and
+/// review, not a code change.
+/// </summary>
+public sealed class ModelCatalog
+{
+    private readonly Dictionary<string, ModelDescriptor> _byId;
+
+    private ModelCatalog(IReadOnlyList<ModelDescriptor> models)
+    {
+        Models = models;
+        _byId = models.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static readonly Lazy<ModelCatalog> DefaultCatalog = new(LoadEmbedded, isThreadSafe: true);
+
+    /// <summary>The catalogue shipped with the application.</summary>
+    public static ModelCatalog Default => DefaultCatalog.Value;
+
+    public IReadOnlyList<ModelDescriptor> Models { get; }
+
+    public ModelDescriptor? Recommended =>
+        Models.FirstOrDefault(m => m.Recommended) ?? Models.FirstOrDefault();
+
+    public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
+        _byId.TryGetValue(id, out model);
+
+    public ModelDescriptor Get(string id) =>
+        TryGet(id, out var model)
+            ? model
+            : throw new KeyNotFoundException(
+                $"Unknown model '{id}'. Known models: {string.Join(", ", Models.Select(m => m.Id))}.");
+
+    public static ModelCatalog Parse(string json)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(json);
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        if (!root.TryGetProperty("models", out var models) || models.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("Model manifest has no 'models' array.");
+        }
+
+        var parsed = new List<ModelDescriptor>();
+        foreach (var element in models.EnumerateArray())
+        {
+            parsed.Add(ParseModel(element));
+        }
+
+        var duplicate = parsed.GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw new InvalidDataException($"Model manifest contains duplicate id '{duplicate.Key}'.");
+        }
+
+        return new ModelCatalog(parsed);
+    }
+
+    private static ModelDescriptor ParseModel(JsonElement element)
+    {
+        var id = RequireString(element, "id");
+
+        var url = RequireString(element, "url");
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidDataException($"Model '{id}' must have an absolute https url (found '{url}').");
+        }
+
+        var sha = OptionalString(element, "sha256");
+        if (sha is not null && !IsSha256Hex(sha))
+        {
+            throw new InvalidDataException($"Model '{id}' has a sha256 that is not 64 hex characters.");
+        }
+
+        var fileName = RequireString(element, "fileName");
+        if (fileName.Contains('/', StringComparison.Ordinal)
+            || fileName.Contains('\\', StringComparison.Ordinal)
+            || fileName != Path.GetFileName(fileName))
+        {
+            throw new InvalidDataException($"Model '{id}' has a fileName that is not a bare file name.");
+        }
+
+        return new ModelDescriptor
+        {
+            Id = id,
+            Family = RequireString(element, "family"),
+            DisplayName = RequireString(element, "displayName"),
+            Quantisation = RequireString(element, "quantisation"),
+            FileName = fileName,
+            Url = uri,
+            SizeBytes = OptionalLong(element, "sizeBytes"),
+            Sha256 = sha?.ToLowerInvariant(),
+            Verified = element.TryGetProperty("verified", out var verified) && verified.ValueKind == JsonValueKind.True,
+            License = RequireString(element, "license"),
+            AttributionId = RequireString(element, "attributionId"),
+            Languages = ParseStringArray(element, "languages"),
+            Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
+            Notes = OptionalString(element, "notes"),
+        };
+    }
+
+    internal static bool IsSha256Hex(string value)
+    {
+        if (value.Length != 64)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            var isHex = c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
+            if (!isHex)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string RequireString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()!
+            : throw new InvalidDataException($"Model manifest entry is missing required string '{name}'.");
+
+    private static string? OptionalString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static long? OptionalLong(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt64()
+            : null;
+
+    private static IReadOnlyList<string> ParseStringArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var array) || array.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var values = new List<string>();
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String && item.GetString() is { } text)
+            {
+                values.Add(text);
+            }
+        }
+
+        return values;
+    }
+
+    private static ModelCatalog LoadEmbedded()
+    {
+        var assembly = typeof(ModelCatalog).GetTypeInfo().Assembly;
+        const string ResourceName = "Parakeet.Core.Models.models.json";
+
+        using var stream = assembly.GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded model manifest '{ResourceName}' is missing from {assembly.GetName().Name}.");
+
+        using var reader = new StreamReader(stream);
+        return Parse(reader.ReadToEnd());
+    }
+}

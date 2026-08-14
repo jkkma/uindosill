@@ -1,0 +1,160 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Parakeet.App.ViewModels"
+        x:Class="Parakeet.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Uindosill — local transcription"
+        Width="1080" Height="720"
+        MinWidth="820" MinHeight="520">
+
+  <TabControl SelectedIndex="{Binding SelectedTab}">
+
+    <TabItem Header="Transcribe">
+      <Grid RowDefinitions="Auto,*,Auto" Margin="12" DataContext="{Binding Transcribe}"
+            x:DataType="vm:TranscribeViewModel">
+
+        <Border Grid.Row="0"
+                Name="DropZone"
+                DragDrop.AllowDrop="True"
+                BorderBrush="#7F888888" BorderThickness="2" CornerRadius="8"
+                Padding="18" Margin="0,0,0,12">
+          <StackPanel Spacing="4" HorizontalAlignment="Center">
+            <TextBlock Text="Drop audio or video files here" HorizontalAlignment="Center" FontSize="16" />
+            <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
+                       Opacity="0.7" FontSize="12" />
+          </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="360,12,*">
+
+          <DockPanel Grid.Column="0">
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <Button Content="Start" Command="{Binding StartCommand}"
+                      IsEnabled="{Binding !IsRunning}" />
+              <Button Content="Cancel" Command="{Binding CancelCommand}"
+                      IsEnabled="{Binding IsRunning}" />
+              <Button Content="Clear" Command="{Binding ClearCommand}"
+                      IsEnabled="{Binding !IsRunning}" />
+            </StackPanel>
+
+            <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:JobViewModel">
+                  <StackPanel Spacing="2" Margin="0,4">
+                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
+                    <ProgressBar Value="{Binding Progress}" Maximum="100"
+                                 IsIndeterminate="{Binding IsIndeterminate}" Height="4" />
+                    <TextBlock Text="{Binding Error}" FontSize="11" Foreground="#D9534F"
+                               TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="#D9A441"
+                               TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+
+          <GridSplitter Grid.Column="1" Background="Transparent" />
+
+          <DockPanel Grid.Column="2">
+            <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
+              <TextBlock Text="Output formats" FontWeight="SemiBold" />
+              <ItemsControl ItemsSource="{Binding Formats}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:OutputFormatViewModel">
+                    <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,0" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Output folder" VerticalAlignment="Center" />
+                <TextBox Text="{Binding OutputDirectory}" Width="280"
+                         PlaceholderText="beside each input file" />
+                <Button Content="Browse…" Name="BrowseOutput" />
+              </StackPanel>
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <CheckBox Content="Fixed windows instead of speech detection"
+                          IsChecked="{Binding UseFixedWindows}" />
+                <TextBlock Text="Segment cap (s)" VerticalAlignment="Center" />
+                <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60" Increment="5" Width="110" />
+              </StackPanel>
+            </StackPanel>
+
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                       Margin="0,8,0,0" Opacity="0.85" />
+
+            <ScrollViewer>
+              <SelectableTextBlock Text="{Binding SelectedJob.Transcript}" TextWrapping="Wrap" />
+            </ScrollViewer>
+          </DockPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Margin="0,10,0,0" Opacity="0.7" FontSize="11" TextWrapping="Wrap"
+                   Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
+      </Grid>
+    </TabItem>
+
+    <TabItem Header="Models">
+      <Grid ColumnDefinitions="340,12,*" Margin="12" DataContext="{Binding Models}"
+            x:DataType="vm:ModelsViewModel">
+
+        <DockPanel Grid.Column="0">
+          <TextBlock DockPanel.Dock="Top" Text="{Binding ModelDirectory}" FontSize="11" Opacity="0.7"
+                     TextWrapping="Wrap" Margin="0,0,0,8" />
+          <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding Selected}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModelViewModel">
+                <StackPanel Spacing="2" Margin="0,4">
+                  <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
+                  <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
+                               IsVisible="{Binding IsBusy}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+
+        <GridSplitter Grid.Column="1" Background="Transparent" />
+
+        <ScrollViewer Grid.Column="2">
+          <StackPanel Spacing="10" DataContext="{Binding Selected}" x:DataType="vm:ModelViewModel">
+            <TextBlock Text="{Binding DisplayName}" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
+            <TextBlock Text="{Binding Notes}" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Licence" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Licence}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Languages" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Languages}" TextWrapping="Wrap" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+    </TabItem>
+
+    <TabItem Header="Licences">
+      <ScrollViewer Margin="12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Notices" FontSize="18" FontWeight="SemiBold" />
+          <SelectableTextBlock Text="{Binding LicenceText}" TextWrapping="Wrap" FontFamily="monospace" />
+          <TextBlock Text="{Binding EnvironmentSummary}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding ThreadingNote}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+  </TabControl>
+</Window>

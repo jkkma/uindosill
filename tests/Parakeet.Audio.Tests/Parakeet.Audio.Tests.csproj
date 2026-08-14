@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Parakeet.Audio/Parakeet.Audio.csproj" />
+  </ItemGroup>
+
+</Project>
