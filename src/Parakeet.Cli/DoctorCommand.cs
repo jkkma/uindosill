@@ -12,6 +12,9 @@ internal static class DoctorCommand
 {
     private static readonly ComputeBackend[] Backends = [ComputeBackend.Cpu, ComputeBackend.Vulkan, ComputeBackend.Cuda];
 
+    /// <summary>How long a backend probe gets before it is killed and reported as hung.</summary>
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
+
     public static async Task<int> RunAsync(CliContext context, ParsedCommandLine parsed, CancellationToken ct)
     {
         context.WriteLine("Environment");
@@ -127,9 +130,39 @@ internal static class DoctorCommand
             return "skipped (could not start the probe process)";
         }
 
-        var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        // Both pipes must be drained CONCURRENTLY. Reading stdout to completion first deadlocks
+        // the moment the child writes more to stderr than the pipe buffer holds (~4 KB on
+        // Windows): the child blocks writing stderr, this process blocks reading stdout, and
+        // neither moves again. A failing probe reports every path it tried, which is well past
+        // that, so the failure path was the one that hung — the success path never did.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+
+        // A probe that never answers must not take the diagnostic down with it. A tool whose job
+        // is to explain why things are broken is the last place to hang without a message.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(ProbeTimeout);
+
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // It exited between the timeout firing and the kill; nothing to do.
+            }
+
+            return $"timed out after {ProbeTimeout.TotalSeconds:0} s and was killed";
+        }
+
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
 
         if (process.ExitCode == 0)
         {
