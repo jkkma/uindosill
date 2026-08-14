@@ -36,6 +36,7 @@ public static class TranscriptionRunner
             SourceName = sourceName,
             AudioDuration = audio.Duration,
             ModelId = capabilities.ModelId,
+            Quantisation = capabilities.Quantisation,
             Backend = capabilities.Backend,
             Language = options.Language,
             ProcessingTime = stopwatch.Elapsed,

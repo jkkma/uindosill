@@ -187,6 +187,25 @@ public class StreamingSegmenterTests
         }
     }
 
+    [Theory]
+    [InlineData(2.0)]
+    [InlineData(2.017)]
+    [InlineData(2.033)]
+    [InlineData(2.099)]
+    public void NoSegmentEndsAfterTheAudioDoes(double speechSeconds)
+    {
+        // The final partial frame is zero-padded so its energy is comparable to every other
+        // frame. That padding is measurement scaffolding, not audio: if it reaches the output
+        // the transcript's last timestamp lands past the end of the file.
+        var samples = TestAudio.Build((0.4, false), (speechSeconds, true));
+        var (segments, report) = Run(samples);
+
+        Assert.NotEmpty(segments);
+        Assert.All(segments, s => Assert.True(
+            s.End <= report.TotalAudio,
+            $"segment {s.Index} ends at {s.End.TotalSeconds:0.####}s, past the {report.TotalAudio.TotalSeconds:0.####}s of audio"));
+    }
+
     [Fact]
     public void RecordingThatStartsOnSpeechIsStillDetected()
     {
