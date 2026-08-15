@@ -270,6 +270,23 @@ public class AttributionTests
     }
 
     [Fact]
+    public void TheProprietaryCudaRuntimeIsListedAndNotDescribedAsMit()
+    {
+        // The CUDA drop is three NVIDIA proprietary DLLs and the component list is what the CLI
+        // and the Licences tab render, so an omission here reaches the shipped product. Asserted
+        // rather than trusted because the failure is silent: five MIT rows look complete.
+        var cuda = Assert.Single(
+            Attributions.Components,
+            c => c.Component.Contains("CUDA", StringComparison.Ordinal));
+
+        Assert.Contains("cudart64_12.dll", cuda.Component, StringComparison.Ordinal);
+        Assert.Contains("cublasLt64_12.dll", cuda.Component, StringComparison.Ordinal);
+        Assert.Contains("EULA", cuda.License, StringComparison.Ordinal);
+        Assert.DoesNotContain("MIT", cuda.License.Replace("not MIT", string.Empty, StringComparison.Ordinal));
+        Assert.Contains("docs.nvidia.com/cuda/eula", cuda.Uri.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LanguageClaimsDoNotIncludeScriptsTheModelCannotHandle()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);

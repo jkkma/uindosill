@@ -64,6 +64,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
             foreach (var component in Attributions.Components)
             {
                 lines.Add($"  {component.Component} — {component.License} — {component.Uri}");
+
+                // The notes carry the qualifying text — which builds ship a component, and on what
+                // terms. This panel used to drop them while `uindosill notice` printed them, so the
+                // two surfaces disagreed about a licence notice. They are rendered in both now.
+                if (component.Notes is { Length: > 0 } notes)
+                {
+                    lines.Add($"    {notes}");
+                }
             }
 
             return string.Join(Environment.NewLine, lines);

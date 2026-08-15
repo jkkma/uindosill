@@ -155,5 +155,21 @@ public static class Attributions
             License = "MIT",
             Uri = new Uri("https://github.com/CommunityToolkit/dotnet"),
         },
+        // The one entry here that is not MIT, and the reason this list is rendered rather than
+        // summarised as "MIT dependencies". cudart64_12.dll, cublas64_12.dll and cublasLt64_12.dll
+        // are NVIDIA proprietary binaries redistributed under Attachment A of the CUDA Toolkit
+        // EULA. It is listed unconditionally even though only the opt-in CUDA backend ships them:
+        // a notice that appears only when a build flag says so is a notice that can go missing,
+        // and the Notes field says which builds carry the files. See docs/LICENSING.md.
+        new ComponentLicence
+        {
+            Component = "NVIDIA CUDA runtime (cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll)",
+            License = "NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A",
+            Uri = new Uri("https://docs.nvidia.com/cuda/eula/index.html"),
+            Notes =
+                "Shipped only by builds that vendor the opt-in CUDA backend; the CPU and Vulkan backends " +
+                "contain none of these files. Redistributed as part of this application and not as a " +
+                "stand-alone product, which is the condition Attachment A attaches.",
+        },
     ];
 }
