@@ -70,6 +70,10 @@ So a session in such a container **builds the solution and runs the full suite**
 pipeline above works there end to end. What it cannot do is transcribe anything real: that needs
 the Windows natives and a model, neither of which is in the clone.
 
+`scripts/lab.ps1` is one entry point for the four of them — run it bare to list the tasks, each
+with the parameters its own script declares. It dispatches and nothing else, so every task is still
+runnable on its own.
+
 The scripts divide along the same line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
 there — including against JSONs the `--fake` engine produced.
