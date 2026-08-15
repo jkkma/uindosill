@@ -177,7 +177,9 @@ internal static class TranscribeCommand
             Document = document,
             OutputFiles = files,
             Elapsed = DateTimeOffset.UtcNow - started,
-            Warning = DescribeSilence(engine, document),
+            // Silence wins when both apply: an empty transcript has no segments to flag, and the
+            // reason it is empty is the only thing worth saying about it.
+            Warning = DescribeSilence(engine, document) ?? DescribeAnomalies(document, options),
         };
     }
 
@@ -218,6 +220,50 @@ internal static class TranscribeCommand
         return string.Create(
             CultureInfo.InvariantCulture,
             $"No speech found. Peak level {report.PeakDb:0.#} dBFS across {report.TotalAudio:hh\\:mm\\:ss} of audio.");
+    }
+
+    /// <summary>
+    /// Points at the segments worth re-reading. Both signals come from data the engine already
+    /// reported, and neither is a correctness claim: a script change says the decoder emitted a
+    /// different alphabet there, which on this checkpoint is what its own language detection
+    /// looks like from the outside. Nothing in the CLI can constrain that — <c>--language</c>
+    /// reaches the ABI and a non-prompt model ignores it — so saying where it happened is the
+    /// whole of what the tool can honestly do.
+    /// </summary>
+    private static string? DescribeAnomalies(TranscriptDocument document, TranscriptionOptions options)
+    {
+        var anomalies = TranscriptAnalysis.Analyse(document, options.LowConfidenceThreshold);
+        if (anomalies.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+
+        var script = anomalies.Where(a => a.Kind is TranscriptAnomalyKind.ScriptDisagreement).ToList();
+        if (script.Count > 0)
+        {
+            var where = string.Join(
+                ", ",
+                script.Select(a => string.Create(
+                    CultureInfo.InvariantCulture, $"{a.Start:hh\\:mm\\:ss} {a.Detail}")));
+
+            parts.Add(
+                (script.Count == 1 ? "One segment changed script" : $"{script.Count} segments changed script") +
+                $": {where}. That describes the text, not the speech: the model chose another language for that " +
+                "stretch, and --language cannot constrain it on this checkpoint.");
+        }
+
+        var low = anomalies.Count(a => a.Kind is TranscriptAnomalyKind.LowConfidence);
+        if (low > 0)
+        {
+            parts.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{low} {(low == 1 ? "segment carries" : "segments carry")} a word below " +
+                $"{options.LowConfidenceThreshold:0.##}."));
+        }
+
+        return string.Join(" ", parts);
     }
 
     private static void WriteProgress(CliContext context, TranscriptionJob job, TranscriptionProgress progress)
