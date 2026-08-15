@@ -61,6 +61,7 @@ internal static class TranscribeCommand
             ModelPath = parsed.Value("model-path"),
             Backend = EngineFactory.ParseBackend(parsed.Value("backend")),
             NativeDirectory = parsed.Value("native-dir"),
+            DisableVulkanBFloat16 = parsed.HasFlag("vk-disable-bf16"),
         });
 
         if (parsed.HasFlag("fake"))

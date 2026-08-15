@@ -16,6 +16,9 @@ internal sealed record EngineRequest
 
     public string? NativeDirectory { get; init; }
 
+    /// <summary>Set GGML_VK_DISABLE_BFLOAT16 before loading. Vulkan only; see ParakeetCppOptions.</summary>
+    public bool DisableVulkanBFloat16 { get; init; }
+
     public bool WarmUp { get; init; } = true;
 
     public int BatchSize { get; init; } = 4;
@@ -57,6 +60,7 @@ internal static class EngineFactory
             ModelPath = path,
             Backend = request.Backend,
             NativeDirectory = request.NativeDirectory,
+            DisableVulkanBFloat16 = request.DisableVulkanBFloat16,
             WarmUp = request.WarmUp,
             BatchSize = request.BatchSize,
             ModelId = descriptor?.Id ?? Path.GetFileNameWithoutExtension(path),
