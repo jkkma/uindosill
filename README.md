@@ -27,9 +27,10 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 That order is deliberate, and for two different reasons. The entire Win32 risk surface — global
 keyboard hooks that get flagged as keyloggers, text injection that fails silently under UIPI,
 overlay windows that steal focus — lives on the dictation path and none of it on the file path,
-which is why dictation is last. Summarization sits in front of it because it needs none of that: it
-reads a transcript this product already produces, and what it costs instead is a second native
-stack and an honesty problem, since a wrong answer is fluent rather than obviously broken.
+which is why dictation is last. Asking questions about a transcript sits in front of it because it
+needs none of that: it reads a transcript this product already produces, and what it costs instead
+is a second native stack and an honesty problem, since a wrong answer is fluent rather than
+obviously broken.
 
 ## Quick start
 
