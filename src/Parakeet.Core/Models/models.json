@@ -30,9 +30,9 @@
       "verified": true,
       "license": "CC-BY-4.0",
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
-      "recommended": true,
+      "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "Default choice. Quantisation quality on this engine is unmeasured: the analogous ONNX INT8 export collapsed to 24.8% long-audio WER against 7.8% for fp32, and it collapsed silently, producing fluent wrong text. Measure against f16 before trusting it."
+      "notes": "The smallest step down from f16, and the measured one: 0.42% of normalised tokens differ from f16 over 2 h 55 m of real speech, against a 0.11% backend noise floor. That is divergence, not error. Quantisation quality on this engine is still unmeasured: the analogous ONNX INT8 export collapsed to 24.8% long-audio WER against 7.8% for fp32, and it collapsed silently, producing fluent wrong text. Choose it to save about 500 MB of download and some decode time, not because it has been cleared."
     },
     {
       "id": "tdt-0.6b-v3-f16",
@@ -46,9 +46,9 @@
       "verified": true,
       "license": "CC-BY-4.0",
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
-      "recommended": false,
+      "recommended": true,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "The reference for accuracy. Every quantisation claim in this project must be measured against this file, on real disfluent audio, including files over ten minutes."
+      "notes": "Default choice, and the reference for accuracy. It is the default because it is the only entry whose transcription quality is not an open question; the cost is a 1.34 GiB download and a slower CPU decode than q8_0. Every quantisation claim in this project must be measured against this file, on real disfluent audio, including files over ten minutes."
     },
     {
       "id": "tdt-0.6b-v3-q6_k",
