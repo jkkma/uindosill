@@ -64,7 +64,8 @@ internal static class Commands
         Short = 'l',
         TakesValue = true,
         ValueName = "tag",
-        Help = "Language hint for multilingual models, e.g. en, de, auto.",
+        Help = "Language hint for multilingual models, e.g. en, de, auto. Passed to the ABI but not "
+             + "applied by any catalogue model: only prompt-conditioned checkpoints read it.",
     };
 
     private static readonly OptionSpec Threads = new()
