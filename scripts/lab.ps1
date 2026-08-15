@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Four scripts with four names and four flag sets is three names too many to remember when you
+    Five scripts with five names and five flag sets is four names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -39,12 +39,18 @@
 
 .EXAMPLE
     .\scripts\lab.ps1 compare -Reference runs\A\chunk-cpu.json -Candidate runs\B\chunk-cpu.json
+
+.EXAMPLE
+    # Note -Candidates, plural and several: `compare` and `word-distance` take different parameters
+    # for the same idea, and the reason is in the param block below.
+    .\scripts\lab.ps1 word-distance -Reference runs\csb-f16-cuda\CSB384.json `
+                                    -Candidates runs\csb-q8_0-cuda\CSB384.json,runs\csb-q4_k-cuda\CSB384.json
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('measure', 'machine', 'compare', 'vendor-cuda')]
+    [ValidateSet('measure', 'machine', 'compare', 'word-distance', 'vendor-cuda')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -60,9 +66,16 @@ param(
     [switch] $ColdVulkanAlreadySpent,
     [switch] $SkipBuild,
 
-    # --- compare ---
+    # --- compare / word-distance ---
     [string] $Reference,
     [string] $Candidate,
+
+    # word-distance.ps1 takes several candidates against one reference, and this cannot be folded
+    # into -Candidate above. Declaring that as [string[]] instead looks like it would serve both and
+    # does not: splatting a String[] at compare-transcripts.ps1, which declares [string], throws
+    # "Cannot process argument transformation" rather than converting. Two names, because the two
+    # scripts genuinely take different things.
+    [string[]] $Candidates,
     [double] $TimeEpsilon,
     [double] $ConfidenceEpsilon,
     [switch] $ShowWords,
@@ -81,10 +94,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $tasks = [ordered]@{
-    'measure'     = 'measure-transcribe.ps1'
-    'machine'     = 'measure-second-machine.ps1'
-    'compare'     = 'compare-transcripts.ps1'
-    'vendor-cuda' = 'vendor-cuda.ps1'
+    'measure'       = 'measure-transcribe.ps1'
+    'machine'       = 'measure-second-machine.ps1'
+    'compare'       = 'compare-transcripts.ps1'
+    'word-distance' = 'word-distance.ps1'
+    'vendor-cuda'   = 'vendor-cuda.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.
@@ -115,15 +129,15 @@ if (-not $Task) {
         $synopsis = ($synopsis -replace '\s+', ' ').Trim()
         if ($synopsis.Length -gt 92) { $synopsis = $synopsis.Substring(0, 89) + '...' }
 
-        Write-Host ("  {0,-12} {1}" -f $name, $synopsis) -ForegroundColor Green
-        Write-Host ("  {0,-12} {1}" -f '', $tasks[$name]) -ForegroundColor DarkGray
+        Write-Host ("  {0,-14} {1}" -f $name, $synopsis) -ForegroundColor Green
+        Write-Host ("  {0,-14} {1}" -f '', $tasks[$name]) -ForegroundColor DarkGray
 
         $rendered = Get-TaskParameters $target | Sort-Object | ForEach-Object {
             # A '!' means the task accepts it and this dispatcher cannot pass it on — call the
             # script directly for that one. It is here so drift is visible rather than silent.
             if ($_ -in $declared) { "-$_" } else { "!-$_" }
         }
-        Write-Host ("  {0,-12} {1}" -f '', ($rendered -join ' '))
+        Write-Host ("  {0,-14} {1}" -f '', ($rendered -join ' '))
         Write-Host ''
     }
 

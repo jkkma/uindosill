@@ -12,7 +12,11 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > one file, not a benchmark, and the Vulkan figure is steady-state: the *first* Vulkan run on a
 > fresh machine takes 14 s rather than 6.6 s, because the driver is compiling shaders inside the
 > number that looks like decode time. Every figure here carries its backend and its caveats in
-> [docs/UNPROVEN.md](docs/UNPROVEN.md). Every quantisation below f16 is still unrun.
+> [docs/UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run against 2 h 55 m of
+> real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to 2.69% for q4_k, over a
+> CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse that sank the analogous
+> ONNX INT8 export. That is divergence from f16, **not** a word error rate: no ground truth exists
+> for that audio, so nothing here is a quality clearance for any quantisation.
 
 ## What it does
 
@@ -71,13 +75,16 @@ So a session in such a container **builds the solution and runs the full suite**
 pipeline above works there end to end. What it cannot do is transcribe anything real: that needs
 the Windows natives and a model, neither of which is in the clone.
 
-`scripts/lab.ps1` is one entry point for the four of them — run it bare to list the tasks, each
+`scripts/lab.ps1` is one entry point for the five of them — run it bare to list the tasks, each
 with the parameters its own script declares. It dispatches and nothing else, so every task is still
 runnable on its own.
 
 The scripts divide along the same line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
-there — including against JSONs the `--fake` engine produced.
+there — including against JSONs the `--fake` engine produced. `scripts/word-distance.ps1` is the
+same shape and runs there too: it answers the one question `compare-transcripts.ps1` gets wrong,
+how far apart two transcripts are when they are *not* nearly identical, by word-level edit distance
+rather than by index alignment.
 `scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
 `scripts/measure-second-machine.ps1` probes hardware through CIM and is Windows throughout, as is
 `scripts/vendor-cuda.ps1`, which reads a PE import table. For those last three, `pwsh` at least
