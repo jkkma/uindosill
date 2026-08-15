@@ -29,6 +29,31 @@ native/**/*.zip
 *.gguf
 tests/fixtures/large/
 
+# Measurement output. The harnesses write a timestamped folder per run under runs/, and a
+# three-hour transcript is 4.4 MB of JSON on its own.
+runs/
+
+# The audio this project is measured against lives in the repository root because that is where
+# the harnesses expect it, and it is large. Scoped to the root so test fixtures are unaffected.
+/*.m4a
+/*.mp3
+/*.mp4
+/*.mkv
+/*.wav
+/*.flac
+/*.wmv
+
+# Transcripts from a bare `uindosill transcribe`, which writes beside its input rather than into
+# runs/. Scoped to the root for the same reason. global.json is the only .json that belongs here.
+/*.srt
+/*.vtt
+/*.txt
+/*.json
+!/global.json
+
+# Not /*.md: README.md and NOTICE.md live here, so a `-f md` transcript written to the root has to
+# be moved or deleted by hand. Use the harnesses, which write into runs/, and this does not arise.
+
 # OS noise
 .DS_Store
 Thumbs.db

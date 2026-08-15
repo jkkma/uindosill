@@ -43,6 +43,15 @@ param(
     # because every run recorded in docs/UNPROVEN.md took the default.
     [string[]] $Formats = @('srt', 'txt', 'json'),
 
+    # Where the transcripts land. The default is a fresh timestamped folder per run, because the
+    # alternative is the CLI's own default — beside the input file — and the input files for this
+    # project live in the repository root. Fourteen runs of chunk.m4a leave fourteen transcripts
+    # there, `git status` fills with them, and the rename policy turns the fifteenth into
+    # "chunk (15).json". A folder per run also means nothing stale can be in it, which makes the
+    # freshness check below belt-and-braces rather than load-bearing — it stays, because a caller
+    # who passes an existing directory brings the staleness back with them.
+    [string] $OutputDirectory,
+
     [string] $Configuration = 'Release',
 
     # Write every working-set sample here as CSV, for plotting the shape rather than reading the
@@ -87,6 +96,12 @@ try {
     # positional input paths rather than as formats.
     $formatArgument = $formatIds -join ','
 
+    if (-not $OutputDirectory) {
+        $OutputDirectory = Join-Path $repo ("runs/{0}-{1}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $Backend)
+    }
+    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+    $OutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
+
     if (-not $SkipBuild) {
         Write-Host 'Building...' -ForegroundColor Cyan
         dotnet build src/Parakeet.Cli -c $Configuration --nologo | Out-Null
@@ -106,11 +121,13 @@ try {
         '--backend'; $Backend
         '--model'; $Model
         '-f'; $formatArgument
+        '-o'; $OutputDirectory
         $audio.Path
     )
 
     Write-Host "Transcribing $($audio.Path)" -ForegroundColor Cyan
     Write-Host "  model $Model, backend $Backend, formats $formatArgument"
+    Write-Host "  writing to $OutputDirectory"
 
     # A GPU timing with no driver version attached cannot be reproduced or argued with later. The
     # Vulkan figure first recorded for this file was 0.0230 and re-measured at 0.0110 on the same
@@ -283,7 +300,7 @@ try {
     }
 
     $stem = [IO.Path]::GetFileNameWithoutExtension($audio.Path)
-    $directory = Split-Path -Parent $audio.Path
+    $directory = $OutputDirectory
 
     # Report the files this run actually wrote, found by timestamp, rather than the names it was
     # assumed to have used.

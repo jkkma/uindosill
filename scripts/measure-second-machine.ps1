@@ -170,7 +170,6 @@ try {
 
     # ── the runs ───────────────────────────────────────────────────────────────
     $stem = [IO.Path]::GetFileNameWithoutExtension($audio.Path)
-    $audioDirectory = Split-Path -Parent $audio.Path
     $summary = @()
 
     foreach ($backend in $Backends) {
@@ -181,11 +180,14 @@ try {
         Write-Host "══ $label ═══════════════════════════════════" -ForegroundColor Magenta
 
         $before = (Get-Date).AddSeconds(-2)
+        $suffix = if ($isColdVulkan) { 'vulkan-cold' } else { $backend }
+        $runDirectory = Join-Path $OutputDirectory $suffix
         $arguments = @{
-            Path    = $audio.Path
-            Model   = $Model
-            Backend = $backend
-            Formats = @('json')
+            Path            = $audio.Path
+            Model           = $Model
+            Backend         = $backend
+            Formats         = @('json')
+            OutputDirectory = $runDirectory
         }
         # Only the first run builds; the rest reuse it. Building between runs would put a compile
         # between two timings that are meant to be comparable.
@@ -193,10 +195,11 @@ try {
 
         & (Join-Path $PSScriptRoot 'measure-transcribe.ps1') @arguments
 
-        # Collect this run's JSON by modification time rather than by reconstructing its name —
-        # the writer renames rather than clobbers, so the name is not predictable (gotcha 16).
-        $fresh = @(Get-ChildItem -LiteralPath $audioDirectory -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match ('^' + [regex]::Escape($stem) + '( \(\d+\))?\.json$') -and $_.LastWriteTime -ge $before } |
+        # Each backend writes into its own directory, so there is nothing to disambiguate. The
+        # freshness filter stays anyway: it costs nothing and it is the only thing standing between
+        # a re-run into an existing folder and a stale transcript reported as this run's.
+        $fresh = @(Get-ChildItem -LiteralPath $runDirectory -Filter '*.json' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $before } |
             Sort-Object LastWriteTime)
 
         if ($fresh.Count -eq 0) {
@@ -208,7 +211,6 @@ try {
             continue
         }
 
-        $suffix = if ($isColdVulkan) { 'vulkan-cold' } else { $backend }
         $destination = Join-Path $OutputDirectory "$stem-$suffix.json"
         Copy-Item -LiteralPath $fresh[-1].FullName -Destination $destination -Force
 
