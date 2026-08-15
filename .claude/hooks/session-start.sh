@@ -35,7 +35,9 @@
 # DUPLICATION, DELIBERATE: scripts/cloud-setup.sh installs the same toolchain with the same digests
 # into the cloud environment's own setup-script field. That one runs at container creation on any
 # branch; this one runs per session and only once it is on the default branch. They cannot share
-# code because that file has to be self-contained to be pasted into a text box. Change both.
+# code because that file has to be self-contained to be pasted into a text box, so if the pinned
+# versions change, both change. They do not fight: whichever runs first is adopted by the other,
+# detected by SDK version rather than by path.
 
 set -euo pipefail
 
@@ -50,6 +52,32 @@ FEED="https://packages.microsoft.com/debian/12/prod"
 
 log() { printf '[session-start] %s\n' "$*"; }
 fail() { printf '[session-start] ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Another mechanism may have installed the toolchain already: scripts/cloud-setup.sh puts the same
+# pinned build in /opt at container creation, on any branch, before this ever runs. Downloading a
+# second byte-identical copy would cost about 215 MB of transfer and a gigabyte of a per-session
+# disk allowance that is fixed, so an SDK that is already reachable is adopted rather than
+# duplicated. Checked by version, not by path, so it does not matter which mechanism won.
+existing_sdk() {
+    local candidate
+    for candidate in "$DOTNET_HOME" /opt/dotnet /usr/share/dotnet "$(command -v dotnet >/dev/null 2>&1 && dirname "$(readlink -f "$(command -v dotnet)")")"; do
+        [ -n "$candidate" ] && [ -x "$candidate/dotnet" ] || continue
+        "$candidate/dotnet" --list-sdks 2>/dev/null | grep -q '^10\.0\.400 ' || continue
+        printf '%s' "$candidate"
+        return 0
+    done
+    return 1
+}
+
+existing_pwsh() {
+    local candidate
+    for candidate in "$PWSH_HOME" /opt/powershell "$(command -v pwsh >/dev/null 2>&1 && dirname "$(readlink -f "$(command -v pwsh)")")"; do
+        [ -n "$candidate" ] && [ -x "$candidate/pwsh" ] || continue
+        printf '%s' "$candidate"
+        return 0
+    done
+    return 1
+}
 
 # name  sha256  path-under-$FEED
 read -r -d '' PACKAGES <<'EOF' || true
@@ -90,8 +118,10 @@ fetch_and_unpack() {
     fi
 }
 
-if [ -x "$DOTNET_HOME/dotnet" ] && "$DOTNET_HOME/dotnet" --list-sdks 2>/dev/null | grep -q '^10\.0\.400 '; then
-    log "SDK 10.0.400 already present at $DOTNET_HOME"
+if found="$(existing_sdk)"; then
+    DOTNET_HOME="$found"
+    if found_pwsh="$(existing_pwsh)"; then PWSH_HOME="$found_pwsh"; fi
+    log "SDK 10.0.400 already present at $DOTNET_HOME — nothing to download"
 else
     CACHE="$HOME/.cache/uindosill-toolchain"
     STAGE="$(mktemp -d)"
