@@ -8,15 +8,19 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
 > `tdt-0.6b-v3-f16`, on one 16-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
 > Vulkan, 0.0064 on CUDA** — 98 segments and 1,573 words on all three, no duplicated or dropped
-> words at any segment join. Three hours has been run end to end on CPU. That is one machine and
-> one file, not a benchmark, and the Vulkan figure is steady-state: the *first* Vulkan run on a
-> fresh machine takes 14 s rather than 6.6 s, because the driver is compiling shaders inside the
-> number that looks like decode time. Every figure here carries its backend and its caveats in
-> [docs/UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run against 2 h 55 m of
-> real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to 2.69% for q4_k, over a
-> CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse that sank the analogous
-> ONNX INT8 export. That is divergence from f16, **not** a word error rate: no ground truth exists
-> for that audio, so nothing here is a quality clearance for any quantisation.
+> words at any segment join. Three hours has been run end to end on CPU. The Vulkan figure is
+> steady-state: the *first* Vulkan run on a fresh machine takes 14 s rather than 6.6 s, because the
+> driver is compiling shaders inside the number that looks like decode time. A second machine — a
+> Ryzen AI 9 365 laptop with an integrated Radeon 880M — has since been measured: **RTF 0.14 on
+> CPU, and Vulkan does not load the model there at all** until `--vk-disable-bf16` is passed, an
+> upstream bf16 shader defect worked around behind an opt-in flag (RTF 0.035 with it). Two machines
+> and two ten-minute files is still not a benchmark. Every figure here carries its backend and its
+> caveats in [docs/UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run
+> against 2 h 55 m of real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to
+> 2.69% for q4_k, over a CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse
+> that sank the analogous ONNX INT8 export. That is divergence from f16, **not** a word error rate:
+> no ground truth exists for that audio, so nothing here is a quality clearance for any
+> quantisation.
 
 ## What it does
 
@@ -36,6 +40,15 @@ needs none of that: it reads a transcript this product already produces, and wha
 is a second native stack and an honesty problem, since a wrong answer is fluent rather than
 obviously broken.
 
+## Getting it
+
+**There is no installer yet.** Packaging, signing and auto-update are Phase 5 in
+[docs/PHASES.md](docs/PHASES.md), and that phase has started but not shipped. Until it does there
+are two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact
+from any CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu
+and vulkan natives already in place, kept for seven days, unsigned. Both still need a model, which
+the CLI or the app's Models tab downloads.
+
 ## Quick start
 
 ```bash
@@ -51,16 +64,24 @@ To do real work you need two things this repository does not contain: the parake
 library ([docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model
 ([docs/MODELS.md](docs/MODELS.md)). The first is one script — it downloads the pinned release,
 verifies it against the recorded digests and unpacks it where the build expects — and the second
-is one command below.
+is one command. Vendor *before* you build: the build is what copies `native/` into the output, so
+natives dropped after a build are not seen until the next one.
 
 ```bash
-pwsh scripts/vendor-natives.ps1           # cpu and vulkan natives, ~18 MB; then rebuild
+pwsh scripts/vendor-natives.ps1           # cpu and vulkan natives, ~18 MB, verified against the pins
+dotnet build Uindosill.slnx -c Release    # copies native/ into the output
 uindosill doctor                          # what this machine has, and which backends load
 uindosill models list
 uindosill models download tdt-0.6b-v3-f16
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
 ```
+
+`uindosill` is the CLI's assembly name: after that build it is
+`src/Parakeet.Cli/bin/Release/net10.0/uindosill.exe`, and `dotnet run --project src/Parakeet.Cli --`
+runs the same thing. On an AMD integrated GPU where Vulkan fails to load the model, add
+`--vk-disable-bf16` to `transcribe` or `bench`; the reason it is not the default is in
+[docs/UNPROVEN.md](docs/UNPROVEN.md).
 
 ### In a container with no toolchain
 
@@ -69,20 +90,23 @@ than a convenience — a test needing 670 MB of weights is one CI will never run
 what makes an ephemeral container a usable place to work, so the toolchain is installed by the
 environment's own setup script. Paste `scripts/cloud-setup.sh` into that field: it unpacks a
 pinned SDK 10.0.400 and PowerShell 7.6.4 from `packages.microsoft.com` Debian packages, checks
-each against the SHA-256 the feed publishes, and warms the NuGet cache. Not the vendor's installer, because `dot.net` and every host it redirects
-to are refused by the network policy there; not the Ubuntu feed either, though the image is
-Ubuntu. That file's header records both, and the digests are pinned for the same reason
-`docs/NATIVE-BINARIES.md` pins a parakeet.cpp release.
+each against the SHA-256 the feed publishes, and warms the NuGet cache. Not the vendor's
+installer, because `dot.net` and every host it redirects to are refused by the network policy
+there; not the Ubuntu feed either, though the image is Ubuntu. That file's header records both, and
+the digests are pinned for the same reason `docs/NATIVE-BINARIES.md` pins a parakeet.cpp release.
 
 So a session in such a container **builds the solution and runs the full suite**, and the `--fake`
 pipeline above works there end to end. What it cannot do is transcribe anything real: that needs
 the Windows natives and a model, neither of which is in the clone.
 
-`scripts/lab.ps1` is one entry point for the six of them — run it bare to list the tasks, each
-with the parameters its own script declares. It dispatches and nothing else, so every task is still
-runnable on its own.
+### The scripts
 
-The scripts divide along the same line rather than all being out of reach.
+`scripts/` holds six PowerShell tasks — two for vendoring, two measurement harnesses, two
+transcript comparisons — and `scripts/lab.ps1` is one entry point for them: run it bare to list
+the tasks, each with the parameters its own script declares. It dispatches and nothing else, so
+every task is still runnable on its own.
+
+They divide along the same container line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
 there — including against JSONs the `--fake` engine produced. `scripts/word-distance.ps1` is the
 same shape and runs there too: it answers the one question `compare-transcripts.ps1` gets wrong,
@@ -102,7 +126,7 @@ src/
   Parakeet.Core/               net10.0            contracts + pure logic; no NuGet, no platform, no UI
   Parakeet.Audio/              net10.0            WAV/RF64 parser + Media Foundation decoding
   Parakeet.Engine.ParakeetCpp/ net10.0            the ONLY project that touches native interop
-  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor
+  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice
   Parakeet.App/                net10.0            Avalonia desktop UI
 tests/                                            one per project, all runnable on Linux
 ```
@@ -122,7 +146,7 @@ of a rewrite.
 | Engine | `mudler/parakeet.cpp` via P/Invoke | MIT, ABI v6, and the only candidate with a published decode-parity result. |
 | Model format | GGUF | `mudler/parakeet-cpp-gguf` (f16, q8_0, q6_k, q5_k, q4_k). |
 | Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
-| Deployment | Self-contained + ReadyToRun, `win-x64` / `win-arm64` | No single-file, no trimming, no NativeAOT. |
+| Deployment | Self-contained + ReadyToRun, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | No single-file, no trimming, no NativeAOT. |
 
 Why parakeet.cpp and not the obvious alternatives is recorded in
 [docs/ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md).
@@ -134,9 +158,11 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 | [docs/UNPROVEN.md](docs/UNPROVEN.md) | Everything asserted here that nobody has measured. Read first. |
 | [docs/GOTCHAS.md](docs/GOTCHAS.md) | The silent failures, and where each one is handled in this codebase. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The seams, the contracts, and why segmentation is not optional. |
-| [docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release. |
+| [docs/ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md) | Why parakeet.cpp, and not the alternatives that looked obvious. |
+| [docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release: the script, the layout, the digests. |
 | [docs/MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
-| [docs/LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution". |
+| [docs/LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution", and the CUDA EULA reading. |
+| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, five MIT components, the CUDA runtime. |
 | [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [docs/V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [docs/PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
