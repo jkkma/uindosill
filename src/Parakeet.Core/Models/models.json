@@ -15,7 +15,7 @@
     "Sizes are exact and are compared to the downloaded byte count, so a rounded value is a bug.",
     "",
     "Weights are CC BY 4.0 (NVIDIA). Redistribution is permitted and the notice obligations are in",
-    "Licensing/Attributions.cs — they are not satisfied by attribution alone."
+    "Licensing/Attribution.cs — they are not satisfied by attribution alone."
   ],
   "models": [
     {

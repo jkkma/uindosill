@@ -49,7 +49,9 @@ check is not possible from here, say so rather than reasoning to a confident ans
 
 ## Where output goes
 
-The harnesses write to `runs/<timestamp>-<backend>/`, which is gitignored, and so are transcripts
-and audio at the repository root. Nothing a measurement produces belongs in the working tree.
+Everything under `runs/` is gitignored, and so are transcripts and audio at the repository root.
+Nothing a measurement produces belongs in the working tree. The two harnesses use different shapes
+inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
+`measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
 `scripts/lab.ps1` is one entry point for the four scripts; run it bare to list them.
