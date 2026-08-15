@@ -127,6 +127,7 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 | [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [docs/V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [docs/PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
+| [CLAUDE.md](CLAUDE.md) | Working agreement for an agent session: budget, how to build, the one rule. |
 
 ## Licence
 
