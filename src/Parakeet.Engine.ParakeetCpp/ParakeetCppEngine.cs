@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Text;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp.Interop;
@@ -42,6 +43,28 @@ public sealed record ParakeetCppOptions
 
     /// <summary>Directory holding the native library, overriding the search order.</summary>
     public string? NativeDirectory { get; init; }
+
+    /// <summary>
+    /// Set <c>GGML_VK_DISABLE_BFLOAT16</c> before the model is loaded, for Vulkan devices whose
+    /// bf16 cooperative-matrix shaders will not build.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off by default, and deliberately not inferred. The symptom is total — the load entry point
+    /// returns NULL and the process then dies in Vulkan teardown — but the ABI exposes no way to
+    /// ask a device about bf16 before loading a model, and a failed load cannot be retried in the
+    /// same process. So the choice has to be made before there is any evidence to make it with,
+    /// and turning it on for every Vulkan device would change the configuration every measured
+    /// Vulkan figure in docs/UNPROVEN.md was taken under.
+    /// </para>
+    /// <para>
+    /// Measured on an AMD Radeon 880M, driver 32.0.13022.3006, which reports <c>bf16: 0</c> and
+    /// <c>KHR_coopmat</c>: with this set the same model loads and decodes, and it is faster than
+    /// <c>GGML_VK_DISABLE_COOPMAT</c>, which also works but gives up the matrix cores. Ignored for
+    /// backends other than Vulkan, and never overrides a value already in the environment.
+    /// </para>
+    /// </remarks>
+    public bool DisableVulkanBFloat16 { get; init; }
 
     /// <summary>Run a throwaway decode at load so the first measured decode is not the first decode.</summary>
     public bool WarmUp { get; init; } = true;
@@ -110,12 +133,25 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
         };
     }
 
+    /// <summary>
+    /// The ggml knob that disables bf16 kernels in the Vulkan backend, and with them the bf16
+    /// cooperative-matrix shader variants that some devices cannot build.
+    /// </summary>
+    public const string VulkanDisableBFloat16Variable = "GGML_VK_DISABLE_BFLOAT16";
+
     public override EngineCapabilities Capabilities => _capabilities;
 
     protected override int BatchSize => _options.BatchSize;
 
     /// <summary>How long loading the model took, measured separately from any decode.</summary>
     public TimeSpan? ColdLoadDuration { get; private set; }
+
+    /// <summary>
+    /// True when this engine set <see cref="VulkanDisableBFloat16Variable"/> itself. False when the
+    /// option was off, the backend was not Vulkan, the variable was already set by someone else, or
+    /// the C runtime would not take it — so it records what happened rather than what was asked for.
+    /// </summary>
+    public bool VulkanBFloat16WorkaroundApplied { get; private set; }
 
     public override async ValueTask LoadAsync(CancellationToken ct = default)
     {
@@ -140,6 +176,8 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
                     $"Model file not found: {_options.ModelPath}", _options.ModelPath);
             }
 
+            ApplyVulkanWorkarounds();
+
             ParakeetNativeLibrary.Configure(_options.Backend, _options.AllowBackendFallback, _options.NativeDirectory);
 
             // Loading a multi-hundred-megabyte model blocks; keeping it off the caller's thread
@@ -157,10 +195,7 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
             if (handle.IsInvalid)
             {
                 handle.Dispose();
-                throw new ParakeetNativeException(
-                    $"parakeet.cpp could not load '{_options.ModelPath}'. The file may be truncated, may not be a " +
-                    "GGUF conversion of a Parakeet checkpoint, or may be a quantisation this build does not " +
-                    "support. (The load entry point returns NULL without a message on failure.)");
+                throw new ParakeetNativeException(DescribeLoadFailure());
             }
 
             _context = handle;
@@ -181,6 +216,65 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
         {
             await WarmUpAsync(_options.WarmUpSampleRate, TranscriptionOptions.Default, ct: ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Applies the opted-in Vulkan knobs before anything reads them. Must run before the first
+    /// native call: ggml reads these during device initialisation, once per process.
+    /// </summary>
+    private void ApplyVulkanWorkarounds()
+    {
+        if (_options.Backend != ComputeBackend.Vulkan || !_options.DisableVulkanBFloat16)
+        {
+            return;
+        }
+
+        // A value already in the environment wins. Someone who set it deliberately — including
+        // to "0" to rule it out while diagnosing something else — should not have it rewritten by
+        // an option whose whole purpose is to set the same variable.
+        if (NativeEnvironment.IsSet(VulkanDisableBFloat16Variable))
+        {
+            return;
+        }
+
+        VulkanBFloat16WorkaroundApplied = NativeEnvironment.Set(VulkanDisableBFloat16Variable, "1");
+    }
+
+    /// <summary>
+    /// The load entry point returns NULL with no message, so everything useful about a failure has
+    /// to be assembled from what was asked for. On Vulkan that includes the one knob known to turn
+    /// a total load failure into a working device.
+    /// </summary>
+    private string DescribeLoadFailure()
+    {
+        var builder = new StringBuilder();
+        builder.Append("parakeet.cpp could not load '").Append(_options.ModelPath)
+            .AppendLine("'. The file may be truncated, may not be a GGUF conversion of a Parakeet " +
+                        "checkpoint, or may be a quantisation this build does not support. " +
+                        "(The load entry point returns NULL without a message on failure.)");
+
+        if (_options.Backend != ComputeBackend.Vulkan)
+        {
+            return builder.ToString();
+        }
+
+        if (VulkanBFloat16WorkaroundApplied)
+        {
+            builder.AppendLine(
+                $"This ran with {VulkanDisableBFloat16Variable}=1 already applied, so the bf16 " +
+                "cooperative-matrix path is not the cause here.");
+            return builder.ToString();
+        }
+
+        builder.AppendLine(
+            "On Vulkan this is also what a device whose bf16 cooperative-matrix shaders will not " +
+            $"build looks like — the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
+            "Measured on an AMD Radeon 880M; see docs/UNPROVEN.md. Retrying in this process is not " +
+            "possible, because the Vulkan device does not survive the failed load: set the variable " +
+            "in the environment, or pass the option, and start again. Loading on the cpu backend " +
+            "distinguishes a device problem from a bad model file.");
+
+        return builder.ToString();
     }
 
     protected override async ValueTask<IReadOnlyList<DecodedSegment>> DecodeAsync(

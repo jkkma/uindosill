@@ -45,6 +45,13 @@ internal static class Commands
         Help = "Directory holding the parakeet.cpp native library.",
     };
 
+    private static readonly OptionSpec VulkanDisableBFloat16 = new()
+    {
+        Name = "vk-disable-bf16",
+        Help = "Vulkan: disable bf16 kernels before loading. Needed on devices whose bf16 " +
+               "cooperative-matrix shaders will not build, where the model otherwise fails to load.",
+    };
+
     private static readonly OptionSpec Fake = new()
     {
         Name = "fake",
@@ -97,6 +104,7 @@ internal static class Commands
             ModelPath,
             Backend,
             NativeDirectory,
+            VulkanDisableBFloat16,
             Language,
             Threads,
             new OptionSpec
@@ -176,6 +184,7 @@ internal static class Commands
             ModelPath,
             Backend,
             NativeDirectory,
+            VulkanDisableBFloat16,
             Language,
             Fake,
             new OptionSpec
