@@ -22,17 +22,36 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var modelStore = store ?? new LocalModelStore();
         var modelCatalog = catalog ?? ModelCatalog.Default;
 
-        Models = new ModelsViewModel(modelStore, modelCatalog);
-        Transcribe = new TranscribeViewModel(engines, () => new EngineSelection
+        Session = new ModelSession(engines);
+
+        Models = new ModelsViewModel(modelStore, modelCatalog, session: Session, backend: () => Backend);
+        Transcribe = new TranscribeViewModel(
+            engines,
+            () => new EngineSelection
+            {
+                Backend = Backend,
+                Model = Models.SelectedDescriptor,
+            },
+            Session);
+
+        // Load and unload have to be shut off for the duration of a batch: the running jobs hold
+        // the engine an unload would dispose out from under them.
+        Transcribe.PropertyChanged += (_, e) =>
         {
-            Backend = Backend,
-            Model = Models.SelectedDescriptor,
-        });
+            if (e.PropertyName == nameof(TranscribeViewModel.IsRunning))
+            {
+                Models.IsTranscribing = Transcribe.IsRunning;
+            }
+        };
     }
 
     public TranscribeViewModel Transcribe { get; }
 
     public ModelsViewModel Models { get; }
+
+    /// <summary>The one loaded model, shared by the Models tab that controls it and the
+    /// Transcribe tab that uses it.</summary>
+    public ModelSession Session { get; }
 
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];

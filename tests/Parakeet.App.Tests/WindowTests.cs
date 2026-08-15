@@ -7,6 +7,7 @@ using Parakeet.App.Views;
 using Parakeet.Audio;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
+using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.Tests;
 
@@ -94,6 +95,12 @@ public class TranscribeViewModelTests
         var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
         main.Transcribe.OutputDirectory = directory;
+
+        // Start refuses without a loaded model, so these tests load one the way the window does.
+        // Waiting on the task rather than firing it: an unawaited load races the Start that follows.
+        main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor })
+            .GetAwaiter().GetResult();
+
         return (main.Transcribe, directory);
     }
 
@@ -136,6 +143,44 @@ public class TranscribeViewModelTests
 
         Assert.Empty(viewModel.Jobs);
         Assert.Contains("not found", viewModel.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartRefusesUntilAModelIsLoaded()
+    {
+        // Start used to load whatever was selected on its way past, which meant the first run of a
+        // session silently decided the backend — the choice this tab now makes explicit.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        main.Transcribe.OutputDirectory = directory;
+        main.Transcribe.AddFiles([WriteWav(directory, "a.wav")]);
+
+        Assert.False(main.Transcribe.IsModelLoaded);
+        Assert.False(main.Transcribe.CanStart);
+        Assert.Contains("No model is loaded", main.Transcribe.StartHint, StringComparison.Ordinal);
+
+        await main.Transcribe.StartCommand.ExecuteAsync(null);
+
+        Assert.Contains("No model is loaded", main.Transcribe.StatusMessage, StringComparison.Ordinal);
+        Assert.All(main.Transcribe.Jobs, job => Assert.Equal(JobState.Pending, job.State));
+        Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
+
+        // Loading turns the button on, and the hint off.
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        Assert.True(main.Transcribe.IsModelLoaded);
+        Assert.True(main.Transcribe.CanStart);
+        Assert.Null(main.Transcribe.StartHint);
+
+        await main.Transcribe.StartCommand.ExecuteAsync(null);
+        Assert.Equal(JobState.Completed, main.Transcribe.Jobs[0].State);
+
+        // Unloading takes it away again, without the queue being touched.
+        await main.Session.UnloadAsync();
+
+        Assert.False(main.Transcribe.CanStart);
+        Assert.Single(main.Transcribe.Jobs);
     }
 
     [Fact]
@@ -300,6 +345,165 @@ public class ModelsViewModelTests
             Assert.False(model.NeedsUnverifiedOptIn);
             Assert.Contains("digest pinned", model.Provenance, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public void DownloadIsOfferedOnlyForModelsThatAreNotAlreadyHere()
+    {
+        // The button bound to IsBusy alone, so an installed model still offered Download — a
+        // 1.34 GiB re-fetch of a file the store already had, next to a Remove button that was
+        // correctly disabled on the opposite condition. Asserting on CanDownload, which is what
+        // the binding and the command guard both read.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+        var model = viewModel.Models.First();
+
+        Assert.False(model.IsInstalled);
+        Assert.True(model.CanDownload);
+
+        model.IsInstalled = true;
+        Assert.False(model.CanDownload);
+
+        // Removing it puts the offer back, which is the only route from installed to downloadable.
+        model.IsInstalled = false;
+        Assert.True(model.CanDownload);
+
+        // And a download in flight still suppresses it, as it did before.
+        model.IsBusy = true;
+        Assert.False(model.CanDownload);
+    }
+
+    [Fact]
+    public async Task DownloadingAnInstalledModelDoesNothing()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+
+        viewModel.Selected = viewModel.Models.First();
+        viewModel.Selected.IsInstalled = true;
+
+        // No installer factory is supplied, so a real InstallAsync would try to reach the network.
+        // Returning early is what keeps this test offline, which is the point being asserted.
+        await viewModel.DownloadCommand.ExecuteAsync(null);
+
+        Assert.Null(viewModel.StatusMessage);
+        Assert.False(viewModel.Selected.IsBusy);
+    }
+
+    [Fact]
+    public async Task TheSessionNamesWhatIsLoadedAndTheBackendItActuallyGot()
+    {
+        // The window could not say which model was loaded because nothing stayed loaded: the engine
+        // was created and disposed inside one Start. This asserts the session answers it, and that
+        // it reports the backend the engine came back with rather than the one that was asked for.
+        var session = new ModelSession(new FakeEngineProvider());
+        var descriptor = ModelCatalog.Default.Models[0];
+
+        Assert.False(session.IsLoaded);
+        Assert.Null(session.LoadedBackend);
+
+        await session.LoadAsync(new EngineSelection { Backend = ComputeBackend.Cuda, Model = descriptor });
+
+        Assert.True(session.IsLoaded);
+        Assert.NotNull(session.Engine);
+        Assert.Equal(descriptor.Id, session.Model?.Id);
+        Assert.Equal(ComputeBackend.Cuda, session.RequestedBackend);
+
+        // The fake engine reports CPU whatever it is handed, which is exactly the fallback shape
+        // the summary has to be able to show: asked for one backend, given another.
+        Assert.Equal(ComputeBackend.Cpu, session.LoadedBackend);
+
+        await session.UnloadAsync();
+
+        Assert.False(session.IsLoaded);
+        Assert.Null(session.Engine);
+        Assert.Null(session.Model);
+        Assert.Null(session.LoadedBackend);
+    }
+
+    [Fact]
+    public async Task TheModelsTabReportsTheLoadedModelAndFlagsAFallback()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var session = new ModelSession(new FakeEngineProvider());
+        var viewModel = new ModelsViewModel(
+            new LocalModelStore(directory),
+            ModelCatalog.Default,
+            session: session,
+            backend: () => ComputeBackend.Cuda);
+
+        Assert.Contains("Nothing loaded", viewModel.LoadedSummary, StringComparison.Ordinal);
+        Assert.False(viewModel.CanUnload);
+
+        // Loading is offered only for a model that is actually on disk.
+        viewModel.Selected = viewModel.Models[0];
+        Assert.False(viewModel.CanLoad);
+
+        viewModel.Selected.IsInstalled = true;
+        Assert.True(viewModel.CanLoad);
+
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsLoaded);
+        Assert.True(viewModel.CanUnload);
+        Assert.True(viewModel.Models[0].IsLoaded);
+        Assert.Contains("Loaded:", viewModel.LoadedSummary, StringComparison.Ordinal);
+        Assert.Contains("cpu", viewModel.LoadedSummary, StringComparison.Ordinal);
+
+        // Asked for cuda, given cpu — the summary has to say so rather than repeat the request.
+        Assert.Contains("fell back", viewModel.LoadedSummary, StringComparison.Ordinal);
+
+        // The backend cannot change after a load, and the note says that rather than the UI
+        // offering a control that quietly does nothing.
+        Assert.Contains("fixed for this process", viewModel.BackendNote, StringComparison.Ordinal);
+
+        await viewModel.UnloadCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.IsLoaded);
+        Assert.False(viewModel.Models[0].IsLoaded);
+        Assert.Contains("Nothing loaded", viewModel.LoadedSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoadAndUnloadAreShutOffWhileATranscriptionIsRunning()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var session = new ModelSession(new FakeEngineProvider());
+        var viewModel = new ModelsViewModel(
+            new LocalModelStore(directory), ModelCatalog.Default, session: session);
+
+        viewModel.Selected = viewModel.Models[0];
+        viewModel.Selected.IsInstalled = true;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.CanUnload);
+
+        // The running batch is holding the engine an unload would dispose.
+        viewModel.IsTranscribing = true;
+
+        Assert.False(viewModel.CanUnload);
+        Assert.False(viewModel.CanLoad);
+
+        viewModel.IsTranscribing = false;
+        Assert.True(viewModel.CanUnload);
+    }
+
+    [Fact]
+    public async Task ALoadedModelCannotBeRemovedFromUnderTheEngine()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var session = new ModelSession(new FakeEngineProvider());
+        var viewModel = new ModelsViewModel(
+            new LocalModelStore(directory), ModelCatalog.Default, session: session);
+
+        viewModel.Selected = viewModel.Models[0];
+        viewModel.Selected.IsInstalled = true;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        viewModel.RemoveCommand.Execute(null);
+
+        Assert.Contains("Unload it first", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.True(viewModel.Models[0].IsInstalled);
     }
 
     [Fact]

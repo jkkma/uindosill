@@ -35,6 +35,10 @@
                       IsEnabled="{Binding IsRunning}" />
               <Button Content="Clear" Command="{Binding ClearCommand}"
                       IsEnabled="{Binding !IsRunning}" />
+              <!-- Start is disabled until a model is loaded, so it has to say why. -->
+              <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
+                         FontSize="11" Foreground="#D9A441"
+                         IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
             </StackPanel>
 
             <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
@@ -113,7 +117,15 @@
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ModelViewModel">
                 <StackPanel Spacing="2" Margin="0,4">
-                  <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                    <!-- Which model is in memory, marked in the list itself. "Installed" is true of
+                         every downloaded entry and answers a different question. -->
+                    <Border IsVisible="{Binding IsLoaded}" Background="#2E7D6B" CornerRadius="3"
+                            Padding="5,1" VerticalAlignment="Center">
+                      <TextBlock Text="LOADED" FontSize="9" FontWeight="Bold" Foreground="White" />
+                    </Border>
+                  </StackPanel>
                   <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
                   <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
                                IsVisible="{Binding IsBusy}" />
@@ -152,7 +164,7 @@
 
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Button Content="Download" Command="{Binding DownloadCommand}"
-                      IsEnabled="{Binding !Selected.IsBusy}" />
+                      IsEnabled="{Binding Selected.CanDownload}" />
               <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
                       IsEnabled="{Binding Selected.IsBusy}" />
               <Button Content="Remove" Command="{Binding RemoveCommand}"
@@ -163,6 +175,32 @@
                          IsVisible="{Binding Selected.IsBusy}" />
             <TextBlock Text="{Binding Selected.Status}" Opacity="0.75" FontSize="11" />
             <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
+
+            <Separator Margin="0,6" />
+
+            <!-- What is in memory, and the controls for putting it there and taking it out again.
+                 Until this existed the engine was built and torn down inside one Start, so there
+                 was no loaded model to name and nothing in the window said which one ran. The
+                 backend row is bound here for the first time too: MainWindowViewModel has exposed
+                 Backends and Backend all along and this view referenced neither, so the app was
+                 pinned to its Vulkan default with no way to see or change it. -->
+            <TextBlock Text="In memory" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Backend" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
+                        SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
+                        IsEnabled="{Binding !IsLoaded}" MinWidth="120" />
+              <Button Content="Load" Command="{Binding LoadCommand}"
+                      IsEnabled="{Binding CanLoad}" />
+              <Button Content="Unload" Command="{Binding UnloadCommand}"
+                      IsEnabled="{Binding CanUnload}" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
+            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
+                       TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
           </StackPanel>
         </ScrollViewer>
       </Grid>
