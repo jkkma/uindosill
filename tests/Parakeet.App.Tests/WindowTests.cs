@@ -72,6 +72,12 @@ public class WindowTests
         Assert.Contains("creativecommons.org/licenses/by/4.0", licence, StringComparison.Ordinal);
         Assert.Contains("technological measures", licence, StringComparison.Ordinal);
         Assert.Contains("MIT", licence, StringComparison.Ordinal);
+
+        // The one non-MIT component, and its qualifying note. This panel used to render the
+        // component line and drop the note, so both are asserted here rather than one standing
+        // in for the other.
+        Assert.Contains("NVIDIA CUDA Toolkit EULA", licence, StringComparison.Ordinal);
+        Assert.Contains("opt-in CUDA backend", licence, StringComparison.Ordinal);
     }
 
     private static MainWindowViewModel NewViewModel(out string directory)
