@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Five scripts with five names and five flag sets is four names too many to remember when you
+    Six scripts with six names and six flag sets is five names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -32,6 +32,11 @@
     Lists the tasks, each with the parameters its own script actually declares.
 
 .EXAMPLE
+    .\scripts\lab.ps1 vendor
+    The pinned cpu and vulkan natives, downloaded, verified against docs/NATIVE-BINARIES.md and
+    unpacked into native/win-x64/. Add -Backends cpu,vulkan,cuda for the opt-in CUDA pair.
+
+.EXAMPLE
     .\scripts\lab.ps1 measure -Path chunk.m4a -Backend cuda -Formats srt,txt,json,vtt,vtt-words
 
 .EXAMPLE
@@ -50,7 +55,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('measure', 'machine', 'compare', 'word-distance', 'vendor-cuda')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -81,6 +86,10 @@ param(
     [switch] $ShowWords,
     [switch] $ShowTimestamps,
 
+    # --- vendor (-Backends and -Force are shared with the tasks above) ---
+    [string] $ArchiveDirectory,
+    [string] $NativeRoot,
+
     # --- vendor-cuda ---
     [string] $LibArchive,
     [string] $CudartArchive,
@@ -94,6 +103,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $tasks = [ordered]@{
+    'vendor'        = 'vendor-natives.ps1'
     'measure'       = 'measure-transcribe.ps1'
     'machine'       = 'measure-second-machine.ps1'
     'compare'       = 'compare-transcripts.ps1'

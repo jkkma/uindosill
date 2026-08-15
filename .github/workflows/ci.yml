@@ -53,6 +53,14 @@ jobs:
   # brief warns about and this repository has already made once: a RuntimeIdentifier no longer
   # implies self-contained on .NET 8+, so a publish can be green and still framework-dependent.
   # Counting the output files is the check.
+  #
+  # It also vendors the parakeet.cpp natives first, so the win-x64 artefact is one that can
+  # transcribe rather than a managed shell around an empty native/ directory. The vendoring is the
+  # same script a developer runs — scripts/vendor-natives.ps1 — which downloads the pinned v0.5.0
+  # archives, refuses to unpack anything whose SHA-256 is not the one recorded in
+  # docs/NATIVE-BINARIES.md, and fails if a pin it trusts is missing from that table. Only win-x64:
+  # upstream publishes no win-arm64 asset, so that leg's artefact still carries no natives and
+  # docs/NATIVE-BINARIES.md says so.
   publish-windows:
     runs-on: ubuntu-latest
     strategy:
@@ -64,6 +72,11 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+
+      - name: Vendor the pinned parakeet.cpp natives (cpu and vulkan)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./scripts/vendor-natives.ps1
 
       - name: Publish CLI
         run: dotnet publish src/Parakeet.Cli --configuration Release -r ${{ matrix.rid }} -o out/cli-${{ matrix.rid }}
@@ -83,6 +96,29 @@ jobs:
               echo "A RuntimeIdentifier does not imply SelfContained on .NET 8+. See Directory.Build.targets."
               exit 1
             fi
+          done
+
+      # The vendoring step above put the natives in native/; this checks they came out the other
+      # side, in both apps, in the layout the loader searches. LICENSE is asserted alongside the
+      # binary because parakeet.cpp is MIT and build/NativeAssets.targets exists partly to carry that
+      # notice — a publish with the DLL and without it redistributes an MIT binary without its notice,
+      # and nothing else in the pipeline would say so.
+      - name: Assert the natives and their licences are in the publish output
+        if: matrix.rid == 'win-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in out/cli-win-x64 out/app-win-x64; do
+            for backend in cpu vulkan; do
+              for file in parakeet.dll LICENSE; do
+                path="$dir/native/win-x64/$backend/$file"
+                if [ ! -s "$path" ]; then
+                  echo "::error::$path is missing or empty. build/NativeAssets.targets globs native/**/*.dll and native/**/LICENSE; one of them did not fire."
+                  exit 1
+                fi
+              done
+              echo "$dir/native/win-x64/$backend: parakeet.dll $(stat -c %s "$dir/native/win-x64/$backend/parakeet.dll") bytes, LICENSE present"
+            done
           done
 
       - uses: actions/upload-artifact@v7

@@ -49,9 +49,12 @@ dotnet run --project src/Parakeet.Cli -- transcribe --fake -f srt,json recording
 
 To do real work you need two things this repository does not contain: the parakeet.cpp native
 library ([docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model
-([docs/MODELS.md](docs/MODELS.md)).
+([docs/MODELS.md](docs/MODELS.md)). The first is one script — it downloads the pinned release,
+verifies it against the recorded digests and unpacks it where the build expects — and the second
+is one command below.
 
 ```bash
+pwsh scripts/vendor-natives.ps1           # cpu and vulkan natives, ~18 MB; then rebuild
 uindosill doctor                          # what this machine has, and which backends load
 uindosill models list
 uindosill models download tdt-0.6b-v3-f16
@@ -75,7 +78,7 @@ So a session in such a container **builds the solution and runs the full suite**
 pipeline above works there end to end. What it cannot do is transcribe anything real: that needs
 the Windows natives and a model, neither of which is in the clone.
 
-`scripts/lab.ps1` is one entry point for the five of them — run it bare to list the tasks, each
+`scripts/lab.ps1` is one entry point for the six of them — run it bare to list the tasks, each
 with the parameters its own script declares. It dispatches and nothing else, so every task is still
 runnable on its own.
 
@@ -84,7 +87,9 @@ The scripts divide along the same line rather than all being out of reach.
 there — including against JSONs the `--fake` engine produced. `scripts/word-distance.ps1` is the
 same shape and runs there too: it answers the one question `compare-transcripts.ps1` gets wrong,
 how far apart two transcripts are when they are *not* nearly identical, by word-level edit distance
-rather than by index alignment.
+rather than by index alignment. `scripts/vendor-natives.ps1` needs only `pwsh` and a route to
+`github.com` for its cpu and vulkan backends, which is how the Linux CI runner vendors the natives
+before it publishes; whether the container's network policy allows that route has not been checked.
 `scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
 `scripts/measure-second-machine.ps1` probes hardware through CIM and is Windows throughout, as is
 `scripts/vendor-cuda.ps1`, which reads a PE import table. For those last three, `pwsh` at least
