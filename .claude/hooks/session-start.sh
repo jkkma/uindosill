@@ -31,6 +31,11 @@
 # shipped to somebody else's machine is a wasted round trip.
 #
 # Re-running is free: an SDK already in place is detected and the downloads are skipped.
+#
+# DUPLICATION, DELIBERATE: scripts/cloud-setup.sh installs the same toolchain with the same digests
+# into the cloud environment's own setup-script field. That one runs at container creation on any
+# branch; this one runs per session and only once it is on the default branch. They cannot share
+# code because that file has to be self-contained to be pasted into a text box. Change both.
 
 set -euo pipefail
 
