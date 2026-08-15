@@ -74,9 +74,9 @@ The scripts divide along the same line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
 there — including against JSONs the `--fake` engine produced.
 `scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
-`scripts/vendor-cuda.ps1` reads a PE import table and is Windows throughout. For those last two,
-`pwsh` at least parses them, which is enough to keep a syntax error off the machine that can run
-them.
+`scripts/measure-second-machine.ps1` probes hardware through CIM and is Windows throughout, as is
+`scripts/vendor-cuda.ps1`, which reads a PE import table. For those last three, `pwsh` at least
+parses them, which is enough to keep a syntax error off the machine that can run them.
 
 ## Layout
 
