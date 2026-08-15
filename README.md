@@ -18,8 +18,9 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 
 - **v1 is file transcription.** No global hotkeys, no text injection, no overlay HUD, no microphone
   capture.
-- **v2 is transcript summarization.** Not built. The decisions it turns on are open and are
-  recorded in [docs/V2-SUMMARIZATION.md](docs/V2-SUMMARIZATION.md).
+- **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
+  cites timestamps you can click. Not built; the open decisions are in
+  [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
 - **v3 is push-to-talk dictation.** Not built, not architected out —
   [docs/V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
 
@@ -28,7 +29,7 @@ keyboard hooks that get flagged as keyloggers, text injection that fails silentl
 overlay windows that steal focus — lives on the dictation path and none of it on the file path,
 which is why dictation is last. Summarization sits in front of it because it needs none of that: it
 reads a transcript this product already produces, and what it costs instead is a second native
-stack and an honesty problem, since a summary that is wrong is fluent rather than obviously broken.
+stack and an honesty problem, since a wrong answer is fluent rather than obviously broken.
 
 ## Quick start
 
@@ -119,7 +120,7 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 | [docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release. |
 | [docs/MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
 | [docs/LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution". |
-| [docs/V2-SUMMARIZATION.md](docs/V2-SUMMARIZATION.md) | The open decisions for v2, and the problem that makes it hard. |
+| [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [docs/V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [docs/PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
 
