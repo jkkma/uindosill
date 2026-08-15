@@ -58,12 +58,12 @@ uindosill bench recording.wav
 
 Every test here runs on Linux with no weights and no display, which is a design constraint rather
 than a convenience — a test needing 670 MB of weights is one CI will never run. That constraint is
-what makes an ephemeral container a usable place to work, so the toolchain installs itself into
-one: `.claude/hooks/session-start.sh` unpacks a pinned SDK 10.0.400 and PowerShell 7.6.4 from
-`packages.microsoft.com` Debian packages, checks each against the SHA-256 the feed publishes, and
-warms the NuGet cache. Not the vendor's installer, because `dot.net` and every host it redirects
+what makes an ephemeral container a usable place to work, so the toolchain is installed by the
+environment's own setup script. Paste `scripts/cloud-setup.sh` into that field: it unpacks a
+pinned SDK 10.0.400 and PowerShell 7.6.4 from `packages.microsoft.com` Debian packages, checks
+each against the SHA-256 the feed publishes, and warms the NuGet cache. Not the vendor's installer, because `dot.net` and every host it redirects
 to are refused by the network policy there; not the Ubuntu feed either, though the image is
-Ubuntu. The hook's header comment records both, and the digests are pinned for the same reason
+Ubuntu. That file's header records both, and the digests are pinned for the same reason
 `docs/NATIVE-BINARIES.md` pins a parakeet.cpp release.
 
 So a session in such a container **builds the solution and runs the full suite**, and the `--fake`
