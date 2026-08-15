@@ -40,7 +40,7 @@ obviously broken.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 258 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 265 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

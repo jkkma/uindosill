@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 258 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 265 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 ```
 
