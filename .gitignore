@@ -29,8 +29,9 @@ native/**/*.zip
 *.gguf
 tests/fixtures/large/
 
-# Measurement output. The harnesses write a timestamped folder per run under runs/, and a
-# three-hour transcript is 4.4 MB of JSON on its own.
+# Measurement output. measure-transcribe.ps1 writes runs/<timestamp>-<backend>/ and
+# measure-second-machine.ps1 writes runs/<machine>/<backend>/; a three-hour transcript is 4.4 MB
+# of JSON on its own.
 runs/
 
 # The audio this project is measured against lives in the repository root because that is where
