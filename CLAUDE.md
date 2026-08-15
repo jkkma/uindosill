@@ -1,0 +1,53 @@
+# Working agreement
+
+Operational notes for an agent session. Everything about *the project* is in `docs/` and in
+`README.md` — do not restate it here, because two copies of a fact is how one of them goes stale,
+which is a failure this repository has already had to fix more than once.
+
+## Budget
+
+**A workflow may spawn at most 16 agents.** That is a hard ceiling set by the maintainer's usage
+limits, not a guideline. Prefer fewer. Before reaching for a fan-out, check whether the question
+is answerable by reading and grepping, which it usually is at this repository's size.
+
+Two things make a review workflow expensive, and neither is the agent count on its own:
+
+- **Auditors that build or test.** The suite is fast, but seven agents each running
+  `dotnet test` is not. Verify the build once yourself and tell the agents the result.
+- **A verify phase that scales with findings.** One skeptic per finding is unbounded — twenty
+  findings is twenty more agents. Batch them, or cap it.
+
+## Building and testing
+
+The toolchain installs itself. In a cloud container it comes from the environment's setup script
+(`scripts/cloud-setup.sh`) or from `.claude/hooks/session-start.sh`, both of which unpack a pinned
+SDK 10.0.400 and PowerShell 7.6.4 — see either file for why not the vendor's installer.
+
+```bash
+dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
+dotnet test  Uindosill.slnx -c Release   # 247 tests, no weights, no display, no network
+pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
+```
+
+**A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
+unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have
+shipped a red build.
+
+What a container still cannot do is transcribe anything real: that needs the Windows natives and
+a model, neither of which is in the clone. `--fake` exercises the whole pipeline without them.
+
+## The rule this project runs on
+
+Every claim is either measured or explicitly marked unproven. When reporting a number, make sure
+it measures the thing being claimed, and never quote a real-time factor without naming its
+backend. `docs/UNPROVEN.md` is the record; read it before quoting any figure from this repository.
+
+That applies to your own output too. Verify a claim before writing it into a document, and when a
+check is not possible from here, say so rather than reasoning to a confident answer.
+
+## Where output goes
+
+The harnesses write to `runs/<timestamp>-<backend>/`, which is gitignored, and so are transcripts
+and audio at the repository root. Nothing a measurement produces belongs in the working tree.
+
+`scripts/lab.ps1` is one entry point for the four scripts; run it bare to list them.
