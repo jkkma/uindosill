@@ -33,6 +33,14 @@ jobs:
       - name: Test
         run: dotnet test Uindosill.slnx --configuration Release --no-build --logger "trx;LogFileName=results.trx"
 
+      # Three documents quote a test total and all three sat at 258 for several commits after the
+      # suite reached 265. The numbers are cheap to check against the run that just happened, and
+      # a repository whose rule is "measured or marked unproven" should not ship a stale one.
+      # --no-run because the step above already produced the TRX files: re-running them here would
+      # hide a reordering of this job rather than report it.
+      - name: The documented test counts must match the suite
+        run: python3 scripts/check-test-counts.py --no-run
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

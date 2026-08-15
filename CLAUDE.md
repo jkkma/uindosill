@@ -29,7 +29,12 @@ so.
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
 dotnet test  Uindosill.slnx -c Release   # 265 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
+python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
+
+That last line is why the number in the comment can be trusted, and CI runs it too. **If you change
+the test count, run it** — it prints what every document should say, and the three that quote a
+count are the three you would otherwise forget.
 
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have
