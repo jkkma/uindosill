@@ -41,6 +41,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     private readonly IEngineProvider _engines;
     private readonly Func<EngineSelection> _selection;
+    private readonly ModelSession? _session;
     private CancellationTokenSource? _cancellation;
 
     [ObservableProperty]
@@ -65,13 +66,25 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [ObservableProperty]
     private double _maxSegmentSeconds = 30;
 
-    public TranscribeViewModel(IEngineProvider engines, Func<EngineSelection> selection)
+    public TranscribeViewModel(
+        IEngineProvider engines, Func<EngineSelection> selection, ModelSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
         ArgumentNullException.ThrowIfNull(selection);
 
         _engines = engines;
         _selection = selection;
+        _session = session;
+
+        if (_session is not null)
+        {
+            _session.Changed += (_, _) =>
+            {
+                OnPropertyChanged(nameof(IsModelLoaded));
+                OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(StartHint));
+            };
+        }
 
         Formats = [.. TranscriptFormats.All.Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
     }
@@ -85,9 +98,23 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     public bool HasJobs => Jobs.Count > 0;
 
+    /// <summary>
+    /// True when there is an engine to run with: a session holding a model, or the sessionless
+    /// construction that builds its own engine per batch.
+    /// </summary>
+    public bool IsModelLoaded => _session?.IsLoaded ?? true;
+
     /// <summary>An enabled Start button with an empty queue does nothing when pressed, which reads
-    /// as a broken button rather than an empty queue.</summary>
-    public bool CanStart => !IsRunning && HasJobs;
+    /// as a broken button rather than an empty queue. The same is true of a Start with no model
+    /// loaded, so that is disabled here rather than failing at the press.</summary>
+    public bool CanStart => !IsRunning && HasJobs && IsModelLoaded;
+
+    /// <summary>
+    /// Says why Start is off when the reason is a missing model. A disabled button with no
+    /// explanation is the same dead end as a button that does nothing.
+    /// </summary>
+    public string? StartHint =>
+        IsModelLoaded ? null : "No model is loaded — open the Models tab and press Load.";
 
     public void AddFiles(IEnumerable<string> paths)
     {
@@ -154,6 +181,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        // Checked after the installed test, because "download one" is the more useful instruction
+        // when there is nothing on disk to load in the first place.
+        if (_session is not null && !_session.IsLoaded)
+        {
+            StatusMessage = "No model is loaded. Open the Models tab, choose a backend and press Load.";
+            return;
+        }
+
         var formats = Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
         if (formats.Count == 0)
         {
@@ -168,9 +203,26 @@ public sealed partial class TranscribeViewModel : ObservableObject
         _cancellation = new CancellationTokenSource();
         var ct = _cancellation.Token;
 
+        // When the window has a session, the engine belongs to it and outlives this batch, so it is
+        // borrowed here and never disposed here — loading is the Models tab's job, and the guard
+        // above has already established one is resident. Without a session (the two-argument
+        // construction) the engine is built and torn down inside this method as it always was.
+        ITranscriptionEngine engine;
+        ITranscriptionEngine? owned = null;
+
         try
         {
-            await using var engine = _engines.Create(selection);
+            if (_session is not null)
+            {
+                engine = _session.Engine
+                    ?? throw new InvalidOperationException("No model is loaded.");
+            }
+            else
+            {
+                owned = _engines.Create(selection);
+                engine = owned;
+            }
+
             var options = BuildOptions();
 
             var jobs = Jobs.Select(vm => new TranscriptionJob
@@ -222,6 +274,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
         finally
         {
+            if (owned is not null)
+            {
+                await owned.DisposeAsync().ConfigureAwait(true);
+            }
+
             IsRunning = false;
             _cancellation?.Dispose();
             _cancellation = null;
