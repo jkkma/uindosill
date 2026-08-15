@@ -2,8 +2,7 @@
 # PASTE THIS INTO THE "SETUP SCRIPT" FIELD OF THE CLAUDE CODE CLOUD ENVIRONMENT SETTINGS.
 #
 # It is not run from the clone. It lives here so the text is versioned and findable rather than
-# living only in somebody's clipboard, and because it duplicates .claude/hooks/session-start.sh
-# on purpose — see the note at the bottom of this comment.
+# living only in somebody's clipboard.
 #
 # Installs .NET SDK 10.0.400 and PowerShell 7.6.4 so a cloud session can build and test.
 #
@@ -24,11 +23,10 @@
 # $HOME, because the toolchain has to be found by a later session's shell with nothing sourced.
 # That is the difference that made an earlier attempt appear to work and then not be there.
 #
-# DUPLICATION, DELIBERATE: .claude/hooks/session-start.sh installs the same toolchain with the same
-# digests. The hook only takes effect once it is on the default branch and only for sessions that
-# clone this repository; this runs at container creation regardless of branch. They cannot share
-# code because this file has to be self-contained to be pasted into a text box. If you change the
-# pinned versions, change both.
+# This is the only thing that sets a session up. A SessionStart hook was tried and removed: it
+# could not take effect until it was on the default branch, so it did nothing for the case it was
+# written for — a fresh session opened before then — and it installed a second copy of the same
+# toolchain on top of this one. One mechanism, in the one place that runs early enough.
 
 set -euo pipefail
 

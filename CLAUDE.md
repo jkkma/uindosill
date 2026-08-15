@@ -19,9 +19,11 @@ Two things make a review workflow expensive, and neither is the agent count on i
 
 ## Building and testing
 
-The toolchain installs itself. In a cloud container it comes from the environment's setup script
-(`scripts/cloud-setup.sh`) or from `.claude/hooks/session-start.sh`, both of which unpack a pinned
-SDK 10.0.400 and PowerShell 7.6.4 — see either file for why not the vendor's installer.
+The toolchain comes from the cloud environment's setup script, whose text is
+`scripts/cloud-setup.sh` — a pinned SDK 10.0.400 and PowerShell 7.6.4 unpacked from
+`packages.microsoft.com`. See that file's header for why not the vendor's installer. If the tools
+are missing, that field has not been filled in; do not try to install one yourself before saying
+so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
