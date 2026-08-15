@@ -18,12 +18,18 @@ TestResults/
 coverage*.xml
 *.coverage
 
-# Native binaries are vendored deliberately (see docs/NATIVE-BINARIES.md), never
-# committed: they are large, per-backend, and pinned to a specific upstream release.
-native/**/*.dll
-native/**/*.so
-native/**/*.dylib
-native/**/*.zip
+# The vendored parakeet.cpp drop (see docs/NATIVE-BINARIES.md) is never committed: it is large,
+# per-backend, and pinned to a specific upstream release.
+#
+# The whole directory is ignored rather than the binaries alone. Listing only *.dll/*.so/*.dylib
+# was not equivalent: every `lib-` archive also carries LICENSE, README.md and parakeet_capi.h, so
+# a vendoring left `native/` showing as untracked and invited someone to commit those by reflex.
+# Nothing under native/ is authored here. Ignoring the LICENSE does not drop it from what ships —
+# build/NativeAssets.targets copies it into the build output, which is where MIT needs it.
+#
+# Scoped to the root, like the audio patterns below: the drop lives at native/ and nowhere else, so
+# a directory named native/ under tests/ stays visible instead of being swallowed by this rule.
+/native/
 
 # Model weights and downloaded audio fixtures never belong in the repo.
 *.gguf
