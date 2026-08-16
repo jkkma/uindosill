@@ -59,4 +59,4 @@ Nothing a measurement produces belongs in the working tree. The two harnesses us
 inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
-`scripts/lab.ps1` is one entry point for the six scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the seven scripts; run it bare to list them.

@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Six scripts with six names and six flag sets is five names too many to remember when you
+    Seven scripts with seven names and seven flag sets is six names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -50,12 +50,16 @@
     # for the same idea, and the reason is in the param block below.
     .\scripts\lab.ps1 word-distance -Reference runs\csb-f16-cuda\CSB384.json `
                                     -Candidates runs\csb-q8_0-cuda\CSB384.json,runs\csb-q4_k-cuda\CSB384.json
+
+.EXAMPLE
+    # The v2 spike: upstream llama-server as a child, on the desktop's CUDA tier, prefilling CSB384.
+    .\scripts\lab.ps1 spike -ModelPath D:\models\Qwen3.5-9B-Q8_0.gguf -PromptFile CSB384.txt
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -96,7 +100,32 @@ param(
     [string] $Destination,
     [switch] $InspectOnly,
     [switch] $SkipArchScan,
-    [switch] $Force
+    [switch] $Force,
+
+    # --- spike (-Backend, -ArchiveDirectory, -Destination and -OutputDirectory are shared with the
+    #     tasks above; -ModelPath is a file, unlike measure's -Model, which is a catalogue id) ---
+    [string] $ModelPath,
+    [string] $PromptFile,
+    [string] $Question,
+    [string] $Release,
+    [string] $CudaVersion,
+    [int] $ContextSize,
+    [ValidateSet('on', 'off', 'auto')]
+    [string] $FlashAttention,
+    [string] $CacheType,
+    [int] $GpuLayers,
+    [int] $ReasoningBudget,
+    [string[]] $ExtraServerArgs,
+    [hashtable] $ServerEnvironment,
+    [int] $Port,
+    [int] $LoadTimeoutSeconds,
+    [int] $RequestTimeoutSeconds,
+    [string] $ExpectedModelSha256,
+    [switch] $SkipDownload,
+    [switch] $SkipScan,
+    [switch] $SkipSecondStart,
+    [switch] $SkipModelHash,
+    [switch] $KeepJitCache
 )
 
 $ErrorActionPreference = 'Stop'
@@ -109,6 +138,7 @@ $tasks = [ordered]@{
     'compare'       = 'compare-transcripts.ps1'
     'word-distance' = 'word-distance.ps1'
     'vendor-cuda'   = 'vendor-cuda.ps1'
+    'spike'         = 'spike-llama-server.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.
