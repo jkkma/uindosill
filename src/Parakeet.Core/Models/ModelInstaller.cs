@@ -126,7 +126,7 @@ public sealed class ModelInstaller : IDisposable
         {
             throw new ModelInstallException(
                 $"Model '{model.Id}' has no pinned SHA-256 in the catalogue, so a download cannot be verified. " +
-                "Pin the digest in models.json (see docs/MODELS.md) or install with the explicit unverified opt-in.");
+                "Pin the digest in models.json (see MODELS.md in the project notes) or install with the explicit unverified opt-in.");
         }
 
         var finalPath = _store.PathFor(model);
@@ -292,7 +292,7 @@ public sealed class ModelInstaller : IDisposable
         {
             throw new ModelInstallException(
                 $"{model.Url} returned 404 for '{model.Id}'. This catalogue entry is marked unverified: its file name " +
-                "and URL were never checked against the live repository. Fix the entry in models.json (docs/MODELS.md " +
+                "and URL were never checked against the live repository. Fix the entry in models.json (MODELS.md in the project notes " +
                 "explains how) rather than retrying.");
         }
 

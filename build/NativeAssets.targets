@@ -20,7 +20,7 @@
     vendors only some backends still ships exactly the notices it needs.
 
     This only holds if the LICENSE is on disk in the first place. Unpacking just parakeet.dll out
-    of the archive puts the breach back and nothing here can detect it; docs/NATIVE-BINARIES.md
+    of the archive puts the breach back and nothing here can detect it; NATIVE-BINARIES.md in the project notes
     says so where the unpacking is described.
   -->
   <ItemGroup>

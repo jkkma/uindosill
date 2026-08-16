@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """Hold the test counts written into the documentation against the counts the suite reports.
 
-Three documents quote a test total, and all three drifted: they said 258 for several commits
-after the suite reached 265, including one commit whose own message said 264. A number nobody
-checks is a number that goes stale, and this repository's whole claim is that its figures are
-measured. So the figures get measured here.
+The documents that quote a test total drifted: they said 258 for several commits after the suite
+reached 265, including one commit whose own message said 264. A number nobody checks is a number
+that goes stale, and this repository's whole claim is that its figures are measured. So the
+figures get measured here.
 
 What is checked, and against what:
 
-  README.md, CLAUDE.md, docs/PHASES.md   "N tests"       the whole suite's total
-  docs/PHASES.md                         "N CLI tests"   Parakeet.Cli.Tests alone
-  docs/PHASES.md                         "N passed and M skipped"
+  README.md, CLAUDE.md   "N tests"       the whole suite's total
 
 A claim that matches nothing is a failure too, not a pass. Rewording a sentence out of the reach
 of these patterns would otherwise silently retire the check, which is the failure mode that makes
 a stale-number guard worse than none.
 
-`docs/UNPROVEN.md` is deliberately not scanned. Its counts (247, 215) are dated records of one run
-on one machine, in sections that are retrospective by construction; updating them to match today
-would destroy the measurement rather than refresh it.
+The project notes (PHASES.md, UNPROVEN.md and the rest) are kept in the maintainer's Google Drive
+rather than in this repository, so this script cannot reach them; the counts they quote are
+dated records of the run they describe, and are the notes' own responsibility.
 
 Reads the TRX files `dotnet test --logger trx` leaves under `tests/*/TestResults/`, and runs the
 suite itself if none are there. Pass --no-run to fail instead, which is what CI does: the workflow
@@ -45,9 +43,6 @@ TRX_NS = "{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}"
 CLAIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ("README.md", r"(\d+)\s+tests\b", ("total",)),
     ("CLAUDE.md", r"(\d+)\s+tests\b", ("total",)),
-    ("docs/PHASES.md", r"(\d+)\s+tests\b", ("total",)),
-    ("docs/PHASES.md", r"(\d+)\s+CLI\s+tests\b", ("Parakeet.Cli.Tests",)),
-    ("docs/PHASES.md", r"(\d+)\s+passed\s+and\s+(\d+)\s+skipped", ("passed", "skipped")),
 ]
 
 

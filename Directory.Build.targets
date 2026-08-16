@@ -27,7 +27,7 @@
     <!-- Deliberately off. Native dependencies make all three hostile: single-file extracts
          natives to a temp path that breaks the backend directory layout, trimming cannot see
          through P/Invoke, and NativeAOT plus a hand-loaded native library is a debugging
-         surface nobody needs. Do not turn these on without re-reading docs/GOTCHAS.md. -->
+         surface nobody needs. Do not turn these on without re-reading GOTCHAS.md in the project notes. -->
     <PublishSingleFile>false</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
     <PublishAot>false</PublishAot>

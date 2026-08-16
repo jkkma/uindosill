@@ -8,7 +8,7 @@
     a script you can run directly, and this changes none of their behaviour.
 
     It is a dispatcher rather than a merge because the scripts it calls produced every number in
-    `docs/UNPROVEN.md`. Rewriting them into one file to save a filename would put that at risk for
+    `UNPROVEN.md` in the project notes. Rewriting them into one file to save a filename would put that at risk for
     no measurement gained.
 
     Two things here are load-bearing rather than convenience.
@@ -33,7 +33,7 @@
 
 .EXAMPLE
     .\scripts\lab.ps1 vendor
-    The pinned cpu and vulkan natives, downloaded, verified against docs/NATIVE-BINARIES.md and
+    The pinned cpu and vulkan natives, downloaded, verified against NATIVE-BINARIES.md in the project notes and
     unpacked into native/win-x64/. Add -Backends cpu,vulkan,cuda for the opt-in CUDA pair.
 
 .EXAMPLE

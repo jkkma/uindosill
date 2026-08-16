@@ -13,8 +13,8 @@
     Three questions get answered before anything is run:
 
     1. Did I receive the archives upstream serves? SHA-256 of each, printed for the digest table in
-       docs/NATIVE-BINARIES.md.
-    2. What is actually in them? The full file list, because docs/NATIVE-BINARIES.md records the
+       NATIVE-BINARIES.md in the project notes.
+    2. What is actually in them? The full file list, because NATIVE-BINARIES.md in the project notes records the
        CPU and Vulkan archives as a single self-contained parakeet.dll and the CUDA pair is a
        different shape.
     3. Which GPU architectures were compiled in? An RTX 5080 is Blackwell, compute capability 12.0
@@ -433,7 +433,7 @@ try {
         }
 
         Write-Heading 'digest table row'
-        Write-Host 'Paste these into the table in docs/NATIVE-BINARIES.md:'
+        Write-Host 'Paste these into the table in NATIVE-BINARIES.md in the project notes:'
         Write-Host ''
         foreach ($digest in $digests) {
             Write-Host ("| v0.5.0 | ``{0}`` | ``{1}`` | | |" -f $digest.Name, $digest.Sha256)
@@ -622,7 +622,7 @@ try {
             Write-Host 'No sm_120 cubin. An RTX 5080 is compute capability 12.0, so every kernel has to come' -ForegroundColor Yellow
             Write-Host 'from PTX through the driver JIT — a long first run and a warm cache after it — or fail' -ForegroundColor Yellow
             Write-Host 'with "no kernel image is available for execution on the device" if no PTX is embedded' -ForegroundColor Yellow
-            Write-Host 'either. Both are measurable; see docs/UNPROVEN.md.' -ForegroundColor Yellow
+            Write-Host 'either. Both are measurable; see UNPROVEN.md in the project notes.' -ForegroundColor Yellow
         }
     }
 
