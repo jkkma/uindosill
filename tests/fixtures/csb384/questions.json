@@ -1,0 +1,59 @@
+{
+  "$comment": "The hand-labelled question set for CSB384 — decision 6 of docs/V2-ASK-THE-TRANSCRIPT.md. Segment ids are 1-based positions in the pinned transcript's segments[] array (the JSON transcript carries no id field), so this file is meaningful only against the transcript it pins. status is 'template' until a person has labelled it against the recording; the suite validates shape either way and enforces the composition and the pin once status is 'labelled'. Placeholders below are marked TEMPLATE and are not labels.",
+  "status": "template",
+  "composition": { "pointed": 16, "paraphrase": 4, "global": 3, "adversarial": 3, "who-said": 2, "needle": 2 },
+  "transcript": {
+    "source": "CSB384.mp3",
+    "model": "tdt-0.6b-v3-f16",
+    "quantisation": "f16",
+    "backend": null,
+    "segments": null,
+    "sha256": null,
+    "$comment": "Fill from the transcript JSON this was labelled against: backend as its 'backend' field, segments as segments.Length, sha256 over the UTF-8 of each segment's start, end and text joined by newlines in order. Re-transcribing the same audio with another model changes the ids and this pin is what says so."
+  },
+  "language": "en",
+  "questions": [
+    {
+      "id": "q01",
+      "kind": "pointed",
+      "question": "TEMPLATE — a pointed question in the reader's own words: what did they say about <topic>?",
+      "gold": { "segments": [], "quote": null, "abstain": false },
+      "notes": "Gold is one or more [from, to] segment ranges (inclusive, 1-based) and a verbatim quote of at most twelve words taken from inside the cited span, for the normalised-substring check."
+    },
+    {
+      "id": "q02",
+      "kind": "paraphrase",
+      "question": "TEMPLATE — a pointed question asked without the transcript's own vocabulary; written last, by rewording a pointed one.",
+      "gold": { "segments": [], "quote": null, "abstain": false },
+      "notes": "Where BM25 is expected to miss and dense retrieval would be justified. Same gold shape as pointed."
+    },
+    {
+      "id": "q03",
+      "kind": "global",
+      "question": "TEMPLATE — a question about the whole recording: what are the main topics?",
+      "gold": { "segments": [], "quote": null, "abstain": false },
+      "notes": "Gold is a set of ranges an answer must touch; judged by a person, not by recall@k. The router must send it down the global path."
+    },
+    {
+      "id": "q04",
+      "kind": "adversarial",
+      "question": "TEMPLATE — plausible, and not answered by the episode; one of the three should be about a topic the episode mentions but does not answer.",
+      "gold": { "segments": [], "quote": null, "abstain": true },
+      "notes": "Gold is an abstention. Any citation is a failure."
+    },
+    {
+      "id": "q05",
+      "kind": "who-said",
+      "question": "TEMPLATE — who said <quote>?",
+      "gold": { "segments": [], "quote": null, "abstain": false },
+      "notes": "Gold is a range and a quote. A name in the answer is a failure: the transcript carries no speaker."
+    },
+    {
+      "id": "q06",
+      "kind": "needle",
+      "question": "TEMPLATE — a question only the planted segment answers.",
+      "gold": { "segments": [], "quote": null, "abstain": false, "plant": { "afterSegment": null, "text": "TEMPLATE — a synthetic sentence that appears nowhere in the recording." } },
+      "notes": "Not hand-labelled: the evaluator inserts plant.text as a new segment after plant.afterSegment in a copy of the transcript and expects that new id to be cited. Mechanism test."
+    }
+  ]
+}
