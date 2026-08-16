@@ -90,12 +90,16 @@ public class FakeEngineTests
 
         var reports = new List<TranscriptionProgress>();
         await TranscriptionRunner.RunAsync(
-            engine, audio, progress: new Progress<TranscriptionProgress>(reports.Add));
-
-        // Progress is delivered through a synchronisation context, so allow it to drain.
-        await Task.Delay(50);
+            engine, audio, progress: new InlineProgress(reports.Add));
 
         Assert.Contains(reports, r => r.Stage == TranscriptionStage.Decoding);
+    }
+
+    /// <summary>Progress&lt;T&gt; posts to a scheduler, so reports can arrive after the run
+    /// completes; reporting inline means the list is complete when RunAsync returns.</summary>
+    private sealed class InlineProgress(Action<TranscriptionProgress> handler) : IProgress<TranscriptionProgress>
+    {
+        public void Report(TranscriptionProgress value) => handler(value);
     }
 
     [Fact]
