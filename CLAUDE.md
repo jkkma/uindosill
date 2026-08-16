@@ -60,3 +60,13 @@ inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
 `scripts/lab.ps1` is one entry point for the eight scripts; run it bare to list them.
+
+Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
+machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they
+carry more than the summary) to the `runs-<machine>` folder there — `runs-laptop`,
+`runs-desktop` — beside the v2 handoff, and keep that folder's README index current, including its
+note on which working-tree changes are not yet pushed. Multi-MB artifacts do not fit the
+connector; list them in that README with how to regenerate them instead, and for byte-exact
+fixtures upload a generator validated against the pin rather than a copy. **No Drive URL or file
+id goes in this repository** — it is public; find the folder by name through the Drive connector,
+and if the connector is not authorized in your session, say so instead of skipping silently.
