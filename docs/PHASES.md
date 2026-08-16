@@ -239,20 +239,40 @@ The next actions, in order:
    app.** Asked for by the maintainer on 2026-08-16, after the WER work; it is a study, not a build,
    and it decides whether speakers are in v1.0 or arrive as v1.1 over the auto-update Phase 5
    brings. What it has to settle, and the facts already in hand:
+   - *The material comes first.* Everything this app has been measured on is a **two-host podcast
+     with overlapping, disfluent speech** — CSB384 for three hours, its ten-minute cuts, both
+     machines. That is the shape to optimise for; a diariser that is excellent at two to four
+     speakers and weak at seventeen is the right trade for this product, not the wrong one. The
+     earnings-call corpus below is the robustness check, not the target.
+   - *The candidates, as of a 2025 cross-dataset benchmark (arXiv 2509.26177) and 2026 write-ups,
+     to be re-checked when the workflow runs.* **NVIDIA Sortformer v2 (streaming)** — end-to-end,
+     arrival-order sorted, strongest on overlap-heavy rapid-turn dialogue (write-ups have it more
+     than halving DER against the pyannote pipeline there, at latencies down to ~0.3 s), built for
+     up to four speakers and degrading past that — is the leading candidate for the podcast case
+     precisely because of that shape. **DiariZen** (open, WavLM-based end-to-end plus clustering,
+     ~13.3% DER, holds up at high speaker counts, heavier on CPU) is the many-speaker alternative.
+     **pyannote.audio 3.1** (~11% DER on AMI, 11–19% across standard sets) is the mature baseline
+     everything is measured against. pyannoteAI's *precision-2* leads the benchmark (~11.2%) and is
+     a cloud API, so it is out. Nobody's benchmark number is this project's; the harness below is.
    - *The stack.* No ggml port of a diariser is known; the practical routes are ONNX Runtime —
      directly, or through sherpa-onnx, which packages pyannote segmentation 3.0 plus a speaker
-     embedding model behind a C API with Windows builds — or an ONNX export of NVIDIA's Sortformer,
-     whose availability is unknown. NeMo itself is a Python framework and is not shipped; only
-     weights exported from it are. Any of these runs on **CPU** for every machine alike — the models
-     are one to two orders of magnitude smaller than the ASR — so there is no NVIDIA/Vulkan tier
-     to design; the CUDA flavour is unaffected and the AMD/Intel user gets the same result.
+     embedding model behind a C API with Windows builds — or an ONNX export of Sortformer, whose
+     availability is the single most consequential unknown given the material. NeMo itself is a
+     Python framework and is not shipped; only weights exported from it are. Any of these runs on
+     **CPU** for every machine alike — the models are one to two orders of magnitude smaller than
+     the ASR — so there is no NVIDIA/Vulkan tier to design; the CUDA flavour is unaffected and the
+     AMD/Intel user gets the same result.
    - *The licence gates.* pyannote segmentation 3.0 is MIT; 3D-Speaker and WeSpeaker embeddings
      Apache-2.0; NeMo's TitaNet CC-BY-4.0 like the Parakeet weights; Sortformer believed CC-BY-4.0
      — each to be read the way `docs/LICENSING.md` reads the others before anything is vendored.
-   - *The measurement.* The corpus pinned in `scripts/wer-corpus.json` carries a per-token
-     `speaker` column (four speakers on one call, seventeen on another), so a diarisation error
-     rate or speaker-attributed WER harness reuses today's corpus and scoring; a CPU-only spike on
-     it is the first thing to run, and its number decides whether the feature ships at all.
+   - *The measurement, and the gap in it.* The corpus pinned in `scripts/wer-corpus.json` carries
+     a per-token `speaker` column (four speakers on one call, seventeen on another), so a
+     diarisation error rate or speaker-attributed WER harness reuses today's corpus and scoring.
+     But it is not the target material, and **CSB384 has no speaker ground truth**: the podcast
+     case needs either a hand-labelled stretch of it (two speakers, ten minutes — an evening's
+     work, and the most honest yardstick this app could have) or a labelled public two-speaker
+     conversational set, chosen with its licence read. A CPU-only spike, on both, is the first thing
+     to run, and its number on the podcast material is what decides whether the feature ships.
    - *The seam and the surface.* An `ISpeakerLabeller` behind Core's engine rule; a speaker on
      `TranscriptSegment` and its words; every formatter and the app growing "Speaker N" labels;
      the fake engine and the tests learning about them; a second native drop, digest table,
