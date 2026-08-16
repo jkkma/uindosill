@@ -374,11 +374,46 @@ whether it holds at 40k is unmeasured. `--host` defaults to `127.0.0.1`; `--api-
 `--slot-save-path`, `--cache-reuse`, `-fit`, `-ot` and `-ncmoe` are all flags. The same README
 documents a **router mode** — start with no model, point it at `--models-dir` or a
 `--models-preset`, load and unload models over the API — so the language model, an embedder and a
-reranker (decision 3) can sit behind one server. How it isolates them, one process per model or one
-for all, was not read; the claim below that an unload is a kill and the VRAM comes back by
-construction holds for the one-model-per-process arrangement — **measured for that arrangement on
-the laptop, Vulkan, 2026-08-16: adapter dedicated 1,126 MiB idle, 3,583 MiB loaded, 1,126 MiB after
-`Stop-Process`** — and is a spike check for the router. Otherwise read, not run.
+reranker (decision 3) can sit behind one server. An earlier revision of this paragraph said that
+how it isolates them, one process per model or one for all, was not read. **It has been now, from
+`tools/server/server-models.cpp` at b10448 on 2026-08-16, and it is one child `llama-server`
+process per model**: `server_models::load()` takes a free loopback port with
+`common_http_get_free_port()`, hands it to the child as `LLAMA_ARG_PORT` with `LLAMA_ARG_HOST` on
+the loopback address, and spawns with `subprocess_option_no_window |
+subprocess_option_combined_stdout_stderr`; unload writes `CMD_ROUTER_TO_CHILD_EXIT` to the child's
+stdin and calls `terminate()` once the preset's `stop-timeout` (default 10 s) has elapsed. The
+README beside it: `--models-max` caps concurrently loaded models (default 4), `--models-autoload`
+loads on first request, `--sleep-idle-seconds` unloads an idle model, `POST /models/load` and
+`/models/unload` do it by hand, and a request is routed by its `model` field (POST) or query
+parameter (GET); presets are an `.ini`, one section per model, keys as command-line arguments. So
+the claim below — that an unload is a kill and the VRAM comes back by construction — holds for the
+router by the same construction it holds for a single child, and the one arrangement it rests on is
+**measured on the laptop, Vulkan, 2026-08-16: adapter dedicated 1,126 MiB idle, 3,583 MiB loaded,
+1,126 MiB after `Stop-Process`**. Two things the read leaves for the run: the router pipes its
+children's combined stdout and stderr, so ggml's `model buffer size` and KV-buffer lines that
+decision 4 reads for VRAM land in the router's pipe rather than in a file this project controls;
+and the per-process GPU counters in decision 4 want the grandchildren's pids, which a Job Object or
+`Win32_Process` by parent enumerates. Otherwise read, not run.
+
+**A separate model-swapping proxy in front of `llama-server` — `mostlygeek/llama-swap` was the
+one considered, 2026-08-16 — is not taken**, and the reason is recorded because the question will
+come back. Read from its README the same day: Go, one binary, MIT, Windows builds on the release
+page, a YAML `cmd:` per model, swap by killing the wrong upstream and starting the right one,
+`ttl` unloading, groups of co-resident models, an api-key on its own listener, `/health` and
+`/upstream/:model`. It clears the no-install bar the way `llama-server` does — bundled, loopback,
+dies with the app — and it is still the wrong shape here for three reasons. The swap decision 4 is
+about is the ASR model against the language model, and the ASR model runs in this process, under
+`parakeet.dll`, where no proxy can see it; what a proxy could swap is the language model against
+decision 3's embedder and reranker, which are 0.6 GiB apiece and sit beside the 9B without touching
+the budget. It removes none of the lifecycle work in the recommendation above — Job Object,
+`/health`, notice a crash, kill on exit — but nests it, the app owning the proxy owning the server,
+and adds a YAML surface, a second unsigned `.exe` for SmartScreen and a third native to pin, digest
+and carry a LICENSE for, against the thirty-odd lines the two lab scripts already spend on start,
+`/health`, ask and `Stop-Process`. And the router mode above is the same mechanism in the binary
+already chosen, from the same release zip under the same pin. Where a proxy would earn a look is as
+a lab convenience for hopping between decision 2's six files from a browser, and a `--models-preset`
+`.ini` under the router does that too. Nothing swap-shaped changes the arithmetic: the card is the
+card, and a swap costs a load of about 9 GB, which is the wait decision 4 already names.
 
 **Recommendation, revised again on 2026-08-16, and narrower this time: `llama-server`.** The
 revision before this said spike LLamaSharp and `llama-server` a day each and let the table decide;
@@ -882,7 +917,7 @@ b10448) is what makes closing and reopening a session cheap on the whole-transcr
 prefilled 40k state, 1.25 GiB at f16 for the 9B, goes to disk instead of being prefilled again;
 unmeasured. Decision 3's residents are small — 0.6 GiB each at Q8 — but the embedder is needed per
 question, so it is resident through the chat or reloaded per question, unmeasured either way, and
-the server's router mode is where they would all live.
+the server's router mode — one child process per model, decision 1 — is where they would all live.
 
 **The laptop: sequential is forced, not chosen, and its budget moves.** The 7.36 GiB this section
 quotes is heap 0's `VK_EXT_memory_budget` figure — a *moment's* budget, net of what other processes
