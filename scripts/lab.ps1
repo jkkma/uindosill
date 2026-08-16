@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Seven scripts with seven names and seven flag sets is six names too many to remember when you
+    Eight scripts with eight names and eight flag sets is seven names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -54,12 +54,16 @@
 .EXAMPLE
     # The v2 spike: upstream llama-server as a child, on the desktop's CUDA tier, prefilling CSB384.
     .\scripts\lab.ps1 spike -ModelPath D:\models\Qwen3.5-9B-Q8_0.gguf -PromptFile CSB384.txt
+
+.EXAMPLE
+    # The labelled question set, asked and checked; -PrintPin alone computes the transcript pin.
+    .\scripts\lab.ps1 answers -TranscriptPath runs\csb-f16-cuda\CSB384.json -ModelPath D:\models\Qwen3.5-9B-Q8_0.gguf
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -125,7 +129,16 @@ param(
     [switch] $SkipScan,
     [switch] $SkipSecondStart,
     [switch] $SkipModelHash,
-    [switch] $KeepJitCache
+    [switch] $KeepJitCache,
+
+    # --- answers (most of the server parameters above are shared) ---
+    [string] $TranscriptPath,
+    [string] $QuestionsPath,
+    [switch] $PrintPin,
+    [string] $ServerDirectory,
+    [int] $MaxAnswerTokens,
+    [switch] $SkipGrammarCost,
+    [switch] $NoAbstainBranch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -139,6 +152,7 @@ $tasks = [ordered]@{
     'word-distance' = 'word-distance.ps1'
     'vendor-cuda'   = 'vendor-cuda.ps1'
     'spike'         = 'spike-llama-server.ps1'
+    'answers'       = 'measure-answers.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.
