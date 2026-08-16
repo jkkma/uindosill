@@ -1032,6 +1032,43 @@ transcript and read the result as a machine difference. The per-run copies under
 correctly as `chunk.json` and `chunk (2).json`, so nothing was lost — but the collected file is
 model-blind and its name does not say so.
 
+#### The three-hour file, end to end on Vulkan here — and it is a new encode
+
+The episode came back to this machine on 2026-08-16, but not the file. The `CSB384.mp3` behind
+every figure above went with the old clones — gitignored files go when the folder does — and was
+re-obtained from the episode's public source (format 140, AAC 129k m4a) and extracted with ffmpeg
+to mp3 at 48 kHz mono: **108,002,975 bytes where the maintainer's archived copy reads
+105,643,318**, container duration `10523.399563` where every record above says `10523.376000`.
+Same episode, same shape, **a different encode, 24 ms apart** — so no transcript of this file is
+word-for-word or id-for-id comparable with the desktop's 1,488-segment transcript or with anything
+else measured against the original, and the pin decision 6 requires will say which file the labels
+are against. Whether the archived copy is byte-identical to the original was not checkable from
+here.
+
+Through `lab.ps1 measure -Backend vulkan`, `tdt-0.6b-v3-f16` (re-downloaded, digest matched the
+pin), with `GGML_VK_DISABLE_BFLOAT16=1` in the environment. This run predates the default flip in
+`66b5291`: on the build it ran, nothing set the knob for you, and the first attempt without the
+variable died at load in one second, exactly the failure the knob section above records. On the
+current build the engine disables bf16 itself; the environment variable remains what the
+llama.cpp scripts below need, since upstream's binaries have no such default:
+
+| | |
+|---|---|
+| Audio | 10,523.4 s (2:55:23), 48 kHz mono mp3 — the new encode above |
+| **Real-time factor** | **0.0316** (332.4 s to decode 10,523.4 s) |
+| Segments | 1,378 — longest 30.00 s, **11 at the cap**, largest gap 4.62 s |
+| Coverage | 10,118.2 s emitted (96.1%) |
+| Words | 29,909 — 0 non-monotonic, 0 past the end of the audio |
+| Host working set | peaked 699 MB at 50% of the run, settled to 627 MB (+177 MB last tenth against first) |
+
+Three hours through the iGPU in five and a half minutes, structural invariants clean, and the
+forced cut ran eleven times on this machine's first long file. Two of the ten-minute caveats above
+now have longer answers: the RTF (0.0349 on the chunk) came down to 0.0316 as the load cost
+amortised, the same shape as the desktop's CPU sequence; and the working-set profile that was
+"still rising at 100%" on ten minutes **turned over at 50% here**, which is the desktop's
+three-hour pattern — evidence against accumulation where the chunk could give none. The transcript
+trio is under `runs/20260816-033132-vulkan/` (gitignored).
+
 #### The harness itself, on its first Windows run
 
 `measure-second-machine.ps1` had never executed on Windows. It behaved correctly, including in the
@@ -1290,6 +1327,87 @@ anything about the v2 candidates. What it establishes is the harness: the pin ch
 citation parsing, pass and fail both observed, and a label-validation path (the gold quote must
 appear in the gold span's text) that reports a bad label as a labelling error rather than a model
 failure.
+
+#### The real transcript through the spike, and the first candidate — 2026-08-16, later the same day
+
+The stand-in prompt retired when the episode's transcript came back to this machine (the
+three-hour Vulkan run in the second-machine section above — a new encode, new ids). Same release
+b10448, same knob, `runs/20260816-033917-spike-vulkan/` and `runs/20260816-035050-spike-vulkan/`.
+The candidate is the v2 note's laptop row made real: `unsloth/Qwen3.5-9B-GGUF`'s
+`Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes — the byte count the note already records — sha256
+`03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`, a first reading, taken from
+the hub listing's LFS oid on 2026-08-16 per `docs/MODELS.md`'s procedure and verified against the
+downloaded file twice (once at download, once by the spike).
+
+**The transcript does not fit the number the v2 note carries.** The 169,291-byte `.txt` is
+**50,892 tokens** under the 0.6B's chat template and **51,712** under the 9B's — the note's "about
+40k tokens" (its line "Three hours of transcript is roughly 30k words, about 40k tokens") is
+word-count arithmetic, and the measured figure is a quarter larger. Every "fits at 40k" line in
+that note inherits this correction for this episode.
+
+**Raising `-c` does not raise the ceiling: `n_ctx_train` does.** At `-c 53248` the 0.6B server
+allocated the larger cache (6,332.9 MiB committed against 5,179.5 at 40,960) and then refused the
+50,892-token request at the same 40,960 — Qwen3-0.6B's training context. The cache fit; the model
+did not. So the 0.6B ran a 124,757-byte head of the transcript cut at a line boundary, and the
+candidate — 262,144 native context — ran the whole file.
+
+| | 0.6B Q8_0, 37,062-token head, `-c 40960` | **Qwen3.5-9B Q4_K_M, 51,712 tokens, `-c 53248`** |
+|---|---|---|
+| Prefill | 193.1 s (191.9 tok/s) | **467.9 s (110.7 tok/s)** |
+| Decode, 160 tokens | 11.0 tok/s | **9.8 tok/s** |
+| Same prefix again | prompt 95 ms | prompt 566 ms |
+| `/health`, first / second start | 1.08 / 1.03 s | 3.64 / 2.54 s |
+| Server committed, loaded | 5,179.5 MiB + 218.3 shared | **6,310.2 MiB + 1,237.2 shared** |
+| Adapter dedicated, loaded | 6,122.6 MiB | **7,211.1 MiB** |
+
+**The spill the laptop paragraph predicted is now a measurement.** Loaded, the adapter held
+7,211.1 MiB dedicated — the fast heap's 7.36 GiB budget, spent — with **1.4 GiB pushed into
+shared memory**, exactly the UMA overflow the "does not fit in the fast heap with a browser open"
+paragraph reasons through. Memory did not grow past the pre-allocated cache during prefill
+(+4.2 MiB), and after `Stop-Process` the adapter returned to 900.9 MiB. And the depth cost that
+was invisible at 7,779 tokens is the story at 37k+: the 0.6B's prefill fell from 807.1 to
+191.9 tok/s and its decode from 37.0 to 11.0 tok/s between the stand-in and the head run — same
+model, same server, deeper context. So the laptop conclusion now has its numbers: the candidate
+prefills the whole episode in **7 minutes 48 seconds**, decodes at **9.8 tok/s** afterwards, and a
+follow-up question against the cached prefix costs half a second of prompt time — an opt-in with a
+progress bar, and a usable conversation once paid.
+
+**`--reasoning-budget 0` does not bind the candidate's template, and the tokens go somewhere the
+morning's runs could not see.** Both spike answer rows above generated their full 160 tokens into
+**empty `message.content`**: under `--jinja`, Qwen3.5-9B's template forces the think block open,
+the budget flag does not close it, and the server files everything under `reasoning_content` —
+where the spike, the answers script and any client reading `content` see nothing. Probed by hand
+against the same server to settle it: at `max_tokens` 300 the whole budget burned as reasoning and
+finished `length` with empty content; at 2,000 the model thought for ~550 tokens, closed the
+block, and answered the toy question correctly with a citation; **with a grammar attached, the
+grammar shaped the thinking** — 52 grammar-legal tokens, `finish_reason` stop, all filed as
+reasoning, content still empty. The 0.6B's morning finding ("reasoning pushed into the answer
+channel rather than removed") is the same defect with opposite plumbing: its template emits
+`<think></think>` closed, so its overflow lands where a client looks. `measure-answers.ps1` now
+passes `--reasoning-format none`, which keeps the stream in `content` where the grammar's shape is
+the answer; the run that found this (`runs/20260816-040827-answers-vulkan/`, four empty answers
+scored as four failures) is kept as the evidence. Two smaller harness findings from the same hour:
+an answer with no `[S<n>]` citation at all crashed the script's strict mode (`Parse-Citations`
+returned an empty list through the pipeline as `$null`; the 0.6B always cited, so the first
+model to produce one found it), and a forced-open template puts a literal `<think>` in front of
+`content` under `--reasoning-format none`, which would defeat the abstain exact-match — stripped
+now, constructed from the probe rather than observed, since the 9B never abstained.
+
+**The self-test pair, same set, same flags, same day** (`runs/20260816-042020-answers-vulkan/` and
+`runs/20260816-041546-answers-vulkan/`; the synthetic 120-segment transcript and four-question
+set from the morning): the 0.6B still abstains on all four — correct once, on the adversarial
+question. The 9B passes both pointed questions (S40/S41 and S75 against gold), **finds the
+planted needle** (S91 cited five times), and **fails the adversarial question by inventing
+citations with the abstain exit available** — `[S1]` three times for a ferry schedule the
+transcript never mentions. One model prefers the exit it should not take; the other declines the
+exit it should. The abstain production traded failure modes with scale, on four questions, once —
+which is exactly what the thirty labelled CSB384 questions exist to measure properly. Read the 9B's
+answer texts before quoting its passes: under the grammar the bullet prose is narrated thinking
+("I will scan the transcript for keywords…") — the ids resolve and overlap gold while the words
+support nothing, the citation-precision problem in its purest form yet. Grammar decode cost, one
+run each: 65.4 → 44.0 tok/s on the 0.6B (33%, a third figure inside the recorded 12–44% spread)
+and 15.6 → 14.6 tok/s on the 9B (**6.4%**) — the rejection-sampling cost shrinking as the model
+grows is one run's evidence, not a law.
 
 ### The confidence threshold is set by guess, and the first real data disagrees
 

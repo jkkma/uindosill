@@ -248,7 +248,10 @@ function Parse-Citations {
         $to = if ($m.Groups[2].Success) { [int]$m.Groups[2].Value } else { $from }
         $cites.Add([pscustomobject]@{ From = $from; To = $to })
     }
-    return $cites
+    # Returned through the pipeline, an empty list arrives as $null, whose .Count strict mode
+    # refuses — reachable only by an answer with no [S<n>] citation at all, which no self-test
+    # model produced until the 9B abstained with a [?]-only bullet.
+    return , $cites.ToArray()
 }
 
 # ── The server (start, ask, stop) ────────────────────────────────────────────────────────────────
@@ -262,8 +265,14 @@ if ($Port -le 0) {
 $apiKey = [guid]::NewGuid().ToString('N')
 $base = "http://127.0.0.1:$Port"
 
+# --reasoning-format none keeps every generated token in message.content. On a template that opens
+# a real think block (Qwen3.5-9B; not the 0.6B, whose template emits <think></think> closed),
+# --reasoning-budget 0 does not stop the thinking, the server's parser files the whole generation
+# under reasoning_content — including grammar-shaped tokens, since the grammar constrains sampling
+# wherever the stream happens to be — and this script reads four empty answers. With the stream in
+# content, the grammar forbids think-prose from the first token, which is the design's intent.
 $serverArgs = @('-m', $ModelPath, '-c', $ContextSize, '-ngl', $GpuLayers, '-fa', $FlashAttention,
-    '-ctk', $CacheType, '-ctv', $CacheType, '--fit', 'off', '--jinja',
+    '-ctk', $CacheType, '-ctv', $CacheType, '--fit', 'off', '--jinja', '--reasoning-format', 'none',
     '--reasoning-budget', $ReasoningBudget, '--host', '127.0.0.1', '--port', $Port, '--api-key', $apiKey) |
     ForEach-Object { $s = "$_"; if ($s -match '\s') { '"' + $s + '"' } else { $s } }
 
@@ -360,8 +369,12 @@ try {
 
         $a = Ask -PromptText $askPrompt -QuestionText ([string]$q.question) -Grammar $askGrammar
         $cites = Parse-Citations $a.Text
-        # An abstention is the abstain line, or an answer whose only citations are [?].
-        $abstained = ($a.Text.Trim() -eq 'NOT_IN_TRANSCRIPT') -or ($cites.Count -eq 0 -and $a.Text -match '\[\?\]')
+        # An abstention is the abstain line, or an answer whose only citations are [?]. A template
+        # that forces the think block open (Qwen3.5-9B) puts a literal <think> at the front of
+        # content under --reasoning-format none, so it is stripped before the exact match — the
+        # grammar forbids the model closing the tag, so it can only ever appear once, at the front.
+        $answerText = ($a.Text -replace '^\s*<think>\s*', '').Trim()
+        $abstained = ($answerText -eq 'NOT_IN_TRANSCRIPT') -or ($cites.Count -eq 0 -and $a.Text -match '\[\?\]')
 
         $limit = if ($null -ne $plantedId) { $segments.Count + 1 } else { $segments.Count }
         $allResolve = @($cites | Where-Object { $_.From -lt 1 -or $_.To -gt $limit -or $_.To -lt $_.From }).Count -eq 0
