@@ -22,6 +22,13 @@ namespace Parakeet.App.Services;
 /// cycles are free; changing Vulkan to CUDA needs a restart, and <see cref="IsBackendFixed"/>
 /// exists so the window can say so instead of appearing to comply.
 /// </para>
+/// <para>
+/// Disposing the session is the end of that process's work with models: it unloads, then asks
+/// the provider to release what the engine technology holds per process. On CUDA that release
+/// has to happen before the process exits — left to static destruction it aborts the process
+/// with <c>0xC0000409</c> after a perfectly good run (gotcha 19) — which is why the window
+/// disposes this on close rather than leaving it to the runtime.
+/// </para>
 /// </remarks>
 public sealed class ModelSession : IAsyncDisposable
 {
@@ -141,7 +148,22 @@ public sealed class ModelSession : IAsyncDisposable
         Raise();
     }
 
-    public async ValueTask DisposeAsync() => await UnloadAsync().ConfigureAwait(false);
+    /// <summary>
+    /// Unloads, then releases the process-level backend. Order matters: upstream's contract for the
+    /// release is that every model has already been destroyed. Waits out a load in flight first,
+    /// because releasing the backend under a load that is still realising weights on it is a race
+    /// with native code.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        while (IsBusy)
+        {
+            await Task.Delay(50).ConfigureAwait(true);
+        }
+
+        await UnloadAsync().ConfigureAwait(true);
+        _engines.ReleaseBackend();
+    }
 
     private void Raise() => Changed?.Invoke(this, EventArgs.Empty);
 }

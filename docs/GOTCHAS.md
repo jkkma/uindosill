@@ -254,8 +254,7 @@ CUDA error: driver shutting down
 
 Exit code 0. Transcript complete, and byte-identical to the other run. This is ggml's CUDA buffer
 destructor running during process teardown, after the driver has begun unloading, so `cudaFree`
-returns `cudaErrorCudartUnloading`. It is upstream's shutdown ordering, not this codebase's, and
-nothing here can suppress it.
+returns `cudaErrorCudartUnloading`. It is upstream's shutdown ordering, not this codebase's.
 
 Two ways it bites. Read literally it says a run failed that did not, and a harness keying on stderr
 would discard a good result. And ggml's error path is `GGML_ABORT` — the only reason the process
@@ -266,14 +265,34 @@ present as a crashed process with complete, correct output on disk.
 **That last sentence is no longer hypothetical.** On 2026-08-15, on the same machine and the same
 driver, eight consecutive CUDA runs took the abort *before* the exit code was set and returned
 `0xC0000409` with complete, correct output on disk — so `measure-transcribe.ps1`, which keys on the
-exit code, printed `THE RUN FAILED` over a run whose every figure was sound. What changed is not
-identified. The measurement and its limits are in `docs/UNPROVEN.md`.
+exit code, printed `THE RUN FAILED` over a run whose every figure was sound. The desktop app did
+the same thing on close whenever a CUDA model had been loaded: a good session, then a crash on the
+way out. The measurement and its limits are in `docs/UNPROVEN.md`.
 
-**Here:** nothing is done about it, deliberately — it is recorded so that the next person to see it
-does not spend an afternoon on a working backend. Judge a run by its outputs as well as its exit
-code: on a CUDA run the exit code alone has now been wrong in both directions, reporting success
-after a fatal-looking error and failure after a clean transcript.
-`scripts/measure-transcribe.ps1` prints the exit code first for this reason.
+**Where it actually comes from — read off the crash dumps on 2026-08-16, GUI and CLI alike:**
+`ExitProcess → LdrShutdownProcess → parakeet.dll DLL_PROCESS_DETACH → execute_onexit_table →
+pk::Backend::~Backend → abort`. parakeet.cpp keeps one `pk::Backend` per process — the ggml
+backend plus a persistent device compute buffer — in a static `unique_ptr`, and its static
+destructor frees device memory after the driver has torn down. It is not our `parakeet_ctx`: the
+CLI frees its context and aborted anyway, and disposing the app's engine before closing changed
+nothing. Upstream knows: `pk::shutdown_backend()` exists for exactly this, documented "call once at
+program exit, after all model objects are destroyed", and their own CLI calls it after every
+subcommand.
+
+**Here:** that call is made — `ParakeetNativeLibrary.TryShutdownBackend()`, reached through the
+export `?shutdown_backend@pk@@YAXXZ` because the function is not in the C ABI and only happens to be
+exported (upstream exports every symbol). The CLI calls it in `CliEntryPoint.RunAsync`'s `finally`,
+after every command's `await using` engine has gone; the app's `MainWindow` turns the first close
+into `MainWindowViewModel.ShutdownAsync` — cancel and wait out a running batch, dispose the
+`ModelSession`, which unloads and then calls `IEngineProvider.ReleaseBackend` — and only then closes.
+Measured on the RTX 5080: eight CUDA processes without the call all exited `0xC0000409`, sixteen
+with it exited 0 (GUI and console), the fixed app exits 0 on an idle close and a mid-batch close,
+Vulkan and CPU exit 0 either way, and the CLI's CUDA run exits 0 with the error line gone. Two things survive from before. A
+vendored build that stops exporting the symbol gets the old behaviour back — `uindosill doctor`
+prints a warning under that backend's line when the export is missing, and
+`ShutdownBackendAvailable` says so in code. And the exit code alone was wrong in both directions
+for a while, so `scripts/measure-transcribe.ps1` still prints it first and the outputs are still
+worth reading.
 
 ## 20. The first GPU run on a machine measures the driver compiling shaders, and calls it decoding
 

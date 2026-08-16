@@ -251,6 +251,18 @@ failing at the first kernel launch. Only a transcription tells you that. The pat
 separate reason above: the loader's flat pass will report a Vulkan build found in an unqualified
 directory as whatever backend you asked for.
 
+**One thing this codebase uses that is not in the C ABI.** The exit-time abort in gotcha 19 is
+prevented by calling upstream's `pk::shutdown_backend()`, which `parakeet_capi.h` does not declare;
+it is reached through its exported C++ name, `?shutdown_backend@pk@@YAXXZ`, which every v0.5.0
+`lib-` build carries only because upstream exports every symbol (2,090 of them, checked with
+`cdb -z parakeet.dll -c ".symopt- 2; x parakeet!*shutdown_backend*"` on all three). A future build
+that exports only the C ABI would still load, still report `ok`, and still decode — and a CUDA
+process would go back to exiting `0xC0000409` after a good run. The probe checks for the export
+after the ABI question and prints a warning line under that backend when it is absent, so a
+re-vendored release that has lost it says so here. If a release drops the export, ask upstream to
+add the call to the C API rather than patching around it: `docs/GOTCHAS.md`, gotcha 19, has the
+measurement that makes the case.
+
 Record here, per release: the tag, the archive names, the SHA-256 of each archive, and the ISA
 baseline you confirmed. `scripts/vendor-natives.ps1` carries the same digests and byte counts as
 its pins, and fails any run whose trusted digest is not in this table — so a new release is a new

@@ -466,6 +466,63 @@ the file used here is a 728.8 s public-domain LibriVox chapter at 22.05 kHz mono
 comparison against the original runs is therefore no longer possible on this machine, and nobody has
 tried to reproduce this on a second one.
 
+### Root-caused and fixed, 2026-08-16 — the abort is a static destructor, and upstream ships the remedy
+
+Measured on the machine in the table above, same driver 610.88, same v0.5.0 binaries.
+
+**Root cause, from the WER minidumps under `cdb`.** The desktop app's one recorded crash
+(`Uindosill.exe`, 8/15 08:08, a CUDA session — `native\win-x64\cuda\parakeet.dll`, `cudart64_12`
+and `nvcuda` in its module list; no `vulkan-1.dll`) and the CLI's CUDA crashes have the same stack,
+frame for frame:
+
+```
+ucrtbase!common_exit → kernel32!ExitProcess → ntdll!LdrShutdownProcess
+  → parakeet.dll DLL_PROCESS_DETACH → ucrtbase!execute_onexit_table
+    → parakeet!pk::Backend::~Backend → … → ucrtbase!abort   (FAST_FAIL_FATAL_APP_EXIT, 0xC0000409)
+```
+
+`pk::Backend` is parakeet.cpp's process-global compute backend (`src/ggml_graph.cpp`: a static
+`std::unique_ptr<Backend> g_backend` holding the ggml backend and a persistent gallocr device
+buffer). Its destructor runs at DLL unload, after the CUDA driver's own teardown, and ggml aborts on
+the failed `cudaFree`. It is not the `parakeet_ctx` this codebase owns — the CLI has always freed
+that and aborted regardless. Upstream's comment on the function it added for this says as much:
+*"Relying on static destruction frees it during process exit, AFTER the driver's atexit handler,
+which aborts with 'driver shutting down'. Call from main() before returning."*
+
+**The fix is that call**, `pk::shutdown_backend()`, made through its MSVC-decorated export
+`?shutdown_backend@pk@@YAXXZ` — it is not in the C ABI, and all three vendored builds export it only
+because they export everything (2,090 symbols). Runs below drove the real Avalonia window and the
+real `MainWindowViewModel` from a harness (plus a no-Avalonia console mode), q8_0 model, two runs
+per row unless stated:
+
+| process | backend | teardown | exit |
+|---|---|---|---|
+| GUI | none loaded | close | 0 |
+| GUI | Vulkan | close with model resident (×5) | 0 |
+| GUI | CPU | close with model resident | 0 |
+| GUI | **CUDA** | close with model resident, before the fix | **0xC0000409** |
+| GUI | **CUDA** | `Session.DisposeAsync()` then close, before the fix | **0xC0000409** |
+| console | **CUDA** | dispose or leak, no shutdown call | **0xC0000409** (×4) |
+| GUI / console | CUDA | dispose, then `pk::shutdown_backend()` | 0 (×4) |
+| GUI | CUDA | `pk::shutdown_backend()` with the model still resident | 0 |
+| GUI / console | Vulkan, CPU | dispose, then `pk::shutdown_backend()` | 0 (×8) |
+| GUI, fixed build | CUDA | close with model resident (×3); close 2 s into a batch (×2) | 0 |
+| GUI, fixed build | Vulkan, CPU | close with model resident; CPU close 2 s into a batch | 0 |
+| CLI, fixed build | CUDA | `transcribe` of the ten-minute file (×2) | 0, RTF 0.007–0.008, no error line |
+
+Eight of eight aborted without the call and none of the twenty-six with it or the fixed build did.
+Every aborting process had already logged its `Main` returning 0 — the crash was entirely after
+this codebase's last instruction. Avalonia is not a factor: the console mode aborts and recovers
+identically. The mid-batch closes took 0.1–0.3 s from close request to window gone.
+
+**What this does not settle.** The one-in-five exit-0 CUDA run recorded above stands as recorded
+and is still unexplained; today's eight unfixed runs were all aborts. The Itanium spelling of the
+export (`_ZN2pk16shutdown_backendEv`) is what the mangling rules give and no non-Windows build has
+been inspected. The wait on a mid-batch close is bounded by one native batch call, which on CPU
+could be many seconds on long segments; the two-second-in closes measured here were short and say
+nothing about that worst case. And a future vendored build that stops exporting the symbol reverts
+to the abort — `uindosill doctor` now warns under the backend's line when that is so.
+
 ### What is still unmeasured about CUDA
 
 - **VRAM.** Not measured, and invisible to the harness, which samples host working set only. How

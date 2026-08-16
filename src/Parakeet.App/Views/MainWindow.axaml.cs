@@ -8,6 +8,8 @@ namespace Parakeet.App.Views;
 
 public partial class MainWindow : Window
 {
+    private bool _shutdownRequested;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -24,6 +26,47 @@ public partial class MainWindow : Window
         {
             browse.Click += OnBrowseOutput;
         }
+    }
+
+    /// <summary>
+    /// The first close request is turned into a shutdown: stop the batch, unload the model, release
+    /// the native backend, and only then close. Without this the process reached its native static
+    /// teardown with a CUDA backend still resident and aborted with <c>0xC0000409</c> — the app
+    /// "crashed on exit" after a good run (gotcha 19). A second request while that is under way
+    /// closes at once; the person asking twice has decided.
+    /// </summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+
+        if (e.Cancel || _shutdownRequested || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        _shutdownRequested = true;
+        e.Cancel = true;
+        _ = ShutdownThenCloseAsync(viewModel);
+    }
+
+    private async Task ShutdownThenCloseAsync(MainWindowViewModel viewModel)
+    {
+        // Off the Closing call stack first. With nothing running and a fake engine everything below
+        // completes synchronously, and closing a window from inside its own Closing handler is a
+        // re-entrancy nobody should have to reason about.
+        await Task.Yield();
+
+        try
+        {
+            await viewModel.ShutdownAsync().ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // The window is going away; a failure here has nowhere to be shown.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+
+        Close();
     }
 
     private void OnDragOver(object? sender, DragEventArgs e) =>

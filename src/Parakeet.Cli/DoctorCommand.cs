@@ -192,6 +192,17 @@ internal static class DoctorCommand
             ParakeetNativeLibrary.Configure(backend, allowFallback: false, parsed.Value("native-dir"));
             var abi = ParakeetNativeLibrary.EnsureLoadedAndCompatible();
             context.WriteLine($"abi {abi} from {ParakeetNativeLibrary.LoadedPath}");
+
+            // Outside the C ABI, so a re-vendored build can silently lack it — and then a CUDA
+            // process is back to aborting on exit. Said here, where the binary is identified,
+            // and only when it is missing: every vendored build so far has it.
+            if (ParakeetNativeLibrary.ShutdownBackendAvailable == false)
+            {
+                context.WriteLine(
+                    "  no pk::shutdown_backend export — on cuda the process will abort with 0xC0000409 at " +
+                    "exit after a good run (docs/GOTCHAS.md, gotcha 19)");
+            }
+
             return ExitCodes.Success;
         }
         catch (ParakeetNativeLoadException ex)
