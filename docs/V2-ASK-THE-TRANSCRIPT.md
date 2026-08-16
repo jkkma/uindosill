@@ -371,7 +371,13 @@ Read from `tools/server/README.md` at b10448 the same day, because they bear on 
 mechanism for hybrid and recurrent models on follow-up turns — such models cannot roll their
 recurrent state back, so without checkpoints a second question re-prefills the whole transcript;
 whether it holds at 40k is unmeasured. `--host` defaults to `127.0.0.1`; `--api-key`,
-`--slot-save-path`, `--cache-reuse`, `-fit`, `-ot` and `-ncmoe` are all flags. Read, not run.
+`--slot-save-path`, `--cache-reuse`, `-fit`, `-ot` and `-ncmoe` are all flags. The same README
+documents a **router mode** — start with no model, point it at `--models-dir` or a
+`--models-preset`, load and unload models over the API — so the language model, an embedder and a
+reranker (decision 3) can sit behind one server. How it isolates them, one process per model or one
+for all, was not read; the claim below that an unload is a kill and the VRAM comes back by
+construction holds for the one-model-per-process arrangement and is a spike check for the router.
+Read, not run.
 
 **Recommendation, revised again on 2026-08-16, and narrower this time: `llama-server`.** The
 revision before this said spike LLamaSharp and `llama-server` a day each and let the table decide;
@@ -707,6 +713,74 @@ the product. Lexical search over 1,488 segments needs no model at all and is ung
 simply be enough at this scale. Nobody has tried either here.
 
 **Whatever is chosen, the three-hour case is the requirement**, not the ten-minute one.
+
+#### The stack, tiered by what it costs — read on 2026-08-16, none of it run
+
+**Tier 0 — windowed BM25, no model, and the first thing to build.** Segments here average about
+27 tokens — too small to be a hit on their own — so the unit is a **window of about 60 s, about 240
+tokens, at 50 % overlap**: roughly 600 windows over CSB384's 1,488 segments, with a 120 s variant to
+compare. Each window carries the ids of the segments inside it, so a retrieved window *is* the
+citation, and the grammar in *The model never writes a timestamp* can enumerate exactly the ids
+that are live. Hand-rolled — BM25 is about two hundred lines — and in `Parakeet.Core`, which takes
+no dependencies and whose build enforces it; Lucene.NET was still `4.8.0-beta` when the
+maintainer's research read NuGet on 2026-08-15. Tokenising is Unicode word breaks and
+lower-casing, with a Snowball stemmer per language for **twenty of the twenty-five in
+`models.json`** — `hr`, `mt`, `sk`, `sl` and `uk` have no stemmer in Snowball or Lucene.NET (the
+research's count against that list; not re-derived here) — and the first run is unstemmed, so that
+stemming's contribution to recall is a measurement rather than an assumption. Why it might simply
+be enough: no study measures BM25 against dense retrieval on transcript question-answering at
+segment granularity; BEIR's "BM25 is a robust baseline" is the nearest evidence, and a 2026 study
+finds read-everything competitive at the smallest corpus scales, which a 40k-token transcript is
+(all from the research's reading). Cost: no bytes, no VRAM, and it is the one part of v2 that is
+testable with no language model in the room.
+
+**Tier 1 — dense retrieval, only if paraphrase recall demands it.**
+`Qwen/Qwen3-Embedding-0.6B-GGUF`, `Q8_0`, **639,150,592 bytes**, apache-2.0, the vendor's own GGUF
+— read from the hub on 2026-08-16. Last-token pooling with an instruction prefix, per its card
+(research); served by `llama-server --embedding --pooling last` on `/v1/embeddings` (flags and
+endpoint read from `tools/server/README.md` at b10448 the same day), fused with tier 0 by
+reciprocal-rank fusion. About 600 windows are embedded once per transcript: seconds on the desktop,
+unknown on the laptop, both unmeasured. It is the third model in the product, at 0.6 GiB beside the
+9B — decision 4's budget, barely touched. Alternatives the research cleared on licence:
+`nomic-embed-text-v2-moe` (apache-2.0, a 512-token cap, 24 of the 25 languages) and `bge-m3` (MIT);
+refused: jina v3/v5 and its reranker (CC-BY-NC); not convertible to GGUF: gte-multilingual-base and
+arctic-embed-m-v2.0. **Maltese appears in no embedding model's enumerated language list** that the
+research found — worth knowing before it is promised.
+
+**Tier 2 — a reranker, last, and only if precision at the top of the list is the problem rather
+than recall.** `ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF`, **639,153,184 bytes**, apache-2.0 — read
+2026-08-16. `/v1/rerank` needs the server started with `--embedding --pooling rank` (README,
+b10448), and it applies the model's template, where LLamaSharp's reranker concatenated raw query
+and document (research) — one more thing the child process brings. Reranker support in llama.cpp
+merged 2025-09-25; community GGUFs older than that give meaningless scores (research). A fourth
+model.
+
+**The global path is not retrieval.** *"What are the main topics?"* wants the whole recording: one
+pass inside the 9B's window — 40k fits — or a map-reduce over the windows above with ids carried
+through the reduce. Which of the two is decided by measuring the 9B's *effective* length on CSB384,
+not its label: RULER puts Llama-3.1-8B's effective length at 32k of a claimed 128k and NoLiMa
+drops it from 76.7 to 14.2 at 32k (research), and nothing says the 9B is different until it is
+run. Between the two paths sits a router that does not exist: a heuristic first — *what did they
+say about, when, did they* → retrieve; *main topics, summarise, overall* → global — and the model
+itself as the classifier if the heuristic fails; unmeasured either way. Both paths cite by id, and
+the global path's citations are the ones decision 6's tests will find wanting first.
+
+**Why retrieval at all when the working candidate reads 262k.** Four reasons this document already
+carries in pieces: the laptop cannot prefill 40k in acceptable time (75–190 s per prompt on that
+class of hardware — arithmetic on third-party rates, in the research); the third file's whole cost
+is prefill with experts in RAM; a grammar over *live* ids is only possible when the candidate set
+is small; and global answers degrade past 32k for open models. Retrieval is the laptop tier, and
+the fast path everywhere.
+
+**What gets tested, and it is the first real test in v2:** a hand-labelled set of about thirty
+question → segment pairs on CSB384, giving recall@10 for tier 0 on the first day, plus a planted
+needle at a known segment and an abstain on an empty transcript and on empty retrieval — the
+bullets decision 6 already lists, with numbers on them. Public seeds (AMI/ICSI, CC BY 4.0, joined
+with QMSum's spans) are English-only, so this set is home-made, and in more than one of the
+twenty-five languages before anything is claimed about them.
+
+Order: tier 0, the thirty questions, recall@10; tier 1 only if recall is the problem; tier 2 only
+if precision is. Nothing needs a GPU before tier 1, and nothing here is measured.
 
 ### 4. Are the two models ever resident at once
 
