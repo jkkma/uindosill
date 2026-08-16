@@ -15,7 +15,7 @@ public class VulkanWorkaroundTests
     public void TheWorkaroundIsOffByDefault()
     {
         // Turning it on for every Vulkan device would change the configuration every measured
-        // Vulkan figure in UNPROVEN.md in the project notes was taken under, on hardware this project cannot
+        // Vulkan figure in docs/UNPROVEN.md was taken under, on hardware this project cannot
         // re-measure from the machine that found the bug.
         var options = new ParakeetCppOptions { ModelPath = "x.gguf" };
 

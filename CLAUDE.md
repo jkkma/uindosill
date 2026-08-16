@@ -1,9 +1,8 @@
 # Working agreement
 
-Operational notes for an agent session. Everything about *the project* is in `README.md` and in
-the project notes — which are kept in the maintainer's Google Drive, not in this repository; see
-the last section — do not restate it here, because two copies of a fact is how one of them goes
-stale, which is a failure this repository has already had to fix more than once.
+Operational notes for an agent session. Everything about *the project* is in `docs/` and in
+`README.md` — do not restate it here, because two copies of a fact is how one of them goes stale,
+which is a failure this repository has already had to fix more than once.
 
 ## Budget
 
@@ -34,9 +33,8 @@ python3 scripts/check-test-counts.py     # the counts above, against the run tha
 ```
 
 That last line is why the number in the comment can be trusted, and CI runs it too. **If you change
-the test count, run it** — it prints what every document should say, and the two files here that
-quote a count (this one and `README.md`) are the two you would otherwise forget. The project notes
-quote counts too, and the script cannot reach them; update `PHASES.md` there by hand.
+the test count, run it** — it prints what every document should say, and the three that quote a
+count are the three you would otherwise forget.
 
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have
@@ -49,8 +47,7 @@ a model, neither of which is in the clone. `--fake` exercises the whole pipeline
 
 Every claim is either measured or explicitly marked unproven. When reporting a number, make sure
 it measures the thing being claimed, and never quote a real-time factor without naming its
-backend. `UNPROVEN.md` in the project notes is the record; read it before quoting any figure from
-this repository.
+backend. `docs/UNPROVEN.md` is the record; read it before quoting any figure from this repository.
 
 That applies to your own output too. Verify a claim before writing it into a document, and when a
 check is not possible from here, say so rather than reasoning to a confident answer.
@@ -63,12 +60,3 @@ inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
 `scripts/lab.ps1` is one entry point for the six scripts; run it bare to list them.
-
-## The project notes live elsewhere
-
-The project's own documentation — architecture, engine choice, gotchas, licensing detail, the
-model catalogue's rules, native vendoring, the phase plan, what is unproven, and the v2 and v3
-registers, plus the v2 research and plan — is kept in the maintainer's Google Drive rather than in
-this repository. Wherever this repository says "X.md in the project notes", that is where X.md is.
-A session with access reads it there before quoting a figure or touching a decision, and puts
-nothing from it into the working tree.

@@ -18,7 +18,7 @@ TestResults/
 coverage*.xml
 *.coverage
 
-# The vendored parakeet.cpp drop (see NATIVE-BINARIES.md in the project notes) is never committed: it is large,
+# The vendored parakeet.cpp drop (see docs/NATIVE-BINARIES.md) is never committed: it is large,
 # per-backend, and pinned to a specific upstream release.
 #
 # The whole directory is ignored rather than the binaries alone. Listing only *.dll/*.so/*.dylib
@@ -64,7 +64,3 @@ runs/
 # OS noise
 .DS_Store
 Thumbs.db
-
-# The project notes used to live in docs/ and now live in the maintainer's Google Drive. A local
-# copy of them under docs/ is fine to have and must never be committed: this repository is public.
-docs/

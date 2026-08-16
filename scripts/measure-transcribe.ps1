@@ -40,7 +40,7 @@ param(
     # function, and an advanced function refuses to collapse an array into a [string] parameter
     # rather than joining it, so `[string] $Formats` failed the unquoted form outright with
     # "Cannot process argument transformation on parameter 'Formats'". Latent until now only
-    # because every run recorded in UNPROVEN.md in the project notes took the default.
+    # because every run recorded in docs/UNPROVEN.md took the default.
     [string[]] $Formats = @('srt', 'txt', 'json'),
 
     # Where the transcripts land. The default is a fresh timestamped folder per run, because the

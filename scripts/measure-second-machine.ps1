@@ -17,7 +17,7 @@
     measurement before a cold one, and records that it has spent the cold run so a later
     invocation cannot quietly report a warm figure as a first-run one.
 
-    The second is the machine itself. `UNPROVEN.md` in the project notes had to be corrected once already because
+    The second is the machine itself. `docs/UNPROVEN.md` had to be corrected once already because
     it described a 16-core CPU as 32-core, and it carried no memory speed at all until the
     hardware turned out to matter. A figure without its machine cannot be reproduced or argued
     with, so the machine block is captured here rather than remembered.
@@ -261,11 +261,11 @@ try {
         }
         else {
             Write-Host "  CUDA was requested and '$($cuda.Loaded)' loaded, which is neither cuda nor cpu" -ForegroundColor Red
-            Write-Host '  and contradicts the documented order in NATIVE-BINARIES.md in the project notes.' -ForegroundColor Red
+            Write-Host '  and contradicts the documented order in docs/NATIVE-BINARIES.md.' -ForegroundColor Red
         }
     }
 
-    # ── a block that can be pasted into UNPROVEN.md in the project notes ───────────────────────
+    # ── a block that can be pasted into docs/UNPROVEN.md ───────────────────────
     $block = @()
     $block += '| | Machine |'
     $block += '|---|---|'

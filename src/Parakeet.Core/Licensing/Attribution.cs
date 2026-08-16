@@ -160,7 +160,7 @@ public static class Attributions
         // are NVIDIA proprietary binaries redistributed under Attachment A of the CUDA Toolkit
         // EULA. It is listed unconditionally even though only the opt-in CUDA backend ships them:
         // a notice that appears only when a build flag says so is a notice that can go missing,
-        // and the Notes field says which builds carry the files. See LICENSING.md in the project notes.
+        // and the Notes field says which builds carry the files. See docs/LICENSING.md.
         new ComponentLicence
         {
             Component = "NVIDIA CUDA runtime (cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll)",

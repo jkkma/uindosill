@@ -88,7 +88,7 @@ public class ParakeetNativeLibraryTests
         }
 
         var load = Assert.IsType<ParakeetNativeLoadException>(exception);
-        Assert.Contains("NATIVE-BINARIES.md", load.Message, StringComparison.Ordinal);
+        Assert.Contains("docs/NATIVE-BINARIES.md", load.Message, StringComparison.Ordinal);
         Assert.Contains("Paths tried:", load.Message, StringComparison.Ordinal);
         Assert.NotEmpty(ParakeetNativeLibrary.AttemptedPaths);
     }
@@ -166,7 +166,7 @@ public class ParakeetNativeLibraryTests
     {
         // Asking for CUDA costs a 553 MB runtime download to set up, so substituting the other GPU
         // tier would hide the failure behind a result that still looks fast. The drop to CPU is
-        // meant to be visible. NATIVE-BINARIES.md in the project notes said "requested, then Vulkan, then CPU",
+        // meant to be visible. docs/NATIVE-BINARIES.md said "requested, then Vulkan, then CPU",
         // which was never true for CUDA.
         var marker = $"no-native-{Guid.NewGuid():N}";
         ParakeetNativeLibrary.Configure(
