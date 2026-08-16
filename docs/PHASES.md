@@ -33,8 +33,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 339 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 338 passed and
+**Status:** met. 359 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 358 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -56,7 +56,7 @@ that file produced byte-identical output. See `docs/UNPROVEN.md`.
 
 ## Phase 3 — CLI — **DONE**
 
-`transcribe`, `models`, `bench`, plus `doctor`, `notice` and — since 2026-08-17 — `wer`, which
+`transcribe`, `models`, `bench`, plus `doctor`, `notice` and — since 2026-08-16 — `wer`, which
 scores a transcript against a human reference and is what the Phase 0 harness is built on.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.

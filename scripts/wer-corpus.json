@@ -1,0 +1,247 @@
+{
+  "name": "earnings22-subset10",
+  "description": "The ten-call, eleven-hour Subset 10 of Rev.com's Earnings-22: English-language earnings calls from ten companies in five countries, transcribed by human transcriptionists in two styles — verbatim (fillers, stutters and repetitions written down) and non-verbatim (lightly edited for readability). Real, accented, disfluent, long-form: what docs/PHASES.md Phase 0 asks a WER corpus to be.",
+  "pinnedOn": "2026-08-16",
+  "source": {
+    "repository": "https://github.com/revdotcom/speech-datasets",
+    "commit": "c05ab6fd8b4b627d123c922a22a39e993dd37635",
+    "commitDate": "2026-05-29T01:30:39Z",
+    "media": "https://media.githubusercontent.com/media/revdotcom/speech-datasets/c05ab6fd8b4b627d123c922a22a39e993dd37635/earnings22/media/{id}.mp3",
+    "verbatim": "https://raw.githubusercontent.com/revdotcom/speech-datasets/c05ab6fd8b4b627d123c922a22a39e993dd37635/earnings22/transcripts/nlp_references/{id}.nlp",
+    "nonverbatim": "https://raw.githubusercontent.com/revdotcom/speech-datasets/c05ab6fd8b4b627d123c922a22a39e993dd37635/earnings22/subset10/nonverbatim_transcripts/nlp_references/{id}.nlp",
+    "note": "The media are Git LFS objects, served from media.githubusercontent.com; raw.githubusercontent.com returns a 132-byte pointer for them. subset10/media/*.mp3 and subset10/verbatim_transcripts/nlp_references/*.nlp in the repository are symlinks to earnings22/media and earnings22/transcripts/nlp_references, which is why the verbatim URL does not mention subset10."
+  },
+  "license": {
+    "transcripts": "CC BY-SA 4.0 — earnings22/LICENSE.md: \"The transcripts and associated text files that are used for alignment in this directory are licensed under a Creative Commons Attribution-ShareAlike 4.0 International license.\"",
+    "audio": "Not stated in the repository. LICENSE.md covers the transcripts and alignment text files and says nothing about the recordings, which Rev publishes there as an ASR benchmark. This project downloads them for evaluation on the machine that runs the harness, keeps them out of the repository (corpus/ is gitignored), and redistributes nothing."
+  },
+  "citation": [
+    "Del Rio et al., \"Accents in Speech Recognition through the Lens of a World Englishes Evaluation Set\", Research in Language 21(3), 2023 — https://czasopisma.uni.lodz.pl/research/article/view/21579 (earlier version: arXiv:2203.15591)",
+    "McNamara et al., \"Style-agnostic evaluation of ASR using multiple reference transcripts\", 2024 — arXiv:2412.07937 (the subset and its two transcript styles)"
+  ],
+  "format": {
+    "nlp": "Pipe-separated, one token per line, header token|speaker|ts|endTs|punctuation|prepunctuation|case|tags. The token column carries the original casing; punctuation is what followed the token. Numbers are written as digits. `uindosill wer` reads it by column name."
+  },
+  "files": [
+    {
+      "id": "4453225",
+      "ticker": "APNHF",
+      "country": "South Africa",
+      "dialectFamily": "Other",
+      "durationSeconds": 4307.51,
+      "metadataDurationSeconds": 4307,
+      "sampleRate": 16000,
+      "channels": 2,
+      "media": {
+        "bytes": 12923698,
+        "sha256": "45082c1503af9bfe3620e963261a0b0a240e4e6c32f5cdb5781d69e4211a52b1"
+      },
+      "verbatim": {
+        "bytes": 222429,
+        "sha256": "00d025947db2046d2abe95418a28f6c857c21ec8a95ef8ee76a95b2deeb24390"
+      },
+      "nonverbatim": {
+        "bytes": 180466,
+        "sha256": "1d59ead624cfdb3a7882fe78a3ac5dc100a8a31bceb7e58d183ccc56afa1ae5b"
+      }
+    },
+    {
+      "id": "4469088",
+      "ticker": "SPPJY",
+      "country": "South Africa",
+      "dialectFamily": "Other",
+      "durationSeconds": 4634.12,
+      "metadataDurationSeconds": 4634,
+      "sampleRate": 44100,
+      "channels": 1,
+      "media": {
+        "bytes": 37073441,
+        "sha256": "00f8b88596f5c68ab0cb42b75620a3865231ed36b41a3e20dcdbbd5eac3d69bd"
+      },
+      "verbatim": {
+        "bytes": 231397,
+        "sha256": "e1cc832d41a5489c518e74a4d3ad560485ef3c32b77c90623985bdc8800e293f"
+      },
+      "nonverbatim": {
+        "bytes": 177350,
+        "sha256": "cce4af477885ffb54f85db11871a3093709d7887b6dd067b58052315dc9b6643"
+      }
+    },
+    {
+      "id": "4470684",
+      "ticker": "IVTJF",
+      "country": "UK",
+      "dialectFamily": "British Isles",
+      "durationSeconds": 4696.33,
+      "metadataDurationSeconds": 4696,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 18786552,
+        "sha256": "f5430fbfaf1ae69534811f759c9bd937aef1dd4acfc56c5237886bbb22cec442"
+      },
+      "verbatim": {
+        "bytes": 222933,
+        "sha256": "9710b86c3f496ebe610d6581aa8b0a3e24ac81000c4c646248eccce689aaccaa"
+      },
+      "nonverbatim": {
+        "bytes": 186443,
+        "sha256": "19c904167a9577145fd4355d0d6543a3de6de314bf54a47317fe11f009223849"
+      }
+    },
+    {
+      "id": "4474506",
+      "ticker": "COST",
+      "country": "United States",
+      "dialectFamily": "North American",
+      "durationSeconds": 3975.97,
+      "metadataDurationSeconds": 3975,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 15905042,
+        "sha256": "0790a0c8b01ce7a37fe9432279958ee1faa6588618ad52affaf525fb1d0abec5"
+      },
+      "verbatim": {
+        "bytes": 224194,
+        "sha256": "b4dd11b47a795d7a9cfdf873daf3e392dc0fb1f554c2f61f58737194f6db5bc2"
+      },
+      "nonverbatim": {
+        "bytes": 186436,
+        "sha256": "32878063362716b9da28b78c13afcc3dc9afceeb408d0b3845b3ad860fc4985c"
+      }
+    },
+    {
+      "id": "4479944",
+      "ticker": "HDB",
+      "country": "India",
+      "dialectFamily": "Other",
+      "durationSeconds": 3892.53,
+      "metadataDurationSeconds": 3892,
+      "sampleRate": 44100,
+      "channels": 2,
+      "media": {
+        "bytes": 15570129,
+        "sha256": "a2ca9b63ba333d47d8e1c9ea1f7dabf956932034db21980b266344c634640065"
+      },
+      "verbatim": {
+        "bytes": 211940,
+        "sha256": "d5c8ce7bd87c843e3a1993c69ab527a5c4e725a08982b7b53cb3c92b449b18e8"
+      },
+      "nonverbatim": {
+        "bytes": 190651,
+        "sha256": "87e1fbc61784b58b50bac99fcc16910ec13b82d38851fd89361c1e15eee755f7"
+      }
+    },
+    {
+      "id": "4481952",
+      "ticker": "CAHPF",
+      "country": "Australia",
+      "dialectFamily": "Oceanic",
+      "durationSeconds": 3709.59,
+      "metadataDurationSeconds": 3710,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 14839538,
+        "sha256": "3259fb7bb9023612d8d29cce71d198e4b23f75c10f1fa8947fa61aab0e9949f9"
+      },
+      "verbatim": {
+        "bytes": 197048,
+        "sha256": "dd9546396f0412171bc324231deb87e2944a8b14606b96ac344e38b68004d26a"
+      },
+      "nonverbatim": {
+        "bytes": 163238,
+        "sha256": "2d308627957ec1a917d49eb0e859ada3d5cad16c73c5c26840c50a1806009621"
+      }
+    },
+    {
+      "id": "4482383",
+      "ticker": "PBTHF",
+      "country": "Australia",
+      "dialectFamily": "Oceanic",
+      "durationSeconds": 3472.23,
+      "metadataDurationSeconds": 3472,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 13890098,
+        "sha256": "6f8790a1954a6aa3d624fe28685060f3df547ab97247caf69dcd5d55d95c7a0d"
+      },
+      "verbatim": {
+        "bytes": 189207,
+        "sha256": "0f81ba0b58a37307c9e85cdba192e1ce44b5e97cb83ca9ecd4ff24d93ce283a2"
+      },
+      "nonverbatim": {
+        "bytes": 164538,
+        "sha256": "332fe19be590fadba1797eddea193deff9f83bf0e54db72e9bee4033d9175b89"
+      }
+    },
+    {
+      "id": "4482613",
+      "ticker": "VEDL",
+      "country": "India",
+      "dialectFamily": "Other",
+      "durationSeconds": 4003.16,
+      "metadataDurationSeconds": 4022,
+      "sampleRate": 22050,
+      "channels": 2,
+      "media": {
+        "bytes": 28023292,
+        "sha256": "70ae18023b2d0591a6ab9c2d908a9c720b2e5d3ce7dc882e8930c6906910a010"
+      },
+      "verbatim": {
+        "bytes": 185748,
+        "sha256": "5d155a11b43d4bd573afe48bb05462e7b7ec718290045ca80b555cbadadac0ae"
+      },
+      "nonverbatim": {
+        "bytes": 164762,
+        "sha256": "ab1466b5e1dd00dc37c0be27d5ddac6363a25b975b574e1bfa7a15663716a9ce"
+      }
+    },
+    {
+      "id": "4483937",
+      "ticker": "RNSHF",
+      "country": "UK",
+      "dialectFamily": "British Isles",
+      "durationSeconds": 3653.55,
+      "metadataDurationSeconds": 3654,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 14615378,
+        "sha256": "9ef797a272a5fa074a25b3838dde9b9ca2c9aff0d831655efc46a49412244ca7"
+      },
+      "verbatim": {
+        "bytes": 176326,
+        "sha256": "a0ff1592f72bda0071780158cc6bcc65ad88fce6869523a2c00ff4ad5dea9301"
+      },
+      "nonverbatim": {
+        "bytes": 147768,
+        "sha256": "6e4eefe9e8686144c59e5b53a0117962678382181684f97fecd6428b47424bc4"
+      }
+    },
+    {
+      "id": "4485192",
+      "ticker": "EPC",
+      "country": "United States",
+      "dialectFamily": "North American",
+      "durationSeconds": 3692.29,
+      "metadataDurationSeconds": 3692,
+      "sampleRate": 24000,
+      "channels": 1,
+      "media": {
+        "bytes": 14770322,
+        "sha256": "352f8f84b0f86005017dcfa331d187a25c355b4d9e1a2ab4837ef41d3fcff585"
+      },
+      "verbatim": {
+        "bytes": 193203,
+        "sha256": "4ca10269ae9c514a8093ccf94e116c5dc675bc06ea7fd578981fe8397853f8d3"
+      },
+      "nonverbatim": {
+        "bytes": 167809,
+        "sha256": "ce9d6d9769d0d748b121c8c1016a90c77b727897a0cdc455168d668b38521d02"
+      }
+    }
+  ]
+}

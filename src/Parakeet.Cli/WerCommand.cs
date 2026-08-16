@@ -256,7 +256,13 @@ internal static partial class WerCommand
             return TimestampPrefix().Replace(content, string.Empty);
         }
 
+        // The header names the columns, and the two layouts in the wild differ: the README's
+        // token|speaker|ts|endTs|punctuation|case|tags|wer_tags, and the files' own
+        // token|speaker|ts|endTs|punctuation|prepunctuation|case|tags. Reading by name serves both.
         var builder = new StringBuilder(content.Length);
+        var tokenColumn = -1;
+        var punctuationColumn = -1;
+        var prepunctuationColumn = -1;
         var first = true;
         foreach (var rawLine in content.Split('\n'))
         {
@@ -269,13 +275,17 @@ internal static partial class WerCommand
             if (first)
             {
                 first = false;
-                if (line.StartsWith(NlpHeaderPrefix, StringComparison.Ordinal))
+                if (!line.StartsWith(NlpHeaderPrefix, StringComparison.Ordinal))
                 {
-                    continue;
+                    throw new CliUsageException(
+                        $"{path} does not start with the .nlp header ('{NlpHeaderPrefix}...'); pass --reference-format text to read it as plain text.");
                 }
 
-                throw new CliUsageException(
-                    $"{path} does not start with the .nlp header ('{NlpHeaderPrefix}...'); pass --reference-format text to read it as plain text.");
+                var names = line.Split('|');
+                tokenColumn = Array.IndexOf(names, "token");
+                punctuationColumn = Array.IndexOf(names, "punctuation");
+                prepunctuationColumn = Array.IndexOf(names, "prepunctuation");
+                continue;
             }
 
             var columns = line.Split('|');
@@ -284,10 +294,15 @@ internal static partial class WerCommand
                 builder.Append(' ');
             }
 
-            builder.Append(columns[0]);
-            if (columns.Length > 4)
+            if (prepunctuationColumn >= 0 && prepunctuationColumn < columns.Length)
             {
-                builder.Append(columns[4]);
+                builder.Append(columns[prepunctuationColumn]);
+            }
+
+            builder.Append(columns[tokenColumn]);
+            if (punctuationColumn >= 0 && punctuationColumn < columns.Length)
+            {
+                builder.Append(columns[punctuationColumn]);
             }
         }
 

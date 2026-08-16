@@ -88,14 +88,24 @@ public static class TranscriptNormalizer
     /// <item>Letters and digits are kept. An apostrophe is kept only between two of them
     /// (<c>don't</c>, <c>o'clock</c>); a full stop is kept only between two digits (<c>3.2</c>); a
     /// comma between two digits is dropped without splitting (<c>1,000</c> becomes <c>1000</c>).
-    /// Every other character — punctuation, symbols, hyphens and dashes, whitespace — separates
-    /// tokens, so <c>year-over-year</c> and <c>year over year</c> agree and <c>17%</c> scores as
-    /// <c>17</c>.</item>
+    /// A percent sign becomes the word <c>percent</c>, since that is how it is spoken. Every other
+    /// character — punctuation, symbols, hyphens and dashes, whitespace — separates tokens, so
+    /// <c>year-over-year</c> and <c>year over year</c> agree.</item>
     /// <item>The <see cref="Fillers"/> are dropped unless <paramref name="keepFillers"/> is set.</item>
+    /// <item>Runs of English cardinal number words become digits: <c>eighty seven</c> (or
+    /// <c>eighty-seven</c>, split by the rule above) becomes <c>87</c>, <c>two hundred and fifty
+    /// two</c> becomes <c>252</c>, <c>three point two million</c> becomes <c>3.2 million</c>.
+    /// The model writes numbers as words and human transcripts write them as digits, and without
+    /// this the score on any material with numbers in it measures that convention rather than the
+    /// recognition. It applies to both sides alike, so where both already agree — <c>five</c>
+    /// against <c>five</c>, or <c>2021</c> against <c>2021</c> — nothing changes. <c>and</c> is
+    /// absorbed only inside a number that has already passed a hundred or a thousand
+    /// (<c>two hundred and one</c>), never between two small numbers (<c>two and three</c>).</item>
     /// </list>
-    /// Not done, and it matters when reading a score: digits against spelled-out numbers
-    /// (<c>2022</c> / <c>twenty twenty-two</c>) count as errors, as do British against American
-    /// spellings and a contraction against its expansion.
+    /// Not done, and it matters when reading a score: a year said as two pairs
+    /// (<c>twenty twenty-one</c>) becomes <c>20 21</c>, not <c>2021</c>; ordinals, currency words,
+    /// and a bare scale word (<c>a hundred</c>, <c>millions</c>) stay as words; British against
+    /// American spellings and a contraction against its expansion count as errors.
     /// </summary>
     public static string[] WordErrorRateTokens(string text, bool keepFillers)
     {
@@ -137,10 +147,15 @@ public static class TranscriptNormalizer
             }
 
             Flush(current, tokens, keepFillers);
+
+            if (ch == '%')
+            {
+                tokens.Add("percent");
+            }
         }
 
         Flush(current, tokens, keepFillers);
-        return tokens.ToArray();
+        return NumberWords.ToDigits(tokens);
     }
 
     private static void Flush(StringBuilder current, List<string> tokens, bool keepFillers)
@@ -166,6 +181,168 @@ public static class TranscriptNormalizer
 
     private static bool IsApostrophe(char ch) =>
         ch == '’' || ch == '‘' || ch == '‛' || ch == '´' || ch == '`';
+
+    /// <summary>
+    /// English cardinal number words to digits, over an already-tokenised, lower-cased sequence.
+    /// Deliberately small: units, teens, tens, hundred, and the thousand/million/billion/trillion
+    /// scales, <c>point</c> followed by digit words, and <c>and</c> inside a number that has
+    /// passed a scale. Anything it does not recognise ends the number and passes through
+    /// untouched, so a token that is not a number word can never be changed.
+    /// </summary>
+    internal static class NumberWords
+    {
+        private static readonly Dictionary<string, int> Small = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["zero"] = 0, ["one"] = 1, ["two"] = 2, ["three"] = 3, ["four"] = 4, ["five"] = 5,
+            ["six"] = 6, ["seven"] = 7, ["eight"] = 8, ["nine"] = 9, ["ten"] = 10, ["eleven"] = 11,
+            ["twelve"] = 12, ["thirteen"] = 13, ["fourteen"] = 14, ["fifteen"] = 15, ["sixteen"] = 16,
+            ["seventeen"] = 17, ["eighteen"] = 18, ["nineteen"] = 19,
+            ["twenty"] = 20, ["thirty"] = 30, ["forty"] = 40, ["fifty"] = 50, ["sixty"] = 60,
+            ["seventy"] = 70, ["eighty"] = 80, ["ninety"] = 90,
+        };
+
+        private static readonly Dictionary<string, long> Scales = new Dictionary<string, long>(StringComparer.Ordinal)
+        {
+            ["thousand"] = 1_000L, ["million"] = 1_000_000L, ["billion"] = 1_000_000_000L, ["trillion"] = 1_000_000_000_000L,
+        };
+
+        public static string[] ToDigits(List<string> tokens)
+        {
+            var output = new List<string>(tokens.Count);
+            var i = 0;
+            while (i < tokens.Count)
+            {
+                if (!StartsNumber(tokens[i]))
+                {
+                    output.Add(tokens[i]);
+                    i++;
+                    continue;
+                }
+
+                var end = ParseNumber(tokens, i, out var rendered);
+                if (end == i)
+                {
+                    output.Add(tokens[i]);
+                    i++;
+                    continue;
+                }
+
+                output.Add(rendered);
+                i = end;
+            }
+
+            return output.ToArray();
+        }
+
+        private static bool StartsNumber(string token) =>
+            Small.ContainsKey(token) || token == "hundred" || Scales.ContainsKey(token);
+
+        /// <summary>
+        /// Reads the longest run of number words from <paramref name="start"/>, returns the index
+        /// after it, and renders it. Returns <paramref name="start"/> itself when the run is not a
+        /// number after all.
+        /// </summary>
+        private static int ParseNumber(List<string> tokens, int start, out string rendered)
+        {
+            long total = 0;      // completed scale groups
+            long current = 0;    // the group being built, below the next scale word
+            var sawScale = false; // hundred or larger has been applied in this run
+            var lastWasSmall = false;
+            var lastSmall = 0;
+            var i = start;
+            var anything = false;
+
+            while (i < tokens.Count)
+            {
+                var token = tokens[i];
+
+                if (Small.TryGetValue(token, out var small))
+                {
+                    // Two small numbers in a row only chain as tens + units ("twenty one"). Anything
+                    // else ("twenty twenty", "five six") is two numbers, and this one ends here.
+                    if (lastWasSmall && !(lastSmall >= 20 && lastSmall % 10 == 0 && small >= 1 && small <= 9))
+                    {
+                        break;
+                    }
+
+                    // "zero" only stands alone: "zero five" is two numbers, not 5.
+                    if (anything && small == 0)
+                    {
+                        break;
+                    }
+
+                    current += small;
+                    lastWasSmall = true;
+                    lastSmall = small;
+                    anything = true;
+                    i++;
+                    continue;
+                }
+
+                if (token == "hundred")
+                {
+                    // A scale word with no number in front of it — "a hundred", "3.2 million",
+                    // "hundreds" is not even in the table — is left as the word it is. Multiplying
+                    // an implied one would turn "3.2 million" into "3.2 1000000" and put the
+                    // number word style back on the other side.
+                    if (current == 0 || current >= 100) break;
+                    current *= 100;
+                    sawScale = true;
+                    lastWasSmall = false;
+                    anything = true;
+                    i++;
+                    continue;
+                }
+
+                if (Scales.TryGetValue(token, out var scale))
+                {
+                    if (current == 0) break;
+
+                    total += current * scale;
+                    current = 0;
+                    sawScale = true;
+                    lastWasSmall = false;
+                    anything = true;
+                    i++;
+                    continue;
+                }
+
+                if (token == "and" && anything && sawScale && i + 1 < tokens.Count && Small.ContainsKey(tokens[i + 1]))
+                {
+                    lastWasSmall = false;
+                    i++;
+                    continue;
+                }
+
+                if (token == "point" && anything && i + 1 < tokens.Count && IsDigitWord(tokens[i + 1]))
+                {
+                    var fraction = new StringBuilder();
+                    var j = i + 1;
+                    while (j < tokens.Count && IsDigitWord(tokens[j]))
+                    {
+                        fraction.Append((char)('0' + Small[tokens[j]]));
+                        j++;
+                    }
+
+                    rendered = (total + current).ToString(System.Globalization.CultureInfo.InvariantCulture) + "." + fraction;
+                    return j;
+                }
+
+                break;
+            }
+
+            if (!anything)
+            {
+                rendered = string.Empty;
+                return start;
+            }
+
+            rendered = (total + current).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return i;
+        }
+
+        private static bool IsDigitWord(string token) => Small.TryGetValue(token, out var value) && value <= 9;
+    }
 
     /// <summary>
     /// Drops <c>[...]</c>, <c>&lt;...&gt;</c> and <c>(...)</c> spans. An opener with no closer is
