@@ -280,7 +280,7 @@ public static class ParakeetNativeLibrary
 
     /// <summary>
     /// The portable RID — <c>win-x64</c>, <c>linux-arm64</c> — which is what the vendoring layout
-    /// in docs/NATIVE-BINARIES.md uses and what upstream names its release archives after.
+    /// in NATIVE-BINARIES.md in the project notes uses and what upstream names its release archives after.
     /// </summary>
     internal static string PortableRuntimeIdentifier
     {
@@ -365,7 +365,7 @@ public static class ParakeetNativeLibrary
         }
 
         // Upstream has no Windows CI and publishes Windows binaries only at release-tag time, so
-        // the exact file name is pinned per vendored release in docs/NATIVE-BINARIES.md rather
+        // the exact file name is pinned per vendored release in NATIVE-BINARIES.md in the project notes rather
         // than assumed here. These are the shapes seen in the ggml family of projects.
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -391,7 +391,7 @@ public static class ParakeetNativeLibrary
         var builder = new StringBuilder();
         builder.AppendLine(
             "Could not load the parakeet.cpp native library. Vendor a pinned upstream release into the " +
-            "native/<rid>/<backend> directory (see docs/NATIVE-BINARIES.md), or point " +
+            "native/<rid>/<backend> directory (see NATIVE-BINARIES.md in the project notes), or point " +
             $"{DirectoryEnvironmentVariable} at a directory containing it.");
         builder.AppendLine("Paths tried:");
 

@@ -70,7 +70,7 @@ internal static class DoctorCommand
         {
             context.WriteLine(
                 "No backend loaded. Vendor a pinned parakeet.cpp release into native/<rid>/<backend> " +
-                "(docs/NATIVE-BINARIES.md) or set " + ParakeetNativeLibrary.DirectoryEnvironmentVariable + ".");
+                "(NATIVE-BINARIES.md in the project notes) or set " + ParakeetNativeLibrary.DirectoryEnvironmentVariable + ".");
         }
 
         context.WriteLine(

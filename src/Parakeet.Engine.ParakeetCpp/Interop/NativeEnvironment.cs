@@ -17,7 +17,7 @@ namespace Parakeet.Engine.ParakeetCpp.Interop;
 /// Measured rather than assumed. Setting <c>GGML_VK_DISABLE_BFLOAT16=1</c> through
 /// <c>Environment.SetEnvironmentVariable</c> before loading a model left the load failing exactly
 /// as it does with no variable set; the same value through <c>ucrtbase!_putenv</c> in the same
-/// position made it load. See docs/UNPROVEN.md.
+/// position made it load. See UNPROVEN.md in the project notes.
 /// </para>
 /// <para>
 /// Both are written: the CRT copy is what native code reads, and the managed copy keeps
