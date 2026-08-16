@@ -268,11 +268,21 @@ The next actions, in order:
    - *The measurement, and the gap in it.* The corpus pinned in `scripts/wer-corpus.json` carries
      a per-token `speaker` column (four speakers on one call, seventeen on another), so a
      diarisation error rate or speaker-attributed WER harness reuses today's corpus and scoring.
-     But it is not the target material, and **CSB384 has no speaker ground truth**: the podcast
-     case needs either a hand-labelled stretch of it (two speakers, ten minutes — an evening's
-     work, and the most honest yardstick this app could have) or a labelled public two-speaker
-     conversational set, chosen with its licence read. A CPU-only spike, on both, is the first thing
-     to run, and its number on the podcast material is what decides whether the feature ships.
+     But it is not the target material, and **no podcast this app has run carries speaker ground
+     truth**. One hand-labelled episode is not a yardstick either — it measures two voices, one
+     microphone setup and one show's habits, and a diariser tuned on it can fail on the next pair
+     of hosts. The podcast set should be **several ten-minute stretches across more than one
+     podcast** — different speaker pairs, same-room and remote, music beds and ad reads — split
+     into a *dev* part, on which the pipeline's post-processing knobs (clustering thresholds,
+     speaker-count bounds, activity thresholds) may be tuned, and a *held-out* part they are
+     scored on. Speaker labels are cheap next to transcripts (who spoke when, not what), so that is
+     evenings, not a project; the audio stays local as CSB384 does, and the labels — a small
+     RTTM-style file of turns per episode with the `ffmpeg` cut line that reproduces its audio —
+     can be committed as fixtures without shipping a byte of anyone's recording. Any *fine-tuning*
+     of a model itself is a separate matter: NeMo/PyTorch training on a GPU, outside this repo's
+     toolchain and inside the ask-first rule, on episodes disjoint from the evaluation set. A
+     CPU-only spike on the podcast set and on the earnings corpus is the first thing to run, and
+     the held-out podcast number is what decides whether the feature ships.
    - *The seam and the surface.* An `ISpeakerLabeller` behind Core's engine rule; a speaker on
      `TranscriptSegment` and its words; every formatter and the app growing "Speaker N" labels;
      the fake engine and the tests learning about them; a second native drop, digest table,
