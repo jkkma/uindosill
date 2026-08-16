@@ -16,8 +16,11 @@ internal sealed record EngineRequest
 
     public string? NativeDirectory { get; init; }
 
-    /// <summary>Set GGML_VK_DISABLE_BFLOAT16 before loading. Vulkan only; see ParakeetCppOptions.</summary>
-    public bool DisableVulkanBFloat16 { get; init; }
+    /// <summary>
+    /// Set GGML_VK_DISABLE_BFLOAT16 before loading. Vulkan only, on by default; see
+    /// ParakeetCppOptions and <see cref="EngineFactory.ParseVulkanBFloat16"/>.
+    /// </summary>
+    public bool DisableVulkanBFloat16 { get; init; } = true;
 
     public bool WarmUp { get; init; } = true;
 
@@ -97,6 +100,22 @@ internal static class EngineFactory
         }
 
         return (path, descriptor);
+    }
+
+    /// <summary>
+    /// Resolves the two Vulkan bf16 flags to the option. The workaround is on unless
+    /// <c>--vk-bf16</c> asks for bf16 to be left enabled; <c>--vk-disable-bf16</c> is the default
+    /// spelled out, kept so commands written before it became the default still run. Both at once
+    /// is a contradiction, reported rather than resolved by precedence.
+    /// </summary>
+    public static bool ParseVulkanBFloat16(bool disableRequested, bool keepRequested)
+    {
+        if (disableRequested && keepRequested)
+        {
+            throw new CliUsageException("--vk-disable-bf16 and --vk-bf16 contradict each other.");
+        }
+
+        return !keepRequested;
     }
 
     public static ComputeBackend ParseBackend(string? value)

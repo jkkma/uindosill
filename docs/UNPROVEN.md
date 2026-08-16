@@ -206,6 +206,13 @@ drift landed on both; the remaining runs behind these means were not alternated,
 Vulkan pair from the shader-cache experiment below. Every decode time here is `processingSec` from
 the transcript, which excludes model load.
 
+The Vulkan column was measured with bf16 enabled (`bf16: 1` in the device banner), which was the
+product's configuration until 2026-08-16. The default is now to disable bf16 before loading — the
+workaround the second machine needs — and it was re-measured on this machine before it changed:
+0.31% apart and byte-identical transcripts, six interleaved runs each way on a different ten-minute
+file. The table and the reasoning are in *The workaround is in the product, and — since 2026-08-16 —
+on by default*, in the second machine's section. Nothing in this table was re-taken.
+
 **CUDA is 12.7× CPU and 1.70× Vulkan in the steady state.** The gap between the two GPU backends is
 several times their run-to-run range, so it is not noise. It is still one machine, one file, one
 quantisation, one driver.
@@ -685,7 +692,7 @@ least, can be. It also reaches AAC via **opus** rather than the documented mp3 �
 | Decode time for 600 s, CPU | 49.1 s | **85.0 s** |
 | Second CPU run | — | 0.1360 / 81.6 s (**4.1% apart**) |
 | Peak host working set, CPU | 2,397 MB | 2,360 MB / 2,332 MB |
-| Real-time factor, Vulkan | 0.0110 | **0.0349** (needs a knob — below) |
+| Real-time factor, Vulkan | 0.0110 | **0.0349** (needs a knob, since made the default — below) |
 | Vulkan against own CPU | 7.4x | **4.06x** |
 | Cores / threads | 16 / 32 | 10 / 20 |
 
@@ -798,9 +805,9 @@ Windows driver in Adrenalin 25.8.1** — the release note, read 2026-08-15, list
 Vulkan Extension Support" — and the driver on this laptop is dated **2025-01-22**, which predates it.
 On a driver that ships the extension the request should succeed and the knob become unnecessary.
 **Whether this unit is fixed by a driver update is not measured.** It is the cheapest experiment in this
-repository: update, run `uindosill bench` on Vulkan with and without `--vk-disable-bf16`, and record
-the driver floor in the machine block above. Until somebody does, the knob stays and every Vulkan
-figure in this section is a figure for driver 32.0.13022.3006.
+repository: update, run `uindosill bench` on Vulkan with `--vk-bf16` (bf16 left on) and without it
+(the default, bf16 disabled), and record the driver floor in the machine block above. Until somebody
+does, the knob stays and every Vulkan figure in this section is a figure for driver 32.0.13022.3006.
 
 **Upstream's own server reproduces it on this driver — 2026-08-16.** llama.cpp b10448's
 `llama-server`, from the Windows Vulkan release zip, loading `Qwen3-0.6B-Q8_0.gguf` with `-ngl 99`:
@@ -811,24 +818,106 @@ text — a fence destroyed on an invalid device is what a failed `vkCreateDevice
 caller that does not check the return, and it is inferred rather than observed that the create call
 failed the same way here. The run is in *Upstream llama.cpp on the second machine* below.
 
-##### The workaround is now in the product, and off by default
+##### The workaround is in the product, and — since 2026-08-16 — on by default
 
-`ParakeetCppOptions.DisableVulkanBFloat16`, reachable as `uindosill transcribe --vk-disable-bf16`
-and `uindosill bench --vk-disable-bf16`, sets the knob before the model is loaded. Measured through
-the CLI on this machine: **exit 0, `backend=vulkan`, RTF 0.0352**, 106 segments, 1,605 words —
-matching the environment-variable figure it replaces.
+`ParakeetCppOptions.DisableVulkanBFloat16` sets the knob before the model is loaded. Measured through
+the CLI on this machine when it was still an opt-in flag: **exit 0, `backend=vulkan`, RTF 0.0352**,
+106 segments, 1,605 words — matching the environment-variable figure it replaces.
 
-**It is off by default deliberately, and that is a judgement rather than an oversight.** Turning it
-on for every Vulkan device would change the configuration under which every Vulkan figure in this
-file was measured, on an RTX 5080 that this machine cannot re-measure. Flipping the default is a
-one-command experiment on the desktop — run the ten-minute file with and without it — and until
-somebody does, defaulting it on would be exactly the unmeasured claim this file exists to prevent.
+**It was off by default deliberately, and that was a judgement rather than an oversight.** Turning
+it on for every Vulkan device would have changed the configuration under which every Vulkan figure
+in this file was measured, on an RTX 5080 that this machine cannot re-measure. Flipping the default
+was a one-command experiment on the desktop, and defaulting it on before that experiment would have
+been exactly the unmeasured claim this file exists to prevent.
+
+**That experiment has now been run, on the desktop, and the default is on.** Machine: the 9950X /
+RTX 5080 desktop from the first machine table, driver 610.88 — the same driver every earlier Vulkan
+figure names — Windows power scheme *High performance*, `tdt-0.6b-v3-f16`, Vulkan backend, one fresh
+process per run so each run pays its own device initialisation and model load, and the figure is
+`processingSec` from the transcript, as everywhere else in this file. **The audio is not
+`chunk.m4a`**, which no longer exists (see the Audio row of that table): it is 600 s of the same
+episode, cut from the audio-only stream of the published video (`p2-xdg_JMfg`, format 140, AAC-LC
+44.1 kHz stereo, 10,523.4 s) with
+
+```
+ffmpeg -ss 8438 -i csb384-p2-xdg_JMfg.m4a -t 600 -vn -c:a aac -b:a 128k -ar 48000 -ac 1 csb384-8438.m4a
+```
+
+— the laptop's own cut, recorded at the top of *The second machine, measured*, with a different
+offset and written down for the same reason. The offset is the timestamp in the link the maintainer
+supplied; whether it coincides with the lost `chunk.m4a`'s offset is not knowable from this
+repository, so **the 6.57 s figure in the desktop table is not a like-for-like baseline for anything
+below** and is treated as indicative only. The decision rests on the two arms against each other, on
+one file, which is self-consistent.
+
+The shader cache was handled by emptying `%LOCALAPPDATA%\NVIDIA\GLCache` before each arm's first
+run rather than by discarding a run and hoping, so both arms have a labelled cold figure. That first
+OFF run came back at 14.286 s — within 1.5% of the 14.07 s cold figure recorded above, which is what
+a genuinely cold cache looks like on this driver. Before the ON arm's cold run the cache — by then
+holding only what the OFF run had compiled — was emptied again; one further OFF run afterwards
+(6.669 s, discarded) left it warm for both arms. The twelve timed runs were **interleaved** — OFF,
+ON, OFF, ON, OFF, ON, then ON, OFF, ON, OFF, ON, OFF — so thermal or clock drift lands on both
+arms. The device banner is the evidence the knob took: `bf16: 1` on every OFF run, `bf16: 0` on
+every ON run, `matrix cores: NV_coopmat2` on all fifteen.
+
+| Vulkan on the RTX 5080, `csb384-8438.m4a` | bf16 left on (`--vk-bf16`) | bf16 disabled (**the default**) |
+|---|---|---|
+| Cold shader cache, first run, discarded | 14.286 s (0.0238) | 13.606 s (0.0227) |
+| Warm, six runs each, interleaved | 6.692, 6.707, 6.700, 6.760, 6.781, 6.711 s | 6.780, 6.699, 6.769, 6.705, 6.759, 6.763 s |
+| **Mean** | **6.725 s, RTF 0.01121** | **6.746 s, RTF 0.01124** |
+| Range, `(max − min) / mean` | 1.3% | 1.2% |
+| Standard deviation | 0.036 s | 0.035 s |
+| Segments / words | 114 / 1,632 | 114 / 1,632 |
+
+**Disabling bf16 costs 0.021 s on 6.7 s — 0.31% — which is smaller than one standard deviation of
+either arm, a quarter of either arm's own range, and under a tenth of the 5.9% run-to-run range
+this file already records for Vulkan on this machine.** The two arms' ranges overlap almost
+entirely (6.692–6.781 s against 6.699–6.780 s). If there is a cost it is under half a percent, and
+six runs each cannot resolve it from noise. So the default is the setting that loads on every device
+measured so far, and it now is: on.
+
+**It also changes nothing in the output.** `scripts/compare-transcripts.ps1` on an OFF transcript
+against an ON one: all 114 segment boundaries identical, **0 of 1,632 word tokens, 0 timestamps
+and 0 confidences differing**, joined text byte-identical. That is not a near-tie surviving —
+it is the same result as OFF against OFF, and across all fifteen runs (both cold, the re-warm and
+the twelve timed) the `.txt` and `.srt` outputs hash identically and the JSON differs only in
+`processingSec` and `realTimeFactor`. Two things follow, one of them inferred. Measured: **Vulkan
+on this device is deterministic run to run**, which the table of backend comparisons above had
+established for CPU and CUDA but never for Vulkan. Inferred, and marked so: an f16 model producing
+identical tokens, timestamps and confidences with bf16 cooperative matrices on and off suggests
+this model's kernels do not take the bf16 path on this device at all, which would also be why the
+knob costs nothing. Nothing here confirms that reading; a bf16 model, or a profile, would.
+
+The cold figures are a bonus rather than a claim: the ON arm's cold run was 0.68 s faster than the
+OFF arm's, consistent with fewer pipeline variants to compile, but that is one run against one run
+and inside the day-to-day scatter of cold runs, so it is recorded and not relied on.
+
+One more thing the session showed, recorded because it is larger than the effect being measured.
+Three verification runs of the rebuilt binary — default, `--vk-bf16`, `--vk-disable-bf16` — taken
+straight after `dotnet build` and `dotnet test` came in at **7.197, 7.282 and 7.025 s**, all three
+arms alike, and three more default runs a minute later, back to back, at 6.739, 6.790 and 6.776 s.
+That is a 7% swing from whatever the machine was still doing after a build, landing in
+`processingSec` on both settings equally. It is why the twelve timed runs above were interleaved
+rather than run as two blocks, and why a single Vulkan timing from a machine that has just done
+something else is worth a second run before it is believed — the same lesson as gotcha 20, from a
+different cause.
+
+What the flip means in the code: `ParakeetCppOptions.DisableVulkanBFloat16` defaults to `true`;
+the desktop app, which sets nothing, inherits it — so the laptop's app can now load a model on
+Vulkan, which it could not before because it had no flag to pass. `--vk-disable-bf16` on
+`transcribe` and `bench` is kept and now only spells the default out. **`--vk-bf16` leaves bf16
+enabled**, so the arm this measurement needed stays reachable — for repeating it after a driver
+or ggml bump, or on a driver that has fixed the extension request — and giving both flags at once
+is a usage error rather than a precedence rule. A value already in the environment still wins over
+the option either way, as before.
 
 Auto-detection was considered and is not possible: ABI v6 exposes no way to ask a device about
 bf16 before loading a model, and a failed Vulkan load cannot be retried in the same process. So the
-choice has to be made before there is any evidence to make it with. What the build does instead is
-make the failure self-describing — the load error now names the knob, says the retry is impossible
-and why, and suggests the cpu backend to tell a device problem from a bad model file.
+choice has to be made before there is any evidence to make it with, and now it is made the way that
+loads. The failure text still says what happened: a Vulkan load that fails with the workaround
+applied says so and rules the bf16 path out; one that fails with it turned off names the knob, says
+the retry is impossible and why, and suggests the cpu backend to tell a device problem from a bad
+model file.
 
 Two mechanism findings came out of building it, both recorded as gotcha 21:
 **`Environment.SetEnvironmentVariable` does not reach the native `getenv`** on Windows and reports

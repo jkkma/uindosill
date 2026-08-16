@@ -12,14 +12,19 @@ public class VulkanWorkaroundTests
     private const string Variable = ParakeetCppEngine.VulkanDisableBFloat16Variable;
 
     [Fact]
-    public void TheWorkaroundIsOffByDefault()
+    public void TheWorkaroundIsOnByDefault()
     {
-        // Turning it on for every Vulkan device would change the configuration every measured
-        // Vulkan figure in docs/UNPROVEN.md was taken under, on hardware this project cannot
-        // re-measure from the machine that found the bug.
+        // It was off until 2026-08-16, because turning it on for every Vulkan device would have
+        // changed the configuration every measured Vulkan figure in docs/UNPROVEN.md was taken
+        // under, on hardware the machine that found the bug could not re-measure. That measurement
+        // has now been made on the RTX 5080 those figures come from: six interleaved runs each way
+        // on one ten-minute file, 6.725 s with bf16 on against 6.746 s with it disabled — 0.3%
+        // apart, inside either arm's own spread — and byte-identical transcripts. So the default
+        // is the setting that loads on every device measured so far, and this test pins it: a
+        // silent flip back would strand the desktop app on the AMD laptop, which has no flag to pass.
         var options = new ParakeetCppOptions { ModelPath = "x.gguf" };
 
-        Assert.False(options.DisableVulkanBFloat16);
+        Assert.True(options.DisableVulkanBFloat16);
     }
 
     [Fact]

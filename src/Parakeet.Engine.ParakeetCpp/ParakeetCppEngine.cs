@@ -46,25 +46,30 @@ public sealed record ParakeetCppOptions
 
     /// <summary>
     /// Set <c>GGML_VK_DISABLE_BFLOAT16</c> before the model is loaded, for Vulkan devices whose
-    /// bf16 cooperative-matrix shaders will not build.
+    /// driver enumerates a bf16 cooperative-matrix shape without exposing the extension — where the
+    /// model otherwise fails to load at all.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Off by default, and deliberately not inferred. The symptom is total — the load entry point
-    /// returns NULL and the process then dies in Vulkan teardown — but the ABI exposes no way to
-    /// ask a device about bf16 before loading a model, and a failed load cannot be retried in the
-    /// same process. So the choice has to be made before there is any evidence to make it with,
-    /// and turning it on for every Vulkan device would change the configuration every measured
-    /// Vulkan figure in docs/UNPROVEN.md was taken under.
+    /// On by default, and deliberately not inferred: the ABI exposes no way to ask a device about
+    /// bf16 before loading a model, and a failed load cannot be retried in the same process, so the
+    /// choice has to be made before there is any evidence to make it with. It was off until the
+    /// cost of turning it on had been measured on NVIDIA, the hardware every Vulkan figure in
+    /// docs/UNPROVEN.md was taken on. That measurement exists: on an RTX 5080 (driver 610.88), the
+    /// same ten-minute file six times each way, interleaved, decoded in 6.725 s with bf16 left on and
+    /// 6.746 s with it disabled — 0.3% apart, inside either arm's own spread — and produced
+    /// byte-identical transcripts. See docs/UNPROVEN.md.
     /// </para>
     /// <para>
-    /// Measured on an AMD Radeon 880M, driver 32.0.13022.3006, which reports <c>bf16: 0</c> and
-    /// <c>KHR_coopmat</c>: with this set the same model loads and decodes, and it is faster than
-    /// <c>GGML_VK_DISABLE_COOPMAT</c>, which also works but gives up the matrix cores. Ignored for
-    /// backends other than Vulkan, and never overrides a value already in the environment.
+    /// The device it exists for is an AMD Radeon 880M, driver 32.0.13022.3006, which reports
+    /// <c>bf16: 0</c> and <c>KHR_coopmat</c>: with this set the same model loads and decodes, and it
+    /// is faster than <c>GGML_VK_DISABLE_COOPMAT</c>, which also works but gives up the matrix
+    /// cores. Ignored for backends other than Vulkan, and never overrides a value already in the
+    /// environment. Set it to false to measure the workaround's cost, or on a driver known to have
+    /// fixed the extension request.
     /// </para>
     /// </remarks>
-    public bool DisableVulkanBFloat16 { get; init; }
+    public bool DisableVulkanBFloat16 { get; init; } = true;
 
     /// <summary>Run a throwaway decode at load so the first measured decode is not the first decode.</summary>
     public bool WarmUp { get; init; } = true;
@@ -267,12 +272,13 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
         }
 
         builder.AppendLine(
-            "On Vulkan this is also what a device whose bf16 cooperative-matrix shaders will not " +
-            $"build looks like — the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
-            "Measured on an AMD Radeon 880M; see docs/UNPROVEN.md. Retrying in this process is not " +
-            "possible, because the Vulkan device does not survive the failed load: set the variable " +
-            "in the environment, or pass the option, and start again. Loading on the cpu backend " +
-            "distinguishes a device problem from a bad model file.");
+            "On Vulkan this is also what a device whose driver mishandles bf16 cooperative-matrix " +
+            $"support looks like — the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
+            "That workaround is on by default and was NOT applied to this run: either the option was " +
+            "turned off, or the variable was already in the environment and left alone. Measured on " +
+            "an AMD Radeon 880M; see docs/UNPROVEN.md. Retrying in this process is not possible, " +
+            "because the Vulkan device does not survive the failed load: start again with the " +
+            "default. Loading on the cpu backend distinguishes a device problem from a bad model file.");
 
         return builder.ToString();
     }

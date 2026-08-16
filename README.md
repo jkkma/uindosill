@@ -12,9 +12,11 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > steady-state: the *first* Vulkan run on a fresh machine takes 14 s rather than 6.6 s, because the
 > driver is compiling shaders inside the number that looks like decode time. A second machine — a
 > Ryzen AI 9 365 laptop with an integrated Radeon 880M — has since been measured: **RTF 0.14 on
-> CPU, and Vulkan does not load the model there at all** until `--vk-disable-bf16` is passed, an
-> upstream bf16 shader defect worked around behind an opt-in flag (RTF 0.035 with it). Two machines
-> and two ten-minute files is still not a benchmark. Every figure here carries its backend and its
+> CPU, and Vulkan does not load the model there at all** unless bf16 is disabled before the load,
+> an upstream defect in how the driver's bf16 support is requested (RTF 0.035 with it disabled).
+> That workaround is now the default: on the RTX 5080 it measured at 0.3% and byte-identical
+> transcripts against leaving bf16 on, and `--vk-bf16` turns it back off. Two machines and two
+> ten-minute files is still not a benchmark. Every figure here carries its backend and its
 > caveats in [UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run
 > against 2 h 55 m of real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to
 > 2.69% for q4_k, over a CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse
@@ -53,7 +55,7 @@ the CLI or the app's Models tab downloads.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 295 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 299 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -79,9 +81,10 @@ uindosill bench recording.wav
 
 `uindosill` is the CLI's assembly name: after that build it is
 `src/Parakeet.Cli/bin/Release/net10.0/uindosill.exe`, and `dotnet run --project src/Parakeet.Cli --`
-runs the same thing. On an AMD integrated GPU where Vulkan fails to load the model, add
-`--vk-disable-bf16` to `transcribe` or `bench`; the reason it is not the default is in
-[UNPROVEN.md](docs/UNPROVEN.md).
+runs the same thing. Vulkan runs with bf16 disabled by default, which is what lets the model load
+on an AMD integrated GPU whose driver mishandles it; `--vk-bf16` on `transcribe` or `bench` leaves
+bf16 on, for measuring the difference or for a driver known to have fixed it. Why the default is
+what it is, and what it measured, is in [UNPROVEN.md](docs/UNPROVEN.md).
 
 ### In a container with no toolchain
 
