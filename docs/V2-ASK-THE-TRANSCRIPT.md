@@ -878,7 +878,11 @@ buffer, the 1.34 GiB ASR model, 15.92 GiB reported):
 
 So *are the two ever resident at once* is a **catalogue property** — VRAM at 40k, RAM if offloaded,
 resident-with-ASR or not — which is what decision 2's remark that an entry cannot describe its
-requirements with a single size was asking for.
+requirements with a single size was asking for. **The policy below has since taken the ASR side of
+that question off the table** — the ASR model is never resident while the chat is open — so the
+right-hand column no longer gates anything in the product. It stays because it is the same
+arithmetic read the other way: the ~1.3 GiB it counts is headroom the language model gets instead,
+and it is what the laptop's budget paragraph still needs.
 
 **The usable figure is not 15.92 GiB, and that is the finding.** Every "fits at ~13 GiB" above
 assumes the display costs little. Measured on the laptop on 2026-08-16, idle, with a browser and an
@@ -909,10 +913,23 @@ consistent with the file plus the cache plus a compute buffer by arithmetic, and
 `docs/UNPROVEN.md`. The mechanism works; the desktop's numbers for the files above are what is
 still missing.
 
-**Policy.** Sequential stays the default. Both-resident is allowed per model where the arithmetic
-says so *and the counter confirms it*, and never on the strength of "it loaded" (decision 1's
-sysmem-fallback note). The ASR model unloads when the chat opens unless the user keeps it; the
-language model stays resident for the session. `--slot-save-path` (`tools/server/README.md` at
+**Policy — decided by the maintainer, 2026-08-16: the ASR model is always unloaded when the chat
+opens.** Not by default, not unless kept — always. An earlier revision of this paragraph allowed
+both-resident per model where the arithmetic said so and the counter confirmed it, and let the user
+keep the ASR model loaded through a chat; both clauses are withdrawn. What that buys: the product
+never has to decide residency per file, so the "beside the ASR model" column above and decision 2's
+"fits alone / not beside" remarks stop being a gate and become headroom — files 4 and 5, which fit
+only alone, fit in the product; the runtime never needs a counter-confirmed check before loading;
+and the sysmem-fallback trap in decision 1 has one fewer way to be fallen into. What it costs is
+the wait in each direction: opening the chat pays the language model's load, and transcribing again
+pays the ASR model's, and the second is the cheap one. **The reverse direction is not yet decided**
+— starting a transcription while a chat is open — and the reading that keeps the rule simple is the
+symmetric one: the language model's child is killed when transcription starts and the chat reopens
+afterwards, with a saved slot making that reopen cheap; a recommendation, not a decision. What the
+counters still decide is the residency that survives — the language model beside decision 3's
+embedder and reranker, all `llama-server` children — and the desktop's idle adapter figure, which
+is now the largest unmeasured term against the language model alone. The language model stays
+resident for the session. `--slot-save-path` (`tools/server/README.md` at
 b10448) is what makes closing and reopening a session cheap on the whole-transcript path — the
 prefilled 40k state, 1.25 GiB at f16 for the 9B, goes to disk instead of being prefilled again;
 unmeasured. Decision 3's residents are small — 0.6 GiB each at Q8 — but the embedder is needed per
