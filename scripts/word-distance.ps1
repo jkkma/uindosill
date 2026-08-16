@@ -3,17 +3,19 @@
     Word-level edit distance between transcripts, for comparing two variants of the same model.
 
 .DESCRIPTION
-    `compare-transcripts.ps1` is the right tool when two transcripts are nearly identical, and the
-    wrong one when they are not. It aligns by word index, so a single insertion desynchronises every
-    pair after it and each one is then counted as a difference. Its guard — refusing the per-word
-    figures when the two word totals differ — catches the common case and cannot catch the case that
-    matters here: insertions and deletions that cancel in the total while leaving the sequence
-    misaligned. That is the likely shape whenever two quantisations of one model are compared, and
-    `docs/UNPROVEN.md` records it producing 727 differences where an alignment-free measure found 50.
+    `compare-transcripts.ps1` used to align two transcripts by word index, so a single insertion
+    desynchronised every pair after it and each one was counted as a difference; its guard —
+    refusing the per-word figures when the two word totals differed — could not catch insertions
+    and deletions that cancel in the total, which is the likely shape whenever two quantisations of
+    one model are compared, and `docs/UNPROVEN.md` records it producing 727 differences where an
+    alignment-free measure found 50. This script was written as that alignment-free measure: an
+    exact word-level Levenshtein distance.
 
-    This script answers the same question without assuming alignment: an exact word-level
-    Levenshtein distance. It is a complement to `compare-transcripts.ps1`, not a replacement — that
-    script reports segment boundaries, timestamps and confidences, and none of that is here.
+    `compare-transcripts.ps1` now aligns properly, with the same code this uses, so the two no
+    longer disagree. What this one still does that it does not is the table: several candidates
+    against one reference on one screen — the quantisation ladder — and it reads the `.txt`
+    output as well as the JSON. What it does not do is segment boundaries, timestamps and
+    confidences; that is the other script.
 
     Two figures are reported, because they answer different questions:
 
@@ -35,10 +37,13 @@
     `segments[].words[].w`, whereas the .txt is the rendered form and counts differently. The mode
     used is printed, so the two are never confused.
 
-    The distance is computed in C# via Add-Type because the matrix is large — three hours of audio
-    is roughly 30,000 tokens a side, so a full DP is about 9e8 cell updates. That is seconds in C#
-    and hours in PowerShell. The common prefix and suffix are trimmed first, which helps when the
-    transcripts are close and does almost nothing when they are not.
+    The distance is computed in C# because the matrix is large — three hours of audio is roughly
+    30,000 tokens a side, so a full DP is about 9e8 cell updates. That is seconds in C# and hours
+    in PowerShell. The code is src/Parakeet.Core/Text/WordAlignment.cs, the same implementation
+    the product's `wer` command and compare-transcripts.ps1 use and the test suite covers, loaded
+    here with Add-Type straight from the source tree so that this script still needs no build.
+    The common prefix and suffix are trimmed first, which helps when the transcripts are close and
+    does almost nothing when they are not.
 
 .EXAMPLE
     # The noise floor: same weights, different backend.
@@ -85,58 +90,22 @@ $Candidates = @($Candidates | ForEach-Object { $_ -split ',' } | Where-Object { 
 
 # ── the distance itself ─────────────────────────────────────────────────────────────────────────
 #
-# Two rows rather than the full matrix: only the distance is wanted, not the edit script, so there
-# is nothing to backtrack through and O(min(n,m)) memory is enough.
+# WordAlignment.Distance: two rows rather than the full matrix, because only the distance is wanted
+# here, not the edit script. The source files are written to compile standalone — BCL only, nothing
+# else from Parakeet.Core — precisely so this works. Add-Type refuses to load a type name twice
+# into one session, which is what the catch is for; the cost is that a session that has already
+# loaded the types keeps the version it loaded first.
 
-$levenshteinSource = @'
-using System;
-
-public static class WordDistance
-{
-    public static int Distance(string[] a, string[] b)
-    {
-        // Near-identical transcripts share long runs at both ends. Trimming them costs one pass
-        // and can turn a very large DP into a small one; on genuinely divergent input it simply
-        // finds nothing and the full matrix is walked.
-        int start = 0;
-        while (start < a.Length && start < b.Length && a[start] == b[start]) start++;
-
-        int endA = a.Length - 1, endB = b.Length - 1;
-        while (endA >= start && endB >= start && a[endA] == b[endB]) { endA--; endB--; }
-
-        int n = endA - start + 1, m = endB - start + 1;
-        if (n <= 0) return m > 0 ? m : 0;
-        if (m <= 0) return n > 0 ? n : 0;
-
-        int[] prev = new int[m + 1];
-        int[] cur = new int[m + 1];
-        for (int j = 0; j <= m; j++) prev[j] = j;
-
-        for (int i = 1; i <= n; i++)
-        {
-            cur[0] = i;
-            string ai = a[start + i - 1];
-            for (int j = 1; j <= m; j++)
-            {
-                int cost = string.Equals(ai, b[start + j - 1], StringComparison.Ordinal) ? 0 : 1;
-                int del = prev[j] + 1;
-                int ins = cur[j - 1] + 1;
-                int sub = prev[j - 1] + cost;
-                int best = del < ins ? del : ins;
-                cur[j] = best < sub ? best : sub;
-            }
-            int[] swap = prev; prev = cur; cur = swap;
-        }
-        return prev[m];
-    }
+$textSources = @('WordAlignment.cs', 'TranscriptNormalizer.cs') |
+    ForEach-Object { Join-Path $PSScriptRoot '..' 'src' 'Parakeet.Core' 'Text' $_ }
+foreach ($source in $textSources) {
+    if (-not (Test-Path -LiteralPath $source)) { throw "Alignment source not found: $source" }
 }
-'@
-
 try {
-    Add-Type -TypeDefinition $levenshteinSource -Language CSharp -ErrorAction Stop | Out-Null
+    Add-Type -Path $textSources -ErrorAction Stop | Out-Null
 }
 catch {
-    # Already added by an earlier run in this session.
+    if (-not ('Parakeet.Core.Text.WordAlignment' -as [type])) { throw }
 }
 
 # ── reading transcripts ─────────────────────────────────────────────────────────────────────────
@@ -180,18 +149,12 @@ function Get-Tokens {
     return [PSCustomObject]@{ Mode = 'text'; Tokens = $tokens }
 }
 
+# Lower-cased, letters and digits only, empties dropped — TranscriptNormalizer.AlphanumericTokens,
+# which is this script's original rule moved into the shared source unchanged, so every figure
+# docs/UNPROVEN.md quotes from here still reproduces.
 function ConvertTo-Normalised {
     param([string[]] $Tokens)
-
-    $out = [Collections.Generic.List[string]]::new($Tokens.Count)
-    foreach ($token in $Tokens) {
-        $builder = [Text.StringBuilder]::new($token.Length)
-        foreach ($ch in $token.ToCharArray()) {
-            if ([char]::IsLetterOrDigit($ch)) { [void] $builder.Append([char]::ToLowerInvariant($ch)) }
-        }
-        if ($builder.Length -gt 0) { $out.Add($builder.ToString()) }
-    }
-    return $out.ToArray()
+    return [string[]] [Parakeet.Core.Text.TranscriptNormalizer]::AlphanumericTokens($Tokens)
 }
 
 # ── report ──────────────────────────────────────────────────────────────────────────────────────
@@ -220,8 +183,8 @@ foreach ($path in $Candidates) {
         continue
     }
 
-    $rawEdits = [WordDistance]::Distance($raw, $referenceRaw)
-    $normalisedEdits = [WordDistance]::Distance($normalised, $referenceNormalised)
+    $rawEdits = [Parakeet.Core.Text.WordAlignment]::Distance([string[]] $referenceRaw, [string[]] $raw)
+    $normalisedEdits = [Parakeet.Core.Text.WordAlignment]::Distance([string[]] $referenceNormalised, [string[]] $normalised)
 
     $rawShare = 100.0 * $rawEdits / $referenceRaw.Count
     $normalisedShare = 100.0 * $normalisedEdits / $referenceNormalised.Count

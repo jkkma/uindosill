@@ -55,7 +55,7 @@ the CLI or the app's Models tab downloads.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 303 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 339 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -111,10 +111,12 @@ every task is still runnable on its own.
 
 They divide along the same container line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
-there — including against JSONs the `--fake` engine produced. `scripts/word-distance.ps1` is the
-same shape and runs there too: it answers the one question `compare-transcripts.ps1` gets wrong,
-how far apart two transcripts are when they are *not* nearly identical, by word-level edit distance
-rather than by index alignment. `scripts/vendor-natives.ps1` needs only `pwsh` and a route to
+there — including against JSONs the `--fake` engine produced. It aligns the two word streams by
+word-level edit distance (the same code the CLI's `wer` command uses, compiled from
+`src/Parakeet.Core/Text/` with `Add-Type`, so no build is needed) and reports substitutions,
+deletions and insertions with raw and normalised counts. `scripts/word-distance.ps1` is the same
+shape and runs there too: several candidates against one reference in one table — the
+quantisation ladder — and it reads the `.txt` output as well. `scripts/vendor-natives.ps1` needs only `pwsh` and a route to
 `github.com` for its cpu and vulkan backends, which is how the Linux CI runner vendors the natives
 before it publishes; whether the container's network policy allows that route has not been checked.
 `scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
@@ -129,7 +131,7 @@ src/
   Parakeet.Core/               net10.0            contracts + pure logic; no NuGet, no platform, no UI
   Parakeet.Audio/              net10.0            WAV/RF64 parser + Media Foundation decoding
   Parakeet.Engine.ParakeetCpp/ net10.0            the ONLY project that touches native interop
-  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice
+  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice / wer
   Parakeet.App/                net10.0            Avalonia desktop UI
 tests/                                            one per project, all runnable on Linux
 ```

@@ -305,8 +305,13 @@ CPU whatever the backend, and this confirms it.
 | CPU vs Vulkan | 2 of 1,573 | 15 (0.160 s) | 836 (0.0029, 0.3729) |
 | Vulkan vs CUDA | 2 of 1,573 | 12 (0.160 s) | 871 (0.0029, 0.3728) |
 
-Produced by `scripts/compare-transcripts.ps1`, which aligns two transcript JSONs by word index and
-reports segment-boundary, token, timestamp and confidence deltas.
+Produced by `scripts/compare-transcripts.ps1` as it was then, which aligned two transcript JSONs by
+word index and reported segment-boundary, token, timestamp and confidence deltas. Since 2026-08-17
+the script aligns by word-level edit distance instead (why: the ten-minute laptop section below).
+On these four pairings the two methods coincide — the word counts are equal and the only token
+differences are substitutions at the same positions — so the table stands as recorded; it has not
+been re-run under the new script, because these transcripts did not survive the working copy
+being recreated.
 
 Vulkan is reported by ggml as `NVIDIA GeForce RTX 5080 ... fp16: 1 | bf16: 1 | matrix cores:
 NV_coopmat2`, so it is using cooperative-matrix kernels rather than a generic fallback, and the
@@ -551,12 +556,14 @@ duration reads `10523.376000`, matching that record exactly — 48 kHz mono, two
 overlapping. That is the material `docs/MODELS.md` asks for and the ten-minute chunk could not
 supply.
 
-**Method, because the obvious tool is wrong here.** `scripts/compare-transcripts.ps1` aligns by word
-index, and the section on the ten-minute laptop comparison records why that overstates a
-quantisation diff: one insertion desynchronises every pair after it, and the total-count guard
-cannot fire when insertions and deletions cancel. So these are **word-level Levenshtein distances**
-over token sequences, which assume no alignment. Two figures, as that earlier analysis reported —
-raw tokens, and with case and all non-alphanumeric characters removed.
+**Method, because the obvious tool was wrong here.** `scripts/compare-transcripts.ps1` aligned by
+word index at the time, and the section on the ten-minute laptop comparison records why that
+overstates a quantisation diff: one insertion desynchronises every pair after it, and the
+total-count guard cannot fire when insertions and deletions cancel. So these are **word-level
+Levenshtein distances** over token sequences, which assume no alignment. Two figures, as that
+earlier analysis reported — raw tokens, and with case and all non-alphanumeric characters removed.
+(Since 2026-08-17 `compare-transcripts.ps1` aligns the same way, with the same code; these
+figures predate that and were never in doubt, because they never came from it.)
 
 `scripts/word-distance.ps1` is that measure, and reproduces every figure below:
 
@@ -1027,15 +1034,31 @@ insertion desynchronises everything after it and every subsequent pair is counte
 The tell is in its own output: joined text of 8,326 against 8,319 characters, which is not what 727
 genuinely different words looks like.
 
-**The script does guard against this, and the guard has a hole worth knowing.** Line 165 compares
-`$left.Words.Count -ne $right.Words.Count`, and when the totals differ it refuses the per-word
+**The script did guard against this, and the guard had a hole worth knowing.** Line 165 compared
+`$left.Words.Count -ne $right.Words.Count`, and when the totals differed it refused the per-word
 figures outright — *"index alignment is not valid … would be an artefact of the offset rather than a
-measurement"* — and prints the first divergence instead. That guard fired correctly on the CPU
-versus Vulkan comparison below, at 1,606 against 1,605 words. It cannot fire here, because f16 and
-q4_k both produced **exactly 1,606** words: the insertions and deletions cancel in the total while
-leaving the sequence misaligned. **A total-count check cannot detect offsetting edits**, so the one
-case that defeats the guard is two transcripts of coincidentally equal length — which is the likely
-case whenever two variants of the same model are compared.
+measurement"* — and printed the first divergence instead. That guard fired correctly on the CPU
+versus Vulkan comparison below, at 1,606 against 1,605 words. It could not fire here, because f16
+and q4_k both produced **exactly 1,606** words: the insertions and deletions cancel in the total
+while leaving the sequence misaligned. **A total-count check cannot detect offsetting edits**, so
+the one case that defeated the guard was two transcripts of coincidentally equal length — which is
+the likely case whenever two variants of the same model are compared.
+
+**Fixed 2026-08-17.** `compare-transcripts.ps1` now aligns the two word streams by word-level
+Levenshtein distance — the same code as `word-distance.ps1` and the CLI's `wer` command,
+`src/Parakeet.Core/Text/WordAlignment.cs`, loaded into the script with `Add-Type` from the source
+tree — reports substitutions, deletions and insertions separately with raw and normalised counts,
+names the first divergence by kind, and computes its timestamp and confidence figures over the
+pairs the alignment made rather than over positions. The laptop pair that produced the 727 is
+gone (`runs/` is gitignored and machine-local), so the fixed tool's report on *that* pair cannot be
+shown. On a fresh f16-against-q4_k pair on the desktop — the ten-minute `csb384-8438.m4a` cut,
+**CPU** backend, both transcribed 2026-08-17 — it reports 1,637 against 1,643 words, **59 raw
+edits (3.60%): 35 substituted, 9 deleted, 15 inserted**, 48 (2.93%) with case and punctuation set
+aside, all 114 segment boundaries identical, first divergence `Um` / `Um,` at 29.4 s;
+`word-distance.ps1` gives the same 59 / 48 on the pair. The old guard would have refused that pair
+outright, the counts differing by six, and passed the laptop's — which is the hole. Different
+clip, different machine, so nothing below is re-derived from it; the 50 / 26 in the table stands
+as measured by the alignment-free tool on the original pair.
 
 Measured instead as a word-level edit distance, which does not assume alignment:
 
