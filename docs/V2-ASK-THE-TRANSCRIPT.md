@@ -376,8 +376,9 @@ documents a **router mode** — start with no model, point it at `--models-dir` 
 `--models-preset`, load and unload models over the API — so the language model, an embedder and a
 reranker (decision 3) can sit behind one server. How it isolates them, one process per model or one
 for all, was not read; the claim below that an unload is a kill and the VRAM comes back by
-construction holds for the one-model-per-process arrangement and is a spike check for the router.
-Read, not run.
+construction holds for the one-model-per-process arrangement — **measured for that arrangement on
+the laptop, Vulkan, 2026-08-16: adapter dedicated 1,126 MiB idle, 3,583 MiB loaded, 1,126 MiB after
+`Stop-Process`** — and is a spike check for the router. Otherwise read, not run.
 
 **Recommendation, revised again on 2026-08-16, and narrower this time: `llama-server`.** The
 revision before this said spike LLamaSharp and `llama-server` a day each and let the table decide;
@@ -396,9 +397,25 @@ keep it current; hand-rolling stays the answer if the language model ever become
 rather than a v2 feature. LLamaSharp would come back if a release tracked a ≥ 12.8 toolkit and
 shipped its runtime — read its compile workflow before assuming either.
 
+**The spike is now a script, and it has run on one of the two machines.**
+`scripts/spike-llama-server.ps1` (`lab.ps1 spike`) does the sitting mechanically — fetches the
+release zips for a backend and checks their byte counts against the releases API and the recorded
+digest where there is one, unpacks flat, scans the CUDA backend's architectures, starts
+`llama-server` as a child on `127.0.0.1` with a random port and api-key, `--fit off` and
+`CUDA_CACHE_DISABLE=1` on CUDA so that a PTX-only backend would JIT on every start, waits for
+`/health`, prefills, asks, stops, starts again, and samples the GPU counters at every phase — and
+prints the block a document should say. Run on the laptop on 2026-08-16 with a 0.6B test model:
+the sequence works end to end on cpu and on Vulkan; the counters see the server's memory and the
+adapter returns to idle on the kill; **and Vulkan on the laptop does not load a model at all
+without `GGML_VK_DISABLE_BFLOAT16=1`** — `docs/UNPROVEN.md`, *Upstream llama.cpp on the second
+machine*, has the run — so on the laptop path that knob goes into the child's environment, which
+is one line under this arrangement and was gotcha 21's whole problem in-process. Two first-reading
+digests came out of it (the cpu and vulkan zips; recorded there). The CUDA branch of the script is
+first exercised on the desktop, and the header says so.
+
 Read from `SciSharp/LLamaSharp` at tag `v0.27.0`, `ggml-org/llama.cpp` at `b10448` and master, and
-NuGet on 2026-08-15; the server sizes were measured from the CPU release zip the same day, and the
-CUDA zip was scanned on 2026-08-16.
+NuGet on 2026-08-15; the server sizes were measured from the CPU release zip the same day, the
+CUDA zip was scanned on 2026-08-16, and the cpu and vulkan zips were run on the laptop the same day.
 
 **Rejected without much investigation**, and worth saying so plainly: Ollama (a separate daemon to
 install, against the no-install positioning), ONNX Runtime GenAI (a different model format and a
@@ -849,7 +866,13 @@ this section said the harness could not see. `scripts/measure-transcribe.ps1` sa
 working set only today; the same call adds these to it and to decision 6's `measure-answers.ps1`,
 with ggml's model, KV and compute buffer log lines (allocation, not pressure) and `nvidia-smi` on
 the desktop as cross-checks. On the iGPU "dedicated" is the carve-out and "shared" is the host heap,
-so a Vulkan run there shows in both columns.
+so a Vulkan run there shows in both columns. **The counters have since returned real figures**:
+through `scripts/spike-llama-server.ps1` on the laptop, 2026-08-16, a 0.6B test model with a
+16,384-token cache showed as **2,456.8 MiB dedicated and 194.3 MiB shared on the server's pid**,
+the adapter rising from 1,126.5 to 3,583.0 MiB and falling back to 1,126.0 MiB after the kill —
+consistent with the file plus the cache plus a compute buffer by arithmetic, and the run is in
+`docs/UNPROVEN.md`. The mechanism works; the desktop's numbers for the files above are what is
+still missing.
 
 **Policy.** Sequential stays the default. Both-resident is allowed per model where the arithmetic
 says so *and the counter confirms it*, and never on the strength of "it loaded" (decision 1's
@@ -1001,7 +1024,11 @@ The working candidate thinks by default; `--reasoning-budget 0` is documented as
 of thinking and `reasoning_format` as how thought tags are extracted. The spike has to show that
 grammar with the budget at zero behaves, and that lazy grammar after a thinking span behaves if
 the budget is not zero; the fourth file's harmony format is the hard case, because there the
-channel does not turn off.
+channel does not turn off. **One observation already, and it points the same way:** on the laptop
+on 2026-08-16, `Qwen3-0.6B` under `--reasoning-budget 0` began both of its answers "Okay, let's
+see. The user wants…" — the thinking moved into the answer channel rather than going away. A 0.6B
+model, one prompt, twice (`docs/UNPROVEN.md`); but it is the reason the constraint has to be a
+grammar and not a budget.
 
 Three things from the maintainer's research notes, carried in because they change what gets
 built rather than what gets measured: **cite segment runs, not sentences** — a 2026 study across
