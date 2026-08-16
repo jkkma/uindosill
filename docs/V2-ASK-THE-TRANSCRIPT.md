@@ -656,6 +656,36 @@ more: a Q4 against the 9B's Q8, eleven languages, and 40k tokens is 2.5× its na
 Whether llama.cpp honours the `llama_4_scaling_beta` term in its rope parameters was not checked.
 Same session, same questions, `-fa on -ctk q8_0 -ctv q8_0`, or the cache does not fit.
 
+**Not a seventh file: NVFP4.** The question, since the desktop is Blackwell: NVIDIA's 4-bit format
+— E2M1 values with an E4M3 scale per sixteen — is what the card's tensor cores execute natively,
+and the issue that asked llama.cpp for it (`ggml-org/llama.cpp` #18250, 2025-12-21) names SM120,
+the RTX 50 series, in its title. Read from `ggml/include/ggml.h` at b10448 and the repository's
+issue and pull-request list on 2026-08-16: **the type exists** — `GGML_TYPE_NVFP4 = 40 // NVFP4 (4
+blocks, E4M3 scale)`, added by #19769, merged 2026-03-11 — and conversion of NVIDIA ModelOpt and
+compressed-tensors NVFP4 checkpoints works, including the `qwen3_5` dense and mixture families
+(#20505, #20506, March). **What does not exist is the tensor-core path.** On CUDA the type runs
+through integer `dp4a`/MMQ kernels (#20644, merged 2026-03-26; #25730 W4A4 activation quantisation,
+merged 2026-07-22). The SM120 proof of concept (#20247) closed unmerged; the live attempt is #26704,
+"CUDA: Add experimental SM120 CUTLASS MoE prefill for MXFP4 and NVFP4" — a **draft** opened
+2026-08-07 claiming 2.19× prefill on `gpt-oss-120b`'s MXFP4 — beside two more drafts (#26159,
+#26311). Vulkan gained native E2M1/E4M3 conversions (#25338, merged 2026-07-13), so the laptop can
+read the type too, unmeasured. `llama-quantize` cannot yet emit it (#26556 open, #25153
+imatrix-aware open; #26989 asks for an NVFP4 cache), so every NVFP4 GGUF is two conversions deep —
+NVIDIA's calibration, then somebody's `convert` — and the hub's fifteen most-downloaded are from
+individual accounts, none from a model vendor, ggml-org or unsloth: `Qwen3.6-35B-A3B`,
+`Qwen3.6-27B`, a `gemma-4-26B-A4B` QAT, and a `Qwen3.8-27B` uploaded 2026-08-15; none of the 9B,
+which fits at Q8 and needs none.
+
+So on this card, today, NVFP4 is one more 4-bit format run through integer math: the same bytes and
+the same bandwidth as `IQ4_XS`, `Q4_K_M` or MXFP4, and no tensor-core gain until a draft merges.
+Four bits do not rescue the 27B — the format does not change the byte count. Its real claim is
+quality per bit at four bits with NVIDIA-calibrated scales, which is worth something exactly where
+this run order is already at four bits — the third and fifth files — and nothing to the first (Q8)
+or the fourth (native MXFP4). It is a variant to swap in against those two and diff, provenance
+pinned by digest with the quantiser's notice travelling as `docs/LICENSING.md` requires; not a
+seventh file. The pull request to watch is #26704, because a native mixture-of-experts prefill on
+this card is precisely the cost that makes the third file wait for retrieval.
+
 ### 3. Retrieval, whole transcript, or both
 
 Reframed by the interaction, and this is the decision that changed most when v2 stopped being a
