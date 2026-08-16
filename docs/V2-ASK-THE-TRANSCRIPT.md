@@ -585,8 +585,36 @@ costs little on this model because the cache is 0.78 GiB at f16 anyway, and some
 Whether b10448 carries it was not checked. And #21831, **open** since 2026-04-13 — the server
 forcing a full re-process on follow-up turns for SWA and recurrent models — is the follow-up-turn
 cost decision 1 hedges, and it applies to the 9B and to Gemma's sliding-window layers as much as
-here, so it separates none of the three. Run with `-fa off` until #26609 closes, `-ot exps=CPU` before
-`-ncmoe`, and host working set and page cache measured beside `nvidia-smi`.
+here, so it separates none of the three. Run with `-fa off` until #26609 closes, `-ot exps=CPU`
+before `-ncmoe`, and host working set and page cache measured beside `nvidia-smi`.
+
+**The fourth file, and the control: `openai/gpt-oss-20b`.** `ggml-org/gpt-oss-20b-GGUF`,
+`gpt-oss-20b-MXFP4.gguf` 12,109,566,624 bytes (11.28 GiB); apache-2.0 on source and GGUF alike.
+Read from the hub on 2026-08-16; nothing run. 21,512M total, `gpt_oss`; 24 layers alternating
+sliding-window at 128 and full attention — 12 full, 8 KV heads of 64 — 32 experts with 4 active;
+native context **4,096, extended by YaRN ×32 to 131,072**; released 2025-08, the oldest here by a
+year. Cache at 40k is 0.94 GiB f16 and the sliding layers are noise. **What it has that nothing
+above has: no quantisation decision.** MXFP4 is how the experts were trained and shipped, so this
+file is the model as released — the ~1.9 GB of attention and embeddings at Q8_0 by the byte count,
+the experts native — from the llama.cpp maintainers, revision-pinned. The question this document
+says it cannot discharge does not arise for it. Fully in VRAM it is 13.7 GiB with cache and
+compute: fits alone, **not beside the ASR model** (15.1). With `-ot exps=CPU` — experts are 24 × 32
+× 3 × 2880² ≈ 19.1B of the 21.5B — about 9.5 GiB goes to RAM and 4 GiB stays on the card, the ASR
+model resident, at the price of the slowest decode ceiling of the offloaded options: four wide
+experts a token is ~1.27 GB read per token, near 76 tokens/s at 96 GB/s theoretical.
+
+Why fourth. Its long context is extrapolated thirty-two-fold from a 4k native window, its card
+publishes no long-context or instruction-following number, and the one figure the maintainer's
+research found is a competitor's table placing it below the 9B at length; its model card describes a
+mostly-English, text-only training set — as remembered, not re-read here — against an app that
+transcribes twenty-five languages; and it always reasons in a harmony "analysis" channel before the
+"final" one, which the grammar-over-output design in *The model never writes a timestamp* has to be
+checked against specifically, since here the channel does not turn off. **Its job is to be the
+control.** If the `qwen3_5` family's CUDA or Vulkan support proves immature, or a citation failure
+is ever suspected of being a quantisation artefact, this is the file that rules quantisation out,
+because it has none. Same session, same questions; `-ot exps=CPU` only if the ASR model must stay
+loaded. The same repository ships EAGLE-3 draft GGUFs beside it for speculative decoding — noted,
+not checked.
 
 ### 3. Retrieval, whole transcript, or both
 
