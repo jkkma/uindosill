@@ -19,10 +19,24 @@
       timestamps    Word times. Expected to move by a frame or so; a large move is not.
       confidences   The most sensitive surface, and the one that moves most.
 
-    Word streams are aligned by index, which is exact while the two runs agree on how many words
-    there are. If the counts differ the alignment is reported as broken rather than papered over:
-    a single inserted word would otherwise shift every later comparison and report hundreds of
-    differences that are one event.
+    Word streams are ALIGNED, not compared by index. An earlier version of this script paired word
+    i with word i and refused to report when the totals differed. That guard could not see
+    insertions and deletions that cancel out — f16 against q4_k on one ten-minute file produced
+    exactly 1,606 words each, so the guard passed and the script reported 727 differing tokens
+    where a word-level edit distance found 50 — and docs/UNPROVEN.md records that figure as an
+    artefact. Now the two word streams are aligned by word-level Levenshtein distance, so a
+    dropped or added word is one edit rather than a desynchronisation of everything after it, and
+    the timestamp and confidence figures are computed over the pairs the alignment actually made.
+
+    Two token figures are reported: RAW, where the model's own tokens are compared exactly, so
+    casing and punctuation count; and NORMALISED, lower-cased with everything but letters and
+    digits removed — the same rule scripts/word-distance.ps1 applies. A large gap between them
+    means the divergence is mostly presentation.
+
+    The alignment is the same code the product and its tests use: src/Parakeet.Core/Text/*.cs,
+    compiled here with Add-Type straight from the source tree, so this script still needs no
+    build and runs anywhere pwsh does — including a container with no natives, against JSONs the
+    --fake engine produced.
 
 .EXAMPLE
     .\scripts\compare-transcripts.ps1 -Reference chunk-cpu.json -Candidate chunk-cuda.json
@@ -41,7 +55,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Candidate,
 
-    # Print every differing word token, not just the count.
+    # Print every differing word token, not just the first forty.
     [switch] $ShowWords,
 
     # Print every word whose timestamp moved.
@@ -56,6 +70,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# ── the alignment, shared with the product ──────────────────────────────────────────────────────
+#
+# One implementation, tested in tests/Parakeet.Core.Tests, used by the CLI's `wer` command and by
+# this script and word-distance.ps1. Those two source files are written to compile standalone —
+# BCL only, nothing else from Parakeet.Core — precisely so this works. Add-Type refuses to load a
+# type name twice into one session, which is what the catch is for; the cost is that a session
+# that has already loaded the types keeps the version it loaded first.
+
+$textSources = @('WordAlignment.cs', 'TranscriptNormalizer.cs') |
+    ForEach-Object { Join-Path $PSScriptRoot '..' 'src' 'Parakeet.Core' 'Text' $_ }
+foreach ($source in $textSources) {
+    if (-not (Test-Path -LiteralPath $source)) { throw "Alignment source not found: $source" }
+}
+try {
+    Add-Type -Path $textSources -ErrorAction Stop | Out-Null
+}
+catch {
+    if (-not ('Parakeet.Core.Text.WordAlignment' -as [type])) { throw }
+}
 
 function Read-Transcript {
     param([string] $Path)
@@ -162,23 +196,15 @@ Write-Heading 'words'
 Write-Host ("reference  {0:N0} words" -f $left.Words.Count)
 Write-Host ("candidate  {0:N0} words" -f $right.Words.Count)
 
-if ($left.Words.Count -ne $right.Words.Count) {
-    Write-Host ''
-    Write-Host 'The word counts differ, so index alignment is not valid and the per-word figures below' -ForegroundColor Red
-    Write-Host 'would be an artefact of the offset rather than a measurement. Compare the text output' -ForegroundColor Red
-    Write-Host 'instead and find where the streams diverge.' -ForegroundColor Red
+[string[]] $leftTokens = @($left.Words | ForEach-Object { $_.Text })
+[string[]] $rightTokens = @($right.Words | ForEach-Object { $_.Text })
 
-    $limit = [Math]::Min($left.Words.Count, $right.Words.Count)
-    for ($i = 0; $i -lt $limit; $i++) {
-        if ($left.Words[$i].Text -cne $right.Words[$i].Text) {
-            Write-Host ''
-            Write-Host ("first divergence at word {0}: '{1}' vs '{2}' (around {3:N2} s)" -f `
-                $i, $left.Words[$i].Text, $right.Words[$i].Text, $left.Words[$i].Start) -ForegroundColor Red
-            break
-        }
-    }
-    return
-}
+$ops = [Parakeet.Core.Text.WordAlignment]::Align($leftTokens, $rightTokens)
+$summary = [Parakeet.Core.Text.WordAlignment]::Summarize($ops)
+
+[string[]] $leftNormalised = [Parakeet.Core.Text.TranscriptNormalizer]::AlphanumericTokens($leftTokens)
+[string[]] $rightNormalised = [Parakeet.Core.Text.TranscriptNormalizer]::AlphanumericTokens($rightTokens)
+$normalisedEdits = [Parakeet.Core.Text.WordAlignment]::Distance($leftNormalised, $rightNormalised)
 
 $tokenDiffs = [Collections.Generic.List[object]]::new()
 $timeDiffs = [Collections.Generic.List[object]]::new()
@@ -187,30 +213,45 @@ $largestTimeMove = 0.0
 $largestConfMove = 0.0
 $confDeltaSum = 0.0
 $missingConfidence = 0
+$alignedPairs = 0
+$firstDivergence = $null
 
-for ($i = 0; $i -lt $left.Words.Count; $i++) {
-    $a = $left.Words[$i]
-    $b = $right.Words[$i]
+foreach ($op in $ops) {
+    $kind = [string] $op.Kind
 
-    if ($a.Text -cne $b.Text) {
-        $tokenDiffs.Add([PSCustomObject]@{
-            Index = $i
-            At    = $a.Start
-            Reference = $a.Text
-            Candidate = $b.Text
-        })
+    if ($kind -ne 'Match') {
+        $a = if ($op.ReferenceIndex -ge 0) { $left.Words[$op.ReferenceIndex] } else { $null }
+        $b = if ($op.HypothesisIndex -ge 0) { $right.Words[$op.HypothesisIndex] } else { $null }
+        $at = if ($null -ne $a) { $a.Start } else { $b.Start }
+        $diff = [PSCustomObject]@{
+            Kind      = $kind
+            Index     = $op.ReferenceIndex
+            At        = $at
+            Reference = if ($null -ne $a) { $a.Text } else { $null }
+            Candidate = if ($null -ne $b) { $b.Text } else { $null }
+        }
+        $tokenDiffs.Add($diff)
+        if ($null -eq $firstDivergence) { $firstDivergence = $diff }
     }
+
+    # Timestamps and confidences are compared over the pairs the alignment made — matches and
+    # substitutions. A deleted or inserted word has nothing opposite it to compare with.
+    if ($kind -ne 'Match' -and $kind -ne 'Substitute') { continue }
+
+    $alignedPairs++
+    $a = $left.Words[$op.ReferenceIndex]
+    $b = $right.Words[$op.HypothesisIndex]
 
     $startDelta = [Math]::Abs($a.Start - $b.Start)
     $endDelta = [Math]::Abs($a.End - $b.End)
     $worstTime = [Math]::Max($startDelta, $endDelta)
     if ($worstTime -gt $TimeEpsilon) {
         $timeDiffs.Add([PSCustomObject]@{
-            Index = $i
-            Word  = $a.Text
+            Index     = $op.ReferenceIndex
+            Word      = $a.Text
             Reference = $a.Start
             Candidate = $b.Start
-            Delta = $worstTime
+            Delta     = $worstTime
         })
         if ($worstTime -gt $largestTimeMove) { $largestTimeMove = $worstTime }
     }
@@ -223,11 +264,11 @@ for ($i = 0; $i -lt $left.Words.Count; $i++) {
     $confDelta = [Math]::Abs($a.Confidence - $b.Confidence)
     if ($confDelta -gt $ConfidenceEpsilon) {
         $confDiffs.Add([PSCustomObject]@{
-            Index = $i
-            Word  = $a.Text
+            Index     = $op.ReferenceIndex
+            Word      = $a.Text
             Reference = $a.Confidence
             Candidate = $b.Confidence
-            Delta = $confDelta
+            Delta     = $confDelta
         })
         $confDeltaSum += $confDelta
         if ($confDelta -gt $largestConfMove) { $largestConfMove = $confDelta }
@@ -235,23 +276,41 @@ for ($i = 0; $i -lt $left.Words.Count; $i++) {
 }
 
 $tokenColour = 'Green'
-if ($tokenDiffs.Count -gt 0) { $tokenColour = 'Yellow' }
+if ($summary.Edits -gt 0) { $tokenColour = 'Yellow' }
+$referenceCount = [Math]::Max(1, $left.Words.Count)
+$normalisedCount = [Math]::Max(1, $leftNormalised.Count)
+
 Write-Host ''
-Write-Host ("word tokens differing : {0} of {1:N0}" -f $tokenDiffs.Count, $left.Words.Count) -ForegroundColor $tokenColour
-Write-Host ("timestamps differing  : {0} of {1:N0}, largest {2:N3} s" -f $timeDiffs.Count, $left.Words.Count, $largestTimeMove)
+Write-Host ("word edits, raw        : {0} of {1:N0} ({2:F3}%) — {3} substituted, {4} deleted, {5} inserted, {6:N0} matched" -f `
+    $summary.Edits, $left.Words.Count, (100.0 * $summary.Edits / $referenceCount), `
+    $summary.Substitutions, $summary.Deletions, $summary.Insertions, $summary.Matches) -ForegroundColor $tokenColour
+Write-Host ("word edits, normalised : {0} of {1:N0} ({2:F3}%) — case and punctuation set aside" -f `
+    $normalisedEdits, $leftNormalised.Count, (100.0 * $normalisedEdits / $normalisedCount))
+Write-Host ("timestamps differing   : {0} of {1:N0} aligned pairs, largest {2:N3} s" -f $timeDiffs.Count, $alignedPairs, $largestTimeMove)
 
 if ($confDiffs.Count -gt 0) {
     # The mean is over the words that actually differ, which is what makes it a description of the
     # disagreement rather than a number diluted by every word the two runs agreed on exactly.
-    Write-Host ("confidences differing : {0} of {1:N0}, mean delta {2:N4}, maximum {3:N4}" -f `
-        $confDiffs.Count, $left.Words.Count, ($confDeltaSum / $confDiffs.Count), $largestConfMove)
+    Write-Host ("confidences differing  : {0} of {1:N0} aligned pairs, mean delta {2:N4}, maximum {3:N4}" -f `
+        $confDiffs.Count, $alignedPairs, ($confDeltaSum / $confDiffs.Count), $largestConfMove)
 }
 else {
-    Write-Host ("confidences differing : 0 of {0:N0}" -f $left.Words.Count)
+    Write-Host ("confidences differing  : 0 of {0:N0} aligned pairs" -f $alignedPairs)
 }
 
 if ($missingConfidence -gt 0) {
     Write-Host ("{0} words carry a confidence on one side only" -f $missingConfidence) -ForegroundColor Yellow
+}
+
+if ($null -ne $firstDivergence) {
+    Write-Host ''
+    $what = switch ($firstDivergence.Kind) {
+        'Substitute' { "'{0}' vs '{1}'" -f $firstDivergence.Reference, $firstDivergence.Candidate }
+        'Delete'     { "'{0}' has nothing opposite it in the candidate" -f $firstDivergence.Reference }
+        'Insert'     { "candidate adds '{0}'" -f $firstDivergence.Candidate }
+    }
+    $where = if ($firstDivergence.Index -ge 0) { "reference word {0}" -f $firstDivergence.Index } else { 'before the next reference word' }
+    Write-Host ("first divergence at {0}: {1} (around {2:N2} s)" -f $where, $what, $firstDivergence.At) -ForegroundColor Yellow
 }
 
 if ($tokenDiffs.Count -gt 0) {
@@ -262,7 +321,13 @@ if ($tokenDiffs.Count -gt 0) {
         $show = $tokenDiffs[0..39]
     }
     foreach ($diff in $show) {
-        Write-Host ("  {0,6}  {1,8:N2} s  {2,-24} -> {3}" -f $diff.Index, $diff.At, "'$($diff.Reference)'", "'$($diff.Candidate)'")
+        $index = if ($diff.Index -ge 0) { '{0,6}' -f $diff.Index } else { '     -' }
+        $line = switch ($diff.Kind) {
+            'Substitute' { "{0,-24} -> {1}" -f "'$($diff.Reference)'", "'$($diff.Candidate)'" }
+            'Delete'     { "{0,-24} -> (deleted)" -f "'$($diff.Reference)'" }
+            'Insert'     { "{0,-24} -> {1}" -f '(inserted)', "'$($diff.Candidate)'" }
+        }
+        Write-Host ("  {0}  {1,8:N2} s  {2}" -f $index, $diff.At, $line)
     }
     if ($show.Count -lt $tokenDiffs.Count) {
         Write-Host ("  ... {0} more (pass -ShowWords)" -f ($tokenDiffs.Count - $show.Count))
@@ -293,14 +358,15 @@ else {
 
 Write-Heading 'verdict'
 
-if ($segmentCountMatches -and $tokenDiffs.Count -eq 0 -and $timeDiffs.Count -eq 0 -and $confDiffs.Count -eq 0) {
+if ($segmentCountMatches -and $summary.Edits -eq 0 -and $timeDiffs.Count -eq 0 -and $confDiffs.Count -eq 0) {
     Write-Host 'The two transcripts are identical.' -ForegroundColor Green
 }
-elseif ($tokenDiffs.Count -eq 0) {
+elseif ($summary.Edits -eq 0) {
     Write-Host 'Same transcript, different numbers: no word changed, only timings and confidences.' -ForegroundColor Green
     Write-Host 'That is what different floating-point kernels look like.'
 }
 else {
-    Write-Host ("{0} word token(s) changed. Read them above and judge whether the transcript means" -f $tokenDiffs.Count)
-    Write-Host 'something different, or whether a near-tie in the argmax landed the other way.'
+    Write-Host ("{0} word edit(s) — {1} once case and punctuation are set aside. Read them above and judge whether" -f $summary.Edits, $normalisedEdits)
+    Write-Host 'the transcript means something different, or whether a near-tie in the argmax landed the other way.'
+    Write-Host 'This is divergence between two transcripts, not a word error rate: neither side is ground truth.' -ForegroundColor DarkGray
 }

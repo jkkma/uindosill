@@ -151,6 +151,11 @@ namespace Parakeet.Cli
                 return Task.FromResult(NoticeCommand.Formats(context));
             }
 
+            if (command == Commands.Wer)
+            {
+                return Task.FromResult(WerCommand.Run(context, parsed));
+            }
+
             context.WriteError($"Command '{command.Name}' has no handler.");
             return Task.FromResult(ExitCodes.UsageError);
         }

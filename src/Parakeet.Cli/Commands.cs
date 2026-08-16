@@ -272,6 +272,64 @@ internal static class Commands
         Options = [Help],
     };
 
+    public static readonly CommandSpec Wer = new()
+    {
+        Name = "wer",
+        Summary = "Score transcripts against a human reference: word error rate, with the normalisation stated.",
+        Positionals = "<hypothesis> [hypothesis...]",
+        Options =
+        [
+            new OptionSpec
+            {
+                Name = "reference",
+                Short = 'r',
+                TakesValue = true,
+                ValueName = "file",
+                Help = "The human transcript every hypothesis is scored against: plain text, or an Earnings-22 .nlp file.",
+            },
+            new OptionSpec
+            {
+                Name = "reference-dir",
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Instead of --reference: a directory holding one <stem>.txt or <stem>.nlp per hypothesis, matched by file stem.",
+            },
+            new OptionSpec
+            {
+                Name = "reference-format",
+                TakesValue = true,
+                ValueName = "auto|text|nlp",
+                Help = "How to read the reference. Default auto: .nlp by extension, plain text otherwise.",
+            },
+            new OptionSpec
+            {
+                Name = "keep-fillers",
+                Help = "Count uh, um, hmm, mm, mhm and mmm as words. By default both sides drop them, as the leaderboard normaliser does.",
+            },
+            new OptionSpec
+            {
+                Name = "show",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "Print the first n error sites of each hypothesis with three words of context either side.",
+            },
+            new OptionSpec
+            {
+                Name = "json",
+                Help = "Machine-readable output: per-hypothesis and summed counts and rates.",
+            },
+            Help,
+        ],
+        Details =
+            "A hypothesis is a transcript this tool wrote: the .json (its \"text\" field) or the .txt (its [hh:mm:ss] prefixes\n" +
+            "are stripped). WER is (substitutions + deletions + insertions) / reference words, over tokens normalised the\n" +
+            "same way on both sides: lower-cased, punctuation removed, hyphens split, bracketed annotations dropped, fillers\n" +
+            "dropped. That is NOT the normaliser the published leaderboards use — numbers, spellings and contractions are\n" +
+            "compared as written, and this model spells numbers out — so a figure from here is comparable to another figure\n" +
+            "from here and not to a leaderboard. The raw column is the same score over whitespace tokens with nothing\n" +
+            "normalised, so the size of the normalisation is visible.",
+    };
+
     public static IReadOnlyList<CommandSpec> All { get; } =
-        [Transcribe, Models, Bench, Doctor, Probe, Notice, Formats];
+        [Transcribe, Models, Bench, Doctor, Probe, Notice, Formats, Wer];
 }
