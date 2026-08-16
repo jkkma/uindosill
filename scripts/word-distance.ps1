@@ -9,7 +9,7 @@
     figures when the two word totals differ — catches the common case and cannot catch the case that
     matters here: insertions and deletions that cancel in the total while leaving the sequence
     misaligned. That is the likely shape whenever two quantisations of one model are compared, and
-    `UNPROVEN.md` in the project notes records it producing 727 differences where an alignment-free measure found 50.
+    `docs/UNPROVEN.md` records it producing 727 differences where an alignment-free measure found 50.
 
     This script answers the same question without assuming alignment: an exact word-level
     Levenshtein distance. It is a complement to `compare-transcripts.ps1`, not a replacement — that
@@ -31,7 +31,7 @@
     candidate that scores near it has not been shown to differ from the reference at all.
 
     Input may be transcript JSON or the .txt output. JSON is preferred and is what the figures in
-    `UNPROVEN.md` in the project notes were computed from: it carries the model's own token stream at
+    `docs/UNPROVEN.md` were computed from: it carries the model's own token stream at
     `segments[].words[].w`, whereas the .txt is the rendered form and counts differently. The mode
     used is printed, so the two are never confused.
 

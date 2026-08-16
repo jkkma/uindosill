@@ -55,7 +55,7 @@ public sealed record ParakeetCppOptions
     /// ask a device about bf16 before loading a model, and a failed load cannot be retried in the
     /// same process. So the choice has to be made before there is any evidence to make it with,
     /// and turning it on for every Vulkan device would change the configuration every measured
-    /// Vulkan figure in UNPROVEN.md in the project notes was taken under.
+    /// Vulkan figure in docs/UNPROVEN.md was taken under.
     /// </para>
     /// <para>
     /// Measured on an AMD Radeon 880M, driver 32.0.13022.3006, which reports <c>bf16: 0</c> and
@@ -269,7 +269,7 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
         builder.AppendLine(
             "On Vulkan this is also what a device whose bf16 cooperative-matrix shaders will not " +
             $"build looks like — the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
-            "Measured on an AMD Radeon 880M; see UNPROVEN.md in the project notes. Retrying in this process is not " +
+            "Measured on an AMD Radeon 880M; see docs/UNPROVEN.md. Retrying in this process is not " +
             "possible, because the Vulkan device does not survive the failed load: set the variable " +
             "in the environment, or pass the option, and start again. Loading on the cpu backend " +
             "distinguishes a device problem from a bad model file.");

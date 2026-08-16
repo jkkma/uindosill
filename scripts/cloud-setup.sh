@@ -15,7 +15,7 @@
 # .NET 10 at all, its newest dotnet package being 6.0. The Debian 12 build runs correctly there.
 #
 # Versions are pinned and every download is checked against the SHA-256 the feed publishes, for the
-# same reason NATIVE-BINARIES.md in the project notes pins a parakeet.cpp release. When a newer SDK is wanted, the
+# same reason docs/NATIVE-BINARIES.md pins a parakeet.cpp release. When a newer SDK is wanted, the
 # current list is at:
 #   https://packages.microsoft.com/debian/12/prod/dists/bookworm/main/binary-amd64/Packages.gz
 #

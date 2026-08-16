@@ -4,9 +4,8 @@
     unpacks them into native/win-x64/<backend>/ — the layout the loader searches and the build copies.
 
 .DESCRIPTION
-    NATIVE-BINARIES.md in the project notes (kept in the maintainer's Google Drive, not in this
-    repository) explains why the natives are pinned to a release rather than tracked or fetched at
-    build time, and until now "vendor" meant reading that document and doing it by hand:
+    docs/NATIVE-BINARIES.md explains why the natives are pinned to a release rather than tracked or
+    fetched at build time, and until now "vendor" meant reading that document and doing it by hand:
     pick the `lib-` family and not `bin-`, download the right archive, hash it, compare by eye,
     unpack flat, keep the LICENSE. Every one of those steps has been got wrong at least once, and one
     of them — the LICENSE — is a licence breach when it goes wrong, and fails silently. This script is
@@ -20,8 +19,8 @@
        real name has passed step 2 at least once.
     2. Checks the byte count and then the SHA-256 against the pins in this file. Either mismatch
        stops the run before anything is unpacked: a wrong archive on disk is a question, not a
-       drop. The pins in this file are the record; NATIVE-BINARIES.md in the project notes carries
-       the same table for reading and cannot be checked from here.
+       drop. The pins are the same values recorded in docs/NATIVE-BINARIES.md, and step 5 holds the
+       two together.
     3. Unpacks it flat into native/win-x64/<backend>/. Upstream wraps the four files in a directory
        named after the archive; the loader wants parakeet.dll directly inside the backend folder.
        Files already there are left alone when they match the archive's size, overwritten with
@@ -31,6 +30,10 @@
        LICENSE check is not tidiness. parakeet.cpp is MIT, and build/NativeAssets.targets copies
        native/**/LICENSE into the output for that reason; a backend directory without one ships an
        MIT binary without its notice.
+    5. Confirms every digest it trusted appears in docs/NATIVE-BINARIES.md, and fails if one does
+       not. Bump the pin here without recording it there and the run says so — the same guard, for
+       the same reason, as scripts/check-test-counts.py.
+
     CUDA is included but not default. It is opt-in in the product, roughly 700 MB across two
     archives, and has questions of its own — which GPU architectures were compiled in, whether
     VCOMP140 is on the machine — that scripts/vendor-cuda.ps1 answers by reading the binaries. So
@@ -39,8 +42,7 @@
     reads a PE import table against System32, so the cuda path is Windows-only; cpu and vulkan run
     wherever pwsh does, which is what lets the Linux CI runner vendor before it publishes.
 
-    Nothing here is arm64. v0.5.0 publishes no win-arm64 asset, and NATIVE-BINARIES.md in the
-    project notes says so.
+    Nothing here is arm64. v0.5.0 publishes no win-arm64 asset, and docs/NATIVE-BINARIES.md says so.
 
     Rebuild afterwards. build/NativeAssets.targets evaluates its glob when the project is
     evaluated, so a drop made after the last build is not in the output until the next one — and
@@ -93,8 +95,8 @@ if ($env:GITHUB_ACTIONS -or $env:CI) { $ProgressPreference = 'SilentlyContinue' 
 # ── The pins ────────────────────────────────────────────────────────────────────────────────────
 #
 # Release tag, archive names, byte counts and SHA-256 as served by GitHub, and the byte count of
-# the parakeet.dll each archive contains. This table is the record of the pins. NATIVE-BINARIES.md
-# in the project notes carries the same values for reading, and is not consulted by this script.
+# the parakeet.dll each archive contains. These are the values in the digest table at the end of
+# docs/NATIVE-BINARIES.md, and the run fails if the two disagree — see the last heading below.
 #
 # The byte count is checked before the digest because it fails faster and says more: an HTML error
 # page saved as a .zip is a few KB, and "expected 17,945,091 bytes, got 9,214" is a diagnosis where
@@ -163,7 +165,7 @@ function Assert-ArchiveMatches {
         throw ("{0} ({1}) hashes to`n  {2}`nbut the pin is`n  {3}`nNot unpacking it. If the file " +
                "was placed by hand, delete it and let this script download the archive; if it was " +
                "downloaded by this script, the release asset has changed under the tag and " +
-               "the pin table in this script needs a new row before anything else happens.") -f `
+               "docs/NATIVE-BINARIES.md needs a new row before anything else happens.") -f `
                $Archive.Name, $Origin, $actual, $Archive.Sha256
     }
 }
@@ -331,12 +333,27 @@ try {
         Assert-Drop -Backend $backend -Directory $destination -LibraryLength $pin.LibraryLength
     }
 
-    # The pin table in this script used to be cross-checked against a copy in the repository's
-    # docs, which no longer live here. This script is now the one record; the digests it trusted on
-    # this run are listed so a reader can carry them into the project notes by hand.
+    # The pins above and the table in docs/NATIVE-BINARIES.md are two copies of one fact, and this
+    # is what keeps them one. It runs after the drop is in place because the drop is correct either
+    # way; what is wrong on a mismatch is the record, and the exit code says so.
     Write-Heading 'the record'
+    $doc = Join-Path $repo 'docs/NATIVE-BINARIES.md'
+    $text = Get-Content -LiteralPath $doc -Raw
+    $unrecorded = @()
     foreach ($archive in $trusted) {
-        Write-Host ("  {0,-44} {1}" -f $archive.Name, $archive.Sha256) -ForegroundColor Green
+        if ($text.Contains($archive.Sha256)) {
+            Write-Host ("  {0,-44} recorded in docs/NATIVE-BINARIES.md" -f $archive.Name) -ForegroundColor Green
+        }
+        else {
+            Write-Host ("  {0,-44} NOT in docs/NATIVE-BINARIES.md" -f $archive.Name) -ForegroundColor Red
+            $unrecorded += $archive
+        }
+    }
+    if ($unrecorded.Count -gt 0) {
+        $rows = ($unrecorded | ForEach-Object { "| $release | ``$($_.Name)`` | ``$($_.Sha256)`` | **unconfirmed** | $(Get-Date -Format yyyy-MM-dd) |" }) -join "`n"
+        throw ("The drop is in place, but {0} digest(s) this script trusts are not in the table at the " +
+               "end of docs/NATIVE-BINARIES.md. Record them — the pin and the record must agree:`n{1}") -f `
+               $unrecorded.Count, $rows
     }
 
     Write-Heading 'next'

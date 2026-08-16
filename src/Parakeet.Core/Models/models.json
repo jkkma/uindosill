@@ -10,7 +10,7 @@
     "audio hashed to the same value the repository publishes.",
     "",
     "An entry added later with \"sha256\": null still works, but it downloads unverified and both",
-    "the CLI and the UI say so on its face. See MODELS.md in the project notes before adding one.",
+    "the CLI and the UI say so on its face. See docs/MODELS.md before adding one.",
     "",
     "Sizes are exact and are compared to the downloaded byte count, so a rounded value is a bug.",
     "",

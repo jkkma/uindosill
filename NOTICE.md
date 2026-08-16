@@ -63,7 +63,7 @@ may be distributed with applications, and says so for version-numbered variants 
 explicitly. The conditions that come with that permission are in §1.1.2 and §1.2: the application
 must have material additional functionality beyond the included portions, the redistributed files
 must be accessed only by that application, and the SDK may not be distributed as a stand-alone
-product. `LICENSING.md` in the project notes records how this product meets each, and what about that reading is
+product. `docs/LICENSING.md` records how this product meets each, and what about that reading is
 still unverified.
 
 ## Deliberately not used

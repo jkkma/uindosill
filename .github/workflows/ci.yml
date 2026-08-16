@@ -58,9 +58,9 @@ jobs:
   # transcribe rather than a managed shell around an empty native/ directory. The vendoring is the
   # same script a developer runs — scripts/vendor-natives.ps1 — which downloads the pinned v0.5.0
   # archives, refuses to unpack anything whose SHA-256 is not the one recorded in
-  # NATIVE-BINARIES.md in the project notes, and fails if a pin it trusts is missing from that table. Only win-x64:
+  # docs/NATIVE-BINARIES.md, and fails if a pin it trusts is missing from that table. Only win-x64:
   # upstream publishes no win-arm64 asset, so that leg's artefact still carries no natives and
-  # NATIVE-BINARIES.md in the project notes says so.
+  # docs/NATIVE-BINARIES.md says so.
   publish-windows:
     runs-on: ubuntu-latest
     strategy:
