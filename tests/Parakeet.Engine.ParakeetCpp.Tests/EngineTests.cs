@@ -215,4 +215,32 @@ public class ParakeetNativeLibraryTests
         Assert.Equal(5, exception.Actual);
         Assert.Contains("corrupts memory", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ShutdownBackendReachesUpstreamThroughItsExportedNameOrDoesNothing()
+    {
+        // The function that stops a CUDA process aborting on exit (gotcha 19) is not in the C ABI;
+        // it is reached by the C++-mangled export name every vendored build happens to carry. The
+        // MSVC spelling is the one that has been seen on a real binary — pinned here so a typo
+        // cannot quietly turn the fix back into the old behaviour. The Itanium spelling is derived
+        // from the mangling rules and no non-Windows build has been checked; the order says which
+        // is which.
+        Assert.Equal("?shutdown_backend@pk@@YAXXZ", ParakeetNativeLibrary.ShutdownBackendExportNames[0]);
+        Assert.Equal("_ZN2pk16shutdown_backendEv", ParakeetNativeLibrary.ShutdownBackendExportNames[1]);
+
+        // With no library loaded there is nothing to release, and the call must say so rather than
+        // load one to find out: this runs where there are no natives, and must never touch them
+        // where there are.
+        if (ParakeetNativeLibrary.LoadedPath is null)
+        {
+            Assert.Null(ParakeetNativeLibrary.ShutdownBackendAvailable);
+            Assert.False(ParakeetNativeLibrary.TryShutdownBackend());
+            return;
+        }
+
+        // Another test in this process loaded a real library. Then the answer is whatever that
+        // build exports, and calling it with nothing loaded on it is documented safe.
+        Assert.NotNull(ParakeetNativeLibrary.ShutdownBackendAvailable);
+        Assert.Equal(ParakeetNativeLibrary.ShutdownBackendAvailable, ParakeetNativeLibrary.TryShutdownBackend());
+    }
 }

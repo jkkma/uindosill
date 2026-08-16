@@ -81,10 +81,136 @@ public class WindowTests
         Assert.Contains("opt-in CUDA backend", licence, StringComparison.Ordinal);
     }
 
+    [AvaloniaFact]
+    public async Task ClosingTheWindowUnloadsTheModelAndReleasesTheBackendBeforeItGoes()
+    {
+        // The app used to reach native static teardown with a CUDA backend still resident and abort
+        // with 0xC0000409 on exit (gotcha 19). The window now turns the first close into a shutdown
+        // — unload, release the backend — and only then closes. Asserted on the real window's
+        // Closing path, not on the view model method it calls.
+        var provider = new FakeEngineProvider();
+        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        var viewModel = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        await viewModel.Session.LoadAsync(new EngineSelection { Model = viewModel.Models.SelectedDescriptor });
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+
+        var closed = false;
+        window.Closed += (_, _) => closed = true;
+
+        window.Close();
+
+        // The first request is intercepted; the real close follows once shutdown has run, so this
+        // pumps the dispatcher until it does rather than asserting on the same call stack.
+        for (var i = 0; i < 200 && !closed; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(closed, "the window never closed after shutdown");
+        Assert.False(viewModel.Session.IsLoaded);
+        Assert.Equal(1, provider.ReleaseCount);
+    }
+
     private static MainWindowViewModel NewViewModel(out string directory)
     {
         directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
         return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+    }
+}
+
+public class ShutdownTests
+{
+    /// <summary>
+    /// A provider that records whether a batch was still running at the moment the backend was
+    /// released — the ordering the whole fix depends on, and the one thing a call count cannot show.
+    /// </summary>
+    private sealed class OrderRecordingProvider : IEngineProvider
+    {
+        private readonly FakeEngineProvider _inner = new(new FakeEngineOptions
+        {
+            PerSegmentDelay = TimeSpan.FromMilliseconds(100),
+        });
+
+        public Func<bool>? IsBatchRunning { get; set; }
+
+        public bool? BatchWasRunningAtRelease { get; private set; }
+
+        public int ReleaseCount { get; private set; }
+
+        public bool IsModelAvailable(EngineSelection selection) => true;
+
+        public ITranscriptionEngine Create(EngineSelection selection) => _inner.Create(selection);
+
+        public void ReleaseBackend()
+        {
+            ReleaseCount++;
+            BatchWasRunningAtRelease = IsBatchRunning?.Invoke();
+        }
+    }
+
+    [Fact]
+    public async Task DisposingTheSessionUnloadsThenReleasesTheBackend()
+    {
+        var provider = new FakeEngineProvider();
+        var session = new ModelSession(provider);
+        await session.LoadAsync(new EngineSelection { Model = ModelCatalog.Default.Models[0] });
+
+        Assert.True(session.IsLoaded);
+        Assert.Equal(0, provider.ReleaseCount);
+
+        await session.DisposeAsync();
+
+        Assert.False(session.IsLoaded);
+        Assert.Equal(1, provider.ReleaseCount);
+
+        // Nothing loaded is not an error; the release is still made, because a failed load can
+        // leave the native backend resident with no engine to show for it.
+        var empty = new ModelSession(provider);
+        await empty.DisposeAsync();
+        Assert.Equal(2, provider.ReleaseCount);
+    }
+
+    [Fact]
+    public async Task ShutdownStopsARunningBatchBeforeReleasingTheBackend()
+    {
+        // The ABI has no abort hook, so shutdown cancels the batch and then waits for it, and only
+        // then disposes the session. Releasing the backend under a running decode would let the
+        // decode recreate it, and the exit abort would come back.
+        var provider = new OrderRecordingProvider();
+        var directory = Directory.CreateTempSubdirectory("uindosill-shutdown").FullName;
+        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        provider.IsBatchRunning = () => main.Transcribe.IsRunning;
+        main.Transcribe.OutputDirectory = directory;
+        main.Transcribe.UseFixedWindows = true;
+        main.Transcribe.MaxSegmentSeconds = 5;
+
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        // Thirty seconds of tone in five-second windows: six segments at 100 ms each, long enough
+        // that shutdown arrives while the batch is genuinely in flight.
+        var path = Path.Combine(directory, "long.wav");
+        var samples = new float[16_000 * 30];
+        for (var i = 0; i < samples.Length; i++)
+        {
+            samples[i] = (float)(0.5 * Math.Sin(2 * Math.PI * 200 * i / 16_000.0));
+        }
+
+        WavWriter.WriteFile(path, samples, 16_000);
+        main.Transcribe.AddFiles([path]);
+
+        var batch = main.Transcribe.StartCommand.ExecuteAsync(null);
+        Assert.True(main.Transcribe.IsRunning);
+
+        await main.ShutdownAsync();
+        await batch;
+
+        Assert.False(main.Transcribe.IsRunning);
+        Assert.False(main.Session.IsLoaded);
+        Assert.Equal(1, provider.ReleaseCount);
+        Assert.False(provider.BatchWasRunningAtRelease);
+        Assert.Contains(main.Transcribe.Jobs, job => job.State != JobState.Completed);
     }
 }
 

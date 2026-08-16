@@ -101,6 +101,16 @@ namespace Parakeet.Cli
                 context.WriteError(ex.Message);
                 return ExitCodes.RuntimeError;
             }
+            finally
+            {
+                // Every command's engine has been disposed by now (they are `await using`), so this
+                // is the one place to release parakeet.cpp's process-global backend while the GPU
+                // driver is still alive. Left to static destruction, a CUDA run that wrote a
+                // perfect transcript exited 0xC0000409 (gotcha 19) — which is what made
+                // measure-transcribe.ps1 call good runs failures. A no-op when no native library
+                // was loaded, and upstream's own CLI does the same after every subcommand.
+                ParakeetNativeLibrary.TryShutdownBackend();
+            }
         }
 
         private static Task<int> DispatchAsync(

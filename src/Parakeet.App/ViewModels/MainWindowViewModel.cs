@@ -53,6 +53,34 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Transcribe tab that uses it.</summary>
     public ModelSession Session { get; }
 
+    /// <summary>
+    /// Everything that has to happen before the process may exit: stop a running batch and wait
+    /// for it, then dispose the session, which unloads the model and releases the process-level
+    /// backend while the GPU driver is still alive.
+    /// </summary>
+    /// <remarks>
+    /// The wait is real. The ABI has no abort hook, so a cancelled batch still finishes the native
+    /// call it is inside — up to one batch of segments, which on CPU can be several seconds. Not
+    /// waiting would mean releasing the backend under a decode that then recreates it, and the
+    /// exit abort this exists to prevent comes back. The window stays open with a status line for
+    /// that long, and a second close request while this is in progress closes it regardless.
+    /// </remarks>
+    public async Task ShutdownAsync()
+    {
+        if (Transcribe.IsRunning)
+        {
+            Transcribe.StatusMessage = "Closing — waiting for the segment being decoded to finish…";
+            Transcribe.CancelCommand.Execute(null);
+
+            while (Transcribe.IsRunning)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+        }
+
+        await Session.DisposeAsync().ConfigureAwait(true);
+    }
+
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];
 

@@ -82,12 +82,23 @@ public static class ParakeetNativeLibrary
     /// <summary>Overrides the file name of the native library.</summary>
     public const string FileNameEnvironmentVariable = "UINDOSILL_PARAKEET_LIBRARY";
 
+    /// <summary>
+    /// The exported names of upstream's <c>void pk::shutdown_backend()</c>, MSVC first, then the
+    /// Itanium spelling every other compiler uses. Only the first has been seen: the three vendored
+    /// v0.5.0 Windows builds all export it (they export every symbol, 2,090 of them); no
+    /// non-Windows build has been inspected, so the second is what the mangling rules say and is
+    /// unverified.
+    /// </summary>
+    internal static readonly string[] ShutdownBackendExportNames =
+        ["?shutdown_backend@pk@@YAXXZ", "_ZN2pk16shutdown_backendEv"];
+
     private static readonly Lock Gate = new();
     private static readonly List<string> Attempts = [];
     private static bool _resolverInstalled;
     private static ComputeBackend _requestedBackend = ComputeBackend.Vulkan;
     private static bool _allowFallback = true;
     private static string? _explicitDirectory;
+    private static IntPtr _handle;
 
     /// <summary>Path of the library that was actually loaded, once one has been.</summary>
     public static string? LoadedPath { get; private set; }
@@ -163,6 +174,92 @@ public static class ParakeetNativeLibrary
         return abi;
     }
 
+    /// <summary>
+    /// Whether the loaded library exports <c>pk::shutdown_backend</c>: null while no library is
+    /// loaded, false for a build that does not, in which case <see cref="TryShutdownBackend"/> can
+    /// do nothing and a CUDA process will abort at exit exactly as before it existed.
+    /// </summary>
+    public static bool? ShutdownBackendAvailable
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _handle == IntPtr.Zero ? null : FindShutdownBackend() != IntPtr.Zero;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Frees parakeet.cpp's process-global compute backend, so that a GPU backend gives its device
+    /// memory back while the driver is still alive. Call once, at the end of the process's work,
+    /// after every engine has been disposed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the fix for gotcha 19. parakeet.cpp keeps one <c>pk::Backend</c> per process — the
+    /// ggml backend plus a persistent device compute buffer — in a static <c>unique_ptr</c>, and
+    /// on CUDA its static destructor runs at DLL unload, after the driver's own teardown, so
+    /// <c>cudaFree</c> fails and ggml aborts the process with <c>0xC0000409</c>. Freeing our
+    /// <c>parakeet_ctx</c> first does not help; the CLI always did that and aborted anyway.
+    /// Upstream added <c>pk::shutdown_backend()</c> for precisely this and calls it after every
+    /// subcommand of its own CLI. Measured on an RTX 5080, 2026-08-16: eight CUDA processes
+    /// without this call all exited <c>0xC0000409</c>, sixteen with it all exited 0, and Vulkan
+    /// and CPU exit 0 either way. See docs/UNPROVEN.md.
+    /// </para>
+    /// <para>
+    /// The function is not part of the C ABI this binding is written against; it is reached
+    /// through its C++-mangled export name, which every vendored build happens to carry because
+    /// upstream exports every symbol. That is why this returns false rather than throwing when
+    /// the export is absent — a future build could stop exporting it, and the honest outcome then
+    /// is the old behaviour, reported by <see cref="ShutdownBackendAvailable"/> and by
+    /// <c>uindosill doctor</c>, not a crash on the way out.
+    /// </para>
+    /// <para>
+    /// Safe to call when nothing has been loaded (nothing happens), safe to call more than once,
+    /// and upstream documents it as safe before further use — a later load recreates the backend.
+    /// It takes the same mutex the compute path holds per graph, so calling it while a decode is
+    /// in flight stalls until the current graph finishes rather than corrupting anything, but a
+    /// decode that carries on afterwards recreates the backend, and the exit abort with it. Stop
+    /// the work first.
+    /// </para>
+    /// </remarks>
+    /// <returns>True if the library was loaded, exports the function, and it was called.</returns>
+    public static unsafe bool TryShutdownBackend()
+    {
+        IntPtr function;
+        lock (Gate)
+        {
+            if (_handle == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            function = FindShutdownBackend();
+        }
+
+        if (function == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        ((delegate* unmanaged[Cdecl]<void>)function)();
+        return true;
+    }
+
+    private static IntPtr FindShutdownBackend()
+    {
+        foreach (var name in ShutdownBackendExportNames)
+        {
+            if (NativeLibrary.TryGetExport(_handle, name, out var address))
+            {
+                return address;
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
     private static void EnsureResolverInstalled()
     {
         if (_resolverInstalled)
@@ -206,6 +303,7 @@ public static class ParakeetNativeLibrary
                     {
                         LoadedPath = candidate;
                         LoadedBackend = backend;
+                        _handle = handle;
                         return handle;
                     }
                 }
@@ -220,6 +318,7 @@ public static class ParakeetNativeLibrary
                 {
                     LoadedPath = fileName;
                     LoadedBackend = null;
+                    _handle = handle;
                     return handle;
                 }
             }
