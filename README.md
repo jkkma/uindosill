@@ -15,7 +15,7 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > CPU, and Vulkan does not load the model there at all** until `--vk-disable-bf16` is passed, an
 > upstream bf16 shader defect worked around behind an opt-in flag (RTF 0.035 with it). Two machines
 > and two ten-minute files is still not a benchmark. Every figure here carries its backend and its
-> caveats in [docs/UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run
+> caveats in [UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run
 > against 2 h 55 m of real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to
 > 2.69% for q4_k, over a CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse
 > that sank the analogous ONNX INT8 export. That is divergence from f16, **not** a word error rate:
@@ -28,9 +28,9 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
   capture.
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. Not built; the open decisions are in
-  [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
+  [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
 - **v3 is push-to-talk dictation.** Not built, not architected out —
-  [docs/V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
+  [V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
 
 That order is deliberate, and for two different reasons. The entire Win32 risk surface — global
 keyboard hooks that get flagged as keyloggers, text injection that fails silently under UIPI,
@@ -43,7 +43,7 @@ obviously broken.
 ## Getting it
 
 **There is no installer yet.** Packaging, signing and auto-update are Phase 5 in
-[docs/PHASES.md](docs/PHASES.md), and that phase has started but not shipped. Until it does there
+[PHASES.md](docs/PHASES.md), and that phase has started but not shipped. Until it does there
 are two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact
 from any CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu
 and vulkan natives already in place, kept for seven days, unsigned. Both still need a model, which
@@ -61,8 +61,8 @@ dotnet run --project src/Parakeet.Cli -- transcribe --fake -f srt,json recording
 ```
 
 To do real work you need two things this repository does not contain: the parakeet.cpp native
-library ([docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model
-([docs/MODELS.md](docs/MODELS.md)). The first is one script — it downloads the pinned release,
+library ([NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model
+([MODELS.md](docs/MODELS.md)). The first is one script — it downloads the pinned release,
 verifies it against the recorded digests and unpacks it where the build expects — and the second
 is one command. Vendor *before* you build: the build is what copies `native/` into the output, so
 natives dropped after a build are not seen until the next one.
@@ -81,7 +81,7 @@ uindosill bench recording.wav
 `src/Parakeet.Cli/bin/Release/net10.0/uindosill.exe`, and `dotnet run --project src/Parakeet.Cli --`
 runs the same thing. On an AMD integrated GPU where Vulkan fails to load the model, add
 `--vk-disable-bf16` to `transcribe` or `bench`; the reason it is not the default is in
-[docs/UNPROVEN.md](docs/UNPROVEN.md).
+[UNPROVEN.md](docs/UNPROVEN.md).
 
 ### In a container with no toolchain
 
@@ -149,7 +149,7 @@ of a rewrite.
 | Deployment | Self-contained + ReadyToRun, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | No single-file, no trimming, no NativeAOT. |
 
 Why parakeet.cpp and not the obvious alternatives is recorded in
-[docs/ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md).
+[ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md).
 
 ## Documentation
 
@@ -178,7 +178,7 @@ The **model weights are not**. They are CC BY 4.0 from NVIDIA, which permits com
 redistribution and bundling but attaches a seven-element notice requirement, forbids DRM on the
 weights, and withholds patent and trademark rights. The notice is shown inside the application (the
 Licences tab, and `uindosill notice`), not only in this repository. See
-[NOTICE.md](NOTICE.md) and [docs/LICENSING.md](docs/LICENSING.md).
+[NOTICE.md](NOTICE.md) and [LICENSING.md](docs/LICENSING.md).
 
 `parakeet-tdt-0.6b-v3` covers 25 European languages. It does **not** cover Chinese, Japanese,
 Korean, Arabic, Hindi or Thai, and this product does not offer them.
