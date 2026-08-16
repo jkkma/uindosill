@@ -72,7 +72,8 @@ internal static class BenchCommand
                 ModelPath = parsed.Value("model-path"),
                 Backend = EngineFactory.ParseBackend(parsed.Value("backend")),
                 NativeDirectory = parsed.Value("native-dir"),
-                DisableVulkanBFloat16 = parsed.HasFlag("vk-disable-bf16"),
+                DisableVulkanBFloat16 = EngineFactory.ParseVulkanBFloat16(
+                    parsed.HasFlag("vk-disable-bf16"), parsed.HasFlag("vk-bf16")),
                 WarmUp = warmUp,
                 BatchSize = batchSize,
             });

@@ -48,8 +48,17 @@ internal static class Commands
     private static readonly OptionSpec VulkanDisableBFloat16 = new()
     {
         Name = "vk-disable-bf16",
-        Help = "Vulkan: disable bf16 kernels before loading. Needed on devices whose bf16 " +
-               "cooperative-matrix shaders will not build, where the model otherwise fails to load.",
+        Help = "Vulkan: disable bf16 kernels before loading. This is the default — it is what lets " +
+               "the model load on devices whose driver mishandles bf16 cooperative matrices, and it " +
+               "measured at no cost on NVIDIA — so the flag only spells the default out.",
+    };
+
+    private static readonly OptionSpec VulkanKeepBFloat16 = new()
+    {
+        Name = "vk-bf16",
+        Help = "Vulkan: leave bf16 kernels enabled, undoing the default workaround. For measuring " +
+               "what the workaround costs, or on a driver known to have fixed the bf16 extension " +
+               "request. On an affected device the model will not load.",
     };
 
     private static readonly OptionSpec Fake = new()
@@ -106,6 +115,7 @@ internal static class Commands
             Backend,
             NativeDirectory,
             VulkanDisableBFloat16,
+            VulkanKeepBFloat16,
             Language,
             Threads,
             new OptionSpec
@@ -186,6 +196,7 @@ internal static class Commands
             Backend,
             NativeDirectory,
             VulkanDisableBFloat16,
+            VulkanKeepBFloat16,
             Language,
             Fake,
             new OptionSpec

@@ -33,8 +33,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 295 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 294 passed and
+**Status:** met. 299 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 298 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -60,10 +60,10 @@ that file produced byte-identical output. See `docs/UNPROVEN.md`.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (23 of the project's 45 CLI
-tests drive the real entry point; the other 22 go through `CommandLineParser` without ever
-constructing it — 17 parser unit tests and 5 that check `--vk-disable-bf16` against the real
-command specs). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+**Status:** usable, tested end to end against the canned engine (23 of the project's 49 CLI
+tests drive the real entry point; the other 26 never construct it — 17 parser unit tests, 7 that
+check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
+`CommandLineParser`, and 2 on the resolver that turns the pair into the engine option). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding
