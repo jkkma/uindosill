@@ -810,6 +810,72 @@ shows what the card is holding; those two, side by side, with and without the AS
 are the first VRAM figures this project will have had — and the desktop is also where the CUDA
 `sm_120` reading in decision 1 gets its corroborating run.
 
+#### Sharpened, 2026-08-16: a per-model property, a measurement, and a policy
+
+**Per file, on paper**, from decision 2's run order under its own allowances (a 1.5 GiB compute
+buffer, the 1.34 GiB ASR model, 15.92 GiB reported):
+
+| File | Beside the ASR model? |
+|---|---|
+| 1 `Qwen3.5-9B` Q8_0 | yes — ~13.0 GiB |
+| 2 `gemma-4-12b-it` Q6_K | yes — ~13.1 GiB |
+| 3 `Qwen3.6-35B-A3B`, experts in RAM | yes on the card (~5 GiB) — on a second budget of 15–20 GB of RAM |
+| 4 `gpt-oss-20b` MXFP4 | **no** — alone at 13.7 GiB |
+| 5 `gemma-4-26B-A4B-it` IQ4_XS, on the card | **no** — alone at 15.2 GiB |
+| 6 `Ministral-3-14B` Q4_K_M, q8_0 cache | yes — ~13.8 GiB; not with an f16 cache |
+
+So *are the two ever resident at once* is a **catalogue property** — VRAM at 40k, RAM if offloaded,
+resident-with-ASR or not — which is what decision 2's remark that an entry cannot describe its
+requirements with a single size was asking for.
+
+**The usable figure is not 15.92 GiB, and that is the finding.** Every "fits at ~13 GiB" above
+assumes the display costs little. Measured on the laptop on 2026-08-16, idle, with a browser and an
+editor open, through the Windows performance counters named below: **the adapter is holding
+2,149 MiB before any model loads, and the compositor alone commits 2,548 MiB** by the per-process
+counter (per-process "dedicated usage" is *committed*, and the processes sum past the adapter's
+*held* total — read the adapter counter for what is on the card and the process counter for who).
+On the desktop that idle number is **unknown**, so every both-resident figure in the table is really
+"~13 GiB plus whatever the desktop already holds", and that term is the largest unmeasured one in
+the arithmetic. One command puts it in `docs/UNPROVEN.md`'s machine block; until then, "fits" above
+means "fits if the desktop holds under about 2.5 GiB idle".
+
+**The measurement exists, is vendor-neutral, and works on both machines.** Verified on the laptop
+2026-08-16 with `Get-Counter -ListSet`: `\GPU Process Memory(pid_<pid>_luid_…_phys_N)\Dedicated
+Usage`, `\Shared Usage`, `\Local Usage`, `\Non Local Usage`, `\Total Committed` per process, and
+`\GPU Adapter Memory(*)\Dedicated Usage`, `\Shared Usage`, `\Total Committed` per adapter — WDDM
+counters, so CUDA or Vulkan, NVIDIA or AMD. Under `llama-server` the child's pid gives the language
+model's memory cleanly and the app's pid gives parakeet's — the two sides of a split placement that
+this section said the harness could not see. `scripts/measure-transcribe.ps1` samples the host
+working set only today; the same call adds these to it and to decision 6's `measure-answers.ps1`,
+with ggml's model, KV and compute buffer log lines (allocation, not pressure) and `nvidia-smi` on
+the desktop as cross-checks. On the iGPU "dedicated" is the carve-out and "shared" is the host heap,
+so a Vulkan run there shows in both columns.
+
+**Policy.** Sequential stays the default. Both-resident is allowed per model where the arithmetic
+says so *and the counter confirms it*, and never on the strength of "it loaded" (decision 1's
+sysmem-fallback note). The ASR model unloads when the chat opens unless the user keeps it; the
+language model stays resident for the session. `--slot-save-path` (`tools/server/README.md` at
+b10448) is what makes closing and reopening a session cheap on the whole-transcript path — the
+prefilled 40k state, 1.25 GiB at f16 for the 9B, goes to disk instead of being prefilled again;
+unmeasured. Decision 3's residents are small — 0.6 GiB each at Q8 — but the embedder is needed per
+question, so it is resident through the chat or reloaded per question, unmeasured either way, and
+the server's router mode is where they would all live.
+
+**The laptop: sequential is forced, not chosen, and its budget moves.** The 7.36 GiB this section
+quotes is heap 0's `VK_EXT_memory_budget` figure — a *moment's* budget, net of what other processes
+hold in the same carve-out. Tonight they hold 2.1 GiB, so the budget now is nearer **5.6 GiB**
+(arithmetic on the measured occupancy), and the 9B at Q4_K_M with 40k of cache — 6.54 GiB — **does
+not fit in the fast heap with a browser open**; it spills into the host heap exactly as the UMA
+paragraph below says it can. Add the 75–190 s that the maintainer's research puts on a 40k prefill
+for that class of hardware (arithmetic on third-party rates), and the conclusion the research
+reached has a measured reason under it: on the laptop the tier is retrieval, and the
+whole-transcript path is an opt-in with a progress bar and a saved slot.
+
+**First two things to run:** the desktop's idle adapter figure, one command, into the machine
+block; then decision 2's first file with the counters sampled at each phase — idle, ASR loaded,
+language model loaded, after the 40k prefill, after an answer — with and without the ASR model
+resident. That is the first VRAM data this project has had, and it is what decides this decision.
+
 **The laptop is a different budget, and its one published number needs its footnote.** The 7.36 GiB
 that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memory_budget` budget**
 — the device-local heap, 7.75 GiB in size — and heap 0 is the **8 GB the BIOS carves out of the
