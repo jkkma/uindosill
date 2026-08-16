@@ -276,7 +276,7 @@ public class TranscriptNormalizerTests
     {
         Assert.Equal(new[] { "3.2", "million" }, TranscriptNormalizer.WordErrorRateTokens("$3.2 million", keepFillers: false));
         Assert.Equal(new[] { "1000" }, TranscriptNormalizer.WordErrorRateTokens("1,000", keepFillers: false));
-        Assert.Equal(new[] { "17" }, TranscriptNormalizer.WordErrorRateTokens("17%", keepFillers: false));
+        Assert.Equal(new[] { "17", "percent" }, TranscriptNormalizer.WordErrorRateTokens("17%", keepFillers: false));
         Assert.Equal(new[] { "end", "next" }, TranscriptNormalizer.WordErrorRateTokens("end. Next", keepFillers: false));
     }
 
@@ -299,6 +299,42 @@ public class TranscriptNormalizerTests
 
         Assert.Equal(new[] { "so", "we", "think", "yes" }, TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: false));
         Assert.Equal(new[] { "um", "so", "uh", "we", "think", "hmm", "yes" }, TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: true));
+    }
+
+    [Theory]
+    [InlineData("eighty-seven online accounts", "87 online accounts")]
+    [InlineData("two hundred and fifty two cents a share", "252 cents a share")]
+    [InlineData("three point two million", "3.2 million")]
+    [InlineData("zero point five", "0.5")]
+    [InlineData("one thousand and one nights", "1001 nights")]
+    [InlineData("two thousand twenty one", "2021")]
+    [InlineData("twelve billion", "12000000000")]
+    [InlineData("a hundred percent", "a hundred percent")]
+    [InlineData("seventeen percent", "17 percent")]
+    [InlineData("17%", "17 percent")]
+    [InlineData("2021 and 30 June", "2021 and 30 june")]
+    public void WerTokensTurnNumberWordsIntoDigitsOnBothSides(string text, string expected)
+    {
+        var tokens = TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: false);
+
+        Assert.Equal(expected, string.Join(' ', tokens));
+    }
+
+    [Theory]
+    [InlineData("two and three", "2 and 3")]                 // "and" between small numbers is a conjunction
+    [InlineData("twenty twenty one", "20 21")]               // a year said in pairs is not fused
+    [InlineData("nineteen eighty four", "19 84")]
+    [InlineData("the point is moot", "the point is moot")]   // "point" outside a number
+    [InlineData("and then one more", "and then 1 more")]
+    [InlineData("five six seven", "5 6 7")]                  // digits read out are separate numbers
+    [InlineData("hundred", "hundred")]
+    [InlineData("hundreds of millions", "hundreds of millions")]
+    [InlineData("one point five million dollars", "1.5 million dollars")]
+    public void WerTokensLeaveWhatIsNotANumberAlone(string text, string expected)
+    {
+        var tokens = TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: false);
+
+        Assert.Equal(expected, string.Join(' ', tokens));
     }
 
     [Fact]

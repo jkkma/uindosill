@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Eight scripts with eight names and eight flag sets is seven names too many to remember when you
+    Nine scripts with nine names and nine flag sets is eight names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -58,12 +58,21 @@
 .EXAMPLE
     # The labelled question set, asked and checked; -PrintPin alone computes the transcript pin.
     .\scripts\lab.ps1 answers -TranscriptPath runs\csb-f16-cuda\CSB384.json -ModelPath D:\models\Qwen3.5-9B-Q8_0.gguf
+
+.EXAMPLE
+    # Word error rate of the whole quantisation ladder on CUDA, against both human transcript
+    # styles of the pinned Earnings-22 subset; the corpus is fetched and verified on first use.
+    .\scripts\lab.ps1 wer -Backend cuda
+
+.EXAMPLE
+    # The backend control for that table: f16 alone on CPU.
+    .\scripts\lab.ps1 wer -Backend cpu -Models tdt-0.6b-v3-f16
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -138,7 +147,19 @@ param(
     [string] $ServerDirectory,
     [int] $MaxAnswerTokens,
     [switch] $SkipGrammarCost,
-    [switch] $NoAbstainBranch
+    [switch] $NoAbstainBranch,
+
+    # --- wer (-Backend, -OutputDirectory, -Configuration and -SkipBuild are shared with measure;
+    #     -Models is plural because the ladder is the default and one script's -Model is a
+    #     [string], which cannot also be this one's [string[]]) ---
+    [string[]] $Models,
+    [string[]] $Files,
+    [ValidateSet('verbatim', 'nonverbatim')]
+    [string[]] $Styles,
+    [switch] $KeepFillers,
+    [string] $ManifestPath,
+    [string] $CorpusRoot,
+    [switch] $SkipVerify
 )
 
 $ErrorActionPreference = 'Stop'
@@ -153,6 +174,7 @@ $tasks = [ordered]@{
     'vendor-cuda'   = 'vendor-cuda.ps1'
     'spike'         = 'spike-llama-server.ps1'
     'answers'       = 'measure-answers.ps1'
+    'wer'           = 'measure-wer.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.
