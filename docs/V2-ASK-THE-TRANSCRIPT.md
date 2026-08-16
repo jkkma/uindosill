@@ -843,6 +843,40 @@ which quantisation produced it, for the same reason `TranscriptDocument` does.
 There is a related question with no obvious answer: whether an exported conversation keeps its
 citations as clickable references, as plain timestamps, or as quoted transcript text.
 
+#### The answer, as far as reading the code takes it — 2026-08-16
+
+**Transient by default; nothing on disk unless the user exports; and an export is a formatter, in
+the mould this repository already has.** `ITranscriptFormatter` exists six times over — txt, md,
+json, srt, vtt, vtt-words — and `MarkdownFormatter` says of its provenance header that it "is not
+decoration". An answer export is the same class of thing over an `AnswerDocument`, and it carries
+five things, one more than the paragraph above asks for:
+
+1. **The "generated, not transcribed" line first**, before anything a reader might quote.
+2. **Provenance**: the language model's id, quantisation and backend, the **mode** — retrieval,
+   whole transcript, or map-reduce — and the date. The same fields `TranscriptDocument` already
+   carries for the ASR, plus the mode, because the mode decides how much of the recording the
+   answer could have seen.
+3. **A pin to the transcript it was answered against — and this is the gap.** `TranscriptDocument`
+   has no identity: `SourceName`, `AudioDuration`, `ModelId`, `Quantisation`, `Backend`,
+   `Language`, `ProcessingTime`, and nothing that says *which segmentation*. A segment id is only
+   meaningful against one transcript; transcribe the same audio again with another model and the
+   same ids point at different words while looking perfectly fine. So an export pins the source
+   name, the ASR model and quantisation, and a hash over the segments — or embeds the cited spans
+   outright, which is simpler and survives everything, and is what the next item does anyway.
+4. **Citations rendered as plain timestamps with the quoted transcript span**, never as clickable
+   references. A clickable one needs the app, the audio and the same transcript — three things
+   an email does not carry — which is the answer to the open sub-question above.
+5. **Copy to the clipboard emits the same rendered form, marker included.** "Somebody copies
+   half of it into an email" is the scenario this decision was written for, and copy is how it
+   happens.
+
+Why transient: a chat is a conversation, saved answers accumulate against transcripts that get
+regenerated, and every saved answer is a saved liability with no WER behind it. Among the
+neighbours the maintainer's research surveyed, Granola and Notion export answers as links into the
+transcript and YouTube exports nothing. And per `docs/LICENSING.md`, Apache-2.0 wants the licence
+*text* to travel with copies, so the language model joins the attribution registry the way the ASR
+models did — an embedded licence-text field, not a URI.
+
 ### 6. What can actually be tested
 
 Less than for v1, and it is worth writing down the little that is testable rather than pretending
@@ -863,6 +897,57 @@ the rest is.
   at a known timestamp, does the retrieval return that segment? That is an ordinary
   information-retrieval measurement, unlike summary quality, and it does not need a language model
   to evaluate.
+
+#### Where each test runs — 2026-08-16
+
+The bullets above stand. What sharpens them is splitting them by where they run, which is how this
+repository already works: a fast suite with no weights, and lab scripts that write to `runs/`.
+
+**In the suite, no model, and CI runs them** — pure functions over `AnswerDocument`:
+
+- the grammar generator: every live id in, no other id possible, and the output parses under it;
+- every id resolves; the range is non-empty, inside `AudioDuration`, `Start ≤ End`; ids are
+  monotone where the answer claims chronology;
+- a required verbatim quote is a *normalised* substring of the cited span — the normalisation
+  (case, whitespace, punctuation) defined once and tested on its own;
+- *who said* yields a range and a quote or a refusal, never a name; an empty transcript and an
+  empty retrieval both yield an abstention;
+- the export carries the marker line, the provenance and the transcript pin from decision 5.
+
+**In the lab, model in the loop, a script under `scripts/` writing to `runs/`, never CI** —
+`measure-answers.ps1` beside `measure-transcribe.ps1`, with the same discipline about naming the
+backend beside every number:
+
+- recall@10 for retrieval on the thirty CSB384 questions (decision 3); planted-needle hit rate;
+  abstain rate on adversarial questions;
+- **citation precision by human spot-check on N answers** — the one quality number this feature
+  can have, and it is a person's, labelled as such in the run's output;
+- the grammar's cost in tokens per second through the binding — 80 → 13 tok/s was reported for
+  Llama-3 in April 2024, before `common/sampling.cpp` moved grammar to rejection sampling, and
+  nothing has been measured since (research) — plus prefill, decode and VRAM per file in decision
+  2's run order, and the follow-up-turn cost that #21831 describes.
+
+**The mechanism exists server-side.** `tools/server/README.md` at b10448 (read 2026-08-16)
+documents `grammar` and `json_schema` on `/completion` and `response_format` with a schema on
+`/v1/chat/completions`, so "the test and the mechanism are one thing" is available and not a
+design hope. **What the README does not say is how a grammar interacts with reasoning output.**
+The working candidate thinks by default; `--reasoning-budget 0` is documented as "immediate end"
+of thinking and `reasoning_format` as how thought tags are extracted. The spike has to show that
+grammar with the budget at zero behaves, and that lazy grammar after a thinking span behaves if
+the budget is not zero; the fourth file's harmony format is the hard case, because there the
+channel does not turn off.
+
+Three things from the maintainer's research notes, carried in because they change what gets
+built rather than what gets measured: **cite segment runs, not sentences** — a 2026 study across
+8B–120B models finds enforcing sentence-level citation degrades attribution by 16–276% against
+paragraph-level, so `[S12-S15]` is the right shape and `vtt-words` is for rendering, not for the
+model; **check and mark, do not trust** — FullCite found about 40% of forced verbatim snippets from
+an 8B model still fail to match, which is why the substring check above is a mechanism and not a
+test; and **grammar hygiene across twenty-five languages** — GBNF works on code points, so
+citation tokens stay ASCII and free text is any code point except `[`, `]` and newline; the prompt
+and few-shot go in the transcript's language, which `TranscriptDocument.Language` already carries;
+and the answer's language is checked mechanically, by a means not yet chosen. NLI-style
+verification (MiniCheck and kin) is English-trained and is not an answer for this language list.
 
 What cannot be tested is whether an answer is *right*. Do not build a harness that appears to.
 
