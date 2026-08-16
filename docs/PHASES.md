@@ -235,6 +235,32 @@ The next actions, in order:
    contemporaneous with the CUDA 12.8 binaries, and an upstream redistribution this project did not
    perform — are in `docs/LICENSING.md` and `docs/UNPROVEN.md`. What is left is Phase 5 packaging
    the result.
+4. **Before v1 ships: a research workflow on how best to implement speaker diarisation in this
+   app.** Asked for by the maintainer on 2026-08-16, after the WER work; it is a study, not a build,
+   and it decides whether speakers are in v1.0 or arrive as v1.1 over the auto-update Phase 5
+   brings. What it has to settle, and the facts already in hand:
+   - *The stack.* No ggml port of a diariser is known; the practical routes are ONNX Runtime —
+     directly, or through sherpa-onnx, which packages pyannote segmentation 3.0 plus a speaker
+     embedding model behind a C API with Windows builds — or an ONNX export of NVIDIA's Sortformer,
+     whose availability is unknown. NeMo itself is a Python framework and is not shipped; only
+     weights exported from it are. Any of these runs on **CPU** for every machine alike — the models
+     are one to two orders of magnitude smaller than the ASR — so there is no NVIDIA/Vulkan tier
+     to design; the CUDA flavour is unaffected and the AMD/Intel user gets the same result.
+   - *The licence gates.* pyannote segmentation 3.0 is MIT; 3D-Speaker and WeSpeaker embeddings
+     Apache-2.0; NeMo's TitaNet CC-BY-4.0 like the Parakeet weights; Sortformer believed CC-BY-4.0
+     — each to be read the way `docs/LICENSING.md` reads the others before anything is vendored.
+   - *The measurement.* The corpus pinned in `scripts/wer-corpus.json` carries a per-token
+     `speaker` column (four speakers on one call, seventeen on another), so a diarisation error
+     rate or speaker-attributed WER harness reuses today's corpus and scoring; a CPU-only spike on
+     it is the first thing to run, and its number decides whether the feature ships at all.
+   - *The seam and the surface.* An `ISpeakerLabeller` behind Core's engine rule; a speaker on
+     `TranscriptSegment` and its words; every formatter and the app growing "Speaker N" labels;
+     the fake engine and the tests learning about them; a second native drop, digest table,
+     `doctor` probe and Phase 5 packaging entry.
+   - *The recommendation as it stands* (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said
+     it* holds until this decides otherwise): build Phase 5, apply to SignPath, run the spike during
+     that wait, ship v1.0 when signing lands, carry speakers in v1.1 — unless the workflow finds a
+     reason to hold v1.0 for it.
 
 ### After v1
 
