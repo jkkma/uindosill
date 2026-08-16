@@ -272,7 +272,14 @@ The next actions, in order:
      truth**. One hand-labelled episode is not a yardstick either — it measures two voices, one
      microphone setup and one show's habits, and a diariser tuned on it can fail on the next pair
      of hosts. The podcast set should be **several ten-minute stretches across more than one
-     podcast** — different speaker pairs, same-room and remote, music beds and ad reads — split
+     podcast** — different speaker pairs, same-room and remote, music beds and ad reads — and,
+     within the shows that have them, **guest episodes**, so the set is stratified by speaker
+     count: two hosts, then three, four and five voices with the same hosts, microphones and
+     habits held constant. That isolates the one variable that separates the candidates, and it
+     lands on the leading candidate's edge on purpose — Sortformer is built for up to four
+     speakers, so the five-voice episodes are what decide whether it needs DiariZen or a
+     clustering fallback behind it, measured in this app's own conditions rather than on a
+     benchmark's meetings. Split
      into a *dev* part, on which the pipeline's post-processing knobs (clustering thresholds,
      speaker-count bounds, activity thresholds) may be tuned, and a *held-out* part they are
      scored on. Speaker labels are cheap next to transcripts (who spoke when, not what), so that is
