@@ -64,3 +64,6 @@ runs/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Claude Code per-machine overrides; the shared hook lives in .claude/settings.json
+.claude/settings.local.json

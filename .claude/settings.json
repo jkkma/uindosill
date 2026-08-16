@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git pull --ff-only 2>&1 || echo \"SessionStart: git pull --ff-only did not fast-forward - the tree is dirty or the branch has diverged; reconcile by hand before working.\"",
+            "timeout": 60,
+            "statusMessage": "Pulling origin (fast-forward only)"
+          }
+        ]
+      }
+    ]
+  }
+}
