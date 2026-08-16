@@ -117,7 +117,11 @@ detected Trojan in installer" reports.
 
 **Here:** not yet done — this is Phase 5 and the repository has no signing identity. The layout is
 ready for it: every native lives under `native/<rid>/<backend>/` where a signing step can enumerate
-it, and nothing is bundled into a single file that would hide a binary from the signer.
+it, and nothing is bundled into a single file that would hide a binary from the signer. The route
+decided on 2026-08-16 (`docs/PHASES.md`, *Decisions taken*) is SignPath Foundation's free
+open-source programme, whose terms sign this project's own binaries only — so on that route the
+upstream `parakeet.dll`s stay unsigned, and this gotcha stays open for Smart App Control machines
+even once the installer and the app are signed.
 
 ## 11. Avalonia 12 breaking changes
 

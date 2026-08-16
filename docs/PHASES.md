@@ -119,6 +119,55 @@ Remember that signing `Setup.exe` alone is not enough. Smart App Control and WDA
 loaded binary, unsigned native DLLs are exactly what gets blocked, and a signed installer dropping
 unsigned executables is itself a recognised malware shape.
 
+### Decisions taken 2026-08-16
+
+These close the two questions this phase was waiting on. **Nothing below is built**; this is the
+plan, recorded so the next session builds what was decided rather than re-deciding it.
+
+1. **The CUDA tier is a second download flavour.** Two Velopack channels from the same publish: the
+   default carries `cpu` and `vulkan`; the second carries `cpu`, `vulkan` and `cuda`. The choice is
+   made at download time, so the default download stays clear of the ~700 MB the CUDA archives add
+   (`docs/NATIVE-BINARIES.md`). It reuses `scripts/vendor-cuda.ps1`, the `native/**` glob and the
+   NVIDIA attribution unchanged, and it keeps the runtime inside a whole-application package rather
+   than a download of its own — the shape `docs/LICENSING.md` reads the EULA's stand-alone clause
+   against. Cost: a ~1 GB release asset per version, deltas after the first. Not chosen: an in-app
+   download of the CUDA archives (best experience, most new code — a user-writable search path for
+   the loader, a Backends control, tests) and deferring CUDA past v1.
+2. **Signing takes the free route: the SignPath Foundation's open-source programme.** No certificate
+   is bought. Its terms, read at signpath.org/terms on 2026-08-16, decide what "signed" can mean
+   here, and two of them cut across item 1:
+   - *"Sign your own binaries only."* Upstream binaries may ship unsigned inside a signed package,
+     but the project may not sign them. So `parakeet.dll` stays unsigned on this route, and Smart
+     App Control — which evaluates every loaded binary — is not answered by it. What it does answer
+     is SmartScreen's "unknown publisher" on the installer and the app.
+   - The project may not contain a *"proprietary, non open-source component"* — which the CUDA
+     flavour does, in the three NVIDIA DLLs. On that reading only the default flavour is eligible
+     and the CUDA flavour ships unsigned. This has not been put to SignPath.
+   - The certificate is issued to SignPath Foundation, so that is the publisher name a user sees;
+     every release needs manual approval; the build must be verifiable from source (the CI publish
+     is); a code-signing policy and a privacy statement have to be published — and the statement
+     cannot be "transfers nothing", because the app downloads models and, per item 4, checks for
+     updates.
+
+   Eligibility is not established: nobody has applied. If SignPath declines, the alternative that
+   costs nothing is to ship unsigned, and that would be a further decision, not this one.
+3. **The installer is the desktop app only.** The CLI stays a zip beside it on the release, as the
+   CI artefact is today: a smaller download and one thing to sign and update. Not chosen: both in
+   one package with a PATH entry (Velopack has no PATH feature, so that is custom code on install
+   and on uninstall), or two installers.
+4. **Updates: check on launch, install on a click.** One HTTPS request to GitHub Releases at
+   startup, a visible notice when there is a newer version, download and restart only when the user
+   asks, and a setting that turns the check off. That request is the one thing the app does on the
+   network unprompted, and the documentation will say so. Not chosen: Velopack's silent
+   download-and-apply, and manual-only.
+
+Defaults taken without a decision, all cheap to reverse: GitHub Releases is the host and the update
+feed; a `v*` tag builds the release; the installer carries no weights — the Models tab downloads
+them, as now; winget can follow later. **One thing to verify before anything is built:** Velopack
+installs under `%LOCALAPPDATA%\<package id>`, and `%LOCALAPPDATA%\Uindosill\models` already exists
+on every machine that has run this product. The package id or the layout has to keep the installer
+from touching those files, and uninstall has to leave them.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -148,10 +197,13 @@ does, it does; what it cannot do is arrive on a machine that has no .NET SDK and
 The next actions, in order:
 
 1. **Phase 5 itself** — Velopack, and signing every PE rather than only `Setup.exe`. ~~A build
-   that vendors the natives instead of expecting a manual copy~~ — done 2026-08-15, above. What
+   that vendors the natives instead of expecting a manual copy~~ — done 2026-08-15, above. ~~What
    signing waits on is a certificate, which is a purchase rather than a commit; what Velopack
    waits on is a decision about how the opt-in CUDA tier arrives, since 700 MB does not belong in
-   the default download.
+   the default download.~~ Both decided 2026-08-16 — see *Decisions taken* above: the CUDA tier is a
+   second download flavour, and signing goes through SignPath Foundation's free programme, which
+   waits on an application to SignPath rather than on a purchase, and which by its own terms signs
+   this project's binaries and not the upstream natives.
 2. **A WER harness**, which gates *recommending* q8_0 or q4_k — and which now sits **behind** v1
    rather than gating it.
 
