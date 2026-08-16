@@ -802,6 +802,15 @@ repository: update, run `uindosill bench` on Vulkan with and without `--vk-disab
 the driver floor in the machine block above. Until somebody does, the knob stays and every Vulkan
 figure in this section is a figure for driver 32.0.13022.3006.
 
+**Upstream's own server reproduces it on this driver — 2026-08-16.** llama.cpp b10448's
+`llama-server`, from the Windows Vulkan release zip, loading `Qwen3-0.6B-Q8_0.gguf` with `-ngl 99`:
+without the knob, `ERROR: vkDestroyFence: Invalid device [VUID-vkDestroyFence-device-parameter]`
+and the process never reached `/health` in 300 s; with `GGML_VK_DISABLE_BFLOAT16=1` in its
+environment it served in 2.61 s. Same driver, same knob, a different binary and a different symptom
+text — a fence destroyed on an invalid device is what a failed `vkCreateDevice` looks like from a
+caller that does not check the return, and it is inferred rather than observed that the create call
+failed the same way here. The run is in *Upstream llama.cpp on the second machine* below.
+
 ##### The workaround is now in the product, and off by default
 
 `ParakeetCppOptions.DisableVulkanBFloat16`, reachable as `uindosill transcribe --vk-disable-bf16`
@@ -1109,6 +1118,54 @@ skipped, 0 failed**, Release, from a 0-warning build. The skip is
 because Media Foundation handles those formats here. Weights and natives being present changes
 nothing about the suite, which confirms the "no weights" claim in `CLAUDE.md` from the other
 direction.
+
+### Upstream llama.cpp on the second machine — the first model loaded here, and what it needed
+
+Nothing under `docs/V2-ASK-THE-TRANSCRIPT.md` had been run against a language model on either
+machine until 2026-08-16, when `scripts/spike-llama-server.ps1` (`lab.ps1 spike`) was run twice on
+this laptop with a model chosen for its size, not its relevance: `Qwen/Qwen3-0.6B-GGUF`'s
+`Qwen3-0.6B-Q8_0.gguf` (639,446,688 bytes), a 7,779-token stand-in prompt, `-c 16384`, `-fa on`,
+`--fit off`, `--reasoning-budget 0`. Upstream release **b10448**, unpacked from its own zips:
+
+- cpu — `llama-b10448-bin-win-cpu-x64.zip`, 18,464,245 bytes, sha256
+  `9038c34d23769ac04a1f59835f41129f3810b3144bb8edc35183507baf827435`
+- vulkan — `llama-b10448-bin-win-vulkan-x64.zip`, 34,807,759 bytes, sha256
+  `cbe06a7a2fce85aaf625aed29eff730e07a6c8257a07e4e3b6b54cb1e9fbd9dd`
+
+Both byte counts match the releases API; both digests are first readings — no other machine has
+hashed them yet.
+
+| | cpu | vulkan, no knob | vulkan, `GGML_VK_DISABLE_BFLOAT16=1` |
+|---|---|---|---|
+| Seconds to `/health`, first start | 1.12 | **never** — `vkDestroyFence: Invalid device`, killed at 300 s | 2.61 |
+| Second start | 1.02 | — | 1.02 |
+| Prefill, 7,779 tokens | 210.7 tok/s (36.9 s) | — | **807.1 tok/s** (9.6 s) |
+| Decode, 160 tokens | 25.2 tok/s | — | **37.0 tok/s** |
+| Second request, same prefix | prompt 43 ms — the cache was reused | — | prompt 29 ms |
+
+**Three things this is the first measurement of here.**
+
+- **Upstream Vulkan does not load a model on this driver without the knob, and does with it** — the
+  bf16 mechanism above, seen on llama.cpp's own binary rather than parakeet's. Prefill is 3.8× and
+  decode 1.5× the CPU figure on this 0.6B file; nothing here says what a 9B does, and the 40k
+  prefill the feature needs was not run.
+- **The per-process GPU counter sees the server, and the memory comes back when it is killed.**
+  `\GPU Adapter Memory(*)\Dedicated Usage` read 1,126.5 MiB idle, **3,583.0 MiB** with the model
+  loaded, 3,582.9 after the prefill and the answer, and **1,126.0 MiB after `Stop-Process`**;
+  `\GPU Process Memory(pid_<server>_*)\Dedicated Usage` read **2,456.8 MiB** for the server, plus
+  194.3 MiB shared, rising by 30 MiB during the prefill. The 2,457 MiB is consistent with the file
+  (610 MiB) plus a 16,384-token f16 cache for this model's 28 layers of 8 KV heads × 128 (1.75 GiB
+  by arithmetic) plus a compute buffer. On the iGPU "dedicated" is the carve-out, so this is the fast
+  heap being spent, and it is what decision 4 of the v2 note calls the measurement it did not have.
+- **`--reasoning-budget 0` does not stop this model reasoning aloud.** Both answers began "Okay,
+  let's see. The user wants…" — the thinking pushed into the answer channel rather than removed.
+  A 0.6B model, twice, one prompt; recorded because it is exactly the grammar-versus-reasoning
+  interaction the v2 note's decision 6 flags as unchecked, and a grammar would have stopped it.
+
+The runs are under `runs/20260816-012603-spike-cpu/` and `runs/20260816-012811-spike-vulkan/` on
+this machine (gitignored); each holds the server's stderr, `samples.csv`, `spike.json` and the
+Markdown block above's source. Not run here, and not runnable here: the CUDA branch of that script,
+which is the desktop's.
 
 ### The confidence threshold is set by guess, and the first real data disagrees
 
