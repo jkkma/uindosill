@@ -1167,6 +1167,41 @@ this machine (gitignored); each holds the server's stderr, `samples.csv`, `spike
 Markdown block above's source. Not run here, and not runnable here: the CUDA branch of that script,
 which is the desktop's.
 
+#### A grammar over live ids, against the same server — measured the same night
+
+Same machine, same Vulkan server, same 0.6B model, `--reasoning-budget 0` throughout; each figure
+is one run.
+
+**The A/B that decision 6 of the v2 note called unchecked.** The same 7,779-token prompt and
+question, once unconstrained and once under a GBNF whose citation rule enumerates exactly the 180
+live segment ids: unconstrained, the model reasoned aloud ("Okay, let's see. The user wants…") and
+hit the 160-token cap **mid-citation** at 34.2 tok/s; under the grammar it produced two clean
+bullets citing `[S1]` and `[S12]`, finished at 60 tokens, 30.1 tok/s. So on this model the grammar
+did what the budget could not — the reasoning prose is gone, only live ids are possible, and the
+output terminates — at a 12% decode cost on this run. The `[S12]` bullet was vacuous and its
+citation supports nothing, which is the citation-precision problem in one line: a grammar makes
+citations *resolvable*, not *right*. Also measured rather than read: **`grammar` is accepted on
+`/v1/chat/completions`** at b10448 — the server README documents it on `/completion` only.
+
+**The abstain branch, through `scripts/measure-answers.ps1`'s self-test.** A synthetic
+120-segment transcript with three planted facts and a four-question labelled set (two pointed with
+verbatim answers in the prompt, one adversarial, one needle). With the grammar's abstain
+production present — decision 6's design — the model abstained on **all four**, both false
+abstains included, under two different system-prompt phrasings. With the production removed
+(`-NoAbstainBranch`): it answered everything — one pointed answer correct (S40, gold S40–S41),
+one on the wrong segment, the needle missed, and the adversarial question **answered with an
+invented citation**, because the exit no longer existed. False abstention and invention traded directly
+against each other by one grammar rule, on a model this small. The grammar cost on that run was
+larger than the morning's figure: 68.9 tok/s unconstrained against 38.9 under the grammar. Two
+one-run figures, 12% and 44%, same model, same backend, different prompts; the spread is the reason
+the lab script measures it per run instead of quoting either number.
+
+A 0.6B model finding one needle in 120 segments would have been the surprise; none of this says
+anything about the v2 candidates. What it establishes is the harness: the pin check, the plant, the
+citation parsing, pass and fail both observed, and a label-validation path (the gold quote must
+appear in the gold span's text) that reports a bad label as a labelling error rather than a model
+failure.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the

@@ -1004,17 +1004,28 @@ repository already works: a fast suite with no weights, and lab scripts that wri
 - the export carries the marker line, the provenance and the transcript pin from decision 5.
 
 **In the lab, model in the loop, a script under `scripts/` writing to `runs/`, never CI** —
-`measure-answers.ps1` beside `measure-transcribe.ps1`, with the same discipline about naming the
-backend beside every number:
+**`measure-answers.ps1` exists (`lab.ps1 answers`), and has run against a synthetic labelled set on
+the laptop (2026-08-16)**. It checks the question set's transcript pin before asking anything,
+builds the grammar from exactly the live ids, asks each question through `llama-server`, scores
+what a machine can score (citations resolve, ranges forward, overlap with gold, adversarial
+abstained, a planted needle cited), validates each label's quote against its own span so a bad
+label reports as a labelling error rather than a model failure, measures the grammar's decode cost
+per run, and prints a summary whose citation-precision column is deliberately blank for a person.
+`-PrintPin` computes the transcript pin block for the labelling session. **recall@10 is a stub that
+says so**: tier 0 belongs in `Parakeet.Core`, and a BM25 reimplemented in the script would measure
+the script's tokenizer rather than the product's. What it measures, with the same discipline about
+naming the backend beside every number:
 
 - recall@10 for retrieval on the thirty CSB384 questions (decision 3); planted-needle hit rate;
   abstain rate on adversarial questions;
 - **citation precision by human spot-check on N answers** — the one quality number this feature
   can have, and it is a person's, labelled as such in the run's output;
 - the grammar's cost in tokens per second through the binding — 80 → 13 tok/s was reported for
-  Llama-3 in April 2024, before `common/sampling.cpp` moved grammar to rejection sampling, and
-  nothing has been measured since (research) — plus prefill, decode and VRAM per file in decision
-  2's run order, and the follow-up-turn cost that #21831 describes.
+  Llama-3 in April 2024, before `common/sampling.cpp` moved grammar to rejection sampling; the
+  first post-rewrite figures now exist and are one-run numbers on a 0.6B model on the laptop, **12%
+  on one prompt and 44% on another** (`docs/UNPROVEN.md`), a spread that is why the lab script
+  measures it per run — plus prefill, decode and VRAM per file in decision 2's run order, and the
+  follow-up-turn cost that #21831 describes.
 
 #### The thirty-question set — the file exists, the labels do not (2026-08-16)
 
@@ -1061,14 +1072,25 @@ documents `grammar` and `json_schema` on `/completion` and `response_format` wit
 `/v1/chat/completions`, so "the test and the mechanism are one thing" is available and not a
 design hope. **What the README does not say is how a grammar interacts with reasoning output.**
 The working candidate thinks by default; `--reasoning-budget 0` is documented as "immediate end"
-of thinking and `reasoning_format` as how thought tags are extracted. The spike has to show that
-grammar with the budget at zero behaves, and that lazy grammar after a thinking span behaves if
-the budget is not zero; the fourth file's harmony format is the hard case, because there the
-channel does not turn off. **One observation already, and it points the same way:** on the laptop
-on 2026-08-16, `Qwen3-0.6B` under `--reasoning-budget 0` began both of its answers "Okay, let's
-see. The user wants…" — the thinking moved into the answer channel rather than going away. A 0.6B
-model, one prompt, twice (`docs/UNPROVEN.md`); but it is the reason the constraint has to be a
-grammar and not a budget.
+of thinking and `reasoning_format` as how thought tags are extracted. **Grammar with the budget at
+zero now behaves on one machine and one model**: on the laptop on 2026-08-16, `Qwen3-0.6B` under
+`--reasoning-budget 0` began its unconstrained answers "Okay, let's see. The user wants…" — the
+thinking moved into the answer channel rather than going away, and one ran off the token cap
+mid-citation — while the same question under a grammar over the live ids produced clean cited
+bullets that terminated (`docs/UNPROVEN.md` has the A/B). The constraint is a grammar and not a
+budget. Still unshown: lazy grammar after a thinking span when the budget is *not* zero, and the
+fourth file's harmony format, the hard case, because there the channel does not turn off. Measured
+beside it: `grammar` is accepted on `/v1/chat/completions` at b10448, which the README documents
+for `/completion` only.
+
+**And the grammar's abstain production is a measured trade, not a formality.** The lab script's
+self-test (below) put the same four questions to the same small model with and without the
+`NOT_IN_TRANSCRIPT` production: with it, the model abstained on everything, including two
+questions answered verbatim in the prompt; without it, it answered everything, including the
+adversarial question, with an invented citation. False abstention and invention traded against
+each other by one grammar rule. A 0.6B result — but it means the abstain design is a dial the
+CSB384 run has to measure per model, and `measure-answers.ps1 -NoAbstainBranch` exists to
+separate "cannot find it" from "prefers the exit".
 
 Three things from the maintainer's research notes, carried in because they change what gets
 built rather than what gets measured: **cite segment runs, not sentences** — a 2026 study across
