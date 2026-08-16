@@ -104,7 +104,7 @@ model or a map-reduce, which is decision 3.
 
 ## The open decisions
 
-### 1. Bindings: LLamaSharp or hand-rolled P/Invoke
+### 1. Bindings: LLamaSharp, hand-rolled P/Invoke, or `llama-server` as a child process
 
 **Measured, 2026-08-14, from the NuGet v3 API.** LLamaSharp is at **0.27.0**, and the three
 backends this project would care about all ship at that same version:
@@ -223,12 +223,54 @@ throughput figure is quoted.
 Read from `SciSharp/LLamaSharp` at tag `v0.27.0` and from `ggml-org/llama.cpp` master on
 2026-08-15.
 
-**Recommendation, which is a recommendation and not a decision:** LLamaSharp. The missing ABI
-guard is the deciding fact — it turns "full control" into "full responsibility for noticing a
-signature change", and this project has one person to notice it. The offload check above is
-supporting evidence rather than the reason: it was the most plausible capability for a binding to
-be missing, and it is not missing. Hand-roll if the summarizer ever becomes load-bearing rather
-than a v2 feature.
+**Recommendation, which is a recommendation and not a decision — and it has changed.** An earlier
+revision of this paragraph said LLamaSharp, and gave as the deciding fact that a hand-rolled binding
+would lack an ABI guard. That fact is gone, because nothing on either side has one. LLamaSharp's
+structs match its own natives and nothing checks that they do — the four-month lag above already
+spans layout changes: between `b8816` and `b10448`, `llama_model_params` traded `use_mmap`,
+`use_direct_io` and `use_mlock` for `load_mode` and `load_mtp`, and `llama_context_params` grew
+five fields (read from `include/llama.h` at both tags, 2026-08-16), and nothing about the next such
+change will announce itself — and `llama_version()` cannot be made to guard anything. So the guard
+gets built here whichever way this goes, and the choice is between two ways of needing it rarely,
+not between having one and not.
+
+That opens a third option the earlier draft did not have in view: **`llama-server` as a bundled
+child process.** The same upstream release zips, vendored under `native/` with the same pin, digest
+and LICENSE-beside-the-binary rules as parakeet's; the app starts `llama-server.exe` on `127.0.0.1`
+with a random port and an api-key, talks HTTP to it, and kills it on exit. Measured from the
+`b10448` Windows CPU zip on 2026-08-16: `llama-server.exe` is a 9 KB stub over
+`llama-server-impl.dll` (10.0 MB) and `llama-common.dll` (8.1 MB); with `llama.dll`, ggml, every
+CPU variant, OpenMP and `mtmd`, the server needs 41.4 MB across 22 files; the whole zip is 47.3 MB
+in 51 files, and it ships no LICENSE file, so the MIT text travels from the source tree at the
+pinned commit. What it buys: no struct layout crosses the process boundary, and the REST surface
+changes far less often than `llama.h`; the pieces that live in llama.cpp's `common/` rather than in
+`libllama` — JSON-schema-to-grammar, the chat-template-aware `/v1/rerank`, slot save and restore —
+come with it, where an in-process binding gets GBNF and nothing else; and the `GGML_VK_*` knobs are
+a child environment, so gotcha 21's `_putenv` path is not needed. What it costs: a process lifecycle
+to own (start, health-check, notice a crash, kill on exit), a loopback socket, and an unsigned
+`.exe` that SmartScreen would notice where a DLL loaded in-process would not. This is not the Ollama
+objection below: nothing is installed, nothing listens off the machine, and the process does not
+outlive the app.
+
+LLamaSharp keeps what it had — the offload API above, streaming, GBNF, embeddings, KV manipulation
+— and it will load natives this project vendors itself, through
+`NativeLibraryConfig.All.WithLibrary(...)`, so the pin, digest and LICENSE rules apply to it too.
+But its structs are the ones its own natives were built with; vendoring a newer upstream build
+under it is the struct-layout risk, not the fix for it. So under LLamaSharp the pin is to
+LLamaSharp's release, and the natives are as old as it is.
+
+**So: spike both, a day each, and decide on the table that produces.** Each has to (1) load the
+same ~9B-parameter GGUF on Vulkan on both machines; (2) unload it and show the VRAM come back, on
+the counter decision 4 says this project does not have yet; (3) coexist in one process with
+parakeet.cpp's own ggml across load ASR → unload → load LLM → unload → load ASR; and (4) set an
+environment knob the native demonstrably reads. Whichever passes is the binding; if both pass, the
+one whose failure is easier to explain on a machine nobody here can see. **Do not hand-roll**: the
+surface is about 73 `llama_*` and 13 `ggml_backend_*` functions and nine structs, roughly ten times
+parakeet's C ABI, and this project has one person to keep it current. Hand-rolling stays what it
+was — the answer if the language model ever becomes load-bearing rather than a v2 feature.
+
+Read from `SciSharp/LLamaSharp` at tag `v0.27.0`, `ggml-org/llama.cpp` at `b10448` and master, and
+NuGet on 2026-08-15; the server sizes were measured from the release zip on 2026-08-16.
 
 **Rejected without much investigation**, and worth saying so plainly: Ollama (a separate daemon to
 install, against the no-install positioning), ONNX Runtime GenAI (a different model format and a
