@@ -655,8 +655,8 @@ below.
 | Host | the laptop — hostname withheld |
 | OS | Windows 11 Home (10.0.26200), x64, Spanish locale |
 | CPU | AMD Ryzen AI 9 365 w/ Radeon 880M — **10 cores, 20 threads**, 2.0 GHz base |
-| Memory | 24 GB across 4 modules, configured 7500 MT/s (rated 7500) |
-| GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 — **no NVIDIA device** |
+| Memory | 24 GB across 4 modules, configured 7500 MT/s (rated 7500) — **of which the BIOS carves out 8 GB for the iGPU** (UMA frame buffer: the driver reports 8,589,934,592 bytes dedicated and Windows sees 15,994 MB of physical memory; the BIOS setting itself was not read, this is what the OS and driver report) |
+| GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 dated **2025-01-22** (Vulkan `driverInfo` 24.30.22.03) — **no NVIDIA device**. Vulkan heaps, from `vulkaninfo` 2026-08-16: heap 0 device-local 7.75 GiB with a `VK_EXT_memory_budget` budget of **7.36 GiB** — that is the carve-out; heap 1 host-visible 7.81 GiB (budget 7.42 GiB); heap 2 device-local 256 MiB; `maxMemoryAllocationSize` 2 GiB; `VK_KHR_cooperative_matrix` revision 2 and **no bfloat16 extension** |
 | Storage | 954 GB NVMe SSD |
 | Runtime | .NET 10.0.11, SDK 10.0.400, PowerShell 7.6.4 |
 | Weights | `tdt-0.6b-v3-f16`, 1.34 GiB, sha256 `8ba47343…fc5abb22` — matches the catalogue pin |
@@ -724,9 +724,11 @@ two different quantisations at 1.34 GiB and 0.63 GiB both fail on Vulkan and bot
 | `tdt-0.6b-v3-f16` | 1.34 GiB | fails at load | RTF 0.1417 |
 | `tdt-0.6b-v3-q4_k` | 643.92 MiB | fails at load | RTF 0.0944 |
 
-That kills the size hypothesis outright — 644 MiB against a 7.36 GiB budget and a 2 GiB
-single-allocation cap is not a memory problem — and it kills "f16 specifically", since q4_k is not
-f16. **What is left is the device or the vendored Vulkan build, not the weights.**
+That kills the size hypothesis outright — 644 MiB against heap 0's 7.36 GiB budget (the 8 GB UMA
+carve-out in the machine block above; a UMA device can also spill into the 7.81 GiB host-visible
+heap, without any knob) and a 2 GiB single-allocation cap is not a memory problem — and it kills
+"f16 specifically", since q4_k is not f16. **What is left is the device or the vendored Vulkan
+build, not the weights.**
 
 **It is the bf16 coopmat shader variants, and there is a workaround.** The vendored `parakeet.dll`
 carries 25 `GGML_VK_*` environment knobs. Two of them make the model load and decode; the rest
@@ -766,6 +768,32 @@ and q4_k both did.
 An earlier revision of this section said the bf16 *shader variants* failed to build. That was wrong,
 and it was wrong because the binding's NULL return carried no information. Corrected here rather than
 quietly rewritten: the reproduction that settled it is upstream's binary, not this one.
+
+**Why it asks for an extension it has just said is unsupported — and why the upstream workaround is
+a newer driver.** Read from `ggml/src/ggml-vulkan/ggml-vulkan.cpp` at `ggml-org/llama.cpp` master
+on 2026-08-16 (last touched 2026-08-15): the backend requests `VK_KHR_shader_bfloat16` at
+`vkCreateDevice` in **two** places. One is gated on the extension actually appearing in the
+device's extension list — that is the check behind the `bf16: 0` in the banner, and on this driver
+it correctly stays off. The other is gated on `coopmat_bf16_support`, which is set while walking
+`vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`: if the driver enumerates a bf16 × bf16 → f32
+subgroup-scope shape, the flag is set and the extension is requested, **and the extension list is
+never consulted for it**. The only thing that clears that flag is `GGML_VK_DISABLE_BFLOAT16`, which
+is exactly why that knob — and disabling coopmat wholesale, which skips the walk — are the two
+settings that load. So this driver enumerates such a shape while exposing no such extension. Two
+things are inferred rather than observed here: that enumeration was not dumped on this unit (the
+`vulkaninfo` build here does not print the cooperative-matrix property list), and the source read
+is master, not the older ggml snapshot inside the vendored `parakeet.dll` — the same shape is
+inferred for that build from the identical symptom and the identical knob.
+
+"Upstream defect" stands — the second request should be gated on the extension list too. The
+implication that nothing upstream fixes it does not: **AMD added `VK_KHR_shader_bfloat16` to its
+Windows driver in Adrenalin 25.8.1** — the release note, read 2026-08-16, lists it under "Expanded
+Vulkan Extension Support" — and the driver on this laptop is dated **2025-01-22**, which predates it.
+On a driver that ships the extension the request should succeed and the knob become unnecessary.
+**Whether this unit is fixed by a driver update is not measured.** It is the cheapest experiment in this
+repository: update, run `uindosill bench` on Vulkan with and without `--vk-disable-bf16`, and record
+the driver floor in the machine block above. Until somebody does, the knob stays and every Vulkan
+figure in this section is a figure for driver 32.0.13022.3006.
 
 ##### The workaround is now in the product, and off by default
 

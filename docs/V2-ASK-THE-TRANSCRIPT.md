@@ -109,21 +109,33 @@ model or a map-reduce, which is decision 3.
 **Measured, 2026-08-14, from the NuGet v3 API.** LLamaSharp is at **0.27.0**, and the three
 backends this project would care about all ship at that same version:
 
-| Package | Latest | Size |
+| Package | Latest | `.nupkg` size |
 |---|---|---|
-| `LLamaSharp` | 0.27.0 | 0.4 MB |
-| `LLamaSharp.Backend.Cpu` | 0.27.0 | 35 MB (all RIDs in one package) |
+| `LLamaSharp` | 0.27.0 | 368,708 bytes (0.4 MB) |
+| `LLamaSharp.Backend.Cpu` | 0.27.0 | 36,337,071 bytes (36.3 MB; all RIDs in one package) |
 | `LLamaSharp.Backend.Vulkan` | 0.27.0 | 48 KB metapackage |
 | `LLamaSharp.Backend.Cuda12` | 0.27.0 | 48 KB metapackage |
 | `LLamaSharp.Backend.Cuda11` | **0.24.0** | — stopped; CUDA 11 is no longer carried forward |
 
 The two GPU backends are metapackages that pull a per-RID package apiece —
-`LLamaSharp.Backend.Vulkan.Windows` at **19 MB** and `LLamaSharp.Backend.Cuda12.Windows` at
-**214 MB** (compressed `.nupkg` sizes; neither was unpacked and neither was inspected for what is
-inside it). For scale against the stack already vendored here: `parakeet-v0.5.0-lib-win-vulkan-x64.zip`
-is 17.1 MB, and CUDA is 149 MB plus a 553 MB cudart archive, 931 MB on disk. So the Vulkan tiers
-are comparable and the CUDA tier is *smaller*, which is the opposite of what a second stack
-usually costs. That number is a download size and not a measurement of anything that matters.
+`LLamaSharp.Backend.Vulkan.Windows` at **20,194,168 bytes (20.2 MB)** and
+`LLamaSharp.Backend.Cuda12.Windows` at **224,196,120 bytes (224.2 MB)**. Sizes are the
+`Content-Length` of each `.nupkg` on the NuGet flat container, read 2026-08-16. An earlier revision
+of this table said 35 MB, 19 MB and 214 MB; those were the MiB figures (34.7, 19.3 and 213.8) with
+the wrong unit on them. Corrected here rather than quietly rewritten, because the numbers beside
+them are in MB.
+
+**The CUDA package has now been looked inside, and the size comparison an earlier draft drew from it
+does not survive that.** It ships **no cudart** — it finds the runtime through `%CUDA_PATH%`, so it
+needs a CUDA Toolkit installed on the machine, which is exactly the install this project's own CUDA
+tier avoids by vendoring the 553 MB cudart archive; and its natives are built with CUDA 12.4.0 and
+carry **no `sm_120`**, so the RTX 5080 is not among their native targets. Its natives are llama.cpp
+**b8816** (2026-04-16), four months behind upstream on the day this was read. So the honest scale
+against the stack already vendored here is: Vulkan comparable (20.2 MB against
+`parakeet-v0.5.0-lib-win-vulkan-x64.zip` at 17.1 MB), and CUDA **not smaller** — 224 MB without a
+runtime against 149 MB plus 553 MB with one; the cost has moved onto the user's machine rather than
+gone. Read from `SciSharp/LLamaSharp` at tag `v0.27.0` and the package contents on 2026-08-15; none
+of it was run. A download size is still not a measurement of anything that matters.
 
 **The objection in `docs/NATIVE-BINARIES.md` still stands, but it is narrower than it looks.** That
 document argues against natives arriving through a channel on somebody else's schedule: "a build
@@ -139,16 +151,23 @@ parakeet.cpp's much smaller C ABI, and it changes far more often.
 
 The version story is the part that matters, and it is a difference of kind rather than of presence.
 llama.cpp does expose `LLAMA_API const char * llama_version(void)` — but it returns a **version
-string, not an integer ABI number**. `parakeet_capi_abi_version()` returns a value the binding
-compares against the ABI it was compiled for and refuses loudly on a mismatch, which is the single
-check that makes the existing interop safe to pin. A string has to be parsed and interpreted before
-it can guard anything, and it identifies the build rather than the contract.
-(`LLAMA_SESSION_VERSION` and `LLAMA_STATE_SEQ_VERSION` exist too, and version the
-state-serialisation format rather than the C ABI.) So a hand-rolled binding would be chasing a
-much larger moving header with a weaker guard against it moving underneath.
+string, not an integer ABI number**, and it is weaker than even that sounds. **Measured, 2026-08-16,
+on the laptop:** `llama.dll` from the upstream Windows CPU release `b10448`, called through
+P/Invoke, returns **`"0.1.0-dev"`** — and that is the string on every release build, not just this
+one (read on 2026-08-15; measured here on one). So it does not identify the build, let alone the
+contract; the release tag in the zip's file name is more information than the function is.
+`parakeet_capi_abi_version()` returns a value the binding compares against the ABI it was compiled
+for and refuses loudly on a mismatch, which is the single check that makes the existing interop safe
+to pin. Nothing on the llama.cpp side plays that role, so a guard, if there is to be one, has to be
+built here — hash the DLL set against a pin table, and compare `llama_model_default_params()` /
+`llama_context_default_params()` against recorded values before loading anything — whichever
+binding is chosen. (`LLAMA_SESSION_VERSION` and `LLAMA_STATE_SEQ_VERSION` exist too, and version
+the state-serialisation format rather than the C ABI.) So a hand-rolled binding would be chasing a
+much larger moving header with no guard against it moving underneath.
 
 Read from `include/llama.h` at `ggml-org/llama.cpp` master on 2026-08-14. An earlier draft of this
-file said there was no version entry point at all, which was wrong.
+file said there was no version entry point at all, which was wrong; a later one said the string
+identifies the build, which was also wrong.
 
 #### The binding was tested against one specific capability: MoE offload
 
@@ -234,10 +253,11 @@ Licensing is a hard gate, not a formality. Every entry in `models` carries a lic
 registered attribution, and `DeferredModelPin` deliberately has no licence property so a pin cannot
 assert one carelessly. Any summarizer model has to clear that bar before it can be an entry.
 
-#### One candidate, recorded rather than chosen
+#### One candidate, recorded and then retired
 
 `Qwen/Qwen3.8-27B` — **apache-2.0**, which clears the licensing gate outright, and that is rarer
 than it sounds among capable local models. Read from the hub on 2026-08-15; nothing below was run.
+**Retired as the working candidate on 2026-08-16**, for the arithmetic under the table.
 
 | | |
 |---|---|
@@ -252,33 +272,52 @@ Sizes from `unsloth/Qwen3.8-27B-GGUF`, which is LFS-backed, so `docs/MODELS.md`'
 reads its digests exactly as written — the same arrangement as `mudler/parakeet-cpp-gguf`, which is
 itself a third-party conversion of NVIDIA's checkpoint.
 
-| Quant | Size | On 16 GB |
+| Quant | Size | On 16 GB, at 40k tokens |
 |---|---|---|
 | `Q4_K_M` | 17.1 GB | does not fit |
-| `IQ4_XS` | 15.7 GB | fits with nothing left for context |
-| **`UD-Q3_K_XL`** | **13.4 GB** | fits, ~2.5 GB for KV |
-| `UD-IQ3_XXS` | 11.9 GB | comfortable |
+| `IQ4_XS` | 15.7 GB (15,705,861,088 bytes, 14.63 GiB) | does not fit once the cache is counted |
+| **`UD-Q3_K_XL`** | **13.4 GB** (13,441,059,904 bytes, 12.52 GiB) | **does not fit** — see below |
+| `UD-IQ3_XXS` | 11.9 GB (11.08 GiB) | fits — 13.6 GiB with the f16 cache; a Q3 |
 
-**Two things follow, and they pull against each other.**
+**An earlier revision of this table said `UD-Q3_K_XL` "fits, ~2.5 GB for KV". The 2.5 GB was not
+headroom; it is the KV cache itself, and it was the entire margin.** Corrected here rather than
+quietly rewritten. From the model's `config.json` (read from the hub 2026-08-16): 64 layers with
+`full_attention_interval` 4, so **16 full-attention layers**, each with **4 KV heads of `head_dim`
+256**. llama.cpp keeps a growing KV cache only for those sixteen — the 48 linear-attention layers
+carry recurrent state that does not grow with the prompt — so at 40,960 tokens the cache is
+
+    16 layers × 2 (K, V) × 4 heads × 256 × 40,960 tokens × 2 bytes = 2,684,354,560 bytes = 2.50 GiB at f16
+
+or **1.33 GiB at q8_0**. Weights plus cache is therefore **15.02 GiB (f16) or 13.85 GiB (q8_0)** on
+a card that reports 16,302 MiB (15.92 GiB), before the compute buffer, before the 1.34 GiB ASR model,
+and before anything else on the display. That is arithmetic, not a measurement, and it does not
+need to be one: no configuration of this file at this length leaves room. The one row that fits,
+`UD-IQ3_XXS`, is a Q3, and the next paragraph is why that is the wrong place to be.
+
+**Two things follow, and they now point the same way.**
 
 The architecture suits this feature unusually well. A 256k window puts a three-hour transcript —
-about 40k tokens — inside a single pass with room to spare, which is decision 3's long-context
-option actually existing on this hardware rather than in principle. And with 48 of 64 layers on
-linear attention the KV cache at that length is far smaller than a normal transformer's, which is
-what makes 2.5 GB of headroom enough.
+about 40k tokens — inside a single pass, which is decision 3's long-context option actually existing
+on this hardware rather than in principle. And with 48 of 64 layers on linear attention the KV cache
+at that length is 2.5 GiB rather than the 10 GiB a fully-attentive 64-layer model of this shape would
+need — the hybrid layout is the right idea; this particular size of it is too big for this card.
 
-But **no Q4 fits, so this would run at Q3**, and that is the wrong end of the quantisation scale to
+And **no Q4 fits, so this would run at Q3**, and that is the wrong end of the quantisation scale to
 be at for this particular feature. `docs/UNPROVEN.md` records the analogous ONNX INT8 export at
 24.8% long-audio WER against 7.8% for fp32, collapsing *silently* into fluent wrong text. That was
 an ASR, where a mistake is visible on the page. Here wrong output is fluent by default, there is no
 WER to catch it, and the citations would be carrying more weight than they were designed to.
 
-There is no smaller sibling to retreat to: the family is this and `Qwen3.8-2.4T-A95B`, which is a
-2.4-trillion-parameter MoE and is `license:other` rather than apache-2.0.
+There is no smaller sibling in this family to retreat to: the family is this and
+`Qwen3.8-2.4T-A95B`, which is a 2.4-trillion-parameter MoE and is `license:other` rather than
+apache-2.0. Smaller hybrid-attention models under the same licence do exist in the neighbouring
+Qwen families and elsewhere; which of them, at which quantisation, is worked out in the maintainer's
+v2 research notes, which are kept outside this repository until something in them has been run.
 
-**Recorded as a candidate, not a choice.** Nothing here has been run, and the Q3 question is the
-one that would have to be answered first — which is the same question as decision 6, arriving early
-and attached to a specific model.
+**Retired, and the slot is open again.** Nothing here has been run; what retired the candidate is
+arithmetic on its own `config.json` — the cheapest possible way to lose one — and the first draft
+missed it by writing the cache down as headroom. The Q3 question — decision 6 arriving early and
+attached to a specific model — is still the one any replacement has to answer first.
 
 ### 3. Retrieval, whole transcript, or both
 
@@ -322,6 +361,24 @@ is not roomy, and it is a second budget to track.
 Worth recording now: **`docs/UNPROVEN.md` says VRAM has never been measured at all** — the harness
 samples host working set only, so it cannot see either side of a split placement. This decision
 currently has no data under it in any direction.
+
+**The laptop is a different budget, and its one published number needs its footnote.** The 7.36 GiB
+that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memory_budget` budget**
+— the device-local heap, 7.75 GiB in size — and heap 0 is the **8 GB the BIOS carves out of the
+24 GB installed for the iGPU**: the driver reports 8,589,934,592 bytes dedicated and Windows sees
+15,994 MB of physical memory. There is also heap 1, host-visible, 7.81 GiB, and a 2 GiB
+single-allocation cap. All measured on that machine with `vulkaninfo`, the driver's registry key and
+`Win32_ComputerSystem` on 2026-08-16. What that means for a language model there: on a device that
+reports `uma: 1`, ggml's Vulkan allocator tries three memory types in order for every buffer —
+device-local-and-host-visible, then device-local, then host-visible — and **no environment knob is
+involved**; `GGML_VK_ALLOW_SYSMEM_FALLBACK` is the switch for the *non*-UMA branch (read from
+`ggml_vk_create_buffer_device` in `ggml/src/ggml-vulkan/ggml-vulkan.cpp`, `ggml-org/llama.cpp`
+master, 2026-08-16). So weights larger than heap 0 load by spilling into the host heap, at the cost
+of whatever the OS was using that memory for and of a bandwidth the fast heap does not have. So the
+laptop question is not "does it fit in 7.36 GiB" but how much of the fast heap the language model
+takes beside — or instead of — the 1.34 GiB ASR model, and what the spill costs; none of it
+measured, sequential the only defensible default, and **the UMA carve-out belongs in the machine
+block before any laptop figure for a language model is quoted.** It is there now.
 
 ### 5. What, if anything, is persisted
 
