@@ -132,25 +132,36 @@ compares the pinned size to the downloaded byte count exactly and refuses a mism
 number would reject a perfectly good download. Pin `sizeBytes` only from an exact byte count — the
 API listing, or the file's own page on the hub, which also shows the SHA-256 you need for `sha256`.
 
-The catalogue recommends **f16**, which is the one entry that requires no guess about its accuracy.
-Every quantisation below it carries a warning instead, and says plainly that the guess is a guess:
+The catalogue recommends **f16**. Until 2026-08-16 it was the one entry that required no guess
+about its accuracy, and every quantisation below it carried this warning:
 
 > Quantisation quality on this engine is unmeasured. The analogous ONNX INT8 export was measured at
 > 24.8% long-audio WER against 7.8% for fp32, and it collapsed *silently*, producing fluent wrong
 > text rather than obvious garbage.
 
-Measure against f16 before recommending anything, on real disfluent accented speech, including at
-least two files over ten minutes. Synthetic text-to-speech will not catch a decoder regression: clean
-TTS decodes identically under conditions that break real speech.
+The rule that went with it — measure against f16 before recommending anything, on real disfluent
+accented speech, including at least two files over ten minutes; synthetic text-to-speech will not
+catch a decoder regression, because clean TTS decodes identically under conditions that break real
+speech — has now been followed, and the entries say what was found instead of the warning.
 
-**Half of that has now been done.** All five entries have been run against a 2 h 55 m two-host
-podcast and diffed against f16 by word-level edit distance: q8_0 0.42%, q6_k 0.87%, q5_k 1.69%,
-q4_k 2.69% of normalised tokens, over a CPU-versus-CUDA noise floor of 0.11%, monotonic and with no
-collapse — see `docs/UNPROVEN.md`. The warning stays exactly as it is, because **divergence from
-f16 is not quality**: there is no ground truth for that episode, so no WER has been computed and no
-quantisation is cleared. That is why the default is f16 rather than the smallest entry that looks
-close enough to it. What would change the warning is a transcript someone has actually corrected by
-hand.
+**Measured, 2026-08-16.** First, divergence: all five entries run against a 2 h 55 m two-host
+podcast and diffed against f16 by word-level edit distance — q8_0 0.42%, q6_k 0.87%, q5_k 1.69%,
+q4_k 2.69% of normalised tokens, over a CPU-versus-CUDA noise floor of 0.11%, monotonic, no
+collapse. Then, the thing divergence cannot say: **word error rate against human transcripts**,
+`scripts/measure-wer.ps1` over eleven hours of accented English earnings calls with two transcript
+styles (`scripts/wer-corpus.json`), every entry on CUDA on the same machine — f16 10.21%, q8_0
+10.23%, q6_k 10.17%, q5_k 10.17%, q4_k 10.15% against the verbatim transcripts, 13.34–13.43%
+against the non-verbatim ones. A 0.08-point spread with no ordering: on that corpus no
+quantisation costs measurable accuracy, and the divergence turns out to be *which* words differ,
+not how many are wrong. The method, the normaliser (this project's own, so the absolute figures
+are not comparable to a published one), the per-file table and the limits — one English corpus of
+one genre, one machine — are in `docs/UNPROVEN.md`.
+
+f16 stays the default because the choice was made before the measurement and nothing has been
+decided since; the measurement removes the reason for it (f16 being the only entry with no open
+question) without making the other decision, which is about download size and CPU speed against
+one corpus's worth of evidence. Every entry's `notes` now carries its own figure and the same
+caveat.
 
 ## Producing conversions yourself
 

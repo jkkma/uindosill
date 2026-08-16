@@ -32,7 +32,7 @@
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
       "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "The smallest step down from f16, and the measured one: 0.42% of normalised tokens differ from f16 over 2 h 55 m of real speech, against a 0.11% backend noise floor. That is divergence, not error. Quantisation quality on this engine is still unmeasured: the analogous ONNX INT8 export collapsed to 24.8% long-audio WER against 7.8% for fp32, and it collapsed silently, producing fluent wrong text. Choose it to save about 500 MB of download and some decode time, not because it has been cleared."
+      "notes": "The smallest step down from f16, and measured against human transcripts: 10.23% word error rate against f16's 10.21% over eleven hours of accented English earnings calls (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md) — no measurable cost on that corpus. Divergence from f16 is 0.42% of tokens over 2 h 55 m; that is which words differ, not how many are wrong. One English corpus of one genre, scored with this project's own normaliser, is the whole of the evidence: it is enough to say this entry is not the silent collapse the analogous ONNX INT8 export was, and not enough to say more. Saves about 500 MB of download and some CPU decode time."
     },
     {
       "id": "tdt-0.6b-v3-f16",
@@ -48,7 +48,7 @@
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
       "recommended": true,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "Default choice, and the reference for accuracy. It is the default because it is the only entry whose transcription quality is not an open question; the cost is a 1.34 GiB download and a slower CPU decode than q8_0. Every quantisation claim in this project must be measured against this file, on real disfluent audio, including files over ten minutes."
+      "notes": "Default choice, and the reference for accuracy: 10.21% word error rate against verbatim human transcripts of eleven hours of accented English earnings calls, 13.40% against non-verbatim ones (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md; this project's own normaliser, so not comparable to a published figure). It is the default because it was the one entry whose quality was not an open question when the choice was made; every quantisation in the catalogue has since scored within 0.08 points of it on that corpus, and whether one of them should replace it as the default is an open product decision. The cost is a 1.34 GiB download and a slower CPU decode than q8_0."
     },
     {
       "id": "tdt-0.6b-v3-q6_k",
@@ -64,7 +64,7 @@
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
       "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "Unmeasured on this engine."
+      "notes": "10.17% word error rate against f16's 10.21% over eleven hours of human-transcribed accented English (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md) — no measurable cost on that one corpus, which is the whole of the evidence."
     },
     {
       "id": "tdt-0.6b-v3-q5_k",
@@ -80,7 +80,7 @@
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
       "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "Unmeasured on this engine."
+      "notes": "10.17% word error rate against f16's 10.21% over eleven hours of human-transcribed accented English (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md) — no measurable cost on that one corpus, which is the whole of the evidence."
     },
     {
       "id": "tdt-0.6b-v3-q4_k",
@@ -96,7 +96,7 @@
       "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
       "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
-      "notes": "Smallest. Also the most likely to fail silently: assume nothing about its accuracy until it is measured against f16 on long, real audio."
+      "notes": "Smallest, and the one most likely to fail silently — which it did not: 10.15% word error rate against f16's 10.21% over eleven hours of human-transcribed accented English (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md), while differing from f16 on 2.69% of tokens over 2 h 55 m — differently right and differently wrong, not more wrong. One English corpus of one genre is the whole of the evidence."
     }
   ]
 ,

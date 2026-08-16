@@ -3,8 +3,8 @@ namespace Parakeet.Core.Transcription;
 /// <summary>
 /// A finished transcript plus the provenance a reader needs to judge it: which model
 /// produced it, at which quantisation, on which backend, and how long it took. Quantisation
-/// quality on this engine is unmeasured, so a transcript that cannot say which weights made
-/// it is not a result you can act on.
+/// quality on this engine is measured on one corpus only (docs/UNPROVEN.md), so a transcript
+/// that cannot say which weights made it is not a result you can act on.
 /// </summary>
 public sealed record TranscriptDocument
 {

@@ -377,3 +377,39 @@ never creates a backend, so it succeeds on a machine where every transcription f
 shared library and is of no use to the build). Downloading it for ten minutes to diagnose a native
 failure is a different act from shipping it, and it is worth doing before filing anything upstream:
 a bug report that says "returns NULL" is a bug report the maintainer has to reproduce from scratch.
+
+## 23. Two transcripts compared by word index measure the offset, not the difference
+
+Pair word *i* of one transcript with word *i* of the other and a single inserted word desynchronises
+every pair after it, so each is counted as a difference. A guard on the two word totals catches the
+common case and cannot catch the one that matters when two variants of one model are compared —
+insertions and deletions that cancel out. f16 against q4_k on ten minutes gave exactly 1,606 words
+each; the guard passed and the tool reported 727 differing tokens where a word-level edit distance
+found 50. The tell was in its own output: joined text of 8,326 against 8,319 characters is not what
+727 different words look like.
+
+**Here:** `scripts/compare-transcripts.ps1` aligns the two word streams by word-level Levenshtein
+distance (`src/Parakeet.Core/Text/WordAlignment.cs`, Hirschberg in linear memory, shared with
+`word-distance.ps1` and `uindosill wer`, compiled into the scripts with `Add-Type` so they still need
+no build) and reports substitutions, deletions and insertions separately, with timestamp and
+confidence figures over the aligned pairs. `docs/UNPROVEN.md` keeps the 727 as the record of the
+artefact.
+
+## 24. A word error rate over speech with numbers in it measures the number convention first
+
+The model writes numbers as words (`two hundred and fifty two`, `eighty-seven`); every human
+transcript this project scores against writes digits (`262`, `87`). Score the two as written and
+each number is several errors before recognition is even involved. On the first Earnings-22 call
+scored, that was the largest single class of error, and rendering cardinal number words as digits on
+both sides moved the call from 15.7% to 13.9% — a fifth of the apparent error rate — and left the
+one real error in that phrase (`262` heard as `252`) as one substitution. Beyond numbers, the raw
+figure over whitespace tokens is ~29% against a normalised ~10%, and the *style* of the human
+transcript moves every model by three points (verbatim 10.2%, non-verbatim 13.4%), because the model
+writes down repetitions a readability edit removes and expands `gonna` to `going to`.
+
+**Here:** `TranscriptNormalizer.WordErrorRateTokens` states its rules — lower-case, punctuation off,
+hyphens split, brackets dropped, six fillers dropped, `%` to `percent`, number words to digits — and
+`uindosill wer` prints the normalised and the raw rate side by side and names the normaliser on
+every run. What it does not do is also stated (paired years, contractions, spellings), which is
+why a figure from here is comparable to another figure from here and not to a leaderboard entry for
+the same model, and `docs/UNPROVEN.md` quotes both transcript styles rather than one.

@@ -623,6 +623,95 @@ Speed did not separate them: every run sat at RTF 0.004–0.005, because on this
 not the bottleneck. The speed case for quantisation lives on CPU, where the second machine measured
 q4_k at 1.5× f16.
 
+### Word error rate against human transcripts — all five entries, eleven hours, measured 2026-08-16
+
+The first WER this project has. Everything above is divergence from f16, which says how far a
+variant is from the reference model and nothing about whether either is right; this is each model
+against what a human wrote down, on the same machine as the ladder above (Ryzen 9 9950X, RTX 5080,
+driver 610.88), **CUDA** backend, and it is what `docs/PHASES.md` Phase 0 asked for — real,
+disfluent, accented, with files over ten minutes.
+
+**The corpus** is Rev.com's Earnings-22 Subset 10, pinned in `scripts/wer-corpus.json`: ten
+English-language earnings calls, 58–78 minutes each, 40,037 s = 11.12 h in all, two companies each
+from South Africa, the UK, the United States, India and Australia, at 16–44.1 kHz mono and stereo,
+each with **two human transcripts** — verbatim (fillers, stutters and repetitions written down;
+101,509 reference words after normalisation) and non-verbatim (lightly edited for readability;
+96,181). Both are scored, because the model sits between them and the gap is information. Every
+media file and transcript is pinned by byte count and SHA-256 at one upstream commit and checked
+before scoring; the licence position is in `docs/LICENSING.md`. `scripts/measure-wer.ps1 -Backend
+cuda` is the whole measurement, and `runs/wer/ladder-cuda/summary.{json,md}` is its output.
+
+**The normaliser is stated, and it is not the leaderboard's.** `uindosill wer` scores tokens
+lower-cased with punctuation removed, hyphens split, bracketed annotations dropped, six fillers
+(uh, um, hmm, mm, mhm, mmm) dropped, `%` read as `percent`, and English cardinal number words
+rendered as digits — all applied to both sides alike. The last rule exists because this model writes
+numbers as words and the transcripts write digits: on the first call scored, `two hundred and fifty
+two cents` against `262 cents` was five errors and is now the one substitution it should be, and that
+one call moved from 15.7% to 13.9%. What is still not done — a year said in pairs (`twenty twenty-one`
+→ `20 21`), contractions against their expansions (`gonna` / `going to`), spelling variants — the
+published Open ASR normaliser does do, so **these figures are comparable to each other and not to a
+leaderboard entry for the same model.** The raw figure, whitespace tokens with nothing normalised, is
+printed beside every row so the size of the normalisation is visible: 29–30% for every model.
+
+| Model | WER vs verbatim | S / D / I | WER vs non-verbatim | S / D / I | RTF (CUDA) |
+|---|---|---|---|---|---|
+| **f16** | **10.21%** | 5,599 / 1,927 / 2,840 | **13.40%** | 4,493 / 1,079 / 7,320 | 0.0040 |
+| q8_0 | 10.23% | 5,594 / 1,936 / 2,855 | 13.41% | 4,505 / 1,071 / 7,318 | 0.0038 |
+| q6_k | 10.17% | 5,603 / 1,895 / 2,827 | 13.34% | 4,520 / 1,024 / 7,284 | 0.0039 |
+| q5_k | 10.17% | 5,593 / 1,882 / 2,844 | 13.43% | 4,536 / 1,047 / 7,337 | 0.0038 |
+| q4_k | 10.15% | 5,659 / 1,832 / 2,814 | 13.40% | 4,609 / 985 / 7,295 | 0.0039 |
+| f16, **CPU** (control) | 10.21% | 5,601 / 1,923 / 2,840 | 13.41% | 4,491 / 1,079 / 7,324 | 0.0687 (CPU) |
+
+The last row is the backend control, run afterwards on the same machine's CPU
+(`scripts/measure-wer.ps1 -Backend cpu -Models tdt-0.6b-v3-f16`, 45 m 51 s wall): f16 scores the
+same on CPU as on CUDA to two decimals, and per file the two backends are within 0.04 points on
+every call. Whatever separates the quantisations, if anything does, is therefore not the backend
+they happened to run on. The RTF in that row is CPU and is not comparable with the column above it.
+
+Per file, WER against the verbatim transcript, f16 first and the four quantisations beside it:
+
+| Call | Country | f16 | q8_0 | q6_k | q5_k | q4_k |
+|---|---|---|---|---|---|---|
+| 4485192 | United States | 5.43% | 5.44% | 5.45% | 5.43% | 5.47% |
+| 4483937 | UK | 6.81% | 6.91% | 6.87% | 6.76% | 6.68% |
+| 4470684 | UK | 7.19% | 7.07% | 7.15% | 6.91% | 6.64% |
+| 4474506 | United States | 8.06% | 8.11% | 8.05% | 8.20% | 8.02% |
+| 4481952 | Australia | 9.05% | 9.05% | 8.66% | 8.55% | 8.60% |
+| 4482383 | Australia | 9.43% | 9.47% | 9.43% | 9.43% | 9.45% |
+| 4469088 | South Africa | 10.77% | 10.76% | 10.80% | 10.84% | 10.67% |
+| 4453225 | South Africa | 13.87% | 13.88% | 13.72% | 13.95% | 13.91% |
+| 4479944 | India | 15.06% | 15.15% | 15.10% | 15.17% | 15.14% |
+| 4482613 | India | 15.93% | 15.96% | 15.98% | 15.85% | 16.48% |
+
+**What it says about quantisation, which is what it was built to say.** Across eleven hours the
+five entries land within **0.08 points** of one another against either transcript — 10.15% to
+10.23% verbatim, 13.34% to 13.43% non-verbatim — and q4_k, the smallest, is not the worst on either.
+Per file, no quantisation is systematically above f16: the mean per-file difference from f16 is
++0.02 points for q8_0 and −0.04 to −0.05 for the other three, and the largest single-file move in
+either direction is 0.55 points (q4_k on the two UK/India calls, one each way), against a
+between-file spread of ten points. So the divergence ladder above — 0.42% to 2.69% of tokens
+differing from f16 — is real, and it is divergence in *which* words are wrong, not in how many:
+q4_k disagrees with f16 on 2.7% of tokens and matches the human transcript exactly as often. On this
+material there is no measurable accuracy cost to any quantisation in the catalogue, and nothing
+resembling the silent collapse this file has warned about since the beginning.
+
+**What it says about the model.** f16 at 10.2% against verbatim transcripts of accented earnings
+calls, spread from 5.4% (a US call) to 15.9% (an Indian one) — the two US and two UK calls are the
+four lowest, the two Indian calls the two highest, and how that compares with the paper's own
+per-region results has not been checked. Against the non-verbatim transcript every model scores about three
+points worse, and the counts say why: insertions go from ~2,800 to ~7,300 while substitutions fall.
+The model writes down the repetitions and false starts that a readability edit removes — it is
+closer to a verbatim transcriber — but it also writes `going to` where the verbatim transcript
+has `gonna`, so it sits between the two styles and neither number is "the" WER; the pair is.
+
+**What this does not settle.** One corpus, English, financial calls, one machine, one backend for
+the ladder (with the CPU control for f16 in the table). The normaliser is this project's, and its residue —
+paired years, contractions, spellings — is in every figure on both sides. The references are
+human and not infallible, and the same alignment scores every model against the same imperfections.
+The verbatim/non-verbatim gap is a property of this corpus's two styles as much as of the model.
+And "no measurable cost" is a statement at the resolution this corpus gives — roughly a tenth of a
+point over eleven hours — not a proof that no input separates them.
+
 ## Still open
 
 ### The CUDA drop's licensing — read, recorded, and the notice gap closed
@@ -671,27 +760,27 @@ alternatives. It is also **one 7.4-second LibriSpeech fixture, CPU, batch 1, gre
 port is numerically faithful to NeMo on that input. It says nothing about quantisation quality and
 nothing about long audio.
 
-### GGUF quantisation quality is unmeasured
+### GGUF quantisation quality — measured on one corpus, 2026-08-16
 
-There is no measured WER for q8_0 or q4_k on Parakeet. The analogous ONNX INT8 export was measured
-at **24.8% long-audio WER against 7.8% for fp32** — and it collapsed *silently*, producing fluent
-wrong text rather than obvious garbage. Assume nothing. Measure against f16, on real audio, before
-recommending any quantisation. The catalogue says so on every entry.
+This item read "unmeasured" from the first commit until 2026-08-16, and the reason was always the
+same: no ground truth existed for any audio this project had run, so every figure was divergence
+from f16 rather than error. The analogous ONNX INT8 export had been measured at **24.8% long-audio
+WER against 7.8% for fp32** — and it collapsed *silently*, producing fluent wrong text rather than
+obvious garbage — which is why the catalogue said "assume nothing" on every entry below f16.
 
-**The heading is now too strong, and is kept for the part of it that still holds.** There is still no
-**WER** for any quantisation on Parakeet, because no ground truth exists for any audio this project
-has run — that is the sense in which quantisation quality remains unmeasured, and it is the sense
-that matters before recommending one.
+**It is now measured, once.** The section *Word error rate against human transcripts* above has
+all five entries against eleven hours of human-transcribed accented English on CUDA: **f16 10.21%,
+q8_0 10.23%, q6_k 10.17%, q5_k 10.17%, q4_k 10.15%** against verbatim transcripts, and 13.34–13.43%
+against non-verbatim ones — a spread of 0.08 points, no ordering, no collapse. The divergence
+ladder that preceded it (q8_0 0.42% to q4_k 2.69% of tokens differing from f16 over 2 h 55 m,
+above a 0.11% backend floor) stands as measured and turns out to be divergence in *which* words are
+wrong rather than in how many.
 
-What does now exist is a full **divergence-from-f16 ladder across all five entries on 2 h 55 m of
-real disfluent speech**, with a backend noise floor measured under it: q8_0 0.415%, q6_k 0.866%,
-q5_k 1.688%, q4_k 2.688% of normalised tokens, against a CPU-versus-CUDA floor of 0.110%. Monotonic,
-no collapse, and nothing like the ONNX INT8 precedent. The measurement, its method and its limits are
-in the desktop section above; an earlier and much smaller signal — q4_k at 1.62% on ten minutes — is
-in the second-machine section below.
-
-None of that clears any quantisation. Divergence from f16 is not error, and f16 itself is unverified
-against a human transcript.
+What is cleared and what is not, precisely: on this corpus, with this normaliser, no catalogue
+quantisation costs measurable accuracy against f16. That is one English corpus of one genre on one
+machine, at a resolution of about a tenth of a point; it is not a clearance for other languages,
+other material, or a claim about the leaderboard figure for the model. It is enough to stop the
+catalogue saying "unmeasured", and it says so instead.
 
 ### Memory beyond three hours
 
