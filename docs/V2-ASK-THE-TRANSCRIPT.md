@@ -46,6 +46,49 @@ transcription rather than playing anything. So the citation being *correct* is n
 and the citation being *clickable* is new surface. Worth sequencing first: a transcript you can
 click to hear is useful before any language model is involved.
 
+### The model never writes a timestamp
+
+**A rule, taken from reading and not yet from running anything.** The language model cites by an
+opaque segment id — `[S12]`, `[S12-S15]` — and never by a time. The app resolves each id to a
+`TranscriptSegment`'s `Start` and `End`, renders the range, and makes it seek. An id that does not
+resolve, or a claim that carries none, is rendered as unresolved (`[?]`) or refused; it is never
+rendered as a bare timestamp a reader might take for a real one. Where the model can be
+constrained to emit only ids that exist — a grammar enumerating the live ids, with a production
+for *not in the recording* — it is.
+
+Why: a model-written timestamp is a fluent number in the exact shape of a checkable one, which is
+the failure described in the next section in its purest form. The one open-source local
+implementation found that gets citations right — `PaulBratslavsky/yt-local-llm-knowledge-base`,
+MIT, TypeScript over an Ollama daemon — states the rule in its README ("Timecodes are
+deterministic, not model-generated. The model is explicitly instructed NOT to emit timecodes in its
+output") and recovers each section's time by BM25 against the transcript chunks after generation.
+The reference product's own help page says "Quality and accuracy may vary." Both read on
+2026-08-15; neither is a measurement made here, and no measurement of citation precision on any
+quantised open model was found. What is worth copying from that repository is this discipline,
+not its runtime.
+
+What the rule does to the decisions below: decision 1's binding has to expose grammar-constrained
+decoding, which is why the comparison there tracks GBNF; decision 3's retrieval hands back the ids
+the model cites, so a retrieved segment is citable by construction; and decision 6's strongest test
+— every citation resolves — stops being a check run afterwards and becomes the mechanism.
+
+### Not in v2: who said it
+
+**Speaker attribution is a non-goal for v2.** The pipeline has no notion of a speaker:
+`TranscriptSegment` carries `Start`, `End`, `Text` and `Words`, and nothing under `src/` produces
+or stores a speaker label (checked 2026-08-15). The catalogue in `models.json` is transcription and
+end-of-utterance models; none of them diarises. So a question of the form *"who said X?"* is
+answered with when it was said and what was said — a range and a quote — or refused. **The model
+must never name a speaker the transcript does not carry**, and the answer must not imply one. The
+discipline is the same as for timestamps above, and the failure would look the same: a fluent,
+plausible attribution nobody can check.
+
+Every neighbouring product surveyed in the maintainer's v2 research notes labels speakers, and
+questions of this shape will arrive on the first day. Recorded here so that the panel's answer to
+them is designed rather than improvised, and so nobody builds towards diarisation by accident: it
+is another model — its own native, its own licence gate, its own place in decision 4's residency
+budget — and it is out of scope until v2 has shipped what it can already cite honestly.
+
 ## Why this is harder than v1, and it is not the modelling
 
 **A transcript can be wrong loudly. A summary cannot.**
@@ -447,8 +490,12 @@ the rest is.
   one and it is mechanically checkable: a citation pointing past the end of the recording, or at a
   range containing no words, is a defect that can be caught without judging the prose at all. It is
   the same class of check as the WebVTT ordering invariant in `scripts/measure-transcribe.ps1`.
+  Under the rule above — the model never writes a timestamp — this is also the runtime path: an id
+  that does not resolve is never rendered as a time, so the test and the mechanism are one thing.
 - Citations are monotonic and non-overlapping where an answer claims to follow the recording.
 - A question about an empty transcript is answered with "nothing here", not with invention.
+- A *who said* question yields a range and a quote, or a refusal — never a name. Checkable without
+  judging the prose, because the transcript carries no speaker to name.
 - **Retrieval, if it exists, is separately testable.** Given a question whose answer is known to be
   at a known timestamp, does the retrieval return that segment? That is an ordinary
   information-retrieval measurement, unlike summary quality, and it does not need a language model
