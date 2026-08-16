@@ -462,7 +462,13 @@ tried to reproduce this on a second one.
 ### What is still unmeasured about CUDA
 
 - **VRAM.** Not measured, and invisible to the harness, which samples host working set only. How
-  close 16 GB comes to being a constraint is unknown.
+  close 16 GB comes to being a constraint is unknown. The counter that would measure it exists and
+  is vendor-neutral — the WDDM performance counters `\GPU Process Memory(pid_*)\Dedicated Usage` /
+  `Shared Usage` per process and `\GPU Adapter Memory(*)\Dedicated Usage` per adapter, verified on
+  the second machine on 2026-08-16 (its idle figures are in the machine block below) — and the
+  harness does not read it yet. On this machine even the idle figure — what the desktop holds
+  before any model loads — is unmeasured, and it is the term every "fits" in
+  `docs/V2-ASK-THE-TRANSCRIPT.md` decision 4 depends on.
 - **Long audio on CUDA.** The three-hour file has been run on CPU only. Ten minutes says nothing
   about whether device memory accumulates over hours.
 - **Any other GPU.** `sm_86` and `sm_89` cubins are present, so 30-series and 40-series cards should
@@ -657,6 +663,7 @@ below.
 | CPU | AMD Ryzen AI 9 365 w/ Radeon 880M — **10 cores, 20 threads**, 2.0 GHz base |
 | Memory | 24 GB across 4 modules, configured 7500 MT/s (rated 7500) — **of which the BIOS carves out 8 GB for the iGPU** (UMA frame buffer: the driver reports 8,589,934,592 bytes dedicated and Windows sees 15,994 MB of physical memory; the BIOS setting itself was not read, this is what the OS and driver report) |
 | GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 dated **2025-01-22** (Vulkan `driverInfo` 24.30.22.03) — **no NVIDIA device**. Vulkan heaps, from `vulkaninfo` 2026-08-15: heap 0 device-local 7.75 GiB with a `VK_EXT_memory_budget` budget of **7.36 GiB** — that is the carve-out; heap 1 host-visible 7.81 GiB (budget 7.42 GiB); heap 2 device-local 256 MiB; `maxMemoryAllocationSize` 2 GiB; `VK_KHR_cooperative_matrix` revision 2 and **no bfloat16 extension** |
+| GPU memory held, idle | From the Windows performance counters on 2026-08-16, about 01:00 local, no model loaded, a browser and an editor open: **`\GPU Adapter Memory(*)\Dedicated Usage` 2,149 MiB, `Shared Usage` 191 MiB**; by process, `\GPU Process Memory(pid_*)\Dedicated Usage` has `dwm` at 2,548 MiB, `firefox` 1,087 MiB, `explorer` 166 MiB. The per-process figures are commitments and sum past the adapter's held total; the adapter figure is what the carve-out is holding. Since heap 0's 7.36 GiB budget above is `VK_EXT_memory_budget`'s moment-to-moment figure net of other holders, with 2.1 GiB held the budget is nearer 5.6 GiB (arithmetic) — a number that moves with what is open, not a constant of the machine |
 | Storage | 954 GB NVMe SSD |
 | Runtime | .NET 10.0.11, SDK 10.0.400, PowerShell 7.6.4 |
 | Weights | `tdt-0.6b-v3-f16`, 1.34 GiB, sha256 `8ba47343…fc5abb22` — matches the catalogue pin |
