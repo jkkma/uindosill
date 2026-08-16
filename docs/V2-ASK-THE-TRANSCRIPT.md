@@ -616,6 +616,46 @@ because it has none. Same session, same questions; `-ot exps=CPU` only if the AS
 loaded. The same repository ships EAGLE-3 draft GGUFs beside it for speculative decoding — noted,
 not checked.
 
+**The fifth file: `google/gemma-4-26B-A4B-it` at `UD-IQ4_XS`, every expert on the card.**
+`unsloth/gemma-4-26B-A4B-it-GGUF`, 13,597,177,568 bytes (12.66 GiB); apache-2.0 on source and GGUF
+alike. Read from the hub on 2026-08-16; nothing run. 26,544M total with about 3.8B active, `gemma4`
+— the 12B's family with a mixture in place of the dense feed-forward: 30 layers, **5
+full-attention** with 2 KV heads of 512 and `attention_k_eq_v`, 25 sliding-window at 1,024 with 8
+KV heads of 256; 128 experts, 8 routed; 262,144 context; vision tower and MTP head as separate
+files. Cache at 40k is 0.78 GiB f16 for the five growing layers plus 0.29 GiB of constant window —
+1.07 GiB. Weights plus cache plus the compute allowance is **15.2 GiB: fits alone, with under a GiB
+to spare, and not beside the ASR model.** That is the hypothesis the third file cannot test —
+25B-class answers with every expert on the GPU, so decode is the card's and not the RAM's — at the
+price of the unload dance. With experts in RAM instead (128 × 3 × 2816 × 704 × 30 ≈ 22.8B of the
+26.5B; ~11 GiB of the file, ~4.4 GiB left on the card, ~0.77 GB read a token) it is a lighter
+sibling of the third file, and second to it. Its `UD-Q4_K_M` (16,947,541,728 bytes) and
+`MXFP4_MOE` (16,551,048,928 bytes) do not fit on the card at all. Fifth because it is a second
+Gemma and inherits every caveat of the second file — and because **#27007 is this model**: the
+Vulkan output corruption on a Radeon 890M was reported on `gemma-4-26B-A4B-it-qat-q4_0.gguf`, so on
+the laptop it is out until that issue moves. Desktop, CUDA, same session, same questions; ASR
+unloaded first.
+
+**The sixth file, and the architecture control: `mistralai/Ministral-3-14B-Instruct-2512` at
+Q4_K_M.** `mistralai/Ministral-3-14B-Instruct-2512-GGUF` — the vendor's own conversion —
+8,239,593,024 bytes (7.67 GiB); apache-2.0 on source and GGUF alike. Read from the hub on
+2026-08-16; nothing run. 13,945M dense, `mistral3`; **40 layers of full attention and nothing else**
+(`sliding_window: null`), 8 KV heads of 128; 262,144 context by YaRN ×16 from a **16,384 native
+window**; a Pixtral vision tower as a separate `mmproj` file; the card lists **eleven languages**
+(en, fr, es, de, it, pt, nl, zh, ja, ko, ar) against the twenty-five this app transcribes. Its cost
+is the cache, and that is the point of running it:
+
+    40 layers × 2 (K, V) × 8 heads × 128 × 40,960 tokens × 2 bytes = 6,710,886,400 bytes = 6.25 GiB at f16
+
+— **five times the 9B's**, 3.32 GiB at q8_0. At Q4_K_M with a q8_0 cache: 12.5 GiB alone, **13.8 GiB
+beside the ASR model — fits on paper**; at f16 the cache alone pushes it to 15.4 GiB and the ASR
+model out. `Q5_K_M` (9,621,091,904 bytes) fits alone; `Q8_0` (14,359,836,224 bytes) does not fit
+with any cache. Its job: every other file here has linear-attention or sliding-window layers, and
+this note preferred them for the cache arithmetic above — if the hybrids all cite badly at 40k, this
+is the file that says whether the architecture is why. Sixth because it is that control and nothing
+more: a Q4 against the 9B's Q8, eleven languages, and 40k tokens is 2.5× its native window.
+Whether llama.cpp honours the `llama_4_scaling_beta` term in its rope parameters was not checked.
+Same session, same questions, `-fa on -ctk q8_0 -ctv q8_0`, or the cache does not fit.
+
 ### 3. Retrieval, whole transcript, or both
 
 Reframed by the interaction, and this is the decision that changed most when v2 stopped being a
