@@ -59,7 +59,7 @@ Nothing a measurement produces belongs in the working tree. The two harnesses us
 inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
-`scripts/lab.ps1` is one entry point for the eight scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the nine scripts; run it bare to list them.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
 machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they

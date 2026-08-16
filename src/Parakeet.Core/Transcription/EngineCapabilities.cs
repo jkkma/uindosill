@@ -13,8 +13,9 @@ public sealed record EngineCapabilities
     /// </summary>
     /// <remarks>
     /// Carried through to the finished transcript. Quantisation quality on this engine is
-    /// unmeasured and the analogous ONNX INT8 export collapsed silently, so a transcript that
-    /// cannot say which weights produced it is not a result anybody can re-examine later.
+    /// measured on one corpus only (docs/UNPROVEN.md) and the analogous ONNX INT8 export collapsed
+    /// silently, so a transcript that cannot say which weights produced it is not a result anybody
+    /// can re-examine later.
     /// </remarks>
     public string? Quantisation { get; init; }
 

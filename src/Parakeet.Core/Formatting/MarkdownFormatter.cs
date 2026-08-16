@@ -6,8 +6,8 @@ namespace Parakeet.Core.Formatting;
 
 /// <summary>
 /// Markdown transcript with a provenance header. The header is not decoration: quantisation
-/// quality on this engine is unmeasured, so a transcript that does not record which weights
-/// and backend produced it cannot be judged later.
+/// quality on this engine is measured on one corpus only (docs/UNPROVEN.md), so a transcript
+/// that does not record which weights and backend produced it cannot be judged later.
 /// </summary>
 public sealed class MarkdownFormatter : ITranscriptFormatter
 {

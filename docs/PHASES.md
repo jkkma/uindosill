@@ -3,7 +3,7 @@
 Exit criteria are evidence, not opinion. What follows is the plan and an honest mark against each
 step.
 
-## Phase 0 — spike, no UI — **PARTLY DONE**
+## Phase 0 — spike, no UI — **DONE**
 
 Console harness: load a GGUF through P/Invoke, transcribe a real file, print the JSON.
 
@@ -22,9 +22,17 @@ end to end — 30 s, 10 min and 2 h 55 m — giving RTF at three durations (0.10
 peak working set at two (2,379 MB and ~2,950 MB), and a working-set profile across three hours
 showing memory peaks mid-run and falls. `scripts/measure-transcribe.ps1` is that harness.
 
-**The WER half is not done and nothing substitutes for it.** There is no WER harness and no
-reference corpus, so no quantisation below f16 should be recommended to anybody. `uindosill bench`
-has still only run against the canned engine.
+**The WER half is done, 2026-08-16.** `scripts/measure-wer.ps1` is the harness and
+`scripts/wer-corpus.json` the corpus — Rev.com's Earnings-22 Subset 10, ten human-transcribed
+earnings calls of 58–78 minutes from five countries, 11.12 hours, two transcript styles, every file
+pinned by digest — which is real, disfluent, accented and long-form, as this phase asked. Every
+catalogue entry was scored on the RTX 5080 desktop on CUDA: **f16 10.21%, q8_0 10.23%, q6_k
+10.17%, q5_k 10.17%, q4_k 10.15%** against the verbatim transcripts, 13.34–13.43% against the
+non-verbatim ones — a 0.08-point spread with no ordering, so on this material no quantisation in
+the catalogue costs measurable accuracy against f16. The method, its normaliser (deliberately not
+the leaderboard's, so the figures are not comparable to a published one), the per-file table, the
+CPU control and the limits are in `docs/UNPROVEN.md`. `uindosill bench` has still only run against
+the canned engine; the timings this phase wanted came from `transcribe` runs instead.
 
 ## Phase 1 — core — **DONE**
 
@@ -175,7 +183,7 @@ from touching those files, and uninstall has to leave them.
 |---|---|---|
 | 0 — spike | Correct text from real weights on real Windows | Yes |
 | 0 — spike | Timing and memory over real long audio | Yes |
-| 0 — spike | A WER harness, so quantisation can be judged | **No** |
+| 0 — spike | A WER harness, so quantisation can be judged | Yes — all five entries within 0.08 points of f16 on 11 h of human-transcribed calls |
 | 1 — core | `dotnet test` green on Linux, no weights | Yes |
 | 2 — engine | CLI transcribes a real file to correct SRT | Yes, up to 2 h 55 m |
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
@@ -205,19 +213,21 @@ The next actions, in order:
    second download flavour, and signing goes through SignPath Foundation's free programme, which
    waits on an application to SignPath rather than on a purchase, and which by its own terms signs
    this project's binaries and not the upstream natives.
-2. **A WER harness**, which gates *recommending* q8_0 or q4_k — and which now sits **behind** v1
-   rather than gating it.
+2. ~~**A WER harness**, which gates *recommending* q8_0 or q4_k~~ — **done 2026-08-16**, Phase 0
+   above and `docs/UNPROVEN.md`. It was moved behind v1 on 2026-08-15 by making f16 the default,
+   and it has now been built and run anyway: every catalogue entry scores within 0.08 points of f16
+   against eleven hours of human-transcribed accented English, so the evidence a recommendation
+   needed exists.
 
-   **Settled 2026-08-15: f16 is the default.** `tdt-0.6b-v3-f16` carries `"recommended": true` and
+   **f16 stays the default for now.** `tdt-0.6b-v3-f16` carries `"recommended": true` and
    `tdt-0.6b-v3-q8_0` carries `false`, so `ModelCatalog.Recommended` — which `EngineFactory`
-   resolves an unspecified `--model` to — returns the one entry whose transcription quality is not
-   an open question. The catalogue and this document now say the same thing.
-
-   The cost was accepted rather than discovered: every new user downloads 1.34 GiB instead of
-   941 MB and decodes more slowly on CPU. What that buys is a shipping default with no unmeasured
-   claim under it, which is what moves the WER harness out of the v1 gate. It remains the only
-   thing that would let this project recommend a quantisation to anybody, and until it exists
-   nothing below f16 should be recommended.
+   resolves an unspecified `--model` to — returns f16. That was chosen on 2026-08-15 because f16
+   was the one entry whose quality was not an open question, at the cost of a 1.34 GiB download
+   instead of 941 MB and a slower CPU decode. The measurement removes the *reason* for that
+   choice without making the other one: whether to make q8_0 (or smaller) the default is a
+   product decision about download size and CPU speed against one corpus's worth of evidence, and
+   it has not been taken. The catalogue's entries no longer say "unmeasured"; they say what was
+   measured and where.
 3. ~~**Settle the CUDA drop's licensing**~~ — **done 2026-08-15.** The EULA was read against what
    this product actually ships, `Attributions.Components` carries the NVIDIA entry so both
    `uindosill notice` and the Licences tab render it, and two tests hold it up. The reading, and

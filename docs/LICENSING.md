@@ -116,6 +116,20 @@ the way MIT requires for the other backends, so no file is dropped into `native/
 later reading finds such a requirement, that is a `build/NativeAssets.targets` change and the glob
 already has the shape for it.
 
+## The evaluation corpus is someone else's, and it does not ship
+
+`scripts/measure-wer.ps1` scores the models against Rev.com's **Earnings-22 Subset 10** — ten
+earnings calls and their human transcripts, pinned by digest in `scripts/wer-corpus.json` and
+fetched from `github.com/revdotcom/speech-datasets` at one commit. Its `LICENSE.md` puts *"the
+transcripts and associated text files that are used for alignment"* under **CC BY-SA 4.0**; it says
+nothing about the recordings, which Rev publishes in the same repository as an ASR benchmark, so
+their terms are **not stated** and this project does not claim to know them. What this project does
+with the corpus is bounded accordingly: it is downloaded to the machine that runs the harness, into
+a directory that is gitignored; nothing from it is committed, packaged or served; the numbers
+computed from it are published with the citation the dataset asks for (in the manifest). The
+share-alike clause attaches to the transcripts and would attach to a redistribution of them, which
+never happens here.
+
 ## Deliberately not used: TEN-VAD
 
 Its modified Apache-2.0 carries an Agora non-compete clause. Voice activity detection here is a plain

@@ -20,9 +20,14 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > caveats in [UNPROVEN.md](docs/UNPROVEN.md). All five quantisations have now been run
 > against 2 h 55 m of real podcast and diffed against f16 — 0.42% of tokens for q8_0 rising to
 > 2.69% for q4_k, over a CPU-versus-CUDA noise floor of 0.11%, with no sign of the silent collapse
-> that sank the analogous ONNX INT8 export. That is divergence from f16, **not** a word error rate:
-> no ground truth exists for that audio, so nothing here is a quality clearance for any
-> quantisation.
+> that sank the analogous ONNX INT8 export. That is divergence from f16, not a word error rate —
+> and the word error rate now exists too: **all five entries scored against eleven hours of
+> human-transcribed accented English earnings calls (Rev's Earnings-22 subset, two transcript
+> styles), on CUDA — f16 10.2%, and every quantisation within 0.08 points of it**, so on that
+> corpus no quantisation costs measurable accuracy. The normaliser is this project's own, not the
+> leaderboard's, so that figure is comparable to itself and not to a published one; one English
+> corpus of one genre is the whole of the evidence, and [UNPROVEN.md](docs/UNPROVEN.md) says
+> exactly what it does and does not cover.
 
 ## What it does
 
@@ -104,10 +109,11 @@ the Windows natives and a model, neither of which is in the clone.
 
 ### The scripts
 
-`scripts/` holds six PowerShell tasks — two for vendoring, two measurement harnesses, two
-transcript comparisons — and `scripts/lab.ps1` is one entry point for them: run it bare to list
-the tasks, each with the parameters its own script declares. It dispatches and nothing else, so
-every task is still runnable on its own.
+`scripts/` holds nine PowerShell tasks — two for vendoring, three measurement harnesses (speed
+and memory, the second machine, and word error rate against human transcripts), two transcript
+comparisons, and two for the v2 spike — and `scripts/lab.ps1` is one entry point for them: run it
+bare to list the tasks, each with the parameters its own script declares. It dispatches and
+nothing else, so every task is still runnable on its own.
 
 They divide along the same container line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
@@ -120,9 +126,13 @@ quantisation ladder — and it reads the `.txt` output as well. `scripts/vendor-
 `github.com` for its cpu and vulkan backends, which is how the Linux CI runner vendors the natives
 before it publishes; whether the container's network policy allows that route has not been checked.
 `scripts/measure-transcribe.ps1` will parse and report on outputs, but cannot produce them.
-`scripts/measure-second-machine.ps1` probes hardware through CIM and is Windows throughout, as is
-`scripts/vendor-cuda.ps1`, which reads a PE import table. For those last three, `pwsh` at least
-parses them, which is enough to keep a syntax error off the machine that can run them.
+`scripts/measure-wer.ps1` needs a machine that can transcribe — it fetches the pinned Earnings-22
+subset (`scripts/wer-corpus.json`, ~190 MB, verified by digest, into the gitignored `corpus/`),
+runs every catalogue model over its eleven hours and scores each against two human transcript
+styles with `uindosill wer`. `scripts/measure-second-machine.ps1` probes hardware through CIM and
+is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table. For those
+last three, `pwsh` at least parses them, which is enough to keep a syntax error off the machine
+that can run them.
 
 ## Layout
 
