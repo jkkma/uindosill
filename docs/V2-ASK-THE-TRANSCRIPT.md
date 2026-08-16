@@ -550,6 +550,44 @@ with no fix named) and #27007 (the 26B-A4B on Vulkan/RADV, a Radeon 890M — the
 — **open**, citing #24311 as the same class). Neither touches the desktop's CUDA path; both touch
 the laptop's, so on the laptop it stays out until reproduced or ruled out there. Read 2026-08-16.
 
+**The third file, and not before decision 3 has retrieval: `Qwen/Qwen3.6-35B-A3B` with the experts
+in system RAM.** `unsloth/Qwen3.6-35B-A3B-GGUF`, `UD-IQ4_XS` 17,730,509,792 bytes (16.51 GiB) first,
+`UD-Q4_K_M` 22,134,528,992 bytes (20.61 GiB) if it earns it; apache-2.0 on source and GGUF alike.
+Read from the hub on 2026-08-16; nothing run. 35,952M total, `qwen3_5_moe` — the 9B's family with a
+mixture in place of the dense feed-forward, so what this note worked out about linear attention
+transfers — 40 layers, 10 full-attention with 2 KV heads of 256, 256 experts with 8 routed and one
+shared per token, 262,144 context. Cache at 40k is 0.78 GiB f16. The experts are 256 × 3 × 2048 ×
+512 × 40 ≈ 32.2B of the 35.95B parameters, so with `-ot exps=CPU` (a flag under `llama-server`, and
+`-ncmoe N` beside it) roughly 15–16 GB of the IQ4_XS file lives in system RAM and what stays on the
+card is attention, the untied 248,320 × 2048 embeddings, routers and shared experts — 2–3 GiB by
+shape, depending on how the UD quant treats them — plus cache and compute: **about 5 GiB of VRAM,
+the ASR model resident, and 15–20 GB of the 32 GB of RAM as the second budget**, which has never
+been measured on this machine and joins the machine block, with RAM speed and channel count, before
+any figure is quoted.
+
+What it costs is time, and it is the wrong time for the whole-transcript path. Decode is bound by
+DDR5 bandwidth — ~1.0B active expert parameters a token at 4.5–5 bits is ~0.6 GB read per token,
+a ceiling near 150 tokens/s at 96 GB/s theoretical and real throughput well under it. Prefill is the
+bill: with experts in RAM a prompt streams expert weights per micro-batch, and the one clean
+published 16 GB row the maintainer's research found — an RX 7800 XT on Vulkan, Q4_K_M, `-ncmoe 12`,
+pp512 265 t/s — puts a 40k prompt near two and a half minutes; not this card, not CUDA, and the
+shape holds: three hours in one pass is minutes here where a dense model in VRAM is seconds, neither
+measured on the 5080. Retrieval turns that around — a prompt of a few thousand tokens makes the
+prefill small, the decode ceiling ample, and 35B-class answers available with the ASR model still
+loaded — which is why this file waits for decision 3 rather than competing with the two above.
+
+Two things read the same day. `ggml-org/llama.cpp` #26609, **open** since 2026-08-05 and updated
+2026-08-15: **Windows 11, an RTX 5070 on driver 610.47** — this card's generation and driver family
+— `Qwen3.6-35B-A3B-UD-Q4_K_M`, `-fa on` with q8_0 cache and `--override-tensor
+"blk\.(16|…|39)\.ffn_.*_exps\.=CPU"` → CUDA illegal memory access, deterministic across two builds,
+gone with `-fa off`. That is exactly the configuration this paragraph describes; the workaround
+costs little on this model because the cache is 0.78 GiB at f16 anyway, and some prefill speed.
+Whether b10448 carries it was not checked. And #21831, **open** since 2026-04-13 — the server
+forcing a full re-process on follow-up turns for SWA and recurrent models — is the follow-up-turn
+cost decision 1 hedges, and it applies to the 9B and to Gemma's sliding-window layers as much as
+here, so it separates none of the three. Run with `-fa off` until #26609 closes, `-ot exps=CPU` before
+`-ncmoe`, and host working set and page cache measured beside `nvidia-smi`.
+
 ### 3. Retrieval, whole transcript, or both
 
 Reframed by the interaction, and this is the decision that changed most when v2 stopped being a
