@@ -525,6 +525,31 @@ unload dance, and it is the retired candidate's own family, so everything read a
 shape transfers. What it does not have is any measurement of what it does with CSB384's questions —
 which is the only question that matters, and the one nothing on this page answers.
 
+**The second file to run, in the same session: `google/gemma-4-12B-it` at Q6_K** —
+`unsloth/gemma-4-12b-it-GGUF`, 9,786,022,720 bytes (9.11 GiB), apache-2.0 on the source and the GGUF
+alike (Gemma 4 is Apache; the Gemma Terms stop at Gemma 3). Read from the hub on 2026-08-16; nothing
+run. 11,960M dense, 48 layers — 8 full-attention, each one KV head of 512 with `attention_k_eq_v`,
+and 40 sliding-window at 1,024, each 8 KV heads of 256 — 262,144 context; vision and audio towers
+in separate `mmproj-*.gguf` files, and a multi-token-prediction head as a separate 465 MB file that
+this document has not checked the server for. Cache at 40k is about 1.1 GiB at f16: 0.63 GiB for
+the eight growing layers, counting K and V, and 0.31–0.47 GiB of constant window for the forty
+others. Weights plus cache is 10.2 GiB — with the same allowances, about 13.1 GiB beside the ASR
+model — which is **the 9B's envelope spent differently: more parameters at a lower quantisation.**
+Which of those buys more for citing a transcript is unmeasured, and the two cards' own numbers do
+not compare (different benchmarks, self-reported), which is why this is a second file and not a
+second candidate: same folder, same `-c 40960 -fa on`, same CSB384 questions, diff the citations.
+Its Q8_0 (12,669,647,680 bytes, 11.80 GiB) fits alone at about 14.4 GiB, and not beside the ASR
+model.
+
+Two reasons it is second and not first. Everything read about the 27B transfers to its sibling and
+nothing transfers here — sliding-window layers, K = V global attention and a separate MTP head are
+each a place where llama.cpp's support is younger. And Vulkan on AMD has two reports against Gemma 4
+where none was looked for against the 9B: `ggml-org/llama.cpp` #24311 (the 12B QAT on **Windows,
+Vulkan**, an AMD dGPU beside an iGPU, garbage output on partial offload; closed **stale** 2026-07-24
+with no fix named) and #27007 (the 26B-A4B on Vulkan/RADV, a Radeon 890M — the laptop's own gfx1150
+— **open**, citing #24311 as the same class). Neither touches the desktop's CUDA path; both touch
+the laptop's, so on the laptop it stays out until reproduced or ruled out there. Read 2026-08-16.
+
 ### 3. Retrieval, whole transcript, or both
 
 Reframed by the interaction, and this is the decision that changed most when v2 stopped being a
