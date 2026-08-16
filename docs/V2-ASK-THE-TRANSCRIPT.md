@@ -138,9 +138,9 @@ Not the C#. **A second native stack**: its own vendored binaries per backend, it
 release and digest table, its own ISA-baseline question, its own version of every gotcha the CUDA
 work just went through. Budget for that, not for the code.
 
-Sizing, on the machine this project is developed against (16 GB VRAM): a competent summarizer at
-Q4_K_M is 2–5 GB on top of the 1.34 GiB ASR model. That fits if the two run in sequence rather
-than staying resident together — which is decision 4.
+Sizing, on the machine this project is developed against (16 GB VRAM): the candidate decision 2 now
+names is 8.87 GiB at Q8_0, plus 1.25 GiB of cache for three hours of transcript, on top of the
+1.34 GiB ASR model. On paper both fit at once; whether they do is decision 4.
 
 Three hours of transcript is roughly 30k words, about 40k tokens. That is either a long-context
 model or a map-reduce, which is decision 3.
@@ -172,7 +172,8 @@ them are in MB.
 does not survive that.** It ships **no cudart** — it finds the runtime through `%CUDA_PATH%`, so it
 needs a CUDA Toolkit installed on the machine, which is exactly the install this project's own CUDA
 tier avoids by vendoring the 553 MB cudart archive; and its natives are built with CUDA 12.4.0 and
-carry **no `sm_120`**, so the RTX 5080 is not among their native targets. Its natives are llama.cpp
+carry **no `sm_120`**, so the RTX 5080 is not among their native targets (what they do carry, and
+what that costs on this card, is under *CUDA on the RTX 5080* below). Its natives are llama.cpp
 **b8816** (2026-04-16), four months behind upstream on the day this was read. So the honest scale
 against the stack already vendored here is: Vulkan comparable (20.2 MB against
 `parakeet-v0.5.0-lib-win-vulkan-x64.zip` at 17.1 MB), and CUDA **not smaller** — 224 MB without a
@@ -302,18 +303,96 @@ But its structs are the ones its own natives were built with; vendoring a newer 
 under it is the struct-layout risk, not the fix for it. So under LLamaSharp the pin is to
 LLamaSharp's release, and the natives are as old as it is.
 
-**So: spike both, a day each, and decide on the table that produces.** Each has to (1) load the
-same ~9B-parameter GGUF on Vulkan on both machines; (2) unload it and show the VRAM come back, on
-the counter decision 4 says this project does not have yet; (3) coexist in one process with
-parakeet.cpp's own ggml across load ASR → unload → load LLM → unload → load ASR; and (4) set an
-environment knob the native demonstrably reads. Whichever passes is the binding; if both pass, the
-one whose failure is easier to explain on a machine nobody here can see. **Do not hand-roll**: the
-surface is about 73 `llama_*` and 13 `ggml_backend_*` functions and nine structs, roughly ten times
-parakeet's C ABI, and this project has one person to keep it current. Hand-rolling stays what it
-was — the answer if the language model ever becomes load-bearing rather than a v2 feature.
+#### CUDA on the RTX 5080, read off the binaries — and it decides between them
+
+**The desktop tier runs on CUDA.** The maintainer's requirement, stated 2026-08-16. Vulkan stays the
+portable default and the laptop's only path, exactly as `docs/NATIVE-BINARIES.md` has it for the
+ASR tier — this narrows the desktop question, not the policy.
+
+What upstream ships, read from the GitHub releases API on 2026-08-16 — release **b10448**, published
+2026-08-15T20:48Z, the latest on that day: two Windows x64 CUDA zips, `cuda-12.4`
+(250,791,166 bytes) and `cuda-13.3` (146,699,660 bytes), each with a runtime zip beside it
+(`cudart-llama-bin-win-cuda-12.4-x64.zip` 391,443,627 bytes; `…-13.3-x64.zip` 390,970,417 bytes),
+plus `vulkan` at 34,807,759 and `cpu` at 18,464,245. Those are download sizes; the CPU zip is the
+one that unpacks to the 47.3 MB measured above.
+
+How they are built, from `.github/workflows/release.yml` at that tag: `-DGGML_BACKEND_DL=ON
+-DGGML_NATIVE=OFF -DGGML_CPU=OFF -DGGML_CUDA=ON`, with **no `CMAKE_CUDA_ARCHITECTURES`**, so ggml's
+default in `ggml/src/ggml-cuda/CMakeLists.txt` decides: for a toolkit below 13, `50/61/70-virtual`;
+always `75-virtual 80-virtual 86-real`; from 11.8, `89-real 90-virtual`; **from 12.8, `120a-real`**;
+from 12.9, `121a-real`. So the `cuda-12.4` zip cannot carry Blackwell code — on this card it would
+run, if at all, through a driver JIT of `compute_90` PTX — and the `cuda-13.3` zip should carry
+`sm_120a`. The CUDA job packs `ggml-cuda.dll` alone, and the release job then unpacks the CPU zip
+into every `llama-bin-win-*-<arch>.zip`; the CUDA zip is therefore the whole CPU drop with one DLL
+on top, and needs nothing but its cudart zip beside it.
+
+**Scanned, 2026-08-16, on the laptop**, which is the second machine and has no CUDA device — so this
+is a reading of the file, not a run. `llama-b10448-bin-win-cuda-13.3-x64.zip` downloaded to
+146,699,660 bytes, matching the API, SHA-256
+`56bef9038109ccae82e1c3843d400d6ca51aee406649a69c206769c8cbc7c89c`; unpacked to 52 files, 180.2 MB —
+`ggml-cuda.dll` at 141,679,616 bytes plus the 51 files of the CPU zip (all fourteen `ggml-cpu-*.dll`
+variants, `llama-server.exe` and `llama-server-impl.dll`, `llama-common.dll`, `llama.dll`, and no
+LICENSE), which confirms the merge. Then `scripts/vendor-cuda.ps1 -InspectOnly` pointed at that
+directory — the same fat-binary walker that produced the parakeet table in
+`docs/NATIVE-BINARIES.md`:
+
+| File | Containers | Cubins | PTX |
+|---|---|---|---|
+| `ggml-cuda.dll` | 141 parsed, 0 rejected | `sm_86`, `sm_89`, **`sm_120`**, `sm_121` | `compute_75`, `compute_80`, `compute_90` |
+
+That is the list CMake predicts for a ≥ 12.9 toolkit, read out of the binary; the walker reports the
+SM number and does not tell `120a` from `120`. The cross-check that would confirm it is the same one
+parakeet's row lacks — every payload is compressed, so nothing was read back against its own ELF
+header — with one difference that matters: parakeet's `sm_120` row was corroborated by a run on the
+5080, and **this one has been run nowhere**. Its corroboration is the first thing the desktop
+produces. The desktop's driver is 610.88; the minimum a 13.3 runtime needs was not looked up here,
+and `nvidia-smi`'s header on that machine answers it in one line.
+
+LLamaSharp, for the comparison this section exists to make: `.github/workflows/compile.yml` at
+`v0.27.0` installs CUDA **12.4.0** and passes `-DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF
+-DLLAMA_OPENSSL=OFF -DBUILD_SHARED_LIBS=ON -DGGML_CUDA=ON` — no `CMAKE_CUDA_ARCHITECTURES` — so its
+natives get the 12.4 list: `sm_86` and `sm_89` cubins and PTX up to `compute_90`. Read from the
+workflow and from ggml's default *at b10448*, where its natives are b8816 and the default may have
+read differently there; its 224 MB package was not scanned. On this card that is a JIT at first
+load at best, no Blackwell kernels ever, and the toolkit-install requirement above; and vendoring
+the 13.3 natives under it is the struct-layout mismatch above. Nothing here is a fault in
+LLamaSharp; it is a toolkit choice made on somebody else's schedule.
+
+**What CUDA does not change, and one thing it adds.** It adds no VRAM — decision 2's arithmetic on
+the 27B is backend-independent. What it adds is a way to be fooled: on Windows the NVIDIA driver can
+let allocations spill into system RAM when the card is full (the driver's "sysmem fallback" policy —
+general knowledge, not measured here), and this build's `llama-server` has `--fit on` by default,
+which trims layers and context to what fits. Both mean a model that does not fit will still *run*.
+The honest reading is ggml's own `model buffer size` / KV-buffer lines against `nvidia-smi` — the
+VRAM counter decision 4 says this project does not have, once more.
+
+Read from `tools/server/README.md` at b10448 the same day, because they bear on this document:
+`--ctx-checkpoints N` (default 32) with `--checkpoint-min-step N` (default 8192) is the server's
+mechanism for hybrid and recurrent models on follow-up turns — such models cannot roll their
+recurrent state back, so without checkpoints a second question re-prefills the whole transcript;
+whether it holds at 40k is unmeasured. `--host` defaults to `127.0.0.1`; `--api-key`,
+`--slot-save-path`, `--cache-reuse`, `-fit`, `-ot` and `-ncmoe` are all flags. Read, not run.
+
+**Recommendation, revised again on 2026-08-16, and narrower this time: `llama-server`.** The
+revision before this said spike LLamaSharp and `llama-server` a day each and let the table decide;
+it was written before the desktop tier was required to run on CUDA. Under that requirement the
+table has one clean column: only the child process gets the `cuda-13.3` build's native `sm_120`
+kernels without a toolkit install. The four checks the spike was to run collapse to one — the same
+GGUF loads on both machines, CUDA on the desktop and Vulkan on the laptop — because the other three
+are answered by the shape: unload is a kill, so the VRAM comes back by construction; two ggml
+instances never share a process; environment knobs are the child's environment. What replaces them
+is the lifecycle work only running it answers: a Job Object so the child dies with the app;
+`/health` before the first request; what SmartScreen does with an unsigned `llama-server.exe`
+started from under the app; and cold-load time for a ~9 GB file as a wait the user sits through.
+**Do not hand-roll** — unchanged, and for the same reasons: about 73 `llama_*` and 13
+`ggml_backend_*` functions and nine structs, roughly ten times parakeet's C ABI, and one person to
+keep it current; hand-rolling stays the answer if the language model ever becomes load-bearing
+rather than a v2 feature. LLamaSharp would come back if a release tracked a ≥ 12.8 toolkit and
+shipped its runtime — read its compile workflow before assuming either.
 
 Read from `SciSharp/LLamaSharp` at tag `v0.27.0`, `ggml-org/llama.cpp` at `b10448` and master, and
-NuGet on 2026-08-15; the server sizes were measured from the release zip the same day.
+NuGet on 2026-08-15; the server sizes were measured from the CPU release zip the same day, and the
+CUDA zip was scanned on 2026-08-16.
 
 **Rejected without much investigation**, and worth saying so plainly: Ollama (a separate daemon to
 install, against the no-install positioning), ONNX Runtime GenAI (a different model format and a
@@ -393,16 +472,58 @@ be at for this particular feature. `docs/UNPROVEN.md` records the analogous ONNX
 an ASR, where a mistake is visible on the page. Here wrong output is fluent by default, there is no
 WER to catch it, and the citations would be carrying more weight than they were designed to.
 
-There is no smaller sibling in this family to retreat to: the family is this and
+There is no smaller sibling in the 3.8 family to retreat to: the family is this and
 `Qwen3.8-2.4T-A95B`, which is a 2.4-trillion-parameter MoE and is `license:other` rather than
-apache-2.0. Smaller hybrid-attention models under the same licence do exist in the neighbouring
-Qwen families and elsewhere; which of them, at which quantisation, is worked out in the maintainer's
-v2 research notes, which are kept outside this repository until something in them has been run.
+apache-2.0. The neighbouring family has one, and it is the working candidate now — next section.
+The wider comparison — dense models that fit at Q6, mixtures that fit with experts in system RAM —
+is in the maintainer's v2 research notes, which stay outside this repository until something in
+them has been run.
 
-**Retired, and the slot is open again.** Nothing here has been run; what retired the candidate is
-arithmetic on its own `config.json` — the cheapest possible way to lose one — and the first draft
-missed it by writing the cache down as headroom. The Q3 question — decision 6 arriving early and
-attached to a specific model — is still the one any replacement has to answer first.
+**Retired, and the slot is filled below on the same arithmetic.** Nothing here has been run; what
+retired the candidate is arithmetic on its own `config.json` — the cheapest possible way to lose
+one — and the first draft missed it by writing the cache down as headroom. The Q3 question —
+decision 6 arriving early and attached to a specific model — was the one any replacement had to
+answer first, and the replacement answers it by not being at Q3.
+
+#### The working candidate now: `Qwen/Qwen3.5-9B` at Q8_0
+
+The same architecture in the size this card takes. Read from the hub on 2026-08-16; nothing run.
+
+| | |
+|---|---|
+| Parameters | 9,653M, **dense**; `qwen3_5` — the architecture llama.cpp registers as `QWEN35`, the 27B's own |
+| Licence | apache-2.0 on `Qwen/Qwen3.5-9B` and on `unsloth/Qwen3.5-9B-GGUF` alike |
+| Layers | 32, hybrid — `full_attention_interval` 4, so **8 full-attention layers**, each **4 KV heads of `head_dim` 256** |
+| Context | **262,144** |
+| Vision | a VLM like its sibling; the GGUF ships the tower as separate `mmproj-*.gguf` files — omit them and it is text-only |
+| Published | model card and GGUF repository both last updated 2026-03-02 |
+
+Sizes from `unsloth/Qwen3.5-9B-GGUF`, LFS-backed, so `docs/MODELS.md`'s pinning procedure applies
+unchanged:
+
+| Quant | Size | With 40k tokens of cache, on 16 GB |
+|---|---|---|
+| **`Q8_0`** | **9,527,502,048 bytes (8.87 GiB)** | **10.12 GiB at f16 — fits, and fits beside the 1.34 GiB ASR model** |
+| `Q6_K` | 7,458,301,152 bytes (6.95 GiB) | 8.20 GiB — past the laptop's 7.36 GiB fast-heap budget, so it would spill there |
+| `Q4_K_M` | 5,680,522,464 bytes (5.29 GiB) | 6.54 GiB — the laptop candidate; inside its fast heap on paper, with under a GiB left for everything else |
+
+The cache, from `config.json`:
+
+    8 layers × 2 (K, V) × 4 heads × 256 × 40,960 tokens × 2 bytes = 1,342,177,280 bytes = 1.25 GiB at f16
+
+or about 0.66 GiB at q8_0 — half the 27B's, because half as many full-attention layers. The 24
+linear-attention layers hold fixed-size recurrent state (about 2 MiB each at f32, for 32 value heads
+of 128 × 128) that does not grow with the prompt. Weights plus cache at Q8_0 is 10.12 GiB; with a
+1.5 GiB compute-buffer allowance — an assumption, anchored on nothing measured here — and the ASR
+model resident, about 13 GiB on a card that reports 15.92 GiB. Arithmetic, and the first CUDA run on
+the desktop measures it.
+
+Why Q8_0 rather than smaller: it fits, so the quantisation question this document cannot discharge
+is asked at the end of the scale where it is smallest — the opposite corner from where the 27B put
+it. Why this and not the wider field: it needs no expert offload, no second memory budget and no
+unload dance, and it is the retired candidate's own family, so everything read about the 27B's
+shape transfers. What it does not have is any measurement of what it does with CSB384's questions —
+which is the only question that matters, and the one nothing on this page answers.
 
 ### 3. Retrieval, whole transcript, or both
 
@@ -433,10 +554,13 @@ panel means the model has to be **resident for as long as somebody is asking que
 wait before the first answer is a wait the user is sitting through rather than one hidden inside a
 transcription job.
 
-16 GB of VRAM holds the 1.34 GiB ASR model and a 2–5 GB summarizer in sequence comfortably; both at
-once is tighter and depends on the summarizer. Since transcription finishes before the questions
-start, sequential is the obvious answer — unload the ASR model, load the language model — and the
-cost is that re-transcribing during a chat session means paying both loads again.
+16 GB of VRAM holds the 1.34 GiB ASR model and the candidate decision 2 now names — 8.87 GiB at
+Q8_0, 10.12 GiB with three hours of cache — in sequence comfortably; both at once is about 13 GiB
+with a 1.5 GiB compute allowance, inside the card on paper. Since transcription finishes before the
+questions start, sequential is still the obvious default — unload the ASR model, load the language
+model — and the cost is that re-transcribing during a chat session means paying both loads again.
+Under `llama-server` (decision 1) an unload is a process exit, which is the one form of unload that
+cannot leak.
 
 MoE offload changes the shape of this question rather than answering it. Experts in system RAM
 lower the VRAM pressure and raise the RAM pressure instead — a 30B-total model at Q4 is roughly
@@ -445,7 +569,11 @@ is not roomy, and it is a second budget to track.
 
 Worth recording now: **`docs/UNPROVEN.md` says VRAM has never been measured at all** — the harness
 samples host working set only, so it cannot see either side of a split placement. This decision
-currently has no data under it in any direction.
+currently has no data under it in any direction. The first `llama-server` run on the desktop
+changes that cheaply: ggml logs its model, KV and compute buffer sizes at load, and `nvidia-smi`
+shows what the card is holding; those two, side by side, with and without the ASR model loaded,
+are the first VRAM figures this project will have had — and the desktop is also where the CUDA
+`sm_120` reading in decision 1 gets its corroborating run.
 
 **The laptop is a different budget, and its one published number needs its footnote.** The 7.36 GiB
 that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memory_budget` budget**
