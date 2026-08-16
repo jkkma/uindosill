@@ -120,7 +120,7 @@ backends this project would care about all ship at that same version:
 The two GPU backends are metapackages that pull a per-RID package apiece —
 `LLamaSharp.Backend.Vulkan.Windows` at **20,194,168 bytes (20.2 MB)** and
 `LLamaSharp.Backend.Cuda12.Windows` at **224,196,120 bytes (224.2 MB)**. Sizes are the
-`Content-Length` of each `.nupkg` on the NuGet flat container, read 2026-08-16. An earlier revision
+`Content-Length` of each `.nupkg` on the NuGet flat container, read 2026-08-15. An earlier revision
 of this table said 35 MB, 19 MB and 214 MB; those were the MiB figures (34.7, 19.3 and 213.8) with
 the wrong unit on them. Corrected here rather than quietly rewritten, because the numbers beside
 them are in MB.
@@ -151,7 +151,7 @@ parakeet.cpp's much smaller C ABI, and it changes far more often.
 
 The version story is the part that matters, and it is a difference of kind rather than of presence.
 llama.cpp does expose `LLAMA_API const char * llama_version(void)` — but it returns a **version
-string, not an integer ABI number**, and it is weaker than even that sounds. **Measured, 2026-08-16,
+string, not an integer ABI number**, and it is weaker than even that sounds. **Measured, 2026-08-15,
 on the laptop:** `llama.dll` from the upstream Windows CPU release `b10448`, called through
 P/Invoke, returns **`"0.1.0-dev"`** — and that is the string on every release build, not just this
 one (read on 2026-08-15; measured here on one). So it does not identify the build, let alone the
@@ -229,7 +229,7 @@ would lack an ABI guard. That fact is gone, because nothing on either side has o
 structs match its own natives and nothing checks that they do — the four-month lag above already
 spans layout changes: between `b8816` and `b10448`, `llama_model_params` traded `use_mmap`,
 `use_direct_io` and `use_mlock` for `load_mode` and `load_mtp`, and `llama_context_params` grew
-five fields (read from `include/llama.h` at both tags, 2026-08-16), and nothing about the next such
+five fields (read from `include/llama.h` at both tags, 2026-08-15), and nothing about the next such
 change will announce itself — and `llama_version()` cannot be made to guard anything. So the guard
 gets built here whichever way this goes, and the choice is between two ways of needing it rarely,
 not between having one and not.
@@ -238,7 +238,7 @@ That opens a third option the earlier draft did not have in view: **`llama-serve
 child process.** The same upstream release zips, vendored under `native/` with the same pin, digest
 and LICENSE-beside-the-binary rules as parakeet's; the app starts `llama-server.exe` on `127.0.0.1`
 with a random port and an api-key, talks HTTP to it, and kills it on exit. Measured from the
-`b10448` Windows CPU zip on 2026-08-16: `llama-server.exe` is a 9 KB stub over
+`b10448` Windows CPU zip on 2026-08-15: `llama-server.exe` is a 9 KB stub over
 `llama-server-impl.dll` (10.0 MB) and `llama-common.dll` (8.1 MB); with `llama.dll`, ggml, every
 CPU variant, OpenMP and `mtmd`, the server needs 41.4 MB across 22 files; the whole zip is 47.3 MB
 in 51 files, and it ships no LICENSE file, so the MIT text travels from the source tree at the
@@ -270,7 +270,7 @@ parakeet's C ABI, and this project has one person to keep it current. Hand-rolli
 was — the answer if the language model ever becomes load-bearing rather than a v2 feature.
 
 Read from `SciSharp/LLamaSharp` at tag `v0.27.0`, `ggml-org/llama.cpp` at `b10448` and master, and
-NuGet on 2026-08-15; the server sizes were measured from the release zip on 2026-08-16.
+NuGet on 2026-08-15; the server sizes were measured from the release zip the same day.
 
 **Rejected without much investigation**, and worth saying so plainly: Ollama (a separate daemon to
 install, against the no-install positioning), ONNX Runtime GenAI (a different model format and a
@@ -299,7 +299,7 @@ assert one carelessly. Any summarizer model has to clear that bar before it can 
 
 `Qwen/Qwen3.8-27B` — **apache-2.0**, which clears the licensing gate outright, and that is rarer
 than it sounds among capable local models. Read from the hub on 2026-08-15; nothing below was run.
-**Retired as the working candidate on 2026-08-16**, for the arithmetic under the table.
+**Retired as the working candidate on 2026-08-15**, for the arithmetic under the table.
 
 | | |
 |---|---|
@@ -323,7 +323,7 @@ itself a third-party conversion of NVIDIA's checkpoint.
 
 **An earlier revision of this table said `UD-Q3_K_XL` "fits, ~2.5 GB for KV". The 2.5 GB was not
 headroom; it is the KV cache itself, and it was the entire margin.** Corrected here rather than
-quietly rewritten. From the model's `config.json` (read from the hub 2026-08-16): 64 layers with
+quietly rewritten. From the model's `config.json` (read from the hub 2026-08-15): 64 layers with
 `full_attention_interval` 4, so **16 full-attention layers**, each with **4 KV heads of `head_dim`
 256**. llama.cpp keeps a growing KV cache only for those sixteen — the 48 linear-attention layers
 carry recurrent state that does not grow with the prompt — so at 40,960 tokens the cache is
@@ -410,12 +410,12 @@ that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memo
 24 GB installed for the iGPU**: the driver reports 8,589,934,592 bytes dedicated and Windows sees
 15,994 MB of physical memory. There is also heap 1, host-visible, 7.81 GiB, and a 2 GiB
 single-allocation cap. All measured on that machine with `vulkaninfo`, the driver's registry key and
-`Win32_ComputerSystem` on 2026-08-16. What that means for a language model there: on a device that
+`Win32_ComputerSystem` on 2026-08-15. What that means for a language model there: on a device that
 reports `uma: 1`, ggml's Vulkan allocator tries three memory types in order for every buffer —
 device-local-and-host-visible, then device-local, then host-visible — and **no environment knob is
 involved**; `GGML_VK_ALLOW_SYSMEM_FALLBACK` is the switch for the *non*-UMA branch (read from
 `ggml_vk_create_buffer_device` in `ggml/src/ggml-vulkan/ggml-vulkan.cpp`, `ggml-org/llama.cpp`
-master, 2026-08-16). So weights larger than heap 0 load by spilling into the host heap, at the cost
+master, 2026-08-15). So weights larger than heap 0 load by spilling into the host heap, at the cost
 of whatever the OS was using that memory for and of a bandwidth the fast heap does not have. So the
 laptop question is not "does it fit in 7.36 GiB" but how much of the fast heap the language model
 takes beside — or instead of — the 1.34 GiB ASR model, and what the spill costs; none of it

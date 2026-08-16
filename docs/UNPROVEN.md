@@ -656,7 +656,7 @@ below.
 | OS | Windows 11 Home (10.0.26200), x64, Spanish locale |
 | CPU | AMD Ryzen AI 9 365 w/ Radeon 880M — **10 cores, 20 threads**, 2.0 GHz base |
 | Memory | 24 GB across 4 modules, configured 7500 MT/s (rated 7500) — **of which the BIOS carves out 8 GB for the iGPU** (UMA frame buffer: the driver reports 8,589,934,592 bytes dedicated and Windows sees 15,994 MB of physical memory; the BIOS setting itself was not read, this is what the OS and driver report) |
-| GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 dated **2025-01-22** (Vulkan `driverInfo` 24.30.22.03) — **no NVIDIA device**. Vulkan heaps, from `vulkaninfo` 2026-08-16: heap 0 device-local 7.75 GiB with a `VK_EXT_memory_budget` budget of **7.36 GiB** — that is the carve-out; heap 1 host-visible 7.81 GiB (budget 7.42 GiB); heap 2 device-local 256 MiB; `maxMemoryAllocationSize` 2 GiB; `VK_KHR_cooperative_matrix` revision 2 and **no bfloat16 extension** |
+| GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 dated **2025-01-22** (Vulkan `driverInfo` 24.30.22.03) — **no NVIDIA device**. Vulkan heaps, from `vulkaninfo` 2026-08-15: heap 0 device-local 7.75 GiB with a `VK_EXT_memory_budget` budget of **7.36 GiB** — that is the carve-out; heap 1 host-visible 7.81 GiB (budget 7.42 GiB); heap 2 device-local 256 MiB; `maxMemoryAllocationSize` 2 GiB; `VK_KHR_cooperative_matrix` revision 2 and **no bfloat16 extension** |
 | Storage | 954 GB NVMe SSD |
 | Runtime | .NET 10.0.11, SDK 10.0.400, PowerShell 7.6.4 |
 | Weights | `tdt-0.6b-v3-f16`, 1.34 GiB, sha256 `8ba47343…fc5abb22` — matches the catalogue pin |
@@ -771,7 +771,7 @@ quietly rewritten: the reproduction that settled it is upstream's binary, not th
 
 **Why it asks for an extension it has just said is unsupported — and why the upstream workaround is
 a newer driver.** Read from `ggml/src/ggml-vulkan/ggml-vulkan.cpp` at `ggml-org/llama.cpp` master
-on 2026-08-16 (last touched 2026-08-15): the backend requests `VK_KHR_shader_bfloat16` at
+on 2026-08-15, the day it was last touched: the backend requests `VK_KHR_shader_bfloat16` at
 `vkCreateDevice` in **two** places. One is gated on the extension actually appearing in the
 device's extension list — that is the check behind the `bf16: 0` in the banner, and on this driver
 it correctly stays off. The other is gated on `coopmat_bf16_support`, which is set while walking
@@ -787,7 +787,7 @@ inferred for that build from the identical symptom and the identical knob.
 
 "Upstream defect" stands — the second request should be gated on the extension list too. The
 implication that nothing upstream fixes it does not: **AMD added `VK_KHR_shader_bfloat16` to its
-Windows driver in Adrenalin 25.8.1** — the release note, read 2026-08-16, lists it under "Expanded
+Windows driver in Adrenalin 25.8.1** — the release note, read 2026-08-15, lists it under "Expanded
 Vulkan Extension Support" — and the driver on this laptop is dated **2025-01-22**, which predates it.
 On a driver that ships the extension the request should succeed and the knob become unnecessary.
 **Whether this unit is fixed by a driver update is not measured.** It is the cheapest experiment in this
