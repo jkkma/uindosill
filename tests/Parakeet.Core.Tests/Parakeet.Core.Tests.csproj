@@ -4,4 +4,12 @@
     <ProjectReference Include="../../src/Parakeet.Core/Parakeet.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The hand-labelled question set for CSB384 (docs/V2-ASK-THE-TRANSCRIPT.md, decision 6).
+         Data, not code: the suite validates its shape so that a labelling session cannot leave a
+         file the lab script would misread. It is a fixture rather than a measurement product, which
+         is why it lives under tests/ and not runs/. -->
+    <Content Include="../fixtures/csb384/questions.json" Link="fixtures/csb384/questions.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

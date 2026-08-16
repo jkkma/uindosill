@@ -53,7 +53,7 @@ the CLI or the app's Models tab downloads.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 289 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 295 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

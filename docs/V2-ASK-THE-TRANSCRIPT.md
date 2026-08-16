@@ -1016,6 +1016,46 @@ backend beside every number:
   nothing has been measured since (research) — plus prefill, decode and VRAM per file in decision
   2's run order, and the follow-up-turn cost that #21831 describes.
 
+#### The thirty-question set — the file exists, the labels do not (2026-08-16)
+
+`tests/fixtures/csb384/questions.json` is the set's shape with one placeholder per kind and
+`status: template`; the suite validates it (`QuestionSetTests`, six tests) so that a labelling
+session cannot leave a file the lab script would misread. Two facts read the same day decided the
+format. **The JSON transcript carries no segment id** — `segments[]` has `start`, `end`, `text`,
+`conf`, `words` and nothing else — so `S<n>` is the 1-based position in that array and the file is
+only meaningful against one transcript: it **pins** the transcript it was labelled against (source,
+ASR model, quantisation, backend, segment count, a SHA-256 over each segment's start, end and text
+in order), which is decision 5's gap arriving one artefact early; the natural target is the
+desktop's f16 reference. And **`language` is empty in the transcript JSON** on the second machine —
+`TranscriptDocument.Language` is a field the pipeline fills only from a hint — so "prompt in the
+transcript's language" needs a source for the language that the transcript itself does not yet
+supply.
+
+The composition, thirty by what each one tests: **16 pointed** (*what did they say about X* — gold
+is one or more `[from, to]` ranges and a verbatim quote of at most twelve words from inside them,
+for the substring check), **4 paraphrase** (pointed, asked without the transcript's own vocabulary,
+written last — where BM25 is expected to miss and tier 1 earns or does not earn its place),
+**3 global** (*main topics* — a set of ranges an answer must touch, judged by a person; the router
+must send them global), **3 adversarial** (plausible and unanswered, one on a topic the episode
+mentions but does not answer — gold is an abstention), **2 who-said** (range and quote; a name is a
+failure) and **2 needle** (not hand-labelled: the evaluator plants a synthetic segment after a
+given index in a copy of the transcript and expects that id cited). Positions spread across the
+three hours, because the effective-length problem is at depth and questions written after reading
+drift toward what was memorable, which is what retrieval finds anyway.
+
+The session is a person's — about two or three hours: read the f16 transcript's `md` (a timestamp
+per segment), write questions *while* reading, note the index range and copy the quote, do the
+paraphrase ones last by rewording pointed ones, write the adversarial ones from adjacent topics.
+English, because CSB384 is; the twenty-five-language claim needs a second set later. Once
+`status` is `labelled` the suite enforces the composition and the pin. What is consumed by whom:
+the suite checks shape only; `measure-answers.ps1` checks ranges against the transcript when it is
+present, runs tier 0 for recall@10 once BM25 exists in `Parakeet.Core`, plants the needles, and
+diffs every model run's citations against gold. One question the maintainer decides, not this
+document: a labelled file carries about thirty short quotes from a podcast in a public repository.
+It is a fixture and not a measurement product, so the `runs/` rule does not cover it; the
+alternatives are beside the transcript under `runs/`, unversioned, or with the research outside the
+repository.
+
 **The mechanism exists server-side.** `tools/server/README.md` at b10448 (read 2026-08-16)
 documents `grammar` and `json_schema` on `/completion` and `response_format` with a schema on
 `/v1/chat/completions`, so "the test and the mechanism are one thing" is available and not a
