@@ -162,10 +162,10 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 | [docs/NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release: the script, the layout, the digests. |
 | [docs/MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
 | [docs/LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution", and the CUDA EULA reading. |
-| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, five MIT components, the CUDA runtime. |
 | [docs/V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [docs/V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [docs/PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
+| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, five MIT components, the CUDA runtime. |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for an agent session: budget, how to build, the one rule. |
 
 ## Licence
