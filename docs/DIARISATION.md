@@ -323,13 +323,51 @@ Concrete integration points, from the repository read (file:line as of 2026-08-1
   multiplier on today's measured RTF 0.079–0.10; what slowdown is acceptable before speakers ship
   is a product decision the spike numbers should provoke, not answer.
 
-## The recommendation
+## The recommendation, and the decision
 
-**Unchanged, now with evidence: speakers ride v1.1.** Build Phase 5, apply to SignPath, and run
-the first spike during that wait — the sherpa-onnx route is days of work against artifacts that
-all exist today, and the first labelled stretches (CSB384's cuts) can be made in evenings. Ship
-v1.0 when signing lands. The Sortformer spike, the dev/held-out set, and the ratified gate decide
-what v1.1 actually carries. Nothing found holds v1.0 for this: no route has a measured number on
-the target material, and the instrument to produce one does not exist yet — shipping v1.0 behind
-that measurement would gate a working product on the one thing this project refuses to do, which
-is claim a number nobody has measured.
+The study's recommendation was v1.1: build Phase 5, apply to SignPath, run the first spike during
+the signing wait, ship v1.0 when signing lands, let speakers ride the auto-update once the
+held-out number clears the ratified gate — because no route has a measured number on the target
+material, and shipping v1.0 behind that measurement would gate a working product on the one thing
+this project refuses to do, which is claim a number nobody has measured.
+
+**The maintainer decided otherwise the same day, 2026-08-16: diarisation ships in v1.0, as an
+option the user turns on.** Recorded with the recommendation it overrode left intact above, so
+the two stay distinguishable. Two more facts arrived with the decision. The feature is **opt-in**
+in the product, not always-on. And the maintainer supplied test material the same evening: four
+full episodes, uploaded to the maintainer's Drive (no ids here — this repository is public),
+whose filenames carry the stratification the measurement plan asked for — two hosts alone, then
+the same two hosts plus one, three and five guests: nominally 2, 3, 5 and 7 voices. That brackets
+the 4-speaker cap from both sides, and the 7-voice episode is a harsher stress than the plan's
+own 5-voice ceiling. Everything about them beyond the filenames — actual speaker counts, same-room
+versus remote guests, beds and ad reads — is unverified until they are heard, and audio alone is
+not ground truth: the RTTM labelling pass over cut stretches is still the work the plan says it
+is. One gap the supplied set does not close: all four appear to be one show, so the stratified
+dev curve is covered, but the held-out-robustness claim still wants at least one entirely unseen
+show later.
+
+What the decision changes, and what it cannot:
+
+- **v1.0 now gates on the measurement.** Signing left the critical path the same day — the
+  maintainer also decided v1.0 ships unsigned (`docs/PHASES.md`, *Decisions taken 2026-08-16*,
+  decision 2) — so the release ships when Phase 5's Velopack packaging and the held-out number
+  passing the pre-ratified gate both land. The decision moves the feature into v1.0; it does not
+  waive the gate — the decision was to ship speakers, not to ship a claim, and an opt-in that
+  mislabels speakers breaks the product's one rule as surely as a default would.
+- **The critical path inverts.** Cutting and labelling stretches from the supplied episodes, and
+  the sherpa-onnx spike, are the front of the queue — there is no signing wait left to fill — in
+  the order §*The spike, in order* already fixes. The DER harness and the seam work need no
+  labels at all and can start immediately.
+- **The integration build joins v1 scope**: everything §*The seam, mapped* lists — the Core
+  interface, the speaker on segments and words, six formatters, the fake engine and the tests,
+  the second native drop with its doctor probe, the Phase 5 packaging entry.
+- **Opt-in shapes the seam.** A transcribe-time option — a CLI flag and an app setting, off by
+  default; the diarisation model files are an on-demand download when the option is first
+  enabled, not part of the default install, the same shape the CUDA-tier decision took. That is
+  the concrete reason the catalogue needs its task discriminator: a diarisation entry must be
+  installable without ever surfacing as a selectable ASR model. The second decode and the
+  diariser's memory are costs only an enabled option pays.
+- **The five-voice-and-beyond fallback becomes a v1.0 decision** instead of a v1.x one if the
+  guest episodes defeat the 4-speaker cap — and the supplied 7-voice episode exists to force
+  that question early: clustering route behind Sortformer, an NC-labelled DiariZen opt-in (a
+  maintainer policy call), or shipping the cap with honest UI.
