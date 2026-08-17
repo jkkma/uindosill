@@ -44,7 +44,7 @@
     .\scripts\sync-drive.ps1 -Runs laptop
 
 .EXAMPLE
-    # A research workflow's product, converted to PDF, goes to its dated folder.
+    # A research workflow's product — markdown, as written — goes to its dated folder.
     .\scripts\sync-drive.ps1 -Research .\out\diarisation-research-2026-08-16
 
 .EXAMPLE
@@ -67,8 +67,8 @@ param(
     [ValidateSet('laptop', 'desktop')]
     [string] $Runs,
 
-    # Push a local research folder to a folder of the same name under uindosill/. Convention:
-    # the PDFs sit at the top and the markdown sources in source-md/ beside them.
+    # Push a local research folder to a folder of the same name under uindosill/. Research is
+    # markdown and travels as markdown; the next session pulls it with -Fetch and reads the files.
     [Parameter(ParameterSetName = 'Research', Mandatory)]
     [string] $Research,
 
@@ -184,10 +184,10 @@ switch ($PSCmdlet.ParameterSetName) {
         $name = Split-Path -Leaf $source
         $target = "$root/$name"
 
-        $pdfs = @(Get-ChildItem -LiteralPath $source -Filter *.pdf -File)
-        if ($pdfs.Count -eq 0) {
-            throw "No PDF in $source. Research goes up as PDF — see CLAUDE.md, 'Where output goes'. " +
-                  'Convert the markdown first and keep the sources in source-md/ beside it.'
+        $documents = @(Get-ChildItem -LiteralPath $source -Filter *.md -File -Recurse)
+        if ($documents.Count -eq 0) {
+            throw "No markdown in $source. A research folder is the study as written; " +
+                  'there is nothing here for the next session to read.'
         }
 
         Invoke-Rclone -What "$name → Drive" -Arguments (@('copy', $source, $target) + $common)
