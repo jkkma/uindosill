@@ -3,9 +3,9 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Ten scripts with ten names and ten flag sets is nine names too many to remember when you
-    are switching between machines. This dispatches to them and nothing else: every task is still
-    a script you can run directly, and this changes none of their behaviour.
+    Eleven scripts with eleven names and eleven flag sets is ten names too many to remember when
+    you are switching between machines. This dispatches to them and nothing else: every task is
+    still a script you can run directly, and this changes none of their behaviour.
 
     It is a dispatcher rather than a merge because the scripts it calls produced every number in
     `docs/UNPROVEN.md`. Rewriting them into one file to save a filename would put that at risk for
@@ -75,12 +75,20 @@
 .EXAMPLE
     # On the desktop, which has no Drive mount by choice: the test episodes, sizes checked.
     .\scripts\lab.ps1 drive -Episodes
+
+.EXAMPLE
+    # The diarisation development stretches, cut from those episodes and checked against their pins.
+    .\scripts\lab.ps1 der -Cut
+
+.EXAMPLE
+    # Speaker-turn hypotheses (one <stretch id>.rttm each) scored against the hand-labelled references.
+    .\scripts\lab.ps1 der -Hypotheses runs\spike-x -System "sherpa-onnx 1.13.5 cpu"
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -179,7 +187,19 @@ param(
     [switch] $Episodes,
     [string] $Remote,
     [string] $DriveFolder,
-    [switch] $DryRun
+    [switch] $DryRun,
+
+    # --- der (-Destination, -Force, -ManifestPath, -OutputDirectory, -Configuration and -SkipBuild
+    #     are shared with the tasks above; measure-der.ps1's parameter sets keep -Cut and
+    #     -Hypotheses apart, and it says so if both are passed) ---
+    [string] $Hypotheses,
+    [string] $System,
+    [string] $ReferenceDirectory,
+    [double] $Collar,
+    [switch] $SkipOverlap,
+    [switch] $Cut,
+    [string[]] $Stretches,
+    [string] $EpisodeDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -196,6 +216,7 @@ $tasks = [ordered]@{
     'answers'       = 'measure-answers.ps1'
     'wer'           = 'measure-wer.ps1'
     'drive'         = 'sync-drive.ps1'
+    'der'           = 'measure-der.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.

@@ -89,7 +89,14 @@ internal static class EngineFactory
                 : throw new CliUsageException(
                     $"Unknown model '{id}'. Run 'uindosill models list' to see the catalogue.")
             : context.Catalog.Recommended
-                ?? throw new CliUsageException("The model catalogue is empty.");
+                ?? throw new CliUsageException("The model catalogue has no transcription model.");
+
+        if (descriptor.Task != ModelTask.Transcription)
+        {
+            throw new CliUsageException(
+                $"'{descriptor.Id}' is a {descriptor.Task.ToString().ToLowerInvariant()} model, not a transcription model; " +
+                "it cannot be loaded as the ASR engine. Run 'uindosill models list' to see which entries transcribe.");
+        }
 
         var path = context.Store.PathFor(descriptor);
         if (!File.Exists(path))

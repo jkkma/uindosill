@@ -61,6 +61,13 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Real-time factor", rtf.ToString("0.###", CultureInfo.InvariantCulture)));
             }
 
+            // Which model named the speakers, beside which model wrote the words, for the same
+            // reason: a label whose source is unknown cannot be re-examined.
+            if (document.SpeakerModelId is { } speakerModel)
+            {
+                rows.Add(("Speaker labels", speakerModel));
+            }
+
             if (rows.Count > 0)
             {
                 builder.Append("| Field | Value |").Append(nl);
@@ -84,6 +91,11 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
             if (options.IncludeTimestamps)
             {
                 builder.Append("**[").Append(Timecode.ToClock(segment.Start)).Append("]** ");
+            }
+
+            if (segment.Speaker is { } speaker)
+            {
+                builder.Append("**").Append(Escape(speaker)).Append(":** ");
             }
 
             builder.Append(Escape(segment.Text.Trim())).Append(nl).Append(nl);

@@ -714,7 +714,7 @@ point over eleven hours — not a proof that no input separates them.
 
 ## Still open
 
-### Speaker diarisation — studied 2026-08-16, nothing measured
+### Speaker diarisation — studied 2026-08-16, instrument built 2026-08-17, nothing measured
 
 The pre-v1 study — run 2026-08-16; it lives in the maintainer's diarisation research on the
 Drive, outside this repository the way research does per `CLAUDE.md` — surveyed candidates,
@@ -726,6 +726,35 @@ machines, this project knows nothing measured about diarisation quality or cost 
 sherpa-onnx pipeline's DER on overlapping speech, not Sortformer's CPU real-time factor on either
 machine, not the int8 export's cost against fp32, not even the labelling effort per stretch. The
 study's remaining unknowns are marked inline in that document where each claim stands.
+
+**What changed on 2026-08-17 is the instrument, not the evidence.** `uindosill der` now exists and
+is validated: on ten committed RTTM fixture pairs (`tests/fixtures/diarisation/scorer/`) it
+reproduces every component pyannote.metrics 4.1 computes — reference speech, missed, false alarm,
+confusion — to within a microsecond, in four blocks each: at the headline collar of 0.25 s with
+overlap included, at collar 0, over reference-overlap regions under the whole-file mapping, and
+over the whole file with overlap skipped; `scripts/validate-der.py`
+ran the comparison and the C# suite re-asserts it on every run. That is a validated scorer, and it
+is still zero measurements: the five development stretches are pinned and cut
+(`tests/fixtures/diarisation/dev/`) but **none is labelled**, so no DER of anything has been
+computed on this material, and the labelling effort per stretch is as unmeasured as it was.
+
+**Two things about the number itself, recorded before any is produced.** First, the collar
+convention: pyannote.metrics' `collar` is a total width centred on each reference boundary
+(`collar=0.25` forgives 0.125 s either side, confirmed in its source), whereas NIST md-eval's
+`-c 0.25` and NeMo's `collar=0.25` are half-widths — NeMo's docstring says so — i.e. this scorer's
+`--collar 0.5`. arXiv 2509.26177 states it uses pyannote.metrics at `collar=0.25, skip_overlap=False`,
+so its figures and this scorer's headline share a scale; the Sortformer model-card figures the
+proposed 10% gate was anchored on do not, and a candidate rescored at `--collar 0.5` is what those
+cards should be compared to. Second, what "validated" covers: pyannote.metrics is the reference
+implementation and the fixture pairs are synthetic; agreement with it on hand labels of real
+podcast audio is exactly what agreement on synthetic turns predicts and has not been separately
+shown, and nothing about the *labels* is validated by any of this — inter-labeller agreement on
+this material is unmeasured, and with one labeller it will stay so.
+
+Also unmeasured, and cheap to measure once a stretch is labelled: the product's own opt-in with the
+canned labeller scores badly by construction (it hears nothing), which is a smoke test of the
+harness and not a number about anything; and the second decode the opt-in costs — a whole extra
+read of the file — has a real-time-factor cost nobody has timed on either machine.
 
 ### NPU offload — assessed 2026-08-16, nothing measured
 

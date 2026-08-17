@@ -17,8 +17,11 @@ public static class TranscriptFormats
 
     public static ITranscriptFormatter Markdown { get; } = new MarkdownFormatter();
 
+    /// <summary>Speaker turns only; empty unless the transcript was made with speaker labelling on.</summary>
+    public static ITranscriptFormatter Rttm { get; } = new RttmFormatter();
+
     public static IReadOnlyList<ITranscriptFormatter> All { get; } =
-        [PlainText, Srt, Vtt, WordTimedVtt, Json, Markdown];
+        [PlainText, Srt, Vtt, WordTimedVtt, Json, Markdown, Rttm];
 
     public static IReadOnlyList<string> Ids { get; } = [.. All.Select(f => f.Id)];
 

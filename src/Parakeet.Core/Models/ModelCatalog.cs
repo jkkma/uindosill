@@ -12,12 +12,16 @@ namespace Parakeet.Core.Models;
 public sealed class ModelCatalog
 {
     private readonly Dictionary<string, ModelDescriptor> _byId;
+    private readonly Dictionary<ModelTask, IReadOnlyList<ModelDescriptor>> _byTask;
 
     private ModelCatalog(IReadOnlyList<ModelDescriptor> models, IReadOnlyList<DeferredModelPin> deferred)
     {
         Models = models;
         Deferred = deferred;
         _byId = models.ToDictionary(m => m.Id, StringComparer.OrdinalIgnoreCase);
+        _byTask = Enum.GetValues<ModelTask>().ToDictionary(
+            task => task,
+            task => (IReadOnlyList<ModelDescriptor>)[.. models.Where(m => m.Task == task)]);
     }
 
     private static readonly Lazy<ModelCatalog> DefaultCatalog = new(LoadEmbedded, isThreadSafe: true);
@@ -36,8 +40,19 @@ public sealed class ModelCatalog
     /// </summary>
     public IReadOnlyList<DeferredModelPin> Deferred { get; }
 
+    /// <summary>
+    /// The transcription model an unspecified <c>--model</c> resolves to. Only ever a
+    /// <see cref="ModelTask.Transcription"/> entry: a diarisation model marked recommended, or
+    /// listed first, must not become the default ASR model by falling through this.
+    /// </summary>
     public ModelDescriptor? Recommended =>
-        Models.FirstOrDefault(m => m.Recommended) ?? Models.FirstOrDefault();
+        TranscriptionModels.FirstOrDefault(m => m.Recommended) ?? TranscriptionModels.FirstOrDefault();
+
+    /// <summary>The entries <c>transcribe</c> may load.</summary>
+    public IReadOnlyList<ModelDescriptor> TranscriptionModels => _byTask[ModelTask.Transcription];
+
+    /// <summary>The entries the speaker-labelling opt-in may load. Empty until a model is integrated.</summary>
+    public IReadOnlyList<ModelDescriptor> DiarisationModels => _byTask[ModelTask.Diarisation];
 
     public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
         _byId.TryGetValue(id, out model);
@@ -164,6 +179,7 @@ public sealed class ModelCatalog
         return new ModelDescriptor
         {
             Id = id,
+            Task = ParseTask(element, id),
             Family = RequireString(element, "family"),
             DisplayName = RequireString(element, "displayName"),
             Quantisation = RequireString(element, "quantisation"),
@@ -177,6 +193,31 @@ public sealed class ModelCatalog
             Languages = ParseStringArray(element, "languages"),
             Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
             Notes = OptionalString(element, "notes"),
+        };
+    }
+
+    /// <summary>
+    /// <c>"task"</c> is optional and defaults to transcription; when present it must be one of the
+    /// two known words. A misspelling is refused rather than defaulted, because defaulting it
+    /// would list a diarisation model as an ASR model — the exact thing the field exists to stop.
+    /// </summary>
+    private static ModelTask ParseTask(JsonElement element, string id)
+    {
+        if (!element.TryGetProperty("task", out var value))
+        {
+            return ModelTask.Transcription;
+        }
+
+        // Present but not a string — null, a number, an array — is refused like a misspelling: only
+        // absence means "transcription", because defaulting a broken value would list a diarisation
+        // model as an ASR model, which is what the field exists to stop.
+        var task = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        return task switch
+        {
+            "transcription" => ModelTask.Transcription,
+            "diarisation" => ModelTask.Diarisation,
+            _ => throw new InvalidDataException(
+                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription and diarisation."),
         };
     }
 

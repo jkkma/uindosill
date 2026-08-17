@@ -33,6 +33,13 @@ public sealed record SubtitleCue
     /// </remarks>
     public IReadOnlyList<IReadOnlyList<TranscriptWord>> LineWords { get; init; } = [];
 
+    /// <summary>
+    /// The one speaker this cue belongs to, or null when speakers were not labelled. A cue never
+    /// carries two: the builder cuts a cue where the speaker changes, and the subtitle formatters
+    /// print this once, in front of the first line.
+    /// </summary>
+    public string? Speaker { get; init; }
+
     public string Text => string.Join(" ", Lines);
 
     /// <summary>Every word of the cue in order, flattened across its lines.</summary>
@@ -68,7 +75,26 @@ public sealed record SubtitleOptions
     /// </remarks>
     public int MinTailCharacters { get; init; } = 16;
 
+    /// <summary>
+    /// How a labelled cue names its speaker, in front of its first line: <c>{0}</c> is the label.
+    /// Plain text rather than WebVTT's <c>&lt;v&gt;</c> voice span, on purpose — the span carries a
+    /// name for styling and nothing renders it as text without author CSS, while a prefix is
+    /// visible in every player and editor, and SubRip has no voice markup at all.
+    /// </summary>
+    public string SpeakerPrefixFormat { get; init; } = "{0}: ";
+
     public int Capacity => Math.Max(1, MaxLineLength * MaxLines);
+
+    /// <summary>The prefix a cue for <paramref name="speaker"/> carries, or empty when there is none.</summary>
+    public string SpeakerPrefix(string? speaker) =>
+        speaker is null ? string.Empty : string.Format(System.Globalization.CultureInfo.InvariantCulture, SpeakerPrefixFormat, speaker);
+
+    /// <summary>
+    /// The characters left for words once the speaker prefix has taken its share of the cue.
+    /// Never below one line's worth: a very long name still leaves room to say something.
+    /// </summary>
+    internal int CapacityFor(string? speaker) =>
+        speaker is null ? Capacity : Math.Max(MaxLineLength, Capacity - SpeakerPrefix(speaker).Length);
 
     public void Validate()
     {
@@ -93,10 +119,19 @@ public sealed record SubtitleOptions
 /// Turns transcript segments into readable subtitle cues.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Word timestamps are used when the engine supplied them. When it did not, the segment is
 /// still split for readability and each piece is timed by its share of the characters —
 /// approximate, but a single 30-second wall of text is not a subtitle, and dropping the
 /// text entirely is worse than approximate timing.
+/// </para>
+/// <para>
+/// When words carry speakers, a cue is cut wherever the speaker changes and never rebalanced
+/// across that cut, so a name in front of a cue is true of every word in it. The prefix is charged
+/// against the cue's character capacity, so a labelled cue holds fewer words than an unlabelled
+/// one of the same length; it is not charged against the first line's balance point, so a first
+/// line can run past the line limit by the width of the name. Documents without speakers take
+/// exactly the path they always did.
 /// </remarks>
 public static class SubtitleCueBuilder
 {
@@ -144,10 +179,14 @@ public static class SubtitleCueBuilder
             }
 
             var addedLength = pending.Count == 0 ? wordText.Length : pendingLength + 1 + wordText.Length;
-            var wouldOverflowText = addedLength > options.Capacity;
+            var wouldOverflowText = addedLength > options.CapacityFor(word.Speaker);
             var wouldOverflowTime = pending.Count > 0 && word.End - pending[0].Start > options.MaxCueDuration;
 
-            if (pending.Count > 0 && (wouldOverflowText || wouldOverflowTime))
+            // A cue names one speaker, so it ends where the speaker does — before any other rule
+            // gets a say. Both null is the same speaker: an unlabelled document never breaks here.
+            var speakerChanged = pending.Count > 0 && !string.Equals(word.Speaker, pending[0].Speaker, StringComparison.Ordinal);
+
+            if (pending.Count > 0 && (wouldOverflowText || wouldOverflowTime || speakerChanged))
             {
                 groups.Add(pending);
                 pending = [];
@@ -177,20 +216,44 @@ public static class SubtitleCueBuilder
     /// its own. Only ever touches a tail that came from a split, never a segment that was short to
     /// begin with.
     /// </summary>
+    /// <remarks>
+    /// With speakers, "a segment" is each run of consecutive same-speaker groups: the tail of every
+    /// such run is rebalanced within the run, and words are never traded across a speaker change —
+    /// a short last cue that is somebody else's whole utterance is not a widow, and moving words
+    /// into it would put them under the wrong name. Without speakers there is one run, and this is
+    /// exactly what it always did.
+    /// </remarks>
     private static void RebalanceTail(List<List<TranscriptWord>> groups, SubtitleOptions options)
     {
-        if (groups.Count < 2)
+        var end = groups.Count;
+        while (end >= 2)
+        {
+            var start = end - 1;
+            while (start > 0 && string.Equals(groups[start - 1][0].Speaker, groups[end - 1][0].Speaker, StringComparison.Ordinal))
+            {
+                start--;
+            }
+
+            if (end - start >= 2)
+            {
+                RebalancePair(groups, end - 1, options);
+            }
+
+            end = start;
+        }
+    }
+
+    /// <summary>Rebalances <c>groups[last - 1]</c> and <c>groups[last]</c>, which share a speaker.</summary>
+    private static void RebalancePair(List<List<TranscriptWord>> groups, int last, SubtitleOptions options)
+    {
+        if (TextLength(groups[last]) >= options.MinTailCharacters)
         {
             return;
         }
 
-        if (TextLength(groups[^1]) >= options.MinTailCharacters)
-        {
-            return;
-        }
-
-        var combined = new List<TranscriptWord>(groups[^2]);
-        combined.AddRange(groups[^1]);
+        var combined = new List<TranscriptWord>(groups[last - 1]);
+        combined.AddRange(groups[last]);
+        var capacity = options.CapacityFor(combined[0].Speaker);
 
         var best = -1;
         var bestCost = int.MaxValue;
@@ -201,7 +264,7 @@ public static class SubtitleCueBuilder
             var tail = TextLength(combined, split, combined.Count);
 
             // Both halves must still fit a cue, and the tail must clear the widow threshold.
-            if (head > options.Capacity || tail > options.Capacity || tail < options.MinTailCharacters)
+            if (head > capacity || tail > capacity || tail < options.MinTailCharacters)
             {
                 continue;
             }
@@ -232,8 +295,8 @@ public static class SubtitleCueBuilder
             return;
         }
 
-        groups[^2] = combined[..best];
-        groups[^1] = combined[best..];
+        groups[last - 1] = combined[..best];
+        groups[last] = combined[best..];
     }
 
     private static TimeSpan Span(List<TranscriptWord> words, int from, int to) =>
@@ -284,9 +347,12 @@ public static class SubtitleCueBuilder
             end = start + options.MinCueDuration;
         }
 
+        // Every word in the group carries the same speaker: the grouping above cuts on a change.
+        var speaker = words[0].Speaker;
+
         if (tokens.Count == 0)
         {
-            return new SubtitleCue { Start = start, End = end, Lines = [string.Empty] };
+            return new SubtitleCue { Start = start, End = end, Lines = [string.Empty], Speaker = speaker };
         }
 
         var wrapped = WrapTokens([.. tokens], text.Length, options);
@@ -301,12 +367,12 @@ public static class SubtitleCueBuilder
             index += line.Length;
         }
 
-        return new SubtitleCue { Start = start, End = end, Lines = lines, LineWords = lineWords };
+        return new SubtitleCue { Start = start, End = end, Lines = lines, LineWords = lineWords, Speaker = speaker };
     }
 
     private static void AppendProportionalCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)
     {
-        var chunks = SplitByCapacity(segment.Text, options.Capacity);
+        var chunks = SplitByCapacity(segment.Text, options.CapacityFor(segment.Speaker));
         if (chunks.Count == 0)
         {
             return;
@@ -338,6 +404,7 @@ public static class SubtitleCueBuilder
                 Start = cursor,
                 End = cursor + slice,
                 Lines = WrapLines(chunks[i], options),
+                Speaker = segment.Speaker,
             });
 
             cursor += slice;

@@ -30,9 +30,17 @@ public sealed class SrtFormatter : ITranscriptFormatter
                    .Append(Timecode.ToSrt(cue.End))
                    .Append(options.NewLine);
 
-            foreach (var line in cue.Lines)
+            // The speaker, once, in front of the first line — see SubtitleOptions.SpeakerPrefixFormat
+            // for why plain text and not markup. Empty when the document carries no speakers.
+            var prefix = options.Subtitles.SpeakerPrefix(cue.Speaker);
+            for (var line = 0; line < cue.Lines.Count; line++)
             {
-                builder.Append(line).Append(options.NewLine);
+                if (line == 0)
+                {
+                    builder.Append(prefix);
+                }
+
+                builder.Append(cue.Lines[line]).Append(options.NewLine);
             }
 
             builder.Append(options.NewLine);

@@ -66,6 +66,7 @@ public sealed partial class JobViewModel : ObservableObject
             TranscriptionStage.Segmenting => "Segmenting",
             TranscriptionStage.Decoding => $"Transcribing {progress.Processed:hh\\:mm\\:ss}",
             TranscriptionStage.Finalising => "Finishing",
+            TranscriptionStage.LabellingSpeakers => "Labelling speakers",
             _ => "Working",
         };
     }
@@ -94,7 +95,21 @@ public sealed partial class JobViewModel : ObservableObject
 
         if (result.Document is { } document)
         {
-            Transcript = document.Text;
+            Transcript = Render(document);
         }
+    }
+
+    /// <summary>
+    /// The transcript as the window shows it: <see cref="TranscriptDocument.Text"/> — the joined
+    /// segments — with the speaker in front of each segment that has one. The document's own
+    /// <c>Text</c> stays free of names on purpose: it is what the JSON's <c>text</c> field carries
+    /// and what a word error rate is scored on, and a name is not a word anybody said.
+    /// </summary>
+    internal static string Render(TranscriptDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return string.Join(" ", document.Segments
+            .Where(s => !s.IsEmpty)
+            .Select(s => s.Speaker is { } speaker ? $"{speaker}: {s.Text.Trim()}" : s.Text.Trim()));
     }
 }

@@ -60,7 +60,7 @@ the CLI or the app's Models tab downloads.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 359 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 451 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -109,11 +109,12 @@ the Windows natives and a model, neither of which is in the clone.
 
 ### The scripts
 
-`scripts/` holds nine PowerShell tasks — two for vendoring, three measurement harnesses (speed
-and memory, the second machine, and word error rate against human transcripts), two transcript
-comparisons, and two for the v2 spike — and `scripts/lab.ps1` is one entry point for them: run it
-bare to list the tasks, each with the parameters its own script declares. It dispatches and
-nothing else, so every task is still runnable on its own.
+`scripts/` holds eleven PowerShell tasks — two for vendoring, four measurement harnesses (speed
+and memory, the second machine, word error rate against human transcripts, and diarisation error
+rate against hand-labelled speaker turns), two transcript comparisons, two for the v2 spike, and
+one that moves run reports and test material over rclone — and `scripts/lab.ps1` is one entry
+point for them: run it bare to list the tasks, each with the parameters its own script declares.
+It dispatches and nothing else, so every task is still runnable on its own.
 
 They divide along the same container line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
@@ -129,10 +130,15 @@ before it publishes; whether the container's network policy allows that route ha
 `scripts/measure-wer.ps1` needs a machine that can transcribe — it fetches the pinned Earnings-22
 subset (`scripts/wer-corpus.json`, ~190 MB, verified by digest, into the gitignored `corpus/`),
 runs every catalogue model over its eleven hours and scores each against two human transcript
-styles with `uindosill wer`. `scripts/measure-second-machine.ps1` probes hardware through CIM and
-is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table. For those
-last three, `pwsh` at least parses them, which is enough to keep a syntax error off the machine
-that can run them.
+styles with `uindosill wer`. `scripts/measure-der.ps1` scores speaker-turn hypotheses with
+`uindosill der` — a diarisation error rate validated against pyannote.metrics on committed fixture
+pairs (`tests/fixtures/diarisation/`) — and cuts the pinned development stretches from the test
+episodes with ffmpeg; the scoring half needs only the built CLI and runs anywhere.
+`scripts/measure-second-machine.ps1` probes hardware through CIM and
+is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table. For
+`measure-wer.ps1`, `measure-second-machine.ps1`, `vendor-cuda.ps1` and `measure-der.ps1`'s cutting
+half, `pwsh` at least parses them, which is enough to keep a syntax error off the machine that can
+run them.
 
 ## Layout
 
@@ -141,7 +147,7 @@ src/
   Parakeet.Core/               net10.0            contracts + pure logic; no NuGet, no platform, no UI
   Parakeet.Audio/              net10.0            WAV/RF64 parser + Media Foundation decoding
   Parakeet.Engine.ParakeetCpp/ net10.0            the ONLY project that touches native interop
-  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice / wer
+  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice / wer / der / rttm
   Parakeet.App/                net10.0            Avalonia desktop UI
 tests/                                            one per project, all runnable on Linux
 ```

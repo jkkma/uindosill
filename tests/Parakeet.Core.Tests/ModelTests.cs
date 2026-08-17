@@ -192,6 +192,53 @@ public class ModelCatalogTests
 
         Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(Json));
     }
+
+    [Fact]
+    public void EveryShippedEntryTranscribes()
+    {
+        // The manifest carries no diarisation entry yet — the model behind the speaker opt-in is
+        // still being chosen by measurement — and until it does, every entry is an ASR model.
+        Assert.All(ModelCatalog.Default.Models, m => Assert.Equal(ModelTask.Transcription, m.Task));
+        Assert.Empty(ModelCatalog.Default.DiarisationModels);
+        Assert.Equal(ModelCatalog.Default.Models.Count, ModelCatalog.Default.TranscriptionModels.Count);
+    }
+
+    [Fact]
+    public void ADiarisationEntryIsKeptOutOfEveryAsrPath()
+    {
+        const string Json = """
+            {"models":[
+            {"id":"diar","task":"diarisation","family":"s","displayName":"D","quantisation":"int8","fileName":"d.onnx","url":"https://e.com/d","license":"L","attributionId":"x","recommended":true},
+            {"id":"asr","family":"f","displayName":"A","quantisation":"q","fileName":"a.gguf","url":"https://e.com/a","license":"L","attributionId":"x"}]}
+            """;
+
+        var catalog = ModelCatalog.Parse(Json);
+
+        // Listed first and marked recommended, and still not what transcribe resolves to.
+        Assert.Equal("asr", catalog.Recommended?.Id);
+        Assert.Equal(["asr"], catalog.TranscriptionModels.Select(m => m.Id));
+        Assert.Equal(["diar"], catalog.DiarisationModels.Select(m => m.Id));
+        Assert.Equal(ModelTask.Diarisation, catalog.Get("diar").Task);
+        Assert.Equal(ModelTask.Transcription, catalog.Get("asr").Task);   // absent means transcription
+    }
+
+    [Theory]
+    [InlineData("\"diarization\"")]      // a misspelling
+    [InlineData("null")]                  // present, and not a string
+    [InlineData("1")]
+    [InlineData("[\"diarisation\"]")]
+    public void ATaskThatIsNotOneOfTheTwoWordsIsRefusedRatherThanDefaulted(string task)
+    {
+        // Only absence means transcription. Defaulting a broken value would list a diarisation
+        // model as an ASR model, which is the one thing the field exists to stop.
+        var json = $$"""
+            {"models":[
+            {"id":"d","task":{{task}},"family":"s","displayName":"D","quantisation":"q","fileName":"d.onnx","url":"https://e.com/d","license":"L","attributionId":"x"}]}
+            """;
+
+        var ex = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
+        Assert.Contains("known tasks are transcription and diarisation", ex.Message, StringComparison.Ordinal);
+    }
 }
 
 public class LocalModelStoreTests

@@ -143,6 +143,10 @@ public class ShutdownTests
 
         public ITranscriptionEngine Create(EngineSelection selection) => _inner.Create(selection);
 
+        public bool SupportsSpeakerLabelling => _inner.SupportsSpeakerLabelling;
+
+        public Parakeet.Core.Diarisation.ISpeakerLabeller? CreateSpeakerLabeller() => _inner.CreateSpeakerLabeller();
+
         public void ReleaseBackend()
         {
             ReleaseCount++;
@@ -338,6 +342,81 @@ public class TranscribeViewModelTests
         Assert.NotNull(viewModel.Jobs[0].Error);
         Assert.Equal(JobState.Completed, viewModel.Jobs[1].State);
         Assert.True(File.Exists(Path.Combine(directory, "good.txt")));
+    }
+
+    [Fact]
+    public async Task TheSpeakerOptInIsOffByDefaultAndNamesTheVoicesWhenOn()
+    {
+        var (viewModel, directory) = Create();
+        Assert.False(viewModel.LabelSpeakers);
+        Assert.True(viewModel.CanLabelSpeakers);   // the fake provider has a labeller
+        Assert.Null(viewModel.SpeakerHint);
+
+        viewModel.AddFiles([WriteWav(directory, "a.wav")]);
+        foreach (var format in viewModel.Formats)
+        {
+            format.IsSelected = format.Id is "txt" or "rttm";
+        }
+
+        // RTTM without the opt-in is refused rather than written empty, and nothing runs.
+        await viewModel.StartCommand.ExecuteAsync(null);
+        Assert.Contains("need 'Label speakers' on", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
+
+        // Off, without asking for RTTM: nothing about speakers anywhere.
+        viewModel.Formats.First(f => f.Id == "rttm").IsSelected = false;
+        await viewModel.StartCommand.ExecuteAsync(null);
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.DoesNotContain("Speaker", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
+
+        // On: the window's transcript and the files carry the names.
+        viewModel.Formats.First(f => f.Id == "rttm").IsSelected = true;
+        viewModel.LabelSpeakers = true;
+        await viewModel.StartCommand.ExecuteAsync(null);
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.Contains("Speaker 1: ", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
+        Assert.Contains("Speaker 1: ", await File.ReadAllTextAsync(Path.Combine(directory, "a (2).txt")), StringComparison.Ordinal);
+        Assert.StartsWith("SPEAKER a 1 0.000", await File.ReadAllTextAsync(Path.Combine(directory, "a.rttm")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutALabellerTheRttmFormatIsNotEvenOffered()
+    {
+        // It could only ever write an empty file there, so the checkbox is absent rather than a trap.
+        var withLabeller = new TranscribeViewModel(new FakeEngineProvider(), () => new EngineSelection());
+        Assert.Contains(withLabeller.Formats, f => f.Id == "rttm");
+
+        var without = new TranscribeViewModel(
+            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName)),
+            () => new EngineSelection());
+        Assert.DoesNotContain(without.Formats, f => f.Id == "rttm");
+    }
+
+    [Fact]
+    public async Task ALoadedModelStartsEvenWhenTheSelectedRowIsNotOne()
+    {
+        // The loaded engine is what runs, not whichever row is highlighted; a selection the engine
+        // provider will not build must not be reported as "no model is installed".
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        main.Transcribe.OutputDirectory = directory;
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+        main.Models.Selected = null;   // nothing highlighted: the session still holds the engine
+
+        main.Transcribe.AddFiles([WriteWav(directory, "a.wav")]);
+        await main.Transcribe.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(JobState.Completed, main.Transcribe.Jobs[0].State);
+        Assert.DoesNotContain("No model is installed", main.Transcribe.StatusMessage ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutALabellerTheOptInIsDisabledWithAReason()
+    {
+        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName)), () => new EngineSelection());
+
+        Assert.False(viewModel.CanLabelSpeakers);
+        Assert.Contains("not in this build yet", viewModel.SpeakerHint, StringComparison.Ordinal);
     }
 
     [Fact]

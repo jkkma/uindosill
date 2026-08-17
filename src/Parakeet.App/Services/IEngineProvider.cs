@@ -1,3 +1,4 @@
+using Parakeet.Core.Diarisation;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp;
@@ -30,6 +31,16 @@ public interface IEngineProvider
     ITranscriptionEngine Create(EngineSelection selection);
 
     /// <summary>
+    /// True when this provider can hand out a speaker labeller. False is a real answer, and the
+    /// window shows it as one: the checkbox for the opt-in is disabled with a reason rather than
+    /// hidden, because a setting that quietly does nothing is worse than one that says why not.
+    /// </summary>
+    bool SupportsSpeakerLabelling { get; }
+
+    /// <summary>The labeller behind the speaker opt-in, or null when <see cref="SupportsSpeakerLabelling"/> is false.</summary>
+    ISpeakerLabeller? CreateSpeakerLabeller();
+
+    /// <summary>
     /// Frees whatever the engine technology keeps alive for the whole process, once every engine
     /// it created has been disposed. For parakeet.cpp that is the process-global compute backend,
     /// which on CUDA must be released while the driver is still up or the process aborts on exit
@@ -53,12 +64,18 @@ public sealed class EngineProvider : IEngineProvider
             return File.Exists(path);
         }
 
-        return selection.Model is { } model && _store.IsInstalled(model);
+        return selection.Model is { Task: ModelTask.Transcription } model && _store.IsInstalled(model);
     }
 
     public ITranscriptionEngine Create(EngineSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
+
+        if (selection.Model is { } chosen && chosen.Task != ModelTask.Transcription)
+        {
+            throw new InvalidOperationException(
+                $"'{chosen.Id}' is a {chosen.Task.ToString().ToLowerInvariant()} model and cannot be loaded as the transcription engine.");
+        }
 
         var path = selection.ModelPath is { Length: > 0 } explicitPath
             ? explicitPath
@@ -74,6 +91,14 @@ public sealed class EngineProvider : IEngineProvider
             Quantisation = selection.Model?.Quantisation,
         });
     }
+
+    /// <summary>
+    /// False in this build: the seam is there and the model behind it is still being chosen by
+    /// measurement (docs/PHASES.md § Decisions taken 2026-08-16). The window's checkbox says so.
+    /// </summary>
+    public bool SupportsSpeakerLabelling => false;
+
+    public ISpeakerLabeller? CreateSpeakerLabeller() => null;
 
     /// <summary>
     /// A no-op until a model has been loaded in this process — the native library is not loaded
@@ -95,6 +120,11 @@ public sealed class FakeEngineProvider : IEngineProvider
     public bool IsModelAvailable(EngineSelection selection) => true;
 
     public ITranscriptionEngine Create(EngineSelection selection) => new FakeTranscriptionEngine(_options);
+
+    /// <summary>The canned labeller, so the window's opt-in runs end to end in the headless tests.</summary>
+    public bool SupportsSpeakerLabelling => true;
+
+    public ISpeakerLabeller? CreateSpeakerLabeller() => new FakeSpeakerLabeller();
 
     public void ReleaseBackend() => ReleaseCount++;
 }

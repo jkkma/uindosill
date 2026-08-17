@@ -41,6 +41,27 @@ public interface IAudioSource : IAsyncDisposable      // files today, live mic i
 Streaming segments out through `IAsyncEnumerable` is deliberate: the UI shows text as it is produced
 on a long file, and v3 dictation reuses the same shape one utterance at a time.
 
+```csharp
+public interface ISpeakerLabeller : IAsyncDisposable   // who spoke when; the opt-in's second pass
+{
+    SpeakerLabellerCapabilities Capabilities { get; }
+    ValueTask LoadAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<SpeakerTurn>> LabelAsync(
+        IAudioSource audio, SpeakerLabellingOptions options,
+        IProgress<TranscriptionProgress>? progress = null, CancellationToken ct = default);
+}
+```
+
+The second contract sits beside the first for the same reason the first exists: the diarisation
+engine behind it is still being chosen by measurement, and the choice must stay one project's
+business. A labeller reads the audio itself and returns turns on the file's timeline; it never sees
+the transcript. Attributing words to turns and cutting segments where the speaker changes is a pure
+function of two lists (`SpeakerAssignment`), so the ASR engine and the labeller stay independently
+testable, and both audio sources being single-read means the opt-in opens the file a second time —
+a cost only the opt-in pays. `FakeSpeakerLabeller` is to this seam what the fake engine is to the
+other; the only labeller in this build is the fake, and both the CLI flag and the window's checkbox
+say so rather than pretend.
+
 `EngineCapabilities` is not decoration. It carries `SupportsDecodeCancellation` and
 `SupportsThreadCount`, both **false** for parakeet.cpp, both verified against the header rather than
 assumed. A UI that offers a control the engine ignores is worse than one that offers nothing.

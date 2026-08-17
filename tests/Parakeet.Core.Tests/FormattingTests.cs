@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Parakeet.Core.Diarisation;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Transcription;
 
@@ -370,9 +371,16 @@ public class FormatterTests
     [Fact]
     public void NewLineIsHonouredByEveryFormatter()
     {
+        // With speaker turns, so the RTTM formatter — which writes nothing for a document that has
+        // none — has lines whose endings can be checked like everyone else's.
+        var document = Document() with
+        {
+            SpeakerTurns = [new SpeakerTurn { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(8), Speaker = "A" }],
+        };
+
         foreach (var formatter in TranscriptFormats.All)
         {
-            var output = formatter.Format(Document(), TranscriptFormatOptions.Default with { NewLine = "\r\n" });
+            var output = formatter.Format(document, TranscriptFormatOptions.Default with { NewLine = "\r\n" });
             Assert.DoesNotContain("\n\n\n", output.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
             Assert.Contains("\r\n", output, StringComparison.Ordinal);
         }

@@ -1,10 +1,34 @@
 namespace Parakeet.Core.Models;
 
+/// <summary>
+/// What a catalogue entry is for. The discriminator exists so that a diarisation model can be
+/// installed through the same catalogue, installer and digest checks as the ASR weights without
+/// ever surfacing as a selectable ASR model: <see cref="ModelCatalog.Recommended"/> and every
+/// engine-selecting code path look only at <see cref="Transcription"/> entries.
+/// </summary>
+public enum ModelTask
+{
+    /// <summary>Speech to text: what <c>transcribe</c> loads.</summary>
+    Transcription = 0,
+
+    /// <summary>Who spoke when: what the speaker-labelling opt-in loads. Never an ASR model.</summary>
+    Diarisation = 1,
+}
+
 /// <summary>One downloadable set of weights.</summary>
 public sealed record ModelDescriptor
 {
     /// <summary>Stable identifier used on the command line and in settings.</summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// What the weights do. Read from the manifest's <c>"task"</c>; absent means
+    /// <see cref="ModelTask.Transcription"/>, so every entry that predates the field keeps meaning
+    /// what it always meant. A build older than the field would still list a diarisation entry as
+    /// an ASR model, which is why no such entry is added to the manifest until the model behind
+    /// it exists — the discriminator has to ship first.
+    /// </summary>
+    public ModelTask Task { get; init; } = ModelTask.Transcription;
 
     /// <summary>Upstream checkpoint this was converted from, shared across quantisations.</summary>
     public required string Family { get; init; }

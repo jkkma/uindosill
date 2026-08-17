@@ -13,6 +13,9 @@ public enum TranscriptionStage
 
     /// <summary>Assembling the finished transcript.</summary>
     Finalising,
+
+    /// <summary>The opt-in second pass: reading the audio again and deciding who spoke when.</summary>
+    LabellingSpeakers,
 }
 
 /// <summary>Progress of a single file. Immutable so it can cross threads freely.</summary>

@@ -43,6 +43,13 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 {
                     writer.WriteNumber("realTimeFactor", Round(rtf, 4));
                 }
+
+                // Present only when a labeller ran, like every speaker field below: a transcript made
+                // without the opt-in serialises exactly as it did before the field existed.
+                if (document.SpeakerModelId is { } speakerModel)
+                {
+                    writer.WriteString("speakerModel", speakerModel);
+                }
             }
 
             writer.WriteString("text", document.Text);
@@ -54,6 +61,11 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 writer.WriteNumber("start", Seconds(segment.Start));
                 writer.WriteNumber("end", Seconds(segment.End));
                 writer.WriteString("text", segment.Text);
+
+                if (segment.Speaker is { } segmentSpeaker)
+                {
+                    writer.WriteString("speaker", segmentSpeaker);
+                }
 
                 if (segment.MeanConfidence is { } confidence)
                 {
@@ -74,6 +86,11 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                             writer.WriteNumber("conf", Round(wordConfidence, 4));
                         }
 
+                        if (word.Speaker is { } wordSpeaker)
+                        {
+                            writer.WriteString("speaker", wordSpeaker);
+                        }
+
                         writer.WriteEndObject();
                     }
 
@@ -84,6 +101,24 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
             }
 
             writer.WriteEndArray();
+
+            // The labeller's own output, distinct from the per-word attribution above: what an RTTM
+            // file carries and what a diarisation scorer reads.
+            if (document.SpeakerTurns.Count > 0)
+            {
+                writer.WriteStartArray("speakerTurns");
+                foreach (var turn in document.SpeakerTurns)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("start", Seconds(turn.Start));
+                    writer.WriteNumber("end", Seconds(turn.End));
+                    writer.WriteString("speaker", turn.Speaker);
+                    writer.WriteEndObject();
+                }
+
+                writer.WriteEndArray();
+            }
+
             writer.WriteEndObject();
         }
 
