@@ -59,7 +59,7 @@ Nothing a measurement produces belongs in the working tree. The two harnesses us
 inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
 
-`scripts/lab.ps1` is one entry point for the nine scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the ten scripts; run it bare to list them.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
 machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they
@@ -71,14 +71,20 @@ fixtures upload a generator validated against the pin rather than a copy. **No D
 id goes in this repository** — it is public; find the folder by name through the Drive connector,
 and if the connector is not authorized in your session, say so instead of skipping silently.
 
-**Reach the Drive through the mount, not the connector, whenever the machine has one.** Google
-Drive for desktop is installed on the maintainer's machines and mounts as a drive letter whose
-root is localised — enumerate the mount's root rather than assuming `My Drive`, because on a
-Spanish install it is `Mi unidad`. Through the mount a file is a file: copy it. The connector's
-`create_file` takes content inline only, so uploading a binary through it means emitting the whole
-thing as base64 — megabytes of generated text for one PDF, which is why the mount is the route and
-the connector is for finding, reading and making folders. On a machine without the mount, upload
-by hand rather than through the connector.
+**Transfers go through rclone — `scripts/sync-drive.ps1`, or `lab.ps1 drive`.** Not through the
+Drive connector: its `create_file` takes content inline only, so uploading a binary through it
+means emitting the whole file as base64, megabytes of generated text for one PDF. The connector is
+for finding folders, creating them and reading files; rclone moves them. Google Drive for desktop
+is deliberately **not** the answer either — the maintainer is not installing a background sync
+application on the desktop, and rclone is one binary that behaves identically on both machines.
+
+Every transfer is `--checksum`, which is why rclone earns its place rather than merely working: a
+sync tool reports success when it has copied bytes, and this reports success when the bytes agree
+at both ends. The script pushes run reports and research, and pulls research and the four test
+episodes with their sizes checked against what Drive reports before anything is measured against
+them. Setup is one browser consent per machine — `rclone config create gdrive drive scope=drive` —
+which no script can do for you; the resulting `rclone.conf` holds a refresh token and never comes
+near this repository.
 
 **Research lives on the Drive too, never in this repository** — the maintainer's standing
 convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived

@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Nine scripts with nine names and nine flag sets is eight names too many to remember when you
+    Ten scripts with ten names and ten flag sets is nine names too many to remember when you
     are switching between machines. This dispatches to them and nothing else: every task is still
     a script you can run directly, and this changes none of their behaviour.
 
@@ -67,12 +67,20 @@
 .EXAMPLE
     # The backend control for that table: f16 alone on CPU.
     .\scripts\lab.ps1 wer -Backend cpu -Models tdt-0.6b-v3-f16
+
+.EXAMPLE
+    # Run summaries up to the Drive for the other machine, every transfer checksum-verified.
+    .\scripts\lab.ps1 drive -Runs laptop
+
+.EXAMPLE
+    # On the desktop, which has no Drive mount by choice: the test episodes, sizes checked.
+    .\scripts\lab.ps1 drive -Episodes
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -159,7 +167,19 @@ param(
     [switch] $KeepFillers,
     [string] $ManifestPath,
     [string] $CorpusRoot,
-    [switch] $SkipVerify
+    [switch] $SkipVerify,
+
+    # --- drive (-Destination is shared with vendor-cuda; sync-drive.ps1's parameter sets make
+    #     -Runs, -Research, -Fetch and -Episodes mutually exclusive, and it says so if two are
+    #     passed together) ---
+    [ValidateSet('laptop', 'desktop')]
+    [string] $Runs,
+    [string] $Research,
+    [string] $Fetch,
+    [switch] $Episodes,
+    [string] $Remote,
+    [string] $DriveFolder,
+    [switch] $DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,6 +195,7 @@ $tasks = [ordered]@{
     'spike'         = 'spike-llama-server.ps1'
     'answers'       = 'measure-answers.ps1'
     'wer'           = 'measure-wer.ps1'
+    'drive'         = 'sync-drive.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.
