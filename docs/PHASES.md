@@ -281,6 +281,36 @@ produces — while what it does need is a second native stack and an answer to a
 problem than v1 ever posed. Its open decisions are recorded in `docs/V2-ASK-THE-TRANSCRIPT.md` and none
 of them is settled. Neither version starts before Phase 5 ships.
 
+**A research workflow on offloading to the NPU — asked for 2026-08-16, deferred until it is
+relevant.** The second machine carries an XDNA 2 NPU (`NPU Compute Accelerator Device`, PCI
+`VEN_1022&DEV_17F0`, driver 32.0.20102.3930 of 2026-05-06), and nothing this product runs can
+reach it: parakeet.cpp is ggml, and ggml's backend list, read at source that day, is cpu, blas,
+cuda, hip, musa, vulkan, opencl, metal, sycl, openvino, cann, hexagon, zdnn, zendnn, rpc, webgpu,
+virtgpu and et — no XDNA. The route would be `docs/ENGINE-CHOICE.md`'s escape hatch — ONNX Runtime
+with a hand-written TDT decoder — under AMD's Vitis AI execution provider, reached either through
+the Ryzen AI SDK (Python and conda) or through Windows ML (C#, the EP managed by Windows, 24H2 or
+later, a driver-version window). AMD publishes a demo of exactly this on exactly this model
+(`amd/RyzenAI-SW`, `Demos/ASR/Parakeet-TDT`, weights `istupakov/parakeet-tdt-0.6b-v3-onnx`):
+conformer encoder on the NPU at BF16, LSTM decoder on the iGPU, mel on the CPU, static 15-second
+chunks, a first run that pays a cached compile — and its README says RTF 0.023–0.030 on 16.5
+minutes of audio, hardware unnamed. This laptop's Vulkan tier already measures RTF 0.035, so on
+speed the ceiling is about 1.5× and even that is a cross-machine, cross-chunking comparison; what an
+NPU actually buys is watts and a free CPU and GPU, which matters for an always-on stream and hardly
+at all for a batch job that finishes a ten-minute file in ~21 s. Nothing was run; the marker is in
+`docs/UNPROVEN.md` § *NPU offload*. **The maintainer asked to be reminded to run the study when it
+becomes relevant, which is any of:** v3 dictation being planned; a battery, thermals or
+keep-the-CPU-free question about the app; v1.0 shipped and the next research item being chosen; a
+second inference stack (ONNX Runtime, Windows ML) proposed for any other reason. What the study
+has to carry: BF16 with per-operator CPU fallback as a new state for the WER gate (the ONNX INT8
+export collapsed silently); static shapes forcing a segment length against the segmenter's join
+guarantee; hardware gating — no NPU on the desktop, the reason the Windows-native AI APIs were
+rejected in `docs/V2-ASK-THE-TRANSCRIPT.md` § 1; the Ryzen AI runtime and `flexml-lite`
+redistribution licences, unread; and that AMD's LLM-on-NPU path is ONNX Runtime GenAI hybrid or
+the Lemonade daemon, both shapes v2 already rejected. Cheapest first measurement: AMD's own demo
+on this laptop against the same ten-minute file, its RTF beside 0.035 — a dev-machine experiment,
+not a shippable path. It runs under `CLAUDE.md`'s convention: the product to a dated Drive folder,
+the decision record and the unproven markers here.
+
 **Pinning the model digests used to head this list** and is done: all five entries carry the exact
 byte size and the SHA-256 read from the repository's LFS listing, `"verified": true`, and no entry
 needs `--allow-unverified`. `docs/MODELS.md` has the table. That settles *provenance* and settles
