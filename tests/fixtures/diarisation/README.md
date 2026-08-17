@@ -76,7 +76,9 @@ is thirty to sixty minutes per ten minutes of audio, and it is unproven.
    audio contains and the scorer's speaker count is honest. Music without words is not speech and
    gets no label. This is the policy the study said had to be written before the first stretch;
    it is written here and can be changed before, not after, held-out is scored.
-6. Export with *File → Export → Export Labels* (all tracks merge into one tab-separated file), then:
+6. Export with *File → Export Other → Export Labels* (the path moved there in Audacity 3.4; every
+   label track merges into one tab-separated file, uppermost track first — the converter sorts by
+   time, so track order does not matter), then:
 
    ```
    uindosill rttm <export>.txt --file-id <id> --out tests\fixtures\diarisation\dev\<id>.rttm
