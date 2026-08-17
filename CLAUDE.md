@@ -82,9 +82,16 @@ Every transfer is `--checksum`, which is why rclone earns its place rather than 
 sync tool reports success when it has copied bytes, and this reports success when the bytes agree
 at both ends. The script pushes run reports and research, and pulls research and the four test
 episodes with their sizes checked against what Drive reports before anything is measured against
-them. Setup is one browser consent per machine — `rclone config create gdrive drive scope=drive` —
-which no script can do for you; the resulting `rclone.conf` holds a refresh token and never comes
-near this repository.
+them.
+
+Setup is one browser consent per machine, which no script can do for you, and it takes an OAuth
+client of your own: `rclone config create gdrive drive scope=drive client_id=<id>
+client_secret=<secret>`. Without one, rclone falls back to a shared client id that Google is
+retiring — its own warning, on every call, says it "will stop working during 2026" (observed
+2026-08-16), so a workflow built on the fallback breaks mid-measurement. **That command prints the
+remote it created, refresh token included: its output is a credential.** It does not get pasted
+anywhere; if it has been, revoke rclone at `myaccount.google.com/permissions` and run it again. The
+resulting `rclone.conf` never comes near this repository.
 
 **Research lives on the Drive too, never in this repository** — the maintainer's standing
 convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived
