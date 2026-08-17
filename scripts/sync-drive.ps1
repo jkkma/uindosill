@@ -23,14 +23,21 @@
 
     **One-time setup, per machine** — this cannot be scripted, because it ends in a browser:
 
-        rclone config create gdrive drive scope=drive
+        rclone config create gdrive drive scope=drive client_id=<id> client_secret=<secret>
 
     That opens Google's consent page and writes a refresh token into `rclone.conf` (under scoop:
-    `~\scoop\persist\rclone\rclone.conf`). That file is a credential: it never goes in this
-    repository, and it is the reason `-Remote` is a name here rather than anything with a secret in
-    it. Confirm with `rclone listremotes`. The built-in client id is shared and rate-limited, which
-    is fine for summaries and PDFs; if a bulk transfer ever crawls, the fix is an own OAuth client,
-    not a change here.
+    `~\scoop\persist\rclone\rclone.conf`). Confirm with `rclone listremotes`.
+
+    **Two warnings that belong in the same breath as that command.** It prints the whole remote,
+    token included, to the terminal — that output is a credential, so it does not get pasted
+    anywhere, and if it has been, revoke rclone at `myaccount.google.com/permissions` and run the
+    command again. And `client_id` is not optional in practice: omit it and rclone falls back to a
+    shared id that Google is retiring, which rclone warns about on every call — "being retired and
+    will stop working during 2026", observed 2026-08-16. Make an OAuth client of your own
+    (rclone.org/drive/#making-your-own-client-id) so this does not stop working mid-measurement.
+
+    `rclone.conf` never goes in this repository, which is why `-Remote` is a name here rather than
+    anything carrying a secret.
 
 .EXAMPLE
     # After a measuring session on the laptop: the run summaries go up for the other machine.
@@ -109,7 +116,8 @@ $episodeNames = @(
 $rclone = Get-Command rclone -ErrorAction SilentlyContinue
 if (-not $rclone) {
     throw "rclone is not on PATH. Install it (scoop install rclone), then configure the remote:`n" +
-          "  rclone config create $Remote drive scope=drive"
+          "  rclone config create $Remote drive scope=drive client_id=<id> client_secret=<secret>`n" +
+          'That command prints a token — treat its output as a credential and do not paste it.'
 }
 
 $remotes = @(& $rclone.Source listremotes 2>&1)
@@ -120,14 +128,21 @@ if ($Remote -notin $remotes) {
     $known = if ($remotes) { $remotes -join ', ' } else { '(none configured)' }
     throw "No rclone remote named '$Remote'. Configured: $known.`n" +
           "Create it — this opens a browser once, and cannot be done for you:`n" +
-          "  rclone config create $Remote drive scope=drive"
+          "  rclone config create $Remote drive scope=drive client_id=<id> client_secret=<secret>`n" +
+          "Make the client id at rclone.org/drive/#making-your-own-client-id; the shared fallback is`n" +
+          'being retired. That command prints a token — its output is a credential, do not paste it.'
 }
 
 $root = "${Remote}:${DriveFolder}"
 
 # --checksum is the point of using rclone here: compare by hash, not by size and mtime, so a
 # truncated or re-encoded file is a failure rather than a silent success.
-$common = @('--checksum', '--progress', '--stats-one-line')
+#
+# Not --progress: it repaints one line with carriage returns, which is unreadable the moment the
+# output is redirected to a file or read by anything other than a terminal — and these runs get
+# pasted into run reports. `-v` prints one durable line per file actually transferred, and
+# --stats-one-line keeps the periodic summary to a single line.
+$common = @('--checksum', '-v', '--stats-one-line', '--stats', '30s')
 if ($DryRun) { $common += '--dry-run' }
 
 function Invoke-Rclone {
