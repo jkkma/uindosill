@@ -168,7 +168,7 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 
 ## Documentation
 
-The eleven notes live in [`docs/`](docs/); the last two rows are at the repository root.
+The ten notes live in [`docs/`](docs/); the last two rows are at the repository root.
 
 | Document | What is in it |
 |---|---|
@@ -179,7 +179,6 @@ The eleven notes live in [`docs/`](docs/); the last two rows are at the reposito
 | [NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release: the script, the layout, the digests. |
 | [MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
 | [LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution", and the CUDA EULA reading. |
-| [DIARISATION.md](docs/DIARISATION.md) | The speaker study: candidates, licences and gates, the measurement plan, and the decision — v1.0 carries speakers, opt-in. |
 | [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |

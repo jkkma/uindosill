@@ -70,3 +70,10 @@ connector; list them in that README with how to regenerate them instead, and for
 fixtures upload a generator validated against the pin rather than a copy. **No Drive URL or file
 id goes in this repository** — it is public; find the folder by name through the Drive connector,
 and if the connector is not authorized in your session, say so instead of skipping silently.
+
+**Research lives on the Drive too, never in this repository** — the maintainer's standing
+convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived
+there). A research workflow's product — the study, the survey, the report — goes to a dated
+folder inside the Drive `uindosill` folder, beside the v2 research and the runs folders. What
+stays here is what binds the repository: the decision record in `docs/PHASES.md`, the unproven
+markers in `docs/UNPROVEN.md`, and a pointer that, as above, names no URL and no id.
