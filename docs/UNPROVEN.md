@@ -714,6 +714,18 @@ point over eleven hours — not a proof that no input separates them.
 
 ## Still open
 
+### Speaker diarisation — studied 2026-08-16, nothing measured
+
+The pre-v1 study (`docs/DIARISATION.md`) surveyed candidates, licences, gates and routes, with
+every load-bearing claim re-read at its primary source that day. What it did not and could not
+produce is a single number of this project's own: every DER and RTF in that document is an
+external benchmark on external material, named with its dataset and scoring convention, and none
+of it is podcast audio. Until the dev/held-out podcast set exists and the spike runs on these
+machines, this project knows nothing measured about diarisation quality or cost — not the
+sherpa-onnx pipeline's DER on overlapping speech, not Sortformer's CPU real-time factor on either
+machine, not the int8 export's cost against fp32, not even the labelling effort per stretch. The
+study's remaining unknowns are marked inline in that document where each claim stands.
+
 ### The CUDA drop's licensing — read, recorded, and the notice gap closed
 
 `cublas64_12.dll`, `cublasLt64_12.dll` and `cudart64_12.dll` are NVIDIA proprietary binaries under

@@ -235,69 +235,24 @@ The next actions, in order:
    contemporaneous with the CUDA 12.8 binaries, and an upstream redistribution this project did not
    perform — are in `docs/LICENSING.md` and `docs/UNPROVEN.md`. What is left is Phase 5 packaging
    the result.
-4. **Before v1 ships: a research workflow on how best to implement speaker diarisation in this
-   app.** Asked for by the maintainer on 2026-08-16, after the WER work; it is a study, not a build,
-   and it decides whether speakers are in v1.0 or arrive as v1.1 over the auto-update Phase 5
-   brings. What it has to settle, and the facts already in hand:
-   - *The material comes first.* Everything this app has been measured on is a **two-host podcast
-     with overlapping, disfluent speech** — CSB384 for three hours, its ten-minute cuts, both
-     machines. That is the shape to optimise for; a diariser that is excellent at two to four
-     speakers and weak at seventeen is the right trade for this product, not the wrong one. The
-     earnings-call corpus below is the robustness check, not the target.
-   - *The candidates, as of a 2025 cross-dataset benchmark (arXiv 2509.26177) and 2026 write-ups,
-     to be re-checked when the workflow runs.* **NVIDIA Sortformer v2 (streaming)** — end-to-end,
-     arrival-order sorted, strongest on overlap-heavy rapid-turn dialogue (write-ups have it more
-     than halving DER against the pyannote pipeline there, at latencies down to ~0.3 s), built for
-     up to four speakers and degrading past that — is the leading candidate for the podcast case
-     precisely because of that shape. **DiariZen** (open, WavLM-based end-to-end plus clustering,
-     ~13.3% DER, holds up at high speaker counts, heavier on CPU) is the many-speaker alternative.
-     **pyannote.audio 3.1** (~11% DER on AMI, 11–19% across standard sets) is the mature baseline
-     everything is measured against. pyannoteAI's *precision-2* leads the benchmark (~11.2%) and is
-     a cloud API, so it is out. Nobody's benchmark number is this project's; the harness below is.
-   - *The stack.* No ggml port of a diariser is known; the practical routes are ONNX Runtime —
-     directly, or through sherpa-onnx, which packages pyannote segmentation 3.0 plus a speaker
-     embedding model behind a C API with Windows builds — or an ONNX export of Sortformer, whose
-     availability is the single most consequential unknown given the material. NeMo itself is a
-     Python framework and is not shipped; only weights exported from it are. Any of these runs on
-     **CPU** for every machine alike — the models are one to two orders of magnitude smaller than
-     the ASR — so there is no NVIDIA/Vulkan tier to design; the CUDA flavour is unaffected and the
-     AMD/Intel user gets the same result.
-   - *The licence gates.* pyannote segmentation 3.0 is MIT; 3D-Speaker and WeSpeaker embeddings
-     Apache-2.0; NeMo's TitaNet CC-BY-4.0 like the Parakeet weights; Sortformer believed CC-BY-4.0
-     — each to be read the way `docs/LICENSING.md` reads the others before anything is vendored.
-   - *The measurement, and the gap in it.* The corpus pinned in `scripts/wer-corpus.json` carries
-     a per-token `speaker` column (four speakers on one call, seventeen on another), so a
-     diarisation error rate or speaker-attributed WER harness reuses today's corpus and scoring.
-     But it is not the target material, and **no podcast this app has run carries speaker ground
-     truth**. One hand-labelled episode is not a yardstick either — it measures two voices, one
-     microphone setup and one show's habits, and a diariser tuned on it can fail on the next pair
-     of hosts. The podcast set should be **several ten-minute stretches across more than one
-     podcast** — different speaker pairs, same-room and remote, music beds and ad reads — and,
-     within the shows that have them, **guest episodes**, so the set is stratified by speaker
-     count: two hosts, then three, four and five voices with the same hosts, microphones and
-     habits held constant. That isolates the one variable that separates the candidates, and it
-     lands on the leading candidate's edge on purpose — Sortformer is built for up to four
-     speakers, so the five-voice episodes are what decide whether it needs DiariZen or a
-     clustering fallback behind it, measured in this app's own conditions rather than on a
-     benchmark's meetings. Split
-     into a *dev* part, on which the pipeline's post-processing knobs (clustering thresholds,
-     speaker-count bounds, activity thresholds) may be tuned, and a *held-out* part they are
-     scored on. Speaker labels are cheap next to transcripts (who spoke when, not what), so that is
-     evenings, not a project; the audio stays local as CSB384 does, and the labels — a small
-     RTTM-style file of turns per episode with the `ffmpeg` cut line that reproduces its audio —
-     can be committed as fixtures without shipping a byte of anyone's recording. Any *fine-tuning*
-     of a model itself is a separate matter: NeMo/PyTorch training on a GPU, outside this repo's
-     toolchain and inside the ask-first rule, on episodes disjoint from the evaluation set. A
-     CPU-only spike on the podcast set and on the earnings corpus is the first thing to run, and
-     the held-out podcast number is what decides whether the feature ships.
-   - *The seam and the surface.* An `ISpeakerLabeller` behind Core's engine rule; a speaker on
-     `TranscriptSegment` and its words; every formatter and the app growing "Speaker N" labels;
-     the fake engine and the tests learning about them; a second native drop, digest table,
-     `doctor` probe and Phase 5 packaging entry.
-   - *The recommendation as it stands* (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said
-     it* holds until this decides otherwise): build Phase 5, apply to SignPath, run the spike during
-     that wait, ship v1.0 when signing lands, carry speakers in v1.1 — unless the workflow finds a
-     reason to hold v1.0 for it.
+4. ~~**Before v1 ships: a research workflow on how best to implement speaker diarisation in this
+   app.**~~ — **the study ran 2026-08-16**, and `docs/DIARISATION.md` is the result; the
+   measurement design that used to live in this item moved there with it, sharpened. Asked for by
+   the maintainer on 2026-08-16, after the WER work; a study, not a build. What it settled: the
+   single most consequential unknown resolved — Sortformer runs without NeMo, because although no
+   official ONNX exists the export recipe is public, community exports were verified
+   file-by-file, and streaming v2 is CC-BY-4.0 and un-gated; every official pyannote pipeline
+   repo is HF-gated, which the by-URL installer cannot use, while sherpa-onnx redistributes the
+   same MIT segmentation model un-gated behind a maintained C# NuGet; DiariZen and Rev are
+   non-commercial and out for shipping; and no candidate has a published number on podcast
+   material, so the dev/held-out podcast set — stratified two to five voices through guest
+   episodes, split by show, scored by a collar-0.25 overlap-included DER harness — remains the
+   deciding instrument, with a proposed gate written down to be ratified before held-out is ever
+   scored. **The recommendation stands as it stood**: build Phase 5, apply to SignPath, run the
+   sherpa-onnx spike during that wait, ship v1.0 when signing lands, carry speakers in v1.1 —
+   the study found no reason to hold v1.0, and `docs/DIARISATION.md` names the spike order and
+   the exact artifacts. (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it* holds until
+   the feature actually ships.)
 
 ### After v1
 
