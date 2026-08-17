@@ -219,8 +219,22 @@ switch ($PSCmdlet.ParameterSetName) {
         # rather than assume, which is what the measurement plan asks for before the audio is used.
         Write-Host ''
         Write-Host '── episodes, against Drive metadata ────────────' -ForegroundColor Green
-        $listing = & $rclone.Source lsjson "${Remote}:" --files-only 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "rclone lsjson failed: $($listing -join ' ')" }
+
+        # stderr is kept off stdout deliberately. rclone writes NOTICE lines there — the shared
+        # client-id retirement warning, among others — and folding them in with 2>&1 puts prose in
+        # front of the JSON, which then fails to parse for a reason that reads like a rclone bug
+        # and is not one. --log-level ERROR silences the notices; the redirect keeps any real error
+        # message available for the throw.
+        $errorLog = [IO.Path]::GetTempFileName()
+        try {
+            $listing = & $rclone.Source lsjson "${Remote}:" --files-only --log-level ERROR 2> $errorLog
+            if ($LASTEXITCODE -ne 0) {
+                throw "rclone lsjson failed (exit $LASTEXITCODE): $((Get-Content -LiteralPath $errorLog -Raw).Trim())"
+            }
+        }
+        finally {
+            Remove-Item -LiteralPath $errorLog -Force -ErrorAction SilentlyContinue
+        }
         $remoteFiles = ($listing -join "`n") | ConvertFrom-Json
 
         $bad = 0
