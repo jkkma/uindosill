@@ -716,8 +716,9 @@ point over eleven hours — not a proof that no input separates them.
 
 ### Speaker diarisation — studied 2026-08-16, nothing measured
 
-The pre-v1 study (`docs/DIARISATION.md`) surveyed candidates, licences, gates and routes, with
-every load-bearing claim re-read at its primary source that day. What it did not and could not
+The pre-v1 study — run 2026-08-16; it lives in the maintainer's diarisation research on the
+Drive, outside this repository the way research does per `CLAUDE.md` — surveyed candidates,
+licences, gates and routes, with every load-bearing claim re-read at its primary source that day. What it did not and could not
 produce is a single number of this project's own: every DER and RTF in that document is an
 external benchmark on external material, named with its dataset and scoring convention, and none
 of it is podcast audio. Until the dev/held-out podcast set exists and the spike runs on these

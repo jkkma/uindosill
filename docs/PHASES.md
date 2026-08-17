@@ -247,8 +247,10 @@ The next actions, in order:
    perform — are in `docs/LICENSING.md` and `docs/UNPROVEN.md`. What is left is Phase 5 packaging
    the result.
 4. ~~**Before v1 ships: a research workflow on how best to implement speaker diarisation in this
-   app.**~~ — **the study ran 2026-08-16**, and `docs/DIARISATION.md` is the result; the
-   measurement design that used to live in this item moved there with it, sharpened. Asked for by
+   app.**~~ — **the study ran 2026-08-16**; its result lives in the maintainer's diarisation
+   research on the Drive, outside this repository the way the v2 research is (moved out the same
+   evening at the maintainer's ask — the convention `CLAUDE.md` now names), and the measurement
+   design that used to live in this item moved there with it, sharpened. Asked for by
    the maintainer on 2026-08-16, after the WER work; a study, not a build. What it settled: the
    single most consequential unknown resolved — Sortformer runs without NeMo, because although no
    official ONNX exists the export recipe is public, community exports were verified
@@ -265,9 +267,11 @@ The next actions, in order:
    gate ratified before held-out is ever scored — but the critical path inverts: labelling and
    the spikes move to the front of the queue beside Phase 5, and — signing having also been
    dropped from v1 the same day — v1.0 ships when Velopack packaging and the passed gate both
-   land. `docs/DIARISATION.md` § *The recommendation, and the
-   decision* carries the record. (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it*
-   holds until the feature actually ships.)
+   land. The research's *The recommendation, and the decision* section carries the record, and
+   the four stratified test episodes the maintainer supplied the same evening — two hosts plus
+   zero, one, three and five guests, one show — live on the Drive beside it.
+   (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it* holds until the feature actually
+   ships.)
 
 ### After v1
 
