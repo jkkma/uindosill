@@ -71,9 +71,26 @@ fixtures upload a generator validated against the pin rather than a copy. **No D
 id goes in this repository** — it is public; find the folder by name through the Drive connector,
 and if the connector is not authorized in your session, say so instead of skipping silently.
 
+**Reach the Drive through the mount, not the connector, whenever the machine has one.** Google
+Drive for desktop is installed on the maintainer's machines and mounts as a drive letter whose
+root is localised — enumerate the mount's root rather than assuming `My Drive`, because on a
+Spanish install it is `Mi unidad`. Through the mount a file is a file: copy it. The connector's
+`create_file` takes content inline only, so uploading a binary through it means emitting the whole
+thing as base64 — megabytes of generated text for one PDF, which is why the mount is the route and
+the connector is for finding, reading and making folders. On a machine without the mount, upload
+by hand rather than through the connector.
+
 **Research lives on the Drive too, never in this repository** — the maintainer's standing
 convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived
 there). A research workflow's product — the study, the survey, the report — goes to a dated
 folder inside the Drive `uindosill` folder, beside the v2 research and the runs folders. What
 stays here is what binds the repository: the decision record in `docs/PHASES.md`, the unproven
 markers in `docs/UNPROVEN.md`, and a pointer that, as above, names no URL and no id.
+
+**Research goes up as PDF** — the maintainer's convention from 2026-08-17, and it exists to make
+the next session's read effortless. The Drive connector reads `application/pdf` natively and hands
+back clean text; a `.md` is not a type it reads, so it comes back base64-encoded and a session
+burns its time decoding. Write the study in markdown, convert, and upload the PDF; keep the
+markdown beside it in a `source-md/` subfolder so the source survives, and read the PDF, not the
+source. No pandoc on these machines — markdown to styled HTML, then Edge headless
+`--print-to-pdf`, works and keeps the tables.
