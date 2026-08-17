@@ -727,6 +727,22 @@ sherpa-onnx pipeline's DER on overlapping speech, not Sortformer's CPU real-time
 machine, not the int8 export's cost against fp32, not even the labelling effort per stretch. The
 study's remaining unknowns are marked inline in that document where each claim stands.
 
+### NPU offload — assessed 2026-08-16, nothing measured
+
+The second machine's XDNA 2 NPU is idle under this product, and that much is settled rather than
+unproven: ggml has no backend for it (its `ggml/src` listing read at source 2026-08-16), so
+parakeet.cpp cannot use it and neither can the llama.cpp server v2 contemplates. Everything past
+that is unmeasured. The one figure in the record — AMD's own Parakeet-TDT 0.6b v3 demo at RTF
+0.023–0.030 on 16.5 minutes, encoder on the NPU at BF16, decoder on the iGPU, static 15-second
+chunks — is AMD's number on unnamed hardware with a different chunking, and it has not been run
+on this laptop, where the Vulkan tier measures 0.035; "about 1.5× at best" is arithmetic across two
+machines, not a measurement. Unknown until a study runs: that demo's RTF here; what BF16 on the NPU
+with per-operator CPU fallback costs against f16 on the WER corpus; the power draw either way,
+which is the quantity an NPU exists for; and whether Windows ML's Vitis AI EP accepts this
+machine's driver, 32.0.20102.3930, whose numbering does not match the window the Microsoft EP page
+listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
+`docs/PHASES.md` § *After v1*.
+
 ### The CUDA drop's licensing — read, recorded, and the notice gap closed
 
 `cublas64_12.dll`, `cublasLt64_12.dll` and `cudart64_12.dll` are NVIDIA proprietary binaries under
