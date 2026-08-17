@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "comment": [
+    "The diarisation development stretches: five ten-minute cuts from the four stratified test episodes,",
+    "pinned here without a byte of the audio. `scripts/measure-der.ps1 -Cut` (or `lab.ps1 der -Cut`) re-creates",
+    "each WAV from the episode at the repository root with the ffmpeg line below and refuses one whose bytes",
+    "do not match. Two digests per stretch: sha256 is the whole file, which pins the ffmpeg build as well as",
+    "the audio (ffmpeg copies the episode's tags into the WAV header, its own encoder string included);",
+    "pcmSha256 is the data chunk alone, which pins the samples. A different ffmpeg that decodes identically",
+    "passes on the second and says so; different samples fail.",
+    "",
+    "The cut re-encodes, never `-c copy`: with `-ss` before `-i` ffmpeg seeks sample-accurately only when",
+    "transcoding, and snaps to a frame boundary under stream copy. Whether a lossy decode is bit-identical",
+    "across ffmpeg versions is unproven, and the pin makes the question moot.",
+    "",
+    "Onsets were chosen by cutting three candidate windows per episode — at 20%, 45% and 70% of its",
+    "duration — transcribing each with the ASR, and reading the transcripts for conversation against ad",
+    "reads, guests evidently present and speaking, and turn density. That is text-only inference and says",
+    "nothing certain about voice count or overlap; the labelling pass is where those become known. The",
+    "windows not chosen, and why, are under candidatesNotChosen so a later robustness stretch — an ad read",
+    "with the return to conversation after it — can be picked knowingly.",
+    "",
+    "The reference for a stretch is <id>.rttm beside this file, made with `uindosill rttm` from an Audacity",
+    "label export as README.md describes; the labelled slot below is flipped when it lands. Until then the",
+    "stretch is cut and measurable for real-time factor and memory, and not for DER."
+  ],
+  "ffmpeg": {
+    "version": "9.0-full_build-www.gyan.dev",
+    "line": "ffmpeg -ss <onset> -t 600 -i <src> -ac 1 -ar 16000 -c:a pcm_s16le <stretch>.wav",
+    "note": "The WAV muxer drops the episodes' embedded cover-art stream on its own; no -vn is needed and none was used."
+  },
+  "episodes": {
+    "two-hosts.mp3": { "bytes": 105643318, "durationSeconds": 10523.376 },
+    "two-hosts-one-guest.mp3": { "bytes": 90898438, "durationSeconds": 9048.888 },
+    "two-hosts-three-guests.mp3": { "bytes": 120850678, "durationSeconds": 12044.112 },
+    "two-hosts-five-guests.mp3": { "bytes": 101447158, "durationSeconds": 10103.76 }
+  },
+  "stretches": [
+    {
+      "id": "two-hosts-a",
+      "episode": "two-hosts.mp3",
+      "onsetSeconds": 2104,
+      "durationSeconds": 600,
+      "nominalVoices": 2,
+      "priority": 1,
+      "labelled": false,
+      "wav": { "bytes": 19200424, "sha256": "6ccd524439c438a6bd6beb1d8a81bae7d5b3d54b4c7df6da131cd7ad1e1f5923", "pcmBytes": 19200000, "pcmSha256": "9edd77046a5352ae6792326578c5387254571b03946ebcfcc7acb977a336265a" },
+      "why": "20% of the episode. Sustained discussion between the two hosts throughout: long turns with back-channel, one question-and-answer run near the end, no ad read and no music in the transcript. The primary two-host stretch, and the first to label."
+    },
+    {
+      "id": "two-hosts-b",
+      "episode": "two-hosts.mp3",
+      "onsetSeconds": 4735,
+      "durationSeconds": 600,
+      "nominalVoices": 2,
+      "priority": 2,
+      "labelled": false,
+      "wav": { "bytes": 19200424, "sha256": "eace1656fb2148ca8e64b11f91d525a857856503549a875934f84a1dd038fbb7", "pcmBytes": 19200000, "pcmSha256": "3395259f01df579e54ebd52250be1831e10e3ab21b2c43b984293969983b7aac" },
+      "why": "45% of the episode, chosen to complement two-hosts-a with a different turn character: the first three minutes are a fast-alternating comedic bit (short turns every few seconds), then a one-host schedule read, then discussion. A stress on speaker-change timing rather than on long turns."
+    },
+    {
+      "id": "two-hosts-one-guest-a",
+      "episode": "two-hosts-one-guest.mp3",
+      "onsetSeconds": 6334,
+      "durationSeconds": 600,
+      "nominalVoices": 3,
+      "priority": 3,
+      "labelled": false,
+      "wav": { "bytes": 19200486, "sha256": "04a0aa18a91e820d737ea17d64f230193bf9219c43ca147d12f6c0907606cbc7", "pcmBytes": 19200000, "pcmSha256": "66aec19e72190023f03d4dfb666f4ea311a48f77f30ab7db0c42cde89634ae67" },
+      "why": "70% of the episode. The guest is addressed by name and answers at length across two topics; a mix of quick exchanges and one long turn near the end; no ad read. The 20% window was a near-monologue guest interview with only one host evidently active, and the 45% window had no guest and spent its second half on sponsor copy."
+    },
+    {
+      "id": "two-hosts-three-guests-a",
+      "episode": "two-hosts-three-guests.mp3",
+      "onsetSeconds": 2408,
+      "durationSeconds": 600,
+      "nominalVoices": 5,
+      "priority": 4,
+      "labelled": false,
+      "wav": { "bytes": 19200422, "sha256": "6a4f875c7dbce251016527dd2f3304b4f3fdcafbc6ac3b75f650e04e443792da", "pcmBytes": 19200000, "pcmSha256": "188c22db44b8afbeac4ded12c589f16f4dc00212d705faaabc18c68e6af11f39" },
+      "why": "20% of the episode. Two guests are addressed by name and answer; the transcript shows dense cross-talk (several speakers merged into single ASR segments), one longer guest turn, no ad read. Expect the labelling to be slow here — that is the point of the stretch. The 45% window lost its last three minutes to a sponsor read; the 70% window named nobody."
+    },
+    {
+      "id": "two-hosts-five-guests-a",
+      "episode": "two-hosts-five-guests.mp3",
+      "onsetSeconds": 4546,
+      "durationSeconds": 600,
+      "nominalVoices": 7,
+      "priority": 5,
+      "labelled": false,
+      "wav": { "bytes": 19200514, "sha256": "a2948e744ad7bb2b731edb848ec5a348ac697df1e77fd8ea2f98983adf575a33", "pcmBytes": 19200000, "pcmSha256": "64d2cd51169dd06ec6bd800c2230bb4e2c01517b9be312aaff04f2ab9d537b8c" },
+      "why": "45% of the episode. The densest multi-voice turn-taking of the three windows — short frequent turns, visible interruptions, a floor hand-off by name — with at least two guests named and speaking and no ad read. This is the stretch that prices the four-speaker cap. The 70% window was more than half a solo sponsor read."
+    }
+  ],
+  "candidatesNotChosen": [
+    { "episode": "two-hosts.mp3", "onsetSeconds": 7366, "why": "Real exchange only in the first two minutes, then a five-minute single-voice explanatory monologue with sparse back-channel." },
+    { "episode": "two-hosts-one-guest.mp3", "onsetSeconds": 1809, "why": "Clean guest interview, but effectively two active voices: the second host is name-dropped, not heard." },
+    { "episode": "two-hosts-one-guest.mp3", "onsetSeconds": 4071, "why": "No guest in the window; roughly the back 45% is three sponsor reads with a two-voice tag after each. A candidate for a later ad-read robustness stretch." },
+    { "episode": "two-hosts-three-guests.mp3", "onsetSeconds": 5419, "why": "One confirmed guest; the last three minutes are a scripted single-voice sponsor read." },
+    { "episode": "two-hosts-three-guests.mp3", "onsetSeconds": 8430, "why": "Consistently multi-voice and ad-free, but nobody is addressed by name, so the labeller would have no textual anchor for who is who." },
+    { "episode": "two-hosts-five-guests.mp3", "onsetSeconds": 2020, "why": "Genuine multi-voice interaction, but a single guest monologue occupies the middle third." },
+    { "episode": "two-hosts-five-guests.mp3", "onsetSeconds": 7072, "why": "About sixty percent solo sponsor read; guests present only in the first two minutes and a twelve-second return at the end. A candidate for a later ad-read robustness stretch, because the return is cross-talk." }
+  ]
+}

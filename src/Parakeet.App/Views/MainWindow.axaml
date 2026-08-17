@@ -90,6 +90,18 @@
                 <TextBlock Text="Segment cap (s)" VerticalAlignment="Center" />
                 <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60" Increment="5" Width="110" />
               </StackPanel>
+
+              <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while no
+                   labeller is in the build — a control that silently does nothing is the failure
+                   this application refuses to ship. -->
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <CheckBox Content="Label speakers (opt-in: reads each file a second time)"
+                          IsChecked="{Binding LabelSpeakers}"
+                          IsEnabled="{Binding CanLabelSpeakers}" />
+                <TextBlock Text="{Binding SpeakerHint}" VerticalAlignment="Center" TextWrapping="Wrap"
+                           FontSize="11" Opacity="0.7"
+                           IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
             </StackPanel>
 
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
@@ -124,6 +136,12 @@
                     <Border IsVisible="{Binding IsLoaded}" Background="#2E7D6B" CornerRadius="3"
                             Padding="5,1" VerticalAlignment="Center">
                       <TextBlock Text="LOADED" FontSize="9" FontWeight="Bold" Foreground="White" />
+                    </Border>
+                    <!-- A model that names speakers rather than writing words: downloadable here,
+                         never offered to Load as the engine. -->
+                    <Border IsVisible="{Binding !IsTranscriptionModel}" Background="#6B4E9C" CornerRadius="3"
+                            Padding="5,1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding TaskLabel}" FontSize="9" FontWeight="Bold" Foreground="White" />
                     </Border>
                   </StackPanel>
                   <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />

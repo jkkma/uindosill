@@ -32,10 +32,21 @@ public sealed class VttFormatter : ITranscriptFormatter
                    .Append(Timecode.ToVtt(cue.End))
                    .Append(options.NewLine);
 
-            foreach (var line in cue.Lines)
+            // The speaker, once, in front of the first line, as plain text: WebVTT's <v> voice span
+            // was considered and not used — see SubtitleOptions.SpeakerPrefixFormat. Empty when the
+            // document carries no speakers, so an unlabelled transcript is byte-identical to before.
+            var prefix = options.Subtitles.SpeakerPrefix(cue.Speaker);
+            for (var line = 0; line < cue.Lines.Count; line++)
             {
+                if (line == 0)
+                {
+                    builder.Append(prefix);
+                }
+
                 // A cue payload line may not start with "-->" and a blank line ends the cue.
-                builder.Append(line.Length == 0 ? " " : line).Append(options.NewLine);
+                var text = cue.Lines[line];
+                var blank = text.Length == 0 && (line > 0 || prefix.Length == 0);
+                builder.Append(blank ? " " : text).Append(options.NewLine);
             }
 
             builder.Append(options.NewLine);

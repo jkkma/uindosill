@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Parakeet.App.Services;
 using Parakeet.Audio;
+using Parakeet.Core.Diarisation;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Segmentation;
@@ -66,6 +67,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [ObservableProperty]
     private double _maxSegmentSeconds = 30;
 
+    /// <summary>
+    /// The speaker opt-in. Off by default and off every time the window opens: it reads each file
+    /// a second time and runs a second model, and it is not what most transcriptions want.
+    /// </summary>
+    [ObservableProperty]
+    private bool _labelSpeakers;
+
     public TranscribeViewModel(
         IEngineProvider engines, Func<EngineSelection> selection, ModelSession? session = null)
     {
@@ -86,7 +94,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
             };
         }
 
-        Formats = [.. TranscriptFormats.All.Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
+        // The RTTM format is the speaker opt-in's output and nothing else's, so it is offered only
+        // where the opt-in can be turned on; a build with no labeller would only ever write empty files.
+        Formats = [.. TranscriptFormats.All
+            .Where(f => f.Id != TranscriptFormats.Rttm.Id || engines.SupportsSpeakerLabelling)
+            .Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
     }
 
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
@@ -95,6 +107,17 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>Extensions this build can actually open, for the file picker and the drop hint.</summary>
     public string SupportedExtensionsHint => string.Join("  ", AudioSources.SupportedExtensions);
+
+    /// <summary>
+    /// Whether the checkbox for the speaker opt-in does anything. When it does not, the box is
+    /// disabled and <see cref="SpeakerHint"/> says why, rather than a setting that silently does
+    /// nothing.
+    /// </summary>
+    public bool CanLabelSpeakers => _engines.SupportsSpeakerLabelling;
+
+    public string? SpeakerHint => CanLabelSpeakers
+        ? null
+        : "Speaker labelling is not in this build yet: the model behind it is still being chosen by measurement.";
 
     public bool HasJobs => Jobs.Count > 0;
 
@@ -175,17 +198,23 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
 
         var selection = _selection();
-        if (!_engines.IsModelAvailable(selection))
+        if (_session is not null)
+        {
+            // With a session, the loaded engine is what runs — not whichever row happens to be
+            // highlighted in the Models list, which may be a speaker model or nothing installed.
+            // Only when nothing is loaded does the selection matter, and then "download one" is
+            // the more useful instruction when there is nothing on disk to load in the first place.
+            if (!_session.IsLoaded)
+            {
+                StatusMessage = _engines.IsModelAvailable(selection)
+                    ? "No model is loaded. Open the Models tab, choose a backend and press Load."
+                    : "No model is installed. Open the Models tab and download one first.";
+                return;
+            }
+        }
+        else if (!_engines.IsModelAvailable(selection))
         {
             StatusMessage = "No model is installed. Open the Models tab and download one first.";
-            return;
-        }
-
-        // Checked after the installed test, because "download one" is the more useful instruction
-        // when there is nothing on disk to load in the first place.
-        if (_session is not null && !_session.IsLoaded)
-        {
-            StatusMessage = "No model is loaded. Open the Models tab, choose a backend and press Load.";
             return;
         }
 
@@ -193,6 +222,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
         if (formats.Count == 0)
         {
             StatusMessage = "Choose at least one output format.";
+            return;
+        }
+
+        if (!LabelSpeakers && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.Ordinal))
+        {
+            StatusMessage = "RTTM speaker turns need 'Label speakers' on: without it there are no turns to write.";
             return;
         }
 
@@ -225,6 +260,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             var options = BuildOptions();
 
+            // One labeller for the whole batch, created only when the opt-in is on and the
+            // provider has one to give; disposed with the batch.
+            await using var labeller = LabelSpeakers && _engines.SupportsSpeakerLabelling
+                ? _engines.CreateSpeakerLabeller()
+                : null;
+
             var jobs = Jobs.Select(vm => new TranscriptionJob
             {
                 InputPath = vm.Path,
@@ -240,7 +281,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 vm.Warning = null;
             }
 
-            var runner = new BatchTranscriptionRunner((job, _, token) => RunJobAsync(engine, job, options, token));
+            var runner = new BatchTranscriptionRunner((job, _, token) => RunJobAsync(engine, labeller, job, options, token));
             var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(true);
 
             // The runner swallows per-file exceptions so the queue keeps going, which means a
@@ -304,7 +345,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
     }
 
     private async Task<JobResult> RunJobAsync(
-        ITranscriptionEngine engine, TranscriptionJob job, TranscriptionOptions options, CancellationToken ct)
+        ITranscriptionEngine engine,
+        ISpeakerLabeller? labeller,
+        TranscriptionJob job,
+        TranscriptionOptions options,
+        CancellationToken ct)
     {
         var vm = Jobs.First(j => string.Equals(j.Path, job.InputPath, StringComparison.OrdinalIgnoreCase));
         SelectedJob ??= vm;
@@ -358,8 +403,24 @@ public sealed partial class TranscribeViewModel : ObservableObject
             ProcessingTime = DateTimeOffset.UtcNow - started,
         };
 
+        string? speakerWarning = null;
+        if (labeller is not null)
+        {
+            // The second pass. Both audio sources are single-read, so the file is opened again;
+            // the labelled transcript then replaces the streamed one in the window, names in front.
+            vm.Status = "Labelling speakers";
+            await using var second = AudioSources.Open(job.InputPath);
+            document = await SpeakerLabelling.LabelAsync(document, labeller, second, progress: progress, ct: ct).ConfigureAwait(true);
+            speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
+
+            text.Clear();
+            text.Append(JobViewModel.Render(document));
+            Publish();
+        }
+
         var written = await TranscriptWriter.WriteAsync(document, job, ct: ct).ConfigureAwait(true);
 
+        var silence = DescribeSilence(engine, document);
         var result = new JobResult
         {
             Job = job,
@@ -367,7 +428,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Document = document,
             OutputFiles = written,
             Elapsed = DateTimeOffset.UtcNow - started,
-            Warning = DescribeSilence(engine, document),
+            Warning = silence is null ? speakerWarning : speakerWarning is null ? silence : $"{silence} {speakerWarning}",
         };
 
         vm.Complete(result);

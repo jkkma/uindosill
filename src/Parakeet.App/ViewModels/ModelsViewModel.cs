@@ -47,6 +47,14 @@ public sealed partial class ModelViewModel : ObservableObject
 
     public string DisplayName => Descriptor.DisplayName;
 
+    /// <summary>
+    /// What the weights do, for the entries that do not transcribe: a diarisation model can be
+    /// downloaded from this tab like any other and must never be offered to Load as the engine.
+    /// </summary>
+    public bool IsTranscriptionModel => Descriptor.Task == ModelTask.Transcription;
+
+    public string TaskLabel => IsTranscriptionModel ? string.Empty : "SPEAKERS";
+
     public string Licence => Descriptor.License;
 
     public string Notes => Descriptor.Notes ?? string.Empty;
@@ -126,7 +134,9 @@ public sealed partial class ModelsViewModel : ObservableObject
         _backend = backend;
 
         Models = [.. catalog.Models.Select(m => new ModelViewModel(m, store.IsInstalled(m)))];
-        Selected = Models.FirstOrDefault(m => m.IsInstalled) ?? Models.FirstOrDefault();
+        Selected = Models.FirstOrDefault(m => m.IsInstalled && m.IsTranscriptionModel)
+            ?? Models.FirstOrDefault(m => m.IsTranscriptionModel)
+            ?? Models.FirstOrDefault();
 
         if (_session is not null)
         {
@@ -196,7 +206,7 @@ public sealed partial class ModelsViewModel : ObservableObject
         : "Choose the backend before loading. It cannot be changed again without restarting.";
 
     public bool CanLoad =>
-        _session is not null && !_session.IsBusy && !IsTranscribing && Selected is { IsInstalled: true };
+        _session is not null && !_session.IsBusy && !IsTranscribing && Selected is { IsInstalled: true, IsTranscriptionModel: true };
 
     public bool CanUnload => _session is { IsLoaded: true, IsBusy: false } && !IsTranscribing;
 

@@ -142,6 +142,20 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "speakers",
+                Help = "Label who is speaking: a second pass over the audio, off by default. Adds 'Speaker 1:' to every " +
+                       "format and speaker turns to json and rttm. Only the canned labeller exists in this build, so " +
+                       "this needs --fake until a diarisation model is integrated; without it the command says so and stops.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-count",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "With --speakers: how many voices there are, when known. Default: let the labeller decide.",
+            },
+            new OptionSpec
+            {
                 Name = "quiet",
                 Short = 'q',
                 Help = "Suppress progress; print only results and errors.",
@@ -154,7 +168,9 @@ internal static class Commands
             "when some files succeeded and others did not.\n\n" +
             "Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness\n" +
             "requirement rather than a tuning default: Parakeet degrades on long single-pass audio and glues text\n" +
-            "across chunk boundaries well before it collapses.",
+            "across chunk boundaries well before it collapses.\n\n" +
+            "--speakers is an opt-in and stays off by default: it reads the file a second time and runs a second model,\n" +
+            "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.",
     };
 
     public static readonly CommandSpec Models = new()
@@ -330,6 +346,103 @@ internal static class Commands
             "normalised, so the size of the normalisation is visible.",
     };
 
+    public static readonly CommandSpec Der = new()
+    {
+        Name = "der",
+        Summary = "Score speaker turns against a hand-labelled reference: diarisation error rate, with the convention stated.",
+        Positionals = "<hypothesis.rttm> [hypothesis.rttm...]",
+        Options =
+        [
+            new OptionSpec
+            {
+                Name = "reference",
+                Short = 'r',
+                TakesValue = true,
+                ValueName = "file.rttm",
+                Help = "The hand-labelled turns every hypothesis is scored against.",
+            },
+            new OptionSpec
+            {
+                Name = "reference-dir",
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Instead of --reference: a directory holding one <stem>.rttm per hypothesis, matched by file stem.",
+            },
+            new OptionSpec
+            {
+                Name = "collar",
+                TakesValue = true,
+                ValueName = "seconds",
+                Help = "No-score zone around every reference boundary, as a total width centred on it (pyannote.metrics " +
+                       "semantics: 0.25 forgives 0.125 s either side). Default 0.25. md-eval's and NeMo's \"0.25\" is a " +
+                       "half-width, so their number is --collar 0.5 here.",
+            },
+            new OptionSpec
+            {
+                Name = "skip-overlap",
+                Help = "Leave regions where two or more reference speakers talk at once out of the score. Off by default: " +
+                       "crosstalk is the thing being measured.",
+            },
+            new OptionSpec
+            {
+                Name = "json",
+                Help = "Machine-readable output: per-hypothesis and summed components and rates, at the headline collar, " +
+                       "at collar 0, and over reference-overlap regions.",
+            },
+            Help,
+        ],
+        Details =
+            "Both files are RTTM: 'SPEAKER <file-id> 1 <onset> <duration> <NA> <NA> <speaker> <NA> <NA>' per turn, as\n" +
+            "'uindosill rttm' writes from Audacity labels and 'uindosill transcribe --speakers -f rttm' writes from a run.\n" +
+            "DER is (missed + false alarm + confusion) / reference speech, over the union of both files' extents with the\n" +
+            "collar cut out around every reference boundary, under the one-to-one speaker mapping that maximises\n" +
+            "co-occurring speech (found exhaustively — greedy mapping is not DER). Computed the way pyannote.metrics\n" +
+            "computes it and validated against it on the fixture pairs in tests/fixtures/diarisation/scorer/.\n\n" +
+            "Three numbers come out together and travel together: the headline at the collar given, the strict number at\n" +
+            "collar 0, and the same components over reference-overlap regions only — where the target audio is hardest\n" +
+            "and where a headline averaged over every second of one person talking says least.",
+    };
+
+    public static readonly CommandSpec Rttm = new()
+    {
+        Name = "rttm",
+        Summary = "Convert an Audacity label export to RTTM speaker turns.",
+        Positionals = "<labels.txt>",
+        Options =
+        [
+            new OptionSpec
+            {
+                Name = "file-id",
+                TakesValue = true,
+                ValueName = "id",
+                Help = "The RTTM file id every line carries. Default: the label file's name without its extension.",
+            },
+            new OptionSpec
+            {
+                Name = "bridge",
+                TakesValue = true,
+                ValueName = "seconds",
+                Help = "Merge same-speaker labels separated by at most this many seconds. Default 0: only overlapping " +
+                       "or touching labels merge. Record the value used with the fixture.",
+            },
+            new OptionSpec
+            {
+                Name = "out",
+                Short = 'o',
+                TakesValue = true,
+                ValueName = "file",
+                Help = "Write the RTTM here instead of to standard output.",
+            },
+            Help,
+        ],
+        Details =
+            "Reads Audacity's Export Labels format — 'start<TAB>end<TAB>text', every label track merged into one file —\n" +
+            "with the label text as the speaker's name: one track per speaker, each labelled independently, so overlap\n" +
+            "falls out on its own. Point labels are dropped, same-speaker overlaps are merged, whitespace in a name becomes\n" +
+            "an underscore because RTTM splits on whitespace. A summary of who spoke how much goes to stderr; the RTTM\n" +
+            "goes to stdout or --out.",
+    };
+
     public static IReadOnlyList<CommandSpec> All { get; } =
-        [Transcribe, Models, Bench, Doctor, Probe, Notice, Formats, Wer];
+        [Transcribe, Models, Bench, Doctor, Probe, Notice, Formats, Wer, Der, Rttm];
 }

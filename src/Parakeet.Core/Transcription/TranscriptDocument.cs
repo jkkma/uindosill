@@ -27,6 +27,23 @@ public sealed record TranscriptDocument
     public TimeSpan? ProcessingTime { get; init; }
 
     /// <summary>
+    /// The speaker turns a labeller produced for this audio, in file time, or empty when speaker
+    /// labelling did not run. These are the labeller's output as such — what an RTTM file carries
+    /// and what a diarisation scorer reads — not the per-word attribution derived from them, which
+    /// lives on the segments.
+    /// </summary>
+    public IReadOnlyList<Diarisation.SpeakerTurn> SpeakerTurns { get; init; } = [];
+
+    /// <summary>
+    /// Which model named the speakers, when one did. Provenance, for the same reason
+    /// <see cref="ModelId"/> is: a label whose source is unknown cannot be re-examined.
+    /// </summary>
+    public string? SpeakerModelId { get; init; }
+
+    /// <summary>True when speaker labelling ran, whether or not it found anyone.</summary>
+    public bool HasSpeakers => SpeakerModelId is not null || SpeakerTurns.Count > 0;
+
+    /// <summary>
     /// Real-time factor: processing time divided by audio duration. Lower is faster.
     /// Null unless both durations are known and the audio is non-empty.
     /// </summary>

@@ -1,0 +1,339 @@
+{
+  "comment": [
+    "Expected diarisation error rate components for the fixture pairs in this directory, computed by",
+    "scripts/validate-der.py with pyannote.metrics — the reference implementation this project's scorer",
+    "is validated against. tests/Parakeet.Core.Tests/DiarisationTests.cs asserts the C# scorer reproduces",
+    "every figure here; do not edit these values by hand, regenerate them with the script.",
+    "",
+    "headline: DiarizationErrorRate(collar=0.25, skip_overlap=False) — pyannote semantics, a 0.25 s no-score",
+    "zone centred on every reference boundary (0.125 s either side); the convention of arXiv 2509.26177.",
+    "strict: the same with collar 0. overlapRegions: IdentificationErrorRate over uem = reference.get_overlap()",
+    "with the hypothesis renamed by the whole-file optimal mapping (found on the collar-extruded pair, as",
+    "DiarizationErrorRate itself finds it), collar 0.25 — the same components over regions where two or more",
+    "distinct reference speakers talk at once, under the same mapping as headline. skipOverlap:",
+    "DiarizationErrorRate(collar=0.25, skip_overlap=True) — every pairwise overlap of reference turns removed,",
+    "same speaker or not, which is pyannote's rule and differs from get_overlap's distinct-label rule."
+  ],
+  "conventions": {
+    "headline": {
+      "collarSeconds": 0.25,
+      "collarSemantics": "pyannote.metrics: total width centred on each reference boundary",
+      "skipOverlap": false
+    },
+    "strict": {
+      "collarSeconds": 0.0,
+      "skipOverlap": false
+    },
+    "overlapRegions": "reference.get_overlap(), whole-file optimal mapping (collar-extruded) held fixed, collar 0.25",
+    "skipOverlap": {
+      "collarSeconds": 0.25,
+      "skipOverlap": true
+    }
+  },
+  "producedBy": {
+    "pyannote.metrics": "4.1",
+    "pyannote.core": "6.0.1"
+  },
+  "cases": {
+    "crosstalk": {
+      "headline": {
+        "referenceSpeechSeconds": 50.75,
+        "missedSeconds": 13.75,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 5.125,
+        "rate": 0.371921182
+      },
+      "strict": {
+        "referenceSpeechSeconds": 55.0,
+        "missedSeconds": 15.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 5.5,
+        "rate": 0.372727273
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 27.5,
+        "missedSeconds": 13.75,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.5
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 23.25,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 5.125,
+        "rate": 0.220430108
+      }
+    },
+    "hypothesis-outside-extent": {
+      "headline": {
+        "referenceSpeechSeconds": 19.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 13.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.666666667
+      },
+      "strict": {
+        "referenceSpeechSeconds": 20.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 13.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.65
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 19.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 13.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.666666667
+      }
+    },
+    "long-jittered-conversation": {
+      "headline": {
+        "referenceSpeechSeconds": 546.843,
+        "missedSeconds": 48.234,
+        "falseAlarmSeconds": 6.135,
+        "confusionSeconds": 32.791,
+        "rate": 0.159387612
+      },
+      "strict": {
+        "referenceSpeechSeconds": 594.434,
+        "missedSeconds": 59.499,
+        "falseAlarmSeconds": 14.639,
+        "confusionSeconds": 36.273,
+        "rate": 0.185741394
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 38.55,
+        "missedSeconds": 4.745,
+        "falseAlarmSeconds": 0.222,
+        "confusionSeconds": 2.056,
+        "rate": 0.182178988
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 508.293,
+        "missedSeconds": 43.489,
+        "falseAlarmSeconds": 5.913,
+        "confusionSeconds": 30.735,
+        "rate": 0.157659067
+      }
+    },
+    "mapping-tipped-by-collar": {
+      "headline": {
+        "referenceSpeechSeconds": 19.547,
+        "missedSeconds": 2.664,
+        "falseAlarmSeconds": 2.739,
+        "confusionSeconds": 8.943,
+        "rate": 0.733923364
+      },
+      "strict": {
+        "referenceSpeechSeconds": 25.384,
+        "missedSeconds": 4.736,
+        "falseAlarmSeconds": 2.864,
+        "confusionSeconds": 10.901,
+        "rate": 0.728844942
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 4.309,
+        "missedSeconds": 2.284,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.431,
+        "rate": 0.630076584
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 14.478,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 2.739,
+        "confusionSeconds": 7.801,
+        "rate": 0.728001105
+      }
+    },
+    "over-clustered": {
+      "headline": {
+        "referenceSpeechSeconds": 39.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 11.75,
+        "rate": 0.301282051
+      },
+      "strict": {
+        "referenceSpeechSeconds": 40.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 12.0,
+        "rate": 0.3
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 39.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 11.75,
+        "rate": 0.301282051
+      }
+    },
+    "perfect-relabelled": {
+      "headline": {
+        "referenceSpeechSeconds": 18.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      },
+      "strict": {
+        "referenceSpeechSeconds": 20.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 18.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      }
+    },
+    "self-overlap": {
+      "headline": {
+        "referenceSpeechSeconds": 23.75,
+        "missedSeconds": 4.75,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.2
+      },
+      "strict": {
+        "referenceSpeechSeconds": 25.0,
+        "missedSeconds": 5.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.2
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 14.25,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      }
+    },
+    "short-turns-collar-heavy": {
+      "headline": {
+        "referenceSpeechSeconds": 10.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      },
+      "strict": {
+        "referenceSpeechSeconds": 18.0,
+        "missedSeconds": 3.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.166666667
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 10.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": 0.0
+      }
+    },
+    "three-speakers-merged-to-two": {
+      "headline": {
+        "referenceSpeechSeconds": 28.25,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 10.25,
+        "rate": 0.362831858
+      },
+      "strict": {
+        "referenceSpeechSeconds": 30.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 11.0,
+        "rate": 0.366666667
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 28.25,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 10.25,
+        "rate": 0.362831858
+      }
+    },
+    "two-speakers-typical": {
+      "headline": {
+        "referenceSpeechSeconds": 36.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 2.75,
+        "confusionSeconds": 2.875,
+        "rate": 0.154109589
+      },
+      "strict": {
+        "referenceSpeechSeconds": 39.0,
+        "missedSeconds": 0.85,
+        "falseAlarmSeconds": 3.28,
+        "confusionSeconds": 3.15,
+        "rate": 0.186666667
+      },
+      "overlapRegions": {
+        "referenceSpeechSeconds": 0.0,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 0.0,
+        "confusionSeconds": 0.0,
+        "rate": null
+      },
+      "skipOverlap": {
+        "referenceSpeechSeconds": 36.5,
+        "missedSeconds": 0.0,
+        "falseAlarmSeconds": 2.75,
+        "confusionSeconds": 2.875,
+        "rate": 0.154109589
+      }
+    }
+  }
+}

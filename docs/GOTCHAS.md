@@ -413,3 +413,18 @@ hyphens split, brackets dropped, six fillers dropped, `%` to `percent`, number w
 every run. What it does not do is also stated (paired years, contractions, spellings), which is
 why a figure from here is comparable to another figure from here and not to a leaderboard entry for
 the same model, and `docs/UNPROVEN.md` quotes both transcript styles rather than one.
+
+## 25. `TimeSpan.FromSeconds(double)` truncates to the tick, and a scorer notices
+
+`TimeSpan.FromSeconds` on .NET Core 3.0 and later converts the value to ticks and *truncates*
+(`(long)ticks`), so a value that arithmetic left a hair under its decimal — an RTTM turn's end
+computed as `onset + duration`, say `10.200 + 8.100`, which in binary64 is `18.299999999999997` and
+scales to `182999999.99999997` ticks — comes back one tick (100 ns) short. Not every such sum does:
+`0.42 + 5.63` is exactly representable enough to scale to `60500000.0` and survives, which is why
+the bug looks absent until enough turns are read at once. Individually invisible; the diarisation
+scorer's validation against pyannote.metrics found it as a ~1 µs disagreement on a ten-minute
+fixture, several turns each a tick short of the reference implementation.
+`SpeakerTurns.FromSeconds` rounds to the nearest tick instead, and every turn boundary parsed from
+an RTTM file or an Audacity label export goes through it. The general lesson is older than this bug:
+validate a scorer against the reference implementation on material long enough for a hundred small
+errors to add up to one you can see.

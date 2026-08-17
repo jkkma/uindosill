@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 359 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 358 passed and
+**Status:** met. 451 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 450 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -64,12 +64,14 @@ that file produced byte-identical output. See `docs/UNPROVEN.md`.
 
 ## Phase 3 — CLI — **DONE**
 
-`transcribe`, `models`, `bench`, plus `doctor`, `notice` and — since 2026-08-16 — `wer`, which
-scores a transcript against a human reference and is what the Phase 0 harness is built on.
+`transcribe`, `models`, `bench`, plus `doctor`, `notice`, `wer` — since 2026-08-16 — which
+scores a transcript against a human reference and is what the Phase 0 harness is built on, and —
+since 2026-08-17 — `der` and `rttm`, the diarisation error rate and the Audacity-labels-to-RTTM
+converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (34 of the project's 60 CLI
+**Status:** usable, tested end to end against the canned engine (55 of the project's 81 CLI
 tests drive the real entry point; the other 26 never construct it — 17 parser unit tests, 7 that
 check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
 `CommandLineParser`, and 2 on the resolver that turns the pair into the engine option). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
@@ -195,6 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
+| speakers | Held-out two-host DER ≤ 10% (collar 0.25 s pyannote.metrics semantics — 0.125 s either side — overlap included; the figure is pre-ratification and the convention is what the ratification has to settle), opt-in aboard v1.0 | Instrument built and validated, stretches pinned, seam in; no labels, no candidate measured |
 
 ### The dictation seam
 
@@ -272,6 +275,50 @@ The next actions, in order:
    zero, one, three and five guests, one show — live on the Drive beside it.
    (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it* holds until the feature actually
    ships.)
+
+   **Built 2026-08-17 — the instrument, the material, and the seam; nothing measured.** The
+   laptop half of the build/measure split, in the order the plan fixed:
+
+   - **The DER scorer** is `uindosill der` over `Parakeet.Core.Diarisation`: pyannote.metrics'
+     algorithm — the union of both extents as the scored region, a collar cut out around every
+     reference boundary, elementary intervals, the one-to-one speaker mapping that maximises
+     co-occurring speech found by exhaustive search rather than greedily — and **validated against
+     pyannote.metrics 4.1 on ten committed fixture pairs, all four blocks of each — headline,
+     collar 0, overlap regions, and skip-overlap — agreeing to a microsecond** (`tests/fixtures/diarisation/scorer/`, `scripts/validate-der.py`; the C# test
+     suite re-asserts the agreement on every run). It prints three numbers together: the headline
+     at collar 0.25 s with overlap included, the strict number at collar 0, and the same components
+     over reference-overlap regions only. `scripts/measure-der.ps1` — `lab.ps1 der`, the eleventh
+     dispatcher task — cuts the stretches and scores hypothesis directories into
+     `runs/der/`; `uindosill rttm` converts an Audacity label export.
+   - **One convention finding worth reading before the gate is ratified.** pyannote's `collar` is a
+     *total* width centred on the boundary — `collar=0.25` forgives 0.125 s either side — while NIST
+     md-eval and NeMo quote a *half*-width, so a Sortformer model card's "collar 0.25" is this
+     scorer's `--collar 0.5`. The benchmark the plan anchors to, arXiv 2509.26177, states it uses
+     pyannote.metrics at `collar=0.25, skip_overlap=False`, and that is the headline convention
+     here; the card numbers the proposed 10% was derived from sit on the other scale. Neither number
+     is wrong; they are not on one scale, and the gate should say which it means.
+   - **Five development stretches**, ten minutes each, are pinned in
+     `tests/fixtures/diarisation/dev/stretches.json` — episode, onset, the exact ffmpeg line,
+     ffmpeg version, byte count, and two SHA-256s (whole file, and PCM alone, because ffmpeg copies
+     the episode's tags into the WAV header). `lab.ps1 der -Cut` re-creates and verifies them
+     from the episodes at the repository root. Two from the two-host episode, one from each guest
+     episode; onsets chosen by transcribing three candidate windows per episode and reading them
+     for conversation over ad reads and for guests evidently present — text-only inference,
+     recorded as such. The labelling guide is `tests/fixtures/diarisation/README.md`; no stretch is
+     labelled yet, and labelling effort remains unmeasured.
+   - **The seam** is in: `ISpeakerLabeller` in Core beside `ITranscriptionEngine`; a nullable
+     `Speaker` on `TranscriptSegment` and `TranscriptWord`; `SpeakerAssignment` attributing words to
+     turns and cutting segments where the speaker changes; every formatter naming the speaker when
+     one is known and byte-identical to before when none is; `SubtitleCueBuilder` never merging a
+     cue across a speaker change; a seventh format, `rttm`, writing the labeller's turns; a canned
+     labeller for CI; the catalogue's `"task"` discriminator, so a diarisation entry can be
+     installed through the same digest checks and never surface as a selectable ASR model. The
+     opt-in shapes it: `transcribe --speakers` and a checkbox on the Transcribe tab, both off by
+     default, and both honest about the fact that this build has no real labeller — the flag says so
+     and stops, the checkbox is disabled with the reason. The suite grew from 359 to 451 tests.
+   - **Not done, by design:** the sherpa-onnx and Sortformer spikes belong to the desktop, which is
+     where the measuring half of the split runs; every DER, RTF and memory figure for a real
+     candidate is still zero measurements.
 
 ### After v1
 

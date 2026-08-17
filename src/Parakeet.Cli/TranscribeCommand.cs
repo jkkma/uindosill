@@ -1,5 +1,6 @@
 using System.Globalization;
 using Parakeet.Audio;
+using Parakeet.Core.Diarisation;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Segmentation;
@@ -43,6 +44,14 @@ internal static class TranscribeCommand
 
         var options = BuildOptions(parsed);
         var quiet = parsed.HasFlag("quiet");
+        var speakerOptions = BuildSpeakerOptions(parsed);
+
+        if (speakerOptions is null && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new CliUsageException(
+                "-f rttm carries speaker turns, and there are none without --speakers; an empty .rttm would be written. " +
+                "Add --speakers or drop the format.");
+        }
 
         var jobs = parsed.Positionals
             .Select(path => new TranscriptionJob
@@ -70,10 +79,14 @@ internal static class TranscribeCommand
             context.WriteError("Using the canned engine: the audio pipeline is real, the words are not.");
         }
 
+        // The opt-in. Off, nothing below changes; on, a labeller is created — or refused, in this
+        // build, unless the canned one was asked for — and every file gets a second pass.
+        await using var labeller = speakerOptions is null ? null : CreateLabeller(context, parsed, speakerOptions);
+
         WarnAboutThreads(context, parsed, engine);
 
         var runner = new BatchTranscriptionRunner((job, progress, token) =>
-            RunOneAsync(context, engine, job, options, progress, quiet, token));
+            RunOneAsync(context, engine, labeller, job, options, speakerOptions, progress, quiet, token));
 
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
@@ -118,6 +131,73 @@ internal static class TranscribeCommand
         return options;
     }
 
+    /// <summary>Null when <c>--speakers</c> was not given: the whole feature is behind that flag.</summary>
+    private static SpeakerLabellingOptions? BuildSpeakerOptions(ParsedCommandLine parsed)
+    {
+        if (!parsed.HasFlag("speakers"))
+        {
+            if (parsed.Value("speaker-count") is { Length: > 0 })
+            {
+                throw new CliUsageException("--speaker-count only means something with --speakers.");
+            }
+
+            return null;
+        }
+
+        // Refused here, before any engine is resolved, so the message the user sees is about the
+        // labeller and not about whichever ASR model happens not to be installed.
+        if (!parsed.HasFlag("fake"))
+        {
+            throw new CliUsageException(NoLabellerMessage);
+        }
+
+        int? count = null;
+        if (parsed.Value("speaker-count") is { Length: > 0 } countText)
+        {
+            if (!CommandLineParser.TryParseInt(countText, out var value) || value < 1)
+            {
+                throw new CliUsageException($"--speaker-count needs a positive integer, got '{countText}'.");
+            }
+
+            count = value;
+        }
+
+        var options = new SpeakerLabellingOptions { SpeakerCount = count };
+        options.Validate();
+        return options;
+    }
+
+    /// <summary>
+    /// The only labeller this build has is the canned one. Saying so, and stopping, is the honest
+    /// answer to <c>--speakers</c> without <c>--fake</c>: the seam is built, the model behind it is
+    /// still being chosen by measurement (docs/PHASES.md), and a flag that silently did nothing
+    /// would print a transcript with no names and let the user think nobody was found.
+    /// </summary>
+    private const string NoLabellerMessage =
+        "--speakers: no speaker labeller is available in this build. The diarisation model is still being chosen " +
+        "by measurement (docs/PHASES.md § Decisions taken 2026-08-16); the seam it will plug into is here, and " +
+        "--speakers --fake exercises it with canned speakers.";
+
+    private static ISpeakerLabeller CreateLabeller(CliContext context, ParsedCommandLine parsed, SpeakerLabellingOptions options)
+    {
+        if (!parsed.HasFlag("fake"))
+        {
+            throw new CliUsageException(NoLabellerMessage);
+        }
+
+        context.WriteError("Using the canned speaker labeller: the second pass over the audio is real, the speakers are not.");
+        var labeller = new FakeSpeakerLabeller();
+
+        // The seam's capabilities are the caller's to honour: a count the labeller cannot fix is
+        // said out loud rather than silently dropped.
+        if (options.SpeakerCount is { } count && !labeller.Capabilities.SupportsFixedSpeakerCount)
+        {
+            context.WriteError($"--speaker-count {count} was given but this labeller decides the count itself; the value is ignored.");
+        }
+
+        return labeller;
+    }
+
     private static void WarnAboutThreads(CliContext context, ParsedCommandLine parsed, ITranscriptionEngine engine)
     {
         if (parsed.Value("threads") is not { Length: > 0 } || engine.Capabilities.SupportsThreadCount)
@@ -133,8 +213,10 @@ internal static class TranscribeCommand
     private static async Task<JobResult> RunOneAsync(
         CliContext context,
         ITranscriptionEngine engine,
+        ISpeakerLabeller? labeller,
         TranscriptionJob job,
         TranscriptionOptions options,
+        SpeakerLabellingOptions? speakerOptions,
         IProgress<TranscriptionProgress>? _,
         bool quiet,
         CancellationToken ct)
@@ -162,6 +244,17 @@ internal static class TranscribeCommand
         var document = await TranscriptionRunner.RunAsync(
             engine, audio, options, job.DisplayName, progress, ct).ConfigureAwait(false);
 
+        string? speakerWarning = null;
+        if (labeller is not null && speakerOptions is not null)
+        {
+            // Both audio sources are single-read, so the second pass opens the file again. That is
+            // a second decode of the whole file, and it is a cost only the opt-in pays.
+            await using var second = AudioSources.Open(job.InputPath);
+            document = await SpeakerLabelling.LabelAsync(
+                document, labeller, second, speakerOptions, progress, ct).ConfigureAwait(false);
+            speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
+        }
+
         if (!quiet && context.Interactive)
         {
             context.Error.Write('\r');
@@ -179,10 +272,14 @@ internal static class TranscribeCommand
             OutputFiles = files,
             Elapsed = DateTimeOffset.UtcNow - started,
             // Silence wins when both apply: an empty transcript has no segments to flag, and the
-            // reason it is empty is the only thing worth saying about it.
-            Warning = DescribeSilence(engine, document) ?? DescribeAnomalies(document, options),
+            // reason it is empty is the only thing worth saying about it. A labeller at its speaker
+            // cap is said after either, because it is about the names and not the words.
+            Warning = Join(DescribeSilence(engine, document) ?? DescribeAnomalies(document, options), speakerWarning),
         };
     }
+
+    private static string? Join(string? first, string? second) =>
+        first is null ? second : second is null ? first : $"{first} {second}";
 
     /// <summary>
     /// Turns "the transcript is empty" into an explanation. An empty file with no message is

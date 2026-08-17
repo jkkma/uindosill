@@ -52,6 +52,12 @@ internal static class ModelsCommand
                 marks.Add("recommended");
             }
 
+            // Only said when it is not the obvious thing: every entry transcribes unless it says otherwise.
+            if (model.Task != ModelTask.Transcription)
+            {
+                marks.Add($"{model.Task.ToString().ToLowerInvariant()} model — not selectable for transcribe");
+            }
+
             if (!model.Verified)
             {
                 marks.Add("unverified catalogue entry");

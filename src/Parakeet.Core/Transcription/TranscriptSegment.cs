@@ -12,6 +12,14 @@ public sealed record TranscriptWord
     /// <summary>Confidence in (0, 1]. Null when the engine does not report one.</summary>
     public float? Confidence { get; init; }
 
+    /// <summary>
+    /// Who said it, when a speaker labeller has run and attributed this word; null otherwise. A
+    /// display name (<c>Speaker 1</c>) or a diariser's own label, exactly as
+    /// <c>SpeakerAssignment</c> left it. Every formatter prints nothing about speakers while this
+    /// is null, so a transcript made without the opt-in is byte-identical to what it always was.
+    /// </summary>
+    public string? Speaker { get; init; }
+
     public TimeSpan Duration => End - Start;
 
     /// <summary>Shifts the word by <paramref name="offset"/>; used to lift segment-relative
@@ -34,9 +42,17 @@ public sealed record TranscriptSegment
 
     /// <summary>
     /// Index of the audio segment this text came from. Two transcript segments can share an
-    /// index when one decode produced several sentences.
+    /// index when one decode produced several sentences, or when speaker labelling cut one
+    /// segment where the speaker changed.
     /// </summary>
     public int SourceSegmentIndex { get; init; }
+
+    /// <summary>
+    /// The one speaker this segment belongs to, when a labeller has run; null otherwise. After
+    /// <c>SpeakerAssignment</c> a segment never spans a speaker change unless its words could not
+    /// be cut apart, in which case this is the speaker of most of it and the words say the rest.
+    /// </summary>
+    public string? Speaker { get; init; }
 
     public TimeSpan Duration => End - Start;
 

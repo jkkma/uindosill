@@ -66,6 +66,12 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
                    .Append(Timecode.ToVtt(cue.End))
                    .Append(options.NewLine);
 
+            // The speaker prefix is bare text before the first span, in both branches, exactly where
+            // VttFormatter puts it — so stripping every tag from this output still reproduces the
+            // plain vtt byte for byte. Bare text matches neither :past nor :future, which is right:
+            // a name is not spoken, so it never lights up.
+            var prefix = options.Subtitles.SpeakerPrefix(cue.Speaker);
+
             if (cue.LineWords.Count == 0)
             {
                 // The engine reported no word timestamps for the segment behind this cue, so
@@ -73,14 +79,22 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
                 // share of the characters, which is a reasonable guess about when to show a line
                 // and a worthless one about when a word is spoken — so no timings are emitted
                 // rather than character-share timings dressed up as measured ones.
-                foreach (var line in cue.Lines)
+                for (var line = 0; line < cue.Lines.Count; line++)
                 {
+                    if (line == 0)
+                    {
+                        builder.Append(prefix);
+                    }
+
                     // A cue payload line may not start with "-->" and a blank line ends the cue.
-                    builder.Append(line.Length == 0 ? " " : line).Append(options.NewLine);
+                    var text = cue.Lines[line];
+                    var blank = text.Length == 0 && (line > 0 || prefix.Length == 0);
+                    builder.Append(blank ? " " : text).Append(options.NewLine);
                 }
             }
             else
             {
+                builder.Append(prefix);
                 AppendTimedLines(builder, cue, options.NewLine);
             }
 

@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 359 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 451 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -55,11 +55,13 @@ check is not possible from here, say so rather than reasoning to a confident ans
 ## Where output goes
 
 Everything under `runs/` is gitignored, and so are transcripts and audio at the repository root.
-Nothing a measurement produces belongs in the working tree. The two harnesses use different shapes
-inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`, and
-`measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it.
+Nothing a measurement produces belongs in the working tree. The four harnesses use different shapes
+inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`,
+`measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it,
+`measure-wer.ps1` writes `runs/wer/<timestamp>-<backend>/`, and `measure-der.ps1` writes
+`runs/der/<timestamp>-<system>/` beside the cut stretches in `runs/der/stretches/`.
 
-`scripts/lab.ps1` is one entry point for the ten scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the eleven scripts; run it bare to list them.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
 machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they
