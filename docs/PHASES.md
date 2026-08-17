@@ -160,6 +160,12 @@ plan, recorded so the next session builds what was decided rather than re-decidi
 
    Eligibility is not established: nobody has applied. If SignPath declines, the alternative that
    costs nothing is to ship unsigned, and that would be a further decision, not this one.
+
+   That further decision arrived the same day, taken rather than forced: **v1.0 ships unsigned.**
+   The maintainer decided it on 2026-08-16, independent of SignPath — no application gates v1.0,
+   and the cost accepted is the known one, SmartScreen's "unknown publisher" on the installer and
+   the app for every v1.0 user. The reading above stays for whenever signing is taken up, because
+   nothing about the programme's terms changed.
 3. **The installer is the desktop app only.** The CLI stays a zip beside it on the release, as the
    CI artefact is today: a smaller download and one thing to sign and update. Not chosen: both in
    one package with a PATH entry (Velopack has no PATH feature, so that is custom code on install
@@ -200,8 +206,11 @@ weights are pinned in the `deferred` array of `models.json` with exact sizes and
 loader, installer and digest checking reach them unchanged once a licence is established for each.
 Neither is installable in this build, and the reason is written down in `docs/MODELS.md`.
 
-**Phase 5 is the only thing between this and a v1 anybody can install.** Everything the product
-does, it does; what it cannot do is arrive on a machine that has no .NET SDK and no git clone.
+**Two things now stand between this and a v1 anybody can install: Phase 5, and speakers.**
+Phase 5 because everything the product does, it does, but it cannot arrive on a machine that has
+no .NET SDK and no git clone. Speakers because the maintainer decided on 2026-08-16 — overriding
+the study's v1.1 recommendation, item 4 below — that **v1.0 does not ship without diarisation**:
+opt-in in the product, an option the user turns on, but aboard from the first release.
 
 The next actions, in order:
 
@@ -212,7 +221,9 @@ The next actions, in order:
    the default download.~~ Both decided 2026-08-16 — see *Decisions taken* above: the CUDA tier is a
    second download flavour, and signing goes through SignPath Foundation's free programme, which
    waits on an application to SignPath rather than on a purchase, and which by its own terms signs
-   this project's binaries and not the upstream natives.
+   this project's binaries and not the upstream natives. **Later the same day the signing half
+   left v1 entirely: v1.0 ships unsigned** (decision 2 above records what that accepts), so
+   Phase 5 for v1 is Velopack without signing and the SignPath application is post-v1 work.
 2. ~~**A WER harness**, which gates *recommending* q8_0 or q4_k~~ — **done 2026-08-16**, Phase 0
    above and `docs/UNPROVEN.md`. It was moved behind v1 on 2026-08-15 by making f16 the default,
    and it has now been built and run anyway: every catalogue entry scores within 0.08 points of f16
@@ -248,11 +259,15 @@ The next actions, in order:
    material, so the dev/held-out podcast set — stratified two to five voices through guest
    episodes, split by show, scored by a collar-0.25 overlap-included DER harness — remains the
    deciding instrument, with a proposed gate written down to be ratified before held-out is ever
-   scored. **The recommendation stands as it stood**: build Phase 5, apply to SignPath, run the
-   sherpa-onnx spike during that wait, ship v1.0 when signing lands, carry speakers in v1.1 —
-   the study found no reason to hold v1.0, and `docs/DIARISATION.md` names the spike order and
-   the exact artifacts. (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it* holds until
-   the feature actually ships.)
+   scored. **The study recommended v1.1; the maintainer decided otherwise the same day: speakers
+   ship in v1.0, as an option the user turns on, and the maintainer sources the test data.** The
+   study's machinery survives the override unchanged — the spike order, the exact artifacts, the
+   gate ratified before held-out is ever scored — but the critical path inverts: labelling and
+   the spikes move to the front of the queue beside Phase 5, and — signing having also been
+   dropped from v1 the same day — v1.0 ships when Velopack packaging and the passed gate both
+   land. `docs/DIARISATION.md` § *The recommendation, and the
+   decision* carries the record. (`docs/V2-ASK-THE-TRANSCRIPT.md` § *Not in v2: who said it*
+   holds until the feature actually ships.)
 
 ### After v1
 
