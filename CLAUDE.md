@@ -72,9 +72,9 @@ id goes in this repository** — it is public; find the folder by name through t
 and if the connector is not authorized in your session, say so instead of skipping silently.
 
 **Transfers go through rclone — `scripts/sync-drive.ps1`, or `lab.ps1 drive`.** Not through the
-Drive connector: its `create_file` takes content inline only, so uploading a binary through it
-means emitting the whole file as base64, megabytes of generated text for one PDF. The connector is
-for finding folders, creating them and reading files; rclone moves them. Google Drive for desktop
+Drive connector: its `create_file` takes content inline only, so uploading anything through it
+means emitting the whole file as generated text, and its reader does not handle markdown at all.
+The connector is for finding folders and creating them; rclone moves the files. Google Drive for desktop
 is deliberately **not** the answer either — the maintainer is not installing a background sync
 application on the desktop, and rclone is one binary that behaves identically on both machines.
 
@@ -100,10 +100,11 @@ folder inside the Drive `uindosill` folder, beside the v2 research and the runs 
 stays here is what binds the repository: the decision record in `docs/PHASES.md`, the unproven
 markers in `docs/UNPROVEN.md`, and a pointer that, as above, names no URL and no id.
 
-**Research goes up as PDF** — the maintainer's convention from 2026-08-17, and it exists to make
-the next session's read effortless. The Drive connector reads `application/pdf` natively and hands
-back clean text; a `.md` is not a type it reads, so it comes back base64-encoded and a session
-burns its time decoding. Write the study in markdown, convert, and upload the PDF; keep the
-markdown beside it in a `source-md/` subfolder so the source survives, and read the PDF, not the
-source. No pandoc on these machines — markdown to styled HTML, then Edge headless
-`--print-to-pdf`, works and keeps the tables.
+**Research goes up as markdown, and comes down the same way** — `lab.ps1 drive -Research <folder>`
+to push, `-Fetch <name>` to pull, and then read the files on disk. Do not read research through the
+Drive connector: `text/markdown` is not a type its `read_file_content` handles, so a `.md` comes
+back base64-encoded through `download_file_content` and a session burns its time decoding, which is
+the whole reason the connector is not the read path. There is no conversion step — a PDF was tried
+on 2026-08-16 to work around the connector's list and dropped the same night once rclone made the
+connector unnecessary; it lost the tables on the way back and was a second copy waiting to go
+stale.
