@@ -60,11 +60,18 @@ The measurement plan's method, made concrete. Time it on the first stretch — t
 is thirty to sixty minutes per ten minutes of audio, and it is unproven.
 
 1. `lab.ps1 der -Cut`, then open `runs/der/stretches/<id>.wav` in Audacity.
-2. **One label track per speaker**, named for the speaker, and **every label's text is the
-   speaker's name** (`host_a`, `host_b`, `guest_1` — no spaces; the converter turns any into
-   underscores). Label each speaker independently, so overlap falls out on its own: where two people
-   talk at once, two tracks carry labels over the same seconds. Do not try to decide who "has the
-   floor".
+2. **One label track per speaker**, and **the label's *text* is what names the speaker** — the
+   export carries each label's text and not its track's name, so the text is the only thing that
+   says whose label a line is, and which track a label lands on does not matter. Keep the names
+   short: `A` and `B` cost two keystrokes a label where `host_a` costs eight, and across the
+   hundreds of labels in a ten-minute stretch that is real time. The choice moves no figure — the
+   scorer maps speaker names optimally, and the `perfect-relabelled` fixture pins that at DER 0
+   across a complete renaming — so use distinct names, use the same ones for the whole stretch, and
+   record in the fixture's note which name was which voice. No spaces (the converter turns any into
+   underscores), and no blank labels: an empty text is an error rather than a default, so the
+   converter refuses the file and names the line. Label each speaker independently, so overlap falls
+   out on its own: where two people talk at once, two tracks carry labels over the same seconds. Do
+   not try to decide who "has the floor".
 3. **Back-channels are speech.** A 300 ms "yeah" gets a label; hosts do it constantly and a 0.25 s
    collar does not hide it.
 4. **Bridge a speaker's own pauses under about 0.3–0.5 s** — draw one label across "so, um, the
@@ -72,10 +79,10 @@ is thirty to sixty minutes per ten minutes of audio, and it is unproven.
    use it for the whole stretch and record it in the fixture's note; `uindosill rttm --bridge` can
    apply it mechanically to labels drawn tighter than that.
 5. **Produced speech policy.** A pre-recorded ad read, a jingle with lyrics, a played clip: label the
-   voice as its own speaker (`ad_read`, `clip`) rather than as a host, so the labels say what the
-   audio contains and the scorer's speaker count is honest. Music without words is not speech and
-   gets no label. This is the policy the study said had to be written before the first stretch;
-   it is written here and can be changed before, not after, held-out is scored.
+   voice as its own speaker (`ad`, `clip` — any name that is not a host's) rather than as a host, so
+   the labels say what the audio contains and the scorer's speaker count is honest. Music without
+   words is not speech and gets no label. This is the policy the study said had to be written before
+   the first stretch; it is written here and can be changed before, not after, held-out is scored.
 6. Export with *File → Export Other → Export Labels* (the path moved there in Audacity 3.4; every
    label track merges into one tab-separated file, uppermost track first — the converter sorts by
    time, so track order does not matter), then:
@@ -86,7 +93,8 @@ is thirty to sixty minutes per ten minutes of audio, and it is unproven.
 
    which merges same-speaker overlaps, drops point labels, prints who spoke how much and how many
    seconds are overlapped, and writes RTTM with LF endings and three decimals. Read the summary: a
-   speaker with two seconds of speech is usually a mislabelled track.
+   speaker with two seconds of speech usually means labels carrying the wrong text, which is the one
+   mistake this convention is exposed to.
 7. Flip `"labelled": true` on the stretch in `stretches.json`, note the bridge and anything unusual
    (a guest who arrives halfway; a stretch that turned out to have six voices), and commit the
    `.rttm` — it is the reference, and it stays fixed once a held-out score has been seen.
