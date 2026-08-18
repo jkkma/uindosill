@@ -197,7 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
-| speakers | Held-out two-host **podcast** DER ≤ 10% (collar 0.25 s pyannote.metrics semantics — 0.125 s either side — overlap included; the figure is pre-ratification and the convention is what the ratification has to settle), opt-in aboard v1.0. Meetings and web video joined the target domain on 2026-08-17 and have neither a gate nor material. | Instrument built and validated, stretches pinned, seam in; no labels, no candidate measured |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin is pre-ratification. Opt-in aboard v1.0. | Instrument built and validated, AMI set up and verified, seam in; sherpa-onnx measured and far off, no candidate passing |
 
 ### The dictation seam
 
@@ -352,6 +352,32 @@ The next actions, in order:
    convention finding above — one corpus carries published figures four-fold apart on convention
    alone, and a second scoring pass at collar 0, where half-width and total-width definitions
    agree, is what buys comparability. The report is on the Drive with the rest of the research.
+
+   **The gate was restated on 2026-08-18, against corpora that exist.** Hand-labelling was declined
+   that day — the ten-minute stretch first, then a two-minute pilot after it had been cut, pinned,
+   transcribed and written up — and that closes the podcast route entirely, because the held-out
+   set the old gate named would have needed labelling exactly as the development stretches did.
+   *Held-out two-host podcast DER ≤ 10%* had become a criterion that could never be evaluated, and
+   since v1.0 ships when packaging and the passed gate both land, v1.0 was gated on something that
+   could not happen. What replaces it is scored on material this project already holds and has
+   verified: **AMI** as the ranking corpus, because it is the only one where several toolkits
+   publish figures whose convention can be established at source; **NOTSOFAR-1** for crosstalk,
+   because AMI's 14.58% overlap is mild against its 39%; **VoxConverse** for web video and for
+   speaker counts past four, which AMI cannot reach at 15 of 16 test meetings holding exactly four.
+
+   **What the restatement costs, said plainly.** The gate no longer asserts anything about podcast
+   audio — the domain this feature was first scoped to, and the one the four stratified episodes
+   were sourced for. A pass now means a diariser is close to the state of the art on meetings and
+   on web video, and it means nothing about two hosts talking over each other. That is a real
+   reduction in what a pass is worth, recorded here rather than absorbed quietly. The 10% figure
+   goes with the material it named; it was in any case derived from Sortformer model-card numbers
+   on the half-width scale, which this document had already flagged as not the scale the gate is
+   written in. The 5-point margin replacing it is a proposal awaiting ratification, and it is
+   relative rather than absolute on purpose: what a shipping product has to answer is whether a
+   local, redistributable pipeline lands near what the best available one would give the same user
+   — not whether it clears a threshold picked before any measurement existed. The five podcast
+   stretches stay pinned and cut, measurable for real-time factor and memory and not for DER,
+   exactly as `stretches.json` says.
 
 ### After v1
 
