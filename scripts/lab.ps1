@@ -178,11 +178,20 @@ param(
     [switch] $SkipVerify,
 
     # --- drive (-Destination is shared with vendor-cuda; sync-drive.ps1's parameter sets make
-    #     -Runs, -Research, -Fetch and -Episodes mutually exclusive, and it says so if two are
-    #     passed together) ---
+    #     -Runs, -Research, -Memory, -Fetch and -Episodes mutually exclusive, and it says so if two
+    #     are passed together) ---
     [ValidateSet('laptop', 'desktop')]
     [string] $Runs,
     [string] $Research,
+
+    # -Memory must be declared here even though this file forwards by name, and the reason is
+    # measure's -MemoryCsv above: PowerShell binds an unambiguous PREFIX, so before this line
+    # `lab.ps1 drive -Memory desktop` bound to -MemoryCsv and was rejected as a parameter the drive
+    # task does not take — an error naming a switch the caller never typed. An exact declaration
+    # wins over a prefix match. Observed 2026-08-17.
+    [ValidateSet('laptop', 'desktop')]
+    [string] $Memory,
+
     [string] $Fetch,
     [switch] $Episodes,
     [string] $Remote,
