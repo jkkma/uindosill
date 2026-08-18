@@ -733,10 +733,11 @@ reproduces every component pyannote.metrics 4.1 computes — reference speech, m
 confusion — to within a microsecond, in four blocks each: at the headline collar of 0.25 s with
 overlap included, at collar 0, over reference-overlap regions under the whole-file mapping, and
 over the whole file with overlap skipped; `scripts/validate-der.py`
-ran the comparison and the C# suite re-asserts it on every run. That is a validated scorer, and it
-is still zero measurements: the five development stretches are pinned and cut
-(`tests/fixtures/diarisation/dev/`) but **none is labelled**, so no DER of anything has been
-computed on this material, and the labelling effort per stretch is as unmeasured as it was.
+ran the comparison and the C# suite re-asserts it on every run. That is a validated scorer, and on
+that day it was still zero measurements: the five development stretches are pinned and cut
+(`tests/fixtures/diarisation/dev/`) but **none is labelled**, so no DER of anything had been
+computed on this material, and the labelling effort per stretch was as unmeasured as it was. The
+first half of that changed the next day, on other material; the podcast half has not changed at all.
 
 **Two things about the number itself, recorded before any is produced.** First, the collar
 convention: pyannote.metrics' `collar` is a total width centred on each reference boundary
@@ -755,6 +756,40 @@ Also unmeasured, and cheap to measure once a stretch is labelled: the product's 
 canned labeller scores badly by construction (it hears nothing), which is a smoke test of the
 harness and not a number about anything; and the second decode the opt-in costs — a whole extra
 read of the file — has a real-time-factor cost nobody has timed on either machine.
+
+**The first candidate number exists as of 2026-08-18, it is on meeting audio, and it is not a
+verdict.** sherpa-onnx 1.13.5 through its C# NuGet — pyannote segmentation-3.0 (MIT) with 3D-Speaker
+CAM++ English embeddings, CPU only — was scored by `uindosill der` at the headline convention
+against the pyannote AMI-diarization-setup reference for ES2004a, seventeen and a half minutes of
+four-speaker meeting audio with 15.8% of its union speech overlapped. **DER 54.04% with the speaker
+count supplied** (miss 9.70%, false alarm 3.11%, confusion 41.23%), and **62.69% with the count left
+unknown**, where it resolved 35 speakers. Real-time factor 0.0355–0.0417 on CPU. For scale, pyannote
+3.1 publishes 18.8 on AMI Mix-Headset at its own stated convention, which is not this one.
+
+What that establishes is narrow and worth stating exactly: the scorer scores a real candidate on
+real audio end to end; the failure is in speaker identity rather than segmentation, because miss and
+false alarm hold at roughly 9.7% and 3.1% across every configuration tried while confusion carries
+the rest; and the caller is not the cause, since the same models and parameters through
+sherpa-onnx's own Python API produce byte-identical RTTM, same SHA-256.
+
+**What it does not establish is that sherpa-onnx is unfit.** One meeting of the sixteen in the test
+split, one embedding model of the ten in the zoo, the int8 segmentation model untried, and an
+unswept hyperparameter space — no clustering threshold tried produced four clusters, and
+`MinDurationOn`/`MinDurationOff` were never moved off the example defaults. It says nothing whatever
+about podcast audio. The artifacts are `runs/spike-sherpa/` on the desktop and travel no further:
+`runs/` is gitignored and machine-local.
+
+**Two properties of AMI bound what any AMI number can mean**, both recomputed from the references on
+this machine rather than quoted. It is effectively a **four-speaker corpus** — 15 of the 16 test
+meetings have exactly four speakers, EN2002c has three — so no AMI figure can price the four-speaker
+cap that the five-guest stretch was pinned for. And per-meeting overlap runs from 4.3% to 30.0% of
+union speech, a factor of seven, so which meeting is scored moves the number more than most
+post-processing would.
+
+**The podcast half is unchanged and now has no shortcut.** The corpus survey of 2026-08-17 found
+free, time-stamped, human-labelled material for meetings and for web video, and none for podcasts.
+So the labelling effort per stretch remains unmeasured, no podcast DER of anything exists, and the
+only podcast reference this project will ever have is the one it labels itself.
 
 ### NPU offload — assessed 2026-08-16, nothing measured
 
