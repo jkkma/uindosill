@@ -95,6 +95,15 @@ remote it created, refresh token included: its output is a credential.** It does
 anywhere; if it has been, revoke rclone at `myaccount.google.com/permissions` and run it again. The
 resulting `rclone.conf` never comes near this repository.
 
+**Session memory travels the same way, and per machine — `lab.ps1 drive -Memory <machine>`.**
+Claude Code's own memory for this repository lives outside it, under a key derived from the working
+copy's path, and the route pushes it to `session-memory/<machine>` beside the runs folders. It is
+**push only** on purpose: each machine has memories the other does not, `MEMORY.md` is an index that
+has to be merged rather than overwritten, and a memory asserting which machine it was written on is
+false on the other one. Pull with `-Fetch session-memory/<machine>` into a scratch folder and merge
+by hand. None of it belongs in this repository — it names machines and sessions, and this repository
+is public.
+
 **Research lives on the Drive too, never in this repository** — the maintainer's standing
 convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived
 there). A research workflow's product — the study, the survey, the report — goes to a dated

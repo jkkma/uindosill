@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Move run reports, research and test material between a machine and the maintainer's Drive over
-    rclone, with every transfer verified by checksum.
+    Move run reports, research, session memory and test material between a machine and the
+    maintainer's Drive over rclone, with every transfer verified by checksum.
 
 .DESCRIPTION
     `runs/` is gitignored and machine-local, research never enters this repository at all, and the
@@ -48,6 +48,11 @@
     .\scripts\sync-drive.ps1 -Research .\out\diarisation-research-2026-08-16
 
 .EXAMPLE
+    # This machine's Claude Code session memory, to session-memory/<machine>. Push only; see the
+    # route for why pulling it is a merge rather than a copy.
+    .\scripts\sync-drive.ps1 -Memory desktop
+
+.EXAMPLE
     # On the desktop: fetch the study before starting work against it.
     .\scripts\sync-drive.ps1 -Fetch diarisation-research-2026-08-16 -Destination .\research
 
@@ -71,6 +76,12 @@ param(
     # markdown and travels as markdown; the next session pulls it with -Fetch and reads the files.
     [Parameter(ParameterSetName = 'Research', Mandatory)]
     [string] $Research,
+
+    # Push this machine's Claude Code session memory to session-memory/<machine>. Push only:
+    # the route explains why coming back the other way is a merge and not this script's job.
+    [Parameter(ParameterSetName = 'Memory', Mandatory)]
+    [ValidateSet('laptop', 'desktop')]
+    [string] $Memory,
 
     # Pull a folder from under uindosill/ by name — a research folder, or runs-<machine>.
     [Parameter(ParameterSetName = 'Fetch', Mandatory)]
@@ -191,6 +202,40 @@ switch ($PSCmdlet.ParameterSetName) {
         }
 
         Invoke-Rclone -What "$name → Drive" -Arguments (@('copy', $source, $target) + $common)
+    }
+
+    'Memory' {
+        # Claude Code keeps its per-project memory outside the repository, under a key that is the
+        # working copy's path with every ':' and '\' replaced by '-'. Derived from $repo rather
+        # than written down: writing it down puts a username in a public repository, and the two
+        # machines' paths differ anyway — which is the whole reason this route is per-machine.
+        $slug = $repo -replace '[:\\]', '-'
+        $profileRoot = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+        $source = Join-Path $profileRoot (Join-Path '.claude/projects' (Join-Path $slug 'memory'))
+
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "No session memory at $source.`n" +
+                  'That folder appears once a Claude Code session has run in this working copy. ' +
+                  'If one has, the key may differ: it is the working copy path with every '':'' ' +
+                  'and ''\'' replaced by ''-''.'
+        }
+        $source = (Resolve-Path -LiteralPath $source).Path
+        $target = "$root/session-memory/$Memory"
+
+        # copy, not sync. The remote also holds the OTHER machine's memory, and files this machine
+        # never had — on 2026-08-17 that folder carried one absent from the desktop entirely — so a
+        # sync would delete them. Nothing up there is this machine's to remove.
+        Invoke-Rclone -What "session memory → session-memory/$Memory" -Arguments (
+            @('copy', $source, $target) + $common + @('--include', '*.md')
+        )
+
+        if ($DryRun) { break }
+
+        Write-Host ''
+        Write-Host '  Push only, deliberately. Installing these on the other machine is a MERGE, not a copy:' -ForegroundColor Yellow
+        Write-Host '  MEMORY.md is one line per memory and each machine has entries the other does not, and a' -ForegroundColor Yellow
+        Write-Host '  memory asserting which machine it was written on is false on the other one. Pull with' -ForegroundColor Yellow
+        Write-Host '  -Fetch session-memory/<machine> into a scratch folder and merge by hand.' -ForegroundColor Yellow
     }
 
     'Fetch' {
