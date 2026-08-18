@@ -197,7 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
-| speakers | Held-out two-host DER ≤ 10% (collar 0.25 s pyannote.metrics semantics — 0.125 s either side — overlap included; the figure is pre-ratification and the convention is what the ratification has to settle), opt-in aboard v1.0 | Instrument built and validated, stretches pinned, seam in; no labels, no candidate measured |
+| speakers | Held-out two-host **podcast** DER ≤ 10% (collar 0.25 s pyannote.metrics semantics — 0.125 s either side — overlap included; the figure is pre-ratification and the convention is what the ratification has to settle), opt-in aboard v1.0. Meetings and web video joined the target domain on 2026-08-17 and have neither a gate nor material. | Instrument built and validated, stretches pinned, seam in; no labels, no candidate measured |
 
 ### The dictation seam
 
@@ -319,6 +319,39 @@ The next actions, in order:
    - **Not done, by design:** the sherpa-onnx and Sortformer spikes belong to the desktop, which is
      where the measuring half of the split runs; every DER, RTF and memory figure for a real
      candidate is still zero measurements.
+
+   **The target domain widened on 2026-08-17 — meetings and web video beside podcasts, and the gate
+   covers one of the three.** The maintainer named the feature's target as meetings, podcasts and
+   YouTube. Everything written above that date describes podcasts alone, and so does every artifact
+   under it: four podcast episodes, five podcast stretches, and a gate phrased around two hosts,
+   which is not the shape of a meeting or a panel. That leaves the ≤ 10% figure covering one domain
+   of three, the other two carrying no material, no reference labels and no gate. It is recorded
+   here rather than closed: whether meetings and web video get gates of their own, or the gate is
+   restated in terms that span all three, belongs to the ratification that has not happened.
+
+   **What follows from it.** Hand-labelling does not scale to three domains at the plan's own
+   estimate of thirty to sixty minutes per ten minutes of audio — an estimate still unproven, and
+   one the maintainer declined to spend against on 2026-08-17, before the first stretch was
+   labelled. Material for the two new domains therefore has to come from existing corpora carrying
+   human, time-stamped references, and a survey of them was commissioned the same day; its product
+   lives on the Drive with the rest of the research. The podcast set stays what it was — the
+   deciding instrument for its own domain, and the only material this project controls end to end.
+   Across all three domains the measurement count is unchanged: zero.
+
+   **What the survey found, the same day.** Forty-three corpora surveyed, forty audited against
+   licence text and live download pages. Meetings and web video are covered by free CC-BY material
+   carrying human, time-stamped references: AMI, which is also the only corpus where several
+   toolkits publish figures whose convention can be established at source, and which is effectively
+   a four-speaker set and therefore cannot price the four-speaker cap; NOTSOFAR-1, whose measured
+   39% overlap makes it the crosstalk instrument and whose far-field capture is the closest public
+   proxy to what this product records; and VoxConverse for web video, whose measured 3% overlap
+   makes it domain coverage rather than a crosstalk test. **Podcasts came back with nothing free and
+   usable** — the one podcast-specific candidate and the Spotify set both failed, the latter
+   withdrawn outright. The labelling declined for three domains is therefore not avoidable for one:
+   podcast material remains only what this project labels itself. The survey also sharpened the
+   convention finding above — one corpus carries published figures four-fold apart on convention
+   alone, and a second scoring pass at collar 0, where half-width and total-width definitions
+   agree, is what buys comparability. The report is on the Drive with the rest of the research.
 
 ### After v1
 
