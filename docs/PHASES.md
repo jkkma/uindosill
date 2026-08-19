@@ -333,6 +333,80 @@ occurrences of `api.velopack.io`, no telemetry, no analytics. `vpk` itself does 
 every invocation to check for a newer `vpk`; that is build-time only and the script passes
 `--skip-updates`. `docs/UNPROVEN.md` records both the finding and its limits.
 
+### Designed 2026-08-19 — the interface, before the release rather than after it
+
+The window this repository ships is stock Avalonia `FluentTheme` over a `TabControl`, which is what
+a window looks like when nobody has decided anything about it. That was decided on 2026-08-19, and
+**none of it is built**: three artboards — the app window, the unbuilt v2 Ask tab, and the token
+sheet that specifies both. The sources and the full argument are in the dated folder
+`ui-mockup-2026-08-19`, beside the other research on the maintainer's Drive, by the standing
+convention that keeps research out of a public repository until v1.0 ships. What binds this
+repository is here.
+
+**One accent family per product generation, over a pure white ground.** Matcha for everything v1
+does, taro for everything v2 adds. The two ramps are the same six points in oklch — lightness and
+chroma identical at every step, to within 0.001 — rotated in hue only, matcha at ~128° and taro at
+~304°. That matching is the whole mechanism: a taro panel can sit beside a matcha one without
+either shouting, because nothing about them differs except hue. The rotation is *roughly* 175–180°
+rather than one exact figure, because rounding each colour to 8-bit sRGB moves its hue a little;
+the sheet says so rather than claiming a precision the hex values do not have.
+
+The rule this buys is worth more than the colours: **a surface's colour says which generation it
+belongs to.** Which is why speaker labelling — a v1 feature — cannot keep the purple `SPEAKERS`
+badge it has today (`#6B4E9C`, in taro's neighbourhood); it would read as a v2 feature the moment
+an Ask tab exists. It becomes an outlined matcha badge, which still separates it from the solid
+`LOADED` badge beside it.
+
+**Type.** Instrument Sans throughout, monospace only for text you copy — paths, extensions, hex,
+licence notices. Numbers you *read* — timestamps, durations, percentages — are the sans with
+tabular figures, so they still align down a column without looking like code. The monospace is
+Chivo Mono, and that was settled by inspection rather than taste: the zero glyph was read out of
+twenty monospace families on Google Fonts, and only Chivo Mono and Azeret Mono draw it with no dot
+and no slash through it. IBM Plex Mono, the previous choice, carries a dotted zero as its *default*
+glyph with no `zero` or `ss01` alternate anywhere in its GSUB, so no stylesheet could have switched
+it off. Both faces are OFL and ship inside the installer.
+
+**Chrome.** No OS title bar: a 46px headerbar with the application name at the left, a pill
+view-switcher centred, and circular window buttons at the right. Tab order is **Transcribe ·
+Models · Updates · Licences** — Licences last, because it is the one tab nobody opens twice.
+
+**The word-by-word view is the design's one genuinely new idea, and it belongs to v1's data.** A
+lane per speaker, two lines deep. Words appear as they are said and fill the lane left to right
+with no motion at all; a word that would need a third line clears the last line and carries on
+there; a speaker who goes quiet long enough loses the lane entirely. Nothing is ever drawn ahead of
+the moment being played — words not yet said are absent, not dimmed. The word being said carries a
+pastel yellow, which is the one place a third hue is admitted and is pinned to that single job.
+
+Two speakers at once needs no special treatment under this scheme: it is two lanes lit at the same
+time. An earlier version had the words scroll leftward out of a playhead and fade through a mask,
+with a time ruler above it, and the ruler died with the motion — a ruler claims that horizontal
+position means time, and once lanes fill and clear independently, two lanes at the same offset are
+at completely different moments. Do not reintroduce one without reintroducing a shared time axis.
+
+None of this needs a language model. Word timings are v1 data — `vtt-words` is already written —
+and `docs/V2-ASK-THE-TRANSCRIPT.md` argues playback should land before any model does. So the whole
+view is matcha, and it is the groundwork that document asks for rather than a v2 feature.
+
+**Speaker labels are editable in place and swappable.** The diariser numbers speakers in the order
+it first hears them, which is not the order anyone means, and the chip set is closed at four
+because four is the architectural ceiling rather than a setting.
+
+**Three colour corrections this found in shipping code, none of them yet made.** They are defects
+in `src/Parakeet.App/Views/MainWindow.axaml` as it stands, not opinions about the new design:
+
+- `#D9A441`, the warning colour on the no-speech hint and the provenance line, is **2.25:1 on
+  white** and fails AA outright. `#966C13` is the same hue at 4.72:1.
+- `#D9534F`, the error colour on a failed job, is **3.96:1** — under the line by a little.
+  `#B84E45` is 4.98:1.
+- A *verified* provenance line reads "Verified against the repository, digest pinned" in that same
+  warning amber, so a confirmation is painted as a problem. Amber belongs on the unverified case
+  only.
+
+Every figure above was computed rather than estimated, and every layout claim in the token sheet
+came out of a headless browser with the webfonts confirmed loaded. The one thing in the design that
+is **not** checked — the window's corner radius on Windows 11 — is in `docs/UNPROVEN.md` with what
+would settle it.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
