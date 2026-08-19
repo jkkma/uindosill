@@ -479,3 +479,24 @@ driver is still alive — gotcha 19. `ApplyUpdatesAndRestart` never returns, so 
 aborted with `0xC0000409` after a perfectly good run. **Here:** `UpdatesViewModel` awaits the
 window's own `ShutdownAsync` between the download and the restart, and a test asserts that ordering
 rather than the two calls merely both happening.
+
+## 27. `OrtValue` exposes four members that are compile errors under `TreatWarningsAsErrors`
+
+`Microsoft.ML.OnnxRuntime` depends on `System.Numerics.Tensors`, which marks twelve of its public
+types `[Experimental("SYSLIB5001")]` — `Tensor<T>`, `TensorSpan<T>`, `ReadOnlyTensorSpan<T>` and
+friends. **`[Experimental]` is an error by default, not a warning**, so it does not need this
+repository's `TreatWarningsAsErrors` to bite; it bites anyway.
+
+Referencing the package is fine and nullability is a non-issue — the ORT assembly carries no
+nullable annotations at all, so `Nullable=enable` produces nothing. What fails is calling
+`OrtValue.GetTensorDataAsTensorSpan`, `GetTensorMutableDataAsTensorSpan`,
+`GetTensorSpanMutableRawData` or `CreateTensorValueFromSystemNumericsTensorObject`. Each has a plain
+`Span<T>` sibling that does the same job — `GetTensorDataAsSpan<T>`, `GetTensorMutableDataAsSpan<T>`
+— and those are the ones to use.
+
+The trap is the fix that looks obvious: adding `SYSLIB5001` to `NoWarn`. It compiles, and it silences
+the diagnostic for the whole project rather than for the call that needed it, so the next preview API
+to arrive under the same id arrives silently. Two `Tensor<T>` types are also in scope once ORT is
+referenced — its own `Microsoft.ML.OnnxRuntime.Tensors.Tensor<T>` and the BCL's — and only one of
+them is experimental, which makes a stray `using` enough to produce the error in code that never
+meant to touch a preview API.

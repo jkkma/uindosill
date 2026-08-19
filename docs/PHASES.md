@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 477 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 476 passed and
+**Status:** met. 543 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 542 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -71,7 +71,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (55 of the project's 81 CLI
+**Status:** usable, tested end to end against the canned engine (55 of the project's 94 CLI
 tests drive the real entry point; the other 26 never construct it — 17 parser unit tests, 7 that
 check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
 `CommandLineParser`, and 2 on the resolver that turns the pair into the engine option). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
@@ -326,7 +326,7 @@ every invocation to check for a newer `vpk`; that is build-time only and the scr
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. Passing candidate, cap unpriced; C# port not started |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam
 
@@ -338,13 +338,16 @@ weights are pinned in the `deferred` array of `models.json` with exact sizes and
 loader, installer and digest checking reach them unchanged once a licence is established for each.
 Neither is installable in this build, and the reason is written down in `docs/MODELS.md`.
 
-**One thing now stands between this and a v1 anybody can install: speakers.** That is a change as
-of 2026-08-19. Phase 5 was the other, because everything the product does, it does, but it could not
-arrive on a machine with no .NET SDK and no git clone — and now it can: there is an installer, it
-was run, and the C# port of the passed diariser is the remaining item. Speakers because the
-maintainer decided on 2026-08-16 — overriding the study's v1.1 recommendation, item 4 below — that
-**v1.0 does not ship without diarisation**: opt-in in the product, an option the user turns on, but
-aboard from the first release.
+**Nothing now stands between this and a v1 anybody can install.** That is a change as of
+2026-08-19, and it took two steps in two days. Phase 5 was one: everything the product does, it did,
+but it could not arrive on a machine with no .NET SDK and no git clone, and now it can — there is an
+installer and it was run. Speakers was the other, because the maintainer decided on 2026-08-16 —
+overriding the study's v1.1 recommendation, item 4 below — that **v1.0 does not ship without
+diarisation**: opt-in in the product, an option the user turns on, but aboard from the first release.
+The diariser passed its gate on 2026-08-18 in Python and was **ported to C# on 2026-08-19**, where it
+reproduces the passing number to four decimal places. What is left before v1.0 is a release, not a
+feature: nothing has been published to GitHub Releases, so the update check has never found anything
+and the download-and-restart path has never run against a real feed.
 
 The next actions, in order:
 
@@ -639,6 +642,116 @@ The next actions, in order:
    interface should say so rather than degrade quietly, because above four the published figures
    for this configuration are 34.81% and 38.90% — a third of speech attributed to the wrong person,
    which is a transcript a user would reject rather than a worse one they would tolerate.
+
+   **The port landed 2026-08-19, and it reproduces the passing number.** Streaming Sortformer is
+   now C# behind `ISpeakerLabeller`, in a project of its own — `Parakeet.Engine.Sortformer`, the
+   same shape as `Parakeet.Engine.ParakeetCpp`, because `Parakeet.Core` may reference no NuGet and
+   a build target fails if it does. Scored the way the Python was, on the 16 AMI test meetings
+   through `uindosill der`, with the post-processing fixed on dev and untouched:
+
+   | | C# port | Python spike | delta |
+   |---|---|---|---|
+   | DER, collar 0.25 (headline) | **13.5995%** | 13.5963% | +0.0032 |
+   | **DER, collar 0 (the gate's convention)** | **16.3368%** | 16.3324% | +0.0044 |
+   | DER, overlap regions only | **26.7986%** | 26.7926% | +0.0060 |
+   | mean \|speakers found − in reference\| | 0.0625 | 0.0625 | 0 |
+
+   Four of the sixteen meetings agree exactly and the worst per-meeting divergence is 0.0335 points.
+   **Both gate criteria hold**, so what passed in Python is what ships.
+
+   **Three things the graph does not own had to be written, and each is held against the reference
+   rather than against a reading of it.** The ONNX export runs the pre-encoder, the encoder and the
+   head; the host owns the mel featurizer, the chunk loop and the Arrival-Order Speaker Cache, and
+   each is a place where a plausible implementation gives a worse DER without failing. So
+   `scripts/make-diariser-fixtures.py` **imports NVIDIA's own `SortformerModules` and NeMo's own
+   `FilterbankFeatures`, runs them, and commits what they returned** — 859 KiB under
+   `tests/fixtures/diarisation/sortformer/`, replayed by a test project that needs no weights, no
+   network and no Python. The speaker cache is exercised at embedding dimension 8 rather than 512, which
+   costs no coverage (the algorithm does no arithmetic across that axis but one masked mean) and
+   turns a 50 MB oracle into half a megabyte.
+
+   **The cache is where a port goes wrong, and this one did.** It was the one part the spike
+   deliberately did not port — it imported `streaming_update_async` and called it — so it was
+   written from the reference source rather than translated from something already working. An
+   adversarial review of the C# against the Python, five independent lenses over the same two files,
+   converged on one defect and found nothing else: the port scored FIFO frames with the predictions
+   they *arrived* with instead of the ones the graph had just made for them. The reference re-predicts
+   the whole `[cache | FIFO | chunk]` window every step and reads `current_fifo_preds`; its stored
+   `fifo_preds` is written and never read again in the asynchronous path. Left in, it would have
+   corrupted the silence profile and evicted the wrong frames — no exception, a worse number.
+
+   **What "reproduces" does and does not mean.** Not bit-identical, and it cannot be: the featurizer
+   computes its transform in double where PyTorch's is single, the running silence mean is
+   accumulated in double for the same reason, and where two frames score identically `torch.topk`
+   leaves the order among equal values undefined, so which of them takes a cache slot is not
+   something a port can be held to. All three are measured rather than asserted — the suite pins the
+   featurizer's deviation under 1e-3 overall and 2e-4 in bands carrying real energy, bounds set from
+   the 3.0e-4 and 8.0e-5 actually measured — and the largest
+   effect any of them has on a meeting is a third of a tenth of a point.
+
+   **What it costs.** 65x realtime on CPU with 12 intra-op threads, against the Python's 74x on the
+   same machine: **about 12% slower, and not investigated**. Peak working set 1 261 MB, which is the
+   graph's rather than the host's — the spike measured a bare ONNX Runtime session at 1 315 MB in
+   steady state and the export's README states a 1 251 MB peak. Adding ONNX Runtime costs 16.05 MiB
+   in a `win-x64` publish — measured at 17.31 MiB on this one, of which onnxruntime.dll is 15.4 —
+   and about 6 MB of download, which is estimated rather than measured.
+
+   **The weights are a catalogue entry now, and they are not CC BY.** `models.json` carries its
+   first diarisation entry, pinned by size and SHA-256 to revision `db3a7b54` of a third party's
+   export. The licence is the **NVIDIA Open Model License**, read in full at NVIDIA's own URL on
+   2026-08-19: it permits redistribution outright, and its §3.1 wants one verbatim sentence and **a
+   copy of the Agreement** rather than CC BY's seven elements. So the notice record grew a second
+   shape — `OpenModelLicenceAttribution` beside `CcByAttribution`, behind an interface — because
+   rendering this licence under CC BY's headings would put a false notice in front of a user.
+   `docs/LICENSING.md` has the reading, including the two clauses CC BY has no equivalent of: the
+   grant is **revocable**, and §2.3 forbids illegal biometric processing, which is what voice
+   separation is.
+
+   **A second review covered everything the first one did not, and it found seven more.** The
+   speaker-cache audit deliberately looked at one file; the featurizer, the chunk loop, the
+   labeller's lifecycle, the resampler, the CLI and app wiring and the licence plumbing were
+   reviewed the same way afterwards, on the reasoning that a passing end-to-end number rules out
+   gross algorithmic errors and rules out nothing about inputs the corpus never presented. It was
+   right to. AMI is sixteen 16 kHz files of fourteen to fifty minutes with three or four speakers,
+   and every one of these needed something outside that:
+
+   - **`diarise` threw away the whole run on a file name containing a space** — RTTM splits on
+     whitespace and `RttmFile.Write` refuses an id with any in it, *after* the diariser has run the
+     entire recording. `transcribe -f rttm` had always underscored the stem; the rule now lives once,
+     in `RttmFile.SanitiseFileId`, beside the check that enforces it.
+   - **The model was loaded on the caller's thread**, which for the desktop app is the UI thread —
+     freezing the window while a 453 MiB graph is optimised. `ISpeakerLabeller.LoadAsync` says
+     "never on a UI thread" and the ASR engine takes the same care for the same reason; this one
+     did not. A failed load is now remembered too, so a batch behind a corrupt model fails once
+     rather than attempting the load again per file.
+   - **The speaker checkbox never noticed the model arriving**, because the properties behind it
+     never raised a change notification. The hint told the user to install from the Models tab and
+     then went on saying so for the rest of the session — a dead end, and one this document had
+     already claimed was fixed.
+   - **Removing the diariser mid-session left the opt-in ticked**, producing a transcript with no
+     names and a zero-byte `.rttm` reported as "Finished" — the exact failure the command line
+     refuses.
+   - **A size mismatch left the partial download in place**, so every later attempt asked for a
+     range past the end of the file and got a 416 for ever. The digest branch three lines below had
+     always deleted it; this one had not. Pre-existing, and reachable by the new 474 MB entry.
+   - **The shipped Agreement had lost its section numbering** when it was extracted from NVIDIA's
+     page, while the notices rendered beside it cite "section 6" and "§3.1". A copy whose citations
+     resolve to nothing is not much of a copy.
+   - **The resampler's own comment understated its cost by two orders of magnitude** — the kernel
+     stretches with the decimation ratio, so it is 193 taps for 48 kHz rather than the fixed 64 the
+     comment claimed, each costing three transcendental calls rather than a multiply. Nothing
+     measured goes through that code, which is precisely why the claim went unchallenged.
+
+   Two more were reported and rejected on inspection, and one — files dropped onto the window while
+   a batch is running are queued and never processed — is real, pre-existing and unrelated, and is
+   recorded rather than fixed here.
+
+   **The opt-in is live in both surfaces, and it turns on when the model arrives rather than at a
+   release.** `transcribe --speakers` no longer needs `--fake`; the window's checkbox and the `rttm`
+   format are gated on the file being installed, so they come alive when the download finishes. A new
+   `uindosill diarise` writes speaker turns without transcribing — which is what made this
+   measurement affordable, since scoring 9 h of AMI through the ASR pass would have cost orders of
+   magnitude more for a file the ASR contributes nothing to.
 
 **The research comes home when v1.0 ships — decided 2026-08-18.** Everything this project has
 measured or studied lives on the maintainer's Drive rather than here, a convention named

@@ -19,6 +19,7 @@
     <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
     <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
     <ProjectReference Include="../Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+    <ProjectReference Include="../Parakeet.Engine.Sortformer/Parakeet.Engine.Sortformer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,5 +27,6 @@
   </ItemGroup>
 
   <Import Project="../../build/NativeAssets.targets" />
+  <Import Project="../../build/Licences.targets" />
 
 </Project>

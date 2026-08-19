@@ -109,9 +109,28 @@ public static class RttmFile
     }
 
     /// <summary>
+    /// Turns a name into something <see cref="Write"/> will accept as a file id: whitespace runs
+    /// become single underscores, and a name that is nothing but whitespace becomes
+    /// <c>transcript</c>.
+    /// </summary>
+    /// <remarks>
+    /// Beside the check that enforces the rule rather than in whichever caller happened to need it
+    /// first. <c>Write</c> refuses whitespace because whitespace is RTTM's field separator, so any
+    /// caller deriving an id from a file name has to sanitise — and a caller that forgets does not
+    /// find out until it has already done the work. That is not hypothetical: <c>diarise</c> forgot,
+    /// and ran a whole recording before throwing on <c>Board Meeting.wav</c>.
+    /// </remarks>
+    public static string SanitiseFileId(string? name)
+    {
+        var parts = (name ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "transcript" : string.Join('_', parts);
+    }
+
+    /// <summary>
     /// Writes turns as RTTM. Three decimals and invariant formatting, so a fixture diffs cleanly
     /// and reads the same on every machine; a speaker label with whitespace in it is refused,
-    /// because whitespace is the field separator and the label would come back as two.
+    /// because whitespace is the field separator and the label would come back as two. See
+    /// <see cref="SanitiseFileId"/> for turning a file name into an acceptable id.
     /// </summary>
     public static string Write(IEnumerable<SpeakerTurn> turns, string fileId, string newLine = "\n")
     {

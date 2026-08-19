@@ -49,6 +49,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         };
 
+        // The speaker opt-in is gated on a model being on disk, and the Models tab is where it
+        // arrives and leaves. Without this the Transcribe tab answers that question once, at
+        // construction, and never again — so the checkbox stays greyed out with a hint telling the
+        // user to install the model they have just installed, and stays lit after a removal until
+        // the batch fails. The two tabs are siblings and neither should know about the other, so
+        // the wiring is here, where they are both already known.
+        foreach (var model in Models.Models.Where(m => !m.IsTranscriptionModel))
+        {
+            model.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModelViewModel.IsInstalled))
+                {
+                    Transcribe.RefreshSpeakerAvailability();
+                }
+            };
+        }
+
         // ShutdownAsync is handed to the updater rather than left to the window's close handler:
         // applying an update replaces the process without a Closing event, so the backend release
         // that avoids the teardown abort has to be reached from there too.

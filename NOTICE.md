@@ -40,6 +40,39 @@ quantisation are modifications.
   Chinese, Japanese, Korean, Arabic, Hindi or Thai, and the product must not offer them. A test
   asserts that no catalogue entry claims those tags.
 
+## Speaker diarisation weights — NVIDIA Open Model License
+
+**Streaming Sortformer Diarizer 4spk v2.1 (speaker diarisation model weights)**
+
+> Licensed by NVIDIA Corporation under the NVIDIA Open Model License
+
+That sentence is quoted rather than paraphrased because §3.1 of the Agreement mandates it verbatim,
+in a Notice file, alongside a **copy of the Agreement** — which is why one ships, at
+`licences/NVIDIA-Open-Model-License-2025-10-24.txt`, and why the build copies it into every publish.
+A link is not a copy.
+
+- **Agreement:** version dated 24 October 2025,
+  https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/
+- **Source:** https://huggingface.co/soniqo/Sortformer-Diarization-4spk-ONNX
+- **Provenance:** NVIDIA trained `diar_streaming_sortformer_4spk-v2.1`; a third party, soniqo,
+  exported it to ONNX with no retraining and no change to weights, architecture or configuration.
+  That export is a Model Derivative under §1 and is published under the same terms. Uindosill hosts
+  neither file and installs soniqo's copy by URL.
+- **Warranty:** NVIDIA provides the model on an "AS IS" basis, without warranties or conditions of
+  any kind, express or implied (§6).
+
+### Two things this licence does that CC BY 4.0 does not
+
+- **§2.3 incorporates NVIDIA's Trustworthy AI terms**, which forbid use in violation of applicable
+  law and name illegal surveillance and the illegal collection or processing of biometric
+  information without consent where consent is required. **Speaker diarisation is voice
+  biometrics.** Whether recording and separating people's voices needs their consent is a question
+  about the user's own material and the user's own jurisdiction, and it is theirs to answer.
+- **§2.1 makes the grant revocable** and lets NVIDIA update the Agreement for legal or regulatory
+  reasons; it also terminates automatically on filing patent or copyright litigation over the model,
+  or on circumventing a safety guardrail. CC BY 4.0 is irrevocable. The two are not interchangeable,
+  and `docs/LICENSING.md` records what that difference means for shipping.
+
 ## Third-party components
 
 | Component | Licence | Source |
@@ -50,6 +83,7 @@ quantisation are modifications.
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
+| ONNX Runtime (`onnxruntime.dll`; runs the speaker diarisation model) | MIT — Copyright (c) Microsoft Corporation. Bundles 69 components under their own licences; its `ThirdPartyNotices.txt` ships verbatim at `licences/onnxruntime-ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
 
 ### The CUDA runtime is the one component here that is not MIT

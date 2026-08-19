@@ -1,8 +1,8 @@
 # Diarisation fixtures
 
-Two directories, two purposes. Nothing here is audio: the audio lives at the repository root
-(gitignored) and on the maintainer's Drive, and everything in here either points at it by digest or
-is small enough to read.
+Three directories, three purposes. Nothing here is audio: the audio lives at the repository root
+(gitignored) and on the maintainer's Drive, and everything in here either points at it by digest,
+is generated from a formula, or is small enough to read.
 
 ## `scorer/` — the scorer's validation pairs
 
@@ -43,6 +43,65 @@ NeMo's `collar=0.25` are *half*-widths — NeMo's own docstring says so — whic
 `--collar 0.5`. The headline here is pyannote `collar=0.25, skip_overlap=False`, the convention of
 arXiv 2509.26177 (which states it uses pyannote.metrics with exactly those settings). A number from a
 NeMo model card is therefore not on this scale until it is rescored at `--collar 0.5`.
+
+## `sortformer/` — what the reference diariser computed
+
+Eight files, 859 KiB, written by `scripts/make-diariser-fixtures.py` and asserted by
+`tests/Parakeet.Engine.Sortformer.Tests/`. They are the whole of the correctness claim for the C#
+port of Streaming Sortformer, and they exist because the ONNX graph does not own the pipeline: the
+mel featurizer, the Arrival-Order Speaker Cache and the chunk loop are all the host's, and each is a
+place where a plausible implementation produces a worse DER without failing.
+
+The generator **imports the reference and runs it** — NVIDIA's own `SortformerModules` and NeMo's
+own `FilterbankFeatures` — and commits what they returned. It needs torch, numpy, librosa and a
+`nemostub/`-shaped tree; CI never runs it, for the same reason it never runs `validate-der.py`.
+
+```
+python scripts/make-diariser-fixtures.py --reference C:/Users/ayymanPC/spike-sortformer
+```
+
+| file | what it holds |
+|---|---|
+| `expected.json` | the manifest: geometry, per-case metadata, tensor offsets, expected post-processing segments |
+| `mel-filterbank.f32` | NeMo's 128 × 257 Slaney-normalised mel filterbank |
+| `mel-window.f32` | its 400-sample Hann window, `periodic=false` |
+| `mel-tones/noise/silence/ramp.f32` | log-mel features for four formula-defined signals |
+| `speaker-cache.f32` | ten steps of `streaming_update_async`, every input and output tensor |
+
+Four things about their design, each of which was arrived at by getting it wrong first.
+
+**Inputs are formulae, not files.** Every signal and probability sequence is an exact expression
+evaluated identically in Python and C# (`DeterministicInputs.cs` mirrors the generator's functions),
+so only the *expected output* is committed. A fixture cannot drift from the input that produced it,
+and no audio enters the repository.
+
+**The speaker cache is exercised at embedding dimension 8, not 512.** The algorithm never does
+arithmetic across that dimension except one masked mean, so every index computation, score, boost,
+top-k and eviction is identical at 8 — and the oracle is half a megabyte instead of fifty. The
+embeddings carry `frame + dimension/16` rather than noise, so a gather that reads the wrong frame,
+or reads down the wrong stride, is visible in the value itself.
+
+**The predictions are checked to be tie-free, using the reference's own scoring.** This is the part
+that is easy to get wrong. The eviction score floors both of its logs at 0.25, so a frame whose
+three other speakers are all above 0.75 scores on its own probability alone — and two such frames
+landing on the same float32 score identically. `torch.topk` does not define its order among equal
+values, so if such a pair straddles a top-k boundary the reference picks one arbitrarily and the
+fixture is asking a question with no answer. The generator runs `_get_log_pred_scores`,
+`_disable_low_scores` and `_boost_topk_scores` over the candidate sets the compression actually saw
+and rerolls the seed until no boundary is tied. Two input distributions were rejected by that check;
+both looked fine.
+
+**The last step is short.** A real recording's last chunk has less lookahead and fewer frames than
+the ones before it, and buffers sized for a full chunk keep stale data past the new logical length.
+Step 9 is 69 frames against 381 for exactly that reason.
+
+**The port is not bit-identical to the reference, and cannot be.** It computes its transform in
+double where PyTorch's is single, sums in a different order, and calls a different runtime's `log`.
+So the featurizer tests assert on the *size* of the deviation, with tolerances set from measurement
+rather than chosen in advance: 1e-3 overall and 2e-4 in bands carrying real energy, against measured
+worsts of 3.0e-4 and 8.0e-5 and log-mel values spanning −16.6 to +5. The speaker cache's tensors agree exactly except the
+running silence mean, which is an average. What settles the question is not any of these: it is that
+the port scored **16.3368%** on AMI test against the Python reference's **16.3324%**.
 
 ## `dev/` — the development stretches
 

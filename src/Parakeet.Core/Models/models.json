@@ -20,9 +20,14 @@
     "An entry may carry \"task\": \"transcription\" (the default when absent) or \"diarisation\". A",
     "diarisation entry installs through the same URL, size and digest checks and is never offered as",
     "an ASR model: not by `transcribe`, not as the recommended entry, not to the window's Load button.",
-    "There is none yet — the model behind the speaker opt-in is still being chosen by measurement — and",
-    "the discriminator ships first, so no build can ever carry a diarisation entry without the field",
-    "that keeps it out of the ASR lists."
+    "The discriminator shipped first, so no build can carry a diarisation entry without the field that",
+    "keeps it out of the ASR lists.",
+    "",
+    "There is one now. It is NOT CC BY 4.0 — it is the NVIDIA Open Model License, whose §3.1 wants a",
+    "verbatim notice and a copy of the agreement rather than CC BY's seven elements. The Agreement was",
+    "read in full at NVIDIA's own URL on 2026-08-19 and permits redistribution; docs/LICENSING.md",
+    "records what it obliges and where the two licences differ. Its URL is pinned to a revision rather",
+    "than to main, because it belongs to a single-maintainer third party rather than to NVIDIA."
   ],
   "models": [
     {
@@ -104,6 +109,23 @@
       "recommended": false,
       "languages": ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu", "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk"],
       "notes": "Smallest, and the one most likely to fail silently — which it did not: 10.15% word error rate against f16's 10.21% over eleven hours of human-transcribed accented English (Earnings-22 Subset 10, CUDA, 2026-08-16, docs/UNPROVEN.md), while differing from f16 on 2.69% of tokens over 2 h 55 m — differently right and differently wrong, not more wrong. One English corpus of one genre is the whole of the evidence."
+    },
+    {
+      "id": "sortformer-4spk-v2.1",
+      "task": "diarisation",
+      "family": "diar_streaming_sortformer_4spk-v2.1",
+      "displayName": "Streaming Sortformer Diarizer 4spk v2.1 — ONNX",
+      "quantisation": "fp32",
+      "fileName": "sortformer-default.onnx",
+      "url": "https://huggingface.co/soniqo/Sortformer-Diarization-4spk-ONNX/resolve/db3a7b542ab60562f24b7bd0cead521b62b1b6a9/sortformer-default.onnx",
+      "sizeBytes": 474630246,
+      "sha256": "cc5d606a5e9f6381c736d753bac34875c436bb27210d1ab0adc4ccb952c0062a",
+      "verified": true,
+      "license": "NVIDIA-Open-Model-License",
+      "attributionId": "nvidia-sortformer-diar-4spk-v2.1-onnx",
+      "recommended": false,
+      "languages": [],
+      "notes": "Says who spoke when; it does not transcribe. Measured on AMI test, 16 meetings, 9.06 h: DER 16.33% at collar 0 with overlap scored and 13.60% at this project's headline collar of 0.25, against the pyannote only_words references — post-processing fixed on the 18 development meetings and applied unchanged, test scored once (docs/PHASES.md). Two limits belong on its face. It tells apart at most FOUR speakers, architecturally: a fifth voice is merged into one of the four, no measurement here prices what that costs, and NVIDIA's own figures for five-plus speakers in this configuration are 34.81% and 38.90% against about 15% below the cap. And it buffers 30.4 s, so it trails the audio by half a minute — fine for a file, not a live-captioning latency. The size is the fp32 graph: the `quantized` tag on the Hub is wrong, and 473 of the 474 MB are float32 weights. Languages are unlisted because it models voices rather than words; it was trained on English meeting corpora and nothing here measures it on anything else."
     }
   ]
 ,

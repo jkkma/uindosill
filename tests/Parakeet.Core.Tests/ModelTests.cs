@@ -16,7 +16,17 @@ public class ModelCatalogTests
 
         Assert.NotEmpty(catalog.Models);
         Assert.NotNull(catalog.Recommended);
-        Assert.All(catalog.Models, m => Assert.Equal("CC-BY-4.0", m.License));
+
+        // Two licences ship, and which entry has which is not incidental: the transcription weights
+        // are CC BY 4.0, and the diariser is under the NVIDIA Open Model License, whose notice is a
+        // different shape and whose grant is revocable where CC BY's is not. Asserting the exact set
+        // rather than "some licence is present" is what makes adding a third a deliberate act.
+        Assert.All(
+            catalog.TranscriptionModels,
+            m => Assert.Equal("CC-BY-4.0", m.License));
+        Assert.All(
+            catalog.DiarisationModels,
+            m => Assert.Equal("NVIDIA-Open-Model-License", m.License));
     }
 
     [Fact]
@@ -194,13 +204,20 @@ public class ModelCatalogTests
     }
 
     [Fact]
-    public void EveryShippedEntryTranscribes()
+    public void TheDiarisationEntryIsTheOnlyEntryThatDoesNotTranscribe()
     {
-        // The manifest carries no diarisation entry yet — the model behind the speaker opt-in is
-        // still being chosen by measurement — and until it does, every entry is an ASR model.
-        Assert.All(ModelCatalog.Default.Models, m => Assert.Equal(ModelTask.Transcription, m.Task));
-        Assert.Empty(ModelCatalog.Default.DiarisationModels);
-        Assert.Equal(ModelCatalog.Default.Models.Count, ModelCatalog.Default.TranscriptionModels.Count);
+        // The manifest carries exactly one diarisation entry — the model behind the speaker opt-in,
+        // added once it passed the gate — and every other entry is an ASR model. Both halves are
+        // asserted: an entry that lost its `task` field would surface as a transcription model and
+        // be offered to `transcribe`, which is the failure the discriminator exists to prevent.
+        var catalog = ModelCatalog.Default;
+
+        var diariser = Assert.Single(catalog.DiarisationModels);
+        Assert.Equal("sortformer-4spk-v2.1", diariser.Id);
+        Assert.False(diariser.Recommended);
+
+        Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
+        Assert.Equal(catalog.Models.Count, catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count);
     }
 
     [Fact]
@@ -360,15 +377,47 @@ public class ModelInstallerTests
     {
         var payload = Encoding.UTF8.GetBytes("short");
         using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var descriptor = Descriptor(sha256: null, size: 999_999);
 
-        using var installer = new ModelInstaller(new LocalModelStore(temp.Path), new HttpClient(new StubHandler(payload)));
+        using var installer = new ModelInstaller(store, new HttpClient(new StubHandler(payload)));
 
         var exception = await Assert.ThrowsAsync<ModelInstallException>(
+            () => installer.InstallAsync(descriptor, new ModelInstallOptions { AllowUnverified = true }));
+
+        Assert.Contains("bytes but the catalogue pins", exception.Message, StringComparison.Ordinal);
+
+        // Discarded, like a digest mismatch is. A complete .part whose length disagrees with the pin
+        // is a file the resume path treats as finished: the next attempt asks for a range starting
+        // at its end, the server answers 416, and the user is stuck on "416
+        // RequestedRangeNotSatisfiable" — which names nothing about the real cause — for ever, with
+        // no way out but deleting a file in a directory nobody told them about.
+        Assert.False(File.Exists(store.PathFor(descriptor) + ".part"));
+        Assert.False(File.Exists(store.PathFor(descriptor) + ".part.json"));
+    }
+
+    [Fact]
+    public async Task ARefusedSizeDoesNotPoisonTheNextAttempt()
+    {
+        // The failure this guards is only visible on the SECOND call: the first reports the size
+        // clearly, and it was the leftover .part that turned every later attempt into a 416. So the
+        // assertion is that a corrected catalogue installs, not that the first attempt fails well.
+        var payload = Encoding.UTF8.GetBytes(new string('z', 4096));
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+
+        using var installer = new ModelInstaller(store, new HttpClient(new StubHandler(payload)));
+
+        await Assert.ThrowsAsync<ModelInstallException>(
             () => installer.InstallAsync(
                 Descriptor(sha256: null, size: 999_999),
                 new ModelInstallOptions { AllowUnverified = true }));
 
-        Assert.Contains("bytes but the catalogue pins", exception.Message, StringComparison.Ordinal);
+        var corrected = Descriptor(Sha256Of(payload), size: payload.Length);
+        var result = await installer.InstallAsync(corrected, ModelInstallOptions.Default);
+
+        Assert.Equal(payload.Length, result.Model.SizeBytes);
+        Assert.True(File.Exists(store.PathFor(corrected)));
     }
 
     [Fact]

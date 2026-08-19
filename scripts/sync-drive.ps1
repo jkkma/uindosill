@@ -180,9 +180,15 @@ switch ($PSCmdlet.ParameterSetName) {
         $source = Assert-LocalPath (Join-Path $repo 'runs') 'runs/'
         $target = "$root/runs-$Runs"
 
+        # `/README.md` is listed separately because `**/*.md` does not match it: rclone's `**` spans
+        # path separators but the pattern still requires one, so it matches at depth one and below
+        # and never at the root. The folder's index lived only on the Drive until that was noticed,
+        # which is exactly the drift CLAUDE.md's "keep that folder's README current" is about — so
+        # the index is now `runs/README.md` on the machine, regenerable, and travels with the rest.
         Invoke-Rclone -What "runs/ → runs-$Runs" -Arguments (
             @('copy', $source, $target) + $common +
-            @('--include', '**/summary.json', '--include', '**/summary.md', '--include', '**/*.md')
+            @('--include', '**/summary.json', '--include', '**/summary.md', '--include', '**/*.md',
+              '--include', '/README.md')
         )
 
         Write-Host ''
