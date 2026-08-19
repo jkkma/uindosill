@@ -714,7 +714,7 @@ point over eleven hours — not a proof that no input separates them.
 
 ## Still open
 
-### Speaker diarisation — studied 2026-08-16, instrument built 2026-08-17, nothing measured
+### Speaker diarisation — studied 2026-08-16, instrument built 2026-08-17, gate passed 2026-08-18 on meetings only
 
 The pre-v1 study — run 2026-08-16; it lives in the maintainer's diarisation research on the
 Drive, outside this repository the way research does per `CLAUDE.md` — surveyed candidates,
@@ -785,6 +785,41 @@ meetings have exactly four speakers, EN2002c has three — so no AMI figure can 
 cap that the five-guest stretch was pinned for. And per-meeting overlap runs from 4.3% to 30.0% of
 union speech, a factor of seven, so which meeting is scored moves the number more than most
 post-processing would.
+
+**A candidate passed the gate on 2026-08-18, and what stays unproven is specific.** Streaming
+Sortformer 4spk v2.1, through the community ONNX export of its 30.4 s configuration, scored 16.33%
+on AMI test at collar 0 with overlap and 0.06 on the speaker criterion, dev-tuned and held out;
+`docs/PHASES.md` carries the result and its reasoning. Three things underwrite it rather than being
+asserted: the mel featurizer is bit-exact against NeMo's own `FilterbankFeatures`, the speaker cache
+is NVIDIA's `streaming_update_async` imported and called rather than reimplemented, and re-tuned on
+the forced-alignment references NVIDIA actually score against it reproduces their published 15.90%
+to the decimal. **That last point is itself a convention trap worth carrying:** NVIDIA's AMI figures
+are on `nttcslab-sp/diar-forced-alignment` RTTMs and this project's are on pyannote
+AMI-diarization-setup `only_words`; the same hypotheses score **13.59 points apart** across the two,
+so a figure quoted from one against the other means nothing.
+
+**What that pass does not establish, stated as narrowly as it should be.** The four-speaker cap is
+**unpriced and unpriceable within this gate**. AMI test is 15/16 four-speaker and the model reported
+four speakers on all sixteen, so the speaker criterion was satisfied by a corpus that cannot vary
+rather than by evidence of counting. Below four the evidence is real and good — on 25 cut stretches
+holding one or two distinct reference speakers the model never over-counted once — but a cut stretch
+is not a recording and no DER is claimed from it. Above four there is nothing: the gate's own
+beyond-four check, VoxConverse, is in v2.1's training-data list and is in any case arithmetically
+unreachable, since 63% of its test files hold more than four speakers and a four-capped model's best
+possible mean speaker error there is 3.02 against a criterion of 1.0. NOTSOFAR-1 is likewise in the
+training list, as is AMI — AMI *test* is safe, being the split NVIDIA and pyannote both evaluate on,
+but AMI *dev* plausibly was not held out, so the dev figure of 11.91% should not be read as a clean
+generalisation estimate. **No measurement anywhere in this repository prices what this model does
+with five or more speakers**, and the only figures that exist are NVIDIA's own: 38.90% on DIHARD III
+eval 5–9 spk and 34.81% on NOTSOFAR1 eval ≥5 spk, against 14.84% and 15.95% below the cap.
+
+**Two further limits of the passing configuration.** It buffers 30.4 s, so the diariser trails the
+audio by half a minute — adequate for file transcription and not a live-captioning latency, and the
+1.04 s graph is a different export this project does not hold. And the measured throughput and
+footprint are Python's: 74x realtime on CPU and a bare ONNX Runtime session at 583 MB after load
+rising to 1 315 MB in steady state. **No C# figure of any kind exists**, because no C# port exists;
+the graph owns neither the featurizer nor the speaker cache nor the chunk loop, so nothing about
+the port's cost or its parity with these numbers is measured.
 
 **The podcast half is unchanged and now has no shortcut.** The corpus survey of 2026-08-17 found
 free, time-stamped, human-labelled material for meetings and for web video, and none for podcasts.
