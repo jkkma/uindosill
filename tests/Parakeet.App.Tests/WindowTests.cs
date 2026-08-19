@@ -88,11 +88,25 @@ public class WindowTests
         Assert.Contains(lines, line => line is not null && line.Contains("while a batch runs", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, line => line is not null && line.Contains("Drop audio", StringComparison.Ordinal));
 
+        // The extension list goes with it. A zone that is not taking files has no business
+        // advertising which ones it takes, and asserting on it is what keeps that binding honest:
+        // the list matches neither phrase above, so on its own it could be inverted or deleted
+        // with the suite still green.
+        Assert.DoesNotContain(lines, line => line == viewModel.Transcribe.SupportedExtensionsHint);
+
         // Over is over: the queue reopens with the batch, so the refusal is not a dead end.
         viewModel.Transcribe.IsRunning = false;
         window.UpdateLayout();
 
         Assert.True(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
+
+        var reopened = dropZone.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.IsVisible)
+            .Select(t => t.Text)
+            .ToList();
+
+        Assert.Contains(reopened, line => line is not null && line.Contains("Drop audio", StringComparison.Ordinal));
+        Assert.Contains(reopened, line => line == viewModel.Transcribe.SupportedExtensionsHint);
     }
 
     [AvaloniaFact]
