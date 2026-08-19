@@ -2106,3 +2106,42 @@ value and did nothing: `dotnet publish -r win-x64` produced eleven files and no 
 same shape as the dropped `--self-contained` flag the brief warns about, arrived at from the
 opposite direction. The settings now live in `Directory.Build.targets`, which is imported after the
 project body, and the comment there records how to check.
+
+## The interface design, and the one claim in it that is not checked
+
+The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository
+by the research convention. Almost all of it was measured — every contrast ratio computed from the
+hex values, every oklch conversion done rather than eyeballed, and every layout number read out of
+a headless browser with the webfonts confirmed loaded, which matters because an unloaded webface
+silently measures the fallback and every number comes out wrong. Three real defects were caught
+that way and none of them by looking: an artboard frame 1288 px shorter than its content, silently
+clipping two whole sections; a list clipping 20 px because `width:100%` met content-box sizing; and
+a lane running to a third line and clipping 34 px.
+
+One claim is not checked, and it is the one the whole window frame rests on.
+
+### The 12px window corner has never been drawn on Windows
+
+The design specifies a 12 px corner radius, no OS title bar, and the application's own shadow — a
+Zorin-style frame. Nothing in this repository has rendered that on a real window. Avalonia exposes
+`ExtendClientAreaToDecorationsHint` and `ExtendClientAreaTitleBarHeightHint` (both confirmed present
+in `Avalonia.Controls` 12.1.1 by inspecting the shipped reference assembly), but extending the
+client area does not hand the corner over: on Windows 11 the compositor still rounds the window at
+its own radius unless the window is drawn borderless with a transparent backdrop and paints its own
+shadow, which is a different and larger piece of work with its own snap-layout and DPI consequences.
+
+**What is actually unproven:** which of those two routes gives the specified corner, what the second
+costs in native code, and whether either interacts badly with snap layouts or per-monitor DPI. The
+mockup renders in a browser, where a `border-radius` is simply obeyed; that is not evidence about a
+window.
+
+**What would settle it:** build the shell both ways on the desktop and look at the corner and the
+shadow at 100% and 150% scaling, with snap layouts exercised. Until then no release note claims a
+Zorin corner, and the honest fallback — accept the system radius on the frame and keep 12 px only
+for panels inside the window — costs nothing and is already known to work.
+
+### The two contrast defects are measured, not unproven
+
+`#D9A441` at 2.25:1 and `#D9534F` at 3.96:1 on white are computed from the shipped hex values and
+are not in question. They are recorded here only so that the fix, when it lands, has something to
+close against: they are unfixed in `MainWindow.axaml` as of 2026-08-19.
