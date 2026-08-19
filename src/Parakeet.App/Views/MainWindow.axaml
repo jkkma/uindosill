@@ -54,11 +54,17 @@
               <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                 <Button Content="Start" Command="{Binding StartCommand}"
                         IsEnabled="{Binding CanStart}" />
+                <!-- Start runs what has not been run, so redoing a finished queue is asked for
+                     rather than guessed at: this is the only way to transcribe the same files a
+                     second time, and it is live only when there is a finished row to redo. -->
+                <Button Content="Run again" Command="{Binding RunAgainCommand}"
+                        IsEnabled="{Binding CanRunAgain}" />
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         IsEnabled="{Binding IsRunning}" />
                 <Button Content="Clear" Command="{Binding ClearCommand}"
                         IsEnabled="{Binding !IsRunning}" />
-                <!-- Start is disabled until a model is loaded, so it has to say why. -->
+                <!-- Start is disabled until a model is loaded, and again once every file in the
+                     queue is transcribed, so it has to say which. -->
                 <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
                            FontSize="11" Foreground="#D9A441"
                            IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />

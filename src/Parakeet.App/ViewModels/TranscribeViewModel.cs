@@ -47,6 +47,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(CanRunAgain))]
+    [NotifyPropertyChangedFor(nameof(StartHint))]
     [NotifyPropertyChangedFor(nameof(DropHint))]
     private bool _isRunning;
 
@@ -181,6 +183,23 @@ public sealed partial class TranscribeViewModel : ObservableObject
     public bool HasJobs => Jobs.Count > 0;
 
     /// <summary>
+    /// True when some row in the queue has not been transcribed yet — which is what Start runs.
+    /// </summary>
+    /// <remarks>
+    /// A row that finished is done: its transcript, its output files and its "Done" are the result
+    /// of a run that happened, and running it a second time costs minutes of decoding and writes
+    /// <c>name (2).txt</c> beside the original. Failed and cancelled rows are not done and count
+    /// here, because pressing Start after a failure is how a person retries one.
+    /// </remarks>
+    public bool HasWorkToDo => Jobs.Any(job => job.State != JobState.Completed);
+
+    /// <summary>
+    /// Whether there is a finished run to ask for a second time. See <see cref="RunAgainAsync"/>
+    /// for why that is a button of its own rather than something Start decides.
+    /// </summary>
+    public bool CanRunAgain => !IsRunning && Jobs.Any(job => job.State == JobState.Completed);
+
+    /// <summary>
     /// True when there is an engine to run with: a session holding a model, or the sessionless
     /// construction that builds its own engine per batch.
     /// </summary>
@@ -188,15 +207,33 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>An enabled Start button with an empty queue does nothing when pressed, which reads
     /// as a broken button rather than an empty queue. The same is true of a Start with no model
-    /// loaded, so that is disabled here rather than failing at the press.</summary>
-    public bool CanStart => !IsRunning && HasJobs && IsModelLoaded;
+    /// loaded, and of a Start with every file already transcribed, so all three are disabled here
+    /// rather than failing at the press.</summary>
+    public bool CanStart => !IsRunning && HasWorkToDo && IsModelLoaded;
 
     /// <summary>
-    /// Says why Start is off when the reason is a missing model. A disabled button with no
-    /// explanation is the same dead end as a button that does nothing.
+    /// Says why Start is off when the reason is not simply an empty queue. A disabled button with
+    /// no explanation is the same dead end as a button that does nothing — and "everything here is
+    /// already transcribed" is the reason a person is least likely to guess, because the queue in
+    /// front of them is full.
     /// </summary>
     public string? StartHint =>
-        IsModelLoaded ? null : "No model is loaded — open the Models tab and press Load.";
+        !IsModelLoaded ? "No model is loaded — open the Models tab and press Load."
+        : HasJobs && !HasWorkToDo ? "Every file here is transcribed. 'Run again' runs them a second time; Clear empties the queue."
+        : null;
+
+    /// <summary>
+    /// Re-asks the questions the buttons and their hints are computed from, all of which move
+    /// together whenever the queue changes or a batch ends.
+    /// </summary>
+    private void RefreshQueueState()
+    {
+        OnPropertyChanged(nameof(HasJobs));
+        OnPropertyChanged(nameof(HasWorkToDo));
+        OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(CanRunAgain));
+        OnPropertyChanged(nameof(StartHint));
+    }
 
     /// <summary>
     /// Queues files, and refuses to while a batch is running.
@@ -241,8 +278,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             added++;
         }
 
-        OnPropertyChanged(nameof(HasJobs));
-        OnPropertyChanged(nameof(CanStart));
+        RefreshQueueState();
 
         StatusMessage = rejected.Count == 0
             ? added == 0 ? "Those files are already in the queue." : $"Added {added} file{(added == 1 ? string.Empty : "s")}."
@@ -260,8 +296,35 @@ public sealed partial class TranscribeViewModel : ObservableObject
         Jobs.Clear();
         LiveTranscript = string.Empty;
         StatusMessage = null;
-        OnPropertyChanged(nameof(HasJobs));
-        OnPropertyChanged(nameof(CanStart));
+        RefreshQueueState();
+    }
+
+    /// <summary>
+    /// Puts every row back to waiting and runs the whole queue again.
+    /// </summary>
+    /// <remarks>
+    /// Start runs what has not been run, so once every row says "Done" it is disabled, and there
+    /// has to be a way to ask for the same files a second time — after changing the output formats,
+    /// or turning the speaker opt-in on, both of which are reasons to want a transcript remade. A
+    /// button of its own rather than something Start decides, because the two intentions are not
+    /// distinguishable from a press and the cost of guessing wrong is minutes of decoding and a
+    /// second copy of every output file.
+    /// </remarks>
+    [RelayCommand]
+    private Task RunAgainAsync()
+    {
+        if (IsRunning || !HasJobs)
+        {
+            return Task.CompletedTask;
+        }
+
+        foreach (var job in Jobs)
+        {
+            job.Reset();
+        }
+
+        RefreshQueueState();
+        return StartAsync();
     }
 
     [RelayCommand]
@@ -272,6 +335,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
     {
         if (IsRunning || Jobs.Count == 0)
         {
+            return;
+        }
+
+        if (!HasWorkToDo)
+        {
+            StatusMessage = "Every file here is transcribed already — press 'Run again' to run them a second time.";
             return;
         }
 
@@ -362,19 +431,24 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 return;
             }
 
-            var jobs = Jobs.Select(vm => new TranscriptionJob
+            // What has not been transcribed, which is not the same as what is in the queue. A row
+            // that finished keeps its transcript, its outputs and its "Done"; the alternative is
+            // that adding a fourth file to a queue of three re-decodes the three, which costs
+            // minutes a file and leaves 'name (2).txt' beside every original. Failed and cancelled
+            // rows are in here: pressing Start after a failure is how a person retries one.
+            var pending = Jobs.Where(vm => vm.State != JobState.Completed).ToList();
+            var alreadyDone = Jobs.Count - pending.Count;
+
+            var jobs = pending.Select(vm => new TranscriptionJob
             {
                 InputPath = vm.Path,
                 Formats = formats,
                 OutputDirectory = string.IsNullOrWhiteSpace(OutputDirectory) ? null : OutputDirectory,
             }).ToList();
 
-            foreach (var vm in Jobs)
+            foreach (var vm in pending)
             {
-                vm.State = JobState.Pending;
-                vm.Status = "Waiting";
-                vm.Error = null;
-                vm.Warning = null;
+                vm.Reset();
             }
 
             var runner = new BatchTranscriptionRunner((job, _, token) => RunJobAsync(engine, labeller, job, options, token));
@@ -398,10 +472,16 @@ public sealed partial class TranscribeViewModel : ObservableObject
             var failed = results.Count(r => r.State == JobState.Failed);
             var cancelled = results.Count(r => r.State == JobState.Cancelled);
 
-            StatusMessage = failed == 0 && cancelled == 0
+            var ran = failed == 0 && cancelled == 0
                 ? $"Finished {results.Count} file{(results.Count == 1 ? string.Empty : "s")}."
                 : $"Finished with {failed} failure{(failed == 1 ? string.Empty : "s")}" +
                   (cancelled > 0 ? $" and {cancelled} cancelled." : ".");
+
+            // What was skipped is said out loud. A queue of four reporting that it finished one is
+            // otherwise indistinguishable from a queue of four that lost three.
+            StatusMessage = alreadyDone == 0
+                ? ran
+                : $"{ran} {alreadyDone} already transcribed and left alone.";
         }
 #pragma warning disable CA1031 // Anything that escapes here belongs on screen, not in a crash dialog.
         catch (Exception ex)
@@ -419,6 +499,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
             IsRunning = false;
             _cancellation?.Dispose();
             _cancellation = null;
+
+            // The rows the batch just finished are what decide whether Start has anything left to
+            // do and whether 'Run again' has anything to redo, so both are re-asked here.
+            RefreshQueueState();
         }
     }
 

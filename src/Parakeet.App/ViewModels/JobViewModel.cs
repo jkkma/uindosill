@@ -71,6 +71,26 @@ public sealed partial class JobViewModel : ObservableObject
         };
     }
 
+    /// <summary>
+    /// Puts the row back to waiting, so the file can be run again.
+    /// </summary>
+    /// <remarks>
+    /// Everything a run left on the row goes, not only the state: a row that says "Waiting" while
+    /// still showing the last run's transcript, its progress bar full and its old output files
+    /// listed is describing a run that is no longer happening.
+    /// </remarks>
+    public void Reset()
+    {
+        State = JobState.Pending;
+        Status = "Waiting";
+        Progress = 0;
+        IsIndeterminate = false;
+        Error = null;
+        Warning = null;
+        Transcript = string.Empty;
+        OutputFiles.Clear();
+    }
+
     public void Complete(JobResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
