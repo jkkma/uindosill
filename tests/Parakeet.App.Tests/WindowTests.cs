@@ -481,12 +481,110 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public void WithoutALabellerTheOptInIsDisabledWithAReason()
+    public void WithoutTheDiarisationModelTheOptInIsDisabledWithAReasonAUserCanActOn()
     {
         var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName)), () => new EngineSelection());
 
         Assert.False(viewModel.CanLabelSpeakers);
-        Assert.Contains("not in this build yet", viewModel.SpeakerHint, StringComparison.Ordinal);
+        Assert.Contains("not installed", viewModel.SpeakerHint, StringComparison.Ordinal);
+        Assert.Contains("Models tab", viewModel.SpeakerHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstallingTheDiarisationModelIsWhatTurnsTheOptInOn()
+    {
+        // The provider asks about the file on disk rather than about the build, so the checkbox and
+        // the rttm format come alive when the download finishes rather than at the next release.
+        // A file of the right name is enough here: nothing loads it, and what is under test is the
+        // wiring between the model store and the window.
+        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+
+        var before = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        Assert.False(before.CanLabelSpeakers);
+        Assert.DoesNotContain(before.Formats, f => f.Id == "rttm");
+
+        File.WriteAllText(store.PathFor(model), "not really a graph");
+
+        var after = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        Assert.True(after.CanLabelSpeakers);
+        Assert.Null(after.SpeakerHint);
+        Assert.Contains(after.Formats, f => f.Id == "rttm");
+    }
+
+    [Fact]
+    public void TheOptInComesAliveWithoutReopeningTheWindow()
+    {
+        // The view model is constructed once for the life of the window, so a snapshot taken in its
+        // constructor is a hint that reads "install it from the Models tab" for the rest of the
+        // session after the user has done exactly that. Asserted on one instance across the change,
+        // not on two instances either side of it.
+        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        var viewModel = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+
+        var notified = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+
+        Assert.False(viewModel.CanLabelSpeakers);
+        File.WriteAllText(store.PathFor(model), "not really a graph");
+        viewModel.RefreshSpeakerAvailability();
+
+        Assert.True(viewModel.CanLabelSpeakers);
+        Assert.Null(viewModel.SpeakerHint);
+        Assert.Contains(viewModel.Formats, f => f.Id == "rttm");
+        Assert.Contains(nameof(TranscribeViewModel.CanLabelSpeakers), notified);
+        Assert.Contains(nameof(TranscribeViewModel.SpeakerHint), notified);
+    }
+
+    [Fact]
+    public void RemovingTheDiariserTurnsTheOptInOffRatherThanLeavingItTicked()
+    {
+        // The Models tab will remove the diariser — only the *loaded* transcription engine is
+        // protected there. A checkbox left ticked with nothing behind it produces a transcript with
+        // no names and a zero-byte .rttm, reported as "Finished": exactly the silent failure the
+        // command line refuses.
+        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        File.WriteAllText(store.PathFor(model), "not really a graph");
+
+        var viewModel = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        viewModel.LabelSpeakers = true;
+        Assert.Contains(viewModel.Formats, f => f.Id == "rttm");
+
+        File.Delete(store.PathFor(model));
+        viewModel.RefreshSpeakerAvailability();
+
+        Assert.False(viewModel.CanLabelSpeakers);
+        Assert.False(viewModel.LabelSpeakers);
+        Assert.DoesNotContain(viewModel.Formats, f => f.Id == "rttm");
+        Assert.NotNull(viewModel.SpeakerHint);
+    }
+
+    [AvaloniaFact]
+    public void TheModelsTabTellsTheTranscribeTabWhenTheDiariserArrives()
+    {
+        // The two tabs are siblings that do not know about each other, so the wiring lives in the
+        // window's view model. Without it the checkbox never notices a download, which is what the
+        // hint tells the user to go and do.
+        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        var store = new LocalModelStore(directory);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default);
+        var diariser = Assert.Single(main.Models.Models, m => !m.IsTranscriptionModel);
+
+        File.WriteAllText(store.PathFor(diariser.Descriptor), "not really a graph");
+
+        var notified = false;
+        main.Transcribe.PropertyChanged += (_, e) =>
+            notified |= e.PropertyName == nameof(TranscribeViewModel.CanLabelSpeakers);
+
+        // What ModelsViewModel sets when a download finishes, and what Refresh() sets on a rescan.
+        diariser.IsInstalled = true;
+
+        Assert.True(notified, "the Transcribe tab was never told the diariser arrived");
     }
 
     [Fact]

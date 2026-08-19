@@ -94,16 +94,26 @@ public sealed partial class TranscribeViewModel : ObservableObject
             };
         }
 
-        // The RTTM format is the speaker opt-in's output and nothing else's, so it is offered only
-        // where the opt-in can be turned on; a build with no labeller would only ever write empty files.
         Formats = [.. TranscriptFormats.All
-            .Where(f => f.Id != TranscriptFormats.Rttm.Id || engines.SupportsSpeakerLabelling)
+            .Where(f => f.Id != TranscriptFormats.Rttm.Id)
             .Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
+        RefreshSpeakerAvailability();
     }
 
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
 
-    public IReadOnlyList<OutputFormatViewModel> Formats { get; }
+    /// <summary>
+    /// The output formats on offer. Observable, and RTTM comes and goes with the diariser.
+    /// </summary>
+    /// <remarks>
+    /// RTTM is the speaker opt-in's output and nothing else's, so it is offered only where the
+    /// opt-in can be turned on: without a labeller it could only ever write an empty file, which is
+    /// the same trap <c>transcribe</c> refuses on the command line. It has to be a live collection
+    /// rather than a snapshot because the answer changes while the window is open — the diariser is
+    /// a separate download, and a list fixed at construction would tell a user to install a model
+    /// and then not notice that they had.
+    /// </remarks>
+    public ObservableCollection<OutputFormatViewModel> Formats { get; }
 
     /// <summary>Extensions this build can actually open, for the file picker and the drop hint.</summary>
     public string SupportedExtensionsHint => string.Join("  ", AudioSources.SupportedExtensions);
@@ -115,9 +125,49 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     public bool CanLabelSpeakers => _engines.SupportsSpeakerLabelling;
 
+    /// <summary>
+    /// Re-asks the engine provider whether a diariser is available, and brings the checkbox, the
+    /// hint and the RTTM format into line with the answer.
+    /// </summary>
+    /// <remarks>
+    /// Called at construction and whenever a model is installed or removed. Without it the hint
+    /// reads "install it from the Models tab" for the rest of the session after the user has done
+    /// exactly that — a dead end, and the one this window's own convention about disabled controls
+    /// exists to avoid. It also turns the opt-in <em>off</em> when the model goes away, so a batch
+    /// cannot start with the box ticked, no labeller behind it, and an empty .rttm as the result.
+    /// </remarks>
+    public void RefreshSpeakerAvailability()
+    {
+        var available = _engines.SupportsSpeakerLabelling;
+
+        if (!available && LabelSpeakers)
+        {
+            LabelSpeakers = false;
+        }
+
+        var rttm = Formats.FirstOrDefault(f => f.Id == TranscriptFormats.Rttm.Id);
+        if (available && rttm is null)
+        {
+            // Inserted where it belongs rather than appended: the list is rendered in order, and a
+            // format that jumps to the end when a model is installed reads as a different list.
+            var position = Math.Min(
+                TranscriptFormats.All.ToList().FindIndex(f => f.Id == TranscriptFormats.Rttm.Id),
+                Formats.Count);
+            Formats.Insert(Math.Max(0, position), new OutputFormatViewModel(TranscriptFormats.Rttm, selected: false));
+        }
+        else if (!available && rttm is not null)
+        {
+            Formats.Remove(rttm);
+        }
+
+        OnPropertyChanged(nameof(CanLabelSpeakers));
+        OnPropertyChanged(nameof(SpeakerHint));
+    }
+
     public string? SpeakerHint => CanLabelSpeakers
         ? null
-        : "Speaker labelling is not in this build yet: the model behind it is still being chosen by measurement.";
+        : "Speaker labelling needs its own model, which is not installed yet. Install it from the Models tab; "
+          + "it is a 453 MiB download and tells apart up to four speakers.";
 
     public bool HasJobs => Jobs.Count > 0;
 
@@ -231,6 +281,17 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        // The diariser is a file on disk and can go away between opening the window and pressing
+        // Start — the Models tab will remove it, since only the *loaded* transcription engine is
+        // protected there. Asked again here rather than trusted from construction, because the
+        // alternative is a transcript with no names and a zero-byte .rttm reported as "Finished".
+        if (LabelSpeakers && !_engines.SupportsSpeakerLabelling)
+        {
+            RefreshSpeakerAvailability();
+            StatusMessage = "The speaker labelling model is no longer installed. Download it again from the Models tab.";
+            return;
+        }
+
         IsRunning = true;
         StatusMessage = null;
         LiveTranscript = string.Empty;
@@ -265,6 +326,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
             await using var labeller = LabelSpeakers && _engines.SupportsSpeakerLabelling
                 ? _engines.CreateSpeakerLabeller()
                 : null;
+
+            if (LabelSpeakers && labeller is null)
+            {
+                StatusMessage = "The speaker labelling model is no longer installed. Download it again from the Models tab.";
+                RefreshSpeakerAvailability();
+                return;
+            }
 
             var jobs = Jobs.Select(vm => new TranscriptionJob
             {

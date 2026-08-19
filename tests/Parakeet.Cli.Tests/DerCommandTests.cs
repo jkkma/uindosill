@@ -303,32 +303,49 @@ public class DerCommandTests
     }
 
     [Fact]
-    public async Task SpeakersWithoutTheCannedLabellerSaysWhyAndStops()
+    public async Task SpeakersWithoutTheDiariserInstalledSaysWhichModelAndStops()
     {
         using var harness = new Harness();
         var input = harness.WriteWav("call.wav", 3);
-        harness.Write("models/tdt-0.6b-v3-f16.gguf", "not a model");   // so the engine resolves; the labeller is what is missing
+        harness.Write("models/tdt-0.6b-v3-f16.gguf", "not a model");   // so the engine resolves; the diariser is what is missing
 
         var exit = await harness.RunAsync("transcribe", "--speakers", "--model-path", Path.Combine(harness.Directory, "models", "tdt-0.6b-v3-f16.gguf"), input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("no speaker labeller is available in this build", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("sortformer-4spk-v2.1", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("models download", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.ChangeExtension(input, ".txt")));
     }
 
     [Fact]
-    public async Task TheRefusalIsAboutTheLabellerEvenWhenNoModelIsInstalled()
+    public async Task TheRefusalNamesTheDiariserEvenWhenTheAsrModelIsAlsoMissing()
     {
-        // The refusal depends only on the flags, so it is given before any model is resolved:
-        // "download the ASR model you have not got" is the wrong answer to "--speakers".
+        // Both are missing here, and only one of them is what --speakers asked for. "Download the
+        // ASR model you have not got" is the wrong answer to "--speakers", so the diariser is
+        // resolved first and it is the diariser the message is about.
         using var harness = new Harness();
         var input = harness.WriteWav("call.wav", 3);
 
         var exit = await harness.RunAsync("transcribe", "--speakers", input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("no speaker labeller is available in this build", harness.Error.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("models download", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("sortformer-4spk-v2.1", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("tdt-0.6b-v3", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SpeakersWithFakeStillNeedsNothingInstalled()
+    {
+        // The canned labeller is what keeps the whole opt-in — the second read, the assignment, the
+        // formatters, the rttm format — exercisable on a machine with no weights at all. Adding a
+        // real diariser must not quietly make --fake depend on one.
+        using var harness = new Harness();
+        var input = harness.WriteWav("call.wav", 3);
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--speakers", "-f", "rttm", input);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.True(File.Exists(Path.ChangeExtension(input, ".rttm")));
     }
 
     [Fact]

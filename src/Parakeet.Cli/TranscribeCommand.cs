@@ -53,6 +53,20 @@ internal static class TranscribeCommand
                 "Add --speakers or drop the format.");
         }
 
+        // Resolved before the ASR engine, and only resolved — the labeller itself is built below,
+        // after the engine, so the "using the canned X" messages stay in their old order. The point
+        // is the message a user gets when the diariser is missing: "download the ASR model you have
+        // not got" is the wrong answer to --speakers, and it is the answer they would get if the
+        // engine were the first thing to fail.
+        if (speakerOptions is not null && !parsed.HasFlag("fake"))
+        {
+            LabellerFactory.ResolveModel(context, new LabellerRequest
+            {
+                ModelId = parsed.Value("speaker-model"),
+                ModelPath = parsed.Value("speaker-model-path"),
+            });
+        }
+
         var jobs = parsed.Positionals
             .Select(path => new TranscriptionJob
             {
@@ -144,13 +158,6 @@ internal static class TranscribeCommand
             return null;
         }
 
-        // Refused here, before any engine is resolved, so the message the user sees is about the
-        // labeller and not about whichever ASR model happens not to be installed.
-        if (!parsed.HasFlag("fake"))
-        {
-            throw new CliUsageException(NoLabellerMessage);
-        }
-
         int? count = null;
         if (parsed.Value("speaker-count") is { Length: > 0 } countText)
         {
@@ -168,34 +175,45 @@ internal static class TranscribeCommand
     }
 
     /// <summary>
-    /// The only labeller this build has is the canned one. Saying so, and stopping, is the honest
-    /// answer to <c>--speakers</c> without <c>--fake</c>: the seam is built, the model behind it is
-    /// still being chosen by measurement (docs/PHASES.md), and a flag that silently did nothing
-    /// would print a transcript with no names and let the user think nobody was found.
+    /// The real diariser, or the canned one under <c>--fake</c>.
     /// </summary>
-    private const string NoLabellerMessage =
-        "--speakers: no speaker labeller is available in this build. The diarisation model is still being chosen " +
-        "by measurement (docs/PHASES.md § Decisions taken 2026-08-16); the seam it will plug into is here, and " +
-        "--speakers --fake exercises it with canned speakers.";
+    /// <remarks>
+    /// <c>--fake</c> keeps meaning what it always meant here: canned everything, no weights, so the
+    /// opt-in stays exercisable end to end on a machine with nothing installed. Without it,
+    /// <c>--speakers</c> now loads the real model, and the second read of the audio it costs is a
+    /// second decode as well as a second inference.
+    /// </remarks>
+    private static ISpeakerLabeller CreateLabeller(CliContext context, ParsedCommandLine parsed, SpeakerLabellingOptions options) =>
+        LabellerFactory.Create(
+            context,
+            new LabellerRequest
+            {
+                Fake = parsed.HasFlag("fake"),
+                ModelId = parsed.Value("speaker-model"),
+                ModelPath = parsed.Value("speaker-model-path"),
+                Threads = ParseThreads(parsed.Value("speaker-threads"), "--speaker-threads"),
+            },
+            options);
 
-    private static ISpeakerLabeller CreateLabeller(CliContext context, ParsedCommandLine parsed, SpeakerLabellingOptions options)
+    /// <summary>
+    /// Parses a thread count. <paramref name="option"/> is the flag the caller's own command spells
+    /// it with — <c>transcribe</c> has <c>--speaker-threads</c> and <c>diarise</c> has
+    /// <c>--threads</c>, and a shared message that names one of them tells half its users to fix a
+    /// flag their command does not have.
+    /// </summary>
+    internal static int ParseThreads(string? value, string option)
     {
-        if (!parsed.HasFlag("fake"))
+        if (value is not { Length: > 0 })
         {
-            throw new CliUsageException(NoLabellerMessage);
+            return 0;
         }
 
-        context.WriteError("Using the canned speaker labeller: the second pass over the audio is real, the speakers are not.");
-        var labeller = new FakeSpeakerLabeller();
-
-        // The seam's capabilities are the caller's to honour: a count the labeller cannot fix is
-        // said out loud rather than silently dropped.
-        if (options.SpeakerCount is { } count && !labeller.Capabilities.SupportsFixedSpeakerCount)
+        if (!CommandLineParser.TryParseInt(value, out var threads) || threads < 0)
         {
-            context.WriteError($"--speaker-count {count} was given but this labeller decides the count itself; the value is ignored.");
+            throw new CliUsageException($"{option} needs a non-negative integer, got '{value}'.");
         }
 
-        return labeller;
+        return threads;
     }
 
     private static void WarnAboutThreads(CliContext context, ParsedCommandLine parsed, ITranscriptionEngine engine)

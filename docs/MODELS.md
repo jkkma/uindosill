@@ -33,6 +33,7 @@ conventional guesses — are confirmed by the same listing.
 | `tdt-0.6b-v3-q6_k` | 812,700,512 | `5fe7e463…d2d717aa` |
 | `tdt-0.6b-v3-q5_k` | 741,867,360 | `5ebd1d55…0646c2e4` |
 | `tdt-0.6b-v3-q4_k` | 675,200,864 | `993d73fe…8b1d5ee8` |
+| `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 
 The f16 digest has independent corroboration the others do not: a copy installed from that URL and
 used to transcribe 30 seconds, ten minutes and 2 h 55 m of audio — three bit-identical runs —
@@ -42,6 +43,33 @@ accuracy. **Pinning is not measurement**: a digest says the bytes are the ones u
 says nothing whatever about what they transcribe. q8_0 through q4_k have since been *diffed* against
 f16 on nearly three hours of real speech — see the section below and `docs/UNPROVEN.md` — but that
 is divergence, not accuracy, and their `notes` still say unmeasured for the reason given there.
+
+### The diarisation entry is a different licence and a different upstream
+
+`sortformer-4spk-v2.1` is the sixth row above and the first that is not CC BY 4.0, not GGUF, and not
+from `mudler/parakeet-cpp-gguf`. It carries `"task": "diarisation"`, which is what keeps it out of
+every ASR path — `transcribe` refuses it by name, it is never the recommended entry, and the window's
+Load button does not offer it. That discriminator shipped in an earlier release **before** any such
+entry existed, deliberately, so that no build could ever list one as a transcription model.
+
+Three things about it differ from every row above.
+
+**The licence is the NVIDIA Open Model License**, not CC BY 4.0. It permits redistribution, and its
+conditions are one verbatim sentence and a copy of the Agreement — which ships at
+`licences/NVIDIA-Open-Model-License-2025-10-24.txt` and which the packaging script refuses to build
+without. It is also **revocable**, where CC BY is not, and it carries a use restriction about
+biometric processing that is squarely on point for a feature that separates voices.
+`docs/LICENSING.md` has the reading.
+
+**The URL is pinned to a revision, not to `main`.** `soniqo/Sortformer-Diarization-4spk-ONNX` is one
+person's ONNX export of NVIDIA's checkpoint rather than a vendor's repository, so the entry names
+`db3a7b542ab60562f24b7bd0cead521b62b1b6a9` explicitly. The size and digest were read from the
+HuggingFace API at that revision, and a local copy used for the AMI measurement hashes to the same
+value, so what was scored is what the entry installs.
+
+**`quantisation` says `fp32`, and the Hub's own tag is wrong.** The listing carries
+`base_model:quantized:…`, but 473 of the file's 474 MB are float32 parameters — 118.3 M of them,
+counted by opening the graph. The tag looks auto-derived; the field records what is in the file.
 
 ### Pins recorded for v3, deliberately unreachable
 

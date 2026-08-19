@@ -33,6 +33,19 @@
     <PackageVersion Include="NAudio.Wasapi" Version="2.3.0" />
     <PackageVersion Include="NAudio.Core" Version="2.3.0" />
 
+    <!-- Speaker diarisation. Microsoft.ML.OnnxRuntime carries only natives and pulls
+         Microsoft.ML.OnnxRuntime.Managed for the C# API, so one reference gets both. 1.29.0 is
+         built from the same source commit (2e2543f) as the Python onnxruntime 1.29 the diarisation
+         spike measured on, so the graph this runs is the graph that was scored, not a later one.
+         It is a single package carrying natives for every RID — win-x64 among them — which is why
+         `dotnet publish -r win-x64` still cross-builds from Linux CI.
+
+         MIT, plus a 343 KB ThirdPartyNotices.txt covering 69 bundled components; both ship, see
+         docs/LICENSING.md. Do not call OrtValue's System.Numerics.Tensors members: that package
+         marks TensorSpan<T> and friends [Experimental], which is an error under
+         TreatWarningsAsErrors. The plain Span<T> siblings are the ones to use. -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
+
     <!-- Avalonia.Headless.XUnit 12.x requires xUnit v3, not v2. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />

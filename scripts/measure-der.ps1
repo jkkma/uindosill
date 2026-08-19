@@ -39,10 +39,22 @@
     .\scripts\measure-der.ps1 -Hypotheses runs\spike-x -System "sherpa-onnx 1.13.5 cpu"
 
 .EXAMPLE
-    # The product's own opt-in over the stretches, then scored. Only the canned labeller exists in
-    # this build, so --fake is what runs today, and the CLI takes files, not wildcards.
-    Get-ChildItem runs\der\stretches\*.wav | ForEach-Object { uindosill transcribe --fake --speakers -f rttm -o runs\product $_.FullName }
-    .\scripts\measure-der.ps1 -Hypotheses runs\product -System "uindosill --speakers (canned labeller)"
+    # The product's own diariser over the stretches, then scored. `diarise` is the ASR-free path:
+    # it writes speaker turns and nothing else, which is what makes scoring a corpus affordable.
+    # Add --fake for the canned labeller, which needs no model at all.
+    Get-ChildItem runs\der\stretches\*.wav | ForEach-Object { uindosill diarise -o runs\product $_.FullName }
+    .\scripts\measure-der.ps1 -Hypotheses runs\product -System "uindosill --speakers (sortformer)"
+
+.EXAMPLE
+    # AMI test, which is the corpus the ship gate is written against and is not what this script
+    # cuts. The audio and the references are machine-local and gitignored; -ReferenceDirectory is
+    # what points the scoring half at them, and --id is what makes the stems match, since AMI's
+    # audio is ES2004a.Mix-Headset.wav and its reference is ES2004a.rttm.
+    Get-Content corpus\ami-diarization-setup\lists\test.meetings.txt | Where-Object { $_ } | ForEach-Object {
+        uindosill diarise --threads 12 --id $_ -o runs\sortformer-csharp "corpus\ami\audio\$_.Mix-Headset.wav"
+    }
+    .\scripts\measure-der.ps1 -Hypotheses runs\sortformer-csharp -System "sortformer c# cpu" `
+        -ReferenceDirectory corpus\ami-diarization-setup\only_words\rttms\test
 
 .EXAMPLE
     .\scripts\lab.ps1 der -Cut

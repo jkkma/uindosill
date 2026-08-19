@@ -218,9 +218,20 @@ public sealed class ModelInstaller : IDisposable
 
         if (model.SizeBytes is { } pinnedSize && pinnedSize != actualSize)
         {
+            // Discarded, exactly as a digest mismatch below is, and for a reason the digest branch
+            // does not have to spell out. A complete `.part` whose length disagrees with the pin is
+            // a file the resume path will treat as finished: the next attempt reads its length from
+            // the metadata, asks for `Range: bytes=<length>-`, and any server honouring Range
+            // answers 416. The user then gets "returned 416 RequestedRangeNotSatisfiable" — which
+            // names nothing about the real cause — on this attempt and on every attempt after it,
+            // including from the application's Download button, with no way out but deleting a file
+            // in a directory they were never told about.
+            File.Delete(partPath);
+            DeleteIfExists(metaPath);
             throw new ModelInstallException(
                 $"Model '{model.Id}' downloaded {actualSize} bytes but the catalogue pins {pinnedSize}. " +
-                "The manifest and the remote file disagree; nothing was installed.");
+                "The manifest and the remote file disagree; the partial download was discarded and " +
+                "nothing was installed.");
         }
 
         if (model.Sha256 is { } expected && !string.Equals(actualSha, expected, StringComparison.OrdinalIgnoreCase))

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Engine.Sortformer</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One project owns one model's interop, as Parakeet.Engine.ParakeetCpp owns parakeet.cpp's.
+    Parakeet.Core declares ISpeakerLabeller and knows nothing about ONNX Runtime, the mel
+    featurizer or the speaker cache; a build target in Core fails if a NuGet reference ever
+    appears there, so this is not a convention that can quietly erode.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Engine.Sortformer.Tests" />
+  </ItemGroup>
+
+</Project>

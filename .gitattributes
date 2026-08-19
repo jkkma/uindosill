@@ -1,0 +1,20 @@
+# Line-ending and diff rules. `core.autocrlf` is true on the maintainer's machines, so text is
+# stored LF and checked out CRLF; these are the files where that is wrong or where the default
+# guess is unsafe.
+
+# Tensor fixtures: little-endian float32, no header, read by offset.
+#
+# Marked binary explicitly rather than left to git's content heuristic, because the heuristic is
+# wrong here in a way that only shows up later. Git decides text-or-binary by looking for a NUL
+# byte in the FIRST 8000 BYTES; `mel-silence.f32` is 48 KB of a repeating non-zero word followed by
+# the zero padding, so its first NUL is at byte 40960 and the sniff never reaches it. That file
+# would be classified as text, have every 0x0A in it rewritten to 0x0D 0x0A on checkout, and arrive
+# at the test suite as a different tensor — on a fresh clone, on someone else's machine, with a
+# failure that looks like a broken port rather than a broken checkout.
+*.f32 binary
+
+# Written by scripts/make-diariser-fixtures.py and scripts/validate-der.py, both of which emit LF
+# and both of which compare what they would write against what is on disk. Checked out as CRLF,
+# every re-run reports every fixture as changed and the "re-running must be a no-op" guarantee
+# those scripts are built around stops meaning anything.
+tests/fixtures/diarisation/**/expected.json text eol=lf

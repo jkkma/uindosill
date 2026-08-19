@@ -144,15 +144,37 @@ internal static class Commands
             {
                 Name = "speakers",
                 Help = "Label who is speaking: a second pass over the audio, off by default. Adds 'Speaker 1:' to every " +
-                       "format and speaker turns to json and rttm. Only the canned labeller exists in this build, so " +
-                       "this needs --fake until a diarisation model is integrated; without it the command says so and stops.",
+                       "format and speaker turns to json and rttm. Needs the diarisation model installed " +
+                       "('uindosill models list'); with --fake it uses the canned labeller instead and needs nothing.",
             },
             new OptionSpec
             {
                 Name = "speaker-count",
                 TakesValue = true,
                 ValueName = "n",
-                Help = "With --speakers: how many voices there are, when known. Default: let the labeller decide.",
+                Help = "With --speakers: how many voices there are, when known. Default: let the labeller decide. " +
+                       "The diariser estimates the count and cannot be told it, and says so when given one.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-model",
+                TakesValue = true,
+                ValueName = "id",
+                Help = "Catalogue id of the diarisation model. Default: the only diarisation entry there is.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-model-path",
+                TakesValue = true,
+                ValueName = "file",
+                Help = "Use an .onnx diarisation model directly instead of a catalogue entry.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-threads",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "Intra-op threads for the diariser. Default: whatever ONNX Runtime chooses.",
             },
             new OptionSpec
             {
@@ -170,7 +192,80 @@ internal static class Commands
             "requirement rather than a tuning default: Parakeet degrades on long single-pass audio and glues text\n" +
             "across chunk boundaries well before it collapses.\n\n" +
             "--speakers is an opt-in and stays off by default: it reads the file a second time and runs a second model,\n" +
-            "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.",
+            "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.\n" +
+            "The diariser tells apart at most four speakers; a fifth voice is merged into one of the four, and the\n" +
+            "command says so on any file where four were found. To score speaker turns without transcribing, use\n" +
+            "'uindosill diarise'.",
+    };
+
+    public static readonly CommandSpec Diarise = new()
+    {
+        Name = "diarise",
+        Summary = "Write speaker turns as RTTM without transcribing.",
+        Positionals = "<file> [file...]",
+        Options =
+        [
+            new OptionSpec
+            {
+                Name = "out",
+                Short = 'o',
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Output directory. Default: beside each input file.",
+            },
+            new OptionSpec
+            {
+                Name = "id",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Name the output <name>.rttm and put <name> in the RTTM's file-id column, instead of deriving " +
+                       "both from the input's name. One input file only.",
+            },
+            new OptionSpec
+            {
+                Name = "model",
+                Short = 'm',
+                TakesValue = true,
+                ValueName = "id",
+                Help = "Catalogue id of the diarisation model. Default: the only diarisation entry there is.",
+            },
+            new OptionSpec
+            {
+                Name = "model-path",
+                TakesValue = true,
+                ValueName = "file",
+                Help = "Use an .onnx file directly instead of a catalogue entry.",
+            },
+            new OptionSpec
+            {
+                Name = "threads",
+                Short = 't',
+                TakesValue = true,
+                ValueName = "n",
+                Help = "Intra-op threads for the ONNX session. Default: whatever ONNX Runtime chooses.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-count",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "How many voices there are, when known. The diariser estimates the count and cannot be told it, " +
+                       "so this is reported as ignored rather than applied.",
+            },
+            Fake,
+            Help,
+        ],
+        Details =
+            "Audio in, RTTM out, no transcription — the same labeller behind the same seam as 'transcribe --speakers',\n" +
+            "without the ASR pass, which costs orders of magnitude more and contributes nothing to a speaker turn.\n" +
+            "This is what the diarisation measurements are run through, and what 'uindosill der' scores.\n\n" +
+            "Speakers are labelled spk0..spk3 by the model's own column rather than renamed in order of appearance:\n" +
+            "the column is what the speaker cache works to keep meaning the same person for a whole recording, and a\n" +
+            "scorer wants to see the labels the model actually produced.\n\n" +
+            "'der' pairs hypotheses to references by file stem, which is what --id is for: AMI's audio is\n" +
+            "ES2004a.Mix-Headset.wav and its reference is ES2004a.rttm.\n\n" +
+            "At most four speakers are told apart. Above that a fifth voice is merged into one of the four, and no\n" +
+            "measurement in this repository prices what that costs — see docs/UNPROVEN.md.",
     };
 
     public static readonly CommandSpec Models = new()
@@ -444,5 +539,5 @@ internal static class Commands
     };
 
     public static IReadOnlyList<CommandSpec> All { get; } =
-        [Transcribe, Models, Bench, Doctor, Probe, Notice, Formats, Wer, Der, Rttm];
+        [Transcribe, Diarise, Models, Bench, Doctor, Probe, Notice, Formats, Wer, Der, Rttm];
 }

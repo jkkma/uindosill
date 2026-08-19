@@ -5,6 +5,7 @@
     <Project Path="src/Parakeet.Cli/Parakeet.Cli.csproj" />
     <Project Path="src/Parakeet.Core/Parakeet.Core.csproj" />
     <Project Path="src/Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+    <Project Path="src/Parakeet.Engine.Sortformer/Parakeet.Engine.Sortformer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Parakeet.App.Tests/Parakeet.App.Tests.csproj" />
@@ -12,5 +13,6 @@
     <Project Path="tests/Parakeet.Cli.Tests/Parakeet.Cli.Tests.csproj" />
     <Project Path="tests/Parakeet.Core.Tests/Parakeet.Core.Tests.csproj" />
     <Project Path="tests/Parakeet.Engine.ParakeetCpp.Tests/Parakeet.Engine.ParakeetCpp.Tests.csproj" />
+    <Project Path="tests/Parakeet.Engine.Sortformer.Tests/Parakeet.Engine.Sortformer.Tests.csproj" />
   </Folder>
 </Solution>

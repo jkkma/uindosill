@@ -82,3 +82,9 @@ Thumbs.db
 # and the release feed under here. Same rule as runs/ — nothing a build produces belongs in the
 # working tree, and one channel's output alone is over 200 MB.
 /packaging/
+
+# Python bytecode. scripts/ holds four Python tools — the DER validator, the test-count guard, the
+# diariser fixture generator and the WER corpus — and importing one from another (the fixture
+# generator is imported by hand when a fixture is being investigated) leaves __pycache__ behind.
+__pycache__/
+*.pyc

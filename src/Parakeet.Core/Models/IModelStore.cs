@@ -30,6 +30,9 @@ public sealed class LocalModelStore : IModelStore
     /// <summary>Environment variable that overrides the location, for portable installs and tests.</summary>
     public const string DirectoryEnvironmentVariable = "UINDOSILL_MODELS_DIR";
 
+    /// <summary>File patterns a model can arrive as: GGUF for transcription, ONNX for diarisation.</summary>
+    private static readonly string[] ModelExtensions = ["*.gguf", "*.onnx"];
+
     public LocalModelStore(string? rootDirectory = null)
     {
         RootDirectory = rootDirectory
@@ -69,7 +72,13 @@ public sealed class LocalModelStore : IModelStore
         var byFileName = catalog.Models.ToDictionary(m => m.FileName, StringComparer.OrdinalIgnoreCase);
         var installed = new List<InstalledModel>();
 
-        foreach (var path in Directory.EnumerateFiles(RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly))
+        // Two extensions, not one. The transcription weights are GGUF and the diarisation model is
+        // a single ONNX graph, and a store that enumerates only `*.gguf` reports a diariser the
+        // user has installed as missing — `models list` would not show it and `models remove` would
+        // find nothing to remove, while `transcribe --speakers` loaded it perfectly well.
+        foreach (var path in ModelExtensions
+            .SelectMany(extension => Directory.EnumerateFiles(RootDirectory, extension, SearchOption.TopDirectoryOnly))
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var name = Path.GetFileName(path);
             byFileName.TryGetValue(name, out var descriptor);

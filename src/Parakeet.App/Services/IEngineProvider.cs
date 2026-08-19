@@ -3,6 +3,7 @@ using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
+using Parakeet.Engine.Sortformer;
 
 namespace Parakeet.App.Services;
 
@@ -93,12 +94,29 @@ public sealed class EngineProvider : IEngineProvider
     }
 
     /// <summary>
-    /// False in this build: the seam is there and the model behind it is still being chosen by
-    /// measurement (docs/PHASES.md § Decisions taken 2026-08-16). The window's checkbox says so.
+    /// True when the diarisation model is installed, and false with a reason when it is not.
     /// </summary>
-    public bool SupportsSpeakerLabelling => false;
+    /// <remarks>
+    /// Deliberately a question about the file on disk rather than about the build. The checkbox is
+    /// disabled with a reason rather than hidden, and "download it" is a reason a user can act on,
+    /// where "this build cannot" is not. It also means the box comes alive the moment the download
+    /// finishes rather than at the next release.
+    /// </remarks>
+    public bool SupportsSpeakerLabelling =>
+        ModelCatalog.Default.DiarisationModels.FirstOrDefault() is { } model && _store.IsInstalled(model);
 
-    public ISpeakerLabeller? CreateSpeakerLabeller() => null;
+    public ISpeakerLabeller? CreateSpeakerLabeller()
+    {
+        if (ModelCatalog.Default.DiarisationModels.FirstOrDefault() is not { } model)
+        {
+            return null;
+        }
+
+        var path = _store.PathFor(model);
+        return File.Exists(path)
+            ? new SortformerSpeakerLabeller(new SortformerLabellerOptions { ModelPath = path, ModelId = model.Id })
+            : null;
+    }
 
     /// <summary>
     /// A no-op until a model has been loaded in this process — the native library is not loaded

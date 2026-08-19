@@ -31,8 +31,15 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 
 ## What it does
 
-- **v1 is file transcription.** No global hotkeys, no text injection, no overlay HUD, no microphone
-  capture.
+- **v1 is file transcription, with optional speaker labels.** No global hotkeys, no text injection,
+  no overlay HUD, no microphone capture. **Who spoke when is an opt-in**, off by default: turn it on
+  and every format gains `Speaker 1:`, and `rttm` becomes available. It costs a second read of the
+  file and a second model — NVIDIA's Streaming Sortformer, a separate 453 MiB download — and it
+  **tells apart at most four speakers**, which is architectural rather than a setting: a fifth voice
+  is merged into one of the four and the product says so rather than degrading quietly. Measured on
+  the AMI meeting corpus at **16.3% diarisation error rate** (collar 0, overlap scored) against the
+  best published figure on the same audio, 18.8%; what that does and does not cover is in
+  [UNPROVEN.md](docs/UNPROVEN.md), and it covers no podcast audio at all.
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. Not built; the open decisions are in
   [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
@@ -81,7 +88,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 477 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 543 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -104,6 +111,19 @@ uindosill models download tdt-0.6b-v3-f16
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
 ```
+
+Speaker labels are a separate model and a separate download, and everything about the opt-in stays
+off until it is there:
+
+```bash
+uindosill models download sortformer-4spk-v2.1   # 453 MiB; not a transcription model
+uindosill transcribe --speakers -f srt,rttm meeting.wav
+uindosill diarise meeting.wav                    # speaker turns only, no transcription
+```
+
+`diarise` exists because scoring a diariser through `transcribe` means paying for an ASR pass that
+contributes nothing to a speaker turn; it is what the AMI measurement runs through, and
+`uindosill der` scores its output.
 
 `uindosill` is the CLI's assembly name: after that build it is
 `src/Parakeet.Cli/bin/Release/net10.0/uindosill.exe`, and `dotnet run --project src/Parakeet.Cli --`

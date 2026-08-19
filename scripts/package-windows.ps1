@@ -307,6 +307,26 @@ foreach ($channel in $Channels) {
         }
     }
 
+    # The speaker opt-in's two obligations, checked on disk before anything is packed. The graph is
+    # run by onnxruntime.dll, which is MIT and has to travel with its notice; the weights are under
+    # the NVIDIA Open Model License, whose section 3.1 wants a copy of the Agreement rather than a
+    # link — and `uindosill notice` prints the path to that copy, so a publish without it prints a
+    # promise it does not keep. Both arrive through the build (Licences.targets and the NuGet
+    # package's own RID assets), which is exactly why they are checked here: a build that silently
+    # stopped copying them would produce a package that looks complete.
+    foreach ($required in @(
+        'onnxruntime.dll',
+        'licences/NVIDIA-Open-Model-License-2025-10-24.txt',
+        'licences/onnxruntime-LICENSE.txt',
+        'licences/onnxruntime-ThirdPartyNotices.txt')) {
+        $path = Join-Path $publishDir $required
+        if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
+            throw "$required is missing or empty in the publish. The speaker labelling opt-in needs " +
+                  "ONNX Runtime, and shipping it or the diarisation weights without these notices is a " +
+                  "licence breach rather than an untidy output directory. See docs/LICENSING.md."
+        }
+    }
+
     Write-Step "Packing '$channel' $Version"
 
     # `[win]` is a System.CommandLine directive, not a flag, and it is what enables cross-building a

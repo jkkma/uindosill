@@ -1,0 +1,35 @@
+<Project>
+
+  <!--
+    Copies licences/ into the build output, so the notices the product renders name files that are
+    actually there.
+
+    Three obligations land in that directory and none of them is satisfied by a link.
+
+    The NVIDIA Open Model License covers the speaker diarisation weights, and §3.1 says a
+    redistributor "must give any other recipients of the Model a copy of this Agreement". A copy,
+    not a URL — and `uindosill notice` prints the path to it, so a build that leaves the file
+    behind prints a promise it does not keep.
+
+    ONNX Runtime is MIT, and MIT requires the copyright notice to travel with the binary. It also
+    statically links 69 third-party components whose own notices are in its ThirdPartyNotices.txt,
+    which is why that file is redistributed verbatim rather than summarised into the component
+    table: summarising it would mean writing 69 licences by hand, and getting one wrong is the same
+    breach as omitting it.
+
+    Deliberately not conditional on a channel or a backend, unlike the CUDA runtime's notice. A
+    notice that ships only when a flag says so is a notice that can go missing, and these are a few
+    hundred kilobytes.
+
+    The parakeet.cpp LICENSE is handled separately, by NativeAssets.targets: it travels beside the
+    binary it covers, one per backend directory, so a drop that vendors only some backends still
+    ships exactly the notices it needs.
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../licences/*"
+          Link="licences/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

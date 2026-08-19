@@ -2,7 +2,13 @@
 
 The code is MIT. The weights are not, and their obligations are the ones worth reading twice.
 
-## The model weights are CC BY 4.0 (NVIDIA)
+**Two model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
+seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
+License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
+revocable and carry a use restriction about biometrics. Which entry has which licence is asserted by
+a test, so adding a third is a deliberate act rather than a drift.
+
+## The transcription weights are CC BY 4.0 (NVIDIA)
 
 Commercial redistribution and bundling **are** permitted. The condition is **not** "just
 attribution".
@@ -46,6 +52,101 @@ one would be a licence breach rather than a feature.
 **§2(b) withholds patent and trademark rights.** Nothing may imply NVIDIA endorsement or
 sponsorship. The product is "Uindosill", it says it uses NVIDIA Parakeet weights under CC BY 4.0, and
 it does not use NVIDIA branding.
+
+## The diarisation weights are NOT CC BY 4.0 — they are the NVIDIA Open Model License
+
+Read in full at NVIDIA's own URL on 2026-08-19, version **dated 24 October 2025**, the same way the
+CUDA EULA below was read. `soniqo/Sortformer-Diarization-4spk-ONNX` and the
+`nvidia/diar_streaming_sortformer_4spk-v2.1` it is exported from both declare `license: other`,
+`license_name: nvidia-open-model-license`. **Neither HuggingFace repository ships a LICENSE file** —
+the licence exists there only as frontmatter metadata — and soniqo's declared `license_link` is a
+404, so NVIDIA's canonical URL is what was read and what is cited.
+
+**It clears, and redistribution is permitted outright.** §3: *"You may reproduce and distribute
+copies of the Model or Derivative Models thereof in any medium, with or without modifications,
+provided that You meet the following conditions"*. There is no field-of-use restriction, no
+non-commercial clause and no acceptable-use list. The preamble states the intent: *"Models are
+commercially usable."*
+
+**The conditions are two, and one of them is a file.** §3.1: *"If you distribute the Model, You must
+give any other recipients of the Model a copy of this Agreement and include the following attribution
+notice within a "Notice" text file with such copies: "Licensed by NVIDIA Corporation under the NVIDIA
+Open Model License""*.
+
+- The sentence is **mandated verbatim**. `OpenModelLicenceAttribution.RequiredNotice` holds it, and
+  the renderer emits it on its own line without a prefix — every other field is labelled
+  (`Source:`, `Provenance:`), and prefixing this one would stop it being the required string. A test
+  asserts it appears character for character on a line of its own.
+- The Agreement is **a copy, not a link**. It ships at
+  `licences/NVIDIA-Open-Model-License-2025-10-24.txt`; `build/Licences.targets` copies the directory
+  into every build output; `scripts/package-windows.ps1` refuses to pack a publish without it; and a
+  test resolves the path the notice prints and reads the mandated sentence out of the file it names.
+  A notice pointing at a file that is not there is worse than no notice.
+
+**This project does not host the weights.** The installer fetches them from soniqo's URL, pinned to
+revision `db3a7b54` rather than `main` because it is a single-maintainer third-party repository. On
+the plain text, §3.1's *"If you distribute the Model"* is not triggered by linking, and §2.2's
+*"(through multiple tiers of distribution)"* shows the drafters contemplated distribution chains
+without imposing anything extra downstream. **That is a reading, not something the text settles** —
+the Agreement contains no clause distinguishing hosting from linking — so the notice and the copy
+ship regardless, which is the same posture this project takes on CC BY.
+
+**Three ways it is stricter than CC BY 4.0, and all three are recorded rather than absorbed.**
+
+1. **The grant is revocable** (§2.1), where CC BY 4.0 is irrevocable. NVIDIA may also update the
+   Agreement for legal or regulatory reasons, and *"You agree to either comply with any updated
+   license or cease Your copying, use, and distribution."* A shipping product whose diariser can be
+   withdrawn is a different risk from one whose ASR weights cannot.
+2. **It terminates automatically** on filing patent or copyright litigation against anyone over the
+   model, and on bypassing *"any technical limitation, safety guardrail ... encryption, security,
+   digital rights management, or authentication mechanism"* in it without a substantially similar
+   replacement.
+3. **§2.3 incorporates NVIDIA's Trustworthy AI terms** (last modified 27 June 2024), which forbid use
+   *"in violation of applicable law or regulation"* and name *"illegal collection or processing of
+   biometric information without the consent of the subject where required under applicable law"*.
+   **Speaker diarisation is voice biometrics**, so this is the one clause here that is about what the
+   product does rather than what it prints. It is in `Attributions.WeightUsageRestrictions` beside the
+   DRM and endorsement clauses, so both notice surfaces render it.
+
+**What it does not claim.** §2.4: *"NVIDIA claims no ownership rights in outputs. You are responsible
+for outputs and their subsequent uses."* And §1: *"An output is not a Derivative Model."* So a
+transcript's speaker labels are the user's.
+
+**The export is a third party's, and that changes nothing.** soniqo's ONNX export is a Model
+Derivative under §1 — it composes the pre-encoder and head into one graph and traces it at static
+shapes. §3 applies identical conditions to *"the Model or Derivative Models thereof"*, and §3.3 would
+have let soniqo impose different terms but soniqo did not: the export declares the same licence. One
+Agreement to satisfy, NVIDIA's, and the §3.1 notice names NVIDIA rather than soniqo.
+
+**Why the notice record grew a second shape.** `Attributions.ById` was a dictionary of
+`CcByAttribution`, whose nine required properties are the seven §3(a) elements plus a title.
+Rendering an NVIDIA Open Model License entry through it would have printed headings — *Modifications*,
+*Warranties* in CC BY's own words — that this licence never asked for, which is a false notice in
+front of a user and the exact failure `models.json`'s own comment about the deferred Nemotron entries
+warns against. So `IModelAttribution` was extracted and `OpenModelLicenceAttribution` sits beside
+`CcByAttribution`: each licence gets a record shaped like its own obligations, and the two rendering
+surfaces depend only on the interface.
+
+**Two things still unverified**, stated as such. No archived copy of the Agreement pinned to the
+export's own date (2 August 2026) was consulted — the text read is the current one, which §2.1's
+unilateral-update clause arguably makes the operative one anyway. And soniqo's authority to publish
+the export was not verified, only that the licence permits Model Derivatives and that soniqo declares
+the same terms. As with the CUDA analysis below: **no lawyer has read any of this.**
+
+## ONNX Runtime is MIT, and carries 69 licences that are not
+
+The diariser runs on `onnxruntime.dll` from `Microsoft.ML.OnnxRuntime` 1.29.0 — the same source
+commit as the Python `onnxruntime` 1.29 the spike measured on, so the graph the product runs is the
+graph that was scored. The package itself is MIT, *Copyright (c) Microsoft Corporation*, and MIT
+requires the copyright notice **and the permission text** to travel with the binary, not the licence
+name. `licences/onnxruntime-LICENSE.txt` is that file, copied out of the restored package rather than
+from the repository, since a package and its repository can disagree.
+
+It also statically links 69 third-party components — Intel MKL, protobuf, Eigen, oneDNN, abseil,
+XNNPACK, mimalloc and the rest — whose own notices are in a 343 KB `ThirdPartyNotices.txt`. That file
+is **redistributed verbatim** at `licences/onnxruntime-ThirdPartyNotices.txt` rather than summarised
+into the component table. Summarising it would mean transcribing 69 licences by hand, and getting one
+wrong is the same breach as omitting it.
 
 ## Display it in the application
 

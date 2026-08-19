@@ -998,11 +998,69 @@ eval 5–9 spk and 34.81% on NOTSOFAR1 eval ≥5 spk, against 14.84% and 15.95% 
 
 **Two further limits of the passing configuration.** It buffers 30.4 s, so the diariser trails the
 audio by half a minute — adequate for file transcription and not a live-captioning latency, and the
-1.04 s graph is a different export this project does not hold. And the measured throughput and
-footprint are Python's: 74x realtime on CPU and a bare ONNX Runtime session at 583 MB after load
-rising to 1 315 MB in steady state. **No C# figure of any kind exists**, because no C# port exists;
-the graph owns neither the featurizer nor the speaker cache nor the chunk loop, so nothing about
-the port's cost or its parity with these numbers is measured.
+1.04 s graph is a different export this project does not hold. And the model's four-speaker cap is
+architectural, so everything above about it applies to the shipped product exactly as it applied to
+the spike.
+
+### The C# port — landed 2026-08-19, and what it settles
+
+**It reproduces the Python, and that is measured rather than argued.** Scored on the same 16 AMI
+test meetings through `uindosill der`, with the post-processing fixed on dev and untouched: DER
+**16.3368%** at collar 0 with overlap against the Python's 16.3324%, **13.5995%** at the headline
+collar 0.25 against 13.5963%, **26.7986%** over overlap regions against 26.7926%, and the same
+speaker error, 0.0625. Four of the sixteen meetings agree exactly; the worst per-meeting divergence
+is 0.0335 points. Both gate criteria hold. The run summary is in the maintainer's Drive per
+`CLAUDE.md`; `runs/` is gitignored and machine-local.
+
+**The port is not bit-identical to the reference and cannot be**, and the three reasons are named
+rather than left to be discovered. The mel featurizer computes its transform in double where
+PyTorch's is single, so log-mel values differ by up to **3.0e-4** overall and **8.0e-5** in bands
+carrying real energy, against values spanning −16.6 to +5. Both of those are measurements; the suite
+asserts bounds a little above them, 1e-3 and 2e-4, so the figures quoted here are what it is and the
+assertions are what would have to move before a regression went unnoticed. The speaker cache's running silence mean is accumulated in double for the same reason. And where
+two frames score identically, `torch.topk` leaves the order among equal values undefined, so which
+of them takes a cache slot is **not something any port can be held to**; this one breaks ties towards
+the earlier frame, which is at least reproducible. The Python spike could claim bit-exactness against
+NeMo because both ran the same PyTorch kernels. This cannot, and does not.
+
+**What the committed fixtures do and do not cover.** They hold the featurizer, the chunk loop, the
+post-processing and the speaker cache against the reference implementations, at the real geometry,
+with no weights — which is what lets CI check them. They do **not** exercise the 474 MB graph, the
+512-wide embeddings, or any real audio: the speaker cache's oracle is at embedding dimension 8,
+which costs no coverage of the algorithm (it does no arithmetic across that axis but one masked
+mean) and is not the same as running it. What covers that gap is the AMI number above and nothing
+else, so a change that passes the suite has not been shown to preserve the DER.
+
+**The port's cost, and one figure that is worse.** **65x realtime** on CPU with 12 intra-op threads
+on the desktop, against the Python's **74x** on the same machine and the same thread count — about
+**12% slower, and nothing here says why.** The mel featurizer is a plain scalar implementation where
+NumPy's is vectorised, and the two spend different amounts of time outside ONNX Runtime, but neither
+was profiled. Peak working set **1 261 MB**, measured on a 34-minute meeting in a single process;
+for scale the spike measured a bare ONNX Runtime session at 1 315 MB in steady state and the export's
+README states a 1 251 MB peak, so the footprint is the graph's rather than the host's. **Turning the
+ONNX Runtime memory arena off is the documented lever against that number and it has not been
+pulled**: the option exists, its default matches what the spike measured so the figures stay
+comparable, and what it would cost in throughput is unmeasured.
+
+**Two things about the port are untested by anything.** The **resampler** — every DER above is on
+16 kHz AMI audio, where it is bypassed entirely, so nothing measured has been through it. Its
+arithmetic is tested (sample counts, passband gain, that a 15 kHz tone in a 48 kHz file is filtered
+rather than folded down onto speech) and its effect on a transcript is not. Its **cost** is not
+measured either, only counted: the kernel stretches with the decimation ratio, so a 48 kHz file
+costs about 193 taps per output sample and three transcendental calls per tap — roughly 9 million
+of them per second of audio, against the ~15 ms the diariser itself spends on that second. That
+arithmetic says it should not matter and no profile says whether it does. And the **second decode**
+the opt-in costs on a real file has still not been timed on either machine, which was already
+recorded above and is not changed by the port.
+
+**The install path and the whole opt-in have been run end to end, once, on one machine.**
+`uindosill models download sortformer-4spk-v2.1` fetched the 474 MB graph from the pinned revision,
+printed the licence notice before downloading it, checked the SHA-256 against the catalogue and moved
+it into place; `transcribe --backend cpu --speakers -f txt,rttm` then produced a named transcript and
+an RTTM with overlapping turns from a minute of AMI audio, with the four-speaker warning shown. What
+that establishes is that the path works, on Windows, on the desktop, once. It is not a claim about
+the app's own Models tab (which shares the installer but was not driven), about a resumed or
+interrupted download, or about any other machine.
 
 **The podcast half is unchanged and now has no shortcut.** The corpus survey of 2026-08-17 found
 free, time-stamped, human-labelled material for meetings and for web video, and none for podcasts.

@@ -12,11 +12,20 @@ also what lets every test run on Linux with no weights present.
 
 ```
 Parakeet.Core           contracts + pure logic          (no dependencies at all)
-   ▲        ▲        ▲
-   │        │        └── Parakeet.Engine.ParakeetCpp    (the only project with native interop)
-   │        └─────────── Parakeet.Audio                 (WAVE reader + Media Foundation, one net10.0)
+   ▲     ▲     ▲     ▲
+   │     │     │     └── Parakeet.Engine.ParakeetCpp    (the only project with native interop)
+   │     │     └──────── Parakeet.Engine.Sortformer     (ONNX Runtime; the speaker diariser)
+   │     └────────────── Parakeet.Audio                 (WAVE reader + Media Foundation, one net10.0)
    └──────────────────── Parakeet.Cli / Parakeet.App
 ```
+
+**One project per model, and that is the pattern rather than a coincidence.** `Parakeet.Core`
+declares `ITranscriptionEngine` and `ISpeakerLabeller` and knows nothing about what implements
+either; parakeet.cpp's interop is in one project and ONNX Runtime's is in another, so neither can
+leak into the other or into anything above them. The diariser's project also owns the three things
+its ONNX graph does *not* — a NeMo-faithful mel featurizer, the Arrival-Order Speaker Cache, and the
+streaming chunk loop — because all three are that model's business and none of them is diarisation
+in general.
 
 ## The contracts
 
@@ -126,6 +135,34 @@ The native library is found by an explicit resolver that searches `native/<rid>/
 documented order (requested backend, then CPU — with Vulkan interposed only for a CPU request, and
 never falling *into* CUDA) and reports every path
 it tried when it fails. See `docs/NATIVE-BINARIES.md`.
+
+`Parakeet.Engine.Sortformer` touches native code too, but through ONNX Runtime's own NuGet package
+rather than a vendored drop: the natives travel per RID inside the package and a `-r win-x64` publish
+resolves them without help, which is why nothing about vendoring or the resolver changes. Only one
+file in that project knows ONNX Runtime exists.
+
+## The diariser owns three things its graph does not
+
+The ONNX export runs the pre-encoder, the encoder and the head. Everything else is the host's, and
+each piece is a place where a plausible implementation gives a worse diarisation error rate without
+failing — so each is held against the reference implementation by committed fixtures rather than by
+a reading of it.
+
+- **The mel featurizer** reproduces NeMo's `FilterbankFeatures` for this checkpoint: pre-emphasis,
+  a 400-sample Hann window with `periodic=false` inside a 512-point transform, 128 Slaney mel
+  filters, `log(x + 2^-24)`, and **no normalisation** — the checkpoint says `normalize: NA`, where
+  nearly every NeMo ASR config says `per_feature`, and using the common setting makes a correct
+  model look mediocre. It streams: the samples pass through and features exist only for the chunk
+  being fed to the graph, so three hours costs megabytes rather than the 690 MB the reference
+  implementation's load-it-all approach would.
+- **The Arrival-Order Speaker Cache** is what makes speaker 2 the same person at minute thirty as at
+  minute one. The graph takes the cache and the FIFO as inputs and returns embeddings; it does not
+  update them. Eviction is not first-in-first-out — frames are scored by how confidently exactly one
+  speaker is active, boosted twice so every speaker keeps a floor and none dominates, and the best
+  188 survive in arrival order with unused slots filled by a running mean of silence.
+- **The chunk loop** slices the mel spectrogram with asymmetric first and last chunks, trims the
+  graph's fixed 381-frame output back to the length it reports, and applies the prediction mask the
+  export omits.
 
 ## Output
 

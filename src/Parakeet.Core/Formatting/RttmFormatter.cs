@@ -43,14 +43,7 @@ public sealed class RttmFormatter : ITranscriptFormatter
     private static string Sanitise(string label) =>
         string.Join('_', label.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-    internal static string FileIdFor(string? sourceName)
-    {
-        var stem = string.IsNullOrWhiteSpace(sourceName) ? "transcript" : Path.GetFileNameWithoutExtension(sourceName);
-        if (string.IsNullOrWhiteSpace(stem))
-        {
-            stem = "transcript";
-        }
-
-        return string.Join('_', stem.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-    }
+    internal static string FileIdFor(string? sourceName) =>
+        RttmFile.SanitiseFileId(
+            string.IsNullOrWhiteSpace(sourceName) ? null : Path.GetFileNameWithoutExtension(sourceName));
 }
