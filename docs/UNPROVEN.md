@@ -823,7 +823,8 @@ substitute for watching the process on a network.
 ### The update check has never found an update
 
 `VelopackUpdater` asks `GithubSource` for the release feed of `jkkma/uindosill`, and that repository
-has no releases. So the path from *a newer version exists* to *it is installed* has never run end to
+has no releases. Two draft releases were built and deleted on 2026-08-19 (below), and a draft is not
+a release for this purpose — `vpk` could not see one either. So the path from *a newer version exists* to *it is installed* has never run end to
 end: no `CheckForUpdatesAsync` has returned a non-null `UpdateInfo`, no `DownloadUpdatesAsync` has
 downloaded anything, and `ApplyUpdatesAndRestart` has never been called by this application.
 
@@ -837,6 +838,46 @@ shutdown happens *before* the restart. All of that is our code. None of it is Ve
 `VelopackUpdater` itself — the twenty lines that turn `UpdateManager` into that interface — has no
 test at all, because every route to one needs either a network or a fabricated release feed. The
 first real release is what will exercise it, and it will exercise it on users.
+
+### The release workflow was run twice, and one step in it still has not been
+
+Rehearsed on 2026-08-19 through `workflow_dispatch` with the `draft` input, twice — 1.0.0-rc.1 and
+then 1.0.0-rc.2 — on `windows-latest`. Both runs went green through all twelve steps, and both
+draft releases were deleted afterwards. What that establishes, on a clean runner rather than on the
+desktop where the packaging was written:
+
+- The two channels build and their assets coexist on one release. Seven assets each time, all names
+  distinct: `UindosillDesktop-win-Setup.exe` (81.9 MB) and `-win-cuda-Setup.exe` (818.6 MB), both
+  full packages, both `releases.<channel>.json`, and the CLI zip.
+- The channel separation holds off this machine. The read-back reported `cpu, vulkan` for the
+  default package and `cpu, cuda, vulkan` for the other, from inside the built `.nupkg`s.
+- The CLI zip does not carry the CUDA drop it inherits from the `win-cuda` vendoring. The prune
+  fired and the zip came out at **53.9 MB**; without it the same zip is around a gigabyte.
+- A prerelease is marked as one. Both runs set `isPrerelease: true` off the hyphen in the version.
+- A draft creates no tag. `git ls-remote --tags origin` was empty before and after.
+
+**The delta path was not exercised, and the rehearsal cannot exercise it.** `vpk` builds a delta by
+diffing against packages already in its output directory, so the job downloads the previous release
+first. Both runs reported the same thing:
+
+```
+[INF] Fetching releases for channel win...
+[WRN] No releases found at 'https://github.com/jkkma/uindosill'.
+[WRN] No full / applicable release was found to download. Aborting.
+```
+
+The second run said it with a draft release sitting in the repository, which is the finding:
+**`vpk download github` does not see draft releases.** So the seeding step has now run twice and
+found nothing both times, and no `-delta.nupkg` has ever been built in CI — only on the desktop,
+where the previous package was on disk beside it.
+
+That is a limit of the rehearsal rather than a defect, and it is deliberately not "fixed" by making
+the step succeed against drafts: the step is right, and it degrades the way it should. But it means
+the first real release will ship full packages only — correct, and 77 MB where a delta would be
+74 KB — and **the delta path first runs on the second real release**, unobserved until then. The
+step to watch on that release is *Seed the previous release so deltas can be built*: if it reports
+"No releases found" again, deltas are silently not being built and every user is re-downloading the
+whole application.
 
 ### Packing a Windows release on Linux is documented, and has never been run here
 
