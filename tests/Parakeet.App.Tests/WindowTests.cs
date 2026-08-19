@@ -19,8 +19,24 @@ public class WindowTests
         var window = new MainWindow { DataContext = NewViewModel(out _) };
         window.Show();
 
-        var tabs = Assert.IsType<TabControl>(window.Content);
-        Assert.Equal(3, tabs.Items.Count);
+        // The tabs stopped being the window's whole content when the update notice was docked above
+        // them, so this looks the control up by name rather than asserting on window.Content.
+        var tabs = window.FindControl<TabControl>("Tabs");
+        Assert.NotNull(tabs);
+        Assert.Equal(4, tabs!.Items.Count);
+    }
+
+    [AvaloniaFact]
+    public void TheUpdateNoticeIsHiddenWhenThereIsNoUpdate()
+    {
+        // The banner is the visible half of the update decision, and it must be invisible the rest
+        // of the time: a window that always carries a bar about updates is a window with a bar.
+        var window = new MainWindow { DataContext = NewViewModel(out _) };
+        window.Show();
+
+        var notice = window.FindControl<Border>("UpdateNotice");
+        Assert.NotNull(notice);
+        Assert.False(notice!.IsVisible);
     }
 
     [AvaloniaFact]
@@ -117,6 +133,60 @@ public class WindowTests
     {
         directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
         return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+    }
+
+    private static MainWindowViewModel NewViewModel(IAppUpdater updater)
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        return new MainWindowViewModel(
+            new FakeEngineProvider(),
+            new LocalModelStore(directory),
+            ModelCatalog.Default,
+            updater,
+            new AppSettingsStore(Path.Combine(directory, "settings.json")));
+    }
+
+    /// <summary>
+    /// The update offer is bound rather than commanded, and this is why.
+    /// </summary>
+    /// <remarks>
+    /// The commands were first generated with a <c>CanExecute</c> and the buttons bound only
+    /// <c>Command</c>. A generated <c>CanExecute</c> is re-queried only when the command is told to,
+    /// and nothing was telling it — so the button was disabled at construction and stayed disabled
+    /// after a check found an update. Every view-model test passed, because
+    /// <c>IAsyncRelayCommand.ExecuteAsync</c> does not consult <c>CanExecute</c>: they were all
+    /// reaching around the one thing that was broken. This asserts the enabled state of the control
+    /// a person actually presses.
+    /// </remarks>
+    [AvaloniaFact]
+    public async Task TheUpdateButtonIsDeadUntilThereIsAnUpdateAndThenLive()
+    {
+        // Nothing newer to begin with. Showing the window runs the launch check, so by the time
+        // this looks at the button the check has already happened and found nothing.
+        var updater = new FakeUpdater { Available = null };
+        var viewModel = NewViewModel(updater);
+        viewModel.SelectedTab = 3;
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        window.UpdateLayout();
+
+        var button = window.FindControl<Button>("InstallUpdate");
+        var notice = window.FindControl<Border>("UpdateNotice");
+        Assert.NotNull(button);
+        Assert.NotNull(notice);
+
+        Assert.Equal(1, updater.Checks);
+        Assert.False(button!.IsEnabled);
+        Assert.False(notice!.IsVisible);
+
+        // Now there is. The offer has to become live off the back of the property changing.
+        updater.Available = "1.1.0";
+        await viewModel.Updates.CheckCommand.ExecuteAsync(null);
+        window.UpdateLayout();
+
+        Assert.True(button.IsEnabled);
+        Assert.True(notice.IsVisible);
     }
 }
 

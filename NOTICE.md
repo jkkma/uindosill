@@ -49,6 +49,7 @@ quantisation are modifications.
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia |
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
+| Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
 
 ### The CUDA runtime is the one component here that is not MIT

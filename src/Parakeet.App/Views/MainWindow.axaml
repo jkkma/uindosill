@@ -7,52 +7,165 @@
         Width="1080" Height="720"
         MinWidth="820" MinHeight="520">
 
-  <TabControl SelectedIndex="{Binding SelectedTab}">
+  <DockPanel>
 
-    <TabItem Header="Transcribe">
-      <Grid RowDefinitions="Auto,*,Auto" Margin="12" DataContext="{Binding Transcribe}"
-            x:DataType="vm:TranscribeViewModel">
+    <!-- The visible notice decision 4 requires. Above the tabs rather than inside one, because a
+         notice on a tab nobody opens is not a notice; hidden entirely when there is nothing to say,
+         so the normal window is exactly as it was. -->
+    <Border DockPanel.Dock="Top"
+            Name="UpdateNotice"
+            IsVisible="{Binding Updates.IsUpdateAvailable}"
+            Background="#1F3B82F6" BorderBrush="#7F3B82F6" BorderThickness="0,0,0,1"
+            Padding="12,8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding Updates.Notice}"
+                   VerticalAlignment="Center" TextWrapping="Wrap" />
+        <Button Grid.Column="1" Content="Download and restart"
+                Command="{Binding Updates.InstallCommand}"
+                IsEnabled="{Binding Updates.CanInstall}" Margin="12,0,0,0" />
+      </Grid>
+    </Border>
 
-        <Border Grid.Row="0"
-                Name="DropZone"
-                DragDrop.AllowDrop="True"
-                BorderBrush="#7F888888" BorderThickness="2" CornerRadius="8"
-                Padding="18" Margin="0,0,0,12">
-          <StackPanel Spacing="4" HorizontalAlignment="Center">
-            <TextBlock Text="Drop audio or video files here" HorizontalAlignment="Center" FontSize="16" />
-            <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
-                       Opacity="0.7" FontSize="12" />
-          </StackPanel>
-        </Border>
+    <TabControl Name="Tabs" SelectedIndex="{Binding SelectedTab}">
 
-        <Grid Grid.Row="1" ColumnDefinitions="360,12,*">
+      <TabItem Header="Transcribe">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="12" DataContext="{Binding Transcribe}"
+              x:DataType="vm:TranscribeViewModel">
+
+          <Border Grid.Row="0"
+                  Name="DropZone"
+                  DragDrop.AllowDrop="True"
+                  BorderBrush="#7F888888" BorderThickness="2" CornerRadius="8"
+                  Padding="18" Margin="0,0,0,12">
+            <StackPanel Spacing="4" HorizontalAlignment="Center">
+              <TextBlock Text="Drop audio or video files here" HorizontalAlignment="Center" FontSize="16" />
+              <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
+                         Opacity="0.7" FontSize="12" />
+            </StackPanel>
+          </Border>
+
+          <Grid Grid.Row="1" ColumnDefinitions="360,12,*">
+
+            <DockPanel Grid.Column="0">
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                <Button Content="Start" Command="{Binding StartCommand}"
+                        IsEnabled="{Binding CanStart}" />
+                <Button Content="Cancel" Command="{Binding CancelCommand}"
+                        IsEnabled="{Binding IsRunning}" />
+                <Button Content="Clear" Command="{Binding ClearCommand}"
+                        IsEnabled="{Binding !IsRunning}" />
+                <!-- Start is disabled until a model is loaded, so it has to say why. -->
+                <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
+                           FontSize="11" Foreground="#D9A441"
+                           IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+
+              <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:JobViewModel">
+                    <StackPanel Spacing="2" Margin="0,4">
+                      <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
+                      <ProgressBar Value="{Binding Progress}" Maximum="100"
+                                   IsIndeterminate="{Binding IsIndeterminate}" Height="4" />
+                      <TextBlock Text="{Binding Error}" FontSize="11" Foreground="#D9534F"
+                                 TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="#D9A441"
+                                 TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Background="Transparent" />
+
+            <DockPanel Grid.Column="2">
+              <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
+                <TextBlock Text="Output formats" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding Formats}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:OutputFormatViewModel">
+                      <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,0" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Output folder" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding OutputDirectory}" Width="280"
+                           PlaceholderText="beside each input file" />
+                  <Button Content="Browse…" Name="BrowseOutput" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <CheckBox Content="Fixed windows instead of speech detection"
+                            IsChecked="{Binding UseFixedWindows}" />
+                  <TextBlock Text="Segment cap (s)" VerticalAlignment="Center" />
+                  <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60" Increment="5" Width="110" />
+                </StackPanel>
+
+                <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while no
+                     labeller is in the build — a control that silently does nothing is the failure
+                     this application refuses to ship. -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <CheckBox Content="Label speakers (opt-in: reads each file a second time)"
+                            IsChecked="{Binding LabelSpeakers}"
+                            IsEnabled="{Binding CanLabelSpeakers}" />
+                  <TextBlock Text="{Binding SpeakerHint}" VerticalAlignment="Center" TextWrapping="Wrap"
+                             FontSize="11" Opacity="0.7"
+                             IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+              </StackPanel>
+
+              <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                         Margin="0,8,0,0" Opacity="0.85" />
+
+              <ScrollViewer>
+                <SelectableTextBlock Text="{Binding SelectedJob.Transcript}" TextWrapping="Wrap" />
+              </ScrollViewer>
+            </DockPanel>
+          </Grid>
+
+          <TextBlock Grid.Row="2" Margin="0,10,0,0" Opacity="0.7" FontSize="11" TextWrapping="Wrap"
+                     Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Models">
+        <Grid ColumnDefinitions="340,12,*" Margin="12" DataContext="{Binding Models}"
+              x:DataType="vm:ModelsViewModel">
 
           <DockPanel Grid.Column="0">
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-              <Button Content="Start" Command="{Binding StartCommand}"
-                      IsEnabled="{Binding CanStart}" />
-              <Button Content="Cancel" Command="{Binding CancelCommand}"
-                      IsEnabled="{Binding IsRunning}" />
-              <Button Content="Clear" Command="{Binding ClearCommand}"
-                      IsEnabled="{Binding !IsRunning}" />
-              <!-- Start is disabled until a model is loaded, so it has to say why. -->
-              <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
-                         FontSize="11" Foreground="#D9A441"
-                         IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-            </StackPanel>
-
-            <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
+            <TextBlock DockPanel.Dock="Top" Text="{Binding ModelDirectory}" FontSize="11" Opacity="0.7"
+                       TextWrapping="Wrap" Margin="0,0,0,8" />
+            <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding Selected}">
               <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:JobViewModel">
+                <DataTemplate x:DataType="vm:ModelViewModel">
                   <StackPanel Spacing="2" Margin="0,4">
-                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                      <!-- Which model is in memory, marked in the list itself. "Installed" is true of
+                           every downloaded entry and answers a different question. -->
+                      <Border IsVisible="{Binding IsLoaded}" Background="#2E7D6B" CornerRadius="3"
+                              Padding="5,1" VerticalAlignment="Center">
+                        <TextBlock Text="LOADED" FontSize="9" FontWeight="Bold" Foreground="White" />
+                      </Border>
+                      <!-- A model that names speakers rather than writing words: downloadable here,
+                           never offered to Load as the engine. -->
+                      <Border IsVisible="{Binding !IsTranscriptionModel}" Background="#6B4E9C" CornerRadius="3"
+                              Padding="5,1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding TaskLabel}" FontSize="9" FontWeight="Bold" Foreground="White" />
+                      </Border>
+                    </StackPanel>
                     <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
-                    <ProgressBar Value="{Binding Progress}" Maximum="100"
-                                 IsIndeterminate="{Binding IsIndeterminate}" Height="4" />
-                    <TextBlock Text="{Binding Error}" FontSize="11" Foreground="#D9534F"
-                               TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                    <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="#D9A441"
-                               TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
+                                 IsVisible="{Binding IsBusy}" />
                   </StackPanel>
                 </DataTemplate>
               </ListBox.ItemTemplate>
@@ -61,179 +174,120 @@
 
           <GridSplitter Grid.Column="1" Background="Transparent" />
 
-          <DockPanel Grid.Column="2">
-            <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
-              <TextBlock Text="Output formats" FontWeight="SemiBold" />
-              <ItemsControl ItemsSource="{Binding Formats}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:OutputFormatViewModel">
-                    <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,0" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+          <ScrollViewer Grid.Column="2">
+            <StackPanel Spacing="10" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="{Binding Selected.DisplayName}" FontSize="18" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
+              <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Output folder" VerticalAlignment="Center" />
-                <TextBox Text="{Binding OutputDirectory}" Width="280"
-                         PlaceholderText="beside each input file" />
-                <Button Content="Browse…" Name="BrowseOutput" />
+                <TextBlock Text="Licence" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Selected.Licence}" />
               </StackPanel>
 
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <CheckBox Content="Fixed windows instead of speech detection"
-                          IsChecked="{Binding UseFixedWindows}" />
-                <TextBlock Text="Segment cap (s)" VerticalAlignment="Center" />
-                <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60" Increment="5" Width="110" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Languages" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" />
               </StackPanel>
 
-              <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while no
-                   labeller is in the build — a control that silently does nothing is the failure
-                   this application refuses to ship. -->
-              <StackPanel Orientation="Horizontal" Spacing="12">
-                <CheckBox Content="Label speakers (opt-in: reads each file a second time)"
-                          IsChecked="{Binding LabelSpeakers}"
-                          IsEnabled="{Binding CanLabelSpeakers}" />
-                <TextBlock Text="{Binding SpeakerHint}" VerticalAlignment="Center" TextWrapping="Wrap"
-                           FontSize="11" Opacity="0.7"
-                           IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <Separator Margin="0,6" />
+
+              <!-- The provenance notice above tells the reader that downloading an unverified entry
+                   needs an explicit opt-in. These are the controls it refers to; without them the
+                   notice was pointing at nothing and the tab could not manage anything at all. -->
+              <CheckBox Content="Allow unverified download (no pinned SHA-256 to check against)"
+                        IsChecked="{Binding AllowUnverified}"
+                        IsVisible="{Binding Selected.NeedsUnverifiedOptIn}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Download" Command="{Binding DownloadCommand}"
+                        IsEnabled="{Binding Selected.CanDownload}" />
+                <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                        IsEnabled="{Binding Selected.IsBusy}" />
+                <Button Content="Remove" Command="{Binding RemoveCommand}"
+                        IsEnabled="{Binding Selected.IsInstalled}" />
               </StackPanel>
+
+              <ProgressBar Value="{Binding Selected.Progress}" Maximum="100" Height="6"
+                           IsVisible="{Binding Selected.IsBusy}" />
+              <TextBlock Text="{Binding Selected.Status}" Opacity="0.75" FontSize="11" />
+              <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
+
+              <Separator Margin="0,6" />
+
+              <!-- What is in memory, and the controls for putting it there and taking it out again.
+                   Until this existed the engine was built and torn down inside one Start, so there
+                   was no loaded model to name and nothing in the window said which one ran. The
+                   backend row is bound here for the first time too: MainWindowViewModel has exposed
+                   Backends and Backend all along and this view referenced neither, so the app was
+                   pinned to its Vulkan default with no way to see or change it. -->
+              <TextBlock Text="In memory" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Backend" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
+                          SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
+                          IsEnabled="{Binding !IsLoaded}" MinWidth="120" />
+                <Button Content="Load" Command="{Binding LoadCommand}"
+                        IsEnabled="{Binding CanLoad}" />
+                <Button Content="Unload" Command="{Binding UnloadCommand}"
+                        IsEnabled="{Binding CanUnload}" />
+              </StackPanel>
+
+              <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
+              <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
+                         TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
             </StackPanel>
-
-            <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
-                       Margin="0,8,0,0" Opacity="0.85" />
-
-            <ScrollViewer>
-              <SelectableTextBlock Text="{Binding SelectedJob.Transcript}" TextWrapping="Wrap" />
-            </ScrollViewer>
-          </DockPanel>
+          </ScrollViewer>
         </Grid>
+      </TabItem>
 
-        <TextBlock Grid.Row="2" Margin="0,10,0,0" Opacity="0.7" FontSize="11" TextWrapping="Wrap"
-                   Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
-      </Grid>
-    </TabItem>
-
-    <TabItem Header="Models">
-      <Grid ColumnDefinitions="340,12,*" Margin="12" DataContext="{Binding Models}"
-            x:DataType="vm:ModelsViewModel">
-
-        <DockPanel Grid.Column="0">
-          <TextBlock DockPanel.Dock="Top" Text="{Binding ModelDirectory}" FontSize="11" Opacity="0.7"
-                     TextWrapping="Wrap" Margin="0,0,0,8" />
-          <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding Selected}">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:ModelViewModel">
-                <StackPanel Spacing="2" Margin="0,4">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                    <!-- Which model is in memory, marked in the list itself. "Installed" is true of
-                         every downloaded entry and answers a different question. -->
-                    <Border IsVisible="{Binding IsLoaded}" Background="#2E7D6B" CornerRadius="3"
-                            Padding="5,1" VerticalAlignment="Center">
-                      <TextBlock Text="LOADED" FontSize="9" FontWeight="Bold" Foreground="White" />
-                    </Border>
-                    <!-- A model that names speakers rather than writing words: downloadable here,
-                         never offered to Load as the engine. -->
-                    <Border IsVisible="{Binding !IsTranscriptionModel}" Background="#6B4E9C" CornerRadius="3"
-                            Padding="5,1" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding TaskLabel}" FontSize="9" FontWeight="Bold" Foreground="White" />
-                    </Border>
-                  </StackPanel>
-                  <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
-                  <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
-                               IsVisible="{Binding IsBusy}" />
-                </StackPanel>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </DockPanel>
-
-        <GridSplitter Grid.Column="1" Background="Transparent" />
-
-        <ScrollViewer Grid.Column="2">
-          <StackPanel Spacing="10" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="{Binding Selected.DisplayName}" FontSize="18" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
-            <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" />
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="Licence" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Selected.Licence}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="Languages" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" />
-            </StackPanel>
-
-            <Separator Margin="0,6" />
-
-            <!-- The provenance notice above tells the reader that downloading an unverified entry
-                 needs an explicit opt-in. These are the controls it refers to; without them the
-                 notice was pointing at nothing and the tab could not manage anything at all. -->
-            <CheckBox Content="Allow unverified download (no pinned SHA-256 to check against)"
-                      IsChecked="{Binding AllowUnverified}"
-                      IsVisible="{Binding Selected.NeedsUnverifiedOptIn}" />
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Download" Command="{Binding DownloadCommand}"
-                      IsEnabled="{Binding Selected.CanDownload}" />
-              <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
-                      IsEnabled="{Binding Selected.IsBusy}" />
-              <Button Content="Remove" Command="{Binding RemoveCommand}"
-                      IsEnabled="{Binding Selected.IsInstalled}" />
-            </StackPanel>
-
-            <ProgressBar Value="{Binding Selected.Progress}" Maximum="100" Height="6"
-                         IsVisible="{Binding Selected.IsBusy}" />
-            <TextBlock Text="{Binding Selected.Status}" Opacity="0.75" FontSize="11" />
-            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
-
-            <Separator Margin="0,6" />
-
-            <!-- What is in memory, and the controls for putting it there and taking it out again.
-                 Until this existed the engine was built and torn down inside one Start, so there
-                 was no loaded model to name and nothing in the window said which one ran. The
-                 backend row is bound here for the first time too: MainWindowViewModel has exposed
-                 Backends and Backend all along and this view referenced neither, so the app was
-                 pinned to its Vulkan default with no way to see or change it. -->
-            <TextBlock Text="In memory" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="Backend" VerticalAlignment="Center" />
-              <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
-                        SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
-                        IsEnabled="{Binding !IsLoaded}" MinWidth="120" />
-              <Button Content="Load" Command="{Binding LoadCommand}"
-                      IsEnabled="{Binding CanLoad}" />
-              <Button Content="Unload" Command="{Binding UnloadCommand}"
-                      IsEnabled="{Binding CanUnload}" />
-            </StackPanel>
-
-            <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
-            <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
-                       TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
+      <TabItem Header="Licences">
+        <ScrollViewer Margin="12">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Notices" FontSize="18" FontWeight="SemiBold" />
+            <SelectableTextBlock Text="{Binding LicenceText}" TextWrapping="Wrap" FontFamily="monospace" />
+            <TextBlock Text="{Binding EnvironmentSummary}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding ThreadingNote}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
           </StackPanel>
         </ScrollViewer>
-      </Grid>
-    </TabItem>
+      </TabItem>
 
-    <TabItem Header="Licences">
-      <ScrollViewer Margin="12">
-        <StackPanel Spacing="10">
-          <TextBlock Text="Notices" FontSize="18" FontWeight="SemiBold" />
-          <SelectableTextBlock Text="{Binding LicenceText}" TextWrapping="Wrap" FontFamily="monospace" />
-          <TextBlock Text="{Binding EnvironmentSummary}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding ThreadingNote}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
-        </StackPanel>
-      </ScrollViewer>
-    </TabItem>
+      <TabItem Header="Updates">
+        <ScrollViewer Margin="12" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel">
+          <StackPanel Spacing="10" MaxWidth="760" HorizontalAlignment="Left">
 
-  </TabControl>
+            <TextBlock Text="Updates" FontSize="18" FontWeight="SemiBold" />
+
+            <TextBlock Text="{Binding CurrentVersion, StringFormat='This is version {0}.'}" />
+
+            <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+
+            <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}"
+                         IsVisible="{Binding IsBusy}" Height="6" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Check now" Command="{Binding CheckCommand}"
+                      IsEnabled="{Binding CanCheck}" />
+              <Button Content="Download and restart" Name="InstallUpdate"
+                      Command="{Binding InstallCommand}"
+                      IsEnabled="{Binding CanInstall}" />
+            </StackPanel>
+
+            <CheckBox Content="Check for updates when Uindosill starts"
+                      IsChecked="{Binding CheckOnLaunch}" />
+
+            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+                       Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network — downloading a model — you start yourself." />
+
+            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+                       Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose and are not touched by an update, or by uninstalling." />
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+    </TabControl>
+  </DockPanel>
 </Window>

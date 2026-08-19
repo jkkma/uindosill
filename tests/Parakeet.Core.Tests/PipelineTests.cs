@@ -291,6 +291,21 @@ public class AttributionTests
     }
 
     [Fact]
+    public void TheUpdateFrameworkIsListedWithItsCopyrightLine()
+    {
+        // MIT requires the copyright notice to travel with the binary, and the installer and the
+        // update check are both Velopack code inside the shipped application. The notice surfaces
+        // render Notes, so the copyright line goes there rather than being left in a source comment.
+        var velopack = Assert.Single(
+            Attributions.Components,
+            c => c.Component.Contains("Velopack", StringComparison.Ordinal));
+
+        Assert.Equal("MIT", velopack.License);
+        Assert.Contains("Velopack Ltd", velopack.Notes ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("github.com/velopack/velopack", velopack.Uri.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LanguageClaimsDoNotIncludeScriptsTheModelCannotHandle()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);

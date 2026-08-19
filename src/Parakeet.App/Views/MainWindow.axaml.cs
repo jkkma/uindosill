@@ -29,6 +29,24 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// The launch check, started once the window exists so its answer has somewhere to appear.
+    /// </summary>
+    /// <remarks>
+    /// Not awaited, and deliberately: an HTTPS request to GitHub must not sit between the user and
+    /// a window they opened to transcribe something. It does nothing at all unless this is an
+    /// installed copy and the setting is on, and every failure inside it becomes a line of text.
+    /// </remarks>
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            _ = viewModel.Updates.CheckOnLaunchAsync();
+        }
+    }
+
+    /// <summary>
     /// The first close request is turned into a shutdown: stop the batch, unload the model, release
     /// the native backend, and only then close. Without this the process reached its native static
     /// teardown with a CUDA backend still resident and aborted with <c>0xC0000409</c> — the app

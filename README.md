@@ -49,18 +49,39 @@ obviously broken.
 
 ## Getting it
 
-**There is no installer yet.** Packaging, signing and auto-update are Phase 5 in
-[PHASES.md](docs/PHASES.md), and that phase has started but not shipped. Until it does there
-are two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact
-from any CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu
-and vulkan natives already in place, kept for seven days, unsigned. Both still need a model, which
-the CLI or the app's Models tab downloads.
+**There is an installer, and no release to download it from yet.** Packaging is built —
+a `v*` tag produces a Windows installer for the desktop app in two flavours, plus the CLI as a zip
+beside it — but no version has been tagged, so the releases page is empty. Until one is, there are
+two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact from any
+CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and vulkan
+natives already in place, kept for seven days. Both still need a model, which the CLI or the app's
+Models tab downloads.
+
+When a release does arrive, three things are worth knowing before you download it:
+
+- **It is unsigned**, by decision rather than oversight, so expect Windows to warn about an unknown
+  publisher. Nobody here has seen that dialog — both installers were only ever run silently — so
+  what it says exactly is one of the things [UNPROVEN.md](docs/UNPROVEN.md) records.
+  [PHASES.md](docs/PHASES.md) records what shipping unsigned accepts, and why signing left v1.
+- **Two flavours.** The default installer carries the CPU and Vulkan backends and is about 82 MB;
+  the `win-cuda` one adds the NVIDIA CUDA runtime and is about 819 MB. Take the first unless you
+  know you want CUDA. Whichever you install is meant to keep updating itself from the same flavour:
+  the channel is recorded at install time and the app never overrides it, which was read off an
+  installed copy — but no release exists yet, so no update has ever been fetched from one.
+- **Your models are not in it, and not touched by it.** The application installs into
+  `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights live in `%LOCALAPPDATA%\Uindosill\models`.
+  Uninstalling deletes the first and leaves the second — that was measured against 4.3 GiB of
+  weights, and [UNPROVEN.md](docs/UNPROVEN.md) has the record, including what it does not prove.
+
+The application asks GitHub once, when it starts, whether a newer version exists. That is the only
+thing it does on the network without being asked: it shows a notice, downloads nothing until you
+press the button, and the Updates tab has a switch that turns the check off.
 
 ## Quick start
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 451 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 477 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -109,11 +130,11 @@ the Windows natives and a model, neither of which is in the clone.
 
 ### The scripts
 
-`scripts/` holds eleven PowerShell tasks — two for vendoring, four measurement harnesses (speed
+`scripts/` holds twelve PowerShell tasks — two for vendoring, four measurement harnesses (speed
 and memory, the second machine, word error rate against human transcripts, and diarisation error
-rate against hand-labelled speaker turns), two transcript comparisons, two for the v2 spike, and
-one that moves run reports and test material over rclone — and `scripts/lab.ps1` is one entry
-point for them: run it bare to list the tasks, each with the parameters its own script declares.
+rate against hand-labelled speaker turns), two transcript comparisons, two for the v2 spike, one
+that moves run reports and test material over rclone, and one that builds the installer — and
+`scripts/lab.ps1` is one entry point for them: run it bare to list the tasks, each with the parameters its own script declares.
 It dispatches and nothing else, so every task is still runnable on its own.
 
 They divide along the same container line rather than all being out of reach.
@@ -135,7 +156,11 @@ styles with `uindosill wer`. `scripts/measure-der.ps1` scores speaker-turn hypot
 pairs (`tests/fixtures/diarisation/`) — and cuts the pinned development stretches from the test
 episodes with ffmpeg; the scoring half needs only the built CLI and runs anywhere.
 `scripts/measure-second-machine.ps1` probes hardware through CIM and
-is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table. For
+is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table.
+`scripts/package-windows.ps1` builds the installer. It passes `vpk`'s `[win]` directive, which is
+documented to cross-build a Windows package from Linux, so it should run on either — but every pack
+here has been on Windows and the Linux route is untried (`UNPROVEN.md`); its CUDA channel needs
+`vendor-cuda.ps1` in any case, so that half is Windows-only. For
 `measure-wer.ps1`, `measure-second-machine.ps1`, `vendor-cuda.ps1` and `measure-der.ps1`'s cutting
 half, `pwsh` at least parses them, which is enough to keep a syntax error off the machine that can
 run them.
@@ -188,7 +213,7 @@ The ten notes live in [`docs/`](docs/); the last two rows are at the repository 
 | [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
-| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, five MIT components, the CUDA runtime. |
+| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, six MIT components, the CUDA runtime. |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for an agent session: budget, how to build, the one rule. |
 
 ## Licence

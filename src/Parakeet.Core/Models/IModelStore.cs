@@ -41,23 +41,11 @@ public sealed class LocalModelStore : IModelStore
 
     /// <summary>
     /// <c>%LOCALAPPDATA%\Uindosill\models</c> on Windows, and the XDG equivalent elsewhere, always
-    /// resolved through the platform API so redirected and roaming profiles keep working.
+    /// resolved through the platform API so redirected and roaming profiles keep working. The
+    /// parent is <see cref="UserDataPaths.RootDirectory"/>, which the settings file shares.
     /// </summary>
-    public static string DefaultRootDirectory()
-    {
-        var localAppData = Environment.GetFolderPath(
-            Environment.SpecialFolder.LocalApplicationData,
-            Environment.SpecialFolderOption.Create);
-
-        if (string.IsNullOrEmpty(localAppData))
-        {
-            // A profile with no local application data is broken, but falling back to the
-            // current directory would scatter 670 MB blobs wherever the app happened to start.
-            localAppData = Path.Combine(Path.GetTempPath(), "Uindosill");
-        }
-
-        return Path.Combine(localAppData, "Uindosill", "models");
-    }
+    public static string DefaultRootDirectory() =>
+        Path.Combine(UserDataPaths.RootDirectory(), "models");
 
     public string PathFor(ModelDescriptor model)
     {

@@ -1,0 +1,253 @@
+name: Release
+
+# A v* tag builds the release. Nothing here runs on a push to a branch: this job produces ~1.8 GB
+# of assets and publishes them under someone's name, which is not a thing to do on every commit.
+#
+# Why windows-latest, when everything else in this repository builds on Linux and the cross-publish
+# is a deliberate design constraint. Three reasons, none of them taste:
+#
+#   1. The CUDA channel cannot be vendored anywhere else. scripts/vendor-cuda.ps1 reads a PE import
+#      table against System32 to prove the drop's dependencies resolve, and that is Windows.
+#   2. vpk compresses delta packages with zstd. On Windows it uses the copy bundled in its own
+#      package; elsewhere it wants zstd on PATH, and if it is missing it does not fail — it warns
+#      and falls back to bsdiff, which in the 1.2.0 line produces patches Update.exe cannot apply
+#      (velopack/velopack#1008). A silent degradation that surfaces as a failed update on a user's
+#      machine is not a risk worth taking to save a runner.
+#   3. `vpk [win] pack` does cross-build from Linux, and the packaging script passes that directive,
+#      so this is a choice rather than a limit. docs/UNPROVEN.md records that the Linux route is
+#      verified in Velopack's documentation and its own CI, and has never been run here.
+#
+# The build-and-test job in ci.yml keeps proving the Linux cross-publish still works on every push,
+# so nothing is lost by packaging elsewhere.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package, without the leading v (e.g. 1.0.0-rc.1). Builds the assets but publishes nothing."
+        required: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # vpk is pinned in .config/dotnet-tools.json, and scripts/package-windows.ps1 refuses to run
+      # if that pin and the Velopack PackageVersion in Directory.Packages.props disagree. Velopack
+      # itself only logs a mismatch — the throw is commented out in 1.2.0 — so the check that stops
+      # a mismatched installer being built is ours.
+      - name: Restore the pinned vpk
+        run: dotnet tool restore
+
+      # The dispatch input reaches bash as an environment variable, never as ${{ }} inside the
+      # script body: expression substitution happens before the shell parses the line, so an input
+      # containing a quote would break the step and one containing a semicolon would run on a
+      # runner holding contents: write.
+      - name: The version comes from the tag
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="${REF_NAME#v}"
+          fi
+
+          # It becomes a filename and a package version, so it has to look like one.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$version' is not a version this can package (expected 1.2.3 or 1.2.3-rc.1)."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A hyphen means a prerelease, and GitHub does not infer that from the tag: without it an
+          # rc would be published as Latest and served to everyone by the default update channel.
+          if printf '%s' "$version" | grep -q -- '-'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Packaging $version"
+
+      # This is the only build and test that runs for a tag. ci.yml is `on: push: branches: ["**"]`,
+      # and a tag ref matches no branch pattern — so pushing v1.0.0 starts this workflow and nothing
+      # else. The suite has usually run on Linux for the commit being tagged, but nothing enforces
+      # that, and a tag pushed on its own would otherwise reach a release with no test run at all.
+      # It is also the only place the suite runs on Windows.
+      - name: Build and test
+        run: |
+          dotnet build Uindosill.slnx --configuration Release
+          dotnet test Uindosill.slnx --configuration Release --no-build
+
+      # vpk builds a delta by diffing against packages already present in --outputDir. A fresh
+      # runner has none, so without this step every release ships full packages only and every user
+      # re-downloads the whole application on every update — 77 MB where 74 KB would do. Failure is
+      # not fatal and must not be: before the first release there is nothing to download, and a
+      # missing delta is a slow update rather than a broken one.
+      - name: Seed the previous release so deltas can be built
+        shell: pwsh
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging/releases | Out-Null
+
+          foreach ($channel in 'win', 'win-cuda') {
+            dotnet vpk download github --repoUrl $env:REPO_URL --channel $channel `
+                                       --outputDir packaging/releases --token $env:GH_TOKEN --skip-updates
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::notice::No previous '$channel' release to diff against - this release ships full packages only."
+            }
+          }
+
+          Get-ChildItem packaging/releases -ErrorAction SilentlyContinue |
+            Select-Object Name, Length | Format-Table -AutoSize
+          exit 0
+
+      # Both flavours. The script vendors the pinned natives per channel, publishes, drops the
+      # backend directories the channel does not promise, packs, and then opens each nupkg and
+      # asserts its native payload against what that channel claims — including the LICENSE beside
+      # every parakeet.dll, because parakeet.cpp is MIT and a binary shipped without its notice is
+      # a licence breach nothing else in this pipeline would report.
+      - name: Build both installer channels
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Version "${{ steps.version.outputs.version }}"
+
+      # The CLI is not in the installer — decision 3, 2026-08-16: Velopack has no PATH feature, so
+      # bundling it would be custom code on install and on uninstall. It ships as the zip beside it,
+      # which is the artefact CI has produced all along.
+      - name: Publish the CLI for the zip beside the installer
+        run: dotnet publish src/Parakeet.Cli --configuration Release -r win-x64 -o packaging/cli-win-x64
+
+      # The step above ran after the win-cuda channel was vendored, and build/NativeAssets.targets
+      # globs native/** unfiltered — so the CLI publish carries the CUDA drop as well, which would
+      # take this zip from ~250 MB to over a gigabyte without anything saying so. The CLI ships the
+      # same backends as the default installer; the rest is dropped here and the result asserted,
+      # because a size regression nobody measures is one nobody notices.
+      - name: Zip the CLI, without the CUDA drop it inherited
+        shell: pwsh
+        run: |
+          $native = 'packaging/cli-win-x64/native/win-x64'
+          if (Test-Path "$native/cuda") {
+            Write-Host 'dropping native/win-x64/cuda from the CLI zip'
+            Remove-Item -LiteralPath "$native/cuda" -Recurse -Force
+          }
+
+          foreach ($backend in 'cpu', 'vulkan') {
+            foreach ($file in 'parakeet.dll', 'LICENSE') {
+              if (-not (Test-Path -LiteralPath "$native/$backend/$file")) {
+                throw "The CLI publish is missing native/win-x64/$backend/$file."
+              }
+            }
+          }
+
+          Compress-Archive -Path packaging/cli-win-x64/* `
+                           -DestinationPath 'packaging/releases/uindosill-cli-win-x64.zip'
+
+          $size = (Get-Item 'packaging/releases/uindosill-cli-win-x64.zip').Length
+          Write-Host "uindosill-cli-win-x64.zip: $([math]::Round($size / 1MB, 1)) MB"
+          if ($size -gt 400MB) {
+            throw "The CLI zip is $([math]::Round($size / 1MB, 1)) MB. That is the CUDA drop coming along again."
+          }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: uindosill-release-${{ steps.version.outputs.version }}
+          path: packaging/releases/
+          retention-days: 7
+
+      # Only a tag publishes. A workflow_dispatch run builds the same assets and stops at the
+      # artefact above, so the whole thing can be exercised without creating a release.
+      #
+      # Every asset name is distinct across the two channels — Velopack suffixes a non-default
+      # channel's files and leaves the default channel's bare — so both live on one release without
+      # colliding. Observed rather than assumed; docs/UNPROVEN.md has the listing.
+      #
+      # RELEASES and RELEASES-win-cuda are deliberately not uploaded: they are the Squirrel-era feed
+      # files, superseded by releases.<channel>.json, and the default channel's is named RELEASES
+      # with no channel in it — the one filename that would collide if a third channel ever appeared.
+      #
+      # The delta packages are uploaded because without them every update is a full re-download:
+      # rc.1 to rc.2 was 74 KB as a delta against 77 MB as a full package, and a release that omits
+      # them still works while being a thousand times more expensive for every user who updates.
+      # Deltas only exist from the second release onwards, so the glob is allowed to match nothing.
+      #
+      # The condition tests the EVENT, not only the ref: workflow_dispatch accepts a tag in its ref
+      # selector, so a ref test alone would let a dispatch run publish a real release while its own
+      # input description promises it does not.
+      - name: Publish the release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          cd packaging/releases
+
+          # nullglob, because the delta glob matches nothing on the very first release and an
+          # unexpanded pattern would reach gh as a literal filename and fail the publish.
+          shopt -s nullglob
+          assets=(
+            UindosillDesktop-*-Setup.exe
+            UindosillDesktop-*-full.nupkg
+            UindosillDesktop-*-delta.nupkg
+            releases.win.json
+            releases.win-cuda.json
+            uindosill-cli-win-x64.zip
+          )
+          shopt -u nullglob
+
+          # The four that must always be there. A release missing one of them is a release nobody
+          # can install or update from, and it is cheaper to fail here than to find that out after.
+          for required in \
+            UindosillDesktop-win-Setup.exe \
+            UindosillDesktop-win-cuda-Setup.exe \
+            releases.win.json \
+            releases.win-cuda.json
+          do
+            if [ ! -s "$required" ]; then
+              echo "::error::$required was not produced, so this release would be incomplete."
+              exit 1
+            fi
+          done
+
+          printf 'uploading %s\n' "${assets[@]}"
+
+          # A prerelease tag has to be marked as one. GitHub does not infer it from the tag name, so
+          # an unmarked rc becomes the repository's Latest release — which the default update channel
+          # would then offer to every stable user.
+          flags=(--generate-notes --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+
+          # Idempotent, because the alternative is losing half an hour of packaging to a dropped
+          # connection on the last step and then having to delete the release by hand to re-run.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG already has a release; uploading the assets into it."
+            gh release upload "$TAG" --clobber "${assets[@]}"
+          else
+            gh release create "$TAG" --title "$TAG" "${flags[@]}" "${assets[@]}"
+          fi
