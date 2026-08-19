@@ -505,6 +505,31 @@ The next actions, in order:
    for this configuration are 34.81% and 38.90% — a third of speech attributed to the wrong person,
    which is a transcript a user would reject rather than a worse one they would tolerate.
 
+**The research comes home when v1.0 ships — decided 2026-08-18.** Everything this project has
+measured or studied lives on the maintainer's Drive rather than here, a convention named
+2026-08-16 and recorded in `CLAUDE.md`. It now has an end date: **on the v1.0 release, every
+research folder and run report moves into this repository**, and the Drive reverts to being a
+transfer route between the two machines rather than the place the evidence lives.
+
+The reason it was ever outside is that this repository is public and the research was not written
+to be. The reason it comes back is that a public repository asserting a gate, a margin and a list
+of unproven claims should carry the material those rest on, and a reader who cannot see the study
+has to take the summary on trust — which is the posture `docs/UNPROVEN.md` exists to refuse. A
+figure whose working is on someone's private Drive is closer to an assertion than a measurement.
+
+**It is a small job and the size is not the obstacle.** Measured 2026-08-18: 8.8 MB across nine
+folders, of which 7.9 MB is one spike's cached per-meeting probabilities and everything else —
+every study, survey, report and run summary this project has produced — comes to under a megabyte.
+
+**Three things to settle at migration time, not before.** First, the material has to be read for
+publication rather than moved wholesale, because it was written for a private folder and this
+repository has already had one history rewrite to remove things that should not have been in it.
+Second, **session memory is not research data and does not come** — it names machines and sessions,
+and `CLAUDE.md` excludes it for reasons the migration does not change. Third, cached intermediate
+artifacts like those 7.9 MB of probability arrays are regenerable from the model in minutes and may
+be better left out than committed as binaries; that is a judgement about each artifact rather than
+a rule.
+
 ### After v1
 
 **v2 is asking questions about a transcript** and **v3 is push-to-talk dictation.** v2 went in front

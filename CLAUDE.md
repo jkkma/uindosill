@@ -104,9 +104,14 @@ false on the other one. Pull with `-Fetch session-memory/<machine>` into a scrat
 by hand. None of it belongs in this repository — it names machines and sessions, and this repository
 is public.
 
-**Research lives on the Drive too, never in this repository** — the maintainer's standing
-convention, named 2026-08-16 when the diarisation study moved out (the v2 research always lived
-there). A research workflow's product — the study, the survey, the report — goes to a dated
+**Research lives on the Drive, not in this repository — until v1.0 ships, at which point it all
+comes back.** The maintainer's standing convention, named 2026-08-16 when the diarisation study
+moved out (the v2 research always lived there), with an end date set 2026-08-18: **on the v1.0
+release, every research folder and run report moves from the Drive into this repository.** Until
+then the rule below is unchanged and a research product still goes to the Drive. Do not start that
+migration early, and do not treat the convention as permanent when writing about it.
+
+A research workflow's product — the study, the survey, the report — goes to a dated
 folder inside the Drive `uindosill` folder, beside the v2 research and the runs folders. What
 stays here is what binds the repository: the decision record in `docs/PHASES.md`, the unproven
 markers in `docs/UNPROVEN.md`, and a pointer that, as above, names no URL and no id.
