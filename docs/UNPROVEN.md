@@ -803,10 +803,15 @@ so a figure quoted from one against the other means nothing.
 four speakers on all sixteen, so the speaker criterion was satisfied by a corpus that cannot vary
 rather than by evidence of counting. Below four the evidence is real and good — on 25 cut stretches
 holding one or two distinct reference speakers the model never over-counted once — but a cut stretch
-is not a recording and no DER is claimed from it. Above four there is nothing: the gate's own
-beyond-four check, VoxConverse, is in v2.1's training-data list and is in any case arithmetically
-unreachable, since 63% of its test files hold more than four speakers and a four-capped model's best
-possible mean speaker error there is 3.02 against a criterion of 1.0. NOTSOFAR-1 is likewise in the
+is not a recording and no DER is claimed from it. Above four there is nothing, and after the narrowing of
+2026-08-18 there is nothing in the gate that could produce anything: VoxConverse was the
+beyond-four check and left the gate with web video, having been both in v2.1's training-data list
+and arithmetically unreachable — 63% of its test files hold more than four speakers, so a
+four-capped model's best possible mean speaker error there is 3.02 against a criterion of 1.0.
+**The cap is therefore scoped around rather than tested, and both of the gate's remaining corpora
+are meeting sets.** That is a deliberate loss of coverage, recorded here so it is not mistaken for
+an absence of risk: a five-person meeting is outside what any measurement in this repository
+covers, and the only figures that exist for it are NVIDIA's own. NOTSOFAR-1 is likewise in the
 training list, as is AMI — AMI *test* is safe, being the split NVIDIA and pyannote both evaluate on,
 but AMI *dev* plausibly was not held out, so the dev figure of 11.91% should not be read as a clean
 generalisation estimate. **No measurement anywhere in this repository prices what this model does

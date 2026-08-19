@@ -197,7 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
-| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. Passing candidate, cap unpriced; C# port not started |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. Passing candidate, cap unpriced; C# port not started |
 
 ### The dictation seam
 
@@ -328,6 +328,8 @@ The next actions, in order:
    of three, the other two carrying no material, no reference labels and no gate. It is recorded
    here rather than closed: whether meetings and web video get gates of their own, or the gate is
    restated in terms that span all three, belongs to the ratification that has not happened.
+   **Resolved 2026-08-18 by narrowing rather than by gating** — web video was dropped once a
+   passing candidate turned out to be architecturally unable to serve it. See the narrowing below.
 
    **What follows from it.** Hand-labelling does not scale to three domains at the plan's own
    estimate of thirty to sixty minutes per ten minutes of audio — an estimate still unproven, and
@@ -364,6 +366,9 @@ The next actions, in order:
    publish figures whose convention can be established at source; **NOTSOFAR-1** for crosstalk,
    because AMI's 14.58% overlap is mild against its 39%; **VoxConverse** for web video and for
    speaker counts past four, which AMI cannot reach at 15 of 16 test meetings holding exactly four.
+   **The VoxConverse third of that restatement lasted the day**: it was removed later on 2026-08-18
+   when the domain narrowed to meetings, so the live gate is AMI and NOTSOFAR-1. What is above is
+   the restatement as it stood, kept because the narrowing is only legible against it.
 
    **What the restatement costs, said plainly.** The gate no longer asserts anything about podcast
    audio — the domain this feature was first scoped to, and the one the four stratified episodes
@@ -446,8 +451,9 @@ The next actions, in order:
    stretches where the reference holds one or two distinct speakers, the model found one in all ten
    one-speaker stretches and **never over-counted in 25 of 25** — its errors below the cap are
    under-counts of near-silent participants, the harmless direction for a transcript. Upward,
-   nothing was tested. **VoxConverse, which this gate names as the beyond-four check, cannot serve
-   as one for this candidate on two independent grounds.** It appears in v2.1's own training-data
+   nothing was tested. **VoxConverse, which this gate named as the beyond-four check until the
+   narrowing below removed it, could not have served as one for this candidate on two independent
+   grounds anyway.** It appears in v2.1's own training-data
    list as `VoxConverse-v0.3`, unqualified by split, and NVIDIA publish no VoxConverse figure at
    all. And it is arithmetically out of reach: computed here from the published RTTMs, 63% of its
    232 test files hold more than four speakers, up to twenty-one, so a four-capped model's **best
@@ -469,6 +475,35 @@ The next actions, in order:
    The report, the code and the cached per-meeting probabilities are in a dated folder beside the
    other research on the maintainer's Drive, per `CLAUDE.md`; nothing from the spike is in this
    repository.
+
+   **The target domain narrowed to meetings and podcasts on 2026-08-18, and web video is out.**
+   This closes the question the widening of 2026-08-17 left open — whether meetings and web video
+   get gates of their own, or the gate is restated to span all three — and it closes it by dropping
+   one of the three rather than by gating it. The reason is a measurement rather than a preference.
+   The candidate that passes caps at four speakers, and VoxConverse, the corpus chosen to represent
+   web video, holds a mean of 6.5 speakers per file across its test split with 63% of files above
+   four and one holding twenty-one. A four-capped model's best possible mean speaker error there is
+   3.02 against a criterion of 1.0, so the product cannot be good at web video with this diariser
+   and no amount of tuning changes that. Keeping web video as a target while shipping a diariser
+   architecturally unable to serve it would be a claim the evidence contradicts, which is the one
+   thing this document exists to prevent.
+
+   **What the narrowing costs and what it does not.** It costs the domain, and it costs the
+   corpus: VoxConverse leaves the gate, so the gate's two corpora — AMI and NOTSOFAR-1 — are both
+   meeting sets, and **nothing in the gate now checks behaviour above four speakers at all**. That
+   is a real loss of coverage and is recorded as such in `docs/UNPROVEN.md` rather than absorbed;
+   the cap is not tested, it is scoped around. It does not cost podcasts. They remain a target
+   domain and remain ungated for want of labelled material, exactly as before, and the spike's own
+   evidence is favourable there rather than silent: across 25 cut stretches holding one or two
+   distinct speakers the model never once over-counted, and a two-host show is precisely that case.
+   That is not a podcast DER and does not become one, but it is the measured absence of the failure
+   a two-host transcript would show first.
+
+   **What follows for the product.** The four-speaker limit stops being a footnote and becomes a
+   stated property: the feature is for meetings and conversations of up to four people, and the
+   interface should say so rather than degrade quietly, because above four the published figures
+   for this configuration are 34.81% and 38.90% — a third of speech attributed to the wrong person,
+   which is a transcript a user would reject rather than a worse one they would tolerate.
 
 ### After v1
 
