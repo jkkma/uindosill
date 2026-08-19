@@ -1152,7 +1152,9 @@ model; **check and mark, do not trust** — FullCite found about 40% of forced v
 an 8B model still fail to match, which is why the substring check above is a mechanism and not a
 test; and **grammar hygiene across twenty-five languages** — GBNF works on code points, so
 citation tokens stay ASCII and free text is any code point except `[`, `]` and newline; the prompt
-and few-shot go in the transcript's language, which `TranscriptDocument.Language` already carries;
+and few-shot go in the transcript's language, which nothing in this pipeline currently knows —
+`TranscriptDocument.Language` carries the *request* and is null whenever `-l` was not passed, so
+where that language comes from is a decision this document has not taken rather than a field lookup;
 and the answer's language is checked mechanically, by a means not yet chosen. NLI-style
 verification (MiniCheck and kin) is English-trained and is not an answer for this language list.
 

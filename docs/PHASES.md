@@ -429,6 +429,73 @@ came out of a headless browser with the webfonts confirmed loaded. The one thing
 is **not** checked — how the window's corner behaves on Windows 11 — is in `docs/UNPROVEN.md` with what
 would settle it.
 
+### Researched 2026-08-19 — translating the transcript into English
+
+**The study proposes a v1 Transcribe-tab opt-in that produces an English version of the transcript
+beside it. Nothing about it is decided and none of it is built.** It is in the dated folder
+`translate-to-english-2026-08-19`, beside the other research on the maintainer's Drive, per
+`CLAUDE.md`.
+
+**The direction was chosen rather than defaulted to.** Into English is the best-resourced direction
+in every open translation family, which makes it the one whose quality claims are cheapest to
+support, and this project ships no claim it cannot measure. English → other targets is out of scope,
+and the naming the study proposes keeps it that way: `--translate` against a `TranslateToEnglish`
+setting, rather than a `translate` that would later have to grow a target.
+
+**One checkbox and no language picker, which is a finding rather than a preference.** This pipeline
+cannot detect what it has just transcribed — the JSON `language` field records the request rather
+than a detection, and `--language` is inert on this checkpoint (`docs/UNPROVEN.md` § *The language
+hint*) — so any design that needs the source language has to ask the user for it. The recommended
+family is many-to-one: the source is never declared, only the target, and the constraint never
+binds. If measurement forces the bilingual-pair fallback the picker comes back, per file, labelled
+as the user's assertion rather than a detection, and never offering "Auto". The cost of not having
+one is that there is no per-language control either, which is what decides the gating question
+below.
+
+**The pass runs last — decode, label speakers, translate — and that order belongs to the code rather
+than to taste.** `SpeakerAssignment` assigns a speaker per *word* and cuts segments where the
+speaker changes; handed a segment with no words it falls back to whichever speaker talks most across
+the span. Translated text carries no words, so translating before labelling would quietly coarsen
+every label rather than fail where anyone could see it.
+
+**Word timings do not survive translation, and nothing pretends otherwise.** `vtt-words` is refused
+under the option rather than degraded in silence; SRT and VTT fall to the proportional-cue path
+`SubtitleCueBuilder` already takes for word-less segments, which `WordTimedVttFormatter`'s own
+comment calls "a reasonable guess about when to show a line and a worthless one about when a word is
+spoken"; and the word-by-word view always draws what was spoken. Every artefact that *can* carry the
+marker in-band does — and SRT cannot, having no comment syntax, so it is covered by its name
+instead: translated files take an `.en` infix, which under `--overwrite` is also what stops a
+translated run destroying the transcription run's output.
+
+**Recommended route, pending measurement:** `Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld` —
+apache-2.0 on its card, and all 25 source languages on a card that disclaims its own coverage list —
+exported to ONNX in-house onto the ONNX Runtime dependency the diariser already ships, so no second
+native stack and no `llama-server` in v1. Rejected: NLLB and TowerInstruct on non-commercial terms;
+Gemma 3 and Llama 3.2 because gated weights break an unattended pinned-URL installer; MADLAD-400
+because `llama-server` has no encoder-decoder path *today*, which is a dated exclusion rather than a
+permanent one; and Whisper's translate task, which translates audio and would replace the ASR engine
+rather than add to it.
+
+**Seam before model, the way the diarisation discriminator shipped before any diarisation entry
+existed.** `ModelTask.Translation`, the manifest word, the badge and a fake translator can all land
+with no entry in `models.json` at all — and that is as far as it can go, because every catalogue
+entry today is one file and the ONNX route is five, which is a schema change with a defined meaning
+for a partial install behind it.
+
+**None of this touches the v1 gate yet.** The study proposes one — chrF++ on FLEURS with the
+source-echo rate beside every score, ratified before the first score exists, in the shape the
+diarisation gate was ratified before any candidate had been scored *at its own convention* — but
+leaves the anchor undecided between a per-language source-copy floor and a human adequacy check on
+the driving case, because no published figure was found to anchor it the way the DER gate is
+anchored. The summary below gains a row when that is settled, not before. The premise the
+whole feature rests on — that this checkpoint writes each of its 25 languages *in* that language —
+is itself settled as of 2026-08-19: it was trained on an ASR subset alone, parakeet.cpp's own
+benchmark returns Italian for Italian audio where the English-only checkpoint returns English, and
+Spanish and German recordings transcribed here came back in Spanish and German. It holds as a
+default rather than as a guarantee, and what is still unmeasured — from the English-drift rate on
+spontaneous non-English speech to the other 22 languages — is in `docs/UNPROVEN.md`
+§ *Translating into English*.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
