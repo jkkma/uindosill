@@ -743,8 +743,16 @@ The next actions, in order:
      measured goes through that code, which is precisely why the claim went unchallenged.
 
    Two more were reported and rejected on inspection, and one — files dropped onto the window while
-   a batch is running are queued and never processed — is real, pre-existing and unrelated, and is
-   recorded rather than fixed here.
+   a batch is running are queued and never processed — is real, pre-existing and unrelated, and was
+   recorded rather than fixed there. **Closed 2026-08-19 by refusing rather than accepting.** The
+   queue is snapshotted before the first file is opened, so a row added after that is in neither
+   the snapshot nor the results, and the reconciliation at the end of the batch — written to stop a
+   row sitting at "Waiting" for ever — never sees it. `AddFiles` returns early while a batch runs
+   now, the way `Clear` always has, and the drop zone binds `AllowDrop` to the same condition with
+   its invitation replaced by the reason: a gesture the queue will refuse is not one the window
+   should accept. Taking the file into the running batch was the friendlier option and was
+   rejected — it means a runner that picks up work added after it started, which changes what
+   "Finished N files" counts.
 
    **The opt-in is live in both surfaces, and it turns on when the model arrives rather than at a
    release.** `transcribe --speakers` no longer needs `--fake`; the window's checkbox and the `rttm`
