@@ -32,14 +32,18 @@
         <Grid RowDefinitions="Auto,*,Auto" Margin="12" DataContext="{Binding Transcribe}"
               x:DataType="vm:TranscribeViewModel">
 
+          <!-- Shut while a batch runs, because the queue behind it is. A zone that keeps taking
+               drops the view model then discards is a gesture accepted and thrown away, and the
+               row it used to leave behind sat blank at "Waiting" for ever. -->
           <Border Grid.Row="0"
                   Name="DropZone"
-                  DragDrop.AllowDrop="True"
+                  DragDrop.AllowDrop="{Binding !IsRunning}"
                   BorderBrush="#7F888888" BorderThickness="2" CornerRadius="8"
                   Padding="18" Margin="0,0,0,12">
             <StackPanel Spacing="4" HorizontalAlignment="Center">
-              <TextBlock Text="Drop audio or video files here" HorizontalAlignment="Center" FontSize="16" />
+              <TextBlock Text="{Binding DropHint}" HorizontalAlignment="Center" FontSize="16" />
               <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
+                         IsVisible="{Binding !IsRunning}"
                          Opacity="0.7" FontSize="12" />
             </StackPanel>
           </Border>

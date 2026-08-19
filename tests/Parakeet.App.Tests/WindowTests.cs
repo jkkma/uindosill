@@ -50,6 +50,51 @@ public class WindowTests
         Assert.True(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
     }
 
+    /// <summary>
+    /// The other half of the fix in
+    /// <see cref="TranscribeViewModelTests.AFileDroppedWhileTheBatchRunsIsRefusedRatherThanLeftADeadRow"/>.
+    /// </summary>
+    /// <remarks>
+    /// The zone carried <c>AllowDrop="True"</c> unconditionally, so once the view model started
+    /// refusing files the UI would still take the gesture and throw it away — the same shape as the
+    /// disabled-control convention this window keeps everywhere else, broken in the one place a
+    /// user is invited to act. The enabled state is driven from <c>IsRunning</c> here rather than
+    /// from a real batch on purpose: what is under test is the binding, and the behaviour behind it
+    /// is tested against a batch that really runs.
+    /// </remarks>
+    [AvaloniaFact]
+    public void TheDropZoneShutsWhileABatchRunsAndSaysWhy()
+    {
+        var viewModel = NewViewModel(out _);
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        window.UpdateLayout();
+
+        var dropZone = window.FindControl<Border>("DropZone");
+        Assert.NotNull(dropZone);
+        Assert.True(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
+
+        viewModel.Transcribe.IsRunning = true;
+        window.UpdateLayout();
+
+        Assert.False(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
+
+        // And it says so where the invitation used to be, rather than going quietly dead.
+        var lines = dropZone!.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.IsVisible)
+            .Select(t => t.Text)
+            .ToList();
+
+        Assert.Contains(lines, line => line is not null && line.Contains("while a batch runs", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line is not null && line.Contains("Drop audio", StringComparison.Ordinal));
+
+        // Over is over: the queue reopens with the batch, so the refusal is not a dead end.
+        viewModel.Transcribe.IsRunning = false;
+        window.UpdateLayout();
+
+        Assert.True(Avalonia.Input.DragDrop.GetAllowDrop(dropZone!));
+    }
+
     [AvaloniaFact]
     public void ModelsTabExposesTheControlsItsOwnTextRefersTo()
     {
@@ -322,6 +367,24 @@ public class TranscribeViewModelTests
         return path;
     }
 
+    /// <summary>
+    /// A plain tone of a chosen length. Thirty seconds of it in five-second fixed windows is six
+    /// decodes, which is long enough that the batch is genuinely mid-flight when the test looks.
+    /// </summary>
+    private static string WriteTone(string directory, string name, int seconds)
+    {
+        var path = Path.Combine(directory, name);
+        var samples = new float[16_000 * seconds];
+
+        for (var i = 0; i < samples.Length; i++)
+        {
+            samples[i] = (float)(0.5 * Math.Sin(2 * Math.PI * 200 * i / 16_000.0));
+        }
+
+        WavWriter.WriteFile(path, samples, 16_000);
+        return path;
+    }
+
     [Fact]
     public void AddingTheSameFileTwiceQueuesItOnce()
     {
@@ -343,6 +406,59 @@ public class TranscribeViewModelTests
 
         Assert.Empty(viewModel.Jobs);
         Assert.Contains("not found", viewModel.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFileDroppedWhileTheBatchRunsIsRefusedRatherThanLeftADeadRow()
+    {
+        // Queue one long file, press Start, drop a second one on the zone while the first decodes.
+        // Start works from a snapshot of the queue taken before the first file is opened, so the
+        // new row was in neither that snapshot nor the results the batch reconciles against at the
+        // end: it sat blank at "Waiting" for ever beside "Finished 1 file." — the silent dead row
+        // that reconciliation was written to prevent, arriving by the one door it does not cover.
+        // Adding is refused while a batch runs now, the way Clear already was, and says so.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var provider = new FakeEngineProvider(new FakeEngineOptions
+        {
+            PerSegmentDelay = TimeSpan.FromMilliseconds(100),
+        });
+
+        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        var viewModel = main.Transcribe;
+        viewModel.OutputDirectory = directory;
+        viewModel.UseFixedWindows = true;
+        viewModel.MaxSegmentSeconds = 5;
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        var queued = WriteTone(directory, "queued.wav", seconds: 30);
+        var dropped = WriteTone(directory, "dropped.wav", seconds: 4);
+        viewModel.AddFiles([queued]);
+
+        var batch = viewModel.StartCommand.ExecuteAsync(null);
+        Assert.True(viewModel.IsRunning);
+
+        // The drop: what MainWindow's OnDrop hands over, with the batch in flight.
+        viewModel.AddFiles([dropped]);
+
+        Assert.Single(viewModel.Jobs);
+        Assert.Contains("A batch is running", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("while a batch runs", viewModel.DropHint, StringComparison.Ordinal);
+
+        await batch;
+
+        // Nothing extra in the queue, nothing left at "Waiting", and no output for a file the
+        // batch never took on.
+        var job = Assert.Single(viewModel.Jobs);
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal("Finished 1 file.", viewModel.StatusMessage);
+        Assert.False(File.Exists(Path.Combine(directory, "dropped.txt")));
+
+        // Over is over: the queue reopens with the batch, so the refusal is not a dead end.
+        Assert.False(viewModel.IsRunning);
+        Assert.Contains("Drop audio", viewModel.DropHint, StringComparison.Ordinal);
+
+        viewModel.AddFiles([dropped]);
+        Assert.Equal(2, viewModel.Jobs.Count);
     }
 
     [Fact]

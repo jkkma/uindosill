@@ -47,6 +47,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(DropHint))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -114,6 +115,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// and then not notice that they had.
     /// </remarks>
     public ObservableCollection<OutputFormatViewModel> Formats { get; }
+
+    /// <summary>
+    /// What the drop zone says. It stops taking files while a batch runs, so while it is shut it
+    /// says so rather than inviting a gesture <see cref="AddFiles"/> would refuse.
+    /// </summary>
+    public string DropHint => IsRunning
+        ? "Adding files is off while a batch runs — press Cancel, or wait for it to finish."
+        : "Drop audio or video files here";
 
     /// <summary>Extensions this build can actually open, for the file picker and the drop hint.</summary>
     public string SupportedExtensionsHint => string.Join("  ", AudioSources.SupportedExtensions);
@@ -189,9 +198,28 @@ public sealed partial class TranscribeViewModel : ObservableObject
     public string? StartHint =>
         IsModelLoaded ? null : "No model is loaded — open the Models tab and press Load.";
 
+    /// <summary>
+    /// Queues files, and refuses to while a batch is running.
+    /// </summary>
+    /// <remarks>
+    /// Refused the way <see cref="Clear"/> is refused, and for a sharper reason than symmetry:
+    /// <see cref="StartAsync"/> takes its work from a snapshot of the queue made before the first
+    /// file is opened, so a row added after that is in neither the snapshot nor the results, and
+    /// the reconciliation at the end of the batch has nothing to match it against. It sat blank at
+    /// "Waiting" for ever beside "Finished 1 file." — the silent dead row that reconciliation
+    /// exists to prevent, arriving by the one door it does not cover. The drop zone shuts at the
+    /// same time (<see cref="DropHint"/>), so a drag is turned away by the cursor before it gets
+    /// this far; this is the guard behind it, for the paths that do not go through the zone.
+    /// </remarks>
     public void AddFiles(IEnumerable<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
+
+        if (IsRunning)
+        {
+            StatusMessage = "A batch is running — press Cancel, or wait for it to finish, before adding files.";
+            return;
+        }
 
         var added = 0;
         var rejected = new List<string>();
