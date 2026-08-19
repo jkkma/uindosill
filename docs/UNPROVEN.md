@@ -1083,6 +1083,108 @@ machine's driver, 32.0.20102.3930, whose numbering does not match the window the
 listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
 `docs/PHASES.md` § *After v1*.
 
+### Translating into English — researched 2026-08-19, no translation model run
+
+**No translation model has been loaded in this repository, on any backend, at any quantisation.**
+The study behind `docs/PHASES.md` § *Researched 2026-08-19* reads every model claim off a card, a
+config, a vocabulary file or a repository listing fetched that day; none of it is a measurement made
+here, and no real-time factor for a translation pass appears anywhere in it, deliberately.
+
+**The feature's founding premise is settled — upstream, and on this stack.** That
+`parakeet-tdt-0.6b-v3` writes each of its 25 languages *in* that language, rather than normalising
+toward English, is what makes a translation pass necessary at all, and four things carry it, fetched
+or run on 2026-08-19. NVIDIA's Granary dataset card defines the ASR target as same-language in its
+own schema — `"target_lang": str, # Target language ("de" for ASR, "en" for AST)` — and the
+technical report says of this checkpoint "we trained exclusively on the ASR subset of the
+Canary-1B-v2 training set" (arXiv:2509.14128v1 § 3), which is an explicit statement about the
+training objective rather than about runtime output. The card's 25-row multilingual table —
+`bg 12.64%`, `el 20.70%`, `ru 5.51%` on FLEURS, scored against same-language references with only
+punctuation and capitalisation stripped — is inferential, but English or transliterated output would
+score near 100% on the Cyrillic and Greek rows, so it carries native script as well as language.
+parakeet.cpp's own committed benchmark is the worked example: `antirez_italian.wav` comes back as
+Italian prose, identical between NeMo and the ggml engine at f32, f16 and the quantisations, under a
+protocol that passes no `--lang` at all — and the same clip through the English-only
+`parakeet-tdt-0.6b-v2` in the same file set comes back as English word-salad, which is the control
+that makes the Italian row mean anything. And two files were transcribed here, on the laptop's CPU
+backend under `tdt-0.6b-v3-f16`: 61 s of a CC0 human narration of the Spanish Wikipedia article on
+Caracas, and 75 s of a CC BY-SA 4.0 human narration of the German article on Ralf Dahrendorf. Both
+came back in their own language, accented and punctuated, with numbers written as the speaker said
+them and English proper nouns left in English inside the German. Neither was scored against a
+reference: what those two runs establish is the output *language*, not accuracy.
+
+**What the premise does not cover stays unproven, and one part of it is worse than unproven.**
+NVIDIA states nowhere that the output is in the source language, and nowhere that the model cannot
+translate; what the model card and the corporate blog say is that it "automatically detects the
+language of the audio and transcribes it without requiring additional prompting". No
+target-language parameter and no AST row exist for this checkpoint — an absence rather than a
+denial, and recorded as one. Visible same-language output now covers three languages of the 25 —
+Italian upstream, Spanish and German here — and the other 22 rest on the WER table's arithmetic
+alone. **And same-language is the default rather than the whole distribution.** A third party
+running this checkpoint through CoreML and FluidAudio on macOS publishes fluent English *inside*
+French transcripts at 0%, 0%, 7.1%, 18.2%, 16.7% and 31.3% across six recordings, worst on
+spontaneous rather than read speech (thoth-app.com, 2026-05-19, fetched that day). That is a
+different runtime and a rate nobody has reproduced here, and nothing on this side can constrain it,
+because `--language` is inert for this checkpoint (§ *The language hint* below) — the Cyrillic
+segment on English-only audio is the same absence of conditioning seen from the other side. So the
+premise holds as *same-language by default*, which is enough to justify a translation pass, and not
+as *same-language*, which would let that pass assume its own input.
+
+**No into-English quality figure exists for the recommended checkpoint.**
+`opus-mt-tc-bible-big-mul-deu_eng_nld` publishes a single aggregate that mixes German, English and
+Dutch targets, which says nothing about into-English alone; the recommendation rests on licence,
+coverage and architecture rather than on a score. Its card disclaims its own coverage list in as
+many words — "for a large number of language pairs it will not work at all" — so 25 of 25 is list
+membership rather than capability. Its training-data composition was not examined either: the series
+is named for a corpus whose register is nothing like spoken conversation, and whether that costs
+anything on podcast or meeting audio is unmeasured. The sibling `opus-mt-mul-en` does publish
+Tatoeba-test BLEU into English for 22 of the 25, and those numbers are **not** comparable to FLORES,
+to WMT, or to this project's own WER normaliser; Croatian has no row at all — the 46.7 on that card
+is the Serbo-Croatian macrolanguage and must not be quoted as a Croatian figure — and neither does
+Slovak, consistent with its absence from that card's source list. Every one of those figures is a
+beam-6 figure, and the greedy-versus-beam-6 delta on this family is unestablished, as is whether a
+C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer`.
+
+**Nothing about the cost is measured.** The model's size at int8 is an estimate between roughly 225
+and 340 MiB rather than a byte count, because the export has not been run. Peak memory with the ASR
+model, the diariser and a translator resident is unmeasured on both machines, so whether the ASR
+model has to be unloaded before translating is the product of a profile nobody has taken. And that
+ONNX Runtime has no Vulkan execution provider is **unverified** — no source was fetched — which
+matters because the conclusion that a Vulkan machine would translate on its CPU rests entirely on
+it, and with it the whole question of whether the second wait is tolerable.
+
+**The recommended model's maximum input length was never read, and that is the largest gap.** The
+512-token figure in the study is the sibling `opus-mt-mul-en`'s, assumed to carry across the family;
+the segmenter caps a segment at 30 s; and the token count of a real 30-second segment is unmeasured
+in all 25 languages. What an over-long segment should do — split, refuse, or truncate — is
+undecided, and silent truncation is the failure to rule out before the contract's shape is fixed,
+because it drops the tail of a segment while the output stays fluent.
+
+**The measurement's own inputs are not all resolved.** CoVoST-2's licence is stated two ways across
+four sources — CC0 in its README and its paper, CC BY-NC 4.0 in its `LICENSE` file and on its
+Hugging Face mirror — and was not resolved; it also covers 11 of the 25, which is why the study
+proposes FLEURS pinned by digest instead. Any FLEURS figure is a lower bound on the cascade penalty,
+because it is read speech of Wikipedia-derived sentences and the ASR half of the cascade is
+correspondingly easy; `es_419` is its only Spanish config, so the driving case would be measured on
+one variety; and its n-way alignment across configs is asserted by its card and unverified here, so
+a harness has to check it and refuse to score on a mismatch. This project's own ASR error rate is
+measured in English only — nothing here measures WER in the other 24. COMET cannot score Maltese,
+because the encoder underneath it was never trained on it. And no published chrF++ or BLEU for any
+candidate on FLEURS X→en at a stated signature was found, so this gate cannot be anchored the way
+the DER gate is.
+
+**Output length into English is unmeasured for the languages where it matters most** — Finnish,
+Hungarian, Estonian and every Slavic source have no figure at all — and the cue-readability check
+that would turn a length figure into a subtitle claim does not exist yet, so nothing can be said
+about translated subtitle quality in either direction. A figure on five of 25 languages is not a
+figure on the feature, and the unscored ones cannot simply be withheld: gating per language means
+knowing the source language, which this pipeline does not, so with a many-to-one model the honesty
+has to live in the text rather than in a control. That is a cost of the one-checkbox design, and it
+is recorded as one.
+
+**The MADLAD-400 exclusion is dated rather than permanent.** It rests on a byte count and a grep
+taken from `llama.cpp` `master` on 2026-08-19 with no commit pin, against an upstream issue that is
+open, so it says what that binary could not do that day and nothing about what it will do.
+
 ### The CUDA drop's licensing — read, recorded, and the notice gap closed
 
 `cublas64_12.dll`, `cublasLt64_12.dll` and `cudart64_12.dll` are NVIDIA proprietary binaries under
