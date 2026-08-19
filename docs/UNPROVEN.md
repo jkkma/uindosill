@@ -1090,7 +1090,7 @@ in a scratch environment outside the working tree — fp32 PyTorch, CPU, against
 project produced — and what that settled is recorded below with the rest. What has *not* happened:
 nothing has run through ONNX Runtime, no C# touches a translator, no quantised artefact exists, and
 no real-time factor for a translation pass has been measured, only per-segment times on one machine
-at one precision. The study behind `docs/PHASES.md` § *Researched 2026-08-19* is separate again:
+at one precision. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
 every model claim in it was read off a card, a config, a vocabulary file or a repository listing
 fetched that day, and where the spike has since contradicted it, the number below is the one that
 holds.
@@ -1211,8 +1211,12 @@ one variety; and its n-way alignment across configs is asserted by its card and 
 a harness has to check it and refuse to score on a mismatch. This project's own ASR error rate is
 measured in English only — nothing here measures WER in the other 24. COMET cannot score Maltese,
 because the encoder underneath it was never trained on it. And no published chrF++ or BLEU for any
-candidate on FLEURS X→en at a stated signature was found, so this gate cannot be anchored the way
-the DER gate is.
+candidate on FLEURS X→en at a stated signature was found, so this gate cannot be anchored to
+somebody else's number the way the DER gate is. The gate ratified on 2026-08-19 answers that by
+anchoring inside the measurement instead — the per-language source-copy floor, and a human adequacy
+check on the driving case, both of which must hold — and `docs/PHASES.md` carries it as a row. What
+the floor's per-language margins actually are is not yet set, and cannot be until the floor is
+computed.
 
 **Output length into English is unmeasured for the languages where it matters most** — Finnish,
 Hungarian, Estonian and every Slavic source have no figure at all — and the cue-readability check

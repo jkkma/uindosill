@@ -429,12 +429,23 @@ came out of a headless browser with the webfonts confirmed loaded. The one thing
 is **not** checked — how the window's corner behaves on Windows 11 — is in `docs/UNPROVEN.md` with what
 would settle it.
 
-### Researched 2026-08-19 — translating the transcript into English
+### Decided 2026-08-19 — translating the transcript into English
 
-**The study proposes a v1 Transcribe-tab opt-in that produces an English version of the transcript
-beside it. Nothing about it is decided and none of it is built.** It is in the dated folder
-`translate-to-english-2026-08-19`, beside the other research on the maintainer's Drive, per
-`CLAUDE.md`.
+**A v1 Transcribe-tab opt-in that produces an English version of the transcript beside it, decided
+2026-08-19 and not yet built.** The study is in the dated folder `translate-to-english-2026-08-19`,
+beside the other research on the maintainer's Drive, per `CLAUDE.md`.
+
+**Four decisions were taken the day the study landed, and the first one overrides its
+recommendation.** *Translation is aboard v1.0*, not v1.1 — the same call the diariser got, and for
+the same reason: a release that transcribes 25 languages and can only hand back 25 languages is a
+narrower product than the one intended, and shipping the narrower one first makes the wider one a
+follow-up nobody schedules. *The gate is two criteria and both must hold*, ratified before any score
+exists, in the shape the speakers gate was. *The pass is CPU-only in v1*, which keeps the pinned
+`Microsoft.ML.OnnxRuntime` 1.29.0 and leaves the diariser's measured DER untouched; DirectML is the
+Windows GPU path when a GPU path is wanted, and taking it moves the diariser too. And *the decode
+loop is built against the recommended checkpoint itself* rather than the cheap sibling the study
+suggested, because the spike showed the mandatory target token is the invariant most likely to fail
+silently, and a loop written against a model that needs no token would not exercise it.
 
 **The direction was chosen rather than defaulted to.** Into English is the best-resourced direction
 in every open translation family, which makes it the one whose quality claims are cheapest to
@@ -493,12 +504,15 @@ with no entry in `models.json` at all — and that is as far as it can go, becau
 entry today is one file and the ONNX route is five, which is a schema change with a defined meaning
 for a partial install behind it.
 
-**None of this touches the v1 gate yet.** The study proposes one — chrF++ on FLEURS with the
-source-echo rate beside every score, ratified before the first score exists, in the shape the
-diarisation gate was ratified before any candidate had been scored *at its own convention* — but
-leaves the anchor undecided between a per-language source-copy floor and a human adequacy check on
-the driving case, because no published figure was found to anchor it the way the DER gate is
-anchored. The summary below gains a row when that is settled, not before. The premise the
+**The gate, ratified 2026-08-19, before a single score exists.** Two criteria, both of which must
+hold. **One:** chrF++ into English clears the **per-language source-copy floor** — the score a
+hypothesis earns by echoing its own source untranslated — by a margin fixed per language, because
+that floor is a property of the language pair and a single number across 25 would be a different
+bar in each. **Two:** a **human adequacy check on the Spanish → English driving case**, rated for
+adequacy and flagged for output that is not English at all. Neither criterion is borrowed: no
+published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike
+the DER gate this one cannot be pinned to somebody else's number and is anchored from inside the
+measurement instead. The summary below carries it as a row. The premise the
 whole feature rests on — that this checkpoint writes each of its 25 languages *in* that language —
 is itself settled as of 2026-08-19: it was trained on an ASR subset alone, parakeet.cpp's own
 benchmark returns Italian for Italian audio where the English-only checkpoint returns English, and
@@ -519,6 +533,7 @@ spontaneous non-English speech to the other 22 languages — is in `docs/UNPROVE
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
+| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Nothing built.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, an int8 export weighs 227 MiB or 404 MiB depending on whether the embeddings quantise, and English input passes through byte-identical. Outstanding: the contract, `ModelTask.Translation`, a multi-file catalogue schema, the decode loop with beam search, both surfaces, and the harness. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam
@@ -538,9 +553,10 @@ installer and it was run. Speakers was the other, because the maintainer decided
 overriding the study's v1.1 recommendation, item 4 below — that **v1.0 does not ship without
 diarisation**: opt-in in the product, an option the user turns on, but aboard from the first release.
 The diariser passed its gate on 2026-08-18 in Python and was **ported to C# on 2026-08-19**, where it
-reproduces the passing number to four decimal places. What is left before v1.0 is a release, not a
-feature: nothing has been published to GitHub Releases, so the update check has never found anything
-and the download-and-restart path has never run against a real feed.
+reproduces the passing number to four decimal places. **Translation into English joined the v1.0
+gate on 2026-08-19**, by the same override this paragraph describes, so what is left before v1.0 is
+now a feature as well as a release: nothing has been published to GitHub Releases, so the update
+check has never found anything and the download-and-restart path has never run against a real feed.
 
 The next actions, in order:
 
