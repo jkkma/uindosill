@@ -197,7 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
-| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. NOTSOFAR-1 and VoxConverse untouched. No candidate passing |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. Passing candidate, cap unpriced; C# port not started |
 
 ### The dictation seam
 
@@ -412,6 +412,63 @@ The next actions, in order:
    audio have not been measured, so ≤ 1.0 is asserted as a product requirement and not as a known
    achievable figure. If measurement later shows the best available system cannot meet it, that is
    grounds to revisit the number, recorded here with its reason like any other change.
+
+   **The gate passed on 2026-08-18, and this is what the pass is and is not.** Streaming Sortformer
+   4spk v2.1 through the community ONNX export of its 30.4 s streaming configuration, driven from
+   Python on the desktop, CPU only, at 74x realtime over 18.73 h of AMI. Post-processing was tuned
+   on the 18 dev meetings pooled — 2 179 distinct configurations — and applied unchanged to the 16
+   test meetings, which were scored once. **AMI test DER 16.33% at collar 0 with overlap** (13.60%
+   at the headline collar 0.25, 26.79% over reference-overlap regions), against the ≤ 23.8 the
+   margin ratified earlier that day fixed, and **mean |speakers found − speakers in reference|
+   0.06** against ≤ 1.0. Both criteria hold, so the gate is passed. For scale, the other candidate
+   measured at this convention, sherpa-onnx, sits at 25.05%, and pyannote 3.1's published 18.8 — the
+   figure the margin is measured from — is 2.5 points worse on the same references.
+
+   **The pipeline is not merely plausible, it reproduces its source exactly, and establishing that
+   required catching a reference-set trap.** NVIDIA score AMI against the forced-alignment
+   ground-truth RTTMs of `nttcslab-sp/diar-forced-alignment`, **not** the pyannote
+   AMI-diarization-setup `only_words` references this project and pyannote 3.1 both use. The two
+   hold 6.65 h and 8.53 h of reference speech over the same sixteen recordings, and the *same*
+   hypotheses score **13.59 points apart** across them, so no figure may be quoted from one against
+   the other. Re-tuned on the forced-alignment dev split and scored on its test split, this
+   implementation lands on **15.90%, which is NVIDIA's published figure for this configuration to
+   the decimal**. Two things underwrite that: the mel featurizer is **bit-exact** against NeMo's own
+   `FilterbankFeatures` on real AMI audio, noise, silence and a ramp — its `preprocessor` block was
+   read out of the `.nemo` checkpoint itself, which is how `normalize: NA` was caught, a setting
+   that would otherwise have made a correct model look mediocre — and the Arrival-Order Speaker
+   Cache is **NVIDIA's own `streaming_update_async`, imported and called**, not a port of it. The
+   16.33% above remains the gate number, because the gate's 18.8 anchor is on the pyannote scale.
+
+   **The four-speaker cap is still unpriced, and it is now clear that no corpus in the gate can
+   price it.** AMI test is 15/16 four-speaker, and the model reported exactly four speakers on all
+   sixteen, so the speaker criterion passed on material whose count barely varies rather than on a
+   demonstration of counting. AMI can be pushed downward, and there the result is good: cutting the
+   stretches where the reference holds one or two distinct speakers, the model found one in all ten
+   one-speaker stretches and **never over-counted in 25 of 25** — its errors below the cap are
+   under-counts of near-silent participants, the harmless direction for a transcript. Upward,
+   nothing was tested. **VoxConverse, which this gate names as the beyond-four check, cannot serve
+   as one for this candidate on two independent grounds.** It appears in v2.1's own training-data
+   list as `VoxConverse-v0.3`, unqualified by split, and NVIDIA publish no VoxConverse figure at
+   all. And it is arithmetically out of reach: computed here from the published RTTMs, 63% of its
+   232 test files hold more than four speakers, up to twenty-one, so a four-capped model's **best
+   possible** mean |found − reference| is **3.02** on test and 1.38 on dev — unreachable against
+   ≤ 1.0 **even with perfect performance**. NOTSOFAR-1 is not blocked the same way, since NVIDIA
+   report a designated 160-session eval split, but 90 of those sessions hold five to seven speakers
+   and it too is in the training-data list. **All three of this gate's corpora are.** AMI test is
+   safe — NVIDIA evaluate on it, sixteen sessions of three to four speakers, exactly this set — but
+   AMI *dev* plausibly was not held out, which explains the 11.91% dev to 16.33% test gap better
+   than corpus difficulty does, and does not touch the test number.
+
+   **What a passing candidate does not yet mean.** The export is the 30.4 s input-buffer
+   configuration, so the diariser runs half a minute behind the audio: fine for transcribing a
+   file, not a live-captioning latency, and the 1.04 s graph is a different export this project
+   does not hold. Nothing here says anything about podcast audio, for the standing reason. And the
+   C# port is **unstarted work rather than a translation** — the graph owns neither the featurizer,
+   nor the speaker cache, nor the chunk loop, and the cache alone is some 250 lines of tensor
+   bookkeeping that this spike deliberately did not port, because the model had to earn it first.
+   The report, the code and the cached per-meeting probabilities are in a dated folder beside the
+   other research on the maintainer's Drive, per `CLAUDE.md`; nothing from the spike is in this
+   repository.
 
 ### After v1
 
