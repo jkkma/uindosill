@@ -76,6 +76,14 @@ public sealed partial class ModelViewModel : ObservableObject
                           "Downloading requires the explicit unverified opt-in below.",
     };
 
+    /// <summary>
+    /// Whether <see cref="Provenance"/> is a confirmation rather than a caveat. Only the fully
+    /// checked case is one: the other three each name something that was never verified. The view
+    /// painted all four in the warning colour, so "digest pinned" — the reassuring case, and the
+    /// one every shipped entry is in — read as a problem.
+    /// </summary>
+    public bool ProvenanceIsVerified => Descriptor.Verified && Descriptor.Sha256 is not null;
+
     public bool NeedsUnverifiedOptIn => Descriptor.Sha256 is null;
 
     /// <summary>

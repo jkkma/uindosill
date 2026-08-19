@@ -7,6 +7,32 @@
         Width="1080" Height="720"
         MinWidth="820" MinHeight="520">
 
+  <!--
+    The two status colours, in one place because they were three literals across this file and two
+    of them failed contrast on white: the amber measured 2.25:1 and the red 3.96:1, against the
+    4.5:1 an accessibility audit asks of body text. These are the same hues taken dark enough to
+    pass — 4.72:1 and 4.98:1 — and nothing else about them changed.
+
+    The third colour is new. A provenance line reading "Verified against the repository, digest
+    pinned" was painted in the warning amber along with the three lines that report something
+    unchecked, so the reassuring case — the case every shipped catalogue entry is in — was drawn as
+    a problem. Amber now says only what it means.
+  -->
+  <Window.Resources>
+    <SolidColorBrush x:Key="StatusWarningBrush" Color="#966C13" />
+    <SolidColorBrush x:Key="StatusErrorBrush" Color="#B84E45" />
+    <SolidColorBrush x:Key="StatusVerifiedBrush" Color="#4A602C" />
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="TextBlock.provenance">
+      <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.provenance.verified">
+      <Setter Property="Foreground" Value="{StaticResource StatusVerifiedBrush}" />
+    </Style>
+  </Window.Styles>
+
   <DockPanel>
 
     <!-- The visible notice decision 4 requires. Above the tabs rather than inside one, because a
@@ -66,7 +92,7 @@
                 <!-- Start is disabled until a model is loaded, and again once every file in the
                      queue is transcribed, so it has to say which. -->
                 <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
-                           FontSize="11" Foreground="#D9A441"
+                           FontSize="11" Foreground="{StaticResource StatusWarningBrush}"
                            IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
               </StackPanel>
 
@@ -78,9 +104,9 @@
                       <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
                       <ProgressBar Value="{Binding Progress}" Maximum="100"
                                    IsIndeterminate="{Binding IsIndeterminate}" Height="4" />
-                      <TextBlock Text="{Binding Error}" FontSize="11" Foreground="#D9534F"
+                      <TextBlock Text="{Binding Error}" FontSize="11" Foreground="{StaticResource StatusErrorBrush}"
                                  TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                      <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="#D9A441"
+                      <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="{StaticResource StatusWarningBrush}"
                                  TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                   </DataTemplate>
@@ -187,7 +213,10 @@
           <ScrollViewer Grid.Column="2">
             <StackPanel Spacing="10" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
               <TextBlock Text="{Binding Selected.DisplayName}" FontSize="18" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap" Foreground="#D9A441" />
+              <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap"
+                         Name="Provenance"
+                         Classes="provenance"
+                         Classes.verified="{Binding Selected.ProvenanceIsVerified}" />
               <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">

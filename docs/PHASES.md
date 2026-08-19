@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 547 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 546 passed and
+**Status:** met. 549 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 548 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -391,16 +391,27 @@ view is matcha, and it is the groundwork that document asks for rather than a v2
 it first hears them, which is not the order anyone means, and the chip set is closed at four
 because four is the architectural ceiling rather than a setting.
 
-**Three colour corrections this found in shipping code, none of them yet made.** They are defects
-in `src/Parakeet.App/Views/MainWindow.axaml` as it stands, not opinions about the new design:
+**Three colour corrections this found in shipping code, all three made the same day.** They were
+defects in `src/Parakeet.App/Views/MainWindow.axaml`, not opinions about the new design:
 
 - `#D9A441`, the warning colour on the no-speech hint and the provenance line, is **2.25:1 on
   white** and fails AA outright. `#966C13` is the same hue at 4.72:1.
 - `#D9534F`, the error colour on a failed job, is **3.96:1** — under the line by a little.
   `#B84E45` is 4.98:1.
-- A *verified* provenance line reads "Verified against the repository, digest pinned" in that same
-  warning amber, so a confirmation is painted as a problem. Amber belongs on the unverified case
+- A *verified* provenance line read "Verified against the repository, digest pinned" in that same
+  warning amber, so a confirmation was painted as a problem. Amber belongs on the unverified case
   only.
+
+**How they closed.** The two contrast failures were four literals across the file; they are now two
+brushes in `Window.Resources`, so the next colour decision has one place to happen rather than
+four. The provenance line follows a new `ModelViewModel.ProvenanceIsVerified`, which is true only
+for the fully checked case — `Verified` *and* a pinned digest — bound to a style class, so amber
+now says only what it means and the reassuring case reads as reassurance. The flag is asserted in
+both directions by `OnlyAFullyCheckedEntryCountsAsVerifiedProvenance`, because an unpinned entry
+saying "cannot be verified" in green would be the same defect pointing the other way. A second test
+asserts on the *rendered* brush rather than the flag: this window has shipped a control bound to
+nothing before, and a flag the view never reads would have looked exactly like a fix. Suite green
+at 549.
 
 Every figure above was computed rather than estimated, and every layout claim in the token sheet
 came out of a headless browser with the webfonts confirmed loaded. The one thing in the design that
