@@ -26,8 +26,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to package, without the leading v (e.g. 1.0.0-rc.1). Builds the assets but publishes nothing."
+        description: "Version to package, without the leading v (e.g. 1.0.0-rc.1)."
         required: true
+      draft:
+        description: "Also create a DRAFT release (collaborators only, nothing public, no tag created). Off: build the assets and publish nothing."
+        type: boolean
+        default: false
 
 env:
   DOTNET_NOLOGO: "true"
@@ -195,13 +199,21 @@ jobs:
       # The condition tests the EVENT, not only the ref: workflow_dispatch accepts a tag in its ref
       # selector, so a ref test alone would let a dispatch run publish a real release while its own
       # input description promises it does not.
+      #
+      # The dispatch path exists so the publish itself can be rehearsed — building the assets proves
+      # a lot, but not that `gh release create` names files that exist. It is hard-wired to --draft:
+      # a draft is visible only to collaborators, creates no tag, and has to be published by a human,
+      # so the worst a mistaken dispatch can do is leave something for someone to delete.
       - name: Publish the release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        if: >-
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+          || (github.event_name == 'workflow_dispatch' && inputs.draft)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', steps.version.outputs.version) }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          DRAFT: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           cd packaging/releases
@@ -238,9 +250,18 @@ jobs:
           # A prerelease tag has to be marked as one. GitHub does not infer it from the tag name, so
           # an unmarked rc becomes the repository's Latest release — which the default update channel
           # would then offer to every stable user.
-          flags=(--generate-notes --verify-tag)
+          flags=(--generate-notes)
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
+          fi
+
+          if [ "$DRAFT" = "true" ]; then
+            # No --verify-tag on this path: a draft names a tag that need not exist yet, and GitHub
+            # creates it only if a human publishes the draft.
+            flags+=(--draft)
+            echo "::notice::Creating a DRAFT release for $TAG. Nothing is public and no tag is created."
+          else
+            flags+=(--verify-tag)
           fi
 
           # Idempotent, because the alternative is losing half an hour of packaging to a dropped
