@@ -476,6 +476,17 @@ because `llama-server` has no encoder-decoder path *today*, which is a dated exc
 permanent one; and Whisper's translate task, which translates audio and would replace the ASR engine
 rather than add to it.
 
+**Four things were measured before any of this was built, and three of them change its shape.** The
+target token is mandatory: the same Spanish segments without `>>eng<<` return fluent German, so the
+prefix is an invariant the translator enforces rather than a convention a caller follows. Greedy
+decoding is not safe — over 44 real segments it dropped content that beam-6 kept — so the decode
+loop needs beam search and pays 2.1× to 2.3× for it. An int8 export weighs 227 MiB or 404 MiB
+depending on whether the embeddings quantise, which is a download decision rather than a rounding
+one. And English input passes through byte-identical, so the drift recorded below costs the pass
+nothing to carry. `docs/UNPROVEN.md` § *Translating into English* has the numbers and what stays
+open, including the encoder position limit, which turned out to be 1024 rather than the 512 the
+study assumed and is no longer the feature's largest risk.
+
 **Seam before model, the way the diarisation discriminator shipped before any diarisation entry
 existed.** `ModelTask.Translation`, the manifest word, the badge and a fake translator can all land
 with no entry in `models.json` at all — and that is as far as it can go, because every catalogue

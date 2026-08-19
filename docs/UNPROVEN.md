@@ -1083,12 +1083,17 @@ machine's driver, 32.0.20102.3930, whose numbering does not match the window the
 listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
 `docs/PHASES.md` § *After v1*.
 
-### Translating into English — researched 2026-08-19, no translation model run
+### Translating into English — researched and spiked 2026-08-19, nothing built
 
-**No translation model has been loaded in this repository, on any backend, at any quantisation.**
-The study behind `docs/PHASES.md` § *Researched 2026-08-19* reads every model claim off a card, a
-config, a vocabulary file or a repository listing fetched that day; none of it is a measurement made
-here, and no real-time factor for a translation pass appears anywhere in it, deliberately.
+**No translation model has run inside this product.** The recommended checkpoint has been exercised
+in a scratch environment outside the working tree — fp32 PyTorch, CPU, against transcripts this
+project produced — and what that settled is recorded below with the rest. What has *not* happened:
+nothing has run through ONNX Runtime, no C# touches a translator, no quantised artefact exists, and
+no real-time factor for a translation pass has been measured, only per-segment times on one machine
+at one precision. The study behind `docs/PHASES.md` § *Researched 2026-08-19* is separate again:
+every model claim in it was read off a card, a config, a vocabulary file or a repository listing
+fetched that day, and where the spike has since contradicted it, the number below is the one that
+holds.
 
 **The feature's founding premise is settled — upstream, and on this stack.** That
 `parakeet-tdt-0.6b-v3` writes each of its 25 languages *in* that language, rather than normalising
@@ -1141,23 +1146,60 @@ Tatoeba-test BLEU into English for 22 of the 25, and those numbers are **not** c
 to WMT, or to this project's own WER normaliser; Croatian has no row at all — the 46.7 on that card
 is the Serbo-Croatian macrolanguage and must not be quoted as a Croatian figure — and neither does
 Slovak, consistent with its absence from that card's source list. Every one of those figures is a
-beam-6 figure, and the greedy-versus-beam-6 delta on this family is unestablished, as is whether a
-C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer`.
+beam-6 figure, which is now known to matter — the greedy-against-beam-6 delta is measured below.
+Whether a C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer` is still
+unestablished.
 
-**Nothing about the cost is measured.** The model's size at int8 is an estimate between roughly 225
-and 340 MiB rather than a byte count, because the export has not been run. Peak memory with the ASR
-model, the diariser and a translator resident is unmeasured on both machines, so whether the ASR
-model has to be unloaded before translating is the product of a profile nobody has taken. And that
-ONNX Runtime has no Vulkan execution provider is **unverified** — no source was fetched — which
-matters because the conclusion that a Vulkan machine would translate on its CPU rests entirely on
-it, and with it the whole question of whether the second wait is tolerable.
+**What it costs is now half measured.** The recommended checkpoint is 238,290,944 parameters, and
+what an int8 export weighs turns on one choice the toolchain makes for you: **227.3 MiB** if every
+tensor quantises, **404.4 MiB** if the embeddings stay fp32 — they are 26% of this model, which is
+the whole of that spread. The study's "roughly 225 to 340 MiB" brackets only the optimistic half,
+and no ONNX artefact exists to settle it, because `optimum` 2.1.0 against `transformers` 4.57.6
+fails on this architecture inside optimum's own config normaliser, through the Python API and
+`optimum-cli` alike. The "one build-time Optimum run" the plan assumes is therefore a
+pinned-version or patched-tooling job rather than a command, and it belongs in the estimate as one.
+Peak memory with the ASR model, the diariser and a translator resident is still unmeasured on both
+machines. **ONNX Runtime having no Vulkan execution provider is now verified** — its
+execution-provider list carries CUDA, TensorRT, OpenVINO, DirectML, oneDNN, QNN, CoreML, ROCm,
+MIGraphX, Vitis AI, WebGPU and others, and no Vulkan — but the conclusion drawn from that was wrong:
+**DirectML is the Windows GPU path**, it covers this laptop's Radeon, and it ships for .NET. Its
+package lags the one it would replace — `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 against the
+pinned `Microsoft.ML.OnnxRuntime` 1.29.0 (`Directory.Packages.props:47`) — and the two are
+alternative builds of a single native library, so adopting it moves the diariser onto it as well.
 
-**The recommended model's maximum input length was never read, and that is the largest gap.** The
-512-token figure in the study is the sibling `opus-mt-mul-en`'s, assumed to carry across the family;
-the segmenter caps a segment at 30 s; and the token count of a real 30-second segment is unmeasured
-in all 25 languages. What an over-long segment should do — split, refuse, or truncate — is
-undecided, and silent truncation is the failure to rule out before the contract's shape is fixed,
-because it drops the tail of a segment while the output stays fluent.
+**The encoder's position limit is settled, and it was never the largest gap.** The recommended
+checkpoint's `config.json` sets `max_position_embeddings` to **1024**, not the 512 the study carried
+over from its sibling; its tokenizer still declares 512, which is the number to design against.
+Token density measured with that tokenizer puts Maltese highest at 0.431 tokens per character, then
+Greek 0.417 and Ukrainian 0.399, against German 0.307 and Spanish 0.285 — so at the 14.6 characters
+per second this project's own ASR output runs to, a full 30-second segment projects to **at most
+about 190 tokens**. Measured peaks on real segments agree: 6.3 tokens per second in both Spanish and
+German, or 189 tokens across 30 s. That is 2.7× headroom against the stricter of the two limits.
+Two things keep it a projection rather than a measurement — the density figures come from written
+text rather than speech, and 23 of the 25 languages have had no audio through this pipeline at all —
+so `MaxSourceTokens` still belongs on the capability, and an over-long segment is still refused
+rather than truncated. It guards an edge now, not the common case.
+
+**Three decode facts, measured on this project's own transcripts.** First, **the target token is not
+optional, and its absence is invisible**: the same Spanish segments without `>>eng<<` come back as
+fluent German, the checkpoint's first declared target, so the prefix has to be an invariant the
+translator enforces and a test asserts rather than a convention a caller remembers. Second,
+**English input is returned byte-identical**, which closes the drift question this entry opens
+above — a segment the ASR wrongly emitted in English costs nothing to pass through, and no language
+detection is needed to protect the pass from it. Third, **greedy decoding is not safe.** Over 44
+real segments, 13 Spanish and 31 German, greedy and beam-6 disagreed on 26, and the disagreements
+are content rather than register: greedy rendered `por la cordillera de la costa` as "by the
+coastline", dropped "in Hamburg" from a birth date, and wrote 1921 for a year beam-6 read correctly,
+while beam-6 came out materially shorter than greedy once against greedy's six. Beam-6 costs 2.1×
+to 2.3× the time — 0.28 s to 0.58 s per segment on Spanish, 0.63 s to 1.44 s on German, fp32 on this
+laptop's CPU — so the decode loop needs beam search or ONNX Runtime's contrib operator, and neither
+is the afternoon a greedy loop would have been.
+
+**And the cascade has an interaction that neither model shows on its own.** This ASR writes German
+numbers as words — `neunzehnhundertneununundzwanzig` — and both decodes mangle exactly those, into
+"nineteen-ninety-nine", "nineteen and twenty-nine" and "194". Dates and figures are where the two
+models meet worst, they are what a listener checks a transcript for, and no metric proposed in the
+study is pointed at them.
 
 **The measurement's own inputs are not all resolved.** CoVoST-2's licence is stated two ways across
 four sources — CC0 in its README and its paper, CC BY-NC 4.0 in its `LICENSE` file and on its
