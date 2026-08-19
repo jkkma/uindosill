@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
@@ -132,6 +133,29 @@ public class WindowTests
         Assert.Contains(buttons, c => c is not null && c.Contains("Download", StringComparison.Ordinal));
         Assert.Contains(buttons, c => c is not null && c.Contains("Remove", StringComparison.Ordinal));
         Assert.Contains(checkboxes, c => c is not null && c.Contains("unverified", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [AvaloniaFact]
+    public void AVerifiedProvenanceLineIsNotPaintedAsAWarning()
+    {
+        // The flag below is only worth having if the view reads it, and this window has shipped a
+        // control bound to nothing before. So this asserts on the rendered brush rather than on
+        // the view model: every shipped entry is pinned and checked, so the line must not come out
+        // in the warning colour.
+        var viewModel = NewViewModel(out _);
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+
+        viewModel.SelectedTab = 1;
+        viewModel.Models.Selected = viewModel.Models.Models.First();
+
+        var provenance = window.FindControl<TextBlock>("Provenance");
+        Assert.NotNull(provenance);
+        Assert.True(viewModel.Models.Selected!.ProvenanceIsVerified);
+        Assert.Contains("verified", (IEnumerable<string>)provenance!.Classes);
+
+        var brush = Assert.IsType<SolidColorBrush>(provenance.Foreground);
+        Assert.Equal(Color.Parse("#4A602C"), brush.Color);
     }
 
     [AvaloniaFact]
@@ -918,6 +942,28 @@ public class ModelsViewModelTests
 
         Assert.Contains("cannot be verified", viewModel.StatusMessage, StringComparison.Ordinal);
         Assert.False(viewModel.Selected!.IsInstalled);
+    }
+
+    [Fact]
+    public void OnlyAFullyCheckedEntryCountsAsVerifiedProvenance()
+    {
+        // The view painted all four provenance lines in the warning colour, so "digest pinned" —
+        // the one reassuring case — was drawn as a problem. The colour now follows this flag, and
+        // it must be true for the checked case only: the other three each name something that was
+        // never verified, and an unpinned entry saying "cannot be verified" in green would be the
+        // same defect pointing the other way.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var unpinned = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue());
+
+        var unchecked_ = unpinned.Models.First(m => !m.Descriptor.Verified);
+        Assert.False(unchecked_.ProvenanceIsVerified);
+
+        var pinned = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+        Assert.All(pinned.Models, model =>
+        {
+            Assert.True(model.ProvenanceIsVerified);
+            Assert.Contains("Verified", model.Provenance, StringComparison.Ordinal);
+        });
     }
 
     [Fact]

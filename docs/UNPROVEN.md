@@ -2140,8 +2140,11 @@ shadow at 100% and 150% scaling, with snap layouts exercised. Until then no rele
 Zorin corner, and the honest fallback — accept the system radius on the frame and keep 12 px only
 for panels inside the window — costs nothing and is already known to work.
 
-### The two contrast defects are measured, not unproven
+### The two contrast defects are measured, not unproven — and now fixed
 
-`#D9A441` at 2.25:1 and `#D9534F` at 3.96:1 on white are computed from the shipped hex values and
-are not in question. They are recorded here only so that the fix, when it lands, has something to
-close against: they are unfixed in `MainWindow.axaml` as of 2026-08-19.
+`#D9A441` at 2.25:1 and `#D9534F` at 3.96:1 on white were computed from the shipped hex values and
+were never in question. **Both were replaced the same day** — `#966C13` at 4.72:1 and `#B84E45` at
+4.98:1, the same hues taken dark enough to clear the 4.5:1 an audit asks of body text — along with
+the third defect beside them, a verified provenance line painted in the warning colour. All three
+are recorded in `docs/PHASES.md` with how they closed. Nothing about the ratios above is unproven;
+they are kept here because a defect recorded as unfixed is a defect that gets fixed twice.
