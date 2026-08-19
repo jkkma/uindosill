@@ -19,6 +19,12 @@
 
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 
+    <!-- Packaging and update. 1.2.0 is the latest stable on nuget.org for both this package and the
+         vpk CLI that builds the installer (re-checked 2026-08-18); 1.2.110-ge826545 is a CI
+         prerelease, not a release. The two versions must agree — see scripts/package-windows.ps1,
+         which reads this file rather than carrying a second copy of the number. -->
+    <PackageVersion Include="Velopack" Version="1.2.0" />
+
     <!-- NAudio 2.3.0 is the last stable line. 3.0 is preview-only with no GA date.
          The NAudio metapackage is deliberately NOT used: it drags in NAudio.WinForms, whose
          FrameworkReference on Microsoft.WindowsDesktop.App.WindowsForms cannot be resolved on a

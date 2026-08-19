@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 451 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 450 passed and
+**Status:** met. 477 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 476 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -102,7 +102,14 @@ empty queue, so pressing it did nothing and read as a broken button.
 
 Velopack, signing every PE, SmartScreen reputation, auto-update.
 
-**Status:** started 2026-08-15, with the piece that has no external dependency. What existed before
+**Status: the installer exists.** Built 2026-08-19 and exercised end to end on the RTX 5080
+desktop — installed, updated one version to the next, and uninstalled, with the 4.295 GiB of
+downloaded weights on that machine hashed before and after every step and identical each time. The
+section *Built 2026-08-19* below says what exists; `docs/UNPROVEN.md` says what that run does and
+does not establish, and what nobody has done yet. What is **not** here is signing: v1.0 ships
+unsigned by the decision recorded below, so every user meets SmartScreen's unknown publisher.
+
+**Before that, from 2026-08-15,** the piece that had no external dependency. What existed before
 was the groundwork: publish is self-contained + ReadyToRun and verified to cross-publish from Linux
 for `win-x64`, single-file and trimming are off (and documented as deliberately off), and every
 native lives under `native/<rid>/<backend>/` where a signing step can enumerate it.
@@ -120,8 +127,9 @@ The first CI run after that commit did the same on Linux, and the artefact it up
 downloaded and run on Windows: `doctor` from it reported `ok — abi 6` for cpu and vulkan from their
 own directories. `docs/UNPROVEN.md` has the run and what it does and does not prove.
 
-Two things that is not. It is not an installer — the artefact is a directory you unzip, and no
-transcription has yet been made from a CI-built binary. And it is not signed: the repository
+Two things that was not. It was not an installer — the artefact is a directory you unzip, and no
+transcription has yet been made from a CI-built binary; the first half of that is what the section
+below closes. And it is not signed: the repository
 still has no signing identity, and the vendored `parakeet.dll`s are unsigned third-party binaries
 — `Get-AuthenticodeSignature` reports `NotSigned` for both the cpu and vulkan builds — which is the
 shape Smart App Control blocks.
@@ -132,8 +140,11 @@ unsigned executables is itself a recognised malware shape.
 
 ### Decisions taken 2026-08-16
 
-These close the two questions this phase was waiting on. **Nothing below is built**; this is the
-plan, recorded so the next session builds what was decided rather than re-deciding it.
+These close the two questions this phase was waiting on. **Nothing below was built when it was
+written**; it was the plan, recorded so the next session would build what was decided rather than
+re-decide it. All four are now code — *Built 2026-08-19* below is what came of them, and the two
+sections are kept apart on purpose, so the decision and its execution can each be read for what
+they are.
 
 1. **The CUDA tier is a second download flavour.** Two Velopack channels from the same publish: the
    default carries `cpu` and `vulkan`; the second carries `cpu`, `vulkan` and `cuda`. The choice is
@@ -185,6 +196,119 @@ installs under `%LOCALAPPDATA%\<package id>`, and `%LOCALAPPDATA%\Uindosill\mode
 on every machine that has run this product. The package id or the layout has to keep the installer
 from touching those files, and uninstall has to leave them.
 
+### Built 2026-08-19 — the installer, the two channels, and the update check
+
+Everything in *Decisions taken* above is now code. Velopack **1.2.0**, pinned twice: the
+`Velopack` package in `Directory.Packages.props` and the `vpk` CLI in `.config/dotnet-tools.json`.
+The two build opposite halves of one artefact — the Setup stub, and the runtime that talks to it —
+so `scripts/package-windows.ps1` refuses to run when they disagree. Velopack itself only *logs* a
+mismatch; the `throw` in its `CompatUtil.VerifyVelopackVersion` is commented out in 1.2.0, so the
+check that stops a mismatched installer being built is this repository's.
+
+**The collision the previous section said to verify first is settled, and the answer changed a
+name.** Velopack installs under `%LOCALAPPDATA%\<package id>`, so the package id is
+**`UindosillDesktop`** — deliberately not `Uindosill`, which is the directory holding the user's
+weights. Nothing user-facing carries that string: the window title, the shortcuts and the
+Add/Remove Programs entry all read *Uindosill*, from a separate `VelopackPackageTitle`. Both
+properties live in `src/Parakeet.App/Parakeet.App.csproj` and there is exactly one copy of each —
+the packaging script reads them with `dotnet msbuild -getProperty:`, and the csproj emits the id as
+assembly metadata so `PackagingIdentity` and its tests read the value the installer was actually
+built with rather than a second literal.
+
+Three things hold that id down, because getting it wrong destroys every weight a user has
+downloaded — 675 MB for the smallest catalogue entry alone, and 4.295 GiB on the machine this was
+checked on — and nothing else in the build would say so:
+
+- **Five tests** in `tests/Parakeet.App.Tests/PackagingTests.cs`. They assert the id is not the data
+  directory's name, that it survives the case-folding and punctuation-stripping an installer might
+  apply, and that the install root and the data root are disjoint — and then one of them rebuilds
+  both directories under a temporary root using the real path arithmetic, writes a model file, and
+  runs the recursive delete uninstall performs. Setting the id to `Uindosill` fails four of the
+  five; that was checked by doing it.
+- **The packaging script refuses to build**, with the same normalisations, before it publishes
+  anything.
+- **The observation below**, which is the only one of the three that is evidence rather than
+  argument.
+
+**Two channels, from one publish, and the difference is asserted rather than intended.** The
+default channel `win` carries the cpu and vulkan natives; `win-cuda` carries those plus the opt-in
+CUDA drop. The build copies whatever is in `native/` into its output, so a machine that has vendored
+CUDA produces a CUDA-carrying publish for *both* channels — the script therefore deletes the backend
+directories a channel does not promise, on disk before packing where they can be listed, and then
+**opens each finished `.nupkg` and checks its native payload against what that channel claims**,
+`LICENSE` beside every `parakeet.dll` included. Measured on the desktop: the default package
+contains `cpu, vulkan` and no NVIDIA file at all, at 81.9 MB of `Setup.exe`; the CUDA package
+contains `cpu, cuda, vulkan` at 818.6 MB. That is decision 1 working — the download almost everybody
+wants stays clear of 730 MB of runtime they will not use.
+
+An installed copy stays on its own flavour without being told. Velopack records the channel in
+`current\sq.version` at install time (`<channel>win</channel>`, read off the installed tree) and
+`UpdateOptions.ExplicitChannel` is documented as "should usually be left null … users automatically
+receive updates from the same channel they installed from". `VelopackUpdater` therefore sets it to
+nothing at all, and says why: setting it would silently move a CUDA user onto the default flavour
+and take the runtime away.
+
+**The release.** `.github/workflows/release.yml`, on a `v*` tag, on `windows-latest`. That runner is
+a choice rather than a limit, and there are three reasons for it. Vendoring the CUDA drop reads a PE
+import table, which is Windows. `vpk` compresses deltas with zstd — bundled on Windows, wanted on
+`PATH` elsewhere, and *missing* it does not fail the build but silently falls back to bsdiff, which
+in the 1.2.0 line produces patches `Update.exe` cannot apply (velopack/velopack#1008). And packing
+Windows releases on Linux does work — `vpk`'s `[win]` directive, which the script passes
+unconditionally — so nothing is being worked around. The Linux `build-and-test` and
+`publish-windows` jobs in `ci.yml` still run on every push, so the cross-publish constraint this
+repository is built on is still proved continuously; the release job is the one place that opts out
+of it, for reasons written down rather than assumed.
+
+The release carries both `Setup.exe`s, both full packages, the delta packages, both
+`releases.<channel>.json` feeds, and the CLI zip — decision 3, the installer is the desktop app
+only. Deltas are uploaded because without them every update is a full download: rc.1 to rc.2 was
+**74 KB as a delta against 77 MB as a full package**. `vpk` builds one by diffing against packages
+already in its output directory, and a fresh runner has none — so the job downloads the previous
+release of each channel first, and tolerates there not being one. Without that step the delta glob
+would have matched nothing on every release rather than only the first, which is the kind of thing
+that is invisible until somebody measures a download. Only `win-x64` gets an installer, because
+upstream ships no `win-arm64` native and an installer that cannot transcribe is worse than none; the
+arm64 publish stays a CI artefact, as it was.
+
+**The app side.** `VelopackApp.Build().SetAutoApplyOnStartup(false).Run()` is the first statement in
+`Program.Main`, before Avalonia — Velopack re-runs the same executable for install, update and
+uninstall steps, and anything above that line runs in every one of those short-lived invocations.
+`SetAutoApplyOnStartup(false)` is not the default: Velopack's own default is on, which applies an
+already-downloaded update during startup, and decision 4's shape is that nothing installs itself.
+`vpk pack` statically decompiles the main executable looking for that call and refuses to build
+without it; it reports `Verified VelopackApp.Run() in 'System.Int32 Parakeet.App.Program::Main(System.String)'` (vpk's own rendering, quoted as printed — the method takes `string[]`)
+on every pack here.
+
+The rest is decision 4 exactly: one HTTPS request to GitHub Releases when the window opens, not
+awaited so it never sits between a person and the window they opened; a banner above the tabs when
+there is something newer, hidden the rest of the time; **download and restart only on a click**; and
+an Updates tab carrying the version, the button and the setting that switches the check off. The
+setting is written through on every change to `%LOCALAPPDATA%\Uindosill\settings.json` — beside the
+weights, not in the install directory, because a settings file under the install root is destroyed
+by every update and the check a user switched off would switch itself back on. Switched off, no
+request is made at all, rather than one whose answer is discarded.
+
+One thing that is easy to miss and would bring back a fixed bug: applying an update replaces the
+process without a `Closing` event, so the update path calls the window's own `ShutdownAsync` first —
+stop the batch, unload the model, release the native backend while the driver is still alive. Without
+it, a CUDA user clicking *Download and restart* would reach the native static teardown with a backend
+resident and hit gotcha 19's `0xC0000409` abort from a direction the close handler does not cover. A
+test asserts the ordering.
+
+`Velopack` is MIT and now has its entry in `Attributions.Components`, with its copyright line, so
+`uindosill notice` and the Licences tab render it; the licence was read off the restored package's
+own `.nuspec` rather than the repository, because a package and its repository can disagree.
+
+**What this cost the network surface: nothing.** The documentation commits to disclosing exactly one
+unprompted network call, and that claim was checked rather than assumed. `Setup.exe` and `Update.exe`
+are Rust binaries linking exactly one HTTP client, reachable from exactly two call sites, both behind
+a runtime-dependency list that is empty unless `vpk pack --framework` is passed — which this project
+must never pass, and does not. `Update.exe` has no update-check verb at all. A `strings` sweep of the
+shipped 1.2.0 binaries in the NuGet cache found the Microsoft prerequisite hosts and **zero**
+occurrences of `api.velopack.io`, no telemetry, no analytics. `vpk` itself does phone nuget.org on
+every invocation to check for a newer `vpk`; that is build-time only and the script passes
+`--skip-updates`. `docs/UNPROVEN.md` records both the finding and its limits.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -196,7 +320,7 @@ from touching those files, and uninstall has to leave them.
 | 2 — engine | CLI transcribes a real file to correct SRT | Yes, up to 2 h 55 m |
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
-| 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
+| 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. Passing candidate, cap unpriced; C# port not started |
 
 ### The dictation seam
@@ -209,15 +333,21 @@ weights are pinned in the `deferred` array of `models.json` with exact sizes and
 loader, installer and digest checking reach them unchanged once a licence is established for each.
 Neither is installable in this build, and the reason is written down in `docs/MODELS.md`.
 
-**Two things now stand between this and a v1 anybody can install: Phase 5, and speakers.**
-Phase 5 because everything the product does, it does, but it cannot arrive on a machine that has
-no .NET SDK and no git clone. Speakers because the maintainer decided on 2026-08-16 — overriding
-the study's v1.1 recommendation, item 4 below — that **v1.0 does not ship without diarisation**:
-opt-in in the product, an option the user turns on, but aboard from the first release.
+**One thing now stands between this and a v1 anybody can install: speakers.** That is a change as
+of 2026-08-19. Phase 5 was the other, because everything the product does, it does, but it could not
+arrive on a machine with no .NET SDK and no git clone — and now it can: there is an installer, it
+was run, and the C# port of the passed diariser is the remaining item. Speakers because the
+maintainer decided on 2026-08-16 — overriding the study's v1.1 recommendation, item 4 below — that
+**v1.0 does not ship without diarisation**: opt-in in the product, an option the user turns on, but
+aboard from the first release.
 
 The next actions, in order:
 
-1. **Phase 5 itself** — Velopack, and signing every PE rather than only `Setup.exe`. ~~A build
+1. ~~**Phase 5 itself** — Velopack, and signing every PE rather than only `Setup.exe`.~~ **The
+   Velopack half is done 2026-08-19** — see *Built 2026-08-19* above — and the signing half left v1
+   on 2026-08-16, so what remains under this heading before v1.0 is not code but a first release:
+   nothing has been published to GitHub Releases, so the update check has never found anything and
+   the download-and-restart path has never run against a real feed. ~~A build
    that vendors the natives instead of expecting a manual copy~~ — done 2026-08-15, above. ~~What
    signing waits on is a certificate, which is a purchase rather than a commit; what Velopack
    waits on is a decision about how the opt-in CUDA tier arrives, since 700 MB does not belong in
@@ -315,7 +445,7 @@ The next actions, in order:
      installed through the same digest checks and never surface as a selectable ASR model. The
      opt-in shapes it: `transcribe --speakers` and a checkbox on the Transcribe tab, both off by
      default, and both honest about the fact that this build has no real labeller — the flag says so
-     and stops, the checkbox is disabled with the reason. The suite grew from 359 to 451 tests.
+     and stops, the checkbox is disabled with the reason. The suite grew from 359 to 451 at that commit.
    - **Not done, by design:** the sherpa-onnx and Sortformer spikes belong to the desktop, which is
      where the measuring half of the split runs; every DER, RTF and memory figure for a real
      candidate is still zero measurements.

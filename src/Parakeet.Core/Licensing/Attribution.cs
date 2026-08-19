@@ -155,6 +155,20 @@ public static class Attributions
             License = "MIT",
             Uri = new Uri("https://github.com/CommunityToolkit/dotnet"),
         },
+        // Ships in the desktop application only: it is what builds the installer and what checks
+        // for a newer version. The CLI zip carries none of it. The licence was read off the
+        // package as restored — velopack.nuspec 1.2.0 declares `<license type="expression">MIT`
+        // and `Copyright (c) Velopack Ltd. All rights reserved.` — rather than assumed from the
+        // repository, because a package and its repository can disagree.
+        new ComponentLicence
+        {
+            Component = "Velopack (installer and update framework)",
+            License = "MIT",
+            Uri = new Uri("https://github.com/velopack/velopack"),
+            Notes =
+                "Copyright (c) Velopack Ltd. All rights reserved. Shipped in the desktop application "
+                + "only; the command-line tool carries none of it.",
+        },
         // The one entry here that is not MIT, and the reason this list is rendered rather than
         // summarised as "MIT dependencies". cudart64_12.dll, cublas64_12.dll and cublasLt64_12.dll
         // are NVIDIA proprietary binaries redistributed under Attachment A of the CUDA Toolkit

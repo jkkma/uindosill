@@ -11,7 +11,32 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+
+    <!--
+      The Velopack package id, and deliberately NOT "Uindosill".
+
+      Velopack installs a Windows application under %LOCALAPPDATA%\<package id> and its uninstall
+      deletes that directory recursively. This product's downloaded weights live in
+      %LOCALAPPDATA%\Uindosill\models — 675 MB for one catalogue entry, 4.295 GiB for the whole
+      ladder on the machine this was checked on, plus a ~474 MB diariser — so an id
+      of "Uindosill" would make uninstall delete every one of them. The id is a separate directory
+      that shares no path segment with the data root, which is what keeps the two apart.
+
+      Nothing user-facing carries this string: the installer's title, its shortcut and its
+      Add/Remove Programs entry all come from VelopackPackageTitle below.
+
+      One copy, two readers. scripts/package-windows.ps1 reads these with
+      `dotnet msbuild -getProperty:`, and the AssemblyMetadata below puts the id in the assembly so
+      PackagingIdentity — and the test that holds it against the models directory — reads the same
+      value the installer was built with rather than a second literal.
+    -->
+    <VelopackPackageId>UindosillDesktop</VelopackPackageId>
+    <VelopackPackageTitle>Uindosill</VelopackPackageTitle>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="VelopackPackageId" Value="$(VelopackPackageId)" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
@@ -19,6 +44,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>

@@ -63,6 +63,11 @@ corpus/
 /*.json
 !/global.json
 
+# The vpk pin is `.config/dotnet-tools.json` and not `dotnet-tools.json`, which is where SDK 10's
+# `dotnet new tool-manifest` puts it by default — the rule above would have ignored that one
+# silently, and a pin nobody commits is CI failing to restore a tool nobody notices is missing.
+# `.config/` is the long-standing location and the SDK still probes it.
+
 # Not /*.md: README.md and NOTICE.md live here, so a `-f md` transcript written to the root has to
 # be moved or deleted by hand. Use the harnesses, which write into runs/, and this does not arise.
 
@@ -72,3 +77,8 @@ Thumbs.db
 
 # Claude Code per-machine overrides; the shared hook lives in .claude/settings.json
 .claude/settings.local.json
+
+# Velopack packaging output: scripts/package-windows.ps1 writes the publish, the nupkg, Setup.exe
+# and the release feed under here. Same rule as runs/ — nothing a build produces belongs in the
+# working tree, and one channel's output alone is over 200 MB.
+/packaging/

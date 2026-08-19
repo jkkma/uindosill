@@ -57,8 +57,16 @@ element-by-element assertion is the one above, on the shared renderer both surfa
 
 ## Dependencies
 
-parakeet.cpp MIT, ggml MIT, Avalonia MIT, NAudio MIT, CommunityToolkit.Mvvm MIT. Listed in
-`NOTICE.md` and rendered in the same panel.
+parakeet.cpp MIT, ggml MIT, Avalonia MIT, NAudio MIT, CommunityToolkit.Mvvm MIT, Velopack MIT.
+Listed in `NOTICE.md` and rendered in the same panel.
+
+Velopack is the newest and the only one that is not in every artefact: it builds the installer and
+performs the update check, so it ships in the desktop application and not in the CLI zip. Its
+copyright line travels with it — `Attributions.Components` carries
+*Copyright (c) Velopack Ltd. All rights reserved.* in the Notes field, which both surfaces render,
+because MIT requires the notice and not merely the licence name. The licence was read off the
+restored package's own `velopack.nuspec` (`<license type="expression">MIT`) rather than the
+repository, since a package and its repository can disagree about what was actually shipped.
 
 ## The CUDA runtime is proprietary, and it is redistributable
 

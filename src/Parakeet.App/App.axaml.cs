@@ -14,6 +14,13 @@ public partial class App : Application
     /// </summary>
     public static IEngineProvider EngineProvider { get; set; } = new EngineProvider();
 
+    /// <summary>
+    /// Update source, replaceable for the same reason. The default reaches no network at all, so a
+    /// designer session or a headless test cannot make an HTTPS request by merely opening the
+    /// window; <c>Program.Main</c> swaps in the real one.
+    /// </summary>
+    public static IAppUpdater Updater { get; set; } = new NotInstalledUpdater();
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -22,7 +29,7 @@ public partial class App : Application
         {
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(EngineProvider),
+                DataContext = new MainWindowViewModel(EngineProvider, updater: Updater),
             };
         }
 

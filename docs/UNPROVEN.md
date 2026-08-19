@@ -712,7 +712,144 @@ The verbatim/non-verbatim gap is a property of this corpus's two styles as much 
 And "no measurable cost" is a statement at the resolution this corpus gives — roughly a tenth of a
 point over eleven hours — not a proof that no input separates them.
 
+### The installer was built, run, updated and uninstalled — observed 2026-08-19
+
+On the RTX 5080 desktop, against that machine's real
+`%LOCALAPPDATA%\Uindosill\models` — **five files, 4.295 GiB**, the whole quantisation ladder. Every
+weight was SHA-256'd before anything was installed, and again after each step. `scripts/package-windows.ps1`
+built the packages; nothing here was done by hand except staging the second version.
+
+| Step | What was run | Weights: files / differences from the baseline |
+|---|---|---|
+| baseline | — | 5 / — |
+| install | `UindosillDesktop-win-Setup.exe --silent` → exit 0 | 5 / **0** |
+| update | `Update.exe apply --silent --norestart`, 1.0.0-rc.1 → 1.0.0-rc.2 → exit 0 | 5 / **0** |
+| uninstall | `Update.exe --uninstall --silent` → exit 0 | 5 / **0** |
+
+"Differences" is `Compare-Object` over name, byte length **and SHA-256** for all five files. Zero at
+every step means every weight is byte-identical to the baseline: `tdt-0.6b-v3-f16.gguf` still hashes
+to `8BA47343…ABB22` after the uninstall, and the directory is still 4.295 GiB.
+
+**The footprint, observed rather than read.** After install:
+
+```
+%LOCALAPPDATA%\UindosillDesktop\        236 files, 257.9 MB
+  current\                              the published app, incl. native\win-x64\{cpu,vulkan}\{parakeet.dll,LICENSE}
+  current\sq.version                    <id>UindosillDesktop</id> <version>1.0.0-rc.1</version> <channel>win</channel>
+  packages\                             UindosillDesktop-1.0.0-rc.1-full.nupkg, .velopack_lock
+  Update.exe                            3,866,112 bytes
+  Uindosill.exe                         392,192 bytes — the root execution stub
+HKCU\…\Uninstall\UindosillDesktop       DisplayName "Uindosill", InstallLocation, UninstallString
+Desktop\Uindosill.lnk                   }  the vpk default --shortcuts Desktop,StartMenuRoot
+Start Menu\Programs\Uindosill.lnk       }
+```
+
+After the uninstall, all four of those are gone — install directory, registry key, both shortcuts —
+and `%TEMP%\velopack_UindosillDesktop` with them. **One thing is left behind:**
+`%LOCALAPPDATA%\velopack\velopack_UindosillDesktop.log` (21 KB), which is Velopack's own log and
+outside everything uninstall deletes. Worth knowing before someone reports the uninstall as
+incomplete; it is 21 KB of text, and nothing reads it afterwards.
+
+The update moved `current\sq.version` from `1.0.0-rc.1` to `1.0.0-rc.2` with `<channel>win</channel>`
+unchanged, and `current\native\win-x64` still held `cpu, vulkan` afterwards. The Add/Remove Programs
+`DisplayVersion` read `1.0.0` throughout, because both builds are `1.0.0` with different prerelease
+tags and Velopack writes the numeric part — not a defect, but it means that field cannot be used to
+tell two prereleases apart.
+
+**What this establishes.** That the package id `UindosillDesktop` keeps uninstall away from
+`%LOCALAPPDATA%\Uindosill\models` — the thing the whole packaging design turns on — is now an
+observation on a machine with 4.295 GiB at stake, not an argument from reading Velopack's source. So
+is the shape of the install, the fact that an update replaces `current\` while leaving the channel
+and the natives intact, and the fact that uninstall removes what it is supposed to.
+
+**What it does not.**
+
+- **It is one machine, and that machine is not clean.** The desktop has the .NET SDK, the natives,
+  and a `%LOCALAPPDATA%\Uindosill` that predates the installer. Nobody has run `Setup.exe` on a
+  Windows machine with no toolchain, which is the machine the installer exists for.
+- **Neither installer was run interactively.** Both went through `--silent`, so no dialog, no
+  SmartScreen prompt and no splash screen has been seen by anyone. What an unsigned `Setup.exe`
+  actually shows a first-time user on a current Windows build is unobserved, and it is the single
+  most likely thing to surprise someone about a v1.0 download.
+- **The application was never launched from the install.** The installed tree was inspected file by
+  file; the window was not opened, nothing was transcribed, and no engine was loaded from an
+  installed copy. The gap `docs/PHASES.md` has recorded since 2026-08-15 — no transcription from a
+  CI-built binary — is unchanged and now also applies to an installed one.
+- **The CUDA channel was built but never installed.** `UindosillDesktop-win-cuda-Setup.exe`
+  (818.6 MB) was produced and its package contents verified; it has not been run, so nothing
+  establishes that a CUDA install works, or how long installing 730 MB of NVIDIA runtime takes.
+- **The update was staged by hand.** The second version's `.nupkg` was copied into `packages\` and
+  `Update.exe apply` was run directly. That exercises Velopack's apply machinery on real packages of
+  this application, and it is what `DownloadUpdatesAsync` leaves behind — but the app's own path to
+  it did not run. *The update check has never found an update*, under **Still open**, is where that
+  gap is recorded.
+- **The delta package was generated, and never applied.** Packing 1.0.0-rc.2 after 1.0.0-rc.1
+  produced `UindosillDesktop-1.0.0-rc.2-delta.nupkg` at **74,470 bytes** against a 77,462,188-byte
+  full package, so the delta machinery works on this machine with vpk's bundled zstd. Whether
+  `Update.exe` can apply that delta is untested — and it is exactly the thing velopack/velopack#1008
+  reports broken for bsdiff deltas in this version line.
+
+### Velopack reaches the network exactly once, and that was checked twice
+
+The user-facing claim is that the launch update check is the only thing this application does on the
+network unprompted. Two independent readings support it, and both have limits worth stating.
+
+**From source, at tag `1.2.0`.** `Setup.exe` and `Update.exe` link exactly one HTTP client (`ureq`),
+via one wrapper module, with exactly two call sites in the binaries — both inside the
+runtime-prerequisite bootstrapper, which is gated on a dependency list that is empty unless
+`vpk pack --framework` is passed, and then on a modal dialog. This publish is self-contained and the
+packaging script must never pass `--framework`; **that is now an invariant rather than a preference,
+because passing it would create a second class of unprompted call and make the documentation false.**
+`Update.exe` has no update-check verb at all — its whole surface is `apply`, `start`, `patch`,
+`uninstall`, `update-self` — so nothing in the shipped native tooling can reach a release feed on its
+own. No telemetry, analytics or crash reporting appears anywhere in those sources.
+
+**From the shipped bytes.** A `strings` sweep of `setup.exe` and `update.exe` as they ship in the
+`vpk` 1.2.0 NuGet package found the Microsoft prerequisite hosts (`aka.ms`,
+`download.microsoft.com`, `go.microsoft.com`, `dotnetcli.blob.core.windows.net`,
+`builds.dotnet.microsoft.com`), **zero** occurrences of `api.velopack.io`, and no telemetry,
+analytics or Sentry string. This is what closes the gap between "the source at that tag does not do
+it" and "the binary a user runs does not do it".
+
+Three limits. Velopack's transitive Rust dependencies were not audited — only its own code and the
+shipped binaries' strings. `vpk` itself **does** phone `api.nuget.org` on every invocation to check
+for a newer `vpk`; that is build-time only, never on a user's machine, and the packaging script
+passes `--skip-updates`, but it means a CI log will show a NuGet request. And the strings sweep
+proves the absence of a hostname, not the absence of a runtime-constructed one; nothing here is a
+substitute for watching the process on a network.
+
 ## Still open
+
+### The update check has never found an update
+
+`VelopackUpdater` asks `GithubSource` for the release feed of `jkkma/uindosill`, and that repository
+has no releases. So the path from *a newer version exists* to *it is installed* has never run end to
+end: no `CheckForUpdatesAsync` has returned a non-null `UpdateInfo`, no `DownloadUpdatesAsync` has
+downloaded anything, and `ApplyUpdatesAndRestart` has never been called by this application.
+
+What is tested is the layer above it: `tests/Parakeet.App.Tests/UpdateTests.cs` drives
+`UpdatesViewModel` against a fake updater and holds down the behaviour the decision specifies — a
+newer version becomes a visible notice, the setting being off makes **no request at all** rather than
+one whose answer is discarded, a copy no installer put there checks nothing, a failed check is a line
+of text rather than an exception, nothing downloads or applies without the click, and the engine
+shutdown happens *before* the restart. All of that is our code. None of it is Velopack's.
+
+`VelopackUpdater` itself — the twenty lines that turn `UpdateManager` into that interface — has no
+test at all, because every route to one needs either a network or a fabricated release feed. The
+first real release is what will exercise it, and it will exercise it on users.
+
+### Packing a Windows release on Linux is documented, and has never been run here
+
+`vpk`'s `[win]` directive cross-builds a Windows package from any host, Velopack's docs say so
+explicitly, its own release pipeline builds the tool package on `ubuntu-latest`, and the Setup stub
+is shipped prebuilt inside the `vpk` NuGet package rather than compiled at pack time — all read at
+tag `1.2.0`. `scripts/package-windows.ps1` passes the directive unconditionally for that reason.
+
+**Every pack in this repository has run on Windows.** `.github/workflows/release.yml` uses
+`windows-latest` deliberately (the reasons are in `docs/PHASES.md`), so the Linux route is a
+documented capability this project does not use and has not verified. If it is ever used, the thing
+to watch is `zstd`: without it on `PATH` vpk does not fail, it warns and falls back to bsdiff deltas
+that `Update.exe` cannot apply in the 1.2.0 line. The script warns; nothing enforces it.
 
 ### Speaker diarisation — studied 2026-08-16, instrument built 2026-08-17, gate passed 2026-08-18 on meetings only
 

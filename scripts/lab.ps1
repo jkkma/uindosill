@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Eleven scripts with eleven names and eleven flag sets is ten names too many to remember when
+    Twelve scripts with twelve names and twelve flag sets is eleven names too many to remember when
     you are switching between machines. This dispatches to them and nothing else: every task is
     still a script you can run directly, and this changes none of their behaviour.
 
@@ -83,12 +83,21 @@
 .EXAMPLE
     # Speaker-turn hypotheses (one <stretch id>.rttm each) scored against the hand-labelled references.
     .\scripts\lab.ps1 der -Hypotheses runs\spike-x -System "sherpa-onnx 1.13.5 cpu"
+
+.EXAMPLE
+    # Both installer flavours for a release, each read back against what its channel promises.
+    # Windows only, because vendoring the CUDA drop reads a PE import table.
+    .\scripts\lab.ps1 package -Version 1.0.0
+
+.EXAMPLE
+    # The default flavour alone: cpu and vulkan, ~82 MB of Setup.exe.
+    .\scripts\lab.ps1 package -Version 1.0.0 -Channels win
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -208,7 +217,19 @@ param(
     [switch] $SkipOverlap,
     [switch] $Cut,
     [string[]] $Stretches,
-    [string] $EpisodeDirectory
+    [string] $EpisodeDirectory,
+
+    # --- package (-OutputDirectory and -Version's siblings are not shared; -Channels is plural for
+    #     the same reason -Backends is, and package-windows.ps1's own ValidateSet is what limits it
+    #     to win and win-cuda) ---
+    [string] $Version,
+    [string[]] $Channels,
+    [string] $Runtime,
+
+    # A path to a markdown file, not the notes: vpk's --releaseNotes takes a filename.
+    [string] $ReleaseNotes,
+    [switch] $SkipVendor,
+    [switch] $SkipPublish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -226,6 +247,7 @@ $tasks = [ordered]@{
     'wer'           = 'measure-wer.ps1'
     'drive'         = 'sync-drive.ps1'
     'der'           = 'measure-der.ps1'
+    'package'       = 'package-windows.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.

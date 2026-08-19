@@ -15,7 +15,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedTab;
 
-    public MainWindowViewModel(IEngineProvider engines, IModelStore? store = null, ModelCatalog? catalog = null)
+    public MainWindowViewModel(
+        IEngineProvider engines,
+        IModelStore? store = null,
+        ModelCatalog? catalog = null,
+        IAppUpdater? updater = null,
+        AppSettingsStore? settings = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
@@ -43,11 +48,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Models.IsTranscribing = Transcribe.IsRunning;
             }
         };
+
+        // ShutdownAsync is handed to the updater rather than left to the window's close handler:
+        // applying an update replaces the process without a Closing event, so the backend release
+        // that avoids the teardown abort has to be reached from there too.
+        Updates = new UpdatesViewModel(
+            updater ?? new NotInstalledUpdater(),
+            settings,
+            shutdown: ShutdownAsync);
     }
 
     public TranscribeViewModel Transcribe { get; }
 
     public ModelsViewModel Models { get; }
+
+    /// <summary>The launch check, the notice it produces, and the setting that switches it off.</summary>
+    public UpdatesViewModel Updates { get; }
 
     /// <summary>The one loaded model, shared by the Models tab that controls it and the
     /// Transcribe tab that uses it.</summary>

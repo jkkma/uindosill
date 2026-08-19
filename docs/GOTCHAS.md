@@ -97,6 +97,23 @@ platform API — never a hardcoded path — and appends `Uindosill/models`. `UIN
 overrides it for portable installs and tests. A test asserts the directory is not under the install
 directory.
 
+**And the second half of it, which only appeared when there was an installer.** Velopack installs a
+Windows application under `%LOCALAPPDATA%\<package id>` and its uninstall deletes that directory's
+contents recursively — one `remove_dir_contents(&root_path)` in `src/bins/src/commands/uninstall.rs`,
+with no keep list, no exclusion and no flag. A package id of `Uindosill` would therefore have made
+uninstall delete every downloaded weight: on the machine this was checked on, 4.295 GiB. Keeping
+models out of the install directory is not enough on its own — **the install directory must also not
+be their parent**, and that is decided by a string in a csproj that nothing about the build would
+otherwise check.
+
+The id is `UindosillDesktop`, it lives once in `VelopackPackageId`
+(`src/Parakeet.App/Parakeet.App.csproj`), and three things hold it: five tests in
+`tests/Parakeet.App.Tests/PackagingTests.cs` — including one that rebuilds both directories and runs
+the real recursive delete — a refusal in `scripts/package-windows.ps1` before it publishes anything,
+and an install/update/uninstall on a real desktop with every weight hashed before and after
+(`docs/UNPROVEN.md`). Setting the id to `Uindosill` fails four of the five tests; that was checked by
+doing it, not assumed.
+
 ## 9. Pin `SelfContained` in the project, not the CI workflow
 
 On .NET 8+ a RuntimeIdentifier no longer implies self-contained, so a lost `--self-contained` flag
@@ -115,13 +132,16 @@ exactly what gets blocked. A signed installer dropping unsigned executables is i
 malware shape. Budget for SmartScreen reputation: a 29k-star project still fields "Windows Defender
 detected Trojan in installer" reports.
 
-**Here:** not yet done — this is Phase 5 and the repository has no signing identity. The layout is
-ready for it: every native lives under `native/<rid>/<backend>/` where a signing step can enumerate
-it, and nothing is bundled into a single file that would hide a binary from the signer. The route
-decided on 2026-08-16 (`docs/PHASES.md`, *Decisions taken*) is SignPath Foundation's free
-open-source programme, whose terms sign this project's own binaries only — so on that route the
-upstream `parakeet.dll`s stay unsigned, and this gotcha stays open for Smart App Control machines
-even once the installer and the app are signed.
+**Here:** not done, and now deliberately so — v1.0 ships unsigned (`docs/PHASES.md`, *Decisions
+taken*). The installer exists and passes `neither --signParams nor --signTemplate`; `vpk` says so on
+every pack, twice, and it is not a warning to silence: *"No signing parameters provided, 229 file(s)
+will not be signed."* The layout is still ready for signing whenever it is taken up: every native
+lives under `native/<rid>/<backend>/` where a signing step can enumerate it, nothing is bundled into
+a single file that would hide a binary from the signer, and `vpk pack --signTemplate` takes a command
+with `{{file}}` substituted, so the step is one argument rather than a rewrite. The route decided on
+2026-08-16 is SignPath Foundation's free open-source programme, whose terms sign this project's own
+binaries only — so on that route the upstream `parakeet.dll`s stay unsigned, and this gotcha stays
+open for Smart App Control machines even once the installer and the app are signed.
 
 ## 11. Avalonia 12 breaking changes
 
@@ -428,3 +448,34 @@ fixture, several turns each a tick short of the reference implementation.
 an RTTM file or an Audacity label export goes through it. The general lesson is older than this bug:
 validate a scorer against the reference implementation on material long enough for a hundred small
 errors to add up to one you can see.
+
+## 26. The updater runs your `Main`, and its defaults are not your decisions
+
+Three traps in one place, all of them quiet.
+
+**Velopack re-runs the application's own executable to perform install, update and uninstall steps,**
+passing them as command-line arguments. `VelopackApp.Build().Run()` is what recognises those, does
+the work, and exits the process — so every line above it runs in each of those short-lived
+invocations. For a GUI application that means a window flashing up during an install, and for this
+one it would have meant a `MainWindowViewModel`, an engine provider and a model store constructed in
+a process that exists to move some files. Nothing warns you: the install still succeeds.
+
+`vpk pack` does statically decompile the main executable and refuse to build if the call is absent —
+*"Unable to verify VelopackApp is called"*, with `--skipVeloAppCheck` as the escape hatch — but it
+checks that the call **exists**, not that it is first. Ours prints
+`Verified VelopackApp.Run() in 'System.Int32 Parakeet.App.Program::Main(System.String)'` (vpk's own rendering, quoted as printed — the method takes `string[]`) on every
+pack; that line is not evidence of correct placement.
+
+**`SetAutoApplyOnStartup` defaults to ON.** An update already downloaded is applied during the next
+startup, without asking. That is a reasonable default and it is not this product's decision
+(`docs/PHASES.md`, decision 4: nothing installs itself), so `Program.Main` sets it to `false`
+explicitly. A decision that happens to match a default still has to be written down, because the
+default is the vendor's to change.
+
+**Applying an update exits the process without a `Closing` event.** The window's close handler is
+where a running batch is stopped, the model unloaded and the native backend released while the GPU
+driver is still alive — gotcha 19. `ApplyUpdatesAndRestart` never returns, so a CUDA user pressing
+*Download and restart* would have reached the native static teardown with a backend resident and
+aborted with `0xC0000409` after a perfectly good run. **Here:** `UpdatesViewModel` awaits the
+window's own `ShutdownAsync` between the download and the restart, and a test asserts that ordering
+rather than the two calls merely both happening.
