@@ -2120,25 +2120,29 @@ a lane running to a third line and clipping 34 px.
 
 One claim is not checked, and it is the one the whole window frame rests on.
 
-### The 12px window corner has never been drawn on Windows
+### The window's corner has never been drawn on Windows
 
-The design specifies a 12 px corner radius, no OS title bar, and the application's own shadow — a
-Zorin-style frame. Nothing in this repository has rendered that on a real window. Avalonia exposes
-`ExtendClientAreaToDecorationsHint` and `ExtendClientAreaTitleBarHeightHint` (both confirmed present
-in `Avalonia.Controls` 12.1.1 by inspecting the shipped reference assembly), but extending the
-client area does not hand the corner over: on Windows 11 the compositor still rounds the window at
-its own radius unless the window is drawn borderless with a transparent backdrop and paints its own
-shadow, which is a different and larger piece of work with its own snap-layout and DPI consequences.
+The design specifies no OS title bar, the application's own shadow, and — since 2026-08-19 — a
+**square** window corner. Nothing in this repository has rendered any of that on a real window.
+Avalonia exposes `ExtendClientAreaToDecorationsHint` and `ExtendClientAreaTitleBarHeightHint` (both
+confirmed present in `Avalonia.Controls` 12.1.1 by inspecting the shipped reference assembly), but
+extending the client area does not hand the corner over: on Windows 11 the compositor rounds
+top-level windows on its own terms.
 
-**What is actually unproven:** which of those two routes gives the specified corner, what the second
-costs in native code, and whether either interacts badly with snap layouts or per-monitor DPI. The
-mockup renders in a browser, where a `border-radius` is simply obeyed; that is not evidence about a
-window.
+**Going square inverted the problem, which is the useful part.** The earlier 12 px design was
+unreachable that way round, because DWM does not take an arbitrary radius — it would have needed a
+borderless window with a transparent backdrop painting its own shadow, a larger piece of work with
+its own snap-layout and DPI consequences. DWM does expose a corner *preference*, and one of its
+values is do-not-round. So square is something the window can ask for, where 12 px was not, and
+this design is cheaper to build than the one it replaced rather than dearer.
 
-**What would settle it:** build the shell both ways on the desktop and look at the corner and the
-shadow at 100% and 150% scaling, with snap layouts exercised. Until then no release note claims a
-Zorin corner, and the honest fallback — accept the system radius on the frame and keep 12 px only
-for panels inside the window — costs nothing and is already known to work.
+**What is actually unproven:** that the preference reaches an Avalonia window with an extended
+client area at all, from where in this codebase the call would be made, and whether it interacts
+badly with snap layouts or per-monitor DPI. The mockup renders in a browser, where `border-radius`
+is simply obeyed; that is not evidence about a window.
+
+**What would settle it:** build the shell on the desktop and look at the corner and the shadow at
+100% and 150% scaling, with snap layouts exercised. Until then no release note describes the frame.
 
 ### The two contrast defects are measured, not unproven — and now fixed
 

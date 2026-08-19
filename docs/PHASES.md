@@ -370,6 +370,17 @@ it off. Both faces are OFL and ship inside the installer.
 view-switcher centred, and circular window buttons at the right. Tab order is **Transcribe ·
 Models · Updates · Licences** — Licences last, because it is the one tab nobody opens twice.
 
+**Corners are square, and the exceptions are the argument.** A 12px-rounded version was built first
+and put beside a square one on the same day; the square one won. Every rectangle is square — the
+window, the panels, the buttons, fields, checkboxes, list rows, badges, progress bars. Four things
+keep their shape, and each because the shape is doing work rather than decorating: the switcher
+pills and the Ask panel's suggestion chips, which read as tappable *because* they are pills; the
+speaker labels; the chat blobs, 12px with 4px on the speaking corner, which is what says who is
+talking; and the things that are genuinely circles rather than rounded rectangles — the window
+buttons, the transport's play button, and its seek handle. The rule that came out of it is shorter
+than the list: **rectangles are square, circles stay circles, and a corner survives only where it
+carries meaning.**
+
 **The word-by-word view is the design's one genuinely new idea, and it belongs to v1's data.** A
 lane per speaker, two lines deep. Words appear as they are said and fill the lane left to right
 with no motion at all; a word that would need a third line clears the last line and carries on
@@ -415,7 +426,7 @@ at 549.
 
 Every figure above was computed rather than estimated, and every layout claim in the token sheet
 came out of a headless browser with the webfonts confirmed loaded. The one thing in the design that
-is **not** checked — the window's corner radius on Windows 11 — is in `docs/UNPROVEN.md` with what
+is **not** checked — how the window's corner behaves on Windows 11 — is in `docs/UNPROVEN.md` with what
 would settle it.
 
 ## The honest summary
