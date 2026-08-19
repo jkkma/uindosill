@@ -197,7 +197,7 @@ from touching those files, and uninstall has to leave them.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | Started: CI publish carries the natives; no installer, no signing |
-| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. Opt-in aboard v1.0. | Instrument built and validated, AMI set up and verified, seam in; sherpa-onnx measured and far off, no candidate passing |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%) and **VoxConverse the web-video and beyond-four-speakers check** (AMI test is 15/16 four-speaker and cannot price the cap). **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. NOTSOFAR-1 and VoxConverse untouched. No candidate passing |
 
 ### The dictation seam
 
@@ -387,6 +387,31 @@ The next actions, in order:
    this project already refuses the second and now refuses the first in writing. Widening it later
    is a decision that must be recorded here with its reason; narrowing it after a candidate has
    been scored is not available at all.
+
+   **A second criterion was added on 2026-08-18, and it tightens the gate rather than loosening
+   it: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set.** What forced it
+   was a measurement. Tuned on the 18 AMI dev meetings and scored held out, NeMo TitaNet-L beat
+   3D-Speaker ERes2Net on DER — 25.05% against 25.77% — while reporting a mean of **14.8 speakers
+   per meeting against a reference of 3.9**, up to 26 on a four-speaker meeting and 23 on a
+   three-speaker one; ERes2Net reported 5.6. **A DER-only gate therefore selects the diariser whose
+   transcript a user would reject on sight.** DER scores under the optimal one-to-one speaker
+   mapping, so unmapped surplus clusters cost only the time they cover, and these are slivers of a
+   few seconds: inventing twenty speakers is nearly free in the metric and fatal in the product.
+   The gate could not express "do not invent twenty speakers", and now does.
+
+   **Why adding this is not the move the paragraph above refuses.** Widening a margin after a
+   result is known makes a gate easier and is refused; this makes it harder, and it disqualifies
+   the better-scoring of the two candidates measured. It also decides nothing retroactively —
+   **both candidates already fail on DER**, at +1.25 and +1.97, so no choice of threshold rescues
+   or condemns anything measured to date; it binds Sortformer and what follows. The measured values
+   are 10.88 for TitaNet-L and 1.75 for ERes2Net, so **≤ 1.0 fails both** and cannot be read as
+   fitted to either. The number is the tightest non-trivial tolerance and is motivated by the
+   product — a transcript's speaker list has to match the room — rather than by parity with a
+   published system, which is why it is absolute where the DER criterion is relative. **What is not
+   established is whether a strong diariser clears it:** pyannote 3.1's own speaker counts on this
+   audio have not been measured, so ≤ 1.0 is asserted as a product requirement and not as a known
+   achievable figure. If measurement later shows the best available system cannot meet it, that is
+   grounds to revisit the number, recorded here with its reason like any other change.
 
 ### After v1
 
