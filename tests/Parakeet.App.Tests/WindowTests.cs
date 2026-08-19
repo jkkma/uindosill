@@ -529,6 +529,84 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
+    public async Task StartRunsWhatHasNotBeenRunAndLeavesFinishedRowsAlone()
+    {
+        // Start used to hand the whole queue to the runner and reset every row on the way, so
+        // adding a fourth file to a queue of three re-decoded the three — minutes a file, and a
+        // second copy of every output beside the first. It runs what has not been run now, and a
+        // row that failed is not one of those: pressing Start after a failure retries it.
+        var (viewModel, directory) = Create();
+        var good = WriteWav(directory, "good.wav");
+        var broken = Path.Combine(directory, "broken.wav");
+        await File.WriteAllTextAsync(broken, "this is not a wave file at all");
+
+        viewModel.AddFiles([good, broken]);
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.Equal(JobState.Failed, viewModel.Jobs[1].State);
+
+        var transcript = viewModel.Jobs[0].Transcript;
+        Assert.NotEmpty(transcript);
+        Assert.True(File.Exists(Path.Combine(directory, "good.txt")));
+
+        // Repair the unreadable one and add a third file: the two that have work to do run, and
+        // the one that is done is not touched.
+        WriteWav(directory, "broken.wav");
+        viewModel.AddFiles([WriteWav(directory, "late.wav")]);
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.All(viewModel.Jobs, job => Assert.Equal(JobState.Completed, job.State));
+        Assert.True(File.Exists(Path.Combine(directory, "broken.txt")));
+        Assert.True(File.Exists(Path.Combine(directory, "late.txt")));
+
+        // The finished row kept everything a finished row has, and nothing was written for it a
+        // second time — 'good (2).txt' is what re-running it would have left behind.
+        Assert.Equal(transcript, viewModel.Jobs[0].Transcript);
+        Assert.Equal("Done — 2 files", viewModel.Jobs[0].Status);
+        Assert.False(File.Exists(Path.Combine(directory, "good (2).txt")));
+
+        // And the count is of what ran, with what was skipped said rather than left to be guessed
+        // at from a queue of three reporting two.
+        Assert.Equal("Finished 2 files. 1 already transcribed and left alone.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AFinishedQueueTurnsStartOffAndSaysWhichButtonRunsItAgain()
+    {
+        // The other half of the decision: Start is disabled once there is nothing left to run,
+        // because a live button that does nothing is the Phase 4 defect this window already fixed
+        // once. 'Run again' is the way back, and it is the only way.
+        var (viewModel, directory) = Create();
+        viewModel.AddFiles([WriteWav(directory, "a.wav")]);
+
+        Assert.True(viewModel.CanStart);
+        Assert.False(viewModel.CanRunAgain);
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.HasWorkToDo);
+        Assert.False(viewModel.CanStart);
+        Assert.True(viewModel.CanRunAgain);
+        Assert.Contains("'Run again'", viewModel.StartHint, StringComparison.Ordinal);
+
+        // Pressing Start anyway — the command runs even when its button is off — writes nothing
+        // and says so instead of quietly re-transcribing.
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.False(File.Exists(Path.Combine(directory, "a (2).txt")));
+        Assert.Contains("transcribed already", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // 'Run again' puts the row back to waiting and runs it, which is when the second copy is
+        // written — asked for, this time.
+        await viewModel.RunAgainCommand.ExecuteAsync(null);
+
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.True(File.Exists(Path.Combine(directory, "a (2).txt")));
+        Assert.Equal("Finished 1 file.", viewModel.StatusMessage);
+    }
+
+    [Fact]
     public async Task OneUnreadableFileDoesNotStopTheOthers()
     {
         var (viewModel, directory) = Create();
@@ -569,10 +647,15 @@ public class TranscribeViewModelTests
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.DoesNotContain("Speaker", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
 
-        // On: the window's transcript and the files carry the names.
+        // On: the window's transcript and the files carry the names. Through 'Run again', because
+        // the row is finished and Start runs only what has not been run — turning the opt-in on
+        // and asking for the same file back is exactly what that button is for.
         viewModel.Formats.First(f => f.Id == "rttm").IsSelected = true;
         viewModel.LabelSpeakers = true;
-        await viewModel.StartCommand.ExecuteAsync(null);
+        Assert.False(viewModel.CanStart);
+        Assert.True(viewModel.CanRunAgain);
+
+        await viewModel.RunAgainCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.Contains("Speaker 1: ", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
         Assert.Contains("Speaker 1: ", await File.ReadAllTextAsync(Path.Combine(directory, "a (2).txt")), StringComparison.Ordinal);

@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 545 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 544 passed and
+**Status:** met. 547 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 546 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -97,6 +97,25 @@ Two defects that only a real launch could show, both since fixed: the Models tab
 its download, remove and unverified-opt-in controls existed on the view model and were bound to
 nothing, while its own text told the reader the opt-in was "below" — and Start was enabled with an
 empty queue, so pressing it did nothing and read as a broken button.
+
+**What Start means was decided 2026-08-19, not merely fixed: it runs what has not been run.** It
+used to hand the whole queue to the runner and reset every row on the way, so adding a fourth file
+to a queue of three re-decoded the three — minutes a file, and `name (2).txt` beside every original,
+neither asked for. Nothing in this repository settled it: the CLI's `--overwrite` and
+`--skip-existing` are about output files on a one-shot invocation where the user names the inputs
+each time, and they say nothing about a queue that persists and remembers which rows are done. It
+was decided against the cost of being wrong in each direction — re-running what is finished costs
+decode time and files nobody wanted, while skipping something a user wanted redone costs a click —
+and against this window's own convention that a finished row is not silently un-finished, which is
+why `JobViewModel.Apply` already refuses to let a late progress report resurrect one.
+
+So a completed row keeps its transcript, its outputs and its "Done"; failed and cancelled rows are
+retried, because pressing Start after a failure is how a person retries one; the status line names
+what it left alone rather than reporting two out of a queue of three with no explanation; and Start
+switches off once nothing is left to run — the same rule as the empty-queue defect above, which is
+why a **Run again** button now carries the other intention. Changing the formats or turning the
+speaker opt-in on and wanting the same files back is a real thing to want, and it is a press of its
+own rather than a guess made from a press of Start.
 
 ## Phase 5 — ship — **STARTED**
 
