@@ -266,7 +266,12 @@ only. Deltas are uploaded because without them every update is a full download: 
 already in its output directory, and a fresh runner has none — so the job downloads the previous
 release of each channel first, and tolerates there not being one. Without that step the delta glob
 would have matched nothing on every release rather than only the first, which is the kind of thing
-that is invisible until somebody measures a download. Only `win-x64` gets an installer, because
+that is invisible until somebody measures a download.
+
+The whole workflow was rehearsed twice on 2026-08-19 through a `workflow_dispatch` draft, and it
+went green both times — `docs/UNPROVEN.md` has what those runs established and the one step they
+could not reach, which is that same delta seeding: `vpk download github` does not see a draft
+release, so the first delta will not be built until the second real release. Only `win-x64` gets an installer, because
 upstream ships no `win-arm64` native and an installer that cannot transcribe is worse than none; the
 arm64 publish stays a CI artefact, as it was.
 
