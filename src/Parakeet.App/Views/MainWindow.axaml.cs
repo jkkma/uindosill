@@ -85,7 +85,12 @@ public partial class MainWindow : Window
         // rounded corner it would have had anyway. See Services/WindowCorner.cs.
         if (TryGetPlatformHandle() is { } handle)
         {
-            Services.WindowCorner.MakeSquare(handle.Handle);
+            Services.WindowFrame.MakeSquare(handle.Handle);
+
+            // And the shadow, which is the other half of "where does this window end". Removing
+            // the title bar removed the whole frame, and a frameless window on Windows casts no
+            // shadow — so against a light desktop the application had no visible edge at all.
+            Services.WindowFrame.GiveShadow(handle.Handle);
         }
 
         if (DataContext is MainWindowViewModel viewModel)

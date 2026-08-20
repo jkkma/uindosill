@@ -3057,13 +3057,16 @@ honours it.
   not measured.
 - **Only one scaling factor has been seen.** 250% works. 100% and 150% are untested, as is moving
   the window between monitors of different DPI while it is open.
-- **The shadow is unverified.** The design asks for a four-layer shadow around the frame;
-  `WindowDecorations="None"` was chosen for the title bar rather than for the shadow, and nobody
-  has compared what Windows draws around this window against what the design specifies.
+- **The shadow is the compositor's, not the design's.** The design specifies four layers; DWM
+  draws the one it draws, and there is no way to hand it a stack. What ships is the platform's
+  shadow plus a 1px edge inside the window, and the two together were confirmed by eye on
+  2026-08-20 to answer the question the design's shadow was there to answer — where does the
+  application end. The four-layer figure in the token sheet describes a browser mock-up and should
+  not be repeated as a description of this window.
 
 **What would settle the rest:** exercise the snap flyout, and look at the frame at 100% and 150%
-and across a DPI boundary. A release note may now describe the corner; it may not yet describe the
-shadow.
+and across a DPI boundary. A release note may describe the corner and the fact that the window has
+a visible edge; it may not describe the shadow as the design's, because it is not.
 
 ### The two contrast defects are measured, not unproven — and now fixed
 

@@ -11,7 +11,7 @@
         Foreground="{DynamicResource InkBrush}"
         FontFamily="{DynamicResource SansFamily}"
         ExtendClientAreaToDecorationsHint="True"
-        WindowDecorations="None">
+        WindowDecorations="BorderOnly">
 
   <!--
     The interface designed 2026-08-19, in the shape that design specifies: no OS title bar, a 46px
@@ -35,8 +35,14 @@
       12px version of this design was not. Confirmed on Windows 11 at 250% scaling: DWM reports
       the do-not-round preference back, and the window draws square.
 
-    · WindowDecorations="None" removes the toolkit's own title bar, and the headerbar below takes
-      its place through WindowDecorationProperties.ElementRole. Without that the caption and a
+    · WindowDecorations="BorderOnly" removes the toolkit's own title bar, and the headerbar below
+      takes its place through WindowDecorationProperties.ElementRole.
+
+      BorderOnly and NOT None, which is the trap here. None removes the whole frame along with the
+      title bar: it takes WS_THICKFRAME with it, so the window stops being resizable, and it takes
+      the compositor's shadow, so on a light desktop nothing shows where the application ends.
+      Both were shipped that way for an afternoon and neither is visible in a screenshot of the
+      window — the style bits have to be read off the handle. Without that the caption and a
       second set of window buttons are drawn over this design's own — invisible to a headless
       render, because there is no window frame there to draw, and found only by photographing the
       built application. The roles also mean the platform handles dragging and
@@ -47,6 +53,12 @@
     <views:IndexMatchConverter x:Key="IndexMatch" />
   </Window.Resources>
 
+  <!-- The window's edge. Inside the window because there is nothing outside it to draw on: with
+       WindowDecorations="None" the frame is gone, so this hairline and the compositor's shadow are
+       the only things saying where the application stops. -->
+  <Border BorderBrush="{DynamicResource WindowEdgeBrush}"
+          BorderThickness="1"
+          Background="{DynamicResource GroundBrush}">
   <DockPanel>
 
     <!-- ══ Headerbar ═══════════════════════════════════════════════════════════════════════════
@@ -567,4 +579,5 @@
 
     </TabControl>
   </DockPanel>
+  </Border>
 </Window>

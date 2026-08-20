@@ -95,6 +95,16 @@
   <SolidColorBrush x:Key="StatusErrorBrush" Color="#B84E45" />
   <SolidColorBrush x:Key="StatusVerifiedBrush" Color="{StaticResource Matcha700}" />
 
+  <!-- The window's own edge, and the design's literal value: rgba(23,38,15,.08), which is
+       #14171E0F as ARGB. Alpha rather than a flat colour on purpose — this pixel sits at the
+       boundary between the application and whatever is behind it, so it has to darken a light
+       desktop and a dark one, where a fixed light grey would vanish against white.
+
+       It is not one of the two rules. #E4E6E0 and #EFF1EC divide things *inside* the window and
+       are opaque; this separates the window from the screen. Reusing a rule here would have been
+       the palette drifting by convenience rather than growing by need. -->
+  <SolidColorBrush x:Key="WindowEdgeBrush" Color="#14171E0F" />
+
   <!-- Close, hovered. A separate token from the error colour rather than a reuse of it, because
        the two have opposite requirements. StatusError is small dark text on white, and being dark
        enough for that costs saturation: at chroma 0.139 it is the least saturated red in the
