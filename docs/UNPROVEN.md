@@ -3026,14 +3026,11 @@ a lane running to a third line and clipping 34 px.
 
 One claim is not checked, and it is the one the whole window frame rests on.
 
-### The window's corner has never been drawn on Windows
+### The window's corner — settled 2026-08-20, except for snap layouts
 
 The design specifies no OS title bar, the application's own shadow, and — since 2026-08-19 — a
-**square** window corner. Nothing in this repository has rendered any of that on a real window.
-Avalonia exposes `ExtendClientAreaToDecorationsHint` and `ExtendClientAreaTitleBarHeightHint` (both
-confirmed present in `Avalonia.Controls` 12.1.1 by inspecting the shipped reference assembly), but
-extending the client area does not hand the corner over: on Windows 11 the compositor rounds
-top-level windows on its own terms.
+**square** window corner. This was the one claim in the design that nothing had rendered. The
+window was built and run on Windows 11 on 2026-08-20, and most of it is now measured.
 
 **Going square inverted the problem, which is the useful part.** The earlier 12 px design was
 unreachable that way round, because DWM does not take an arbitrary radius — it would have needed a
@@ -3042,13 +3039,31 @@ its own snap-layout and DPI consequences. DWM does expose a corner *preference*,
 values is do-not-round. So square is something the window can ask for, where 12 px was not, and
 this design is cheaper to build than the one it replaced rather than dearer.
 
-**What is actually unproven:** that the preference reaches an Avalonia window with an extended
-client area at all, from where in this codebase the call would be made, and whether it interacts
-badly with snap layouts or per-monitor DPI. The mockup renders in a browser, where `border-radius`
-is simply obeyed; that is not evidence about a window.
+**What is now measured.** `DwmSetWindowAttribute` with `DWMWA_WINDOW_CORNER_PREFERENCE` returns
+`S_OK` from `Services/WindowCorner.cs`, called on `OnOpened` once the window has a handle, and
+`DwmGetWindowAttribute` reads the preference back as `DWMWCP_DONOTROUND` — so it reaches an
+Avalonia window with an extended client area and is retained rather than silently ignored. The
+corner **draws square**, confirmed by looking at the running window. Per-monitor DPI is not a
+problem either: the display it was run on reports 240 DPI, which is 250% scaling, and the layout
+scales cleanly with no clipping and no blurring — the manifest declares `permonitorv2` and Windows
+honours it.
 
-**What would settle it:** build the shell on the desktop and look at the corner and the shadow at
-100% and 150% scaling, with snap layouts exercised. Until then no release note describes the frame.
+**What is still not established**, and is a smaller list than before:
+
+- **Snap layouts have not been exercised.** Hovering the maximise button for the Windows 11 snap
+  flyout, and the quarter-tiling it offers, is untested. The window now uses
+  `WindowDecorations="None"` with `WindowDecorationProperties.ElementRole="MaximizeButton"` on its
+  own button, which is the arrangement the toolkit documents for exactly this, but documented is
+  not measured.
+- **Only one scaling factor has been seen.** 250% works. 100% and 150% are untested, as is moving
+  the window between monitors of different DPI while it is open.
+- **The shadow is unverified.** The design asks for a four-layer shadow around the frame;
+  `WindowDecorations="None"` was chosen for the title bar rather than for the shadow, and nobody
+  has compared what Windows draws around this window against what the design specifies.
+
+**What would settle the rest:** exercise the snap flyout, and look at the frame at 100% and 150%
+and across a DPI boundary. A release note may now describe the corner; it may not yet describe the
+shadow.
 
 ### The two contrast defects are measured, not unproven — and now fixed
 
