@@ -11,12 +11,13 @@ namespace Parakeet.Core.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nothing in the shipped manifest is multi-file yet — the ONNX translation route is nine files but
-/// no asset has been uploaded and no URL can be pinned until one is. That is the same order the
-/// task discriminator and the diarisation entry arrived in, twice, and for the same reason: the
-/// code that has to understand a shape ships before the entry that has that shape, so no build can
-/// ever meet one it does not know. These tests are what makes that claim checkable rather than
-/// hopeful, so they build their own manifests instead of leaning on the shipped one.
+/// The shape shipped before its first user, which is the same order the task discriminator and the
+/// diarisation entry arrived in, twice, and for the same reason: the code that has to understand a
+/// shape ships before the entry that has that shape, so no build can ever meet one it does not
+/// know. The user arrived on 2026-08-20 — the nine-file ONNX translation entry, once there was a
+/// decode loop to read it. These tests still build their own manifests rather than leaning on the
+/// shipped one, because the edges worth testing are the malformed ones the manifest will never
+/// contain; exactly one of them looks at the real entry, and it is named for it.
 /// </para>
 /// <para>
 /// The claim under all of it: <b>a multi-file model is installed or it is not.</b> There is no
@@ -93,18 +94,40 @@ public class MultiFileModelTests
     }
 
     [Fact]
-    public void EveryShippedEntryIsStillSingleFile()
+    public void TheShippedMultiFileEntryIsTheTranslationOne()
     {
-        // Not a rule, a fact with a date on it. When the translation entry lands this test is the
-        // one that fails, and its failure is the reminder to check that docs/MODELS.md and the
-        // manifest's own comment block stopped saying "every entry here is a single file".
-        Assert.All(
-            ModelCatalog.Default.Models,
-            model => Assert.False(
-                model.IsMultiFile,
-                $"'{model.Id}' is the first multi-file entry to ship. Check that docs/MODELS.md and " +
-                "the comment block in models.json have stopped saying every entry is a single file, " +
-                "then delete this test."));
+        // This replaces a tripwire that asserted every shipped entry was still a single file, whose
+        // whole job was to fail the day one was not. It failed on 2026-08-20. What is asserted now
+        // is the thing that tripwire was protecting: the schema has exactly one real user, and that
+        // user is well formed — because until this entry landed, twenty-four tests held the shape
+        // up against nothing but hand-written JSON.
+        var multiFile = Assert.Single(ModelCatalog.Default.Models, m => m.IsMultiFile);
+
+        Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", multiFile.Id);
+        Assert.Equal(ModelTask.Translation, multiFile.Task);
+        Assert.Equal("opus-mt-tc-bible-big-mul-en", multiFile.DirectoryName);
+        Assert.Equal(multiFile.DirectoryName, multiFile.StorageName);
+
+        // Nine files, and the count is the point: the route was planned as five before the export
+        // was run, and the tokenizer turned out to be five files on its own.
+        Assert.Equal(9, multiFile.Files.Count);
+        Assert.Equal(1_435_604_524, multiFile.TotalSizeBytes);
+
+        // Every one of the nine has to be there, because a partial set loads until it does not.
+        var names = multiFile.Files.Select(f => f.FileName).ToList();
+        Assert.Equal(
+            [
+                "config.json", "decoder_model_merged.onnx", "encoder_model.onnx", "generation_config.json",
+                "source.spm", "special_tokens_map.json", "target.spm", "tokenizer_config.json", "vocab.json",
+            ],
+            names.Order(StringComparer.Ordinal));
+
+        // Two of those names — config.json and vocab.json — are exactly why `directory` is required.
+        Assert.Contains("config.json", names);
+        Assert.Contains("vocab.json", names);
+
+        Assert.True(multiFile.IsFullyPinned);
+        Assert.All(multiFile.Files, file => Assert.True(file.SizeBytes > 0));
     }
 
     [Fact]

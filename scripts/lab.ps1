@@ -3,8 +3,8 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Twelve scripts with twelve names and twelve flag sets is eleven names too many to remember when
-    you are switching between machines. This dispatches to them and nothing else: every task is
+    Thirteen scripts with thirteen names and thirteen flag sets is twelve names too many to remember
+    when you are switching between machines. This dispatches to them and nothing else: every task is
     still a script you can run directly, and this changes none of their behaviour.
 
     It is a dispatcher rather than a merge because the scripts it calls produced every number in
@@ -69,6 +69,11 @@
     .\scripts\lab.ps1 wer -Backend cpu -Models tdt-0.6b-v3-f16
 
 .EXAMPLE
+    # Does the C# decode loop reproduce the English the translation gate was scored on? Start with
+    # Spanish: 348 sentences is minutes, and a port that is going to disagree disagrees there too.
+    .\scripts\lab.ps1 agreement -Languages es
+
+.EXAMPLE
     # Run summaries up to the Drive for the other machine, every transfer checksum-verified.
     .\scripts\lab.ps1 drive -Runs laptop
 
@@ -97,7 +102,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -219,6 +224,18 @@ param(
     [string[]] $Stretches,
     [string] $EpisodeDirectory,
 
+    # --- agreement (-Configuration is shared with measure) ---
+    [string] $Languages,
+    [int] $Sentences,
+    [string] $Variant,
+    [int] $Threads,
+
+    # -Run is declared exactly, and has to be, for the same reason -Memory above is: PowerShell
+    # binds an unambiguous prefix, and without this line `lab.ps1 agreement -Run <dir>` is ambiguous
+    # between drive's -Runs and package's -Runtime and is rejected naming neither. An exact
+    # declaration wins over a prefix match.
+    [string] $Run,
+
     # --- package (-OutputDirectory and -Version's siblings are not shared; -Channels is plural for
     #     the same reason -Backends is, and package-windows.ps1's own ValidateSet is what limits it
     #     to win and win-cuda) ---
@@ -247,6 +264,7 @@ $tasks = [ordered]@{
     'wer'           = 'measure-wer.ps1'
     'drive'         = 'sync-drive.ps1'
     'der'           = 'measure-der.ps1'
+    'agreement'     = 'measure-translation-agreement.ps1'
     'package'       = 'package-windows.ps1'
 }
 

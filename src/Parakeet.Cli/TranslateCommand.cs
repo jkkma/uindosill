@@ -1,0 +1,186 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using Parakeet.Core.Transcription;
+using Parakeet.Core.Translation;
+
+namespace Parakeet.Cli;
+
+/// <summary>
+/// English, and nothing else: text in, text out, no audio and no ASR.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <c>transcribe --translate</c> already writes English, but it transcribes first, and the ASR pass
+/// costs orders of magnitude more than the translator does. Holding the decode loop to a reference
+/// corpus through that path would mean hours of Parakeet decoding to produce text the ASR
+/// contributes nothing to — and worse, it would mean having audio for the reference sentences,
+/// which for a text corpus like FLEURS' transcripts nobody does. This is the path the translation
+/// measurements are run through, and it is the same translator behind the same seam, so what is
+/// measured is what the product runs.
+/// </para>
+/// <para>
+/// <b>One line in, one line out, in order.</b> A blank line comes back blank rather than being
+/// dropped, for the same reason the translation contract yields an empty segment rather than
+/// skipping it: a file whose line numbers no longer line up is a file nothing can be scored
+/// against, and the misalignment is invisible until somebody reads the two side by side.
+/// </para>
+/// <para>
+/// There is deliberately no beam, context or length option. Those are the degrees of freedom that
+/// decide what English comes out, every published figure for this model was produced at one setting
+/// of them, and a flag would make it easy to produce a number that describes nothing.
+/// </para>
+/// </remarks>
+internal static class TranslateCommand
+{
+    public static async Task<int> RunAsync(CliContext context, ParsedCommandLine parsed, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(parsed);
+
+        if (parsed.Positionals.Count == 0)
+        {
+            context.WriteError("translate needs at least one text file.");
+            return ExitCodes.UsageError;
+        }
+
+        var id = parsed.Value("id");
+        if (id is { Length: > 0 } && parsed.Positionals.Count > 1)
+        {
+            context.WriteError("--id names one output, so it takes one input file.");
+            return ExitCodes.UsageError;
+        }
+
+        foreach (var path in parsed.Positionals)
+        {
+            if (!File.Exists(path))
+            {
+                context.WriteError($"File not found: {path}");
+                return ExitCodes.UsageError;
+            }
+        }
+
+        await using var translator = TranslatorFactory.Create(
+            context,
+            new TranslatorRequest
+            {
+                Fake = parsed.HasFlag("fake"),
+                ModelId = parsed.Value("model"),
+                ModelPath = parsed.Value("model-path"),
+                Threads = TranscribeCommand.ParseThreads(parsed.Value("threads"), "--threads"),
+            });
+
+        TranslatorFactory.Check(translator, []);
+        await translator.LoadAsync(ct).ConfigureAwait(false);
+
+        var capabilities = translator.Capabilities;
+        context.WriteError(
+            $"{capabilities.ModelId ?? capabilities.EngineName}: into {TranslationTarget.LanguageTag} only, " +
+            $"{capabilities.Backend.ToString().ToLowerInvariant()}, no word timings" +
+            $"{(capabilities.MaxSourceTokens is { } cap ? $", sources over {cap} tokens refused" : string.Empty)}.");
+
+        var outputDirectory = parsed.Value("out");
+        if (outputDirectory is { Length: > 0 })
+        {
+            Directory.CreateDirectory(outputDirectory);
+        }
+
+        // Two inputs can name one output — a/es.txt and b/es.txt with -o, which is the shape a
+        // corpus takes. Overwriting an output from an earlier run is ordinary and stays allowed;
+        // overwriting one written moments ago in this run is a file the user asked for and will not
+        // get, so it stops here rather than leaving a scorer to report n-1 files as a complete set.
+        var written = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var totalLines = 0;
+        var totalElapsed = TimeSpan.Zero;
+
+        foreach (var path in parsed.Positionals)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var stem = id is { Length: > 0 } ? id : Path.GetFileNameWithoutExtension(path);
+            var destination = Path.Combine(
+                outputDirectory is { Length: > 0 } ? outputDirectory : Path.GetDirectoryName(path) ?? ".",
+                stem + ".en.txt");
+
+            if (written.TryGetValue(destination, out var earlier))
+            {
+                context.WriteError(
+                    $"{path} and {earlier} would both be written to {destination}. Give them different names, " +
+                    "run them separately, or use --id on one file at a time.");
+                return ExitCodes.UsageError;
+            }
+
+            written.Add(destination, path);
+
+            var lines = File.ReadAllLines(path);
+            var segments = ToSegments(lines);
+
+            var started = Stopwatch.GetTimestamp();
+            var english = new List<string>(lines.Length);
+
+            await foreach (var segment in translator
+                .TranslateAsync(segments, TranslationOptions.Default, progress: null, ct)
+                .ConfigureAwait(false))
+            {
+                english.Add(segment.Text);
+            }
+
+            var elapsed = Stopwatch.GetElapsedTime(started);
+
+            if (english.Count != lines.Length)
+            {
+                // The driver enforces this for a transcript; this command builds its own segments,
+                // so it checks its own counts rather than trusting them.
+                context.WriteError(
+                    $"{path}: {lines.Length} lines in and {english.Count} out. A pass that loses lines loses text.");
+                return ExitCodes.RuntimeError;
+            }
+
+            File.WriteAllLines(destination, english, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            totalLines += lines.Length;
+            totalElapsed += elapsed;
+
+            context.WriteLine(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{stem}: {lines.Length} lines in {elapsed.TotalSeconds:F1} s " +
+                $"({elapsed.TotalSeconds / Math.Max(1, lines.Length):F3} s/line) -> {destination}"));
+        }
+
+        if (parsed.Positionals.Count > 1)
+        {
+            context.WriteLine(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{parsed.Positionals.Count} files: {totalLines} lines in {totalElapsed.TotalMinutes:F1} min = " +
+                $"{totalElapsed.TotalSeconds / Math.Max(1, totalLines):F3} s/line"));
+        }
+
+        return ExitCodes.Success;
+    }
+
+    /// <summary>
+    /// One segment per line, timed by line number.
+    /// </summary>
+    /// <remarks>
+    /// The times are the line's index and are honestly synthetic — there is no audio here and no
+    /// clock to take them from. They exist because the seam takes segments and a segment has a
+    /// start and an end, and the translator is required to hand them back untouched, which this
+    /// command relies on to keep the output in the input's order.
+    /// </remarks>
+    private static IReadOnlyList<TranscriptSegment> ToSegments(IReadOnlyList<string> lines)
+    {
+        var segments = new List<TranscriptSegment>(lines.Count);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(i),
+                End = TimeSpan.FromSeconds(i + 1),
+                Text = lines[i],
+                SourceSegmentIndex = i,
+            });
+        }
+
+        return segments;
+    }
+}

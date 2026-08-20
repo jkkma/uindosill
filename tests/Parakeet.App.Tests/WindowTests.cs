@@ -810,7 +810,10 @@ public class TranscribeViewModelTests
         var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default);
-        var diariser = Assert.Single(main.Models.Models, m => !m.IsTranscriptionModel);
+        // By task, not by "not transcription": there are two non-ASR entries now, and the one this
+        // wires up is the diariser.
+        var diariser = Assert.Single(
+            main.Models.Models, m => m.Descriptor.Task == ModelTask.Diarisation);
 
         File.WriteAllText(store.PathFor(diariser.Descriptor), "not really a graph");
 
@@ -958,12 +961,19 @@ public class ModelsViewModelTests
         var unchecked_ = unpinned.Models.First(m => !m.Descriptor.Verified);
         Assert.False(unchecked_.ProvenanceIsVerified);
 
-        var pinned = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
-        Assert.All(pinned.Models, model =>
+        // The shipped catalogue now has both states in it, which is better coverage than it had:
+        // every entry whose URL was checked against a live repository says Verified, and the
+        // translation entry — whose release asset has not been uploaded, so its URL cannot have
+        // been checked — is painted as the warning it is despite pinning all nine digests.
+        var shipped = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
+        Assert.All(shipped.Models, model =>
         {
-            Assert.True(model.ProvenanceIsVerified);
-            Assert.Contains("Verified", model.Provenance, StringComparison.Ordinal);
+            Assert.Equal(model.Descriptor.Verified, model.ProvenanceIsVerified);
+            Assert.Equal(model.Descriptor.Verified, model.Provenance.Contains("Verified", StringComparison.Ordinal));
         });
+
+        Assert.Contains(shipped.Models, model => model.ProvenanceIsVerified);
+        Assert.Contains(shipped.Models, model => !model.ProvenanceIsVerified);
     }
 
     [Fact]

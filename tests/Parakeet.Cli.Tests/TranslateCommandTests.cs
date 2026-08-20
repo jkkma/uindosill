@@ -167,9 +167,12 @@ public class TranslateCommandTests
         var exit = await harness.RunAsync(
             "transcribe", "--translate", "--model-path", harness.Path_("models/tdt-0.6b-v3-f16.gguf"), input);
 
+        // The catalogue has a translation entry as of 2026-08-20, so the refusal changed from
+        // "this build has no translator" to "the one it has is not installed" — and it still
+        // arrives before any audio is read, which is the part that matters.
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("no translation model", harness.Error.ToString(), StringComparison.Ordinal);
-        Assert.Contains("--fake", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("opus-mt-tc-bible-big-mul-en-fp32", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(harness.Path_("call.en.txt")));
         Assert.False(File.Exists(harness.Path_("call.txt")));
     }
@@ -186,7 +189,8 @@ public class TranslateCommandTests
         var exit = await harness.RunAsync("transcribe", "--translate", input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("no translation model", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("opus-mt-tc-bible-big-mul-en-fp32", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("tdt-0.6b-v3", harness.Error.ToString(), StringComparison.Ordinal);
     }
 

@@ -139,6 +139,66 @@ public sealed record OpenModelLicenceAttribution : IModelAttribution
     }
 }
 
+/// <summary>
+/// An Apache License 2.0 §4 notice package.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The third licence in this file and the third differently-shaped obligation. §4 attaches four
+/// conditions to redistribution: <b>(a)</b> give recipients a copy of the License — a copy, like
+/// the NVIDIA agreement and unlike CC BY, which is why <see cref="LicencePath"/> names a file that
+/// ships rather than a URL; <b>(b)</b> carry prominent notices stating that the files were changed;
+/// <b>(c)</b> retain the copyright, patent, trademark and attribution notices found in the source
+/// form; and <b>(d)</b> reproduce the attribution notices of any <c>NOTICE</c> file the work ships.
+/// </para>
+/// <para>
+/// <b>(c) and (d) are discharged by what the source actually carries, and this record cannot invent
+/// either.</b> A copyright line nobody published is a false notice in front of a user, which is the
+/// thing the catalogue's own comment about the deferred entries refuses; so <see cref="Creator"/>
+/// is the publishing identity as the repository states it, and anything further that turns out to
+/// be in the upstream tree is a change to this record rather than a guess baked into it. What is
+/// outstanding before these weights are redistributed is written down in <c>docs/LICENSING.md</c>
+/// rather than assumed away.
+/// </para>
+/// </remarks>
+public sealed record ApacheAttribution : IModelAttribution
+{
+    public required string Title { get; init; }
+
+    /// <summary>Who publishes the work, as the source repository states it.</summary>
+    public required string Creator { get; init; }
+
+    /// <summary>The statement of the licence, with a link to its canonical text.</summary>
+    public required string LicenceStatement { get; init; }
+
+    public required Uri LicenceUri { get; init; }
+
+    /// <summary>Repository-relative path of the copy that ships, per §4(a).</summary>
+    public required string LicencePath { get; init; }
+
+    /// <summary>Where the weights come from.</summary>
+    public required Uri MaterialUri { get; init; }
+
+    /// <summary>§4(b): what was changed, prominently.</summary>
+    public required string ModificationNotice { get; init; }
+
+    /// <summary>§7, in the terms the licence sets out itself.</summary>
+    public required string WarrantyDisclaimerNotice { get; init; }
+
+    public string ToPlainText(string newLine = "\n")
+    {
+        var builder = new StringBuilder();
+        builder.Append(Title).Append(newLine);
+        builder.Append("Creator: ").Append(Creator).Append(newLine);
+        builder.Append("Licence: ").Append(LicenceStatement).Append(' ').Append(LicenceUri).Append(newLine);
+        builder.Append("A copy ships at ").Append(LicencePath).Append('.').Append(newLine);
+        builder.Append("Source: ").Append(MaterialUri).Append(newLine);
+        builder.Append("Modifications: ").Append(ModificationNotice).Append(newLine);
+        builder.Append("Warranties: ").Append(WarrantyDisclaimerNotice).Append(newLine);
+        return builder.ToString();
+    }
+}
+
 /// <summary>A third-party component and the licence it ships under.</summary>
 public sealed record ComponentLicence
 {
@@ -156,6 +216,11 @@ public static class Attributions
     public const string ParakeetTdt06BV3 = "nvidia-parakeet-tdt-0.6b-v3";
 
     public const string SortformerDiarisation4Spk = "nvidia-sortformer-diar-4spk-v2.1-onnx";
+
+    public const string OpusMtBibleBigMulEn = "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx";
+
+    /// <summary>Where the Apache License 2.0 copy lives, relative to the repository root.</summary>
+    public const string ApacheLicencePath = "licences/Apache-License-2.0.txt";
 
     /// <summary>Where the NVIDIA Open Model License copy lives, relative to the repository root.</summary>
     public const string OpenModelLicencePath = "licences/NVIDIA-Open-Model-License-2025-10-24.txt";
@@ -207,6 +272,29 @@ public static class Attributions
                 "NVIDIA provides the model on an \"AS IS\" basis, without warranties or conditions of any "
                 + "kind, express or implied (section 6 of the Agreement).",
         },
+
+        // The translation weights, and the first Apache-2.0 entry. Uindosill exports these itself —
+        // the ONNX graphs are produced here from the upstream PyTorch checkpoint by
+        // scripts/export-translation-onnx.py — so the modification notice §4(b) wants is a
+        // description of this project's own work rather than of somebody else's.
+        [OpusMtBibleBigMulEn] = new ApacheAttribution
+        {
+            Title = "OPUS-MT tc-bible-big mul→deu+eng+nld (machine translation model weights)",
+            Creator = "Helsinki-NLP, the Language Technology Research Group at the University of Helsinki",
+            LicenceStatement = "Apache License, Version 2.0,",
+            LicenceUri = new Uri("https://www.apache.org/licenses/LICENSE-2.0"),
+            LicencePath = ApacheLicencePath,
+            MaterialUri = new Uri("https://huggingface.co/Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld"),
+            ModificationNotice =
+                "Modified: the original Marian checkpoint at revision bb1ef830d5 was exported to ONNX in the "
+                + "merged decoder layout by scripts/export-translation-onnx.py, which splits it into an encoder "
+                + "graph and a decoder graph with past key values exposed. The weights are unchanged and "
+                + "unquantised — float32 in, float32 out. Uindosill redistributes the exported graphs and does "
+                + "not redistribute the original checkpoint.",
+            WarrantyDisclaimerNotice =
+                "The work is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
+                + "either express or implied (section 7 of the License).",
+        },
     };
 
     public static IReadOnlyDictionary<string, IModelAttribution> ById => ByIdMap;
@@ -226,6 +314,17 @@ public static class Attributions
         "model files must not be encrypted, licence-locked or otherwise DRM-wrapped.",
         "CC BY 4.0 §2(b) withholds patent and trademark rights: nothing in this product may imply NVIDIA " +
         "endorsement or sponsorship.",
+        "Apache-2.0 §3 grants a patent licence with the translation weights and terminates it for anyone " +
+        "who files patent litigation alleging the model infringes. CC BY 4.0, which the transcription " +
+        "weights ship under, licenses no patent rights at all (§2(b)(1)), so the three licences in this " +
+        "product make three different patent bargains and none of them is the other's.",
+
+        "The translation checkpoint's own card disclaims its coverage list — \"for a large number of " +
+        "language pairs it will not work at all\" — so the language tags on that entry are list " +
+        "membership rather than a quality claim, and the product must not present them as one. Measured " +
+        "on FLEURS into English, 23 of the 24 clear this project's own bar and Slovak falls below it " +
+        "by 0.74.",
+
         "parakeet-tdt-0.6b-v3 covers 25 European languages. It does not cover Chinese, Japanese, Korean, " +
         "Arabic, Hindi or Thai, and the product must not offer them.",
 

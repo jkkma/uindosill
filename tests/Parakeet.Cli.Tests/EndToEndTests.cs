@@ -240,15 +240,31 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task ShippedEntriesAreNotFlaggedBecauseTheyArePinned()
+    public async Task OnlyTheEntryWhoseUrlWasNeverCheckedIsFlagged()
     {
+        // Every shipped entry pins a digest per file, so nothing here can say "no digest". One of
+        // them — the translation entry, whose release asset has not been uploaded, so its URL
+        // cannot have been checked against anything — is nonetheless unverified, and the listing
+        // says so on its line rather than only in the manifest. Until 2026-08-20 this asserted the
+        // flag never appeared at all, which made it a claim about the data; it is now a claim about
+        // the flag, checked against both states.
         using var harness = new Harness();
 
         await harness.RunAsync("models", "list");
         var output = harness.Out.ToString();
 
-        Assert.DoesNotContain("unverified catalogue entry", output, StringComparison.Ordinal);
         Assert.DoesNotContain("no digest", output, StringComparison.OrdinalIgnoreCase);
+
+        var flagged = output
+            .Split('\n')
+            .Where(line => line.Contains("unverified catalogue entry", StringComparison.Ordinal))
+            .ToList();
+
+        // The flag is rendered beside the entry's display name rather than its id, so that is what
+        // is asserted; that there is exactly one such line is the other half.
+        var line = Assert.Single(flagged);
+        Assert.Contains("OPUS-MT Bible-Big", line, StringComparison.Ordinal);
+        Assert.Contains("opus-mt-tc-bible-big-mul-en-fp32", output, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -19,6 +19,7 @@
     <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
     <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
     <ProjectReference Include="../Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+    <ProjectReference Include="../Parakeet.Engine.Marian/Parakeet.Engine.Marian.csproj" />
     <ProjectReference Include="../Parakeet.Engine.Sortformer/Parakeet.Engine.Sortformer.csproj" />
   </ItemGroup>
 

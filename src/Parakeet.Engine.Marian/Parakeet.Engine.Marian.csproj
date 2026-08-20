@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Engine.Marian</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One project owns one model's interop, as Parakeet.Engine.Sortformer owns the diariser's.
+    Parakeet.Core declares ITranscriptTranslator and knows nothing about ONNX Runtime, SentencePiece
+    or beam search; a build target in Core fails if a NuGet reference ever appears there.
+
+    The tokenizer is written out by hand here rather than taken from a package, and that is a
+    decision rather than an omission: Directory.Packages.props is pinned to the graph the gate was
+    scored against, a second tokenizer library would be a second thing that can move underneath a
+    measured number, and what this needs — Unigram Viterbi over one .spm plus Marian's language-code
+    rule — is small enough to hold to a committed fixture.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Engine.Marian.Tests" />
+  </ItemGroup>
+
+</Project>

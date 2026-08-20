@@ -118,6 +118,28 @@ public sealed record TranslatorCapabilities
     public bool SupportsCancellation { get; init; }
 
     /// <summary>
+    /// True when the translator actually reads <see cref="TranslationOptions.ContextSegments"/>.
+    /// False on everything this product ships, and false is a report rather than a shrug.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Context is the caller's only lever, and a lever that does nothing is worse than no lever:
+    /// somebody asks for two segments of context, gets a different-looking translation because
+    /// beam search is not deterministic across inputs it never saw, and concludes the flag works.
+    /// So a translator that ignores it says so, and the caller reports the option as ignored — the
+    /// same shape as the diariser being told a speaker count it cannot use.
+    /// </para>
+    /// <para>
+    /// The recommended checkpoint is why it is false. It is a sentence-level model with no way to
+    /// mark which part of its input is context, so folding preceding segments in would translate
+    /// them too and leave the caller splitting one English paragraph back into its parts by guess.
+    /// Nothing has measured what context buys here, and an unmeasured decode path is the one thing
+    /// this feature cannot afford: every published figure is a no-context figure.
+    /// </para>
+    /// </remarks>
+    public bool HonoursContext { get; init; }
+
+    /// <summary>
     /// Longest source the model will accept, counted in the model's own tokens. Null when it has
     /// no such limit.
     /// </summary>

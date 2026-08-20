@@ -68,7 +68,7 @@ internal static class TranscribeCommand
         // and it is not one that arrives after a three-hour decode.
         if (translationOptions is not null)
         {
-            TranslatorFactory.Resolve(context, parsed.HasFlag("fake"));
+            TranslatorFactory.Resolve(context, TranslationRequestFrom(parsed));
         }
 
         // Resolved before the ASR engine, and only resolved — the labeller itself is built below,
@@ -127,11 +127,12 @@ internal static class TranscribeCommand
         // output after the first three have been written is not a refusal.
         await using var translator = translationOptions is null
             ? null
-            : TranslatorFactory.Create(context, parsed.HasFlag("fake"));
+            : TranslatorFactory.Create(context, TranslationRequestFrom(parsed));
 
         if (translator is not null)
         {
             TranslatorFactory.Check(translator, formats);
+            TranslatorFactory.ReportIgnoredContext(context, translator, translationOptions!);
             WarnAboutLanguageHint(context, parsed);
         }
 
@@ -212,6 +213,21 @@ internal static class TranscribeCommand
         options.Validate();
         return options;
     }
+
+    /// <summary>Which translation model the flags ask for, resolved the same way twice.</summary>
+    /// <remarks>
+    /// Built in one place because <c>--translate</c> resolves its model twice: once up front so a
+    /// missing translator is reported before 1.34 GiB of ASR weights load, and once for real after.
+    /// Two copies of this would be two chances for the pre-flight check to resolve a different
+    /// model from the one that runs.
+    /// </remarks>
+    private static TranslatorRequest TranslationRequestFrom(ParsedCommandLine parsed) => new()
+    {
+        Fake = parsed.HasFlag("fake"),
+        ModelId = parsed.Value("translate-model"),
+        ModelPath = parsed.Value("translate-model-path"),
+        Threads = ParseThreads(parsed.Value("translate-threads"), "--translate-threads"),
+    };
 
     /// <summary>Null when <c>--translate</c> was not given: the whole pass is behind that flag.</summary>
     private static TranslationOptions? BuildTranslationOptions(ParsedCommandLine parsed)
