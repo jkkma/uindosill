@@ -394,6 +394,48 @@ def compare_normaliser(run: Path, language: str) -> int:
     (out / f"{language}-normaliser.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    # Markdown beside the JSON, because that is what travels: the run-report sync takes *.md and
+    # summary.json and nothing else, so a figure that exists only in a differently-named JSON is a
+    # figure the other machine never sees.
+    lines = [
+        f"# What the German number rewrite buys — {language}, {len(sentences)} sentences",
+        "",
+        "Both columns are the same recognised text through the same weights. The left is the Python",
+        "path the cascade arm uses, which does **not** apply `GermanNumberWords`; the right is",
+        "`uindosill translate`, which does, in `TranslationRequest.Mark`.",
+        "",
+        "| | without the rewrite | with it |",
+        "|---|---:|---:|",
+        f"| chrF++ | {without} | **{with_it}** |",
+        f"| numeral recall, all {len(sentences)} sentences | {hit_without}/{total} | **{hit_with}/{total}** |",
+        f"| numeral recall, the {len(changed)} changed lines | {changed_without}/{changed_total} | **{changed_with}/{changed_total}** |",
+        "",
+        f"chrF++ signature `{signature}`.",
+        "",
+        f"**{len(changed)} lines changed and {len(compound)} of them carry a German compound number token.**",
+        "That is what attributes the difference to the rewrite rather than to the C# port, whose",
+        "agreement with Python was established on FLEURS transcripts and never on recogniser output.",
+        "",
+        "**chrF++ understates this by design.** A corpus metric cannot report a number error — the",
+        "difference between *\"in 1889\"* and *\"in the eighteenth century\"* is a handful of character",
+        "n-grams. Numeral recall asks the question chrF++ cannot: of the numbers the English reference",
+        "carries, how many survive as digits. It does not ask whether they landed in the right place.",
+        "",
+        "**Nobody has rated whether every changed line is an improvement**, and some of the German was",
+        "itself misrecognised, so what the rewrite does to already-wrong input is not something a",
+        "recall figure answers.",
+        "",
+        "## The numeral-loss flag, on the same run",
+        "",
+    ]
+    lines += [f"- `{line}`" for line in flag] or ["- it did not fire"]
+    lines += [
+        "",
+        "How often it *fires*, not how often it is correct to fire — nobody has checked these against",
+        "the audio.",
+    ]
+    (out / f"{language}-normaliser.md").write_text(NEWLINE.join(lines) + NEWLINE, encoding="utf-8")
+
     print(f"  chrF++ {without} -> {with_it}  ({with_it - without:+.2f})")
     print(f"  {len(changed)} lines changed, {len(compound)} of them carrying a German compound number")
     print(f"  numeral recall, all {len(sentences)} sentences: "
