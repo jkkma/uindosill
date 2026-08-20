@@ -14,6 +14,17 @@
     "",
     "Sizes are exact and are compared to the downloaded byte count, so a rounded value is a bug.",
     "",
+    "An entry is one file or several. One file names it inline — \"fileName\", \"url\", \"sizeBytes\",",
+    "\"sha256\" — and lands in the store root, which is every entry below. Several go in a \"files\"",
+    "array of those same four keys, and then \"directory\" is required: the ONNX translation route",
+    "ships config.json and vocab.json, and no single entry can own those names in a shared folder.",
+    "An entry carrying both shapes is refused rather than guessed at. Pins are per file, so an entry",
+    "is verified only when every one of its files is — eight of nine is unverified.",
+    "",
+    "A multi-file entry installs all or nothing: the installer assembles it in a <directory>.part",
+    "staging folder and renames that into place once every file has been sized and hashed, so an",
+    "interrupted download is never something an engine can be handed. Resume is per file.",
+    "",
     "Weights are CC BY 4.0 (NVIDIA). Redistribution is permitted and the notice obligations are in",
     "Licensing/Attribution.cs — they are not satisfied by attribution alone.",
     "",
@@ -29,9 +40,10 @@
     "records what it obliges and where the two licences differ. Its URL is pinned to a revision rather",
     "than to main, because it belongs to a single-maintainer third party rather than to NVIDIA.",
     "",
-    "There is no \"translation\" entry yet, and adding one is not a one-line change: every entry here",
-    "is a single file and the decided ONNX route for translation is five, so that schema question is",
-    "settled before a URL is pinned. See docs/PHASES.md."
+    "There is no \"translation\" entry yet. The schema it needs is above and shipped, and the export",
+    "it would point at exists and was measured on 2026-08-20 — nine files, not the five the plan",
+    "assumed. What is missing is the asset: no release has been tagged, so there is no URL to pin.",
+    "See docs/PHASES.md."
   ],
   "models": [
     {

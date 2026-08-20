@@ -90,6 +90,21 @@ public sealed class ModelCatalog
             throw new InvalidDataException($"Model manifest contains duplicate id '{duplicate.Key}'.");
         }
 
+        // Two entries that occupy the same name in the store root are one entry as far as the disk
+        // is concerned: installing the second overwrites the first, and removing either takes both.
+        // The check is over the storage name rather than the file name so it also catches a
+        // directory colliding with a file — the two share one namespace, and on Windows they share
+        // it case-insensitively.
+        var collidingName = parsed
+            .GroupBy(m => m.StorageName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (collidingName is not null)
+        {
+            throw new InvalidDataException(
+                $"Model manifest has more than one entry stored as '{collidingName.Key}': " +
+                $"{string.Join(", ", collidingName.Select(m => m.Id))}.");
+        }
+
         var deferred = new List<DeferredModelPin>();
         if (root.TryGetProperty("deferred", out var deferredElement))
         {
@@ -158,7 +173,103 @@ public sealed class ModelCatalog
     private static ModelDescriptor ParseModel(JsonElement element)
     {
         var id = RequireString(element, "id");
+        var (files, directory) = ParseFiles(element, id);
 
+        return new ModelDescriptor
+        {
+            Id = id,
+            Task = ParseTask(element, id),
+            Family = RequireString(element, "family"),
+            DisplayName = RequireString(element, "displayName"),
+            Quantisation = RequireString(element, "quantisation"),
+            Files = files,
+            DirectoryName = directory,
+            Verified = element.TryGetProperty("verified", out var verified) && verified.ValueKind == JsonValueKind.True,
+            License = RequireString(element, "license"),
+            AttributionId = RequireString(element, "attributionId"),
+            Languages = ParseStringArray(element, "languages"),
+            Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
+            Notes = OptionalString(element, "notes"),
+        };
+    }
+
+    /// <summary>
+    /// Reads an entry's files in either of the two shapes the manifest allows, and refuses a mix.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Inline</b> — <c>fileName</c>, <c>url</c>, <c>sizeBytes</c>, <c>sha256</c> on the entry
+    /// itself, which is every entry that predates 2026-08-20 and is still the right shape for a
+    /// model that is one file. <b>Multi</b> — a <c>directory</c> and a <c>files</c> array of the
+    /// same four keys each.
+    /// </para>
+    /// <para>
+    /// An entry carrying both is refused rather than resolved, because there is no reading of it
+    /// that is obviously right and the two candidate readings — "the inline one is a member of the
+    /// set" and "the inline one is a legacy leftover to ignore" — differ by a whole file. Refusing
+    /// costs a release engineer one error message; guessing costs a user a model that installs and
+    /// does not load.
+    /// </para>
+    /// </remarks>
+    private static (IReadOnlyList<ModelFile> Files, string? Directory) ParseFiles(JsonElement element, string id)
+    {
+        var hasInline = element.TryGetProperty("fileName", out _);
+        var hasArray = element.TryGetProperty("files", out var array);
+
+        if (hasInline && hasArray)
+        {
+            throw new InvalidDataException(
+                $"Model '{id}' has both an inline 'fileName' and a 'files' array. Use one: a single-file " +
+                "entry names its file inline, a multi-file entry lists them in 'files' with a 'directory'.");
+        }
+
+        if (!hasArray)
+        {
+            // Inline. No directory: these land in the store root, exactly where they always have.
+            return ([ParseFile(element, id, "fileName")], null);
+        }
+
+        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() == 0)
+        {
+            throw new InvalidDataException($"Model '{id}' has a 'files' that is not a non-empty array.");
+        }
+
+        var files = new List<ModelFile>();
+        foreach (var file in array.EnumerateArray())
+        {
+            files.Add(ParseFile(file, id, "fileName"));
+        }
+
+        var duplicate = files
+            .GroupBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            // Two entries writing the same name means whichever downloads last wins, and the
+            // digest that was checked is not the one on disk.
+            throw new InvalidDataException($"Model '{id}' lists '{duplicate.Key}' more than once.");
+        }
+
+        var directory = OptionalString(element, "directory")
+            ?? throw new InvalidDataException(
+                $"Model '{id}' uses a 'files' array and must name a 'directory' to install into. " +
+                "Its files would otherwise share the store root with every other entry, and names " +
+                "like config.json belong to no single model.");
+
+        if (directory.Length == 0
+            || directory.Contains('/', StringComparison.Ordinal)
+            || directory.Contains('\\', StringComparison.Ordinal)
+            || directory is "." or ".."
+            || directory != Path.GetFileName(directory))
+        {
+            throw new InvalidDataException($"Model '{id}' has a directory that is not a bare directory name.");
+        }
+
+        return (files, directory);
+    }
+
+    private static ModelFile ParseFile(JsonElement element, string id, string fileNameKey)
+    {
         var url = RequireString(element, "url");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
         {
@@ -171,7 +282,7 @@ public sealed class ModelCatalog
             throw new InvalidDataException($"Model '{id}' has a sha256 that is not 64 hex characters.");
         }
 
-        var fileName = RequireString(element, "fileName");
+        var fileName = RequireString(element, fileNameKey);
         if (fileName.Contains('/', StringComparison.Ordinal)
             || fileName.Contains('\\', StringComparison.Ordinal)
             || fileName != Path.GetFileName(fileName))
@@ -179,23 +290,12 @@ public sealed class ModelCatalog
             throw new InvalidDataException($"Model '{id}' has a fileName that is not a bare file name.");
         }
 
-        return new ModelDescriptor
+        return new ModelFile
         {
-            Id = id,
-            Task = ParseTask(element, id),
-            Family = RequireString(element, "family"),
-            DisplayName = RequireString(element, "displayName"),
-            Quantisation = RequireString(element, "quantisation"),
             FileName = fileName,
             Url = uri,
             SizeBytes = OptionalLong(element, "sizeBytes"),
             Sha256 = sha?.ToLowerInvariant(),
-            Verified = element.TryGetProperty("verified", out var verified) && verified.ValueKind == JsonValueKind.True,
-            License = RequireString(element, "license"),
-            AttributionId = RequireString(element, "attributionId"),
-            Languages = ParseStringArray(element, "languages"),
-            Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
-            Notes = OptionalString(element, "notes"),
         };
     }
 

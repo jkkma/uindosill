@@ -79,13 +79,16 @@ public sealed partial class ModelViewModel : ObservableObject
     /// Shown next to every entry whose provenance has not been checked. Silence here would let
     /// a guessed URL and an unpinned digest look exactly like a verified one.
     /// </summary>
-    public string Provenance => (Descriptor.Verified, Descriptor.Sha256 is not null) switch
+    public string Provenance => (Descriptor.Verified, Descriptor.IsFullyPinned) switch
     {
         (true, true) => "Verified against the repository, digest pinned.",
         (true, false) => "Catalogue entry checked, but no digest is pinned — the download cannot be verified.",
         (false, true) => "Digest pinned, but the catalogue entry itself was never checked.",
         (false, false) => "Unverified: file name, size and digest were never checked against the repository. " +
                           "Downloading requires the explicit unverified opt-in below.",
+        // An entry of several files is pinned only when every one of them is. One unpinned file
+        // among nine cannot be reported as "digest pinned": the set is as checked as its weakest
+        // member, and this string is the only place a user is told which it is.
     };
 
     /// <summary>
@@ -94,9 +97,9 @@ public sealed partial class ModelViewModel : ObservableObject
     /// painted all four in the warning colour, so "digest pinned" — the reassuring case, and the
     /// one every shipped entry is in — read as a problem.
     /// </summary>
-    public bool ProvenanceIsVerified => Descriptor.Verified && Descriptor.Sha256 is not null;
+    public bool ProvenanceIsVerified => Descriptor.Verified && Descriptor.IsFullyPinned;
 
-    public bool NeedsUnverifiedOptIn => Descriptor.Sha256 is null;
+    public bool NeedsUnverifiedOptIn => !Descriptor.IsFullyPinned;
 
     /// <summary>
     /// Downloading is only meaningful for a model that is not already here. Binding the button to
@@ -339,9 +342,10 @@ public sealed partial class ModelsViewModel : ObservableObject
             model.IsInstalled = true;
             model.Status = "Installed";
             model.Progress = 100;
-            StatusMessage = model.Descriptor.Sha256 is null
-                ? $"Installed. Its SHA-256 is {result.Sha256} — pin that in the catalogue so the next install is checked."
-                : "Installed and verified.";
+            StatusMessage = model.Descriptor.IsFullyPinned
+                ? "Installed and verified."
+                : "Installed. Pin these in the catalogue so the next install is checked — " +
+                  string.Join("; ", result.Files.Select(f => $"{f.FileName} {f.Sha256}"));
         }
         catch (OperationCanceledException)
         {

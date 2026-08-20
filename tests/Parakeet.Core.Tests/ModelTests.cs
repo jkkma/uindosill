@@ -45,7 +45,7 @@ public class ModelCatalogTests
     [Fact]
     public void UnverifiedEntriesAreMarkedRatherThanQuietlyShipped()
     {
-        foreach (var model in ModelCatalog.Default.Models.Where(m => m.Sha256 is null))
+        foreach (var model in ModelCatalog.Default.Models.Where(m => !m.IsFullyPinned))
         {
             Assert.False(model.Verified, $"'{model.Id}' claims to be verified but pins no digest");
         }
@@ -63,10 +63,20 @@ public class ModelCatalogTests
 
         Assert.All(ModelCatalog.Default.Models, model =>
         {
-            Assert.NotNull(model.Sha256);
-            Assert.True(ModelCatalog.IsSha256Hex(model.Sha256!), $"'{model.Id}' has a malformed digest");
+            Assert.NotEmpty(model.Files);
             Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
-            Assert.True(model.SizeBytes > 0, $"'{model.Id}' has no pinned size to compare against");
+
+            // Per file, not per entry. An entry of nine files where eight are pinned is not a
+            // pinned entry, and asserting only the aggregate would let the ninth through.
+            Assert.All(model.Files, file =>
+            {
+                Assert.NotNull(file.Sha256);
+                Assert.True(ModelCatalog.IsSha256Hex(file.Sha256!), $"'{model.Id}/{file.FileName}' has a malformed digest");
+                Assert.True(file.SizeBytes > 0, $"'{model.Id}/{file.FileName}' has no pinned size to compare against");
+            });
+
+            Assert.True(model.IsFullyPinned, $"'{model.Id}' is not fully pinned");
+            Assert.True(model.TotalSizeBytes > 0, $"'{model.Id}' has no total size");
         });
     }
 
@@ -147,11 +157,17 @@ public class ModelCatalogTests
     {
         // Copying one entry to make another is easy and leaves two quantisations sharing a digest,
         // which would then reject whichever was downloaded second with a corruption error.
+        // Across every file of every entry, not just entry to entry: two files of one multi-file
+        // model sharing a digest is the same copy-paste slip one directory further down.
         var duplicate = ModelCatalog.Default.Models
-            .GroupBy(m => m.Sha256, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(m => m.Files.Select(f => (Model: m, File: f)))
+            .GroupBy(x => x.File.Sha256, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(g => g.Count() > 1);
 
-        Assert.True(duplicate is null, $"digest {duplicate?.Key} is pinned by {duplicate?.Count()} entries");
+        Assert.True(
+            duplicate is null,
+            $"digest {duplicate?.Key} is pinned by {duplicate?.Count()} files: " +
+            $"{string.Join(", ", duplicate?.Select(x => $"{x.Model.Id}/{x.File.FileName}") ?? [])}");
     }
 
     [Fact]
@@ -342,16 +358,25 @@ public class LocalModelStoreTests
 
 public class ModelInstallerTests
 {
-    private static ModelDescriptor Descriptor(string? sha256, long? size = null) => new()
+    private static ModelDescriptor Descriptor(string? sha256, long? size = null) => Descriptor(
+    [
+        new ModelFile
+        {
+            FileName = "test.gguf",
+            Url = new Uri("https://example.invalid/test.gguf"),
+            Sha256 = sha256,
+            SizeBytes = size,
+        },
+    ]);
+
+    private static ModelDescriptor Descriptor(IReadOnlyList<ModelFile> files, string? directory = null) => new()
     {
         Id = "test-model",
         Family = "test",
         DisplayName = "Test",
         Quantisation = "q8_0",
-        FileName = "test.gguf",
-        Url = new Uri("https://example.invalid/test.gguf"),
-        Sha256 = sha256,
-        SizeBytes = size,
+        Files = files,
+        DirectoryName = directory,
         License = "CC-BY-4.0",
         AttributionId = Attributions.ParakeetTdt06BV3,
     };
@@ -381,7 +406,7 @@ public class ModelInstallerTests
         using var installer = new ModelInstaller(store, new HttpClient(handler));
         var result = await installer.InstallAsync(Descriptor(Sha256Of(payload)));
 
-        Assert.Equal(Sha256Of(payload), result.Sha256);
+        Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
         Assert.True(File.Exists(result.Model.Path));
         Assert.False(File.Exists(result.Model.Path + ".part"));
         Assert.False(File.Exists(result.Model.Path + ".part.json"));
@@ -477,7 +502,7 @@ public class ModelInstallerTests
         {
             var result = await installer.InstallAsync(descriptor);
             Assert.True(result.Resumed, "the second attempt did not resume");
-            Assert.Equal(Sha256Of(payload), result.Sha256);
+            Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
         }
 
         Assert.Equal(partial, resuming.LastRangeFrom);
@@ -501,7 +526,7 @@ public class ModelInstallerTests
         var result = await installer.InstallAsync(descriptor);
 
         Assert.False(result.Resumed);
-        Assert.Equal(Sha256Of(payload), result.Sha256);
+        Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
     }
 
     [Fact]

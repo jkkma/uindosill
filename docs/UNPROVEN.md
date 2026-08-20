@@ -1211,6 +1211,16 @@ rather than the 404.4 an untied count predicts. **Which end ships is not decided
 download-size-against-quality call, the quality side of it is the paragraph below, and the export
 script deliberately produces both and picks neither.
 
+**The catalogue can hold those nine files as of 2026-08-20, and nothing has installed one.** The
+multi-file schema, the staging-directory install and the per-file pins are code with twenty-four
+tests behind them (`docs/PHASES.md` § *Built 2026-08-20 — the catalogue learns to hold more than one
+file*), but every test builds its own manifest: **no multi-file entry has ever been downloaded from
+a real URL, and no ONNX model has been loaded out of a directory this installer assembled.** What is
+proven is that the parser refuses the shapes it should, that an interrupted install leaves nothing
+`IsInstalled` reports, and that a staged file with a good digest is not refetched — all against a
+stub HTTP handler on this machine. The first real install is what will exercise the rest, and it
+cannot happen until an asset exists.
+
 **The recorded export failure was misdiagnosed, and the correct diagnosis is cheap to act on.** It
 is not a skew between `optimum` 2.1.0 and `transformers` 4.57.6, and no pinned pair of them fixes
 it: it is **CPython 3.14**, which gave `functools.partial` the descriptor protocol. optimum stores
