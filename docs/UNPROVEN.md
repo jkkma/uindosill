@@ -1211,6 +1211,40 @@ rather than the 404.4 an untied count predicts. **Which end ships is not decided
 download-size-against-quality call, the quality side of it is the paragraph below, and the export
 script deliberately produces both and picks neither.
 
+**Half the gate is now a number, and it is the half that needed no model.** The per-language
+source-copy floor — what a hypothesis earns by echoing its untranslated source — was computed on
+2026-08-20 for all 24 source languages by `scripts/measure-translation.py --floor-only`, over
+FLEURS `test` in full (251 to 350 sentences per language, every sentence shared with `en_us` by id),
+chrF++ at `nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`. **The floors run from 2.00
+to 23.10**, and the shape is script rather than language family: Ukrainian 2.00, Russian 2.10,
+Bulgarian 2.13 and Greek 2.37 — a non-Latin source shares almost no character n-grams with an
+English reference — against French 23.10, Italian 22.42, Dutch 22.07, Portuguese 21.77, Romanian
+21.76, Danish 21.64, Spanish 21.40, Swedish 20.91 and German 20.78, with the Latin-script Slavic,
+Baltic and Finno-Ugric languages between at 14.54 (Latvian) to 16.84 (Estonian), and Maltese 19.42.
+**That is an 11.5× spread, and it is why the gate was written per language on 2026-08-19 before any
+of it was known.** A single bar of, say, 30 would have been a formality for a Cyrillic source and a
+real test for French; the decision to refuse one number across 25 languages is now measured rather
+than argued. Two things about the corpus travel with these figures: Dutch has only **251** sentences
+shared with English where every other language has 329 or more, and the floors are scored against
+FLEURS' punctuated `raw_transcription` on both sides.
+
+**Nothing has been scored against those floors.** No hypothesis exists for any language: the model
+half of the harness is about **five hours per precision** on this laptop — 2.16 s per sentence at
+int8, beam-6 — and was not run here. So there is no chrF++ for the model, no margin, no per-language
+margin ratified, and nothing that passes or fails criterion one. Criterion two, the human adequacy
+check on Spanish → English, has no sheet to rate yet either. **One Spanish slice exists and is not a
+result**: 32 sentences scored 53.78 against that language's 20.80 floor on the same run that
+measured the rate. It is 32 sentences of one language from a harness shakedown, it moved the floor
+by 0.6 points against the full-split figure just by being a subsample, and it is recorded here so
+nobody rediscovers it later and mistakes it for a measurement.
+
+**Batching this model on a CPU is six times slower than not batching, which is the opposite of the
+usual.** The same 32 Spanish sentences took 12.75 s each at batch 16 and 2.16 s each at batch 1. A
+padded beam-search batch decodes until every member finishes, so one long sentence holds up fifteen
+short ones while beam-6 keeps 96 sequences in flight. The harness defaults to batch 1 because of
+that measurement; it is a laptop-CPU figure and has not been checked on the desktop or on any GPU
+execution provider.
+
 **The catalogue can hold those nine files as of 2026-08-20, and nothing has installed one.** The
 multi-file schema, the staging-directory install and the per-file pins are code with twenty-four
 tests behind them (`docs/PHASES.md` § *Built 2026-08-20 — the catalogue learns to hold more than one
