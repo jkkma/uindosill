@@ -52,10 +52,12 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
         var cues = SubtitleCueBuilder.Build(document.Segments, options.Subtitles);
         var builder = new StringBuilder();
 
-        // Plain "WEBVTT" with no header text, so the strip-the-tags comparison against the vtt
-        // output covers the whole file rather than only the cue payloads. What this file is gets
-        // said by its name.
-        builder.Append("WEBVTT").Append(options.NewLine).Append(options.NewLine);
+        // The same header the plain vtt output writes, from the same method, so the strip-the-tags
+        // comparison against it covers the whole file rather than only the cue payloads. What this
+        // file is gets said by its name; what the vtt header can say — that the text is a
+        // translation — has to be said identically in both or the comparison fails on exactly those
+        // documents.
+        builder.Append(VttFormatter.Header(document, options.NewLine));
 
         for (var i = 0; i < cues.Count; i++)
         {

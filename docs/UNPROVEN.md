@@ -1083,14 +1083,19 @@ machine's driver, 32.0.20102.3930, whose numbering does not match the window the
 listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
 `docs/PHASES.md` § *After v1*.
 
-### Translating into English — researched and spiked 2026-08-19, nothing built
+### Translating into English — researched and spiked 2026-08-19, seam built, nothing measured
 
 **No translation model has run inside this product.** The recommended checkpoint has been exercised
 in a scratch environment outside the working tree — fp32 PyTorch, CPU, against transcripts this
 project produced — and what that settled is recorded below with the rest. What has *not* happened:
-nothing has run through ONNX Runtime, no C# touches a translator, no quantised artefact exists, and
-no real-time factor for a translation pass has been measured, only per-segment times on one machine
-at one precision. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
+nothing has run through ONNX Runtime, no quantised artefact exists, and no real-time factor for a
+translation pass has been measured, only per-segment times on one machine at one precision. C# now
+touches a translator, but only the canned one: the seam landed on 2026-08-19 (`docs/PHASES.md`
+§ *Built 2026-08-19 — the translation seam*) with the contract, `ModelTask.Translation` and
+`--translate` wired to a fake that reads no weights. **Nothing in this repository has translated a
+word.** What the seam does carry is the three spike findings as invariants a test asserts — the
+mandatory target token, the dropped word timings, the enforced pass order — so the figures below
+are what the decode loop will be measured against rather than a description of anything running. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
 every model claim in it was read off a card, a config, a vocabulary file or a repository listing
 fetched that day, and where the spike has since contradicted it, the number below is the one that
 holds.

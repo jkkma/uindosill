@@ -218,6 +218,11 @@ public class ModelCatalogTests
 
         Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
         Assert.Equal(catalog.Models.Count, catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count);
+
+        // And the translation word exists with nothing behind it, which is the state Step 1 ships:
+        // the discriminator goes into the manifest's vocabulary before any entry uses it, because a
+        // build that did not know the word would list such an entry as an ASR model.
+        Assert.Empty(catalog.TranslationModels);
     }
 
     [Fact]
@@ -239,22 +244,49 @@ public class ModelCatalogTests
         Assert.Equal(ModelTask.Transcription, catalog.Get("asr").Task);   // absent means transcription
     }
 
+    [Fact]
+    public void ATranslationEntryIsNeitherAnAsrModelNorADiariser()
+    {
+        // The second time this discriminator has had to hold: a translation model reads text and
+        // returns text, so offering it to `transcribe` or to the speaker opt-in would load an ONNX
+        // graph as GGUF weights or as a diariser. Both lists have to exclude it by construction
+        // rather than by anybody remembering to filter.
+        const string Json = """
+            {"models":[
+            {"id":"mt","task":"translation","family":"opus-mt","displayName":"T","quantisation":"int8","fileName":"t.onnx","url":"https://e.com/t","license":"L","attributionId":"x","recommended":true},
+            {"id":"diar","task":"diarisation","family":"s","displayName":"D","quantisation":"int8","fileName":"d.onnx","url":"https://e.com/d","license":"L","attributionId":"x"},
+            {"id":"asr","family":"f","displayName":"A","quantisation":"q","fileName":"a.gguf","url":"https://e.com/a","license":"L","attributionId":"x"}]}
+            """;
+
+        var catalog = ModelCatalog.Parse(Json);
+
+        Assert.Equal(ModelTask.Translation, catalog.Get("mt").Task);
+        Assert.Equal(["mt"], catalog.TranslationModels.Select(m => m.Id));
+
+        // Listed first and marked recommended, and still not what an unspecified --model resolves to.
+        Assert.Equal("asr", catalog.Recommended?.Id);
+        Assert.DoesNotContain(catalog.TranscriptionModels, m => m.Id == "mt");
+        Assert.DoesNotContain(catalog.DiarisationModels, m => m.Id == "mt");
+    }
+
     [Theory]
     [InlineData("\"diarization\"")]      // a misspelling
+    [InlineData("\"translate\"")]        // the flag's name, not the task's
     [InlineData("null")]                  // present, and not a string
     [InlineData("1")]
     [InlineData("[\"diarisation\"]")]
-    public void ATaskThatIsNotOneOfTheTwoWordsIsRefusedRatherThanDefaulted(string task)
+    public void ATaskThatIsNotOneOfTheKnownWordsIsRefusedRatherThanDefaulted(string task)
     {
-        // Only absence means transcription. Defaulting a broken value would list a diarisation
-        // model as an ASR model, which is the one thing the field exists to stop.
+        // Only absence means transcription. Defaulting a broken value would list a diarisation or
+        // translation model as an ASR model, which is the one thing the field exists to stop.
         var json = $$"""
             {"models":[
             {"id":"d","task":{{task}},"family":"s","displayName":"D","quantisation":"q","fileName":"d.onnx","url":"https://e.com/d","license":"L","attributionId":"x"}]}
             """;
 
         var ex = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
-        Assert.Contains("known tasks are transcription and diarisation", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "known tasks are transcription, diarisation and translation", ex.Message, StringComparison.Ordinal);
     }
 }
 

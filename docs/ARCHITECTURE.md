@@ -20,12 +20,15 @@ Parakeet.Core           contracts + pure logic          (no dependencies at all)
 ```
 
 **One project per model, and that is the pattern rather than a coincidence.** `Parakeet.Core`
-declares `ITranscriptionEngine` and `ISpeakerLabeller` and knows nothing about what implements
-either; parakeet.cpp's interop is in one project and ONNX Runtime's is in another, so neither can
-leak into the other or into anything above them. The diariser's project also owns the three things
-its ONNX graph does *not* — a NeMo-faithful mel featurizer, the Arrival-Order Speaker Cache, and the
-streaming chunk loop — because all three are that model's business and none of them is diarisation
-in general.
+declares `ITranscriptionEngine`, `ISpeakerLabeller` and `ITranscriptTranslator` and knows nothing
+about what implements any of them; parakeet.cpp's interop is in one project and ONNX Runtime's is in
+another, so neither can leak into the other or into anything above them. The diariser's project also
+owns the three things its ONNX graph does *not* — a NeMo-faithful mel featurizer, the Arrival-Order
+Speaker Cache, and the streaming chunk loop — because all three are that model's business and none
+of them is diarisation in general. The translator's project does not exist yet: its contract and a
+fake shipped ahead of it, the way the diarisation discriminator shipped ahead of any diarisation
+entry, and when it arrives it is a fourth box on that diagram rather than a second responsibility
+for one of the three.
 
 ## The contracts
 
@@ -70,6 +73,27 @@ testable, and both audio sources being single-read means the opt-in opens the fi
 a cost only the opt-in pays. `FakeSpeakerLabeller` is to this seam what the fake engine is to the
 other; the only labeller in this build is the fake, and both the CLI flag and the window's checkbox
 say so rather than pretend.
+
+```csharp
+public interface ITranscriptTranslator : IAsyncDisposable   // the transcript in English; the opt-in's last pass
+{
+    TranslatorCapabilities Capabilities { get; }
+    ValueTask LoadAsync(CancellationToken ct = default);
+    IAsyncEnumerable<TranscriptSegment> TranslateAsync(
+        IReadOnlyList<TranscriptSegment> segments, TranslationOptions options,
+        IProgress<TranscriptionProgress>? progress = null, CancellationToken ct = default);
+}
+```
+
+The third takes segments and never audio: translation reads what the ASR wrote, and a translator
+that opened the file would be a second speech model. It returns segments rather than an annotation
+because, unlike a speaker turn, a translated segment *is* the displayable artefact — which is why
+its return type is the engine's and not the labeller's. It runs last, after the speakers, and that
+order belongs to the code: `SpeakerAssignment` attributes a speaker per word, a translated segment
+has no words, and translating first would coarsen every label rather than fail visibly.
+`TranscriptTranslation` is the driver every caller goes through, and it holds the translator to the
+contract — one segment out per segment in, times and speaker unchanged, no word timings carried
+across — because each of those failures produces a file that looks entirely correct.
 
 `EngineCapabilities` is not decoration. It carries `SupportsDecodeCancellation` and
 `SupportsThreadCount`, both **false** for parakeet.cpp, both verified against the header rather than

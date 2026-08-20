@@ -54,6 +54,9 @@ public sealed class ModelCatalog
     /// <summary>The entries the speaker-labelling opt-in may load. Empty until a model is integrated.</summary>
     public IReadOnlyList<ModelDescriptor> DiarisationModels => _byTask[ModelTask.Diarisation];
 
+    /// <summary>The entries the translation opt-in may load. Empty until a model is integrated.</summary>
+    public IReadOnlyList<ModelDescriptor> TranslationModels => _byTask[ModelTask.Translation];
+
     public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
         _byId.TryGetValue(id, out model);
 
@@ -198,8 +201,9 @@ public sealed class ModelCatalog
 
     /// <summary>
     /// <c>"task"</c> is optional and defaults to transcription; when present it must be one of the
-    /// two known words. A misspelling is refused rather than defaulted, because defaulting it
-    /// would list a diarisation model as an ASR model — the exact thing the field exists to stop.
+    /// known words. A misspelling is refused rather than defaulted, because defaulting it would
+    /// list a diarisation or translation model as an ASR model — the exact thing the field exists
+    /// to stop.
     /// </summary>
     private static ModelTask ParseTask(JsonElement element, string id)
     {
@@ -216,8 +220,9 @@ public sealed class ModelCatalog
         {
             "transcription" => ModelTask.Transcription,
             "diarisation" => ModelTask.Diarisation,
+            "translation" => ModelTask.Translation,
             _ => throw new InvalidDataException(
-                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription and diarisation."),
+                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation and translation."),
         };
     }
 

@@ -1,11 +1,21 @@
 namespace Parakeet.Core.Models;
 
 /// <summary>
-/// What a catalogue entry is for. The discriminator exists so that a diarisation model can be
-/// installed through the same catalogue, installer and digest checks as the ASR weights without
-/// ever surfacing as a selectable ASR model: <see cref="ModelCatalog.Recommended"/> and every
+/// What a catalogue entry is for. The discriminator exists so that a model which is not the ASR
+/// weights can be installed through the same catalogue, installer and digest checks without ever
+/// surfacing as a selectable ASR model: <see cref="ModelCatalog.Recommended"/> and every
 /// engine-selecting code path look only at <see cref="Transcription"/> entries.
 /// </summary>
+/// <remarks>
+/// Adding a member here compiles clean. Nothing switches on this enum exhaustively — every site
+/// asks whether an entry <i>is</i> the task it wants and refuses everything else — so the compiler
+/// will not point at the places a new member has to be considered. They are enumerated deliberately
+/// instead: <c>ModelTests</c> holds the catalogue half — a new task reaches no ASR list and no
+/// other task's list — and the CLI tests hold the refusals each command owes when it is handed the
+/// wrong kind of entry. What the two miss is anything that treated "not transcription" as a synonym
+/// for one particular other task, which is what the badge and the window's install subscription
+/// both did until translation arrived.
+/// </remarks>
 public enum ModelTask
 {
     /// <summary>Speech to text: what <c>transcribe</c> loads.</summary>
@@ -13,6 +23,12 @@ public enum ModelTask
 
     /// <summary>Who spoke when: what the speaker-labelling opt-in loads. Never an ASR model.</summary>
     Diarisation = 1,
+
+    /// <summary>
+    /// Transcript into English: what the translation opt-in loads. Never an ASR model and never a
+    /// diariser — it reads text and returns text, and has no idea what audio is.
+    /// </summary>
+    Translation = 2,
 }
 
 /// <summary>One downloadable set of weights.</summary>
@@ -24,9 +40,9 @@ public sealed record ModelDescriptor
     /// <summary>
     /// What the weights do. Read from the manifest's <c>"task"</c>; absent means
     /// <see cref="ModelTask.Transcription"/>, so every entry that predates the field keeps meaning
-    /// what it always meant. A build older than the field would still list a diarisation entry as
-    /// an ASR model, which is why no such entry is added to the manifest until the model behind
-    /// it exists — the discriminator has to ship first.
+    /// what it always meant. A build older than a task word would still list that entry as an ASR
+    /// model, which is why no such entry is added to the manifest until the word behind it ships —
+    /// the discriminator goes first, both times it has been needed.
     /// </summary>
     public ModelTask Task { get; init; } = ModelTask.Transcription;
 

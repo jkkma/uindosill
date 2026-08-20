@@ -5,11 +5,20 @@ using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Translation;
 
 namespace Parakeet.Cli;
 
 internal static class TranscribeCommand
 {
+    /// <summary>
+    /// What goes between a translated run's file name and its extension. SubRip has no comment
+    /// syntax and plain text has no header, so for those two this is the only place the output
+    /// can say it is not the language that was spoken; for the rest it is what keeps a
+    /// translated run from overwriting a plain one under --overwrite.
+    /// </summary>
+    private const string TranslatedInfix = "." + TranslationTarget.LanguageTag;
+
     public static async Task<int> RunAsync(CliContext context, ParsedCommandLine parsed, CancellationToken ct)
     {
         if (parsed.Positionals.Count == 0)
@@ -45,12 +54,21 @@ internal static class TranscribeCommand
         var options = BuildOptions(parsed);
         var quiet = parsed.HasFlag("quiet");
         var speakerOptions = BuildSpeakerOptions(parsed);
+        var translationOptions = BuildTranslationOptions(parsed);
 
         if (speakerOptions is null && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.OrdinalIgnoreCase))
         {
             throw new CliUsageException(
                 "-f rttm carries speaker turns, and there are none without --speakers; an empty .rttm would be written. " +
                 "Add --speakers or drop the format.");
+        }
+
+        // Resolved before anything else, for the same reason the diariser is: the answer to
+        // "--translate, and this build has no translator" is not a message about the ASR weights,
+        // and it is not one that arrives after a three-hour decode.
+        if (translationOptions is not null)
+        {
+            TranslatorFactory.Resolve(context, parsed.HasFlag("fake"));
         }
 
         // Resolved before the ASR engine, and only resolved — the labeller itself is built below,
@@ -74,6 +92,9 @@ internal static class TranscribeCommand
                 Formats = formats,
                 OutputDirectory = parsed.Value("out"),
                 Overwrite = overwrite,
+
+                // What makes a translated run's output its own rather than the transcription run's.
+                StemSuffix = translationOptions is null ? string.Empty : TranslatedInfix,
             })
             .ToList();
 
@@ -97,10 +118,24 @@ internal static class TranscribeCommand
         // build, unless the canned one was asked for — and every file gets a second pass.
         await using var labeller = speakerOptions is null ? null : CreateLabeller(context, parsed, speakerOptions);
 
+        // The other opt-in, created after the labeller because it runs after it. Its capabilities
+        // are checked against the formats now rather than at write time: refusing a file's fourth
+        // output after the first three have been written is not a refusal.
+        await using var translator = translationOptions is null
+            ? null
+            : TranslatorFactory.Create(context, parsed.HasFlag("fake"));
+
+        if (translator is not null)
+        {
+            TranslatorFactory.Check(translator, formats);
+            WarnAboutLanguageHint(context, parsed);
+        }
+
         WarnAboutThreads(context, parsed, engine);
 
-        var runner = new BatchTranscriptionRunner((job, progress, token) =>
-            RunOneAsync(context, engine, labeller, job, options, speakerOptions, progress, quiet, token));
+        var runner = new BatchTranscriptionRunner((job, progress, token) => RunOneAsync(
+            context, engine, labeller, translator, job, options, speakerOptions, translationOptions,
+            progress, quiet, token));
 
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
@@ -174,6 +209,58 @@ internal static class TranscribeCommand
         return options;
     }
 
+    /// <summary>Null when <c>--translate</c> was not given: the whole pass is behind that flag.</summary>
+    private static TranslationOptions? BuildTranslationOptions(ParsedCommandLine parsed)
+    {
+        if (!parsed.HasFlag("translate"))
+        {
+            if (parsed.Value("context-segments") is { Length: > 0 })
+            {
+                throw new CliUsageException("--context-segments only means something with --translate.");
+            }
+
+            return null;
+        }
+
+        var contextSegments = 0;
+        if (parsed.Value("context-segments") is { Length: > 0 } text)
+        {
+            if (!CommandLineParser.TryParseInt(text, out var value) || value < 0)
+            {
+                throw new CliUsageException($"--context-segments needs a non-negative integer, got '{text}'.");
+            }
+
+            contextSegments = value;
+        }
+
+        var options = new TranslationOptions { ContextSegments = contextSegments };
+        options.Validate();
+        return options;
+    }
+
+    /// <summary>
+    /// Says that <c>--language</c> did not reach the translator, when both were given.
+    /// </summary>
+    /// <remarks>
+    /// The two flags are one letter apart in a help listing and a mile apart in what they do, and
+    /// the plausible misreading — that <c>--language en</c> asks for English out — is exactly the
+    /// one that would leave somebody waiting for a translation that was never requested. It is a
+    /// hint to the speech model about what it is listening to; it reaches the ABI, no catalogue
+    /// model applies it, and no translator ever sees it.
+    /// </remarks>
+    private static void WarnAboutLanguageHint(CliContext context, ParsedCommandLine parsed)
+    {
+        if (parsed.Value("language") is not { Length: > 0 } hint)
+        {
+            return;
+        }
+
+        context.WriteError(
+            $"--language {hint} is a hint to the speech model about the audio, not a translation target: the " +
+            "translator is many-to-one into English and is never told what it is reading. --translate is what asks " +
+            "for English.");
+    }
+
     /// <summary>
     /// The real diariser, or the canned one under <c>--fake</c>.
     /// </summary>
@@ -232,9 +319,11 @@ internal static class TranscribeCommand
         CliContext context,
         ITranscriptionEngine engine,
         ISpeakerLabeller? labeller,
+        ITranscriptTranslator? translator,
         TranscriptionJob job,
         TranscriptionOptions options,
         SpeakerLabellingOptions? speakerOptions,
+        TranslationOptions? translationOptions,
         IProgress<TranscriptionProgress>? _,
         bool quiet,
         CancellationToken ct)
@@ -273,6 +362,22 @@ internal static class TranscribeCommand
             speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
         }
 
+        // Last, and after the speakers on purpose: SpeakerAssignment attributes a speaker per word
+        // and cuts segments where the speaker changes, and a translated segment has no words. Run
+        // the other way round it would fall back to "whoever talks most across the span" on every
+        // segment — a coarser label, arrived at silently.
+        //
+        // The transcript as the engine wrote it is kept: the anomalies reported below are about
+        // what was heard, and translation destroys both signals they rest on — a translated segment
+        // has no word confidences, and a stretch the model emitted in another script comes back as
+        // English prose. Reading them off the translation would quietly stop reporting either.
+        var transcribed = document;
+        if (translator is not null && translationOptions is not null)
+        {
+            document = await TranscriptTranslation.TranslateAsync(
+                document, translator, translationOptions, progress, ct).ConfigureAwait(false);
+        }
+
         if (!quiet && context.Interactive)
         {
             context.Error.Write('\r');
@@ -292,7 +397,8 @@ internal static class TranscribeCommand
             // Silence wins when both apply: an empty transcript has no segments to flag, and the
             // reason it is empty is the only thing worth saying about it. A labeller at its speaker
             // cap is said after either, because it is about the names and not the words.
-            Warning = Join(DescribeSilence(engine, document) ?? DescribeAnomalies(document, options), speakerWarning),
+            Warning = Join(
+                DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options), speakerWarning),
         };
     }
 
@@ -346,7 +452,14 @@ internal static class TranscribeCommand
     /// reaches the ABI and a non-prompt model ignores it — so saying where it happened is the
     /// whole of what the tool can honestly do.
     /// </summary>
-    private static string? DescribeAnomalies(TranscriptDocument document, TranscriptionOptions options)
+    /// <remarks>
+    /// Internal rather than private so a test can hold the property the caller depends on: this
+    /// reads the transcript as the engine wrote it, and translation destroys both signals it rests
+    /// on. No CLI invocation can reach the difference — the canned engine writes Latin script at
+    /// confidences well above the threshold, and the threshold is not a flag — so the two documents
+    /// are handed to it directly instead.
+    /// </remarks>
+    internal static string? DescribeAnomalies(TranscriptDocument document, TranscriptionOptions options)
     {
         var anomalies = TranscriptAnalysis.Analyse(document, options.LowConfidenceThreshold);
         if (anomalies.Count == 0)

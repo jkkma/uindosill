@@ -21,7 +21,7 @@ public sealed class VttFormatter : ITranscriptFormatter
         var cues = SubtitleCueBuilder.Build(document.Segments, options.Subtitles);
         var builder = new StringBuilder();
 
-        builder.Append("WEBVTT").Append(options.NewLine).Append(options.NewLine);
+        builder.Append(Header(document, options.NewLine));
 
         for (var i = 0; i < cues.Count; i++)
         {
@@ -50,6 +50,34 @@ public sealed class VttFormatter : ITranscriptFormatter
             }
 
             builder.Append(options.NewLine);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// <c>WEBVTT</c>, and a <c>NOTE</c> saying so when the cues are a translation rather than what
+    /// was said.
+    /// </summary>
+    /// <remarks>
+    /// WebVTT has a comment syntax, so it can carry the marker in-band; SubRip has none and is
+    /// covered by the <c>.en</c> infix in its name instead, as plain text is. Shared with the
+    /// word-timed WebVTT formatter rather than written twice, because those two outputs are held
+    /// byte-identical to each other once the timing tags are stripped, and a header in one of them
+    /// only would break that on exactly the documents this note exists for. It carries no markup,
+    /// for the same reason.
+    /// </remarks>
+    internal static string Header(TranscriptDocument document, string newLine)
+    {
+        var builder = new StringBuilder();
+        builder.Append("WEBVTT").Append(newLine).Append(newLine);
+
+        if (document.TranslatedTo is { } target)
+        {
+            var by = document.TranslationModelId is { } model ? $" by {model}" : string.Empty;
+            builder.Append("NOTE Translated into ").Append(target).Append(by)
+                   .Append(". The text is a translation of the speech; the times are the speech.")
+                   .Append(newLine).Append(newLine);
         }
 
         return builder.ToString();
