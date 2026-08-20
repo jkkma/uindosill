@@ -29,20 +29,31 @@ conventional guesses — are confirmed by the same listing.
 | Entry | Bytes | SHA-256 |
 |---|---|---|
 | `tdt-0.6b-v3-f16` | 1,441,046,400 | `8ba47343…fc5abb22` |
+| `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
+| `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
+
+**Three entries, and all three are unquantised.** The catalogue offered f16 plus four quantisations
+of it until 2026-08-20, when the four were withdrawn — a product decision recorded in
+`docs/PHASES.md`, not a quality finding. Their digests are kept here because a pin that was once
+shipped is worth not re-deriving, and because the measurements below are about these exact files:
+
+| Withdrawn 2026-08-20 | Bytes | SHA-256 |
+|---|---|---|
 | `tdt-0.6b-v3-q8_0` | 940,663,680 | `4d69a4a6…cd07d757` |
 | `tdt-0.6b-v3-q6_k` | 812,700,512 | `5fe7e463…d2d717aa` |
 | `tdt-0.6b-v3-q5_k` | 741,867,360 | `5ebd1d55…0646c2e4` |
 | `tdt-0.6b-v3-q4_k` | 675,200,864 | `993d73fe…8b1d5ee8` |
-| `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 
-The f16 digest has independent corroboration the others do not: a copy installed from that URL and
+Do not add one back without reversing the decision in `docs/PHASES.md` first.
+
+The f16 digest has independent corroboration the rest do not: a copy installed from that URL and
 used to transcribe 30 seconds, ten minutes and 2 h 55 m of audio — three bit-identical runs —
-hashes to exactly the value the repository publishes. For the other four, the pin means the
-download matches what upstream serves today, which is what a digest is for and is not a claim about
+hashes to exactly the value the repository publishes. For the withdrawn four, the pin meant the
+download matched what upstream served, which is what a digest is for and is not a claim about
 accuracy. **Pinning is not measurement**: a digest says the bytes are the ones upstream serves, and
-says nothing whatever about what they transcribe. q8_0 through q4_k have since been *diffed* against
-f16 on nearly three hours of real speech — see the section below and `docs/UNPROVEN.md` — but that
-is divergence, not accuracy, and their `notes` still say unmeasured for the reason given there.
+says nothing whatever about what they transcribe. q8_0 through q4_k were *diffed* against f16 on
+nearly three hours of real speech — see the section below and `docs/UNPROVEN.md` — but that is
+divergence, not accuracy.
 
 ### The diarisation entry is a different licence and a different upstream
 

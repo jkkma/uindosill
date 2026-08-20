@@ -9,12 +9,15 @@ public sealed partial class JobViewModel : ObservableObject
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFinished))]
+    [NotifyPropertyChangedFor(nameof(ProgressLabel))]
     private JobState _state = JobState.Pending;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressLabel))]
     private double _progress;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressLabel))]
     private bool _isIndeterminate;
 
     [ObservableProperty]
@@ -42,7 +45,36 @@ public sealed partial class JobViewModel : ObservableObject
 
     public List<string> OutputFiles { get; } = [];
 
+    /// <summary>
+    /// The transcript as the window draws it: one entry per segment, each carrying its speaker as
+    /// a chip rather than as a prefix on the text.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="Transcript"/> rather than instead of it. That string is what a person
+    /// copies out of the window and what the pipeline's own tests pin; this is the view's shape.
+    /// </remarks>
+    public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> Lines { get; } = [];
+
     public bool IsFinished => State is JobState.Completed or JobState.Failed or JobState.Cancelled;
+
+    /// <summary>
+    /// The percentage shown beside the file name while it is being transcribed, or null when there
+    /// is no honest number to show.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than "0%" in three cases, and each is a different kind of nothing: a job that
+    /// has not started, a job that has finished — where the row says how many files it wrote
+    /// instead — and a stage that cannot report a fraction at all, which is what
+    /// <see cref="IsIndeterminate"/> means. A determinate-looking 0% over an indeterminate bar
+    /// claims a precision the pipeline has not got.
+    ///
+    /// Formatted invariantly because the surrounding interface is English throughout; rounding to
+    /// whole percent keeps a decimal separator out of it either way.
+    /// </remarks>
+    public string? ProgressLabel =>
+        State is JobState.Running && !IsIndeterminate
+            ? Progress.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "%"
+            : null;
 
     public void Apply(TranscriptionProgress progress)
     {
@@ -89,6 +121,7 @@ public sealed partial class JobViewModel : ObservableObject
         Error = null;
         Warning = null;
         Transcript = string.Empty;
+        Lines.Clear();
         OutputFiles.Clear();
     }
 
@@ -117,6 +150,7 @@ public sealed partial class JobViewModel : ObservableObject
         if (result.Document is { } document)
         {
             Transcript = Render(document);
+            Relines(document);
         }
     }
 
@@ -126,6 +160,44 @@ public sealed partial class JobViewModel : ObservableObject
     /// <c>Text</c> stays free of names on purpose: it is what the JSON's <c>text</c> field carries
     /// and what a word error rate is scored on, and a name is not a word anybody said.
     /// </summary>
+    /// <summary>
+    /// Rebuilds <see cref="Lines"/> from a finished document, assigning each speaker one of the
+    /// four chip styles in the order they are first heard.
+    /// </summary>
+    /// <remarks>
+    /// The diariser numbers speakers in the order it first hears them, and this follows that same
+    /// order rather than sorting by name — so the chip a speaker gets does not move when a name is
+    /// edited, and two files transcribed in the same session do not swap colours between them.
+    ///
+    /// The modulo is a backstop rather than a policy. Four is the diariser's architectural ceiling,
+    /// so a fifth speaker is not something this pipeline can produce; if one ever arrives it wraps
+    /// to the first chip rather than throwing, because a colour clash is a smaller failure than a
+    /// window that will not draw a transcript.
+    /// </remarks>
+    private void Relines(TranscriptDocument document)
+    {
+        Lines.Clear();
+
+        var chips = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var segment in document.Segments.Where(s => !s.IsEmpty))
+        {
+            var speaker = segment.Speaker;
+            var chip = -1;
+
+            if (speaker is not null)
+            {
+                if (!chips.TryGetValue(speaker, out chip))
+                {
+                    chip = chips.Count % 4;
+                    chips[speaker] = chip;
+                }
+            }
+
+            Lines.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip));
+        }
+    }
+
     internal static string Render(TranscriptDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);

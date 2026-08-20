@@ -27,7 +27,10 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
 > corpus no quantisation costs measurable accuracy. The normaliser is this project's own, not the
 > leaderboard's, so that figure is comparable to itself and not to a published one; one English
 > corpus of one genre is the whole of the evidence, and [UNPROVEN.md](docs/UNPROVEN.md) says
-> exactly what it does and does not cover.
+> exactly what it does and does not cover. **The four quantisations were withdrawn from the
+> catalogue on 2026-08-20 and the product now offers f16 alone** — a product decision rather
+> than a quality one, since the measurement above is exactly what makes it cheap; the reasoning
+> is in [PHASES.md](docs/PHASES.md).
 
 ## What it does
 
@@ -100,7 +103,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 751 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 759 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -222,7 +225,7 @@ of a rewrite.
 | UI | Avalonia 12.1.1 | Plain `net10.0` TFM on Windows, so the desktop app cross-builds from Linux CI. |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 | Avalonia's documented default; source-generator based. |
 | Engine | `mudler/parakeet.cpp` via P/Invoke | MIT, ABI v6, and the only candidate with a published decode-parity result. |
-| Model format | GGUF | `mudler/parakeet-cpp-gguf` (f16, q8_0, q6_k, q5_k, q4_k). |
+| Model format | GGUF | `mudler/parakeet-cpp-gguf`, f16 only — the quantisations were withdrawn from the catalogue 2026-08-20. |
 | Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
 | Deployment | Self-contained + ReadyToRun, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | No single-file, no trimming, no NativeAOT. |
 

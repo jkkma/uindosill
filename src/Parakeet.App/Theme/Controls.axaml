@@ -1,0 +1,423 @@
+<!--
+  Control styling for the design decided 2026-08-19, and the reusable text classes the window
+  draws with.
+
+  Split from Tokens.axaml on a real distinction rather than for tidiness: that file overrides
+  Fluent resource *keys*, which reach the whole application by name. This one handles the three
+  things the design needs that have no key in Avalonia.Themes.Fluent 12.1.1 — the selected
+  ListBoxItem background, and the ProgressBar's fill and track — plus the geometry and type roles
+  that were never resource keys in any version. Searching the shipped assembly for
+  ListBoxItemBackgroundSelected and ProgressBarForeground finds nothing, so an override written
+  there would have loaded quietly and done nothing at all.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── Type roles ──────────────────────────────────────────────────────────────────────────
+       The design's six roles, as classes. Sizes and weights are the token sheet's.
+
+       Body is 500 rather than 400, so it is set on TextBlock itself: a style setter loses to any
+       local value, so a control that names its own weight still wins. Tabular figures are on for
+       the same reason they are in the design — timestamps, durations and percentages are numbers
+       you read rather than code, and they still have to align down a column. -->
+  <Style Selector="TextBlock">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+
+  <Style Selector="SelectableTextBlock">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+
+  <!-- Tab page headings — Notices, Updates, the selected model. -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.255" />
+  </Style>
+
+  <!-- File names, model names. -->
+  <Style Selector="TextBlock.emphasis">
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <!-- OUTPUT FORMATS, IN MEMORY, LICENCE. -->
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.55" />
+    <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
+  </Style>
+
+  <!-- Status lines, sizes, hints. -->
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMetaBrush}" />
+  </Style>
+
+  <!-- The segment-cap note, warnings inside a row. -->
+  <Style Selector="TextBlock.fine">
+    <Setter Property="FontSize" Value="10.5" />
+    <Setter Property="LineHeight" Value="16.3" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- Text you copy rather than read: paths, extensions, hex, licence notices. -->
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource MonoFamily}" />
+  </Style>
+  <Style Selector="SelectableTextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource MonoFamily}" />
+  </Style>
+
+  <Style Selector="TextBlock.secondary">
+    <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
+  </Style>
+
+  <!-- The provenance line, which says whether an entry was checked. Amber is the unverified case
+       only; a verified line reading "digest pinned" in amber draws a confirmation as a problem. -->
+  <Style Selector="TextBlock.provenance">
+    <Setter Property="Foreground" Value="{DynamicResource StatusWarningBrush}" />
+  </Style>
+  <Style Selector="TextBlock.provenance.verified">
+    <Setter Property="Foreground" Value="{DynamicResource StatusVerifiedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.warning">
+    <Setter Property="Foreground" Value="{DynamicResource StatusWarningBrush}" />
+  </Style>
+  <Style Selector="TextBlock.error">
+    <Setter Property="Foreground" Value="{DynamicResource StatusErrorBrush}" />
+  </Style>
+
+  <!-- ── Buttons ─────────────────────────────────────────────────────────────────────────────
+       30px in a row, 32px standing on a page; square; a hairline rather than a fill. -->
+  <Style Selector="Button">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="13,0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <Style Selector="Button:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DisabledEdgeBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource DisabledTextBrush}" />
+  </Style>
+
+  <!-- The one filled button on a page: Start, Check now. -->
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha600Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.primary /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource GroundBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Matcha700Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha700Brush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource GroundBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DisabledEdgeBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource DisabledTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.onPage">
+    <Setter Property="Height" Value="32" />
+  </Style>
+
+  <!-- ── Fields ──────────────────────────────────────────────────────────────────────────────
+       30px, square, a hairline that does not change the box. -->
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="NumericUpDown">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ── Checkbox ────────────────────────────────────────────────────────────────────────────
+       17px and square. Fluent draws a 20px rounded box, so both are set on the template part. -->
+  <Style Selector="CheckBox">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="CheckBox /template/ Border#NormalRectangle">
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource UncheckedBoxBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+    <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+  <Style Selector="CheckBox:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+  </Style>
+
+  <!-- ── List rows ───────────────────────────────────────────────────────────────────────────
+       Square, 9px/10px padding, and the faintest possible "this one" when selected: matcha-50
+       with a matcha-200 hairline. There is no ListBoxItemBackgroundSelected key in Fluent 12.1.1,
+       so this is done on the template's presenter, where the theme's own pseudo-class styles put
+       it. Writing it as a resource override would have compiled and done nothing. -->
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="5" />
+  </Style>
+
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="10,9" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha200Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha200Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <!-- ── Progress ────────────────────────────────────────────────────────────────────────────
+       4px in a row, square, matcha-400 running on an #E9EBE5 track. Neither ProgressBarForeground
+       nor a track key exists in Fluent 12.1.1; the default template binds both to the control's
+       own Foreground and Background, so they are set there. -->
+  <Style Selector="ProgressBar">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Matcha400Brush}" />
+    <Setter Property="Background" Value="{DynamicResource ProgressTrackBrush}" />
+  </Style>
+  <Style Selector="ProgressBar /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <!-- ── The pill view switcher ──────────────────────────────────────────────────────────────
+       One of the four shapes that keeps a corner, and it keeps it because a pill reads as
+       tappable. The segments are radio buttons rather than tab headers: the pages live in a
+       TabControl whose own header strip is collapsed, so this is the only thing a user sees. -->
+  <Style Selector="Border.switcher">
+    <Setter Property="Background" Value="{DynamicResource SunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <Style Selector="RadioButton.segment">
+    <Setter Property="Padding" Value="15,5" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
+    <Setter Property="LetterSpacing" Value="-0.0625" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Pill"
+                Background="Transparent"
+                CornerRadius="999"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="RadioButton.segment:pointerover /template/ Border#Pill">
+    <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+  </Style>
+
+  <Style Selector="RadioButton.segment:checked /template/ Border#Pill">
+    <Setter Property="Background" Value="{DynamicResource Matcha100Brush}" />
+  </Style>
+  <Style Selector="RadioButton.segment:checked">
+    <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <!-- ── The pages behind the switcher ───────────────────────────────────────────────────────
+       A TabControl still hosts and switches the pages; what it does not do is draw its own
+       header strip, because the design puts the switcher in the headerbar where a tab strip
+       cannot go. Collapsing the presenter rather than removing the TabControl keeps one selected
+       index driving both, so the pills and the pages cannot disagree. -->
+  <Style Selector="TabControl.headless">
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="TabControl.headless /template/ ItemsPresenter#PART_ItemsPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <!-- ── Window buttons ──────────────────────────────────────────────────────────────────────
+       24px circles, 7px apart — genuinely circles rather than rounded rectangles, which is why
+       they keep their shape in a square design. Close goes red on hover with a white glyph. -->
+  <Style Selector="Button.window">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Background" Value="{DynamicResource WindowButtonBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.window /template/ ContentPresenter">
+    <Setter Property="CornerRadius" Value="999" />
+  </Style>
+  <Style Selector="Button.window:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource RuleSeenBrush}" />
+  </Style>
+  <Style Selector="Button.window.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource StatusErrorBrush}" />
+  </Style>
+  <Style Selector="Button.window.close:pointerover Path">
+    <Setter Property="Stroke" Value="{DynamicResource GroundBrush}" />
+  </Style>
+
+  <!-- ── Panels and badges ───────────────────────────────────────────────────────────────────
+       Square, and bordered with a hairline. -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Border.tinted">
+    <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha200Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Border.badge">
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.badge TextBlock">
+    <Setter Property="FontSize" Value="9" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.54" />
+  </Style>
+
+  <!-- Solid: what is in memory. Outlined: what a model does rather than what state it is in.
+       The outline is what keeps speaker labelling inside the matcha family — it was #6B4E9C,
+       which is taro's neighbourhood, and would read as a v2 feature the moment an Ask tab
+       exists. -->
+  <Style Selector="Border.badge.solid">
+    <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+  <Style Selector="Border.badge.solid TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource GroundBrush}" />
+  </Style>
+  <Style Selector="Border.badge.outlined">
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha400Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.badge.outlined TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
+  </Style>
+
+  <!-- Speaker labels: 6px, one of the four shapes that keeps a corner. Two fills then two
+       outlines, a closed set of four because four is the diariser's architectural ceiling
+       rather than a setting. -->
+  <Style Selector="Border.speaker">
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+  <Style Selector="Border.speaker TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <!-- Two fills, then two outlines: four speakers told apart without leaving the matcha family or
+       borrowing taro, which belongs to v2 and would make labelling look like a v2 feature. The set
+       is closed at four because that is the diariser's ceiling, not a setting, so there is
+       deliberately no fifth style here to fall through to. -->
+  <Style Selector="Border.speaker.chip0">
+    <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip0 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource GroundBrush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip1">
+    <Setter Property="Background" Value="{DynamicResource Matcha100Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip1 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip2">
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha600Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.speaker.chip2 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip3">
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha400Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.speaker.chip3 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+
+  <!-- ── Separator ───────────────────────────────────────────────────────────────────────── -->
+  <Style Selector="Separator">
+    <Setter Property="Background" Value="{DynamicResource RuleSeenBrush}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+</Styles>

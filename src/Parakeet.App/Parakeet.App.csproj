@@ -17,10 +17,10 @@
 
       Velopack installs a Windows application under %LOCALAPPDATA%\<package id> and its uninstall
       deletes that directory recursively. This product's downloaded weights live in
-      %LOCALAPPDATA%\Uindosill\models — 675 MB for one catalogue entry, 4.295 GiB for the whole
-      ladder on the machine this was checked on, plus a ~474 MB diariser — so an id
-      of "Uindosill" would make uninstall delete every one of them. The id is a separate directory
-      that shares no path segment with the data root, which is what keeps the two apart.
+      %LOCALAPPDATA%\Uindosill\models — 1.34 GiB for the transcription weights, 453 MiB for the
+      diariser and 1.34 GiB for the translator, 3.12 GiB for all three — so an id of "Uindosill"
+      would make uninstall delete every one of them. The id is a separate directory that shares no
+      path segment with the data root, which is what keeps the two apart.
 
       Nothing user-facing carries this string: the installer's title, its shortcut and its
       Add/Remove Programs entry all come from VelopackPackageTitle below.
@@ -38,11 +38,31 @@
     <AssemblyMetadata Include="VelopackPackageId" Value="$(VelopackPackageId)" />
   </ItemGroup>
 
+  <!--
+    The two typefaces the interface is drawn in, embedded rather than asked of the system.
+
+    Both are SIL Open Font Licence 1.1, which is what makes shipping them inside the installer
+    legal; their OFL texts are in licences/ and travel to the output like every other notice, and
+    both have a row in Attribution.Components so `uindosill notice` names them.
+
+    These are the *static* instances, not the variable fonts upstream also publishes. Avalonia's
+    family grouping reads the typographic family name, and the static faces carry a legacy family
+    name that disagrees with it — "Instrument Sans Medium" against "Instrument Sans" — so which
+    name the toolkit groups by is the difference between one family with four weights and four
+    families with one each. That is asserted rather than assumed, by
+    TypographyTests.TheDesignsTypefacesAreEmbeddedAndResolveAtEveryWeightItDraws.
+
+    Only the weights the design actually draws are here: 400/500/600/700 for the sans, 400/500 for
+    the mono. About 313 KB in total.
+  -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/Fonts/*.ttf" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Velopack" />
   </ItemGroup>

@@ -262,10 +262,16 @@ public static class Attributions
                 "extent permitted under the CC BY 4.0 disclaimer of warranties and limitation of liability " +
                 "(section 5 of the licence).",
             MaterialUri = new Uri("https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"),
+            // CC BY 4.0 §3(a)(1)(B) wants modifications indicated, and what this build actually
+            // hands a user is one converted file. It said "quantised (q8_0, q6_k, q5_k, q4_k)"
+            // until 2026-08-20, when the quantised ladder was withdrawn from the catalogue: a
+            // notice describing conversions the product no longer distributes is a notice about
+            // somebody else's files. The GGUF conversion itself is still a modification and still
+            // has to be declared.
             ModificationNotice =
-                "Modified: the original NVIDIA NeMo checkpoint was converted to the GGUF format and, for some " +
-                "builds, quantised (q8_0, q6_k, q5_k, q4_k). Uindosill redistributes these converted files and " +
-                "does not redistribute the original checkpoint.",
+                "Modified: the original NVIDIA NeMo checkpoint was converted to the GGUF format (f16, " +
+                "unquantised). Uindosill redistributes that converted file and does not redistribute the " +
+                "original checkpoint.",
             LicenceStatement = "Creative Commons Attribution 4.0 International (CC BY 4.0),",
             LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
         },
@@ -429,6 +435,32 @@ public static class Attributions
             Component = "CommunityToolkit.Mvvm",
             License = "MIT",
             Uri = new Uri("https://github.com/CommunityToolkit/dotnet"),
+        },
+        // The two typefaces the window is drawn in, embedded in the desktop application as static
+        // instances of the upstream variable fonts. The SIL Open Font Licence is what makes that
+        // legal, and it is the one licence here with a condition about the *name*: §5 forbids
+        // redistributing a modified font under its reserved name, so these ship unmodified and
+        // under their own names rather than subsetted, which is also why the whole face is here
+        // when the interface uses a few hundred glyphs. The licence text travels in licences/,
+        // because OFL requires the copyright notice and the licence with every copy — the CLI zip
+        // carries neither font, having no window to draw.
+        new ComponentLicence
+        {
+            Component = "Instrument Sans (typeface)",
+            License = "OFL-1.1",
+            Uri = new Uri("https://github.com/Instrument/instrument-sans"),
+            Notes =
+                "Copyright 2022 The Instrument Sans Project Authors. Shipped in the desktop application "
+                + "only; licences/InstrumentSans-OFL.txt travels with it.",
+        },
+        new ComponentLicence
+        {
+            Component = "Chivo Mono (typeface)",
+            License = "OFL-1.1",
+            Uri = new Uri("https://github.com/Omnibus-Type/Chivo"),
+            Notes =
+                "Copyright 2019 The Chivo Project Authors. Shipped in the desktop application only; "
+                + "licences/ChivoMono-OFL.txt travels with it.",
         },
         // Ships in the desktop application only: it is what builds the installer and what checks
         // for a newer version. The CLI zip carries none of it. The licence was read off the

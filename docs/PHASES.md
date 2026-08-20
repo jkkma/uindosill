@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 751 tests, no weights, no display, no network — **742 passed and 9 skipped**, and
+**Status:** met. 759 tests, no weights, no display, no network — **750 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
@@ -253,8 +253,9 @@ assembly metadata so `PackagingIdentity` and its tests read the value the instal
 built with rather than a second literal.
 
 Three things hold that id down, because getting it wrong destroys every weight a user has
-downloaded — 675 MB for the smallest catalogue entry alone, and 4.295 GiB on the machine this was
-checked on — and nothing else in the build would say so:
+downloaded — 453 MiB for the smallest catalogue entry alone, 3.121 GiB for all three, and 4.295 GiB
+on the machine this was checked on, which then had the whole quantisation ladder installed — and
+nothing else in the build would say so:
 
 - **Five tests** in `tests/Parakeet.App.Tests/PackagingTests.cs`. They assert the id is not the data
   directory's name, that it survives the case-folding and punctuation-stripping an installer might
@@ -1264,6 +1265,50 @@ written for it would be a rule nothing calibrated. `transcribe --translate` repo
 speaker-cap note; `uindosill translate` reports it by line number rather than by timestamp, because
 that command's segments are one synthetic second apiece and `[00:03]` would be a time that never
 existed.
+
+### Decided 2026-08-20 — one transcription entry, unquantised
+
+**The quantised ladder is withdrawn from the catalogue. `tdt-0.6b-v3-f16` is the only transcription
+entry the product offers, and there is nothing below it.** Until today the catalogue shipped f16
+and four quantisations of it — q8_0, q6_k, q5_k and q4_k — and the Models tab presented all five as
+a ladder to choose from. It now presents one.
+
+**This is not a quality finding, and saying so is the point.** The ladder was measured, and the
+measurement is why the decision is cheap: over eleven hours of accented English earnings calls,
+every quantisation scored within 0.08 points of f16's 10.21% word error rate, and the smallest of
+them differed from f16 on 2.69% of tokens while being neither more nor less wrong. Nothing
+discovered about those files made them unfit. `docs/UNPROVEN.md` keeps that ladder in full,
+unedited, because it is a dated record of a real measurement on real files — the files still exist
+in the upstream repository and the digests still pin them. What changed is what this product
+*offers*, not what was true about them.
+
+**The argument is a product one.** A ladder asks a user to trade download size against accuracy at
+the moment they are least able to evaluate the trade — before they have transcribed anything — and
+the honest answer the catalogue itself gave was the same entry every time, since f16 was the
+recommended entry throughout and the four alternatives saved between 500 MB and 766 MB for a
+difference no measurement here could distinguish from noise. Offering the choice made the window
+look like a decision was required when the project's own evidence said it was not.
+
+**What it costs, stated rather than waved away.** The floor for transcription is now a 1.34 GiB
+download with no smaller option behind it, which is worse for a user on a metered connection or a
+small disk, and the CPU decode is slower than q8_0's. That is the whole of the cost and it is
+accepted deliberately. Nobody should reverse it by adding an entry back to `models.json` without
+reversing this paragraph first — a catalogue that quietly regrows a ladder is how the Models tab
+became a menu the first time.
+
+**Three entries remain and all three are unquantised**: the f16 transcription weights at 1.342 GiB,
+the Sortformer diariser at 453 MiB and the OPUS-MT translator at 1.337 GiB, 3.121 GiB together
+against the 4.295 GiB the ladder alone occupied on the machine the uninstall hazard was checked on.
+Two things that quoted the old figures were corrected the same day rather than left to drift: the
+CC BY modification notice in `Licensing/Attribution.cs`, which declared quantisations this build no
+longer distributes and would have put a notice about somebody else's files in front of a user, and
+the Models tab's own line about what an uninstall leaves behind.
+
+**The deferred digests are untouched and that is not a contradiction.** `models.json` records
+name, size and SHA-256 for ten files in the same upstream repository, several of them quantised,
+and the block's own comment already says what they are: not catalogue entries, not installable and
+not selectable by this build, recorded so a later version does not have to re-derive them. A
+recorded digest is not an offer.
 
 ## The honest summary
 

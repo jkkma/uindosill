@@ -26,6 +26,50 @@ public partial class MainWindow : Window
         {
             browse.Click += OnBrowseOutput;
         }
+
+        WireHeaderBar();
+    }
+
+    /// <summary>
+    /// The headerbar does the two jobs the OS title bar was doing before the design turned it off:
+    /// it moves the window, and it carries the minimise, maximise and close buttons.
+    /// </summary>
+    /// <remarks>
+    /// Every lookup is null-tolerant for the same reason the two above are — the headless test host
+    /// builds this window, and a control that a future edit renames should fail a test rather than
+    /// throw inside a constructor.
+    /// </remarks>
+    private void WireHeaderBar()
+    {
+        if (this.FindControl<Border>("HeaderBar") is { } header)
+        {
+            // Only a press that lands on the bar itself, not one that has already been handled by a
+            // button or the switcher sitting on it.
+            header.PointerPressed += (_, e) =>
+            {
+                if (!e.Handled && e.GetCurrentPoint(header).Properties.IsLeftButtonPressed)
+                {
+                    BeginMoveDrag(e);
+                }
+            };
+        }
+
+        if (this.FindControl<Button>("WindowMinimise") is { } minimise)
+        {
+            minimise.Click += (_, _) => WindowState = WindowState.Minimized;
+        }
+
+        if (this.FindControl<Button>("WindowMaximise") is { } maximise)
+        {
+            maximise.Click += (_, _) => WindowState =
+                WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        }
+
+        if (this.FindControl<Button>("WindowClose") is { } close)
+        {
+            // Close() rather than exiting: the shutdown ordering in OnClosing has to run.
+            close.Click += (_, _) => Close();
+        }
     }
 
     /// <summary>
@@ -39,6 +83,19 @@ public partial class MainWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+
+        // Square the corner, once there is a handle to square. The design calls for a square
+        // window, and on Windows 11 the compositor rounds top-level windows on its own terms —
+        // extending the client area to the decorations does not hand the corner over. DWM takes a
+        // preference rather than a radius, and one of its values is do-not-round, which is the
+        // whole reason this design is reachable where the earlier 12px one was not.
+        //
+        // Nothing reads the answer: this is decoration, and a machine that refuses gets the
+        // rounded corner it would have had anyway. See Services/WindowCorner.cs.
+        if (TryGetPlatformHandle() is { } handle)
+        {
+            Services.WindowCorner.MakeSquare(handle.Handle);
+        }
 
         if (DataContext is MainWindowViewModel viewModel)
         {

@@ -18,3 +18,9 @@
 # every re-run reports every fixture as changed and the "re-running must be a no-op" guarantee
 # those scripts are built around stops meaning anything.
 tests/fixtures/diarisation/**/expected.json text eol=lf
+
+# The two embedded typefaces. TrueType begins with a version tag full of NUL bytes, so git's
+# text-or-binary sniff gets these right on its own — but the rule above exists because that sniff
+# is a heuristic, and a font checked out with its 0x0A bytes rewritten is a font that fails to
+# load on somebody else's clone with no obvious cause. Cheaper to say so than to diagnose.
+*.ttf binary
