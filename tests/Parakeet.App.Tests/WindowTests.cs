@@ -223,7 +223,7 @@ public class WindowTests
         Assert.Equal(1, provider.ReleaseCount);
     }
 
-    private static MainWindowViewModel NewViewModel(out string directory)
+    internal static MainWindowViewModel NewViewModel(out string directory)
     {
         directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
         return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);

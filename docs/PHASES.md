@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 759 tests, no weights, no display, no network — **750 passed and 9 skipped**, and
+**Status:** met. 767 tests, no weights, no display, no network — **758 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
@@ -399,6 +399,21 @@ talking; and the things that are genuinely circles rather than rounded rectangle
 buttons, the transport's play button, and its seek handle. The rule that came out of it is shorter
 than the list: **rectangles are square, circles stay circles, and a corner survives only where it
 carries meaning.**
+
+**The window buttons left that list on 2026-08-20**, at the maintainer's direction and after seeing
+them on a real screen. They are a bare glyph now — a dash, the two overlapping squares of the
+restore mark, and a cross — with no ground at all until the pointer is over them, which is how the
+editors this application sits beside draw theirs. The circles were the one exception on the list
+whose shape was doing the least work: a pill says *tappable*, a chat blob's flattened corner says
+*who is talking*, and a filled circle in the corner of a headerbar said only that somebody had
+decided to put a circle there. So the rule loses an exception and reads the better for it.
+
+The buttons got **larger** in the process, which is worth saying because it sounds backwards. The
+24px circle was both the mark and the whole clickable area; a bare 11px glyph sized to itself would
+be a smaller target than what it replaced. The target is 40x32 with only the strokes visible, so
+what shrank is the ink rather than the button. Close still takes the error red on hover with a
+white glyph — the one place in this window where colour lands on a control instead of in a message,
+and it keeps the exception because closing is the only irreversible thing in the bar.
 
 **The word-by-word view is the design's one genuinely new idea, and it belongs to v1's data.** A
 lane per speaker, two lines deep. Words appear as they are said and fill the lane left to right

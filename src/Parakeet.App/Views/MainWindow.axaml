@@ -59,7 +59,7 @@
             Background="{DynamicResource GroundBrush}"
             BorderBrush="{DynamicResource RuleSeenBrush}"
             BorderThickness="0,0,0,1"
-            Padding="14,0,10,0">
+            Padding="14,0,0,0">
       <Grid ColumnDefinitions="210,*,210">
 
         <!-- The mark and the name. matcha-100 ground, matcha-700 strokes: the application's own
@@ -92,26 +92,32 @@
           </StackPanel>
         </Border>
 
-        <!-- 24px circles, 7px apart. Genuinely circles rather than rounded rectangles, which is
-             why they keep their shape in a design that squares everything else. -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7"
-                    HorizontalAlignment="Right" VerticalAlignment="Center">
+        <!-- Bare glyphs, no ground until hover. Spacing is 0 because each button is 40px wide
+             around an 11px glyph, so the gap a reader sees is the padding rather than a margin. -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0"
+                    HorizontalAlignment="Right" VerticalAlignment="Stretch">
           <!-- Stretch="None" on all three, and the minimise glyph is why: its geometry is a
                horizontal line, so it is seven units wide and zero tall, and scaling that uniformly
                into a 9x9 box has no defined answer — Avalonia drew a dot. Left at their natural
                size the three glyphs are also consistent with each other, which uniform scaling of
                three different aspect ratios was not. -->
           <Button Name="WindowMinimise" WindowDecorationProperties.ElementRole="MinimizeButton" Classes="window" ToolTip.Tip="Minimise">
-            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
-                  StrokeLineCap="Round" Data="M0 0h8" Stretch="None" />
+            <Path StrokeThickness="1.3"
+                  StrokeLineCap="Round" Data="M0 0h11" Stretch="None" />
           </Button>
+          <!-- Two overlapping squares rather than one: the restore glyph, drawn as a filled-edge
+               front square with the top-right of a second showing behind it. Deliberately the same
+               glyph in both window states — a button that changes shape under the pointer is a
+               button people misclick, and the tooltip says which way it goes. -->
           <Button Name="WindowMaximise" WindowDecorationProperties.ElementRole="MaximizeButton" Classes="window" ToolTip.Tip="Maximise">
-            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.4"
-                  Data="M0 0h7.4v7.4h-7.4z" Stretch="None" />
+            <Path StrokeThickness="1.3"
+                  StrokeJoin="Round" StrokeLineCap="Round"
+                  Data="M0 3.2h7.8v7.8h-7.8z M2.9 3.2v-2.9h7.8v7.8h-2.9"
+                  Stretch="None" />
           </Button>
           <Button Name="WindowClose" WindowDecorationProperties.ElementRole="CloseButton" Classes="window close" ToolTip.Tip="Close">
-            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
-                  StrokeLineCap="Round" Data="M0 0l7 7M7 0l-7 7" Stretch="None" />
+            <Path StrokeThickness="1.3"
+                  StrokeLineCap="Round" Data="M0 0l10.5 10.5M10.5 0l-10.5 10.5" Stretch="None" />
           </Button>
         </StackPanel>
       </Grid>
