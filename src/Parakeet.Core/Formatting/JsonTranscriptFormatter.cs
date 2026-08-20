@@ -50,6 +50,18 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 {
                     writer.WriteString("speakerModel", speakerModel);
                 }
+
+                // Likewise present only when a translation pass ran. "text" and every segment below
+                // are the English in that case, and these two fields are the only thing that says so.
+                if (document.TranslatedTo is { } target)
+                {
+                    writer.WriteString("translatedTo", target);
+                }
+
+                if (document.TranslationModelId is { } translationModel)
+                {
+                    writer.WriteString("translationModel", translationModel);
+                }
             }
 
             writer.WriteString("text", document.Text);

@@ -16,6 +16,13 @@ public enum TranscriptionStage
 
     /// <summary>The opt-in second pass: reading the audio again and deciding who spoke when.</summary>
     LabellingSpeakers,
+
+    /// <summary>
+    /// The opt-in last pass: rewriting the finished transcript in English. No audio is read — it
+    /// works on segments — so what it reports progress against is the transcript rather than the
+    /// file.
+    /// </summary>
+    Translating,
 }
 
 /// <summary>Progress of a single file. Immutable so it can cross threads freely.</summary>

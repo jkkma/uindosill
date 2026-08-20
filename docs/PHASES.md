@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 549 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 548 passed and
+**Status:** met. 581 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 580 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -71,10 +71,12 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (55 of the project's 94 CLI
-tests drive the real entry point; the other 26 never construct it — 17 parser unit tests, 7 that
+**Status:** usable, tested end to end against the canned engine (80 of the project's 107 CLI
+tests drive the real entry point; the other 27 never construct it — 17 parser unit tests, 7 that
 check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
-`CommandLineParser`, and 2 on the resolver that turns the pair into the engine option). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+`CommandLineParser`, 2 on the resolver that turns the pair into the engine option, and 1 on the
+anomaly report, which is handed its two documents directly because no invocation can reach the
+difference between them). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding
@@ -502,7 +504,8 @@ study assumed and is no longer the feature's largest risk.
 existed.** `ModelTask.Translation`, the manifest word, the badge and a fake translator can all land
 with no entry in `models.json` at all — and that is as far as it can go, because every catalogue
 entry today is one file and the ONNX route is five, which is a schema change with a defined meaning
-for a partial install behind it.
+for a partial install behind it. **That step is built as of 2026-08-19** — see *Built 2026-08-19 —
+the translation seam* below.
 
 **The gate, ratified 2026-08-19, before a single score exists.** Two criteria, both of which must
 hold. **One:** chrF++ into English clears the **per-language source-copy floor** — the score a
@@ -521,6 +524,73 @@ default rather than as a guarantee, and what is still unmeasured — from the En
 spontaneous non-English speech to the other 22 languages — is in `docs/UNPROVEN.md`
 § *Translating into English*.
 
+### Built 2026-08-19 — the translation seam, with no model behind it
+
+**Step 1 of the feature above is code: the contract, the canned translator, the catalogue
+discriminator and the CLI flag, in one commit that changes nothing an existing run does.** The same
+order the diarisation discriminator shipped in, and for the same reason — the parts that do not
+involve a model can be settled, tested and reviewed while the model is still a schema change and a
+decode loop away.
+
+`Parakeet.Core.Translation` sits beside `Transcription` and `Diarisation`, and the shape of its
+contract is the feature's two facts rather than the other two contracts' symmetry.
+`ITranscriptTranslator` takes `IReadOnlyList<TranscriptSegment>` and never audio, because
+translation reads what the ASR wrote and a translator that opened the file would be a second
+speech model. It returns `IAsyncEnumerable<TranscriptSegment>` rather than an annotation something
+else applies, because unlike a speaker turn a translated segment *is* the displayable artefact.
+`TranslatorCapabilities` carries `RequiresSourceLanguage`, `PreservesWordTimings`,
+`SupportsCancellation`, `MaxSourceTokens` and the source and target language lists, on the terms
+`SpeakerLabellerCapabilities` established: what a translator will not honour is said out loud
+rather than dropped. `TranslationOptions` has one property — `ContextSegments`, defaulting to zero
+because nothing has measured what context buys.
+
+**The three things the spike settled are invariants in code, not comments.** The `>>eng<<` target
+token is applied by `TranslationRequest.Build`, which is the only way a source string is built and
+which refuses a blank token, because a forgotten prefix returns fluent German rather than an error
+and nothing downstream would catch it. Word timings are dropped: a translator declaring
+`PreservesWordTimings` false and returning words is refused by the driver, `-f vtt-words` is refused
+under `--translate` from the capability rather than from a hardcoded rule, and the message says
+which. And the order is enforced by where the pass sits — decode, label, translate — with every
+yielded segment's start, end, source index and speaker checked against the segment it replaced, so
+a translator cannot quietly recut the timeline the speakers were attributed on. A source past
+`MaxSourceTokens` raises `SegmentTooLongException` and is never truncated.
+
+`FakeTranscriptTranslator` is mandatory rather than convenient, for the reason the fake engine and
+the fake labeller are: the whole suite runs with no weights on disk. It marks its sources through
+the real builder, assembles the real context, drops the real word timings and refuses a real
+over-long segment, so what CI exercises is the seam rather than a stand-in for it.
+
+**`ModelTask.Translation` and its manifest word ship before any entry uses them**, which is the
+second time that ordering has been needed: a build that did not know the word would list such an
+entry as an ASR model. Adding the member compiles clean — nothing switches on the enum
+exhaustively, because every site asks whether an entry *is* the task it wants — so the sites were
+enumerated by hand rather than by the compiler. Two of them were wrong for a third task and are
+fixed: the Models tab's badge said SPEAKERS for anything that was not an ASR model, and the window
+subscribed every non-ASR entry's install state to the speaker checkbox's availability. The rest
+were already right by shape, and `ModelTests` now holds all three tasks against the ASR lists.
+
+On the command line, `--translate` runs the pass against the canned translator and refuses without
+it, naming the missing translator rather than the ASR weights and stopping before any file is
+decoded. Its help says what separates it from `--language`, which is a hint to the speech model
+about the audio and reaches no translator, and passing both says so at runtime. Output takes an
+`.en` infix — `call.en.srt` — which is how SubRip carries the marker at all and what stops a
+translated run overwriting a plain one under `--overwrite`; JSON, Markdown and WebVTT say it
+in-band as well, and an untranslated document's output is byte-identical to what it always was.
+`--context-segments` is the one knob, and it means nothing without `--translate`.
+
+One thing already in `transcribe` had to move rather than be added to: the anomaly report — script
+disagreements and low-confidence words — now reads the transcript the engine wrote rather than the
+document that comes back from the pass, because translation destroys both signals it rests on. A
+translated segment carries no word confidences, and a stretch the model emitted in Cyrillic comes
+back as English prose, so reading the report off the translation would have stopped reporting either
+without saying so. No invocation can reach that difference — the canned engine writes Latin at
+confidences well above the threshold, and the threshold is not a flag — so the two documents are
+handed to the report directly in a test instead.
+
+**Nothing is measured and no model has run.** There is no entry in `models.json`, no engine
+project, no decode loop, no checkbox and no harness; the gate above still has no score against it.
+`docs/UNPROVEN.md` § *Translating into English* carries what the spike settled and what it did not.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -533,7 +603,7 @@ spontaneous non-English speech to the other 22 languages — is in `docs/UNPROVE
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Nothing built.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, an int8 export weighs 227 MiB or 404 MiB depending on whether the embeddings quantise, and English input passes through byte-identical. Outstanding: the contract, `ModelTask.Translation`, a multi-file catalogue schema, the decode loop with beam search, both surfaces, and the harness. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
+| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, nothing measured.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, an int8 export weighs 227 MiB or 404 MiB depending on whether the embeddings quantise, and English input passes through byte-identical. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. Outstanding: a multi-file catalogue schema (every entry today is one file, the ONNX route is five), the decode loop with beam search, the window's checkbox and pane switcher, and the harness — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam

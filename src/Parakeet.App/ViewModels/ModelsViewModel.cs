@@ -48,12 +48,24 @@ public sealed partial class ModelViewModel : ObservableObject
     public string DisplayName => Descriptor.DisplayName;
 
     /// <summary>
-    /// What the weights do, for the entries that do not transcribe: a diarisation model can be
-    /// downloaded from this tab like any other and must never be offered to Load as the engine.
+    /// What the weights do, for the entries that do not transcribe: a diarisation or translation
+    /// model can be downloaded from this tab like any other and must never be offered to Load as
+    /// the engine.
     /// </summary>
     public bool IsTranscriptionModel => Descriptor.Task == ModelTask.Transcription;
 
-    public string TaskLabel => IsTranscriptionModel ? string.Empty : "SPEAKERS";
+    /// <summary>
+    /// The badge on an entry that is not the ASR weights. Named per task rather than "not
+    /// transcription": the badge said SPEAKERS for everything that was not an ASR model, which was
+    /// true while diarisation was the only other task and would have labelled the first translation
+    /// entry as a diariser.
+    /// </summary>
+    public string TaskLabel => Descriptor.Task switch
+    {
+        ModelTask.Diarisation => "SPEAKERS",
+        ModelTask.Translation => "ENGLISH",
+        _ => string.Empty,
+    };
 
     public string Licence => Descriptor.License;
 

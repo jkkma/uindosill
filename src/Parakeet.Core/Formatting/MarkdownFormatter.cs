@@ -68,6 +68,19 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Speaker labels", speakerModel));
             }
 
+            // And which model wrote the English, when this is not what the engine heard. A reader
+            // holding a translation without knowing it is reading a second model's opinion of a
+            // first model's output, which is a different thing to judge.
+            if (document.TranslatedTo is { } target)
+            {
+                rows.Add(("Translated into", target));
+            }
+
+            if (document.TranslationModelId is { } translationModel)
+            {
+                rows.Add(("Translation model", translationModel));
+            }
+
             if (rows.Count > 0)
             {
                 builder.Append("| Field | Value |").Append(nl);

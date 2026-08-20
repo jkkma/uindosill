@@ -67,6 +67,7 @@ public sealed partial class JobViewModel : ObservableObject
             TranscriptionStage.Decoding => $"Transcribing {progress.Processed:hh\\:mm\\:ss}",
             TranscriptionStage.Finalising => "Finishing",
             TranscriptionStage.LabellingSpeakers => "Labelling speakers",
+            TranscriptionStage.Translating => "Translating",
             _ => "Working",
         };
     }

@@ -44,6 +44,29 @@ public sealed record TranscriptDocument
     public bool HasSpeakers => SpeakerModelId is not null || SpeakerTurns.Count > 0;
 
     /// <summary>
+    /// BCP-47 tag of the language this transcript was translated into, or null when it is what the
+    /// engine wrote. Only ever <c>en</c> today; carried as a tag rather than a flag so a document
+    /// that grows a second target does not have to grow a second field.
+    /// </summary>
+    /// <remarks>
+    /// Provenance, and not decoration: a translated transcript is a second model's opinion of a
+    /// first model's output, and a reader who cannot tell which they are holding cannot judge
+    /// either. The formats that have somewhere to put it say so in-band; the ones that do not —
+    /// SubRip has no comment syntax and plain text has no header — are covered by the <c>.en</c>
+    /// infix in their file names.
+    /// </remarks>
+    public string? TranslatedTo { get; init; }
+
+    /// <summary>
+    /// Which model wrote the English, when one did. Beside <see cref="ModelId"/> and
+    /// <see cref="SpeakerModelId"/>, for the same reason both of those are here.
+    /// </summary>
+    public string? TranslationModelId { get; init; }
+
+    /// <summary>True when a translation pass ran.</summary>
+    public bool IsTranslated => TranslatedTo is not null;
+
+    /// <summary>
     /// Real-time factor: processing time divided by audio duration. Lower is faster.
     /// Null unless both durations are known and the audio is non-empty.
     /// </summary>

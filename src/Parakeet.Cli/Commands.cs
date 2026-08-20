@@ -74,7 +74,8 @@ internal static class Commands
         TakesValue = true,
         ValueName = "tag",
         Help = "Language hint for multilingual models, e.g. en, de, auto. Passed to the ABI but not "
-             + "applied by any catalogue model: only prompt-conditioned checkpoints read it.",
+             + "applied by any catalogue model: only prompt-conditioned checkpoints read it. It translates "
+             + "nothing and it is not what --translate reads; see that flag.",
     };
 
     private static readonly OptionSpec Threads = new()
@@ -178,6 +179,23 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "translate",
+                Help = "Write the transcript in English instead of the language it was spoken in: a pass over the " +
+                       "finished text, off by default. Output files take an .en infix (call.en.srt), so a translated " +
+                       "run never overwrites a plain one. NOT --language, which is a hint to the speech model about " +
+                       "what it is listening to and reaches no translator. Needs the translation model, which this " +
+                       "build has not got; with --fake it uses the canned translator and needs nothing.",
+            },
+            new OptionSpec
+            {
+                Name = "context-segments",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "With --translate: how many preceding segments to hand the translator as context. Default 0, " +
+                       "each segment on its own. Nothing here has measured what context buys.",
+            },
+            new OptionSpec
+            {
                 Name = "quiet",
                 Short = 'q',
                 Help = "Suppress progress; print only results and errors.",
@@ -195,7 +213,15 @@ internal static class Commands
             "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.\n" +
             "The diariser tells apart at most four speakers; a fifth voice is merged into one of the four, and the\n" +
             "command says so on any file where four were found. To score speaker turns without transcribing, use\n" +
-            "'uindosill diarise'.",
+            "'uindosill diarise'.\n\n" +
+            "--translate is the other opt-in, and it runs last: decode, then label speakers, then translate. That\n" +
+            "order belongs to the code — speakers are attributed word by word and a translated segment has no words,\n" +
+            "so translating first would coarsen every label instead of failing where anyone could see it. Word\n" +
+            "timings do not survive translation and nothing pretends they do: -f vtt-words is refused under\n" +
+            "--translate, and SRT and VTT space each cue across its segment as they already do for any segment the\n" +
+            "engine returned no word timings for. There is no source language to choose, and that is a property of\n" +
+            "the pass rather than an omission: it is many-to-one into English, so it is told the target and never\n" +
+            "asked what it is reading.",
     };
 
     public static readonly CommandSpec Diarise = new()

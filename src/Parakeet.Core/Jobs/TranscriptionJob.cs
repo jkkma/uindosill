@@ -33,6 +33,19 @@ public sealed record TranscriptionJob
     /// <summary>Directory for outputs. Null writes beside the input file.</summary>
     public string? OutputDirectory { get; init; }
 
+    /// <summary>
+    /// Inserted between the input's name and the format's extension, so a run that produces a
+    /// different artefact from the same recording writes <c>call.en.srt</c> rather than
+    /// <c>call.srt</c>. Empty by default: a plain transcription run's file names are what they
+    /// always were.
+    /// </summary>
+    /// <remarks>
+    /// This is what stops a translated run destroying a transcription run's output under
+    /// <c>--overwrite</c>, and it is how SubRip carries the marker at all: SRT has no comment
+    /// syntax, so the only place to say "this is the English one" is the name.
+    /// </remarks>
+    public string StemSuffix { get; init; } = string.Empty;
+
     public OverwritePolicy Overwrite { get; init; } = OverwritePolicy.Rename;
 
     public string DisplayName => Path.GetFileName(InputPath);
@@ -175,7 +188,7 @@ public static class TranscriptWriter
         var directory = job.OutputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(job.InputPath)) ?? ".";
         Directory.CreateDirectory(directory);
 
-        var stem = Path.GetFileNameWithoutExtension(job.InputPath);
+        var stem = Path.GetFileNameWithoutExtension(job.InputPath) + job.StemSuffix;
         var written = new List<string>(job.Formats.Count);
 
         foreach (var formatId in job.Formats)
