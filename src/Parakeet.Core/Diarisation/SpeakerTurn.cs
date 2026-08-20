@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Parakeet.Core.Diarisation;
 
 /// <summary>
@@ -90,7 +92,7 @@ public static class SpeakerTurns
         var names = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var speaker in Speakers(turns))
         {
-            names[speaker] = string.Format(System.Globalization.CultureInfo.InvariantCulture, format, names.Count + 1);
+            names[speaker] = string.Format(CultureInfo.InvariantCulture, format, names.Count + 1);
         }
 
         return [.. turns.Select(t => t with { Speaker = names[t.Speaker] })];
@@ -213,12 +215,22 @@ public static class SpeakerTurns
             // for a couple of minutes however you cut them, so 131.8 s reads alarming on its own and
             // is in fact the clearest pair in the file by a factor of two. What says whether the fold
             // had a real choice to make is how far the next-best pair was behind it.
+            // Invariant, like every other figure this product prints. These seconds are evidence a
+            // user quotes back in a bug report, and the run summary printed beside them is invariant
+            // too, so a decimal separator taken from the operator's locale would leave one run's own
+            // output disagreeing with itself and stop two machines' reports comparing.
             var margin = double.IsPositiveInfinity(runnerUp) || runnerUp == double.MaxValue
                 ? "no other pair to compare it with"
                 : bestCollision > 0
-                    ? $"the next-closest pair overlapped {runnerUp:F1} s, {runnerUp / bestCollision:F1}x more"
-                    : $"the next-closest pair overlapped {runnerUp:F1} s";
-            made.Add($"'{drop}' into '{keep}' (they talked over each other for {bestCollision:F1} s; {margin})");
+                    ? string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"the next-closest pair overlapped {runnerUp:F1} s, {runnerUp / bestCollision:F1}x more")
+                    : string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"the next-closest pair overlapped {runnerUp:F1} s");
+            made.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"'{drop}' into '{keep}' (they talked over each other for {bestCollision:F1} s; {margin})"));
             current = [.. current.Select(t => t.Speaker == drop ? t with { Speaker = keep } : t)];
             remaining.Remove(drop);
         }
