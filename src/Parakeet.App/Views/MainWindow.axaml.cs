@@ -31,29 +31,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The headerbar does the two jobs the OS title bar was doing before the design turned it off:
-    /// it moves the window, and it carries the minimise, maximise and close buttons.
+    /// Wires the headerbar's window buttons.
     /// </summary>
     /// <remarks>
+    /// Dragging is not here. The headerbar carries
+    /// <c>WindowDecorationProperties.ElementRole="TitleBar"</c>, so the platform moves the window
+    /// and handles double-click-to-maximise itself — which is both less code than a PointerPressed
+    /// handler calling BeginMoveDrag and better behaved, because the OS also knows about snapping.
+    ///
     /// Every lookup is null-tolerant for the same reason the two above are — the headless test host
     /// builds this window, and a control that a future edit renames should fail a test rather than
     /// throw inside a constructor.
     /// </remarks>
     private void WireHeaderBar()
     {
-        if (this.FindControl<Border>("HeaderBar") is { } header)
-        {
-            // Only a press that lands on the bar itself, not one that has already been handled by a
-            // button or the switcher sitting on it.
-            header.PointerPressed += (_, e) =>
-            {
-                if (!e.Handled && e.GetCurrentPoint(header).Properties.IsLeftButtonPressed)
-                {
-                    BeginMoveDrag(e);
-                }
-            };
-        }
-
         if (this.FindControl<Button>("WindowMinimise") is { } minimise)
         {
             minimise.Click += (_, _) => WindowState = WindowState.Minimized;

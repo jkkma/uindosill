@@ -1310,6 +1310,43 @@ and the block's own comment already says what they are: not catalogue entries, n
 not selectable by this build, recorded so a later version does not have to re-derive them. A
 recorded digest is not an offer.
 
+### Built 2026-08-20 — the window on a real screen, and the three defects only that could find
+
+The interface was ported, rendered headlessly and checked pixel by pixel against its palette
+before anything was run. All of that held. Then the built application was opened on Windows 11,
+and it found three things a headless render is structurally incapable of showing, because a
+headless render has no window frame to draw.
+
+**The toolkit's own title bar was drawn on top of the design's.** `ExtendClientAreaToDecorationsHint`
+extends the client area but does not remove the caption: the window carried `WS_CAPTION`, and both
+the title text and a second set of minimise, maximise and close buttons arrived over the headerbar
+— two copies of the application name, one of them in Segoe UI.
+
+The fix is the mechanism Avalonia 12 documents for this and it is not the one that was reached for
+first. `SystemDecorations` is not it. Neither is styling a `PART_TitleBar` template part, which
+matches nothing — and neither does `HasTitleBar`, which belongs to the chrome control rather than
+to `Window`. What works is **`WindowDecorations="None"`** together with the
+**`WindowDecorationProperties.ElementRole`** attached property: the headerbar declares itself
+`TitleBar` and each window button declares its role. That also deletes code, because the platform
+then owns dragging and double-click-to-maximise, where the first attempt had a `PointerPressed`
+handler calling `BeginMoveDrag` — fewer lines and better behaved, since the OS also knows about
+snapping.
+
+**A hint ran off the edge of the window.** The speaker opt-in's explanation — the reason the
+control is disabled rather than hidden, which is the whole argument for disabling it — was cut at
+"it is a 453 MiB dow". A horizontal `StackPanel` measures its children with infinite width along
+the stacking axis, so `TextWrapping` never engages inside one. It is a `DockPanel` now.
+
+**And the corner is square.** `DwmGetWindowAttribute` reads the preference back as
+`DWMWCP_DONOTROUND`, and the window draws square on screen. Per-monitor DPI is not a problem
+either — the display reports 240 DPI, which is 250% scaling, and the layout scales cleanly.
+`docs/UNPROVEN.md` has what that settles and the three things it does not: snap layouts, the other
+scaling factors, and the shadow.
+
+**The lesson is about the method rather than the bugs.** Every one of these was invisible to the
+measuring loop that caught the earlier defects, and the palette audit and the headless renders were
+not wrong — they were answering a different question. A window has to be opened.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |

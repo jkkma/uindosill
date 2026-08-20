@@ -11,7 +11,7 @@
         Foreground="{DynamicResource InkBrush}"
         FontFamily="{DynamicResource SansFamily}"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="-1">
+        WindowDecorations="None">
 
   <!--
     The interface designed 2026-08-19, in the shape that design specifies: no OS title bar, a 46px
@@ -32,7 +32,15 @@
 
     · The corner is square by asking rather than by drawing. See Services/WindowCorner.cs — DWM
       takes a preference, not a radius, which is what makes square reachable where the earlier
-      12px version of this design was not.
+      12px version of this design was not. Confirmed on Windows 11 at 250% scaling: DWM reports
+      the do-not-round preference back, and the window draws square.
+
+    · WindowDecorations="None" removes the toolkit's own title bar, and the headerbar below takes
+      its place through WindowDecorationProperties.ElementRole. Without that the caption and a
+      second set of window buttons are drawn over this design's own — invisible to a headless
+      render, because there is no window frame there to draw, and found only by photographing the
+      built application. The roles also mean the platform handles dragging and
+      double-click-to-maximise, rather than a PointerPressed handler calling BeginMoveDrag.
   -->
 
   <Window.Resources>
@@ -46,6 +54,7 @@
          job the OS title bar was doing before it was turned off. -->
     <Border DockPanel.Dock="Top"
             Name="HeaderBar"
+            WindowDecorationProperties.ElementRole="TitleBar"
             Height="46"
             Background="{DynamicResource GroundBrush}"
             BorderBrush="{DynamicResource RuleSeenBrush}"
@@ -92,15 +101,15 @@
                into a 9x9 box has no defined answer — Avalonia drew a dot. Left at their natural
                size the three glyphs are also consistent with each other, which uniform scaling of
                three different aspect ratios was not. -->
-          <Button Name="WindowMinimise" Classes="window" ToolTip.Tip="Minimise">
+          <Button Name="WindowMinimise" WindowDecorationProperties.ElementRole="MinimizeButton" Classes="window" ToolTip.Tip="Minimise">
             <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
                   StrokeLineCap="Round" Data="M0 0h8" Stretch="None" />
           </Button>
-          <Button Name="WindowMaximise" Classes="window" ToolTip.Tip="Maximise">
+          <Button Name="WindowMaximise" WindowDecorationProperties.ElementRole="MaximizeButton" Classes="window" ToolTip.Tip="Maximise">
             <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.4"
                   Data="M0 0h7.4v7.4h-7.4z" Stretch="None" />
           </Button>
-          <Button Name="WindowClose" Classes="window close" ToolTip.Tip="Close">
+          <Button Name="WindowClose" WindowDecorationProperties.ElementRole="CloseButton" Classes="window close" ToolTip.Tip="Close">
             <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
                   StrokeLineCap="Round" Data="M0 0l7 7M7 0l-7 7" Stretch="None" />
           </Button>
@@ -266,15 +275,23 @@
                      Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
                      strip so the opt-in reads as a decision rather than a fourth checkbox. -->
                 <Border Classes="tinted" Padding="10,8">
-                  <StackPanel Orientation="Horizontal" Spacing="9">
-                    <CheckBox Content="Label speakers"
+                  <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures its children
+                       with infinite width on the stacking axis, so TextWrapping on the hint never
+                       engaged and the reason the opt-in was disabled ran off the right edge —
+                       "…it is a 453 MiB dow". The hint is the whole point of disabling rather than
+                       hiding the control, so it has to be readable. -->
+                  <DockPanel LastChildFill="True">
+                    <CheckBox DockPanel.Dock="Left"
+                              Content="Label speakers"
                               FontWeight="SemiBold"
+                              Margin="0,0,9,0"
+                              VerticalAlignment="Center"
                               IsChecked="{Binding LabelSpeakers}"
                               IsEnabled="{Binding CanLabelSpeakers}" />
                     <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
                                VerticalAlignment="Center"
                                IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  </StackPanel>
+                  </DockPanel>
                 </Border>
               </StackPanel>
 
