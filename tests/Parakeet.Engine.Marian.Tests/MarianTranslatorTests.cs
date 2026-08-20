@@ -97,7 +97,7 @@ public sealed class MarianTranslatorTests
     public async Task ItTranslatesRealSegmentsAndHonoursEveryClauseItDeclared()
     {
         var checkpoint = Fixtures.Checkpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; this one reads real weights.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; this one reads real weights.");
 
         await using var translator = new MarianTranscriptTranslator(new MarianTranslatorOptions
         {
@@ -153,7 +153,7 @@ public sealed class MarianTranslatorTests
     public async Task TheDriverAcceptsWhatThisTranslatorReturns()
     {
         var checkpoint = Fixtures.Checkpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; this one reads real weights.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; this one reads real weights.");
 
         // Through TranscriptTranslation rather than around it: the driver re-checks every clause
         // above on every segment, so this is the contract enforced by the code that enforces it
@@ -185,7 +185,7 @@ public sealed class MarianTranslatorTests
     public async Task ASourcePastTheLimitIsRefusedRatherThanTruncated()
     {
         var checkpoint = Fixtures.Checkpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; this one reads real weights.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; this one reads real weights.");
 
         await using var translator = new MarianTranscriptTranslator(new MarianTranslatorOptions
         {
@@ -214,7 +214,7 @@ public sealed class MarianTranslatorTests
     public async Task LoadingTwiceLoadsOnce()
     {
         var checkpoint = Fixtures.Checkpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; this one reads real weights.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; this one reads real weights.");
 
         await using var translator = new MarianTranscriptTranslator(new MarianTranslatorOptions
         {

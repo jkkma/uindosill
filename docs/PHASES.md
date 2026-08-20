@@ -41,15 +41,26 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 678 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 677 passed and
-1 skipped. **Seven more of them, added 2026-08-20, read the translation checkpoint and skip
-themselves wherever it is absent**, which is every machine but a measuring one: they are the
-tokenizer's check against the ids HuggingFace really emitted and the translator's against the
-English it really produces, and neither can be reproduced without 3.06 MB and 1.34 GiB of an
-artefact this repository does not carry. The other 24 of that project's 31 run everywhere, because
-the protobuf reader, the double-array trie, the Unigram search, byte fallback and the whole beam
-search are exercised against models and logits the tests write themselves.
+**Status:** met. 678 tests, no weights, no display, no network — **670 passed and 8 skipped**, and
+that pair is the same on every machine, which took a correction to make true. One skip is the Media
+Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
+translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
+translator's against the English it really produces, neither reproducible without 3.06 MB and
+1.34 GiB of an artefact this repository does not carry.
+
+**Those seven are opt-in rather than discovered, and the reason is this line.** They first looked for
+`runs/translation-onnx/fp32-merged` and ran when it happened to be there — so they passed on a
+measuring machine and skipped on CI, and no single number could be written here that was true in
+both places. A count that depends on what is installed is not a count this document can carry, so
+the suite gives one answer everywhere and the seven are asked for by name:
+
+```
+UINDOSILL_TRANSLATION_MODEL=runs/translation-onnx/fp32-merged dotnet test Uindosill.slnx -c Release
+```
+
+The other 24 of that project's 31 run everywhere, because the protobuf reader, the double-array
+trie, the Unigram search, byte fallback and the whole beam search are exercised against models and
+logits the tests write themselves.
 
 ## Phase 2 — engine — **DONE**
 

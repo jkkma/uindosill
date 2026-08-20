@@ -23,12 +23,6 @@ namespace Parakeet.Engine.Marian.Tests;
 /// </remarks>
 internal static class Fixtures
 {
-    /// <summary>Where a checkpoint is looked for, in order, before a test gives up on one.</summary>
-    private static readonly string[] CheckpointCandidates =
-    [
-        Path.Combine("runs", "translation-onnx", "fp32-merged"),
-    ];
-
     public static string Directory { get; } = Find("tests", "fixtures", "translation");
 
     public static string? Repository { get; } = FindRepository();
@@ -37,35 +31,39 @@ internal static class Fixtures
         JsonDocument.Parse(File.ReadAllText(Path.Combine(Directory, "marian-tokenizer.json")));
 
     /// <summary>
-    /// The exported checkpoint directory, or null when this clone has no weights.
+    /// The exported checkpoint directory, or null unless a run explicitly asked for one.
     /// </summary>
     /// <remarks>
-    /// <c>UINDOSILL_TRANSLATION_MODEL</c> overrides the search so a machine that keeps the artefact
-    /// somewhere else does not have to move it.
+    /// <para>
+    /// <b>Opt-in rather than discovered, and the reason is the test counts.</b> This originally
+    /// searched <c>runs/translation-onnx/fp32-merged</c> and used it when it was there, which meant
+    /// the seven checkpoint tests ran on a measuring machine and skipped on CI — so
+    /// <c>scripts/check-test-counts.py</c> could not be told one true number for how many pass.
+    /// Documents cannot record a count that depends on what happens to be installed, so the suite
+    /// gives the same answer everywhere and these are asked for by name:
+    /// </para>
+    /// <code>
+    /// UINDOSILL_TRANSLATION_MODEL=runs/translation-onnx/fp32-merged dotnet test
+    /// </code>
+    /// <para>
+    /// A path that is set but not a directory returns null rather than throwing: the point is to
+    /// skip cleanly on a machine that has not got it, and a typo should read as "not here" rather
+    /// than as a broken suite.
+    /// </para>
     /// </remarks>
     public static string? Checkpoint()
     {
         var declared = Environment.GetEnvironmentVariable("UINDOSILL_TRANSLATION_MODEL");
-        if (!string.IsNullOrWhiteSpace(declared))
-        {
-            return System.IO.Directory.Exists(declared) ? declared : null;
-        }
-
-        if (Repository is null)
+        if (string.IsNullOrWhiteSpace(declared))
         {
             return null;
         }
 
-        foreach (var candidate in CheckpointCandidates)
-        {
-            var path = Path.Combine(Repository, candidate);
-            if (System.IO.Directory.Exists(path) && File.Exists(Path.Combine(path, "vocab.json")))
-            {
-                return path;
-            }
-        }
+        var path = Path.IsPathRooted(declared) || Repository is null
+            ? declared
+            : Path.Combine(Repository, declared);
 
-        return null;
+        return System.IO.Directory.Exists(path) ? path : null;
     }
 
     /// <summary>The tokenizer's five files, without the two 1.3 GiB graphs beside them.</summary>

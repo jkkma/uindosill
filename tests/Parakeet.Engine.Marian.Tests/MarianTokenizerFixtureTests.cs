@@ -70,7 +70,7 @@ public sealed class MarianTokenizerFixtureTests
     public void TargetTokenIsOneToken()
     {
         var checkpoint = Fixtures.TokenizerCheckpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; see the round-trip test.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; see the round-trip test.");
 
         var tokenizer = MarianTokenizer.Load(checkpoint!);
         using var fixture = Fixtures.TokenizerFixture();
@@ -92,7 +92,7 @@ public sealed class MarianTokenizerFixtureTests
     public void DecodesBackToTheRecordedText()
     {
         var checkpoint = Fixtures.TokenizerCheckpoint();
-        Assert.SkipWhen(checkpoint is null, "No exported checkpoint; see the round-trip test.");
+        Assert.SkipWhen(checkpoint is null, "Set UINDOSILL_TRANSLATION_MODEL; see the round-trip test.");
 
         var tokenizer = MarianTokenizer.Load(checkpoint!);
         using var fixture = Fixtures.TokenizerFixture();
