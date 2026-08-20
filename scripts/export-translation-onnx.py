@@ -53,13 +53,24 @@ The split pair stores the decoder's weights twice, once in each graph; the merge
 decoder behind a `use_cache_branch` input. Beside the graphs, either layout carries `config.json`,
 `generation_config.json` and the tokenizer, which is itself more than one file.
 
-Each layout is built at three precisions. The int8 spread the study could not close — 227.3 MiB if
-every tensor quantises, 404.4 MiB if the embeddings stay fp32, they being 26% of this model — turns
-on whether `Gather` is in the quantiser's operator set, which is a knob rather than a fate. Both
-ends are exported and both are measured; **this script does not choose**, because download size
-against translation quality is the maintainer's call and a script that picked one would be making it
-silently. Neither end came out at either of those two figures, for the reason `initialiser_report`
-below explains and measures.
+Each layout is built at three precisions, and the merged layout at a fourth. The int8 spread the
+study could not close — 227.3 MiB if every tensor quantises, 404.4 MiB if the embeddings stay fp32,
+they being 26% of this model — turns on whether `Gather` is in the quantiser's operator set, which
+is a knob rather than a fate. Both ends are exported and both are measured; **this script does not
+choose**, because download size against translation quality is the maintainer's call and a script
+that picked one would be making it silently. Neither end came out at either of those two figures,
+for the reason `initialiser_report` below explains and measures.
+
+`fp16-merged` was added on 2026-08-20, the day int8 was dropped and the middle of the size range
+went empty — and **it does not work.** It converts, it weighs the expected 686.4 MiB, and ONNX
+Runtime refuses to open the decoder. The fault is the converter's handling of the merged decoder's
+`If` subgraphs, not the model's or this script's, and `to_float16` below has the two defects written
+out. It is kept rather than deleted because a variant that was tried and failed is worth more in the
+table than a gap somebody re-derives: every produced graph is now load-checked at export time, so
+the failure is loud where it used to be silent. The **encoder** converts and loads cleanly and
+halves, 545.9 MiB to 260.4, so an encoder-fp16 hybrid at about 1108.9 MiB is available and unmeasured
+for quality. Merged only, because the split layout was measured to translate byte-identically for
+about 800 MiB.
 
 Writes `manifest.json` into the output directory: every file with its exact byte count and SHA-256,
 the toolchain that produced it, the checkpoint revision, and per graph a census of the initialisers
@@ -117,13 +128,15 @@ DEFAULT_DYNAMIC_OPS = ["Attention", "Conv", "EmbedLayerNormalization", "Gather",
 OPS_WITHOUT_GATHER = [op for op in DEFAULT_DYNAMIC_OPS if op not in ("Gather", "EmbedLayerNormalization")]
 
 class Variant:
-    """One precision at one graph layout, and the source it is quantised from."""
+    """One precision at one graph layout, and the fp32 variant it is derived from."""
 
-    def __init__(self, merged: bool, operators: list[str] | None, what: str, quantise_from: str | None = None):
+    def __init__(self, merged: bool, operators: list[str] | None, what: str, quantise_from: str | None = None,
+                 half: bool = False):
         self.merged = merged
         self.operators = operators          # None means "do not quantise"
         self.what = what
-        self.quantise_from = quantise_from  # which fp32 variant is the quantiser's input
+        self.quantise_from = quantise_from  # which fp32 variant is the quantiser's or converter's input
+        self.half = half                    # convert to float16 instead of quantising
 
 
 VARIANTS = {
@@ -143,6 +156,20 @@ VARIANTS = {
     "int8-merged-fp32-embeddings": Variant(True, OPS_WITHOUT_GATHER,
                                            "merged layout, dynamic int8 with Gather dropped — embeddings stay fp32",
                                            "fp32-merged"),
+    # Half precision, added 2026-08-20 when int8 was dropped and the middle of the size range was
+    # left empty. It reaches about the same place as int8-with-Gather-dropped by a different route,
+    # and the route is the point: int8 is a lossy quantisation with a scale and a zero point per
+    # tensor, and its observed failure is a decoder that collapses into a repetition loop. fp16 is a
+    # narrower float that keeps the exponent range, so it is not that kind of change. What it is
+    # instead is a bet on kernels: ORT's CPU provider has few native fp16 ones and casts around
+    # fp32 arithmetic, so on the provider this project ships it may well be slower than the thing it
+    # halves. Measured, not assumed — that is what the variant is here for.
+    #
+    # Merged only. The split layout was measured to produce byte-identical translations for about
+    # 800 MiB, so building an fp16 of it would spend the export twice to learn nothing.
+    "fp16-merged": Variant(True, None,
+                           "merged layout, float16 — half the bytes, and BROKEN: does not load",
+                           "fp32-merged", half=True),
 }
 
 # Fixed sentences for the smoke test and the tokenizer fixture. The first four are real ASR output
@@ -331,6 +358,69 @@ def export_fp32(destination: Path, merged: bool) -> float:
     model.save_pretrained(destination)
     AutoTokenizer.from_pretrained(MODEL).save_pretrained(destination)
     return time.time() - started
+
+
+def to_float16(source: Path, destination: Path) -> float:
+    """Convert every .onnx graph in `source` to float16, copying the non-graph files across.
+
+    The converter is ONNX Runtime's own — `onnxruntime.transformers.float16` — so this adds no
+    dependency the export did not already have.
+
+    `keep_io_types=True` is the part that is not a detail. It leaves every graph input and output in
+    fp32 and inserts the casts inside, so optimum's runtime code, the KV cache it threads between
+    steps and the `use_cache_branch` boolean all keep the types they already agree on. Converting the
+    interface too would be a faster graph and a different contract, and the contract is what the C#
+    decode loop will be written against.
+
+    `op_block_list` keeps the two places where fp16's narrower exponent actually bites away from it.
+    Nothing here has measured that they bite on this model; they are the operators where a range
+    problem would show up first if it did, which is the cheap half of an insurance policy.
+    """
+    from onnxruntime.transformers import float16
+
+    import onnx
+
+    destination.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    for graph in sorted(source.glob("*.onnx")):
+        model = onnx.load(str(graph), load_external_data=True)
+        converted = float16.convert_float_to_float16(
+            model, keep_io_types=True, disable_shape_infer=False,
+            op_block_list=["Range", "CumSum"] + list(float16.DEFAULT_OP_BLOCK_LIST))
+        onnx.save(converted, str(destination / graph.name),
+                  save_as_external_data=False, all_tensors_to_one_file=True)
+    elapsed = time.time() - started
+
+    for extra in sorted(source.iterdir()):
+        if extra.is_file() and extra.suffix != ".onnx" and not extra.name.endswith(".onnx_data"):
+            shutil.copy2(extra, destination / extra.name)
+
+    # Converted graphs are checked for loadability here rather than left for the scorer to discover,
+    # because as of 2026-08-20 this conversion **does not work** on the merged decoder and the
+    # failure is silent until something tries to open it. Two independent defects, both from the
+    # converter not accounting for `If` subgraphs: it renames the `If` node's outputs and inserts
+    # matching casts inside each branch but leaves the branches' declared output names pointing at
+    # values nothing inside produces, and its dead-cast pass removes an outer-graph `Cast` that a
+    # subgraph still consumes. Renaming the dangling outputs fixes the first and the second remains.
+    # `keep_io_types=False` changes neither. The encoder, which has no subgraphs, converts and loads
+    # cleanly. Recorded in `docs/UNPROVEN.md` § *Translating into English*.
+    for graph in sorted(destination.glob("*.onnx")):
+        note = load_check(graph)
+        if note is not None:
+            print(f"  WARNING {graph.name} does not load: {note}", flush=True)
+
+    return elapsed
+
+
+def load_check(onnx_path: Path) -> str | None:
+    """None if ONNX Runtime opens the graph, else the first line of why it would not."""
+    import onnxruntime as ort
+
+    try:
+        ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+        return None
+    except Exception as failure:  # noqa: BLE001 - any load failure is the answer, whatever its type
+        return str(failure).splitlines()[0][:400]
 
 
 def quantise(source: Path, destination: Path, operators: list[str]) -> float:
@@ -606,18 +696,21 @@ def main() -> int:
         print(f"\n=== {name} — {variant.what} ===", flush=True)
 
         if not args.skip_export:
-            if variant.operators is None:
+            if variant.operators is None and not variant.half:
                 print(f"exporting, merged={variant.merged} ...", flush=True)
                 seconds = export_fp32(directory, variant.merged)
             else:
                 source = args.out / variant.quantise_from
                 if not source.exists():
-                    print(f"{variant.quantise_from} not on disk; exporting it as the quantiser's input",
-                          flush=True)
+                    print(f"{variant.quantise_from} not on disk; exporting it as the input", flush=True)
                     export_fp32(source, VARIANTS[variant.quantise_from].merged)
-                print(f"quantising {variant.quantise_from}, operators = "
-                      f"{', '.join(variant.operators)} ...", flush=True)
-                seconds = quantise(source, directory, variant.operators)
+                if variant.half:
+                    print(f"converting {variant.quantise_from} to float16 ...", flush=True)
+                    seconds = to_float16(source, directory)
+                else:
+                    print(f"quantising {variant.quantise_from}, operators = "
+                          f"{', '.join(variant.operators)} ...", flush=True)
+                    seconds = quantise(source, directory, variant.operators)
             print(f"took {seconds:.0f}s", flush=True)
         else:
             seconds = None
@@ -632,7 +725,8 @@ def main() -> int:
         manifest["variants"][name] = {
             "what": variant.what,
             "layout": "merged" if variant.merged else "split",
-            "quantisedFrom": variant.quantise_from,
+            "derivedFrom": variant.quantise_from,
+            "precision": "float16" if variant.half else ("int8" if variant.operators else "float32"),
             "operatorsToQuantize": variant.operators,
             "secondsToProduce": round(seconds, 1) if seconds is not None else None,
             **described,
@@ -677,6 +771,26 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     manifest_path = args.out / "manifest.json"
+
+    # Merged into whatever is already there, not written over it. `--variants fp16-merged` used to
+    # replace the whole file, so exporting one variant erased the pinned digests of the others —
+    # which is the one thing a manifest exists not to do, and it happened here on 2026-08-20. The
+    # variants this run produced win; the rest are carried forward with a note saying they were not
+    # re-verified, so a stale entry is visibly stale rather than quietly authoritative.
+    if manifest_path.exists():
+        try:
+            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            previous = {}
+        carried = {name: entry for name, entry in previous.get("variants", {}).items()
+                   if name not in manifest["variants"]}
+        for entry in carried.values():
+            entry["carriedForward"] = "not re-verified by this run"
+        if carried:
+            print(f"\ncarrying forward {len(carried)} variant(s) already in the manifest: "
+                  f"{', '.join(sorted(carried))}")
+        manifest["variants"] = {**carried, **manifest["variants"]}
+
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"\nwrote {manifest_path}")
     return 0
