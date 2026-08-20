@@ -500,3 +500,25 @@ to arrive under the same id arrives silently. Two `Tensor<T>` types are also in 
 referenced — its own `Microsoft.ML.OnnxRuntime.Tensors.Tensor<T>` and the BCL's — and only one of
 them is experimental, which makes a stray `using` enough to produce the error in code that never
 meant to touch a preview API.
+
+## 28. `check-test-counts.py` reads yesterday's results if they are still on disk
+
+It reads the TRX files `dotnet test --logger trx` leaves under `tests/*/TestResults/`, and **runs the
+suite itself only if it finds none** — which its docstring says, and which is easy to read as "it
+measures the suite" rather than "it measures whatever TRX are lying around".
+
+On 2026-08-20 it reported **549 tests and 94 CLI tests** against documents claiming 637 and 125, from
+TRX left by an earlier run, and the suite had in fact just passed 637. Two minutes went into looking
+for 88 tests that had never gone missing. The fix is one line before the check:
+
+```bash
+rm -rf tests/*/TestResults && dotnet test Uindosill.slnx -c Release --logger trx && python3 scripts/check-test-counts.py --no-run
+```
+
+CI does not have this problem, because its workspace is clean and it passes `--no-run` so a missing
+TRX is a failure rather than a silent re-run. A working copy is the opposite: the TRX are always
+there and always older than the change being checked.
+
+**And do not pipe `dotnet test` through `tail`.** The per-assembly `Passed!` lines are what say which
+projects ran, and `| tail -8` in the same session hid two of the six assemblies — which is how a run
+that covered everything looked like a run that had lost a third of the suite.

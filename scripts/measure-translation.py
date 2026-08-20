@@ -114,6 +114,23 @@ MAX_SOURCE_TOKENS = 512
 # thirty sentences is a number with an error bar nobody states, which is worse than no number.
 MIN_SHARED_SENTENCES = 100
 
+# The gate's bar, ratified 2026-08-20 (`docs/PHASES.md` § *Ratified 2026-08-20*). The gate is written
+# as a per-language margin over the source-copy floor, and this is that margin: `45 - floor`, one
+# absolute bar behind 24 different numbers. It is expressed this way round because the scores turned
+# out to be script-independent while the floors are not, so 24 margins were one decision wearing 24
+# hats and saying so is more honest than tabulating them.
+#
+# It is applied here rather than left to a reader with two tables. On the run it was ratified from,
+# 23 of 24 languages clear it and Slovak does not, by 0.74 — a bar nothing fails has not been set.
+GATE_ABSOLUTE_CHRF = 45.0
+
+# The third criterion, added the same day: a hypothesis that stops translating and starts looping
+# costs the meaning, chrF++ averages one of them into three hundred and reports almost nothing, and
+# fp32 produced none in 8,149 sentences. Zero is therefore free to hold and expensive to lose.
+# Trailing punctuation runs are counted beside it and are deliberately NOT a criterion: they cost no
+# meaning, and no acceptable rate for them has been argued for.
+GATE_MAX_COLLAPSES = 0
+
 
 def sha256_of(path: Path) -> str:
     digest = hashlib.sha256()
@@ -387,18 +404,24 @@ def main() -> int:
             collapsed = sum(1 for kind in kinds if kind == "collapse")
             trailing = sum(1 for kind in kinds if kind == "punctuation")
 
+            required = round(GATE_ABSOLUTE_CHRF - floor, 2)
+            passed = (hypothesis_score - floor >= required - 1e-9) and collapsed <= GATE_MAX_COLLAPSES
+
             entry |= {
                 "chrF2pp": hypothesis_score,
                 "marginOverFloor": round(hypothesis_score - floor, 2),
+                "requiredMargin": required,
                 "collapse": collapsed,
                 "punctuationRun": trailing,
+                "gatePass": passed,
                 "seconds": round(seconds, 1),
                 "secondsPerSentence": round(seconds / max(1, len(sources)), 3),
             }
             flags = "".join(f"   {name.upper()} {count}" for name, count in
                             (("collapse", collapsed), ("punct", trailing)) if count)
             print(f"  translated         chrF++ {hypothesis_score:6.2f}"
-                  f"   margin {hypothesis_score - floor:+6.2f}   {seconds:.0f}s{flags}")
+                  f"   margin {hypothesis_score - floor:+6.2f} vs {required:+6.2f} required"
+                  f"   {'PASS' if passed else 'FAIL'}   {seconds:.0f}s{flags}")
 
             (out / "hypotheses").mkdir(exist_ok=True)
             with (out / "hypotheses" / f"{code}.jsonl").open("w", encoding="utf-8") as handle:
@@ -490,22 +513,24 @@ def write_summary(path: Path, result: dict) -> None:
         "",
         "**This is the translation model alone — no audio, no ASR, so it is not the cascade.**",
         "",
-        "| language | scored | source-copy floor | chrF++ | margin | collapse | punct. run |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| language | scored | source-copy floor | chrF++ | margin | required | collapse | punct. run | gate |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|:--:|",
     ]
 
     for code, entry in sorted(result["languages"].items()):
         if "refused" in entry:
-            lines.append(f"| {code} | — | — | — | refused: {entry['refused']} | — | — |")
+            lines.append(f"| {code} | — | — | — | refused: {entry['refused']} | — | — | — | — |")
             continue
         if "chrF2pp" not in entry:
             lines.append(
-                f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | — | — | — | — |")
+                f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | — | — | — | — | — | — |")
             continue
         lines.append(
             f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | "
             f"{entry['chrF2pp']:.2f} | {entry['marginOverFloor']:+.2f} | "
-            f"{entry.get('collapse', 0)} | {entry.get('punctuationRun', 0)} |")
+            f"{entry.get('requiredMargin', float('nan')):+.2f} | "
+            f"{entry.get('collapse', 0)} | {entry.get('punctuationRun', 0)} | "
+            f"{'PASS' if entry.get('gatePass') else '**FAIL**'} |")
 
     if scored:
         margins = [entry["marginOverFloor"] for entry in scored.values()]
@@ -530,8 +555,19 @@ def write_summary(path: Path, result: dict) -> None:
             "stop emitting `. . . .` and a decoder that lost the sentence and emits "
             "`Genocococococ` cost entirely different things and chrF++ reports neither.",
             "",
-            "**No margin has been ratified**, so nothing here passes or fails the gate yet. "
-            "`docs/PHASES.md` carries the criterion; the number that clears it is the maintainer's.",
+            "",
+            (f"**Criterion one: {sum(1 for e in scored.values() if e.get('gatePass'))} of "
+             f"{len(scored)} languages pass** — chrF++ at least "
+             f"`{GATE_ABSOLUTE_CHRF:.0f} − floor` and at most {GATE_MAX_COLLAPSES} collapse(s), "
+             f"ratified 2026-08-20 (`docs/PHASES.md` § *Ratified 2026-08-20*)."
+             + (f" Failing: {', '.join(sorted(c for c, e in scored.items() if not e.get('gatePass')))}."
+                if any(not e.get("gatePass") for e in scored.values()) else "")),
+            "The bar is one absolute number behind 24 per-language margins, because the scores are "
+            "script-independent and the floors are not. Trailing punctuation runs are reported and "
+            "are **not** a criterion.",
+            "",
+            "**Criterion two is a person's**: the Spanish adequacy sheet, unrated until somebody "
+            "rates it. Nothing here can pass it.",
         ]
 
     lines += ["", "## Not measured", ""] + [f"- {note}" for note in result["notMeasured"]] + [""]

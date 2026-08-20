@@ -1356,7 +1356,7 @@ than argued. Two things about the corpus travel with these figures: Dutch has on
 shared with English where every other language has 329 or more, and the floors are scored against
 FLEURS' punctuated `raw_transcription` on both sides.
 
-**Criterion one is now scored, in every language, and no margin has been ratified against it.**
+**Criterion one is scored in every language, the margin was ratified the same day, and 23 of 24 pass.** The bar is `margin_L = 45 − floor_L` — one absolute chrF++ bar behind 24 per-language margins, because the scores turned out script-independent while the floors are not — plus a third criterion added at ratification: **zero degenerate collapses**. **Slovak fails**, by 0.74: +28.15 against +28.89 required.
 Run on the desktop's CPU on 2026-08-20 against `fp32-merged`, FLEURS `test` in full, beam-6, batch 1:
 **8,149 sentences in 1.40 h at a mean 0.618 s per sentence**, none skipped for length, chrF++ at
 `nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`.
