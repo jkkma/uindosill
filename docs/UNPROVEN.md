@@ -1307,6 +1307,15 @@ never about the machines, and **the file optimum merges comes out differently ev
 merged.** What varies inside it was not identified — equal size with unequal bytes points at
 ordering or at names of fixed length rather than at content, and that was not chased.
 
+**So the scored copy was uploaded on 2026-08-20, and that is a change of practice rather than a
+transfer.** Until then the graphs were deliberately kept off the Drive — the export folder's own
+README says they are "nowhere on Drive and are not meant to be" — on the reasoning that the script
+reproduces them and the script is therefore the artefact. That reasoning was wrong for one file of
+nine. The nine files the gate was scored against are now in the dated folder
+`translation-weights-fp32-merged-2026-08-20`, verified file by file against the digests the gate run
+itself recorded, so the bytes every figure below describes still exist somewhere other than one
+gitignored directory on one desktop.
+
 **That changes what the export script is for, and it is worth being exact about.** `models.json`
 pins a URL and a SHA-256 **together**, and a multi-file entry pins one per file. Eight of the nine
 files are reproducible and verifiable by anyone; the ninth is not. So the artefact is something
