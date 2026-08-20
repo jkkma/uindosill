@@ -961,10 +961,12 @@ public class ModelsViewModelTests
         var unchecked_ = unpinned.Models.First(m => !m.Descriptor.Verified);
         Assert.False(unchecked_.ProvenanceIsVerified);
 
-        // The shipped catalogue now has both states in it, which is better coverage than it had:
-        // every entry whose URL was checked against a live repository says Verified, and the
-        // translation entry — whose release asset has not been uploaded, so its URL cannot have
-        // been checked — is painted as the warning it is despite pinning all nine digests.
+        // On the shipped catalogue the property still has to track the descriptor exactly, and as of
+        // 2026-08-20 every shipped entry is verified: the translation entry was the last one that
+        // was not, and its nine files were published that day with every LFS oid matching the digest
+        // the gate run recorded. The negative case is the constructed catalogue above, which is
+        // where it belongs — a flag exercised only by whatever the shipped manifest happens to
+        // contain stops being exercised the moment the manifest changes.
         var shipped = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
         Assert.All(shipped.Models, model =>
         {
@@ -972,8 +974,7 @@ public class ModelsViewModelTests
             Assert.Equal(model.Descriptor.Verified, model.Provenance.Contains("Verified", StringComparison.Ordinal));
         });
 
-        Assert.Contains(shipped.Models, model => model.ProvenanceIsVerified);
-        Assert.Contains(shipped.Models, model => !model.ProvenanceIsVerified);
+        Assert.All(shipped.Models, model => Assert.True(model.ProvenanceIsVerified));
     }
 
     [Fact]

@@ -20,6 +20,12 @@
     "windows not chosen, and why, are under candidatesNotChosen so a later robustness stretch — an ad read",
     "with the return to conversation after it — can be picked knowingly.",
     "",
+    "nominalVoices is the EPISODE's speaker count, and as of 2026-08-20 those four counts — 2, 3, 5 and 7 —",
+    "are the maintainer's own confirmation rather than an inference from the filenames: no ad-reads and no",
+    "jingle voices. What that confirms is the episode. It does not confirm that every one of those voices",
+    "speaks inside a given ten-minute window, so on a stretch the number stays an upper bound and the",
+    "reference is still what settles it.",
+    "",
     "The reference for a stretch is <id>.rttm beside this file, made with `uindosill rttm` from an Audacity",
     "label export as README.md describes; the labelled slot below is flipped when it lands. Until then the",
     "stretch is cut and measurable for real-time factor and memory, and not for DER."

@@ -704,6 +704,128 @@ public class SpeakerLabellingPipelineTests
 
         Assert.Equal("SPEAKER_00", labelled.SpeakerTurns[0].Speaker);
     }
+
+    private static SpeakerLabellerCapabilities Capped(int? max) => new()
+    {
+        EngineName = "sortformer-onnx",
+        ModelId = "sortformer-4spk-v2.1",
+        SupportsFixedSpeakerCount = false,
+        MaxSpeakers = max,
+    };
+
+    [Fact]
+    public void ACountAboveTheCapIsWarnedAboutBeforeTheRun()
+    {
+        // The whole point of this message is that it names the user's own number and says it was
+        // never on offer. "The value is ignored" does not: a reader takes it to mean the labeller
+        // will work the count out for itself, which is exactly what it cannot do past four.
+        var warning = SpeakerLabelling.DescribeUnreachableCount(Capped(4), 7);
+
+        Assert.NotNull(warning);
+        Assert.Contains("7 speakers were asked for", warning, StringComparison.Ordinal);
+        Assert.Contains("at most 4", warning, StringComparison.Ordinal);
+        Assert.Contains("never reachable", warning, StringComparison.Ordinal);
+        Assert.Contains("sortformer-4spk-v2.1", warning, StringComparison.Ordinal);
+
+        // And it warns rather than refuses, which is a product decision and belongs in the text:
+        // somebody who knows they will get four still wants the run.
+        Assert.Contains("Continuing", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACountAtOrUnderTheCapIsNotWarnedAbout()
+    {
+        // Four is reachable, so there is nothing to say. A warning that fires on the ordinary case
+        // is a warning nobody reads on the case that matters.
+        Assert.Null(SpeakerLabelling.DescribeUnreachableCount(Capped(4), 4));
+        Assert.Null(SpeakerLabelling.DescribeUnreachableCount(Capped(4), 1));
+    }
+
+    [Fact]
+    public void WithNoCapOrNoCountThereIsNothingToWarnAbout()
+    {
+        Assert.Null(SpeakerLabelling.DescribeUnreachableCount(Capped(null), 99));   // the fake has none
+        Assert.Null(SpeakerLabelling.DescribeUnreachableCount(Capped(4), null));    // nobody asked
+    }
+
+    [Fact]
+    public void TheWarningNamesTheEngineWhenTheModelHasNoId()
+    {
+        // A labeller loaded from a path rather than the catalogue has no model id, and a sentence
+        // reading "and can tell apart at most 4" with a hole where the name goes is worse than one
+        // naming the engine.
+        var warning = SpeakerLabelling.DescribeUnreachableCount(
+            Capped(4) with { ModelId = null }, 6);
+
+        Assert.NotNull(warning);
+        Assert.Contains("sortformer-onnx", warning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARecordingPastWhereTheEvidenceStopsIsWarnedAbout()
+    {
+        var capped = Capped(4) with { ReliableUpTo = TimeSpan.FromHours(1) };
+
+        // Inside the bound, nothing to say.
+        Assert.Null(SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromMinutes(32)));
+        Assert.Null(SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromHours(1)));
+
+        // Past it, and the sentence has to be about evidence rather than about a defect: the labels
+        // are not known to be wrong, they are not known to be right, and those are different claims.
+        var warning = SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromMinutes(175));
+        Assert.NotNull(warning);
+        Assert.Contains("175 minutes", warning, StringComparison.Ordinal);
+        Assert.Contains("not known to be wrong so much as not known to be right", warning, StringComparison.Ordinal);
+        Assert.Contains("the words are unaffected", warning, StringComparison.Ordinal);
+
+        // No bound measured, or no duration known, is silence rather than a guess.
+        Assert.Null(SpeakerLabelling.DescribeDurationRisk(Capped(4), TimeSpan.FromHours(5)));
+        Assert.Null(SpeakerLabelling.DescribeDurationRisk(capped, null));
+    }
+
+    [Fact]
+    public void TheTwoLimitsAreDifferentShapesAndSayDifferentThings()
+    {
+        // The cap is architectural — in the model's geometry, the same on every file, knowable
+        // without running anything. The duration bound is empirical — where the scoring stopped.
+        // A seven-speaker request on a three-hour file is owed both sentences, and conflating them
+        // would let a caller report one and believe it had reported the other.
+        var capabilities = Capped(4) with { ReliableUpTo = TimeSpan.FromHours(1) };
+
+        var cap = SpeakerLabelling.DescribeUnreachableCount(capabilities, 7);
+        var length = SpeakerLabelling.DescribeDurationRisk(capabilities, TimeSpan.FromHours(3));
+
+        Assert.NotNull(cap);
+        Assert.NotNull(length);
+        Assert.NotEqual(cap, length);
+        Assert.Contains("never reachable", cap, StringComparison.Ordinal);
+        Assert.DoesNotContain("never reachable", length, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBeforeAndAfterMessagesSayDifferentThings()
+    {
+        // DescribeLimit reports what happened; DescribeUnreachableCount reports what cannot happen.
+        // If they ever collapse into the same sentence, the before-the-run half has stopped earning
+        // its place — "4 speakers were labelled" is a fact about the recording and reads as one.
+        var labeller = new FakeSpeakerLabeller();
+        var document = new TranscriptDocument
+        {
+            SourceName = "meeting.wav",
+            Segments = [],
+            SpeakerTurns =
+            [
+                new SpeakerTurn { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Speaker = "SPEAKER_00" },
+            ],
+        };
+
+        // The fake has no cap, so the after-the-run half stays silent on it.
+        Assert.Null(SpeakerLabelling.DescribeLimit(labeller, document));
+
+        var before = SpeakerLabelling.DescribeUnreachableCount(Capped(4), 7);
+        Assert.NotNull(before);
+        Assert.DoesNotContain("were labelled", before, StringComparison.Ordinal);
+    }
 }
 
 public class SpeakerFormattingTests

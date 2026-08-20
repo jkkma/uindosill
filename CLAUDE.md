@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 678 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 744 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -35,6 +35,22 @@ python3 scripts/check-test-counts.py     # the counts above, against the run tha
 That last line is why the number in the comment can be trusted, and CI runs it too. **If you change
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
+
+**Nine of those 744 skip themselves, and they are the ones that read something a clone does not
+carry.** Both are asked for by name, because a count that depends on what is installed cannot be
+written into a document CI checks:
+
+```bash
+UINDOSILL_TRANSLATION_MODEL=runs/translation-onnx/fp32-merged dotnet test Uindosill.slnx -c Release
+UINDOSILL_FLEURS_DIR=<a google/fleurs snapshot's data/ directory> dotnet test Uindosill.slnx -c Release
+```
+
+The first runs the seven checkpoint tests — the tokenizer against its committed fixture and the
+translator against real weights — and is what to run after any change to `Parakeet.Engine.Marian`.
+The second runs one test, and it is the one that says the German number rewrite in
+`TranslationRequest.Mark` is still a no-op on written text. **Run it after any change to
+`GermanNumberWords`**: if it ever fires on FLEURS, the sentences the shipping path sends the
+translator are no longer the sentences the published chrF++ figures describe.
 
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have

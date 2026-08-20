@@ -157,13 +157,55 @@ the merged decoder layout with past key values exposed — and redistributes the
 themselves are unchanged and unquantised, float32 in and float32 out; what changed is the container
 and the graph split. `ApacheAttribution.ModificationNotice` says exactly that.
 
-**(c) and (d) are outstanding and are stated as outstanding.** Whether the upstream repository
-carries copyright notices or a `NOTICE` file was not checked from the machine that built this, and
-this record invents neither: a copyright line nobody published is a false notice in front of a user,
-which is the failure `models.json`'s own comment about the deferred entries refuses. **That check
-belongs before the release asset is uploaded**, not before the entry exists — the entry is pinned
-and marked unverified precisely because nothing is being distributed yet. Nothing is redistributed
-until a tag is pushed, and the tag has not been.
+**(c) and (d) were the two outstanding items, and they were closed on 2026-08-20 by reading the
+upstream tree rather than by reasoning about it.** The check was done before the weights were
+uploaded, which is where it belongs: uploading to Hugging Face **is** redistribution, and §4's
+conditions attach to redistribution rather than to the existence of a catalogue entry.
+
+What was read, so a later revision is a visible change rather than a silent one: the file listing
+from `huggingface.co/api/models/Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld?blobs=true`, whose
+`sha` came back as `bb1ef830d540449c89c7ee5b9ea5b1fc666db3d5` — **the same revision the export ran
+against**, so the listing is the pinned revision and not merely `main` — and then every text file in
+it fetched at that revision: `README.md`, `config.json`, `generation_config.json`,
+`tokenizer_config.json`, `special_tokens_map.json`, `benchmark_results.txt` and `.gitattributes`.
+
+**§4(d) is inapplicable: there is no `NOTICE` file.** It is absent from the listing, and `NOTICE`,
+`NOTICE.txt` and `NOTICE.md` were each requested at that revision and each returned 404. So did
+`LICENSE`, `LICENSE.txt` and `COPYING` — the repository declares `apache-2.0` in card metadata and
+ships no copy of it, which is why the copy this project ships under §4(a) came from elsewhere.
+
+**§4(c) splits in two, and both halves are now recorded.** There is **no copyright, patent or
+trademark notice** in the repository: a case-insensitive search for `copyright`, `(c)`, `©`,
+`patent`, `trademark` and `all rights reserved` across all seven text files returns nothing. The
+only occurrences of those words anywhere in the tree are inside `source.spm` and `target.spm`, where
+`▁Copyright`, `▁copyright`, `▁trademark` and `▁Helsinki` are SentencePiece **vocabulary pieces** —
+each preceded by U+2581 and wrapped in the protobuf framing of a `ModelProto` piece, which is a token
+in a subword inventory and not a notice. Nothing is reproduced from them, and nothing is invented to
+fill the gap: a copyright line nobody published is a false notice in front of a user, which is the
+failure `models.json`'s own comment about the deferred entries refuses.
+
+**But §4(c) says "copyright, patent, trademark, and attribution notices", and the attribution
+notices are real.** The card carries four, and all four are now retained rather than summarised: the
+developer line and the OPUS-MT/Marian/OPUS provenance; the original model archive's URL on
+`object.pouta.csc.fi`; the citation request naming three publications, which the card states as
+*"Please, cite if you use this model"*; and the Acknowledgements paragraph crediting the HPLT project
+under EU Horizon Europe grant agreement No 101070350, CSC — IT Center for Science, and the EuroHPC
+supercomputer LUMI. They live in `ApacheAttribution.RetainedSourceNotices`, in `NOTICE.md`, and in the
+`README.md` of the Hugging Face repository the export is published to, so every surface a recipient
+can reach carries them.
+
+**The negative finding is a field rather than a silence.** `ApacheAttribution.SourceNoticeFinding` is
+`required`, like every other element in this file, and it states the revision read, the date, and
+that there is no NOTICE file and no copyright notice. A notice that omits a NOTICE file and one that
+records there is none read identically to anyone downstream; only the second says the check was
+performed. Two tests hold it up — one asserting all four §4 conditions reach the rendered notice, one
+asserting the notice invents no copyright line and that the word appears only in the finding that
+says there is none.
+
+The narrow reading — that §4(c) covers only notices in the *files*, and a model card is not a file of
+the Work — would have discharged this with nothing retained. It was not taken. Retaining what the
+source asks to travel with it costs four paragraphs, and the cost of being wrong the other way is a
+licence breach.
 
 One thing that is settled: the licence itself. `docs/PHASES.md` records apache-2.0 for this
 checkpoint, read off its model card on 2026-08-19 when the route was chosen, and that is the record

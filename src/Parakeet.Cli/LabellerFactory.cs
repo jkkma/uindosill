@@ -54,12 +54,23 @@ internal static class LabellerFactory
             });
         }
 
-        // The seam's capabilities are the caller's to honour: a count the labeller cannot fix is
-        // said out loud rather than silently dropped.
+        // The seam's capabilities are the caller's to honour, and there are two separate things a
+        // caller can be owed here. Both are said, because they are different facts and only one of
+        // them was being said.
         if (options.SpeakerCount is { } count && !labeller.Capabilities.SupportsFixedSpeakerCount)
         {
             context.WriteError(
                 $"--speaker-count {count} was given but this labeller decides the count itself; the value is ignored.");
+        }
+
+        // The second, and the one that changes what a user does next. "The value is ignored" is true
+        // and reads as harmless — nothing was applied, so presumably nothing was lost. It does not
+        // say that the number asked for was never on offer. This does, before a byte of audio is
+        // read, because after the run the only thing left to say is DescribeLimit's "4 speakers were
+        // labelled", which reads as a fact about the recording rather than about the tool.
+        if (SpeakerLabelling.DescribeUnreachableCount(labeller.Capabilities, options.SpeakerCount) is { } unreachable)
+        {
+            context.WriteError($"WARNING: {unreachable}");
         }
 
         return labeller;

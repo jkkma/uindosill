@@ -155,7 +155,9 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "n",
                 Help = "With --speakers: how many voices there are, when known. Default: let the labeller decide. " +
-                       "The diariser estimates the count and cannot be told it, and says so when given one.",
+                       "The diariser estimates the count and cannot be told it, and says so when given one. A " +
+                       "count above what the labeller can tell apart is warned about before the audio is read, " +
+                       "and the run continues.",
             },
             new OptionSpec
             {
@@ -299,7 +301,8 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "n",
                 Help = "How many voices there are, when known. The diariser estimates the count and cannot be told it, " +
-                       "so this is reported as ignored rather than applied.",
+                       "so this is reported as ignored rather than applied. A count above what it can tell apart " +
+                       "is warned about before the audio is read, and the run continues.",
             },
             Fake,
             Help,

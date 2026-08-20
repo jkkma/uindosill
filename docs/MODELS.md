@@ -125,12 +125,22 @@ like this, abbreviated:
 }
 ```
 
-**That entry is pinned and not verified, and the two are different claims.** Its nine digests were
-taken off the bytes the translation gate was scored against and re-hashed from disk — stronger
-evidence than an LFS listing, which is what every other entry rests on. Its URL points at a release
-tag nobody has pushed, so `models download` on it will 404 until the asset is uploaded, and
-`"verified": false` is what says so on its face in `models list` and in the Models tab. Until then
-`--translate-model-path` takes the exported directory straight.
+**That entry is verified, and it is the only one attested twice.** Its nine digests were first taken
+off the bytes the translation gate was scored against and re-hashed from disk — stronger evidence
+than an LFS listing, which is what every other entry rests on. The files were then published on
+2026-08-20, and every one of the nine LFS `oid`s Hugging Face publishes matched the scored digest,
+so the pin is now confirmed by the repository as well as by the machine that built it. Those two
+checks are independent, and agreeing is what `"verified": true` means here.
+
+**Its URLs pin a commit sha rather than `main`**, the way the diariser's entry does and for the same
+reason: a URL and a digest are pinned together, so a URL that can serve different bytes later would
+break every already-installed copy with a digest mismatch as its only symptom.
+
+**All nine files are on LFS, including the four under a kilobyte**, because that is what makes them
+checkable. A file stored as an ordinary git blob carries a git SHA-1 and publishes no SHA-256, so
+those four would have had nothing to pin against and only five of nine could have been verified — and
+an entry is as verified as its least-checked member. The `.gitattributes` uploaded beside them is
+what forces it.
 
 **`directory` is required for a multi-file entry, and it is about names rather than tidiness.** The
 translation route ships `config.json` and `vocab.json`; neither is a name one model can own in a

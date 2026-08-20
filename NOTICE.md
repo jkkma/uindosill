@@ -73,6 +73,49 @@ A link is not a copy.
   or on circumventing a safety guardrail. CC BY 4.0 is irrevocable. The two are not interchangeable,
   and `docs/LICENSING.md` records what that difference means for shipping.
 
+## Translation weights — Apache-2.0
+
+**OPUS-MT tc-bible-big mul→deu+eng+nld (machine translation model weights)**
+
+- **Creator:** Helsinki-NLP, the Language Technology Research Group at the University of Helsinki
+- **Licence:** Apache License, Version 2.0, https://www.apache.org/licenses/LICENSE-2.0 — §4(a)
+  wants a **copy** rather than a link, so one ships at `licences/Apache-License-2.0.txt`.
+- **Source:** https://huggingface.co/Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld
+- **Modifications (§4(b)):** the original Marian checkpoint at revision `bb1ef830d5` was exported to
+  ONNX in the merged decoder layout by `scripts/export-translation-onnx.py`, which splits it into an
+  encoder graph and a decoder graph with past key values exposed. The weights are unchanged and
+  unquantised — float32 in, float32 out. Uindosill redistributes the exported graphs and does not
+  redistribute the original checkpoint.
+- **Warranty:** the work is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied (§7).
+
+### What the source carries, and what it does not (§4(c) and §4(d))
+
+**Read at the pinned revision `bb1ef830d5` on 2026-08-20** — the file listing and every text file in
+it. There is **no `NOTICE` file**, so §4(d) has nothing to reproduce, and there is **no copyright,
+patent or trademark notice anywhere in the repository**, so none is reproduced here. The negative
+half is stated rather than left silent, because a notice that omits a NOTICE file and one that
+records there is none read identically downstream, and only the second says the check was performed.
+Inventing a plausible copyright line to fill the gap would be a false notice in front of a user,
+which is the failure `models.json`'s own comment about the deferred entries refuses.
+
+The attribution notices it **does** carry are retained, per §4(c):
+
+- Developed by the Language Technology Research Group at the University of Helsinki, as part of the
+  [OPUS-MT project](https://github.com/Helsinki-NLP/Opus-MT). Originally trained with Marian NMT and
+  converted to PyTorch with the transformers library; training data from [OPUS](https://opus.nlpl.eu/).
+- Original model: `opusTCv20230926max50+bt+jhubc_transformer-big_2024-08-18.zip`, at
+  https://object.pouta.csc.fi/Tatoeba-MT-models/mul-deu+eng+nld/opusTCv20230926max50+bt+jhubc_transformer-big_2024-08-18.zip
+- The source asks to be cited: Tiedemann et al., "Democratizing neural machine translation with
+  OPUS-MT" (Language Resources and Evaluation 58, 2023, doi:10.1007/s10579-023-09704-w); Tiedemann
+  and Thottingal, "OPUS-MT – Building open translation services for the World" (EAMT 2020); and
+  Tiedemann, "The Tatoeba Translation Challenge – Realistic Data Sets for Low Resource and
+  Multilingual MT" (WMT 2020).
+- Acknowledgements, in the source's own words: "The work is supported by the HPLT project, funded by
+  the European Union’s Horizon Europe research and innovation programme under grant agreement
+  No 101070350. We are also grateful for the generous computational resources and IT infrastructure
+  provided by CSC -- IT Center for Science, Finland, and the EuroHPC supercomputer LUMI."
+
 ## Third-party components
 
 | Component | Licence | Source |

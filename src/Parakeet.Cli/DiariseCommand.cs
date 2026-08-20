@@ -74,7 +74,11 @@ internal static class DiariseCommand
 
         await labeller.LoadAsync(ct).ConfigureAwait(false);
 
-        if (labeller.Capabilities.MaxSpeakers is { } cap)
+        // The standing note about the cap, for a run that did not ask for a count. When one was
+        // asked for and it is above the cap, LabellerFactory has already said so in the terms that
+        // name the user's own number, and saying the same thing twice in weaker words dilutes it.
+        if (labeller.Capabilities.MaxSpeakers is { } cap
+            && SpeakerLabelling.DescribeUnreachableCount(labeller.Capabilities, options.SpeakerCount) is null)
         {
             context.WriteError(
                 $"{labeller.Capabilities.ModelId}: at most {cap} speakers can be told apart; a further voice is " +
@@ -123,6 +127,14 @@ internal static class DiariseCommand
             var started = Stopwatch.GetTimestamp();
             await using var audio = AudioSources.Open(path);
             var duration = audio.Duration;
+
+            // Per file, because it is a fact about the file. Opening a container reads its header,
+            // not its audio, so this still lands before the labeller has decoded a sample.
+            if (SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, duration) is { } longRun)
+            {
+                context.WriteError($"WARNING: {stem}: {longRun}");
+            }
+
             var turns = await labeller.LabelAsync(audio, options, progress: null, ct).ConfigureAwait(false);
             var elapsed = Stopwatch.GetElapsedTime(started);
 

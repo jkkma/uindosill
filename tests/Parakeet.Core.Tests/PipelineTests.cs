@@ -326,6 +326,57 @@ public class AttributionTests
     }
 
     [Fact]
+    public void TheTranslatorNoticeCarriesAllFourApacheSection4Conditions()
+    {
+        // §4 attaches four conditions to redistribution, and (c) and (d) are the two that cannot be
+        // written from the licence text alone: they depend on what the upstream tree actually
+        // carries. That was read at the pinned revision on 2026-08-20 — no NOTICE file, no
+        // copyright, patent or trademark notice anywhere, and four attribution notices on the card.
+        // Uploading to Hugging Face is redistribution, so this asserts on the rendered notice that
+        // all four conditions reach a reader rather than only the two a licence text supplies.
+        var text = Attributions.Get(Attributions.OpusMtBibleBigMulEn).ToPlainText();
+
+        // (a) a copy of the License, not a link — so the path is named and the link is beside it.
+        Assert.Contains(Attributions.ApacheLicencePath, text, StringComparison.Ordinal);
+        Assert.Contains("apache.org/licenses/LICENSE-2.0", text, StringComparison.Ordinal);
+
+        // (b) prominent notices that the files were changed, and what the change was.
+        Assert.Contains("Modified:", text, StringComparison.Ordinal);
+        Assert.Contains("exported to ONNX", text, StringComparison.Ordinal);
+
+        // (c) the attribution notices found in the source form, retained rather than summarised.
+        Assert.Contains("University of Helsinki", text, StringComparison.Ordinal);
+        Assert.Contains("opusTCv20230926max50+bt+jhubc_transformer-big_2024-08-18.zip", text, StringComparison.Ordinal);
+        Assert.Contains("Democratizing neural machine translation", text, StringComparison.Ordinal);
+        Assert.Contains("grant agreement No 101070350", text, StringComparison.Ordinal);
+
+        // (d) is discharged by a finding rather than by a reproduction, and the finding is the part
+        // worth asserting: a notice that silently omits a NOTICE file and one that records there is
+        // none read identically to anyone downstream, and only the second says the check was done.
+        Assert.Contains("no NOTICE file", text, StringComparison.Ordinal);
+        Assert.Contains("bb1ef830d5", text, StringComparison.Ordinal);
+
+        // And §7, which the other two notice shapes also carry.
+        Assert.Contains("AS IS", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheTranslatorNoticeInventsNoCopyrightLine()
+    {
+        // The upstream repository publishes no copyright line, and the failure this guards against
+        // is the tempting one: filling the gap with a plausible "Copyright (c) Helsinki-NLP" that
+        // nobody upstream ever wrote. That is a false notice in front of a user, which is the same
+        // failure models.json's comment about the deferred entries refuses. The word may appear
+        // only in the finding that says there is none.
+        var text = Attributions.Get(Attributions.OpusMtBibleBigMulEn).ToPlainText();
+
+        Assert.DoesNotContain("Copyright ©", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Copyright (c)", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("All rights reserved", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no copyright, patent or trademark notice", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheDiarisationLicencesConstraintsOnUseAreListed()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);

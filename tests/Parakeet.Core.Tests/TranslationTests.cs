@@ -390,3 +390,134 @@ public class TranslationTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
+
+/// <summary>
+/// The flag that says a translated segment lost a number.
+/// </summary>
+/// <remarks>
+/// Two failure modes to hold apart, and the second is the one that decides whether a flag is worth
+/// having. It has to fire when a date or a quantity really did go missing, and it has to stay quiet
+/// when the English merely wrote the number differently — as words, with a different separator, or
+/// with the digits regrouped. A flag that fires on every sentence with a number in it is a flag
+/// nobody reads by the second file.
+/// </remarks>
+public class TranslationNumeralsTests
+{
+    [Fact]
+    public void ANumberTheEnglishDoesNotCarryIsReported()
+    {
+        // The measured failure, after GermanNumberWords has done its half: the source now says 1929
+        // and the English still says a century.
+        Assert.Equal(
+            ["1929"],
+            TranslationNumerals.Missing(
+                "Ralf Dahrendorf wurde 1929 in Hamburg geboren.",
+                "Ralf Dahrendorf was born in Hamburg in the nineteenth century."));
+    }
+
+    [Fact]
+    public void TheSourceIsCheckedAsTheTranslatorReadIt()
+    {
+        // The trap, and the one this pair of features exists for. The recogniser writes the year as
+        // a word; TranslationRequest.Mark turns it into 1929 before the model sees it. If this
+        // compared the RAW source instead, there would be no numeral in it to be missing, and the
+        // exact failure being guarded against would be the one case the flag could never fire on.
+        Assert.Equal(
+            ["1929"],
+            TranslationNumerals.Missing(
+                "Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren.",
+                "Ralf Dahrendorf was born in Hamburg in the nineteenth century."));
+
+        // And when the translation gets it right, nothing is said.
+        Assert.Empty(TranslationNumerals.Missing(
+            "Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren.",
+            "Ralf Dahrendorf was born in Hamburg in 1929."));
+    }
+
+    [Fact]
+    public void ANumberSpelledOutInEnglishIsNotAMissingNumber()
+    {
+        // This is the whole reason the English side goes through the word-error-rate normaliser
+        // first. Without it every small number in every transcript would be flagged, and the one
+        // that matters would be somewhere in the noise.
+        Assert.Empty(TranslationNumerals.Missing("Es waren 12 Personen.", "There were twelve people."));
+        Assert.Empty(TranslationNumerals.Missing("252 Meter", "two hundred and fifty two metres"));
+    }
+
+    [Fact]
+    public void SeparatorsAreNotDifferences()
+    {
+        // German writes a thousand as 1.000 and a decimal as 3,2; English does the opposite. Neither
+        // is a lost number, and a flag that could not tell the two apart would fire on every large
+        // figure in every European language.
+        Assert.Empty(TranslationNumerals.Missing("1.000 Meter", "1,000 metres"));
+        Assert.Empty(TranslationNumerals.Missing("3,2 Millionen", "3.2 million"));
+    }
+
+    [Fact]
+    public void RepeatsAreCountedRatherThanSetified()
+    {
+        // "5 people in 5 rooms" losing one of the fives is a loss, and present-or-absent would
+        // report nothing.
+        Assert.Equal(
+            ["5"],
+            TranslationNumerals.Missing("5 Personen in 5 Räumen", "5 people in several rooms"));
+    }
+
+    [Fact]
+    public void ANumberTheEnglishAddedIsNotReported()
+    {
+        // One-directional on purpose. Invention is a different defect from loss, it has not been
+        // observed, and a rule written for it would be a rule nothing calibrated.
+        Assert.Empty(TranslationNumerals.Missing("einige Personen", "about 6 people"));
+    }
+
+    [Fact]
+    public void TextWithNoNumbersIsNeverFlagged()
+    {
+        Assert.Empty(TranslationNumerals.Missing(
+            "Esto parece tener sentido.", "This seems to make sense."));
+    }
+
+    [Fact]
+    public void TheDescriptionNamesTheSegmentsAndSummarisesTheRest()
+    {
+        var source = Enumerable.Range(0, 8).Select(i => new TranscriptSegment
+        {
+            Start = TimeSpan.FromSeconds(i * 10),
+            End = TimeSpan.FromSeconds((i * 10) + 9),
+            Text = $"Im Jahr {1900 + i} geschah etwas.",
+        }).ToList();
+
+        var translated = source.Select(s => s with { Text = "Something happened that year." }).ToList();
+
+        var description = TranslationNumerals.Describe(source, translated);
+
+        Assert.NotNull(description);
+        Assert.Contains("8 segments carry a number the English does not", description, StringComparison.Ordinal);
+        Assert.Contains("[00:00] 1900", description, StringComparison.Ordinal);
+        Assert.Contains("[00:40] 1904", description, StringComparison.Ordinal);   // the fifth, at the limit
+        Assert.DoesNotContain("1905", description, StringComparison.Ordinal);     // past it
+        Assert.Contains("and 3 more", description, StringComparison.Ordinal);
+
+        // Nothing lost, nothing said.
+        Assert.Null(TranslationNumerals.Describe(source, source));
+    }
+
+    [Fact]
+    public void AnHourIntoAFileTheTimestampCarriesTheHour()
+    {
+        var source = new List<TranscriptSegment>
+        {
+            new() { Start = TimeSpan.FromMinutes(93), End = TimeSpan.FromMinutes(94), Text = "Im Jahr 1929." },
+        };
+        var translated = new List<TranscriptSegment>
+        {
+            source[0] with { Text = "That year." },
+        };
+
+        var description = TranslationNumerals.Describe(source, translated);
+        Assert.NotNull(description);
+        Assert.Contains("[01:33:00]", description, StringComparison.Ordinal);
+    }
+}

@@ -1,3 +1,4 @@
+using Parakeet.Core.Text;
 using Parakeet.Core.Transcription;
 
 namespace Parakeet.Core.Translation;
@@ -59,7 +60,9 @@ public sealed record TranslationRequest
             var first = Math.Max(0, i - options.ContextSegments);
             for (var j = first; j < i; j++)
             {
-                var previous = segments[j].Text.Trim();
+                // Normalised the same way the source is. Context is text the model reads, so a
+                // compound number word left in it is the same hazard one segment later.
+                var previous = GermanNumberWords.ToDigits(segments[j].Text).Trim();
                 if (previous.Length > 0)
                 {
                     context.Add(previous);
@@ -77,13 +80,33 @@ public sealed record TranslationRequest
         return requests;
     }
 
-    /// <summary>The target token, a space, then the text — with the text's own edges trimmed.</summary>
+    /// <summary>
+    /// The target token, a space, then the text — with the text's own edges trimmed and its German
+    /// compound number words turned into digits.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rewrite is here, at the one funnel every source string passes through, for the same
+    /// reason the target token is: something a translator is trusted to remember is something a
+    /// translator will one day forget. <see cref="GermanNumberWords"/> says why it is needed — the
+    /// recogniser writes a spoken year as <c>neunzehnhundertneunundzwanzig</c> and the translator
+    /// turns it into a century — and why it is safe to run without knowing the source language.
+    /// </para>
+    /// <para>
+    /// It is unconditional rather than a flag, because it is measured to be a no-op on anything
+    /// that is not a German compound: over all 25 FLEURS <c>test</c> configs — 20,146 rows, 8,499
+    /// distinct sentences, every language the catalogue claims — it changed nothing. That check is
+    /// <c>GermanNumberWordsTests.ItChangesNothingInFleursWrittenText</c> and it is re-runnable, so
+    /// the claim that the shipping path still sends the translator the sentences the published
+    /// chrF++ figures describe is a test rather than a memory.
+    /// </para>
+    /// </remarks>
     public static string Mark(string text, string targetToken)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetToken);
 
-        return $"{targetToken} {text.Trim()}";
+        return $"{targetToken} {GermanNumberWords.ToDigits(text).Trim()}";
     }
 
     /// <summary>True when <paramref name="source"/> carries <paramref name="targetToken"/>.</summary>

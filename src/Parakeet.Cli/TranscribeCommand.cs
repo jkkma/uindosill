@@ -424,6 +424,15 @@ internal static class TranscribeCommand
             // Both audio sources are single-read, so the second pass opens the file again. That is
             // a second decode of the whole file, and it is a cost only the opt-in pays.
             await using var second = AudioSources.Open(job.InputPath);
+
+            // Before the labeller decodes a sample, and it is the one warning here that is about
+            // the file rather than about the request: past where this labeller's output has been
+            // established, the speaker labels are a guess and nothing after the run will say so.
+            if (SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, second.Duration) is { } longRun)
+            {
+                context.WriteError($"WARNING: {job.InputPath}: {longRun}");
+            }
+
             document = await SpeakerLabelling.LabelAsync(
                 document, labeller, second, speakerOptions, progress, ct).ConfigureAwait(false);
             speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
@@ -439,10 +448,17 @@ internal static class TranscribeCommand
         // has no word confidences, and a stretch the model emitted in another script comes back as
         // English prose. Reading them off the translation would quietly stop reporting either.
         var transcribed = document;
+        string? numeralWarning = null;
         if (translator is not null && translationOptions is not null)
         {
             document = await TranscriptTranslation.TranslateAsync(
                 document, translator, translationOptions, progress, ct).ConfigureAwait(false);
+
+            // Dates and figures are what a listener checks a transcript for, and they are where a
+            // two-model cascade meets worst. Compared against the transcript as the engine wrote
+            // it, which is what `transcribed` is being kept for, so the comparison is against what
+            // was heard rather than against a second reading of the English.
+            numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
         }
 
         if (!quiet && context.Interactive)
@@ -463,9 +479,11 @@ internal static class TranscribeCommand
             Elapsed = DateTimeOffset.UtcNow - started,
             // Silence wins when both apply: an empty transcript has no segments to flag, and the
             // reason it is empty is the only thing worth saying about it. A labeller at its speaker
-            // cap is said after either, because it is about the names and not the words.
+            // cap is said after either, because it is about the names and not the words. A number
+            // the English lost is said last, because it is about one segment rather than the file.
             Warning = Join(
-                DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options), speakerWarning),
+                Join(DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options), speakerWarning),
+                numeralWarning),
         };
     }
 

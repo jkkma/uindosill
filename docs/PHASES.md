@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 678 tests, no weights, no display, no network — **670 passed and 8 skipped**, and
+**Status:** met. 744 tests, no weights, no display, no network — **735 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
@@ -1000,6 +1000,245 @@ unverified, and everything measured here loaded the checkpoint from a directory 
 real-time factor for a translation pass over real audio has been measured. And the window's
 checkbox and pane switcher are still not built.
 
+### Decided 2026-08-20 — the speaker cap warns rather than refuses, and what a forced count would mean
+
+**`--speaker-count 7` used to be told the truth in a way that read as harmless.** The message was
+*"the value is ignored"*, which is accurate — the diariser estimates the count and cannot be told
+one — and which a reader takes to mean nothing was lost. Nothing said that seven was never on offer.
+The only thing that ever mentioned the four-speaker cap in a `transcribe` run was
+`SpeakerAssignment.DescribeLimit`, **after** the pass, and what it says there is *"4 speakers were
+labelled"* — a sentence about the recording, which is exactly the wrong thing for somebody who does
+not know the tool has a ceiling.
+
+**Warn loudly, up front, and continue.** Fired before a byte of audio is read, in both
+`uindosill diarise` and `transcribe --speakers`, naming the user's own number and the model that
+cannot reach it. It does **not** refuse: somebody with six speakers who knows they will get four
+still has a good transcript — the words are untouched and only the labels are capped — and blocking
+that run would cost them something real to protect them from something they have just been told. It
+is also the house pattern, where a count that cannot be honoured is reported as ignored rather than
+applied.
+
+**CLI only.** The desktop application has no speaker-count input at all, so there is nothing there
+to warn about and nothing in `Parakeet.App` is touched.
+
+**The `diarise` command's standing cap note is suppressed when the specific warning fires**, because
+saying the same thing twice in weaker words dilutes the first telling. It still prints on a run that
+asked for no count, which is where it earns its place.
+
+**And one decision taken here that is not built, so it is not re-argued later.** If **channel
+merging** is ever built — it is not being built now, and nothing about it is designed — and a
+user's `--speaker-count` conflicts with what the channels say, **the user's count wins and the
+transcript's provenance records that it was forced.** The reasoning is the one above: the person in
+the room knows how many people were in it, a channel count is an artefact of how the recording was
+made, and a transcript that silently overrode the user would be a transcript whose speaker labels
+nobody can account for. Recording that it was forced is what keeps the override honest.
+
+### Measured 2026-08-20 — the cascade penalty, recorded and deliberately not gated
+
+**Nothing had priced what ASR error costs the translation, and the whole of the evidence was one
+sentence.** `scripts/measure-cascade.py` fixes that using the one property of FLEURS that makes it
+nearly free: it is n-way parallel, so the same sentence ids exist as Spanish audio, as Spanish text
+and as English reference text. Both arms run in one process over one id set — transcripts in, and
+audio through the recogniser and then in — and the gap between them is the recogniser.
+
+| | sentences | text-in chrF++ | cascade chrF++ | penalty | ASR WER |
+|---|---:|---:|---:|---:|---:|
+| es (`es_419`) | 348 | 56.17 | 53.22 | **−2.95** | 6.12% |
+| de (`de_de`) | 347 | 63.64 | 59.30 | **−4.34** | 9.93% |
+
+**The text-in arm reproduced the gate's published 56.17 and 63.64 exactly**, which is the check that
+this harness is measuring the gate's object: it is recomputed rather than quoted, so the subtraction
+is between two things that differ only by the ASR.
+
+**The penalty decomposes the reassuring way.** German has 1.62× Spanish's word error rate and 1.47×
+its penalty, so the loss scales roughly with how wrong the input is — the translator is not
+disproportionately brittle to slightly-off text, which was the alternative this was built to
+distinguish. Neither language's verdict moves: Spanish clears its bar by +31.82 after the cascade
+against +23.60 required, German by +38.52 against +24.22.
+
+**Two of the twenty-four source languages now have a word error rate**, at 6.12% and 9.93%. Every
+WER this project had until today was English.
+
+**Recorded, not gated, and that was decided before the number existed.** A bar argued for after
+seeing the figure is not a bar, and the gate already carries one criterion nobody has performed. The
+audio halves of both FLEURS configs are pinned by the digest the repository publishes, the way the
+TSVs already were.
+
+### Measured 2026-08-20 — the diariser on whole podcasts, and the limit that is not the cap
+
+**The cap warning above was built for one risk and the measurement found a bigger one.** The four
+episodes went through `uindosill diarise` on the CPU — 2, 3, 5 and 7 speakers, confirmed by the
+maintainer that day — and **all four returned four labels**. Above the cap that is the merge the
+model advertises. Below it, it is the opposite: two hosts produced three substantial clusters, three
+speakers produced four. On this material the number four says nothing, and a user cannot tell which
+of the two things happened to them.
+
+**It is duration.** Same audio, same onset, window grown: correct at 10, 30, 40 and 50 minutes, and
+wrong from an hour. A second episode gives the same shape one rung later. **AMI meetings average
+about half an hour** — inside the range where it is right — so the gate this model passed could not
+have exercised it. AMI dev re-scored the same day is 8.62% DER at collar 0.25 with 0.94% confusion
+and 4-of-4 speaker agreement on all eighteen meetings: this is not a model that confuses speakers in
+general, it is a model whose speaker identities do not survive a long recording.
+
+**Two diagnostics rule out the easy explanations.** The spurious cluster is spread across the whole
+window rather than appearing after long exposure, and the stretch a failing window contains that a
+passing one does not is *correct in isolation*. What is left is over-segmentation of one host into
+two labels. **Nothing was re-tuned to chase it** — the post-processing is still the one fixed on the
+18 AMI dev meetings and applied unchanged, because changing it would invalidate the gate — and no
+root cause was established.
+
+**So a second warning was added, in the same shape as the first.**
+`SpeakerLabellerCapabilities.ReliableUpTo` is **fifty minutes** for this model — the longest length
+at which every window tested was right, rather than the rounder hour at which one of four failed —
+and it is a different kind of limit from `MaxSpeakers`: the cap is architectural, in the model's geometry, knowable without
+running anything; this is empirical, and it is where the evidence stops. Past it the labels are not
+known to be wrong so much as not known to be right, which is the distinction the sentence has to
+carry. It warns and continues, `diarise` and `transcribe --speakers`, before a sample is decoded.
+
+**`docs/UNPROVEN.md` has the ladder, the shares and everything this does not establish** — no DER on
+any podcast, one show, the counts on the maintainer's word, and no root cause.
+
+### Published 2026-08-20 — the weights, and the licence check that had to come first
+
+**The nine files are on Hugging Face, and the Apache-2.0 §4 conditions were discharged before they
+went rather than after.** Uploading is redistribution, and §4 attaches its conditions to
+redistribution — not to a catalogue entry existing. Two of the four had been recorded as outstanding
+since the entry was written, deliberately, and closing them was the first thing done.
+
+**§4(d) is inapplicable and §4(c) splits in two.** The upstream repository was read at the pinned
+revision `bb1ef830d5` — the API's own `sha` came back as exactly the revision the export ran
+against, so the listing *is* the pinned revision and not merely `main` — and then every text file in
+it was fetched at that revision. There is **no `NOTICE` file**; `NOTICE`, `NOTICE.txt` and
+`NOTICE.md` were each requested and each 404ed, and so did `LICENSE`, `LICENSE.txt` and `COPYING`.
+There is **no copyright, patent or trademark notice anywhere** — a case-insensitive search across
+all seven text files returns nothing, and the only occurrences of those words in the whole tree are
+`▁Copyright`, `▁copyright`, `▁trademark` and `▁Helsinki` inside `source.spm` and `target.spm`, each
+preceded by U+2581 in the protobuf framing of a `ModelProto` piece. Those are **subword vocabulary
+entries, not notices**, and nothing is reproduced from them.
+
+**But §4(c) says "copyright, patent, trademark, and attribution notices", and the attribution
+notices are real.** The card carries four — the developer line and the OPUS-MT/Marian/OPUS
+provenance, the original model archive's URL, a citation request naming three publications, and the
+Acknowledgements paragraph crediting the HPLT project under EU Horizon Europe grant agreement
+No 101070350, CSC — IT Center for Science, and the EuroHPC supercomputer LUMI. All four are now
+retained rather than summarised, in `ApacheAttribution.RetainedSourceNotices`, in `NOTICE.md` —
+which had no Apache section at all until today — and in the published repository's own `README.md`.
+The narrow reading, that §4(c) covers only notices inside the *files* and a model card is not a file
+of the Work, would have discharged this with nothing retained. It was not taken: retaining what the
+source asks to travel with it costs four paragraphs, and being wrong the other way is a breach.
+
+**The negative finding is a field rather than a silence.** `ApacheAttribution.SourceNoticeFinding`
+is `required`, like every other element in that file, and states the revision read, the date, and
+that there is no NOTICE file and no copyright line. A notice that omits a NOTICE file and one that
+records there is none read identically to anyone downstream; only the second says the check was
+performed. Two tests hold it up, and the second exists for the tempting failure specifically: it
+asserts the notice invents **no** copyright line, because filling the gap with a plausible
+*Copyright (c) Helsinki-NLP* that nobody upstream ever wrote is a false notice in front of a user —
+the failure `models.json`'s own comment about the deferred entries refuses.
+
+**Hugging Face rather than a GitHub release, and the reason is verification rather than
+convenience.** All six other catalogue entries are HF URLs and the translation entry was the only
+`github.com` one. More to the point, HF publishes an LFS object's `oid`, which for an LFS object
+**is** its SHA-256 — so the entry can be pinned against what the repository publishes rather than
+against what one machine happened to upload, which is the distinction `docs/MODELS.md` draws between
+a verified entry and a trusted one. That is also why the uploaded `.gitattributes` forces **all
+nine** files onto LFS including the four under a kilobyte: left as ordinary git blobs those four
+would carry a git SHA-1 and publish no SHA-256, and only five of nine could be checked. An entry is
+as verified as its least-checked member.
+
+**Pinned, and then installed for real.** `--verify` read the nine published oids back and every one
+matched the digest the gate run recorded, so `models.json` swapped its nine placeholder URLs for
+`resolve/<commit-sha>/` ones and flipped to `"verified": true` — the commit sha rather than `main`,
+the way the diariser entry does it, because a URL and a digest are pinned together here. The last
+exception in `ModelTests` went with it: there is no unverified entry left to excuse, so nothing is
+excused, and a new one fails outright. Two other tests had quietly become claims about the data
+rather than about the flag they were named for — one asserting `models list` shows exactly one
+unverified line, one asserting the Models tab paints at least one — and both were rewritten to test
+the flag against a catalogue built for the purpose, which is where a flag belongs.
+
+**Then the thing none of it had ever done: an install.** `models download` assembled the nine files
+in an `opus-mt-tc-bible-big-mul-en.part` staging folder, fetched, sized and hashed each, renamed the
+folder into place and printed all nine digests; `models verify` re-hashed them off disk and reported
+**9 of 9 files match**; and `uindosill translate` then loaded the ONNX graphs **out of that assembled
+directory** with no `--translate-model-path` and translated 347 lines at 0.467 s each. Before today
+every figure in `docs/UNPROVEN.md` reached this checkpoint through a directory the export script left
+behind. The staging-directory install, the per-file pins and the all-or-nothing rename are experience
+now rather than tests against a stub. **Interruption is still only tests** — the one install that has
+ever run ran to completion, so resume-per-file has not been exercised on anything real.
+
+### Built 2026-08-20 — the two halves of the number problem
+
+**The cascade fails in a way neither model fails on its own, and until today the whole of the
+evidence was one sentence.** The recogniser writes numbers the way they are said, so a German
+speaker's 1929 arrives as `neunzehnhundertneunundzwanzig`, and the translator — whose training
+corpus is Bible-derived text where numbers are digits — returned *"the nineteenth century"*. Neither
+component is wrong on its own metric. What is built here is the repair and the alarm: one narrow
+rewrite in front of the translator, and one language-independent check behind it.
+
+**The rewrite is `GermanNumberWords`, and its whole safety argument is the word "compound".** A
+token is turned into digits only when it parses *completely* as a German cardinal **and** is built
+from at least two number words. `zwei`, `zwanzig`, `neunzehn` and `hundert` are single lexical items
+the translator handles perfectly well and are left exactly as they are; `einundzwanzig`,
+`zweihundert` and `neunzehnhundertneunundzwanzig` are compositions and are rewritten. Requiring the
+*whole* token to parse is what keeps ordinary words out — `Achtung` parses `acht` and has `ung` left
+over, `Dreieck` has `eck`, `Zweifel` has `fel` — and the two-word floor is what keeps the small
+numbers that already translate correctly out. Bare `ein` is in the grammar and `eine`, `einer`,
+`einem` are not, because those are the indefinite article.
+
+**It runs without being told the source language, and that had to be earned rather than assumed.**
+Nothing in this pipeline knows the source language: the translator is many-to-one, told the target
+and never the source. So the rewrite runs on every segment in every language, and the question is
+whether it ever fires on something that is not a German compound number. **It does not.** Over all
+25 FLEURS `test` configs — **20,146 rows, 8,499 distinct sentences, every language the catalogue
+claims, English included** — it changed **nothing**. (8,499 is the gate's 8,149 plus English's own
+350, which is the arithmetic that says the same corpus was read.) That check is
+`GermanNumberWordsTests.ItChangesNothingInFleursWrittenText`, opt-in behind `UINDOSILL_FLEURS_DIR`
+because it reads a corpus this repository does not carry, and it is re-runnable rather than
+performed once and written down.
+
+**That check is not a nicety, it is the condition on shipping the rewrite at all.** The translation
+gate was scored on FLEURS `raw_transcription` — written prose, where numbers are already digits. If
+the rewrite changed any of that text, the sentences the shipping path sends the translator would no
+longer be the sentences the published chrF++ figures describe, and every one of those figures would
+have to be re-earned. It is a no-op there and fires only on recogniser output, which is exactly the
+split that makes it free.
+
+**It lives in `TranslationRequest.Mark`**, the one funnel every source string passes through, for
+the same reason the `>>eng<<` target token does: something a translator implementation is trusted to
+remember is something a translator implementation will one day forget. Context segments are
+normalised the same way, since context is text the model reads too.
+
+**The alarm is `TranslationNumerals`, and it needs no per-language grammar at all.** If the source
+carries a numeral and the English does not, say so — which works for all twenty-four sources,
+including the twenty-three nobody here has ever put audio through. Two decisions keep it from being
+noise. The English side is first put through `TranscriptNormalizer`'s word-error-rate tokeniser,
+whose number rule already turns runs of English cardinal words into digits, so a translation
+rendering `12` as *twelve* is not a lost number; without that, every small number in every
+transcript would be flagged and the one that mattered would be buried. And separators are dropped on
+both sides, because German `1.000` against English `1,000`, and German `3,2` against English `3.2`,
+are the one difference that reliably occurs and never carries meaning. The cost is that `3.2` and
+`32` cannot be told apart, which is the right trade for something whose job is to point a human at a
+segment rather than to score one.
+
+**And the rewrite is measured to help, which it was not when it was written.** The cascade run above
+translates in Python and so does *not* apply it; putting the same 347 recognised German sentences
+through `uindosill translate` produces the shipping output, and
+`scripts/measure-cascade.py --compare-normaliser` diffs the two. **chrF++ moves +0.15, 59.30 to
+59.45 — and that understates it by design**, because a corpus metric cannot see a number error.
+**Numeral recall can**: of the numbers the English reference carries, how many survive as digits.
+Over all 347 sentences, **46 of 105 → 62 of 105**. Over the **17 sentences the rewrite changed**,
+**2 of 29 → 18 of 29**. All 17 carry a German compound number token, which is what attributes the
+difference to the rewrite rather than to the port. And the founding failure was caught again in the
+wild and repaired: `im Jahr achtzehnhundertneunundachtzig` went from *"in the eighteenth century"* to
+*"in 1889"*, against a reference that says *"in 1889"*.
+
+**It is a flag, not a refusal, and it is one-directional.** A number the English *added* is not
+reported: invention is a different defect from loss, it has not been observed here, and a rule
+written for it would be a rule nothing calibrated. `transcribe --translate` reports it beside the
+speaker-cap note; `uindosill translate` reports it by line number rather than by timestamp, because
+that command's segments are one synthetic second apiece and `[00:03]` would be a time that never
+existed.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -1012,8 +1251,8 @@ checkbox and pane switcher are still not built.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. Outstanding: **the human adequacy check**, which is what keeps the gate unpassed; the release tag and its 1.34 GiB, without which no multi-file entry has ever been installed; a real-time factor for a translation pass over real audio; and the window's checkbox and pane switcher. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
-| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
+| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. **The weights were published to Hugging Face on 2026-08-20 and the entry is verified against the nine LFS oids the repository publishes**, with the Apache-2.0 §4(c) and §4(d) checks done before the upload rather than after — no NOTICE file upstream, no copyright line anywhere, and four attribution notices retained. The first real multi-file install ran the same day: staged, hashed, 9 of 9 verified, and the graphs then loaded out of that assembled directory. **The cascade penalty is measured** — Spanish −2.95 and German −4.34 chrF++ against ASR word error rates of 6.12% and 9.93% — recorded and deliberately not gated. Outstanding: **the human adequacy check**, which is what keeps the gate unpassed; a real-time factor for a translation pass over real audio; an interrupted install, which nothing has exercised; and the window's checkbox and pane switcher. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
+| speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app. **Measured 2026-08-20 on whole podcasts and it does not transfer**: all four episodes returned four labels whether there were 2, 3, 5 or 7 speakers — the cap explains the last two and over-segmentation explains the first two — and a duration ladder over one episode puts the count right to 50 minutes and wrong from an hour, against AMI meetings averaging about half an hour. AMI dev re-scored the same day is 8.62% at collar 0.25 with 0.94% confusion and 4-of-4 speaker agreement on all eighteen, so this is a long-recording limit rather than a bad model. Nothing was re-tuned; the product now warns before the run, past an hour and on a count above the cap. No DER exists for any podcast and the cap is still unpriced |
 
 ### The dictation seam
 

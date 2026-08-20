@@ -429,3 +429,185 @@ public class WordErrorRateTests
         Assert.Equal(0.14, corpus.Rate, 10);
     }
 }
+
+/// <summary>
+/// The German compound-number rewrite that goes in front of the translator.
+/// </summary>
+/// <remarks>
+/// Two halves, and the second is the one that decides whether this may ship. The first is that it
+/// gets the arithmetic right on the case it exists for. The second — the larger half of these tests
+/// — is everything it must <b>not</b> touch, because it runs without knowing the source language
+/// and a rewrite of an ordinary word would put invented digits into somebody's transcript.
+/// </remarks>
+public class GermanNumberWordsTests
+{
+    [Theory]
+    // The measured failure this exists for: 1929, as a German speaker says it.
+    [InlineData("neunzehnhundertneunundzwanzig", 1929)]
+    [InlineData("einundzwanzig", 21)]
+    [InlineData("neunundneunzig", 99)]
+    [InlineData("zweihundert", 200)]
+    [InlineData("zweihundertfünfzig", 250)]
+    [InlineData("zweihundertzweiundfünfzig", 252)]
+    [InlineData("einhundert", 100)]
+    [InlineData("hunderttausend", 100_000)]
+    [InlineData("zweitausend", 2000)]
+    [InlineData("zweitausendvierundzwanzig", 2024)]
+    [InlineData("neunzehnhundert", 1900)]
+    [InlineData("dreitausendsiebenhundertneunundfünfzig", 3759)]
+    // Umlauts as the recogniser might spell them either way.
+    [InlineData("zweihundertfuenfzig", 250)]
+    [InlineData("dreissigtausend", 30_000)]
+    [InlineData("dreißigtausend", 30_000)]
+    // Case is the recogniser's business, not the parser's.
+    [InlineData("Neunzehnhundertneunundzwanzig", 1929)]
+    public void ACompoundParsesToItsValue(string token, long expected)
+    {
+        Assert.True(GermanNumberWords.TryParseCompound(token, out var value), token);
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    // Single number words. These translate perfectly well and rewriting them would change text the
+    // gate was scored on for no measured benefit — the two-word floor is what keeps them out.
+    [InlineData("zwei")]
+    [InlineData("zwanzig")]
+    [InlineData("neunzehn")]
+    [InlineData("hundert")]
+    [InlineData("tausend")]
+    [InlineData("eins")]
+    [InlineData("zwölf")]
+    // Ordinary German words that begin with a number word. The whole token has to parse, so each of
+    // these fails on its remainder rather than being half-converted.
+    [InlineData("Achtung")]
+    [InlineData("Dreieck")]
+    [InlineData("Zweifel")]
+    [InlineData("dreißigjährige")]
+    [InlineData("Neunzehntel")]
+    [InlineData("hundertprozentig")]
+    [InlineData("Siebensachen")]
+    [InlineData("einundzwanzigsten")]
+    [InlineData("Tausende")]
+    // The indefinite article, which is one of the commonest words in the language.
+    [InlineData("ein")]
+    [InlineData("eine")]
+    [InlineData("einer")]
+    [InlineData("einem")]
+    [InlineData("einen")]
+    // And words from the other languages this many-to-one translator sees, since nothing tells it
+    // which one it is reading.
+    [InlineData("veintiuno")]
+    [InlineData("negentien")]
+    [InlineData("undertaking")]
+    [InlineData("understand")]
+    [InlineData("underneath")]
+    public void AnythingThatIsNotAWholeCompoundIsLeftAlone(string token)
+    {
+        Assert.False(GermanNumberWords.TryParseCompound(token, out _), token);
+    }
+
+    [Fact]
+    public void TheRewriteKeepsEverythingAroundIt()
+    {
+        Assert.Equal(
+            "Ralf Dahrendorf wurde 1929 in Hamburg geboren.",
+            GermanNumberWords.ToDigits("Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren."));
+
+        // Punctuation, hyphens and repeated separators all survive untouched.
+        Assert.Equal(
+            "Im Jahr 1929, also 21 Jahre  später —  200 Meter.",
+            GermanNumberWords.ToDigits(
+                "Im Jahr neunzehnhundertneunundzwanzig, also einundzwanzig Jahre  später —  zweihundert Meter."));
+    }
+
+    [Fact]
+    public void TextWithNothingToRewriteComesBackTheSameInstance()
+    {
+        // Not merely equal. The shipping path calls this on every segment of every transcript in
+        // every language, and the claim that it is a no-op on 23 of the 24 should cost nothing.
+        const string Text = "Esto parece tener sentido, ya que en la Tierra no se percibe su movimiento.";
+        Assert.Same(Text, GermanNumberWords.ToDigits(Text));
+    }
+
+    [Fact]
+    public void AHyphenatedCompoundIsTwoTokensAndBothAreRewritten()
+    {
+        // Hyphens end a token, so "neunzehnhundert-neunundzwanzig" is two compounds rather than one
+        // number. Both are numbers and both are rewritten; nothing here tries to rejoin them, which
+        // would be a guess about what the speaker meant.
+        Assert.Equal("1900-29", GermanNumberWords.ToDigits("neunzehnhundert-neunundzwanzig"));
+    }
+
+    /// <summary>
+    /// The check that decided whether this may run in the shipping path at all, kept re-runnable
+    /// rather than performed once and written down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The translation gate was scored on FLEURS <c>raw_transcription</c> — written prose, where
+    /// numbers are already digits. If this rewrite changes any of that text, then the sentences the
+    /// shipping path sends the translator are no longer the sentences the published chrF++ figures
+    /// describe, and every one of those figures would have to be re-earned. So it must be a **no-op
+    /// on written text**, across all 24 source languages and not only German, because it runs
+    /// without being told which language it is reading.
+    /// </para>
+    /// <para>
+    /// Opt-in, like the translation checkpoint tests, because it reads a corpus this repository
+    /// does not carry. Point <c>UINDOSILL_FLEURS_DIR</c> at the <c>data/</c> directory of a
+    /// <c>google/fleurs</c> snapshot — the one <c>scripts/measure-translation.py</c> leaves in the
+    /// Hugging Face cache — and it scores every <c>test.tsv</c> under it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ItChangesNothingInFleursWrittenText()
+    {
+        var directory = Environment.GetEnvironmentVariable("UINDOSILL_FLEURS_DIR");
+        Assert.SkipWhen(
+            string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory),
+            "Set UINDOSILL_FLEURS_DIR to the data/ directory of a google/fleurs snapshot. The gate " +
+            "figures were scored on that text, so a rewrite that touches it invalidates them.");
+
+        var offenders = new List<string>();
+        var sentences = 0;
+        var configs = 0;
+
+        foreach (var tsv in Directory.EnumerateFiles(directory!, "test.tsv", SearchOption.AllDirectories))
+        {
+            configs++;
+            var config = Path.GetFileName(Path.GetDirectoryName(tsv)) ?? "?";
+            foreach (var line in File.ReadLines(tsv))
+            {
+                var fields = line.Split('\t');
+                if (fields.Length < 3)
+                {
+                    continue;
+                }
+
+                var raw = fields[2].Trim();
+                if (raw.Length == 0)
+                {
+                    continue;
+                }
+
+                sentences++;
+                var rewritten = GermanNumberWords.ToDigits(raw);
+                if (!ReferenceEquals(rewritten, raw))
+                {
+                    offenders.Add($"{config} {fields[0]}: {raw}\n            -> {rewritten}");
+                }
+            }
+        }
+
+        Assert.True(configs > 0, $"no test.tsv found under {directory}");
+        Assert.True(sentences > 0, $"no sentences read from {directory}");
+
+        // Every offender is listed rather than only the count. If this ever fails, the question is
+        // which word it caught and whether the grammar or the corpus is wrong, and a bare number
+        // answers neither.
+        Assert.True(
+            offenders.Count == 0,
+            $"the rewrite is not a no-op on written text: {offenders.Count} of {sentences} sentences in " +
+            $"{configs} configs changed. The gate figures describe the unrewritten text.\n  " +
+            string.Join("\n  ", offenders.Take(40)));
+    }
+}

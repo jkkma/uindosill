@@ -87,6 +87,20 @@ public sealed class SortformerSpeakerLabeller : ISpeakerLabeller
             // --speaker-count report that it was ignored instead of appearing to work.
             SupportsFixedSpeakerCount = false,
             MaxSpeakers = SortformerGeometry.SpeakerCount,
+
+            // Fifty minutes, and it is where the evidence stops rather than where the model does.
+            // Measured 2026-08-20 on this project's own podcast material by growing the window from a
+            // fixed onset: right at 10, 30, 40 and 50 minutes across two episodes — five windows,
+            // five correct — and then only three of four at sixty, and nothing correct past two
+            // hours. On all four full episodes it returned four speakers whether there were two,
+            // three, five or seven.
+            //
+            // So the number is the longest length at which EVERYTHING tested was right, not the
+            // shortest at which something was wrong. An hour would have read rounder and would have
+            // let the one failing sixty-minute window through without a word. AMI, the corpus its
+            // gate was passed on, has meetings averaging about half an hour, so nothing in that gate
+            // exercised any of this. See docs/UNPROVEN.md for the ladder.
+            ReliableUpTo = TimeSpan.FromMinutes(50),
         };
     }
 
