@@ -60,6 +60,9 @@ inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`,
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it,
 `measure-wer.ps1` writes `runs/wer/<timestamp>-<backend>/`, and `measure-der.ps1` writes
 `runs/der/<timestamp>-<system>/` beside the cut stretches in `runs/der/stretches/`.
+`export-translation-onnx.py` is not a harness but writes there for the same reason —
+`runs/translation-onnx/<variant>/` with a `manifest.json` beside them, and the graphs run to
+gigabytes.
 
 `packaging/` is the second such tree and is gitignored for the same reason: `package-windows.ps1`
 writes the publish, the packages and the release feed under it, and one channel alone is over
