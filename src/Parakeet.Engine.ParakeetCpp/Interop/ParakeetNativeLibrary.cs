@@ -425,6 +425,43 @@ public static class ParakeetNativeLibrary
         return roots;
     }
 
+    /// <summary>
+    /// The backend to use when nobody has said which: the fastest tier in <paramref name="present"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One rule, in one place, because both front ends need it and an install that disagreed with
+    /// itself about which tier it runs would be worse than either answer. The window uses it for a
+    /// first-run default it then remembers; the CLI uses it for a bare <c>--backend</c>.
+    /// </para>
+    /// <para>
+    /// CUDA outranks Vulkan because its presence is not an accident: the default channel ships cpu
+    /// and vulkan, and the <c>cuda</c> directory arrives only with the second, whose installer is
+    /// 818 MB against 82 MB. An empty list means Vulkan rather than CPU — a build from source with
+    /// no vendored natives should resolve to what it always did and let the loader say what is
+    /// missing, rather than quietly settling for the slowest tier.
+    /// </para>
+    /// </remarks>
+    public static ComputeBackend PreferredBackend(IReadOnlyList<ComputeBackend> present)
+    {
+        ArgumentNullException.ThrowIfNull(present);
+
+        if (present.Contains(ComputeBackend.Cuda))
+        {
+            return ComputeBackend.Cuda;
+        }
+
+        if (present.Contains(ComputeBackend.Vulkan) || present.Count == 0)
+        {
+            return ComputeBackend.Vulkan;
+        }
+
+        return present.Contains(ComputeBackend.Cpu) ? ComputeBackend.Cpu : ComputeBackend.Vulkan;
+    }
+
+    /// <summary><see cref="PreferredBackend"/> over <see cref="BackendsPresentOnDisk"/>.</summary>
+    public static ComputeBackend PreferredBackendOnDisk() => PreferredBackend(BackendsPresentOnDisk());
+
     private static IEnumerable<(ComputeBackend Backend, string Directory)> CandidateDirectories()
     {
         var roots = CandidateRoots();

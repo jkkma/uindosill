@@ -2,6 +2,7 @@ using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.ParakeetCpp.Interop;
 
 namespace Parakeet.App.Tests;
 
@@ -41,24 +42,24 @@ public class BackendSelectionTests
     [InlineData(ComputeBackend.Cuda)]                          // the CUDA channel, on its own
     [InlineData(ComputeBackend.Cpu, ComputeBackend.Vulkan, ComputeBackend.Cuda)]
     public void CudaOnDiskIsTheDefaultBecauseNobodyGetsItByAccident(params ComputeBackend[] onDisk) =>
-        Assert.Equal(ComputeBackend.Cuda, MainWindowViewModel.BestBackendPresent(onDisk));
+        Assert.Equal(ComputeBackend.Cuda, ParakeetNativeLibrary.PreferredBackend(onDisk));
 
     [Fact]
     public void TheDefaultChannelStartsOnVulkan() =>
         Assert.Equal(
             ComputeBackend.Vulkan,
-            MainWindowViewModel.BestBackendPresent([ComputeBackend.Cpu, ComputeBackend.Vulkan]));
+            ParakeetNativeLibrary.PreferredBackend([ComputeBackend.Cpu, ComputeBackend.Vulkan]));
 
     [Fact]
     public void ACpuOnlyDropStartsOnCpu() =>
         // Not Vulkan-and-let-it-fall-back. The dropdown should say what will actually run.
-        Assert.Equal(ComputeBackend.Cpu, MainWindowViewModel.BestBackendPresent([ComputeBackend.Cpu]));
+        Assert.Equal(ComputeBackend.Cpu, ParakeetNativeLibrary.PreferredBackend([ComputeBackend.Cpu]));
 
     [Fact]
     public void NothingOnDiskStillSaysVulkan() =>
         // A build from source with no vendored natives, which is every developer's first run and
         // what shipped before any of this. The loader's own message is the right place to find out.
-        Assert.Equal(ComputeBackend.Vulkan, MainWindowViewModel.BestBackendPresent([]));
+        Assert.Equal(ComputeBackend.Vulkan, ParakeetNativeLibrary.PreferredBackend([]));
 
     // ------------------------------------------------------------- the persistence
 

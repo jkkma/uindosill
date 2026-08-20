@@ -34,7 +34,8 @@ internal static class Commands
         Name = "backend",
         TakesValue = true,
         ValueName = "cpu|vulkan|cuda",
-        Help = "Compute backend to load. Default vulkan, falling back to cpu.",
+        Help = "Compute backend to load. Defaults to the fastest this build has: cuda if its "
+             + "binaries are installed, else vulkan. Falls back to cpu, and says so when it does.",
     };
 
     private static readonly OptionSpec NativeDirectory = new()

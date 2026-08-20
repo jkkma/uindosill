@@ -98,12 +98,14 @@ internal static class TranscribeCommand
             })
             .ToList();
 
+        var requestedBackend = EngineFactory.ParseBackend(parsed.Value("backend"));
+
         await using var engine = EngineFactory.Create(context, new EngineRequest
         {
             Fake = parsed.HasFlag("fake"),
             ModelId = parsed.Value("model"),
             ModelPath = parsed.Value("model-path"),
-            Backend = EngineFactory.ParseBackend(parsed.Value("backend")),
+            Backend = requestedBackend,
             NativeDirectory = parsed.Value("native-dir"),
             DisableVulkanBFloat16 = EngineFactory.ParseVulkanBFloat16(
                 parsed.HasFlag("vk-disable-bf16"), parsed.HasFlag("vk-bf16")),
@@ -113,6 +115,8 @@ internal static class TranscribeCommand
         {
             context.WriteError("Using the canned engine: the audio pipeline is real, the words are not.");
         }
+
+        WarnAboutBackendFallback(context, parsed, requestedBackend, engine);
 
         // The opt-in. Off, nothing below changes; on, a labeller is created — or refused, in this
         // build, unless the canned one was asked for — and every file gets a second pass.
@@ -301,6 +305,53 @@ internal static class TranscribeCommand
         }
 
         return threads;
+    }
+
+    /// <summary>
+    /// Says so when the backend that loaded is not the backend that was asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing in this command reported the loaded backend at all until 2026-08-20, which was
+    /// survivable while a bare <c>--backend</c> always meant Vulkan: the fallback from there is
+    /// CPU, and the user had typed nothing to be contradicted. It stopped being survivable when the
+    /// default became "the fastest tier on disk". A machine carrying the CUDA drop with no working
+    /// driver behind it now silently resolves to CUDA, fails, and lands on CPU — twelve times
+    /// slower than the CUDA it was reaching for and seven times slower than the Vulkan it skipped,
+    /// with no line of output to say why a job that used to take four minutes took fifty.
+    /// </para>
+    /// <para>
+    /// It names Vulkan when CUDA falls through because the loader's chain is CUDA then CPU and
+    /// never CUDA then Vulkan — deliberately, so that a deliberate CUDA request fails loudly — and
+    /// a reader who did not choose CUDA needs telling that the middle tier is still there and how
+    /// to ask for it. On stderr, with the other notices, so a piped transcript is unaffected.
+    /// </para>
+    /// </remarks>
+    private static void WarnAboutBackendFallback(
+        CliContext context, ParsedCommandLine parsed, ComputeBackend requested, ITranscriptionEngine engine)
+    {
+        if (parsed.HasFlag("fake"))
+        {
+            return;
+        }
+
+        var loaded = engine.Capabilities.Backend;
+        if (loaded == requested)
+        {
+            return;
+        }
+
+        static string Name(ComputeBackend backend) => backend.ToString().ToLowerInvariant();
+
+        var how = parsed.Value("backend") is { Length: > 0 }
+            ? $"{Name(requested)} was requested"
+            : $"{Name(requested)} was chosen automatically, because this build carries its binaries,";
+
+        var suggestion = requested == ComputeBackend.Cuda && loaded != ComputeBackend.Vulkan
+            ? "  Vulkan is not tried after CUDA; pass --backend vulkan for the other GPU tier."
+            : string.Empty;
+
+        context.WriteError($"{how} but the native loader fell back to {Name(loaded)}.{suggestion}");
     }
 
     private static void WarnAboutThreads(CliContext context, ParsedCommandLine parsed, ITranscriptionEngine engine)
