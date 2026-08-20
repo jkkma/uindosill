@@ -1075,6 +1075,62 @@ others rather than a pin for them. And **nothing was re-tuned**: the post-proces
 fixed on the 18 AMI dev meetings and applied unchanged, because changing it would invalidate the
 gate this model passed.
 
+**The cause is in the model's geometry, and it is 3.5 seconds long.** `SpeakerCacheLength` is 188
+encoder frames — **15.0 s in total, 44 frames or 3.52 s per speaker** — and
+`ArrivalOrderSpeakerCache` exists because the ONNX graph takes the cache as an *input* and does not
+update it: the host scores every frame, boosts twice and keeps the highest 188. So a speaker's whole
+identity is 3.5 seconds of *recent* audio with **no long-term anchor**. Over hours, drift or a long
+silence leaves the cached exemplar no longer matching, and with two real speakers there are two free
+slots for the drifted voice to claim. That is the streaming design working as designed, and this
+project's port is fixture-validated against NVIDIA's own function, so it is not a defect here.
+
+**Shortening the window helps and does not fix it.** Tiled across `two-hosts` and counting only
+labels holding ≥1% of speech: **8 of 8 five-minute tiles correct, 7 of 9 at twenty minutes, 4 of 6
+at thirty, 3 of 5 at fifty, 0 of 3 past two hours.** Every 5-minute probe of the first twenty minutes
+is correct where the same audio as one 20-minute window is not, so the extra cluster is created by
+window length rather than by anything in the content.
+
+**Windowing and stitching was the obvious fix and it is measured to be a bad one.** `two-hosts` cut
+into 8-minute windows with 2 minutes of overlap gives 26 of 30 windows internally correct, and
+adjacent windows can be linked by matching labels on the overlap, where the same audio is labelled
+twice — no embedding model needed. Scored on AMI dev, which has references, that pipeline returns
+**DER 23.53% against the single pass's 8.62%**. Missed speech and false alarm barely move (5.50%
+against 5.29%, 2.28% against 2.39%); **confusion goes from 0.94% to 15.76%**. The segmentation is
+fine and the speaker identities are destroyed, because a mapping error at one junction propagates
+through every window after it. **Windowing is rejected on that number.**
+
+**What ships instead is a repair, not a re-run: `SpeakerTurns.FoldDownTo`.** The failure is always
+**over**-segmentation, and over-segmentation is the direction that can be repaired afterwards — two
+labels merge, where one label cannot be split back into two people. So the labels are folded down to
+a requested count by repeatedly merging the pair that talk over each other least. With no speaker
+embeddings available — the graph returns per-frame activity for four slots and nothing identifying a
+voice — the timeline is the only evidence there is, and it is good evidence: two labels that are one
+drifted person are never simultaneously active, while two people in conversation collide constantly.
+
+**It is a no-op wherever the model was already within the count**, which on all 18 AMI dev meetings
+is every one of them — four labels, cap four, nothing merged, DER unchanged at 8.62%. That is what
+makes it safe to ship against a passed gate, and it is the property windowing lacks.
+
+**It never fires on its own, and that is measured rather than cautious.** An automatic rule — merge
+any pair that never overlaps — would be wrong on AMI: in `IS1008a` the least-colliding pair of
+*genuinely different* speakers overlaps by **0.0 s across the whole meeting**. One meeting in
+eighteen. The rest of that distribution runs 2.8 s to 57.6 s, so the signal is real and simply not
+clean enough to act on unasked. The fold therefore requires an explicit `--speaker-count`, which
+until 2026-08-20 was a flag this labeller reported as ignored.
+
+**Each merge is reported with its margin, because the raw seconds mislead.** On `two-hosts` the
+merged pair overlapped 131.8 s, which sounds alarming until you see the alternatives at 277.9 s and
+334.8 s — it is the clearest pair in the file by 2.1×. What the CLI prints is that ratio. A merge
+with no margin is a merge the count forced rather than one the evidence supports, and the sliver
+merge in that same run shows exactly that: 2.1 s against a next-closest 2.2 s, 1.0×.
+
+**What the fold does not establish.** It fixes the **count**, and a count is not a DER. `two-hosts`
+folds to 62.3% / 37.6% and `two-hosts-one-guest` to 49.5% / 26.6% / 23.9%, and **nothing here can
+say whether those attributions are right**, because no podcast in this project has a per-turn
+reference. Its failure mode is real and one AMI meeting demonstrates it. It needs the user to know
+the speaker count, and for a user who does not, the duration warning below is the whole of what this
+product offers.
+
 **The product now says so before it runs.** `SpeakerLabellerCapabilities.ReliableUpTo` is **fifty
 minutes** for this model and `SpeakerLabelling.DescribeDurationRisk` turns it into a sentence, fired
 by `diarise` and by `transcribe --speakers` on a file longer than that, before the labeller decodes a

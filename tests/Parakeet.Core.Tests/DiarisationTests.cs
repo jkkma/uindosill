@@ -761,6 +761,141 @@ public class SpeakerLabellingPipelineTests
         Assert.Contains("sortformer-onnx", warning, StringComparison.Ordinal);
     }
 
+    private static SpeakerTurn T(double start, double end, string speaker) =>
+        new() { Start = TimeSpan.FromSeconds(start), End = TimeSpan.FromSeconds(end), Speaker = speaker };
+
+    [Fact]
+    public void FoldingIsANoOpWhenTheModelWasAlreadyWithinTheCap()
+    {
+        // The property that makes this safe to ship against a passed gate. On all 18 AMI dev
+        // meetings the model returns four labels and the cap is four, so nothing merges and the DER
+        // cannot move. A repair that fires when it is not needed would have to re-earn that gate.
+        SpeakerTurn[] turns = [T(0, 5, "A"), T(5, 10, "B"), T(10, 15, "A")];
+
+        Assert.Same(turns, SpeakerTurns.FoldDownTo(turns, 2));
+        Assert.Same(turns, SpeakerTurns.FoldDownTo(turns, 3));
+    }
+
+    [Fact]
+    public void TheLabelsThatNeverTalkOverEachOtherAreTheOnesMerged()
+    {
+        // The measured failure's shape: one person's identity drifts to a second label partway
+        // through, so the two are complementary in time and never simultaneous, while the genuine
+        // second speaker collides with both constantly.
+        SpeakerTurn[] turns =
+        [
+            T(0, 10, "drifted-early"), T(5, 12, "the-other-host"),
+            T(20, 30, "drifted-early"), T(25, 33, "the-other-host"),
+            T(60, 70, "drifted-late"),  T(65, 72, "the-other-host"),
+            T(80, 90, "drifted-late"),  T(85, 93, "the-other-host"),
+        ];
+
+        var folded = SpeakerTurns.FoldDownTo(turns, 2);
+        var speakers = SpeakerTurns.Speakers(folded);
+
+        Assert.Equal(2, speakers.Count);
+        Assert.Contains("the-other-host", speakers);
+
+        // The two halves of the drifted speaker are now one, and the host is untouched.
+        var driftedSeconds = folded.Where(t => t.Speaker != "the-other-host").Sum(t => t.Duration.TotalSeconds);
+        Assert.Equal(40, driftedSeconds, 3);
+    }
+
+    [Fact]
+    public void TheSurvivingLabelIsTheOneMostOfTheWordsAlreadyHad()
+    {
+        // Merging renames one label to the other. Picking the larger means the transcript keeps the
+        // name most of its speech already carried, rather than renaming an hour of one host to a
+        // label that held ninety seconds.
+        SpeakerTurn[] turns =
+        [
+            T(0, 100, "major"), T(200, 210, "minor"), T(50, 60, "someone-else"),
+        ];
+
+        var folded = SpeakerTurns.FoldDownTo(turns, 2);
+
+        Assert.Contains("major", SpeakerTurns.Speakers(folded));
+        Assert.DoesNotContain("minor", SpeakerTurns.Speakers(folded));
+    }
+
+    [Fact]
+    public void FoldingKeepsEverySecondOfSpeechAndInventsNone()
+    {
+        // A merge must not lose or gain speech: the same audio is being relabelled, not re-cut.
+        // Overlapping turns of what is now one speaker are merged, so the total can only fall by
+        // exactly the overlap the two labels shared — which for a real drift pair is zero.
+        SpeakerTurn[] turns =
+        [
+            T(0, 10, "a"), T(20, 30, "b"), T(40, 50, "c"), T(60, 70, "a"),
+        ];
+
+        var folded = SpeakerTurns.FoldDownTo(turns, 2);
+
+        Assert.Equal(40, folded.Sum(t => t.Duration.TotalSeconds), 3);
+        Assert.Equal(2, SpeakerTurns.Speakers(folded).Count);
+    }
+
+    [Fact]
+    public void FoldingIsDeterministic()
+    {
+        // Two labels can tie on collision — trivially, when several never overlap at all — and a
+        // fold that picked differently between runs would make a transcript irreproducible.
+        SpeakerTurn[] turns =
+        [
+            T(0, 10, "a"), T(20, 30, "b"), T(40, 50, "c"), T(60, 70, "d"),
+        ];
+
+        var first = SpeakerTurns.Speakers(SpeakerTurns.FoldDownTo(turns, 2));
+        var second = SpeakerTurns.Speakers(SpeakerTurns.FoldDownTo(turns, 2));
+
+        Assert.Equal(first, second);
+        Assert.Equal(2, first.Count);
+    }
+
+    [Fact]
+    public void EachMergeIsReportedWithTheEvidenceForIt()
+    {
+        // The overlap seconds are the merge's own evidence and a caller owes them to the user. Near
+        // zero is the signature this repair exists for; a large number means the pair really did
+        // converse, the merge still happens because the count wins, and nobody should be told it
+        // was well founded.
+        SpeakerTurn[] drifted =
+        [
+            T(0, 10, "early"), T(60, 70, "late"), T(5, 12, "host"), T(65, 72, "host"),
+        ];
+
+        SpeakerTurns.FoldDownTo(drifted, 2, out var merges);
+        var reported = Assert.Single(merges);
+        Assert.Contains("'early'", reported, StringComparison.Ordinal);
+        Assert.Contains("0.0 s", reported, StringComparison.Ordinal);
+
+        // And when the least-colliding pair is not actually complementary, the number says so
+        // rather than the message pretending the merge was clean.
+        SpeakerTurn[] conversing =
+        [
+            T(0, 10, "a"), T(5, 15, "b"), T(20, 30, "a"), T(25, 35, "b"), T(50, 55, "c"),
+        ];
+
+        SpeakerTurns.FoldDownTo(conversing, 2, out var loud);
+        Assert.NotEmpty(loud);
+        Assert.All(loud, m => Assert.Contains("talked over each other for", m, StringComparison.Ordinal));
+
+        // No fold, nothing reported.
+        SpeakerTurns.FoldDownTo(drifted, 3, out var none);
+        Assert.Empty(none);
+    }
+
+    [Fact]
+    public void ACountAboveWhatWasFoundChangesNothing()
+    {
+        // Folding only ever reduces. Asking for seven when the labeller found four cannot conjure
+        // three more, which is what the cap warning says out loud before the run.
+        SpeakerTurn[] turns = [T(0, 5, "A"), T(5, 10, "B")];
+
+        Assert.Same(turns, SpeakerTurns.FoldDownTo(turns, 7));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SpeakerTurns.FoldDownTo(turns, 0));
+    }
+
     [Fact]
     public void ARecordingPastWhereTheEvidenceStopsIsWarnedAbout()
     {

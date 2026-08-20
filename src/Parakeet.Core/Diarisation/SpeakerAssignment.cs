@@ -206,6 +206,7 @@ public static class SpeakerLabelling
         IAudioSource audio,
         SpeakerLabellingOptions? options = null,
         IProgress<TranscriptionProgress>? progress = null,
+        ICollection<string>? merges = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -215,9 +216,24 @@ public static class SpeakerLabelling
         options.Validate();
 
         var raw = await labeller.LabelAsync(audio, options, progress, ct).ConfigureAwait(false);
+
+        // The user's count, applied where the model could not be told it. A labeller that estimates
+        // its own count can over-segment one person into two labels on a long recording, and that
+        // is the one failure a post-step can repair — two labels merge, one label cannot be split.
+        // A no-op when the model already produced no more labels than were asked for.
+        IReadOnlyList<string> folds = [];
+        var counted = options.SpeakerCount is { } wanted ? SpeakerTurns.FoldDownTo(raw, wanted, out folds) : raw;
+        if (merges is not null)
+        {
+            foreach (var fold in folds)
+            {
+                merges.Add(fold);
+            }
+        }
+
         var turns = options.DisplayNameFormat is { } format
-            ? SpeakerTurns.RenameByFirstAppearance(raw, format)
-            : raw;
+            ? SpeakerTurns.RenameByFirstAppearance(counted, format)
+            : counted;
 
         return document with
         {
