@@ -91,7 +91,19 @@ internal static class ModelsCommand
 
             if (model.Notes is { Length: > 0 } notes)
             {
-                context.WriteLine($"  note: {notes}");
+                // Notes are several short paragraphs, written for the person reading them rather
+                // than for this listing, so the blank lines between them are theirs. Printing the
+                // string raw put every paragraph after the first hard against the left margin,
+                // where it read as a new field rather than as more of the note.
+                var paragraphs = notes.Replace("\r\n", "\n", StringComparison.Ordinal)
+                    .Split('\n');
+
+                context.WriteLine($"  note: {paragraphs[0]}");
+
+                foreach (var line in paragraphs.Skip(1))
+                {
+                    context.WriteLine(line.Length == 0 ? string.Empty : $"        {line}");
+                }
             }
 
             context.WriteLine();

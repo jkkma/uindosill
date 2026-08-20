@@ -260,9 +260,12 @@ public class EndToEndTests
         Assert.DoesNotContain("no digest", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("unverified catalogue entry", output, StringComparison.Ordinal);
 
-        // Still listed — listed without a warning is the point, not listed at all.
+        // Still listed — listed without a warning is the point, not listed at all. The id is the
+        // durable half of that: the display name was "OPUS-MT Bible-Big multilingual to English -
+        // ONNX fp32" until 2026-08-20, when the entries were renamed for the people reading the
+        // Models tab, and a listing test has no business pinning a name chosen for readability.
         Assert.Contains("opus-mt-tc-bible-big-mul-en-fp32", output, StringComparison.Ordinal);
-        Assert.Contains("OPUS-MT Bible-Big", output, StringComparison.Ordinal);
+        Assert.Contains("English translation", output, StringComparison.Ordinal);
     }
 
     [Fact]

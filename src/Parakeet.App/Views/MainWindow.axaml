@@ -1,84 +1,181 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Parakeet.App.ViewModels"
+        xmlns:views="using:Parakeet.App.Views"
         x:Class="Parakeet.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Uindosill — local transcription"
         Width="1080" Height="720"
-        MinWidth="820" MinHeight="520">
+        MinWidth="820" MinHeight="520"
+        Background="{DynamicResource GroundBrush}"
+        Foreground="{DynamicResource InkBrush}"
+        FontFamily="{DynamicResource SansFamily}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1">
 
   <!--
-    The two status colours, in one place because they were three literals across this file and two
-    of them failed contrast on white: the amber measured 2.25:1 and the red 3.96:1, against the
-    4.5:1 an accessibility audit asks of body text. These are the same hues taken dark enough to
-    pass — 4.72:1 and 4.98:1 — and nothing else about them changed.
+    The interface designed 2026-08-19, in the shape that design specifies: no OS title bar, a 46px
+    headerbar carrying the application name and a pill view-switcher, and square corners on
+    everything that is not a circle.
 
-    The third colour is new. A provenance line reading "Verified against the repository, digest
-    pinned" was painted in the warning amber along with the three lines that report something
-    unchecked, so the reassuring case — the case every shipped catalogue entry is in — was drawn as
-    a problem. Amber now says only what it means.
+    Colours, type and control geometry are not here — they are in Theme/Tokens.axaml and
+    Theme/Controls.axaml, which reach the whole application. What is here is layout and the few
+    places a surface has to name its own colour because it is the only one of its kind.
+
+    Two structural notes, because both look like accidents:
+
+    · The pages still live in a TabControl, whose header strip is collapsed by the `headless`
+      class. The design puts the switcher in the middle of the headerbar, between the application
+      name and the window buttons, which is not a place a tab strip can be — so the switcher is
+      four radio buttons bound to the same SelectedTab index the TabControl reads. The TabControl
+      is doing the page-switching; the pills are the only part anyone sees.
+
+    · The corner is square by asking rather than by drawing. See Services/WindowCorner.cs — DWM
+      takes a preference, not a radius, which is what makes square reachable where the earlier
+      12px version of this design was not.
   -->
-  <Window.Resources>
-    <SolidColorBrush x:Key="StatusWarningBrush" Color="#966C13" />
-    <SolidColorBrush x:Key="StatusErrorBrush" Color="#B84E45" />
-    <SolidColorBrush x:Key="StatusVerifiedBrush" Color="#4A602C" />
-  </Window.Resources>
 
-  <Window.Styles>
-    <Style Selector="TextBlock.provenance">
-      <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
-    </Style>
-    <Style Selector="TextBlock.provenance.verified">
-      <Setter Property="Foreground" Value="{StaticResource StatusVerifiedBrush}" />
-    </Style>
-  </Window.Styles>
+  <Window.Resources>
+    <views:IndexMatchConverter x:Key="IndexMatch" />
+  </Window.Resources>
 
   <DockPanel>
 
-    <!-- The visible notice decision 4 requires. Above the tabs rather than inside one, because a
-         notice on a tab nobody opens is not a notice; hidden entirely when there is nothing to say,
-         so the normal window is exactly as it was. -->
+    <!-- ══ Headerbar ═══════════════════════════════════════════════════════════════════════════
+         46px, one hairline underneath, no fill. Dragging it moves the window, which is the whole
+         job the OS title bar was doing before it was turned off. -->
+    <Border DockPanel.Dock="Top"
+            Name="HeaderBar"
+            Height="46"
+            Background="{DynamicResource GroundBrush}"
+            BorderBrush="{DynamicResource RuleSeenBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="14,0,10,0">
+      <Grid ColumnDefinitions="210,*,210">
+
+        <!-- The mark and the name. matcha-100 ground, matcha-700 strokes: the application's own
+             badge is the one place the accent appears without meaning "selected". -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+          <Border Width="22" Height="22" Background="{DynamicResource Matcha100Brush}">
+            <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
+                  StrokeLineCap="Round"
+                  Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                  Width="13" Height="13" Stretch="Uniform"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Uindosill" FontSize="13" FontWeight="Bold"
+                     LetterSpacing="-0.156" VerticalAlignment="Center" />
+          <TextBlock Text="local transcription" Classes="meta" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- The switcher. Licences last, because it is the one tab nobody opens twice. -->
+        <Border Grid.Column="1" Classes="switcher"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <RadioButton Name="TabTranscribe" Classes="segment" GroupName="Switcher" Content="Transcribe"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+            <RadioButton Name="TabModels" Classes="segment" GroupName="Switcher" Content="Models"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+            <RadioButton Name="TabUpdates" Classes="segment" GroupName="Switcher" Content="Updates"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=3}" />
+            <RadioButton Name="TabLicences" Classes="segment" GroupName="Switcher" Content="Licences"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=2}" />
+          </StackPanel>
+        </Border>
+
+        <!-- 24px circles, 7px apart. Genuinely circles rather than rounded rectangles, which is
+             why they keep their shape in a design that squares everything else. -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7"
+                    HorizontalAlignment="Right" VerticalAlignment="Center">
+          <!-- Stretch="None" on all three, and the minimise glyph is why: its geometry is a
+               horizontal line, so it is seven units wide and zero tall, and scaling that uniformly
+               into a 9x9 box has no defined answer — Avalonia drew a dot. Left at their natural
+               size the three glyphs are also consistent with each other, which uniform scaling of
+               three different aspect ratios was not. -->
+          <Button Name="WindowMinimise" Classes="window" ToolTip.Tip="Minimise">
+            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
+                  StrokeLineCap="Round" Data="M0 0h8" Stretch="None" />
+          </Button>
+          <Button Name="WindowMaximise" Classes="window" ToolTip.Tip="Maximise">
+            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.4"
+                  Data="M0 0h7.4v7.4h-7.4z" Stretch="None" />
+          </Button>
+          <Button Name="WindowClose" Classes="window close" ToolTip.Tip="Close">
+            <Path Stroke="{DynamicResource InkSecondaryBrush}" StrokeThickness="1.5"
+                  StrokeLineCap="Round" Data="M0 0l7 7M7 0l-7 7" Stretch="None" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ══ Update notice ═══════════════════════════════════════════════════════════════════════
+         The visible half of the update decision: above the pages rather than inside one, because a
+         notice on a tab nobody opens is not a notice, and hidden entirely when there is nothing to
+         say, so the normal window is exactly as it was.
+
+         Matcha rather than the blue it used to be. Blue belongs to no generation in this system,
+         and an update is a v1 thing. -->
     <Border DockPanel.Dock="Top"
             Name="UpdateNotice"
             IsVisible="{Binding Updates.IsUpdateAvailable}"
-            Background="#1F3B82F6" BorderBrush="#7F3B82F6" BorderThickness="0,0,0,1"
-            Padding="12,8">
+            Background="{DynamicResource Matcha50Brush}"
+            BorderBrush="{DynamicResource Matcha200Brush}"
+            BorderThickness="0,0,0,1"
+            Padding="16,10">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" Text="{Binding Updates.Notice}"
+                   Foreground="{DynamicResource Matcha700Brush}"
                    VerticalAlignment="Center" TextWrapping="Wrap" />
-        <Button Grid.Column="1" Content="Download and restart"
+        <Button Grid.Column="1" Classes="primary" Content="Download and restart"
                 Command="{Binding Updates.InstallCommand}"
                 IsEnabled="{Binding Updates.CanInstall}" Margin="12,0,0,0" />
       </Grid>
     </Border>
 
-    <TabControl Name="Tabs" SelectedIndex="{Binding SelectedTab}">
+    <TabControl Name="Tabs" Classes="headless" SelectedIndex="{Binding SelectedTab}">
 
+      <!-- ══ Transcribe ════════════════════════════════════════════════════════════════════════ -->
       <TabItem Header="Transcribe">
-        <Grid RowDefinitions="Auto,*,Auto" Margin="12" DataContext="{Binding Transcribe}"
+        <Grid RowDefinitions="Auto,*,Auto" Margin="16" DataContext="{Binding Transcribe}"
               x:DataType="vm:TranscribeViewModel">
 
           <!-- Shut while a batch runs, because the queue behind it is. A zone that keeps taking
                drops the view model then discards is a gesture accepted and thrown away, and the
-               row it used to leave behind sat blank at "Waiting" for ever. -->
+               row it used to leave behind sat blank at "Waiting" for ever. Open it is matcha-50
+               inside a dashed matcha-400 edge; shut it is the sunken grey with no dash. -->
           <Border Grid.Row="0"
                   Name="DropZone"
                   DragDrop.AllowDrop="{Binding !IsRunning}"
-                  BorderBrush="#7F888888" BorderThickness="2" CornerRadius="8"
-                  Padding="18" Margin="0,0,0,12">
-            <StackPanel Spacing="4" HorizontalAlignment="Center">
-              <TextBlock Text="{Binding DropHint}" HorizontalAlignment="Center" FontSize="16" />
-              <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
-                         IsVisible="{Binding !IsRunning}"
-                         Opacity="0.7" FontSize="12" />
-            </StackPanel>
+                  Background="{DynamicResource Matcha50Brush}"
+                  Margin="0,0,0,12">
+            <!-- The dash is a Rectangle rather than the Border's own edge: in Avalonia 12.1.1
+                 StrokeDashArray is a Shape property and Border has no dashed variant, so a border
+                 here could only ever be solid. Drawn under the content in the same cell, so it
+                 does not take part in the layout. -->
+            <Panel>
+              <Rectangle Stroke="{DynamicResource Matcha400Brush}" StrokeThickness="1"
+                         StrokeDashArray="4,3" />
+              <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="18">
+                <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="1.9"
+                      StrokeLineCap="Round" StrokeJoin="Round"
+                      Data="M12 3v11m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
+                      Width="19" Height="19" Stretch="Uniform" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding DropHint}" HorizontalAlignment="Center"
+                           FontSize="14.5" FontWeight="SemiBold"
+                           Foreground="{DynamicResource Matcha700Brush}" />
+                <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
+                           Classes="mono meta" FontSize="10.5"
+                           IsVisible="{Binding !IsRunning}" />
+              </StackPanel>
+            </Panel>
           </Border>
 
-          <Grid Grid.Row="1" ColumnDefinitions="360,12,*">
+          <Grid Grid.Row="1" ColumnDefinitions="344,14,*">
 
+            <!-- ── The queue ──────────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="0">
-              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                <Button Content="Start" Command="{Binding StartCommand}"
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="7" Margin="0,10,0,0">
+                <Button Classes="primary" Content="Start" Command="{Binding StartCommand}"
                         IsEnabled="{Binding CanStart}" />
                 <!-- Start runs what has not been run, so redoing a finished queue is asked for
                      rather than guessed at: this is the only way to transcribe the same files a
@@ -89,25 +186,37 @@
                         IsEnabled="{Binding IsRunning}" />
                 <Button Content="Clear" Command="{Binding ClearCommand}"
                         IsEnabled="{Binding !IsRunning}" />
-                <!-- Start is disabled until a model is loaded, and again once every file in the
-                     queue is transcribed, so it has to say which. -->
-                <TextBlock Text="{Binding StartHint}" VerticalAlignment="Center" TextWrapping="Wrap"
-                           FontSize="11" Foreground="{StaticResource StatusWarningBrush}"
-                           IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
               </StackPanel>
+
+              <!-- Start is disabled until a model is loaded, and again once every file in the
+                   queue is transcribed, so it has to say which. -->
+              <TextBlock DockPanel.Dock="Bottom" Text="{Binding StartHint}" TextWrapping="Wrap"
+                         Classes="fine warning" Margin="0,8,0,0"
+                         IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
               <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:JobViewModel">
-                    <StackPanel Spacing="2" Margin="0,4">
-                      <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
+                    <StackPanel Spacing="5">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding FileName}" Classes="emphasis"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{Binding ProgressLabel}" Classes="meta"
+                                   Margin="7,0,0,0" VerticalAlignment="Center"
+                                   IsVisible="{Binding ProgressLabel, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      </Grid>
+                      <TextBlock Text="{Binding Status}" Classes="meta" />
+                      <!-- Gone once the row is finished. A full bar under "Done — 6 files" is a
+                           progress report for something that is not in progress, and it made every
+                           completed row look like a fifth thing still running. Queued rows keep an
+                           empty one, because they are waiting rather than done. -->
                       <ProgressBar Value="{Binding Progress}" Maximum="100"
-                                   IsIndeterminate="{Binding IsIndeterminate}" Height="4" />
-                      <TextBlock Text="{Binding Error}" FontSize="11" Foreground="{StaticResource StatusErrorBrush}"
-                                 TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                      <TextBlock Text="{Binding Warning}" FontSize="11" Foreground="{StaticResource StatusWarningBrush}"
-                                 TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                   IsIndeterminate="{Binding IsIndeterminate}"
+                                   IsVisible="{Binding !IsFinished}" />
+                      <TextBlock Text="{Binding Error}" Classes="fine error"
+                                 IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <TextBlock Text="{Binding Warning}" Classes="fine warning"
+                                 IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -116,9 +225,10 @@
 
             <GridSplitter Grid.Column="1" Background="Transparent" />
 
+            <!-- ── Options and transcript ─────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="2">
-              <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
-                <TextBlock Text="Output formats" FontWeight="SemiBold" />
+              <StackPanel DockPanel.Dock="Top" Spacing="9" Margin="0,0,0,11">
+                <TextBlock Text="OUTPUT FORMATS" Classes="section" />
                 <ItemsControl ItemsSource="{Binding Formats}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -127,80 +237,127 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:OutputFormatViewModel">
-                      <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" Margin="0,0,12,0" />
+                      <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}"
+                                Margin="0,0,14,0" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="Output folder" VerticalAlignment="Center" />
+                  <TextBlock Text="Output folder" Classes="secondary" Width="88"
+                             VerticalAlignment="Center" />
                   <TextBox Text="{Binding OutputDirectory}" Width="280"
                            PlaceholderText="beside each input file" />
                   <Button Content="Browse…" Name="BrowseOutput" />
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="14">
                   <CheckBox Content="Fixed windows instead of speech detection"
                             IsChecked="{Binding UseFixedWindows}" />
-                  <TextBlock Text="Segment cap (s)" VerticalAlignment="Center" />
-                  <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60" Increment="5" Width="110" />
+                  <TextBlock Text="Segment cap" Classes="secondary" VerticalAlignment="Center" />
+                  <NumericUpDown Value="{Binding MaxSegmentSeconds}" Minimum="5" Maximum="60"
+                                 Increment="5" Width="110" FormatString="0 's'" />
                 </StackPanel>
 
-                <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while no
-                     labeller is in the build — a control that silently does nothing is the failure
-                     this application refuses to ship. -->
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                  <CheckBox Content="Label speakers (opt-in: reads each file a second time)"
-                            IsChecked="{Binding LabelSpeakers}"
-                            IsEnabled="{Binding CanLabelSpeakers}" />
-                  <TextBlock Text="{Binding SpeakerHint}" VerticalAlignment="Center" TextWrapping="Wrap"
-                             FontSize="11" Opacity="0.7"
-                             IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                </StackPanel>
+                <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while
+                     no labeller is in the build — a control that silently does nothing is the
+                     failure this application refuses to ship.
+
+                     Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
+                     strip so the opt-in reads as a decision rather than a fourth checkbox. -->
+                <Border Classes="tinted" Padding="10,8">
+                  <StackPanel Orientation="Horizontal" Spacing="9">
+                    <CheckBox Content="Label speakers"
+                              FontWeight="SemiBold"
+                              IsChecked="{Binding LabelSpeakers}"
+                              IsEnabled="{Binding CanLabelSpeakers}" />
+                    <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </Border>
               </StackPanel>
 
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
-                         Margin="0,8,0,0" Opacity="0.85" />
+                         Classes="meta" FontSize="11.5" Margin="0,10,0,0" />
 
-              <ScrollViewer>
-                <SelectableTextBlock Text="{Binding SelectedJob.Transcript}" TextWrapping="Wrap" />
-              </ScrollViewer>
+              <!-- The transcript of the selected file: selectable, read-only, one row per segment
+                   with the speaker as a chip rather than a "S1: " prefix. The chip is what makes a
+                   labelled transcript readable at a glance, and it is a v1 feature, so it is
+                   matcha — see the four chip styles in Theme/Controls.axaml. Unlabelled
+                   transcripts simply have no chip and read as paragraphs. -->
+              <Border Classes="panel" Padding="15,13">
+                <ScrollViewer>
+                  <ItemsControl ItemsSource="{Binding SelectedJob.Lines}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TranscriptLineViewModel">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,9">
+                          <Border Grid.Column="0" Margin="0,0,9,0"
+                                  IsVisible="{Binding HasSpeaker}"
+                                  Classes="speaker"
+                                  Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                                  Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
+                                  Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
+                                  Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
+                            <TextBlock Text="{Binding Speaker}" />
+                          </Border>
+                          <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
+                                               TextWrapping="Wrap" LineHeight="20.3" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Border>
             </DockPanel>
           </Grid>
 
-          <TextBlock Grid.Row="2" Margin="0,10,0,0" Opacity="0.7" FontSize="11" TextWrapping="Wrap"
+          <TextBlock Grid.Row="2" Margin="0,12,0,0" Classes="fine meta"
                      Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
         </Grid>
       </TabItem>
 
+      <!-- ══ Models ════════════════════════════════════════════════════════════════════════════ -->
       <TabItem Header="Models">
-        <Grid ColumnDefinitions="340,12,*" Margin="12" DataContext="{Binding Models}"
+        <Grid ColumnDefinitions="344,14,*" Margin="16" DataContext="{Binding Models}"
               x:DataType="vm:ModelsViewModel">
 
           <DockPanel Grid.Column="0">
-            <TextBlock DockPanel.Dock="Top" Text="{Binding ModelDirectory}" FontSize="11" Opacity="0.7"
-                       TextWrapping="Wrap" Margin="0,0,0,8" />
+            <TextBlock DockPanel.Dock="Top" Text="{Binding ModelDirectory}" Classes="mono meta"
+                       FontSize="10.5" TextWrapping="Wrap" Margin="0,0,0,9" />
             <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding Selected}">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:ModelViewModel">
-                  <StackPanel Spacing="2" Margin="0,4">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                      <!-- Which model is in memory, marked in the list itself. "Installed" is true of
-                           every downloaded entry and answers a different question. -->
-                      <Border IsVisible="{Binding IsLoaded}" Background="#2E7D6B" CornerRadius="3"
-                              Padding="5,1" VerticalAlignment="Center">
-                        <TextBlock Text="LOADED" FontSize="9" FontWeight="Bold" Foreground="White" />
+                  <StackPanel Spacing="5">
+                    <!-- Wrapping, not a horizontal row: the diariser's name plus its badge is
+                         wider than the 344px list, and in a StackPanel the badge simply ran off
+                         the edge — "SPEAKERS" arrived as "SPE". -->
+                    <WrapPanel ItemSpacing="6" LineSpacing="4">
+                      <!-- MaxWidth so the longest name in the catalogue wraps rather than running
+                           off the edge: a WrapPanel hands a child its desired width, and a single
+                           line of text desires all of it. The translation entry is the one that
+                           needs it. -->
+                      <TextBlock Text="{Binding DisplayName}" Classes="emphasis"
+                                 TextWrapping="Wrap" MaxWidth="316"
+                                 VerticalAlignment="Center" />
+                      <!-- Which model is in memory, marked in the list itself. "Installed" is true
+                           of every downloaded entry and answers a different question. -->
+                      <Border Classes="badge solid" IsVisible="{Binding IsLoaded}">
+                        <TextBlock Text="LOADED" />
                       </Border>
-                      <!-- A model that names speakers rather than writing words: downloadable here,
-                           never offered to Load as the engine. -->
-                      <Border IsVisible="{Binding !IsTranscriptionModel}" Background="#6B4E9C" CornerRadius="3"
-                              Padding="5,1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding TaskLabel}" FontSize="9" FontWeight="Bold" Foreground="White" />
+                      <!-- A model that names speakers rather than writing words: downloadable
+                           here, never offered to Load as the engine.
+
+                           Outlined matcha, not the solid purple it was. Speaker labelling is a v1
+                           feature and #6B4E9C sits in taro's neighbourhood, so it would have read
+                           as a v2 feature the moment an Ask tab exists. The outline is what still
+                           separates it from the solid LOADED badge beside it. -->
+                      <Border Classes="badge outlined" IsVisible="{Binding !IsTranscriptionModel}">
+                        <TextBlock Text="{Binding TaskLabel}" />
                       </Border>
-                    </StackPanel>
-                    <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.75" />
-                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4"
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Status}" Classes="meta" />
+                    <ProgressBar Value="{Binding Progress}" Maximum="100"
                                  IsVisible="{Binding IsBusy}" />
                   </StackPanel>
                 </DataTemplate>
@@ -211,105 +368,161 @@
           <GridSplitter Grid.Column="1" Background="Transparent" />
 
           <ScrollViewer Grid.Column="2">
-            <StackPanel Spacing="10" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <TextBlock Text="{Binding Selected.DisplayName}" FontSize="18" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap"
-                         Name="Provenance"
-                         Classes="provenance"
-                         Classes.verified="{Binding Selected.ProvenanceIsVerified}" />
-              <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" />
+            <StackPanel Spacing="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
 
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Licence" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Selected.Licence}" />
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Selected.DisplayName}" Classes="title" />
+                <!-- The upstream artefact's own name, in the monospace this design reserves for
+                     text you copy rather than read. It is here so that renaming the entry to
+                     something a user understands does not cost anyone the ability to check which
+                     exact weights are installed against a model card or a run report. -->
+                <TextBlock Text="{Binding Selected.TechnicalName}" Classes="mono meta"
+                           FontSize="10.5" TextWrapping="Wrap" Margin="0,1,0,3" />
+                <TextBlock Text="{Binding Selected.Provenance}" TextWrapping="Wrap"
+                           Name="Provenance"
+                           FontSize="11.5"
+                           Classes="provenance"
+                           Classes.verified="{Binding Selected.ProvenanceIsVerified}" />
               </StackPanel>
 
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Languages" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" />
-              </StackPanel>
+              <TextBlock Text="{Binding Selected.Notes}" TextWrapping="Wrap" Classes="secondary" />
 
-              <Separator Margin="0,6" />
+              <StackPanel Orientation="Horizontal" Spacing="24">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="LICENCE" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
+                  <TextBlock Text="{Binding Selected.Licence}" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                  <TextBlock Text="LANGUAGES" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
+                  <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" MaxWidth="420" />
+                </StackPanel>
+              </StackPanel>
 
               <!-- The provenance notice above tells the reader that downloading an unverified entry
                    needs an explicit opt-in. These are the controls it refers to; without them the
                    notice was pointing at nothing and the tab could not manage anything at all. -->
-              <CheckBox Content="Allow unverified download (no pinned SHA-256 to check against)"
+              <CheckBox Name="UnverifiedOptIn"
+                        Content="Download this file even though Uindosill cannot check it"
                         IsChecked="{Binding AllowUnverified}"
                         IsVisible="{Binding Selected.NeedsUnverifiedOptIn}" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Download" Command="{Binding DownloadCommand}"
+                <Button Classes="onPage" Content="Download" Command="{Binding DownloadCommand}"
                         IsEnabled="{Binding Selected.CanDownload}" />
-                <Button Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                <Button Classes="onPage" Content="Cancel" Command="{Binding CancelDownloadCommand}"
                         IsEnabled="{Binding Selected.IsBusy}" />
-                <Button Content="Remove" Command="{Binding RemoveCommand}"
+                <Button Classes="onPage" Content="Remove" Command="{Binding RemoveCommand}"
                         IsEnabled="{Binding Selected.IsInstalled}" />
               </StackPanel>
 
               <ProgressBar Value="{Binding Selected.Progress}" Maximum="100" Height="6"
                            IsVisible="{Binding Selected.IsBusy}" />
-              <TextBlock Text="{Binding Selected.Status}" Opacity="0.75" FontSize="11" />
-              <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" />
+              <TextBlock Text="{Binding Selected.Status}" Classes="meta" />
+              <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Classes="secondary" />
 
-              <Separator Margin="0,6" />
+              <Separator />
 
-              <!-- What is in memory, and the controls for putting it there and taking it out again.
-                   Until this existed the engine was built and torn down inside one Start, so there
-                   was no loaded model to name and nothing in the window said which one ran. The
-                   backend row is bound here for the first time too: MainWindowViewModel has exposed
-                   Backends and Backend all along and this view referenced neither, so the app was
-                   pinned to its Vulkan default with no way to see or change it. -->
-              <TextBlock Text="In memory" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
+              <!-- What is in memory, and the controls for putting it there and taking it out
+                   again. Until this existed the engine was built and torn down inside one Start,
+                   so there was no loaded model to name and nothing in the window said which one
+                   ran. The backend row is bound here too: MainWindowViewModel has exposed Backends
+                   and Backend all along and this view referenced neither, so the app was pinned to
+                   its Vulkan default with no way to see or change it. -->
+              <Border Classes="tinted" Padding="14">
+                <StackPanel Spacing="11">
+                  <TextBlock Text="LOADED MODEL" Classes="section"
+                             Foreground="{DynamicResource Matcha700Brush}" />
+                  <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
 
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Backend" VerticalAlignment="Center" />
-                <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
-                          SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
-                          IsEnabled="{Binding !IsLoaded}" MinWidth="120" />
-                <Button Content="Load" Command="{Binding LoadCommand}"
-                        IsEnabled="{Binding CanLoad}" />
-                <Button Content="Unload" Command="{Binding UnloadCommand}"
-                        IsEnabled="{Binding CanUnload}" />
-              </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Backend" Classes="secondary" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
+                              SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
+                              IsEnabled="{Binding !IsLoaded}" MinWidth="132" />
+                    <Button Content="Load" Command="{Binding LoadCommand}"
+                            IsEnabled="{Binding CanLoad}" />
+                    <Button Content="Unload" Command="{Binding UnloadCommand}"
+                            IsEnabled="{Binding CanUnload}" />
+                  </StackPanel>
 
-              <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
-              <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
-                         TextWrapping="Wrap" Opacity="0.7" FontSize="11" />
+                  <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Classes="meta" />
+                  <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
+                             TextWrapping="Wrap" Classes="meta" />
+                </StackPanel>
+              </Border>
+
+              <!-- The one amber panel in the window, and it earns the colour: an uninstall that
+                   silently kept 4 GiB of weights would be a surprise either way round. -->
+              <Border Background="{DynamicResource WarningPanelBrush}"
+                      BorderBrush="{DynamicResource WarningPanelEdgeBrush}"
+                      BorderThickness="1" Padding="12,10">
+                <StackPanel Orientation="Horizontal" Spacing="9">
+                  <Path Stroke="{DynamicResource StatusWarningBrush}" StrokeThickness="1.5"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
+                        Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
+                  <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
+                             Text="Uninstalling Uindosill does not delete downloaded models. They live outside the application directory on purpose — the three of them come to over 3 GiB." />
+                </StackPanel>
+              </Border>
+
             </StackPanel>
           </ScrollViewer>
         </Grid>
       </TabItem>
 
+      <!-- ══ Licences ══════════════════════════════════════════════════════════════════════════
+           Third in the TabControl because the view models and tests index it there; third from
+           the right in the switcher, which puts it last, where the design wants it. -->
       <TabItem Header="Licences">
-        <ScrollViewer Margin="12">
-          <StackPanel Spacing="10">
-            <TextBlock Text="Notices" FontSize="18" FontWeight="SemiBold" />
-            <SelectableTextBlock Text="{Binding LicenceText}" TextWrapping="Wrap" FontFamily="monospace" />
-            <TextBlock Text="{Binding EnvironmentSummary}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding ThreadingNote}" Opacity="0.7" FontSize="11" TextWrapping="Wrap" />
-          </StackPanel>
-        </ScrollViewer>
+        <DockPanel Margin="26,22">
+          <TextBlock DockPanel.Dock="Top" Text="Notices" Classes="title" Margin="0,0,0,13" />
+          <!-- HorizontalAlignment matters here: a stretched TextBlock with a MaxWidth centres its
+               own box in the leftover space, so the paragraph sat in the middle of the page under
+               a left-aligned heading. -->
+          <TextBlock DockPanel.Dock="Top" Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
+                     HorizontalAlignment="Left"
+                     LineHeight="20" Margin="0,0,0,13"
+                     Text="Shown here because the licences require the notice to be present where the material is used, not only in a file in the source repository." />
+          <TextBlock DockPanel.Dock="Bottom" Text="{Binding EnvironmentSummary}" Classes="meta"
+                     TextWrapping="Wrap" Margin="0,13,0,0" />
+          <TextBlock DockPanel.Dock="Bottom" Text="{Binding ThreadingNote}" Classes="meta"
+                     TextWrapping="Wrap" Margin="0,8,0,0" />
+
+          <Border Background="{DynamicResource SunkenBrush}"
+                  BorderBrush="{DynamicResource RuleSeenBrush}"
+                  BorderThickness="1" Padding="16,14">
+            <ScrollViewer>
+              <SelectableTextBlock Text="{Binding LicenceText}" TextWrapping="Wrap"
+                                   Classes="mono" FontSize="11" LineHeight="19.25"
+                                   Foreground="{DynamicResource InkSecondaryBrush}" />
+            </ScrollViewer>
+          </Border>
+        </DockPanel>
       </TabItem>
 
+      <!-- ══ Updates ═══════════════════════════════════════════════════════════════════════════ -->
       <TabItem Header="Updates">
-        <ScrollViewer Margin="12" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel">
-          <StackPanel Spacing="10" MaxWidth="760" HorizontalAlignment="Left">
+        <ScrollViewer Margin="26,22" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel">
+          <StackPanel Spacing="15" MaxWidth="700" HorizontalAlignment="Left">
 
-            <TextBlock Text="Updates" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Updates" Classes="title" />
 
-            <TextBlock Text="{Binding CurrentVersion, StringFormat='This is version {0}.'}" />
+            <TextBlock Text="{Binding CurrentVersion, StringFormat='This is version {0}.'}"
+                       FontSize="13" />
 
-            <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+            <Border Classes="tinted" Padding="14,12">
+              <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Matcha700Brush}" />
+            </Border>
 
             <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}"
                          IsVisible="{Binding IsBusy}" Height="6" />
 
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Content="Check now" Command="{Binding CheckCommand}"
+              <Button Classes="primary onPage" Content="Check now" Command="{Binding CheckCommand}"
                       IsEnabled="{Binding CanCheck}" />
-              <Button Content="Download and restart" Name="InstallUpdate"
+              <Button Classes="onPage" Content="Download and restart" Name="InstallUpdate"
                       Command="{Binding InstallCommand}"
                       IsEnabled="{Binding CanInstall}" />
             </StackPanel>
@@ -317,10 +530,12 @@
             <CheckBox Content="Check for updates when Uindosill starts"
                       IsChecked="{Binding CheckOnLaunch}" />
 
-            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+            <Separator />
+
+            <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
                        Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network — downloading a model — you start yourself." />
 
-            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+            <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
                        Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose and are not touched by an update, or by uninstalling." />
 
           </StackPanel>

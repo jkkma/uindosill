@@ -1,10 +1,30 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Parakeet.App.App"
-             RequestedThemeVariant="Default">
+             RequestedThemeVariant="Light">
+
+  <!--
+    Light rather than Default, and that is a decision rather than a default left alone.
+
+    The design is a pure white ground with one accent family, and it has no dark counterpart:
+    every contrast figure in the token sheet was computed against white, so following the system
+    into dark mode would render the whole window in pairings nobody has measured. Until a dark
+    ramp exists and has been measured the same way, the window is light on any machine.
+  -->
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Uindosill/Theme/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
 
   <Application.Styles>
+    <!-- Fluent first: everything after it overrides it, and the order is what makes the control
+         styles in Controls.axaml win over the theme's own. -->
     <FluentTheme />
+    <StyleInclude Source="avares://Uindosill/Theme/Controls.axaml" />
   </Application.Styles>
 
 </Application>

@@ -48,6 +48,22 @@ public sealed partial class ModelViewModel : ObservableObject
     public string DisplayName => Descriptor.DisplayName;
 
     /// <summary>
+    /// The upstream artefact's own name, shown under the friendly one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DisplayName"/> answers "which of these do I need" and this answers "which exact
+    /// file is that", which are different questions asked by different people — one choosing a
+    /// download, the other checking that the thing on disk is the thing a licence notice or a
+    /// measurement refers to. The display name used to be this string, so the tab answered the
+    /// second question and left the first one to guesswork.
+    ///
+    /// Not the id: the id is this project's key for the entry, while the family and quantisation
+    /// are what the upstream repository calls the weights, which is what somebody comparing
+    /// against a model card or a run report is holding.
+    /// </remarks>
+    public string TechnicalName => $"{Descriptor.Family} · {Descriptor.Quantisation}";
+
+    /// <summary>
     /// What the weights do, for the entries that do not transcribe: a diarisation or translation
     /// model can be downloaded from this tab like any other and must never be offered to Load as
     /// the engine.
@@ -81,11 +97,11 @@ public sealed partial class ModelViewModel : ObservableObject
     /// </summary>
     public string Provenance => (Descriptor.Verified, Descriptor.IsFullyPinned) switch
     {
-        (true, true) => "Verified against the repository, digest pinned.",
-        (true, false) => "Catalogue entry checked, but no digest is pinned — the download cannot be verified.",
-        (false, true) => "Digest pinned, but the catalogue entry itself was never checked.",
-        (false, false) => "Unverified: file name, size and digest were never checked against the repository. " +
-                          "Downloading requires the explicit unverified opt-in below.",
+        (true, true) => "Checked. Uindosill knows this file's fingerprint and will refuse the download if it does not match.",
+        (true, false) => "Uindosill knows where this file comes from, but has no fingerprint to check the download against.",
+        (false, true) => "Uindosill has a fingerprint to check the download against, but never confirmed where the file comes from.",
+        (false, false) => "Uindosill cannot check where this file comes from or whether it arrives intact. " +
+                          "You have to allow that explicitly below.",
         // An entry of several files is pinned only when every one of them is. One unpinned file
         // among nine cannot be reported as "digest pinned": the set is as checked as its weakest
         // member, and this string is the only place a user is told which it is.
@@ -189,7 +205,7 @@ public sealed partial class ModelsViewModel : ObservableObject
         {
             if (_session is null)
             {
-                return "No model session in this window.";
+                return "No model is loaded.";
             }
 
             if (_session.IsBusy)
@@ -307,8 +323,8 @@ public sealed partial class ModelsViewModel : ObservableObject
         if (model.NeedsUnverifiedOptIn && !AllowUnverified)
         {
             StatusMessage =
-                "This catalogue entry has no pinned SHA-256, so the download cannot be verified. " +
-                "Tick 'allow unverified' to install it anyway.";
+                "There is no fingerprint for this file, so Uindosill cannot tell whether it arrives intact. " +
+                "Tick the box above to download it anyway.";
             return;
         }
 

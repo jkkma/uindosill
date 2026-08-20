@@ -1,0 +1,147 @@
+<!--
+  The interface design's tokens, and the Fluent keys they override.
+
+  This is the colour and type system decided 2026-08-19, transcribed from the design's own token
+  sheet. Every value here is a literal from that sheet rather than a value picked here, and the
+  reasoning behind each is in docs/PHASES.md § "Designed 2026-08-19"; what follows is only what a
+  reader needs to change one safely.
+
+  ── Two rules that decide where a colour may go ────────────────────────────────────────────────
+
+  1. A surface's colour says which product generation it belongs to. Matcha is everything v1 does;
+     taro is everything v2 adds. The two ramps are the same six points in oklch — lightness and
+     chroma identical at every step to within 0.001 — rotated in hue alone, which is what lets a
+     taro panel sit beside a matcha one without either shouting.
+
+     Taro is deliberately *not* defined here. Nothing in v1 may draw it, and a brush that exists is
+     a brush something will eventually use; when the Ask tab is built it brings its own ramp. This
+     is also why speaker labelling is matcha despite having been purple: it is a v1 feature, and
+     #6B4E9C would read as v2 the moment an Ask tab exists.
+
+  2. #F0D983 is pinned to exactly one job — the word being spoken in the word-by-word view — and
+     that view is not built yet. It is defined here because it is part of the system, and it is
+     the one place a third hue is admitted. Anywhere else and the system has drifted.
+
+  ── The two accent keys that are Colors rather than Brushes ────────────────────────────────────
+
+  SystemAccentColor and its Light/Dark relatives are `Color` resources; Fluent derives brushes from
+  them. The rest are brushes. Getting that backwards produces a resource that loads and an app that
+  ignores it, which is the failure mode this file is most exposed to — see the note at the bottom
+  about the three keys that do not exist at all.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── The matcha ramp ─────────────────────────────────────────────────────────────────────
+       Six points, oklch hue ~128.5. The step names are the sheet's, not invented here.
+       50  0.969 0.015 h — selected row, the open drop zone, the in-memory panel
+       100 0.936 0.036 h — selected switcher segment, speaker chips, the app mark
+       200 0.887 0.066 h — hairline around a tinted panel, a finished progress bar
+       400 0.762 0.101 h — running progress fill, drop-zone dash, the SPEAKERS badge outline
+       600 0.542 0.092 h — primary button fill, LOADED badge, checkbox tick ground
+       700 0.458 0.082 h — accent text on a tint; 7.0:1 on white, so it is legal as body text -->
+  <Color x:Key="Matcha50">#F2F7EC</Color>
+  <Color x:Key="Matcha100">#E3EFD6</Color>
+  <Color x:Key="Matcha200">#CDE3B5</Color>
+  <Color x:Key="Matcha400">#9EBE78</Color>
+  <Color x:Key="Matcha600">#5F793D</Color>
+  <Color x:Key="Matcha700">#4A602C</Color>
+
+  <SolidColorBrush x:Key="Matcha50Brush" Color="{StaticResource Matcha50}" />
+  <SolidColorBrush x:Key="Matcha100Brush" Color="{StaticResource Matcha100}" />
+  <SolidColorBrush x:Key="Matcha200Brush" Color="{StaticResource Matcha200}" />
+  <SolidColorBrush x:Key="Matcha400Brush" Color="{StaticResource Matcha400}" />
+  <SolidColorBrush x:Key="Matcha600Brush" Color="{StaticResource Matcha600}" />
+  <SolidColorBrush x:Key="Matcha700Brush" Color="{StaticResource Matcha700}" />
+
+  <!-- ── Ground and ink ──────────────────────────────────────────────────────────────────────
+       The neutrals carry a trace of the matcha hue (chroma 0.004–0.025 at hue ~126°) so white
+       never looks blue beside the accent. Nothing here exceeds 0.025 chroma. -->
+  <Color x:Key="Ground">#FFFFFF</Color>
+  <Color x:Key="Sunken">#F7F8F5</Color>
+  <Color x:Key="Ink">#23261F</Color>
+  <Color x:Key="InkSecondary">#5A6152</Color>
+  <Color x:Key="InkMeta">#8C9282</Color>
+
+  <SolidColorBrush x:Key="GroundBrush" Color="{StaticResource Ground}" />
+  <SolidColorBrush x:Key="SunkenBrush" Color="{StaticResource Sunken}" />
+  <SolidColorBrush x:Key="InkBrush" Color="{StaticResource Ink}" />
+  <SolidColorBrush x:Key="InkSecondaryBrush" Color="{StaticResource InkSecondary}" />
+  <SolidColorBrush x:Key="InkMetaBrush" Color="{StaticResource InkMeta}" />
+
+  <!-- Exactly two rules, and a third of either is how a palette starts drifting:
+       #E4E6E0 where a boundary should be seen, #EFF1EC where it should only be felt. -->
+  <SolidColorBrush x:Key="RuleSeenBrush" Color="#E4E6E0" />
+  <SolidColorBrush x:Key="RuleFeltBrush" Color="#EFF1EC" />
+
+  <!-- ── Component greys: seven, and no more ─────────────────────────────────────────────────
+       Exactly one disabled pair (#E7E9E2 edge, #A8AEA0 text). -->
+  <SolidColorBrush x:Key="WindowButtonBrush" Color="#ECEEE9" />
+  <SolidColorBrush x:Key="ControlBorderBrush" Color="#DCDFD6" />
+  <SolidColorBrush x:Key="ProgressTrackBrush" Color="#E9EBE5" />
+  <SolidColorBrush x:Key="UncheckedBoxBrush" Color="#D5D8D0" />
+  <SolidColorBrush x:Key="DisabledEdgeBrush" Color="#E7E9E2" />
+  <SolidColorBrush x:Key="DisabledTextBrush" Color="#A8AEA0" />
+
+  <!-- ── Status ──────────────────────────────────────────────────────────────────────────────
+       Both replaced a colour that failed contrast on white and both figures were computed from
+       the hex rather than estimated: #D9A441 measured 2.25:1 and #D9534F measured 3.96:1, against
+       the 4.5:1 an audit asks of body text. These are the same hues taken dark enough to pass.
+
+       StatusVerified is not a replacement but a correction: a provenance line reading "digest
+       pinned" was painted in the warning amber, so a confirmation was drawn as a problem. Amber
+       now says only what it means. -->
+  <SolidColorBrush x:Key="StatusWarningBrush" Color="#966C13" />
+  <SolidColorBrush x:Key="StatusErrorBrush" Color="#B84E45" />
+  <SolidColorBrush x:Key="StatusVerifiedBrush" Color="{StaticResource Matcha700}" />
+
+  <!-- The warning panel's ground and edge, the one tinted surface that is neither accent. -->
+  <SolidColorBrush x:Key="WarningPanelBrush" Color="#FCF8EF" />
+  <SolidColorBrush x:Key="WarningPanelEdgeBrush" Color="#EFE2C7" />
+
+  <!-- Pinned to the word being spoken and to nothing else. oklch(0.887 0.11 95) — the same
+       lightness as matcha-200, carrying the extra chroma a yellow needs to read as yellow there.
+       Ink on it measures 10.9:1. Unused until the word-by-word view exists. -->
+  <SolidColorBrush x:Key="SpokenWordBrush" Color="#F0D983" />
+
+  <!-- ── Type ────────────────────────────────────────────────────────────────────────────────
+       Instrument Sans throughout; Chivo Mono only for text you copy — paths, extensions, hex,
+       licence notices. Numbers you *read* are the sans with tabular figures, so they align down a
+       column without looking like code.
+
+       Both are embedded, and TypographyTests holds them to resolving at every weight drawn here
+       without Avalonia synthesising one. -->
+  <FontFamily x:Key="SansFamily">avares://Uindosill/Assets/Fonts#Instrument Sans</FontFamily>
+  <FontFamily x:Key="MonoFamily">avares://Uindosill/Assets/Fonts#Chivo Mono</FontFamily>
+
+  <!-- ══ Fluent overrides ════════════════════════════════════════════════════════════════════
+       Every key below was confirmed present in Avalonia.Themes.Fluent 12.1.1 by searching the
+       shipped assembly, because an override on a key that does not exist loads without complaint
+       and changes nothing. Three things the design needs have no key at all in this version —
+       the selected ListBoxItem background, and the ProgressBar foreground and track — and those
+       are done with control themes in Controls.axaml instead. Do not add them here. -->
+
+  <Color x:Key="SystemAccentColor">#5F793D</Color>
+  <Color x:Key="SystemAccentColorLight1">#9EBE78</Color>
+  <Color x:Key="SystemAccentColorLight2">#CDE3B5</Color>
+  <Color x:Key="SystemAccentColorLight3">#E3EFD6</Color>
+  <Color x:Key="SystemAccentColorDark1">#4A602C</Color>
+  <Color x:Key="SystemAccentColorDark2">#3A4C22</Color>
+  <Color x:Key="SystemAccentColorDark3">#2B3919</Color>
+
+  <!-- Rectangles are square. The exceptions are all drawn explicitly where they occur — the
+       switcher pills, the speaker labels, the window buttons — rather than by a radius here. -->
+  <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+
+  <FontFamily x:Key="ContentControlThemeFontFamily">avares://Uindosill/Assets/Fonts#Instrument Sans</FontFamily>
+  <x:Double x:Key="ControlContentThemeFontSize">12.5</x:Double>
+
+  <SolidColorBrush x:Key="AccentButtonBackground" Color="{StaticResource Matcha600}" />
+  <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource Ground}" />
+  <SolidColorBrush x:Key="ButtonBorderBrush" Color="#DCDFD6" />
+  <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource Ground}" />
+  <SolidColorBrush x:Key="TextControlBorderBrush" Color="#DCDFD6" />
+  <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{StaticResource Matcha600}" />
+
+</ResourceDictionary>

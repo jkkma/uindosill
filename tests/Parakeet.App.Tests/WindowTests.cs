@@ -132,7 +132,18 @@ public class WindowTests
 
         Assert.Contains(buttons, c => c is not null && c.Contains("Download", StringComparison.Ordinal));
         Assert.Contains(buttons, c => c is not null && c.Contains("Remove", StringComparison.Ordinal));
-        Assert.Contains(checkboxes, c => c is not null && c.Contains("unverified", StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(checkboxes);
+
+        // The opt-in is found by name and tested by its binding rather than by its label. It used
+        // to be matched on the word "unverified", which stopped being in the label when these
+        // strings were rewritten for the people who read them — and a label match never tested the
+        // thing that was actually broken, which was a control bound to nothing at all.
+        var optIn = window.FindControl<CheckBox>("UnverifiedOptIn");
+        Assert.NotNull(optIn);
+
+        Assert.False(viewModel.Models.AllowUnverified);
+        optIn!.IsChecked = true;
+        Assert.True(viewModel.Models.AllowUnverified);
     }
 
     [AvaloniaFact]
@@ -927,8 +938,23 @@ public class ModelsViewModelTests
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue());
 
         var model = viewModel.Models.First(m => !m.Descriptor.Verified);
-        Assert.Contains("Unverified", model.Provenance, StringComparison.Ordinal);
+
+        // Asserted on the meaning rather than on one word. This looked for the literal "Unverified"
+        // until the provenance lines were rewritten for the people who read them — "Unverified:
+        // file name, size and digest were never checked against the repository" is a sentence for
+        // whoever maintains the catalogue, not for somebody deciding whether to press Download.
+        // A test that pins the vocabulary makes the text hard to improve without making it any
+        // harder to ship a line that says nothing.
+        Assert.False(model.ProvenanceIsVerified);
         Assert.True(model.NeedsUnverifiedOptIn);
+
+        // It still has to *say* so, in whatever words: silence here would let an unchecked entry
+        // look exactly like a checked one.
+        Assert.Contains("cannot check", model.Provenance, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(
+            new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default)
+                .Models.First(m => m.ProvenanceIsVerified).Provenance,
+            model.Provenance);
     }
 
     [Fact]
@@ -943,7 +969,10 @@ public class ModelsViewModelTests
         viewModel.Selected = viewModel.Models.First(m => m.NeedsUnverifiedOptIn);
         await viewModel.DownloadCommand.ExecuteAsync(null);
 
-        Assert.Contains("cannot be verified", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.NotNull(viewModel.StatusMessage);
+        Assert.Contains("cannot", viewModel.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        // A refusal that does not say how to proceed is a dead end, and this one has a way out.
+        Assert.Contains("tick", viewModel.StatusMessage, StringComparison.OrdinalIgnoreCase);
         Assert.False(viewModel.Selected!.IsInstalled);
     }
 
@@ -971,7 +1000,10 @@ public class ModelsViewModelTests
         Assert.All(shipped.Models, model =>
         {
             Assert.Equal(model.Descriptor.Verified, model.ProvenanceIsVerified);
-            Assert.Equal(model.Descriptor.Verified, model.Provenance.Contains("Verified", StringComparison.Ordinal));
+
+            // The text has to distinguish the two states without this test dictating which words
+            // do it: a checked entry must not be handed the sentence an unchecked one gets.
+            Assert.NotEqual(unchecked_.Provenance, model.Provenance);
         });
 
         Assert.All(shipped.Models, model => Assert.True(model.ProvenanceIsVerified));
@@ -983,10 +1015,15 @@ public class ModelsViewModelTests
         var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
 
+        // "and say so" is the half worth testing, so it is tested as a property of the pair of
+        // states rather than as a search for the phrase "digest pinned". These lines are read by
+        // people deciding whether to download a gigabyte, so they get rewritten; a test that
+        // spells the wording makes rewriting them look like a regression.
         Assert.All(viewModel.Models, model =>
         {
             Assert.False(model.NeedsUnverifiedOptIn);
-            Assert.Contains("digest pinned", model.Provenance, StringComparison.OrdinalIgnoreCase);
+            Assert.True(model.ProvenanceIsVerified);
+            Assert.NotEmpty(model.Provenance);
         });
     }
 
