@@ -63,14 +63,26 @@ internal static class ModelsCommand
                 marks.Add("unverified catalogue entry");
             }
 
-            if (model.Sha256 is null)
+            if (!model.IsFullyPinned)
             {
-                marks.Add("no pinned digest");
+                var unpinned = model.Files.Count(f => f.Sha256 is null);
+                marks.Add(model.Files.Count == 1
+                    ? "no pinned digest"
+                    : $"no pinned digest for {unpinned} of {model.Files.Count} files");
             }
 
             context.WriteLine($"{model.Id}");
             context.WriteLine($"  {model.DisplayName}  [{string.Join(", ", marks)}]");
             context.WriteLine($"  licence: {model.License}");
+
+            // Said only for an entry that is more than one file, because for the other six saying
+            // "1 file" would be noise on every line of a list a user reads often.
+            if (model.IsMultiFile)
+            {
+                context.WriteLine(
+                    $"  {model.Files.Count} files in {model.StorageName}\\  " +
+                    $"({(model.TotalSizeBytes is { } bytes ? Bytes(bytes) + " total" : "total size not pinned")})");
+            }
 
             if (model.Languages.Count > 0)
             {
@@ -145,9 +157,18 @@ internal static class ModelsCommand
                 : $"Installed {model.Id} to {result.Model.Path}");
 
             context.WriteLine($"  size:   {Bytes(result.Model.SizeBytes)}");
-            context.WriteLine($"  sha256: {result.Sha256}");
 
-            if (model.Sha256 is null)
+            // One line per file, always — including for the five single-file entries, where it
+            // reads exactly as the old one line did. An entry of nine files that printed one digest
+            // would be offering a release engineer an eighth of what they have to paste back.
+            foreach (var file in result.Files)
+            {
+                context.WriteLine(result.Files.Count == 1
+                    ? $"  sha256: {file.Sha256}"
+                    : $"  sha256: {file.Sha256}  {file.FileName}");
+            }
+
+            if (!model.IsFullyPinned)
             {
                 context.WriteLine();
                 context.WriteLine(
@@ -178,28 +199,54 @@ internal static class ModelsCommand
             return ExitCodes.UsageError;
         }
 
-        var path = context.Store.PathFor(model);
-        if (!File.Exists(path))
+        if (!context.Store.IsInstalled(model))
         {
-            context.WriteError($"{model.Id} is not installed ({path}).");
+            context.WriteError($"{model.Id} is not installed ({context.Store.PathFor(model)}).");
             return ExitCodes.RuntimeError;
         }
 
-        var digest = await ModelInstaller.ComputeSha256Async(path, ct).ConfigureAwait(false);
-        context.WriteLine($"path:   {path}");
-        context.WriteLine($"size:   {Bytes(new FileInfo(path).Length)}");
-        context.WriteLine($"sha256: {digest}");
+        context.WriteLine($"path:   {context.Store.PathFor(model)}");
 
-        if (model.Sha256 is null)
+        // Every file is hashed and reported even after the first mismatch. Stopping at the first
+        // would answer "is it good" and not "what is wrong with it", and for a nine-file entry the
+        // second question is the one somebody is actually asking.
+        var mismatches = 0;
+        var unpinned = 0;
+
+        foreach (var file in model.Files)
         {
-            context.WriteLine("catalogue: no pinned digest to compare against.");
-            return ExitCodes.Success;
+            var path = context.Store.PathFor(model, file);
+            var digest = await ModelInstaller.ComputeSha256Async(path, ct).ConfigureAwait(false);
+            var label = model.Files.Count == 1 ? string.Empty : $"{file.FileName}: ";
+
+            context.WriteLine($"{label}size:   {Bytes(new FileInfo(path).Length)}");
+            context.WriteLine($"{label}sha256: {digest}");
+
+            if (file.Sha256 is null)
+            {
+                context.WriteLine($"{label}catalogue: no pinned digest to compare against.");
+                unpinned++;
+                continue;
+            }
+
+            var matched = string.Equals(digest, file.Sha256, StringComparison.OrdinalIgnoreCase);
+            context.WriteLine($"{label}catalogue: {file.Sha256}");
+            context.WriteLine($"{label}{(matched ? "match" : "MISMATCH")}");
+            if (!matched)
+            {
+                mismatches++;
+            }
         }
 
-        var matches = string.Equals(digest, model.Sha256, StringComparison.OrdinalIgnoreCase);
-        context.WriteLine($"catalogue: {model.Sha256}");
-        context.WriteLine(matches ? "match" : "MISMATCH");
-        return matches ? ExitCodes.Success : ExitCodes.RuntimeError;
+        if (model.Files.Count > 1)
+        {
+            context.WriteLine(
+                $"{model.Files.Count - mismatches - unpinned} of {model.Files.Count} files match" +
+                (unpinned > 0 ? $", {unpinned} unpinned" : string.Empty) +
+                (mismatches > 0 ? $", {mismatches} MISMATCH" : string.Empty));
+        }
+
+        return mismatches == 0 ? ExitCodes.Success : ExitCodes.RuntimeError;
     }
 
     private static int Remove(CliContext context, ParsedCommandLine parsed)

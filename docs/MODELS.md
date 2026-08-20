@@ -100,6 +100,49 @@ parse error, and `models list` and the Models tab never show them.
 To promote one: establish the licence, register the attribution in `Attributions.ById`, move the
 entry into `models`. Nothing about it is installable before that.
 
+## An entry is one file, or several
+
+Every entry that ships today is a single file, and that shape is unchanged: `fileName`, `url`,
+`sizeBytes` and `sha256` on the entry itself, installed into the store root under that name.
+
+An entry may instead list several, which the ONNX translation route needs and which nothing in the
+manifest uses yet:
+
+```json
+{
+  "id": "…", "task": "translation", "…": "…",
+  "directory": "opus-mt-tc-bible-big-mul-en",
+  "files": [
+    { "fileName": "encoder_model.onnx", "url": "https://…", "sizeBytes": 0, "sha256": "…" },
+    { "fileName": "decoder_model_merged.onnx", "url": "https://…", "sizeBytes": 0, "sha256": "…" }
+  ]
+}
+```
+
+**`directory` is required for a multi-file entry, and it is about names rather than tidiness.** The
+translation route ships `config.json` and `vocab.json`; neither is a name one model can own in a
+folder shared with every other entry. The parser refuses a `files` array without one, refuses a
+`directory` that is not a bare name — `../..` would have `models remove` delete outside the store —
+and refuses an entry that carries both shapes at once rather than guessing which the author meant.
+Two entries that would occupy the same name in the store, directory or file, are also refused.
+
+**Pins are per file, and an entry is verified only when every file is.** Eight pinned digests out of
+nine is an unverified entry: a set is as checked as its least-checked member, and `models list` says
+so with the count. `models verify` hashes every file and reports every one, including after the
+first mismatch, because "which of the nine is wrong" is the question somebody is actually asking.
+
+**A multi-file entry installs all or nothing.** The installer assembles it in a `<directory>.part`
+staging folder beside the target and renames that into place only once every file has been fetched,
+sized and hashed. Interrupt it anywhere and what is on disk is a staging folder, which `IsInstalled`
+does not look at and `models list` does not report — so there is an incomplete *download*, which
+resumes, and never an incomplete *model*, which an engine would try to load. Resume is per file: a
+file already staged with the right digest is skipped rather than refetched, because throwing away
+eight good files because the ninth was interrupted is over a gigabyte of somebody's bandwidth.
+
+`models remove` takes the whole directory, including anything in it the manifest does not list — a
+file a later revision of the entry added — because leaving it would make the next install look
+partial and the reported disk usage a lie.
+
 ## Pinning an entry properly
 
 1. Fetch the repository's file listing and read the LFS `oid` — for Hugging Face repositories that
@@ -138,7 +181,9 @@ one value with the other.
   the pinned value, and only then is the file moved into place. A half-written 670 MB blob is never
   mistaken for a model.
 - **Idempotent.** An already-installed file is hashed and left alone. A file that does not match its
-  pinned digest is replaced, because a corrupt or tampered model is not something to keep.
+  pinned digest is replaced, because a corrupt or tampered model is not something to keep. For a
+  multi-file entry the unit replaced is the whole directory rather than the file that failed:
+  keeping the ones that happened to verify would leave a mixed set nobody has ever tested together.
 
 ## Which quantisation
 

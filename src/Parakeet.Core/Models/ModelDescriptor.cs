@@ -31,9 +31,41 @@ public enum ModelTask
     Translation = 2,
 }
 
+/// <summary>
+/// One file of a catalogue entry: what to fetch, and what it must weigh and hash when it arrives.
+/// </summary>
+/// <remarks>
+/// Every entry has at least one of these, and until 2026-08-20 every entry had exactly one, which
+/// is why the pin used to live directly on <see cref="ModelDescriptor"/>. The ONNX translation route
+/// is nine files — two graphs, two configs and a five-file tokenizer — and nine files is not one
+/// file with a longer name: each needs its own URL, its own byte count and its own digest, because
+/// a set that verifies as a whole and not per file cannot say which member is wrong.
+/// </remarks>
+public sealed record ModelFile
+{
+    /// <summary>Bare file name on disk. Never a path: the store decides which directory.</summary>
+    public required string FileName { get; init; }
+
+    public required Uri Url { get; init; }
+
+    /// <summary>Expected size in bytes, or null when it has not been pinned.</summary>
+    public long? SizeBytes { get; init; }
+
+    /// <summary>
+    /// Lowercase hex SHA-256 of this file, or null when nobody has pinned one. Pins are per file
+    /// rather than per entry: a digest over a concatenation would tell a user their download is
+    /// broken without telling them which of nine files to look at.
+    /// </summary>
+    public string? Sha256 { get; init; }
+
+    public override string ToString() => FileName;
+}
+
 /// <summary>One downloadable set of weights.</summary>
 public sealed record ModelDescriptor
 {
+    private readonly IReadOnlyList<ModelFile> _files = [];
+
     /// <summary>Stable identifier used on the command line and in settings.</summary>
     public required string Id { get; init; }
 
@@ -54,21 +86,63 @@ public sealed record ModelDescriptor
     /// <summary>GGUF quantisation, e.g. <c>f16</c>, <c>q8_0</c>, <c>q4_k</c>.</summary>
     public required string Quantisation { get; init; }
 
-    /// <summary>File name on disk, inside the model store.</summary>
-    public required string FileName { get; init; }
-
-    public required Uri Url { get; init; }
-
-    /// <summary>Expected size in bytes, or null when it has not been pinned.</summary>
-    public long? SizeBytes { get; init; }
+    /// <summary>
+    /// Every file this entry installs, in manifest order and never empty.
+    /// </summary>
+    /// <remarks>
+    /// There is no <c>FileName</c>, <c>Url</c>, <c>SizeBytes</c> or <c>Sha256</c> on the descriptor
+    /// any more, and their removal was the point rather than a side effect. Leaving them as
+    /// shortcuts onto the first file would have let every existing call site keep compiling while
+    /// silently meaning "the first of nine" — so the four were deleted and the compiler was made to
+    /// name each place that had assumed one file. <see cref="TotalSizeBytes"/> and
+    /// <see cref="IsFullyPinned"/> are what the display sites wanted anyway.
+    /// </remarks>
+    public required IReadOnlyList<ModelFile> Files
+    {
+        get => _files;
+        init => _files = value is { Count: > 0 }
+            ? value
+            : throw new ArgumentException($"Model '{Id}' must have at least one file.", nameof(value));
+    }
 
     /// <summary>
-    /// Lowercase hex SHA-256 of the file. Null means nobody has pinned a digest yet, and
-    /// <see cref="ModelInstaller"/> refuses to install such a model unless the caller
-    /// explicitly opts in. A 670 MB blob fetched over the network with no integrity check is
-    /// not something to install quietly into a user's profile.
+    /// Subdirectory of the model store this entry installs into, or null to install into the store
+    /// root as a bare file.
     /// </summary>
-    public string? Sha256 { get; init; }
+    /// <remarks>
+    /// Required of any entry with more than one file, and the reason is the file names rather than
+    /// tidiness: the ONNX route ships <c>config.json</c>, <c>vocab.json</c> and
+    /// <c>encoder_model.onnx</c>, none of which is a name one entry can own in a shared directory.
+    /// A single-file entry may still ask for one, but none does — the five GGUF entries and the
+    /// diariser predate this and stay exactly where they are.
+    /// </remarks>
+    public string? DirectoryName { get; init; }
+
+    /// <summary>True when this entry installs into a directory of its own.</summary>
+    public bool IsMultiFile => DirectoryName is not null;
+
+    /// <summary>
+    /// What this entry is called on disk: the directory for a multi-file entry, the file name for a
+    /// single-file one. The thing <see cref="IModelStore.PathFor"/> resolves against the store root.
+    /// </summary>
+    public string StorageName => DirectoryName ?? Files[0].FileName;
+
+    /// <summary>
+    /// Every file's size added up, or null when any one of them is unpinned — because a total that
+    /// silently omits a file is a smaller number than the truth, which is the direction that
+    /// matters for a download the user is deciding whether to start.
+    /// </summary>
+    public long? TotalSizeBytes =>
+        Files.All(f => f.SizeBytes is not null) ? Files.Sum(f => f.SizeBytes!.Value) : null;
+
+    /// <summary>
+    /// True when every file carries a digest. <see cref="ModelInstaller"/> refuses to install an
+    /// entry that does not unless the caller explicitly opts in, and <b>one</b> unpinned file among
+    /// nine is enough to make that true: a set is only as checked as its least-checked member.
+    /// A 670 MB blob fetched over the network with no integrity check is not something to install
+    /// quietly into a user's profile.
+    /// </summary>
+    public bool IsFullyPinned => Files.All(f => f.Sha256 is not null);
 
     /// <summary>
     /// False when the URL, size and digest in the manifest have not been checked against the
@@ -98,8 +172,14 @@ public sealed record InstalledModel
 {
     public required string Id { get; init; }
 
+    /// <summary>
+    /// The file for a single-file entry; the directory for a multi-file one. Both are "the thing
+    /// you point an engine at", which is why one property carries both rather than the callers
+    /// branching.
+    /// </summary>
     public required string Path { get; init; }
 
+    /// <summary>Bytes on disk: the file's length, or every file in the directory added up.</summary>
     public required long SizeBytes { get; init; }
 
     /// <summary>Null when the file is on disk but not in the catalogue (sideloaded).</summary>
