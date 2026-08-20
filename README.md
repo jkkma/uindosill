@@ -40,13 +40,18 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
   the AMI meeting corpus at **16.3% diarisation error rate** (collar 0, overlap scored) against the
   best published figure on the same audio, 18.8%; what that does and does not cover is in
   [UNPROVEN.md](docs/UNPROVEN.md), and it covers no podcast audio at all.
-- **An English version of the transcript is v1's second opt-in, and it is half built.** Decided
+- **An English version of the transcript is v1's second opt-in, and it now translates.** Decided
   2026-08-19 and aboard v1.0 rather than deferred, because a release that transcribes 25 languages
-  and can only hand back 25 languages is a narrower product than the one intended. What exists is
-  the seam: the contract, a canned translator, the catalogue discriminator, and `--translate` on
-  the CLI wired to the canned one. **Nothing here has translated a word** — there is no model, no
-  score, and a gate ratified before any score could exist. The decision and what the spike settled
-  are in [PHASES.md](docs/PHASES.md) and [UNPROVEN.md](docs/UNPROVEN.md).
+  and can only hand back 25 languages is a narrower product than the one intended. `--translate`
+  reads real weights as of 2026-08-20: a Marian checkpoint exported here to ONNX, nine files and
+  1.34 GiB, decoded on the CPU at beam 6 by a SentencePiece tokenizer and a beam search written for
+  this project. `uindosill translate` runs the same pass over a text file with no audio at all.
+  **The gate it was written against is not passed**, and that is a statement about a criterion
+  nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
+  languages and Slovak misses by 0.74, and the human adequacy check has been declined. Translation
+  carries no word timings, and the word-timed subtitle format is refused rather than written against
+  times that no longer fit the words. What is measured and what is not is in
+  [UNPROVEN.md](docs/UNPROVEN.md); the decision is in [PHASES.md](docs/PHASES.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. Not built; the open decisions are in
   [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
@@ -95,7 +100,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 637 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 678 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

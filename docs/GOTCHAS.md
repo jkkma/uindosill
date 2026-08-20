@@ -522,3 +522,41 @@ there and always older than the change being checked.
 **And do not pipe `dotnet test` through `tail`.** The per-assembly `Passed!` lines are what say which
 projects ran, and `| tail -8` in the same session hid two of the six assemblies — which is how a run
 that covered everything looked like a run that had lost a third of the suite.
+
+## 29. Scripted logits mean nothing in absolute terms, because the search takes a log-softmax first
+
+The beam search's tests write their own distributions — `Logits((Eos, -5f))` and the like — so that
+cases a real model will never produce on demand can be reached: a banned token as the single most
+likely continuation, a short hypothesis losing to a long one by a hair. **Only the gaps between the
+listed values do anything.** A step that lists one token gives that token a log probability of about
+zero however small a number it was written with, because normalising one entry produces certainty.
+
+Three of the first six such tests failed for that reason and each looked like a bug in the search.
+The one written to prove beam search beats a one-beam decode gave the bad branch `Logits((Eos, 0f))`
+as its continuation, meaning to make finishing there expensive; it made it free, and the bad branch
+won on merit. The one meant to prove the cache is permuted gave the leading beam a continuation of
+`-5f` alone, which normalised to the same zero as its rival's, so nothing overtook anything and the
+surviving order was the identity.
+
+**A step that is meant to cost something has to have somewhere else for the probability to go.** All
+three were fixed by giving the branch a four-way tie to pay for rather than a smaller number.
+
+## 30. Under `Set-StrictMode -Version Latest`, a one-element result is not an array and has no `.Count`
+
+Every script here sets it, and PowerShell unwraps a single-element collection to a scalar on
+assignment. Wrapping each branch is not enough — the unwrap happens on the way out of the
+conditional:
+
+```powershell
+# Throws "The property 'Count' cannot be found on this object" for -Languages es, and only for
+# a single language, which is exactly how it will be run the first time.
+$codes = if ($Languages) { @($Languages -split ',') } else { @(Get-ChildItem ... ) }
+if ($codes.Count -eq 0) { ... }
+
+# The @() has to be around the whole expression.
+$codes = @(if ($Languages) { $Languages -split ',' } else { Get-ChildItem ... })
+```
+
+Slicing has the same edge: `$rows[0..($n - 1)]` is an array for `$n` above one and a scalar for
+`$n` of one. The failure arrives with no line number from the caller's point of view and names a
+property nobody wrote, which is why it is worth recognising on sight rather than debugging.

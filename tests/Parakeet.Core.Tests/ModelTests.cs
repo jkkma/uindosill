@@ -9,6 +9,12 @@ namespace Parakeet.Core.Tests;
 
 public class ModelCatalogTests
 {
+    /// <summary>
+    /// The one entry whose asset has not been uploaded yet, so its URL cannot have been checked.
+    /// Delete this and the one exception that names it once the release tag is pushed.
+    /// </summary>
+    private const string AwaitingItsRelease = "opus-mt-tc-bible-big-mul-en-fp32";
+
     [Fact]
     public void EmbeddedCatalogueLoadsAndHasARecommendation()
     {
@@ -17,16 +23,21 @@ public class ModelCatalogTests
         Assert.NotEmpty(catalog.Models);
         Assert.NotNull(catalog.Recommended);
 
-        // Two licences ship, and which entry has which is not incidental: the transcription weights
-        // are CC BY 4.0, and the diariser is under the NVIDIA Open Model License, whose notice is a
-        // different shape and whose grant is revocable where CC BY's is not. Asserting the exact set
-        // rather than "some licence is present" is what makes adding a third a deliberate act.
+        // Three licences ship, and which entry has which is not incidental: the transcription
+        // weights are CC BY 4.0, the diariser is under the NVIDIA Open Model License — whose notice
+        // is a different shape and whose grant is revocable where CC BY's is not — and the
+        // translator is Apache-2.0, whose section 4(a) wants a copy of the licence rather than a
+        // link. Asserting the exact set rather than "some licence is present" is what makes adding
+        // a fourth a deliberate act.
         Assert.All(
             catalog.TranscriptionModels,
             m => Assert.Equal("CC-BY-4.0", m.License));
         Assert.All(
             catalog.DiarisationModels,
             m => Assert.Equal("NVIDIA-Open-Model-License", m.License));
+        Assert.All(
+            catalog.TranslationModels,
+            m => Assert.Equal("Apache-2.0", m.License));
     }
 
     [Fact]
@@ -64,7 +75,17 @@ public class ModelCatalogTests
         Assert.All(ModelCatalog.Default.Models, model =>
         {
             Assert.NotEmpty(model.Files);
-            Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
+
+            // Verified means the URL was checked against a live repository, which is a different
+            // claim from "the digest is right". The translation entry's nine digests were taken off
+            // the bytes the gate was scored against — stronger than an LFS listing — and its URL
+            // points at a release tag nobody has pushed, so it is pinned and not verified, and the
+            // UI paints it as such. Named rather than blanket-excused: a second unverified entry
+            // fails here, and flipping this one to true once the asset is uploaded still passes,
+            // at which point the name below goes.
+            Assert.True(
+                model.Verified || model.Id == AwaitingItsRelease,
+                $"'{model.Id}' pins a digest but is not marked verified");
 
             // Per file, not per entry. An entry of nine files where eight are pinned is not a
             // pinned entry, and asserting only the aggregate would let the ninth through.
@@ -220,25 +241,29 @@ public class ModelCatalogTests
     }
 
     [Fact]
-    public void TheDiarisationEntryIsTheOnlyEntryThatDoesNotTranscribe()
+    public void TheDiariserAndTheTranslatorAreTheOnlyEntriesThatDoNotTranscribe()
     {
-        // The manifest carries exactly one diarisation entry — the model behind the speaker opt-in,
-        // added once it passed the gate — and every other entry is an ASR model. Both halves are
-        // asserted: an entry that lost its `task` field would surface as a transcription model and
-        // be offered to `transcribe`, which is the failure the discriminator exists to prevent.
+        // The manifest carries exactly one diarisation entry and one translation entry, and every
+        // other entry is an ASR model. Both halves are asserted: an entry that lost its `task` field
+        // would surface as a transcription model and be offered to `transcribe`, which is the
+        // failure the discriminator exists to prevent.
         var catalog = ModelCatalog.Default;
 
         var diariser = Assert.Single(catalog.DiarisationModels);
         Assert.Equal("sortformer-4spk-v2.1", diariser.Id);
         Assert.False(diariser.Recommended);
 
-        Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
-        Assert.Equal(catalog.Models.Count, catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count);
+        // And one translation entry, added 2026-08-20 once there was a decode loop to read it.
+        // Neither may be Recommended: that property picks the default ASR model, and a model that
+        // cannot transcribe becoming the default is the failure the discriminator exists to stop.
+        var translator = Assert.Single(catalog.TranslationModels);
+        Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", translator.Id);
+        Assert.False(translator.Recommended);
 
-        // And the translation word exists with nothing behind it, which is the state Step 1 ships:
-        // the discriminator goes into the manifest's vocabulary before any entry uses it, because a
-        // build that did not know the word would list such an entry as an ASR model.
-        Assert.Empty(catalog.TranslationModels);
+        Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
+        Assert.Equal(
+            catalog.Models.Count,
+            catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count + catalog.TranslationModels.Count);
     }
 
     [Fact]

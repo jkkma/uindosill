@@ -41,9 +41,15 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 637 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 636 passed and
-1 skipped.
+**Status:** met. 678 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 677 passed and
+1 skipped. **Seven more of them, added 2026-08-20, read the translation checkpoint and skip
+themselves wherever it is absent**, which is every machine but a measuring one: they are the
+tokenizer's check against the ids HuggingFace really emitted and the translator's against the
+English it really produces, and neither can be reproduced without 3.06 MB and 1.34 GiB of an
+artefact this repository does not carry. The other 24 of that project's 31 run everywhere, because
+the protobuf reader, the double-array trie, the Unigram search, byte fallback and the whole beam
+search are exercised against models and logits the tests write themselves.
 
 ## Phase 2 — engine — **DONE**
 
@@ -71,12 +77,11 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (80 of the project's 125 CLI
-tests drive the real entry point; the other 27 never construct it — 17 parser unit tests, 7 that
-check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
-`CommandLineParser`, 2 on the resolver that turns the pair into the engine option, and 1 on the
-anomaly report, which is handed its two documents directly because no invocation can reach the
-difference between them). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+**Status:** usable, tested end to end against the canned engine (91 of the project's 135 CLI
+tests drive the real entry point; the other 44 never construct it — 18 on the backend default and
+the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
+17 parser unit tests, and 9 checking those two flags against the real command specs through
+`CommandLineParser` — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding
@@ -589,9 +594,12 @@ without saying so. No invocation can reach that difference — the canned engine
 confidences well above the threshold, and the threshold is not a flag — so the two documents are
 handed to the report directly in a test instead.
 
-**Nothing is measured and no model has run.** There is no entry in `models.json`, no engine
-project, no decode loop, no checkbox and no harness; the gate above still has no score against it.
-`docs/UNPROVEN.md` § *Translating into English* carries what the spike settled and what it did not.
+**Nothing is measured and no model has run** — on the day this was written. There is no entry in
+`models.json`, no engine project, no decode loop, no checkbox and no harness; the gate above still
+has no score against it. `docs/UNPROVEN.md` § *Translating into English* carries what the spike
+settled and what it did not. **All of that except the checkbox changed on 2026-08-20**: the export,
+the harness, the scores, and then the decode loop and the catalogue entry — see the four sections
+below, of which § *Built 2026-08-20 — the decode loop* is the one that closes this paragraph.
 
 ### Built 2026-08-20 — the ONNX export, and what it turned out to be
 
@@ -901,6 +909,86 @@ records is what the options were.
 the same degenerate German segment as the default operator set, so nothing measured distinguishes it
 on quality and it has never been timed on this machine at all.
 
+### Built 2026-08-20 — the decode loop, and the oracle it was held to
+
+**`--translate` reads real weights.** The seam shipped on 2026-08-19 with a canned translator behind
+it and the entry above records what the export turned out to be; this is the part in between —
+a SentencePiece tokenizer and a beam search, in C#, in a new `Parakeet.Engine.Marian` beside
+`Parakeet.Engine.Sortformer`, on the same terms: one project owns one model's interop, `Parakeet.Core`
+keeps its contract and knows nothing about ONNX Runtime, and a build target in Core fails if a NuGet
+reference ever appears there. `TranslatorFactory` came off the fake, `models.json` gained its first
+multi-file entry, and the claim `docs/UNPROVEN.md` had carried since the route was chosen — *nothing
+this product ships has translated a word* — closed.
+
+**The thing that made this different from ordinary porting: the graphs are pinned and the search
+over them is not.** Every chrF++ figure this project publishes was produced by HuggingFace's beam
+search driving those two ONNX files. The files are fixed by digest. The search is a set of choices,
+and each of them changes the English while leaving it looking entirely correct — whether a finished
+hypothesis is scored by its total or its mean log probability, whether the loop stops when the beams
+are full or when they can no longer improve, how equal-scoring candidates are ordered, whether a beam
+that has just emitted the end token can still be continued, how `bad_words_ids` and
+`forced_eos_token_id` are applied. The diariser had already shown what that costs here: one numerical
+tie-break moved a meeting by 11 DER points. So this is a port of **one implementation** —
+transformers 4.57.6's `GenerationMixin._beam_search`, the vectorised rewrite rather than the older
+`BeamSearchScorer`, which is a different algorithm with the same name — read out of the installed
+source rather than recalled, and its shape is not the textbook one: it keeps `2 x beams` candidates
+per step so a step in which every top beam ends the sentence still leaves live continuations, and
+only a candidate from the step's top `beams` may enter the finished set at all.
+
+**So there is an oracle, it already existed, and it was not built for this.** The gate run of
+2026-08-20 recorded every hypothesis it produced — **8,149 sentences across 24 languages**, source
+and output — in `hypotheses/*.jsonl`. That is the acceptance test for the port, and it is a
+different question from "does the output look reasonable": *does it reproduce these strings.*
+`scripts/measure-translation-agreement.ps1` asks it, per language, as exact ordinal string equality,
+and writes any disagreeing pair out verbatim. ****8,148 of the 8,149 reproduce the recorded hypothesis character for character — 99.99%, with 23 of the 24 languages at exactly 100%.** The one disagreement is Hungarian, on a sentence the gate run had already flagged as degenerate: both implementations write the same English for 427 characters and then differ only in how long a run of trailing ` .` goes on, 171 against 248. Rescored at the gate's own signature it moves Hungarian's chrF++ from 56.75 to 56.79 — +0.04, in the port's favour, against a required margin of 29.55 — so the verdict is unchanged and the other 23 languages are unchanged by construction. **The chrF++ table therefore describes what ships**, which is the sentence this whole step exists to be able to write.**
+
+**Three traps in the config, all of which produce plausible output when got wrong, and all three are
+now code with a comment on them.** `generation_config.json` says `num_beams: 4`; nothing this project
+has measured used four, and the loop takes six from `MarianDecodeSettings` and treats the file's
+number as something to notice a change in rather than obey — a test asserts the two differ.
+`decoder_start_token_id` is **58433**, which is also `pad_token_id` and is also in `bad_words_ids`:
+three roles for one id, and each has a different consequence if confused, so the type that carries it
+says which is which. And `>>eng<<` is **one token**, id 693, cut off the front of the string before
+SentencePiece sees anything — a tokenizer that hands it to the Unigram search gets plausible ids back
+and has silently lost the target, and the same segments without it return fluent German.
+
+**What CI can check, and what it cannot.** The fixture that pins the tokenizer's ids cannot be
+recomputed without `source.spm` and `vocab.json`, which are 3.06 MB of an artefact no clone carries,
+so those seven tests skip themselves wherever the checkpoint is absent — the repository's standing
+rule is that a test needing weights is not a test CI will run. Everything that does not need them is
+hermetic and does run: the protobuf reader against a `ModelProto` the test writes byte by byte, the
+darts-clone double-array trie against a one-key trie written out in its own bit encoding, the Unigram
+search against two score tables that segment the same input two different ways, byte fallback, and
+the whole beam search against scripted logits — where a banned token can be made the most likely
+continuation and the length penalty can be made to decide between a short hypothesis and a long one,
+neither of which a real model will produce on demand. Of the Marian project's 31, twenty-four run
+everywhere and seven need the checkpoint.
+
+**One new command, and it is the diariser's argument again.** `uindosill translate` takes a text file
+and writes the English one, line for line, with no audio and no ASR — the same translator behind the
+same seam as `transcribe --translate`, without the decode that costs orders of magnitude more and
+contributes nothing to a translation. `uindosill diarise` exists for that reason and this exists for
+a sharper version of it: the corpus the decode loop is held to is written sentences with no audio at
+all, so there is no path to it through `transcribe`. It has deliberately no beam, context or length
+option — those are the degrees of freedom above, and a flag would make it easy to produce a number
+that describes nothing.
+
+**`--context-segments` is reported as ignored rather than silently doing nothing.** The option has
+shipped since the seam landed and no translator this product can ship reads it: the checkpoint is a
+sentence-level model with no way to mark which part of its input is context, so folding preceding
+segments in would translate them too and leave the caller splitting one English paragraph back into
+its parts by guess. `TranslatorCapabilities` gained `HonoursContext` and the CLI says the value was
+ignored — the same shape as the diariser being told a speaker count it cannot use. A lever that
+silently does nothing is worse than no lever.
+
+**What this does not close.** The gate is still **not passed**, and for the same reason as before:
+its second criterion is a human adequacy check that was declined on 2026-08-20 and is queued to
+nobody. Slovak still fails criterion one by 0.74. No multi-file entry has ever been installed from a
+real URL, because no release asset has been uploaded — the entry pins nine digests and is marked
+unverified, and everything measured here loaded the checkpoint from a directory instead. No
+real-time factor for a translation pass over real audio has been measured. And the window's
+checkbox and pane switcher are still not built.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -913,7 +1001,7 @@ on quality and it has never been timed on this machine at all.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. Outstanding: ratifying the per-language margins, the human adequacy check, the decode loop with beam search, and the window's checkbox and pane switcher — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
+| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. Outstanding: **the human adequacy check**, which is what keeps the gate unpassed; the release tag and its 1.34 GiB, without which no multi-file entry has ever been installed; a real-time factor for a translation pass over real audio; and the window's checkbox and pane switcher. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam

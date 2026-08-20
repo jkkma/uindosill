@@ -102,22 +102,35 @@ entry into `models`. Nothing about it is installable before that.
 
 ## An entry is one file, or several
 
-Every entry that ships today is a single file, and that shape is unchanged: `fileName`, `url`,
+Every ASR entry and the diariser are a single file, and that shape is unchanged: `fileName`, `url`,
 `sizeBytes` and `sha256` on the entry itself, installed into the store root under that name.
 
-An entry may instead list several, which the ONNX translation route needs and which nothing in the
-manifest uses yet:
+An entry may instead list several. **One does, as of 2026-08-20** — the ONNX translation route,
+which is nine files: two graphs, two configs and a five-file tokenizer. The shape shipped in
+2026-08-20's earlier work with nothing using it, which is the same order the task discriminator and
+the diarisation entry arrived in and for the same reason: the code that has to understand a shape
+ships before the entry that has it, so no build can meet one it does not know. The real entry looks
+like this, abbreviated:
 
 ```json
 {
-  "id": "…", "task": "translation", "…": "…",
+  "id": "opus-mt-tc-bible-big-mul-en-fp32", "task": "translation", "…": "…",
   "directory": "opus-mt-tc-bible-big-mul-en",
   "files": [
-    { "fileName": "encoder_model.onnx", "url": "https://…", "sizeBytes": 0, "sha256": "…" },
-    { "fileName": "decoder_model_merged.onnx", "url": "https://…", "sizeBytes": 0, "sha256": "…" }
+    { "fileName": "config.json", "url": "https://…", "sizeBytes": 1056, "sha256": "…" },
+    { "fileName": "decoder_model_merged.onnx", "url": "https://…", "sizeBytes": 886620027, "sha256": "…" },
+    { "fileName": "encoder_model.onnx", "url": "https://…", "sizeBytes": 545922847, "sha256": "…" },
+    { "…": "and generation_config.json, source.spm, special_tokens_map.json, target.spm, tokenizer_config.json, vocab.json" }
   ]
 }
 ```
+
+**That entry is pinned and not verified, and the two are different claims.** Its nine digests were
+taken off the bytes the translation gate was scored against and re-hashed from disk — stronger
+evidence than an LFS listing, which is what every other entry rests on. Its URL points at a release
+tag nobody has pushed, so `models download` on it will 404 until the asset is uploaded, and
+`"verified": false` is what says so on its face in `models list` and in the Models tab. Until then
+`--translate-model-path` takes the exported directory straight.
 
 **`directory` is required for a multi-file entry, and it is about names rather than tidiness.** The
 translation route ships `config.json` and `vocab.json`; neither is a name one model can own in a

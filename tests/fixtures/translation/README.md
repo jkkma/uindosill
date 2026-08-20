@@ -1,6 +1,7 @@
 # Translation fixtures
 
-One file, one purpose, and nothing reads it yet — which is deliberate rather than an oversight.
+One file, one purpose. It was committed on 2026-08-20 with nothing reading it, deliberately; the C#
+tokenizer arrived later the same day and `MarianTokenizerFixtureTests` is what reads it now.
 
 ## `marian-tokenizer.json` — what HuggingFace's `MarianTokenizer` actually emits
 
@@ -11,13 +12,24 @@ Token ids, token strings and the round-tripped decode for six fixed sentences th
 produced it inside the file, so the fixture names its own provenance rather than relying on this
 page to stay accurate about it.
 
-**Why it exists before anything reads it.** `docs/UNPROVEN.md` § *Translating into English* has
-carried "whether a C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer` is still
-unestablished" since the route was chosen, and that cannot be established against a description —
-only against ids. The decode loop is the step that will have a C# tokenizer to hold up to this, the
-way `tests/fixtures/diarisation/sortformer/` holds the diariser's featurizer to a reference it did
-not compute. Committing the ids now means the loop is written against a fixed target instead of
-whatever the first C# implementation happens to produce.
+**Why it existed before anything read it.** `docs/UNPROVEN.md` § *Translating into English* carried
+"whether a C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer` is still
+unestablished" from the day the route was chosen, and that cannot be established against a
+description — only against ids. Committing them first meant the tokenizer was written against a
+fixed target instead of against whatever its own first output happened to be. It reproduced all six
+cases, ids and round-tripped text, on the first run.
+
+**Reading it needs the checkpoint, so the test that reads it is skipped where there is none.** The
+ids cannot be recomputed without `source.spm`, `target.spm` and `vocab.json` — 3.06 MB of a 1.34 GiB
+artefact this repository does not carry, and whose redistribution is a licence question rather than
+a size one. Everything about the tokenizer that does not need them — the protobuf reader, the
+double-array character map, the Unigram search, byte fallback, the language-code rule — is tested
+hermetically in `SentencePieceTests` against models those tests write byte by byte, so what the skip
+costs is the check against HuggingFace's real ids and nothing else.
+
+**Six sentences is a start and not a proof**, which is why the same tokenizer is also held to the
+8,149 sources the translation gate run tokenised — see `scripts/measure-translation-agreement.ps1`.
+A fixture proves the shape; a corpus proves the tail.
 
 **Three things in it are load-bearing and would be easy to get wrong.**
 

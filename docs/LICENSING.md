@@ -2,11 +2,13 @@
 
 The code is MIT. The weights are not, and their obligations are the ones worth reading twice.
 
-**Two model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
+**Three model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
 seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
 License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
-revocable and carry a use restriction about biometrics. Which entry has which licence is asserted by
-a test, so adding a third is a deliberate act rather than a drift.
+revocable and carry a use restriction about biometrics. The translation weights are Apache-2.0 and
+want a copy of the licence, a statement of what was changed, and the notices the source carried.
+Which entry has which licence is asserted by a test, so adding a fourth is a deliberate act rather
+than a drift.
 
 ## The transcription weights are CC BY 4.0 (NVIDIA)
 
@@ -132,6 +134,42 @@ export's own date (2 August 2026) was consulted — the text read is the current
 unilateral-update clause arguably makes the operative one anyway. And soniqo's authority to publish
 the export was not verified, only that the licence permits Model Derivatives and that soniqo declares
 the same terms. As with the CUDA analysis below: **no lawyer has read any of this.**
+
+## The translation weights are Apache-2.0 (Helsinki-NLP), and this project is the one that modified them
+
+The third licence, and the third shape. Section 4 of the Apache License 2.0 attaches four conditions
+to redistribution: **(a)** give recipients a copy of the License, **(b)** carry prominent notices
+saying the files were changed, **(c)** retain the copyright, patent, trademark and attribution
+notices found in the source form, and **(d)** reproduce the attribution notices of any `NOTICE` file
+the work ships.
+
+**(a) is a copy, not a link** — the same as the NVIDIA agreement and unlike CC BY — so
+`licences/Apache-License-2.0.txt` ships. It was not transcribed from memory: it was extracted verbatim from
+`licences/onnxruntime-ThirdPartyNotices.txt`, which this repository already redistributes and which
+already carried nineteen copies of the text, and it is 11,357 bytes over 201 lines. Nothing here
+has compared those bytes against apache.org — the source is a file already in the tree, which is a
+weaker check than fetching the canonical one and is stated as such.
+
+**(b) is about this project's work rather than somebody else's**, and that is what makes this entry
+different from the other two. Uindosill does not redistribute Helsinki-NLP's checkpoint. It exports
+it — `scripts/export-translation-onnx.py`, against revision `bb1ef830d5`, into two ONNX graphs in
+the merged decoder layout with past key values exposed — and redistributes the result. The weights
+themselves are unchanged and unquantised, float32 in and float32 out; what changed is the container
+and the graph split. `ApacheAttribution.ModificationNotice` says exactly that.
+
+**(c) and (d) are outstanding and are stated as outstanding.** Whether the upstream repository
+carries copyright notices or a `NOTICE` file was not checked from the machine that built this, and
+this record invents neither: a copyright line nobody published is a false notice in front of a user,
+which is the failure `models.json`'s own comment about the deferred entries refuses. **That check
+belongs before the release asset is uploaded**, not before the entry exists — the entry is pinned
+and marked unverified precisely because nothing is being distributed yet. Nothing is redistributed
+until a tag is pushed, and the tag has not been.
+
+One thing that is settled: the licence itself. `docs/PHASES.md` records apache-2.0 for this
+checkpoint, read off its model card on 2026-08-19 when the route was chosen, and that is the record
+this entry rests on rather than a fresh reading.
+
+As everywhere else here: **no lawyer has read any of this.**
 
 ## ONNX Runtime is MIT, and carries 69 licences that are not
 

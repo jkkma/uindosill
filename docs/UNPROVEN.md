@@ -1174,24 +1174,111 @@ machine's driver, 32.0.20102.3930, whose numbering does not match the window the
 listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
 `docs/PHASES.md` § *After v1*.
 
-### Translating into English — researched and spiked 2026-08-19, exported 2026-08-20, nothing scored
+### Translating into English — spiked 2026-08-19, exported and scored 2026-08-20, decoded in C# 2026-08-20
 
-**No translation model has run inside this product.** The recommended checkpoint has been exercised
-in a scratch environment outside the working tree — fp32 PyTorch and then ONNX Runtime, CPU, against
-transcripts this project produced — and what that settled is recorded below with the rest. What has
-*not* happened: no real-time factor for a translation pass has been measured, only per-segment times
-on one machine at three precisions, and nothing has been scored against the gate. C# now
-touches a translator, but only the canned one: the seam landed on 2026-08-19 (`docs/PHASES.md`
-§ *Built 2026-08-19 — the translation seam*) with the contract, `ModelTask.Translation` and
-`--translate` wired to a fake that reads no weights. **Nothing this product ships has translated a
-word.** The one thing in the repository that has is `scripts/export-translation-onnx.py`, which is a
-Python export tool the build does not touch and the product does not carry. What the seam does carry
-is the three spike findings as invariants a test asserts — the
-mandatory target token, the dropped word timings, the enforced pass order — so the figures below
-are what the decode loop will be measured against rather than a description of anything running. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
+**This product translates.** The claim this entry carried from the day the route was chosen —
+*nothing this product ships has translated a word* — closed on 2026-08-20: a SentencePiece tokenizer
+and a beam search written for this project drive the exported ONNX graphs from
+`Parakeet.Engine.Marian`, `--translate` reads real weights, and `uindosill translate` runs the same
+pass over a text file with no audio at all. What that does **not** mean is that the feature is
+proven; it means the unproven parts moved. They are below, and the two that matter most are that
+**the gate is still not passed** — its human criterion is unperformed — and that **the English this
+loop produces is the English the gate was scored on only to the extent that a measurement says so**,
+which is a number rather than an assumption.
+
+What has *not* happened: **no real-time factor for a translation pass has been measured** end to
+end, only per-sentence times; no translated transcript has been produced from real audio and
+compared with anything; and the 23 of 25 languages that have never had audio through this pipeline
+still have not. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
 every model claim in it was read off a card, a config, a vocabulary file or a repository listing
 fetched that day, and where the spike has since contradicted it, the number below is the one that
 holds.
+
+**The beam search is a port of one implementation, and the difference is not pedantry.** The two
+ONNX graphs are pinned by digest; the search over them is not, and it is a real degree of freedom.
+Whether a finished hypothesis is scored by its total or its mean log probability, whether the loop
+stops when the beams are full or when they can no longer improve, how equal-scoring candidates are
+ordered, whether a beam that has just emitted the end token can still be continued, how
+`bad_words_ids` and `forced_eos_token_id` are applied — each changes the English while leaving it
+looking entirely correct, and the diariser has already shown what that costs here: one numerical
+tie-break moved a meeting by 11 DER points. So what is in `Parakeet.Engine.Marian` reproduces
+transformers 4.57.6's `GenerationMixin._beam_search` specifically — the vectorised rewrite rather
+than the older `BeamSearchScorer`, which is a different algorithm with the same name — read out of
+the installed source on 2026-08-20 rather than recalled. Its shape is not the textbook one: it keeps
+`2 x beams` candidates per step so that a step in which every top beam ends the sentence still
+leaves live continuations, finished hypotheses occupy a second set of `beams` slots that a new one
+must outscore to enter, and only a candidate from the step's top `beams` may enter that set at all.
+One quirk was reproduced rather than corrected: an unfilled finished slot holds −1e9, so the
+early-stop heuristic cannot fire until `beams` complete hypotheses exist. Fixing that would be a
+different search.
+
+**8,148 of the 8,149 reproduce the recorded hypothesis character for character — 99.99%, with 23 of
+the 24 languages at exactly 100%.** Run on the desktop's CPU on 2026-08-20 against `fp32-merged`,
+beam-6, one sentence at a time, at a mean 0.532 s per sentence against the gate run's own 0.618.
+
+**The single disagreement is worth more than the rate is.** It is Hungarian sentence 1818, and it is
+one of the 31 hypotheses the gate run had already flagged as degenerate — its recorded row carries
+`degenerate: ". "`, a trailing punctuation run rather than a collapse. Both implementations produce
+the same English:
+
+> People probably don't think that homebound travelers need patience and understanding.
+
+and then neither stops. They are **character-identical for 427 characters** — the whole sentence
+plus 171 trailing ` .` — and differ only in when the runaway ends: **171 dots from the port against
+248 recorded.** So the two searches agree everywhere the model is translating, and diverge only
+after it has finished translating and will not stop emitting. That is exactly where divergence
+should be expected: hundreds of steps of near-identical log probabilities, where a difference far
+below any decision the search makes accumulates until one comparison flips.
+
+**What it costs the published figures, computed rather than asserted: +0.04 chrF++, in the port's
+favour.** Rescoring Hungarian's 348 sentences at the gate's own signature gives **56.7485** for the
+recorded hypotheses — which is the 56.75 the gate published, so the scoring is the gate's — and
+**56.7883** for the port's. Against a required margin of 29.55 that moves nothing: Hungarian's
+verdict is unchanged, and the other 23 languages' figures are unchanged *by construction*, because
+their hypotheses are the same strings.
+
+**So the chrF++ table above describes what the product ships.** That is the sentence this
+measurement exists to be able to write, and it is now a measured claim rather than an assumption —
+with the one exception stated in full rather than rounded away.
+
+**The first English this product produced, and the one line of it that is wrong.** On 2026-08-20 the
+six sentences of `tests/fixtures/translation/marian-tokenizer.json` — four of them real ASR output
+from this project's own pipeline, Spanish and German — went through `uindosill translate` against
+`fp32-merged` on the desktop's CPU at 0.522 s per line. Five came back right. The German one did
+not:
+
+| | |
+|---|---|
+| in | `Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren.` |
+| out | *Ralf Dahrendorf was born in Hamburg in the nineteenth century.* |
+
+**1929, spelled as a word, became a century.** That is the failure the fixture was built to contain a
+case of — its README says the German number sentence is "where the ASR and the translator interact
+worst" — and it is now measured rather than predicted. It is also a *cascade* failure rather than a
+translation one: the ASR wrote the year as `neunzehnhundertneunundzwanzig` because that is how the
+speaker said it, and the translator then had to read a nineteen-character compound number that
+almost certainly never appeared in a Bible corpus. Nothing here prices how often it happens — one
+sentence is one sentence — and no gate criterion looks for it: chrF++ against an English reference
+scores a wrong date as a few bad character n-grams, and the corpus the gate ran on is written text
+where numbers are digits. **The two things that would price it are a cascade measurement and the
+human adequacy check, and neither has been done.**
+
+English passed through byte-identical, which reproduces the spike's finding through the product
+rather than beside it.
+
+**What that number does not cover, and the list is longer than the number.** It is agreement on
+**FLEURS transcripts**, which are read Wikipedia-derived prose — punctuated, well formed, and
+nothing like ASR output with its missing final stops and its disfluencies; **no ASR output has been
+put through both implementations and compared.** It is agreement **on this machine**: ONNX Runtime
+partitions a matmul's reductions by thread count, so a machine with a different core count computes
+slightly different logits, and the only thing standing between that and a different sentence is that
+no two candidates were close enough to swap. It is agreement **at beam 6 with no context**, which is
+the only configuration anything here has measured. And it says **nothing about quality** — the
+chrF++ figures above are the quality claim, and what this establishes is that they describe the
+loop that ships rather than only the Python that produced them. **No sentence in the corpus exceeds
+512 tokens**, so the two implementations' different treatment of one that does — the harness skips
+it, the product refuses it with `SegmentTooLongException` — has never been exercised against
+anything.
 
 **The feature's founding premise is settled — upstream, and on this stack.** That
 `parakeet-tdt-0.6b-v3` writes each of its 25 languages *in* that language, rather than normalising
@@ -1245,13 +1332,32 @@ to WMT, or to this project's own WER normaliser; Croatian has no row at all — 
 is the Serbo-Croatian macrolanguage and must not be quoted as a Croatian figure — and neither does
 Slovak, consistent with its absence from that card's source list. Every one of those figures is a
 beam-6 figure, which is now known to matter — the greedy-against-beam-6 delta is measured below.
-Whether a C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer` is still
-unestablished — there is no C# tokenizer to establish it about — but as of 2026-08-20 there is
-something to establish it *against*: `tests/fixtures/translation/marian-tokenizer.json` records the
-ids `MarianTokenizer` emits for six fixed sentences at a named checkpoint revision, so the decode
-loop is written against a fixed target rather than against its own first output. Nothing reads it
-yet. One thing in it is already a trap avoided: `>>eng<<` is a single token, id 693, and a
-tokenizer that takes it apart produces plausible ids and silently loses the target.
+
+**The C# tokenizer reproduces HuggingFace's `MarianTokenizer`, and that is now established rather
+than hoped for.** It was the open question from the day the route was chosen, and it was answered in
+the order the fixture was built for: `tests/fixtures/translation/marian-tokenizer.json` recorded the
+ids `MarianTokenizer` emits for six fixed sentences at revision `bb1ef830d5` with nothing reading
+it, so the port was written against a fixed target rather than against its own first output. It
+matched all six — ids, pieces and the round-tripped decode — on its first run, and the trap the
+fixture was built around was avoided by construction: `>>eng<<` is a single token, id 693, split off
+the front of the string before SentencePiece sees anything.
+
+**Six sentences is a start and not a proof, so the same tokenizer was held to 8,149.** What the
+fixture cannot cover is the tail — a character no piece covers, a normalisation rule that fires once
+in a corpus — and the tail is where a Unigram port goes wrong. The agreement measurement below is
+what covers it, because a decode that reproduces a recorded hypothesis character for character
+cannot have tokenised its source differently on the way in.
+
+**What the C# port is, precisely.** A protobuf reader for the three fields of `ModelProto` that
+matter; SentencePiece's compiled `nmt_nfkc` character map, read as the darts-clone double-array trie
+it is stored as rather than reimplemented as rules; the Unigram Viterbi, advancing one UTF-8
+character at a time with `min_score − 10` for a character no piece covers; byte fallback applied
+after the search rather than inside it, because the 256 `<0xNN>` pieces are kept out of the trie so
+the search cannot prefer a cheap pile of bytes to a real piece; and Marian's own language-code rule,
+which is a prefix test and not a regular expression. **The Moses punctuation normaliser is not on
+this path** — `MarianTokenizer` builds one and, in transformers 4.57.6, never calls it from
+`_tokenize`, which was checked in the installed source rather than assumed, and is true whether or
+not `sacremoses` is present.
 
 **What it costs is measured, and it is not either of the two numbers this entry used to carry.** The
 export exists as of 2026-08-20 — `scripts/export-translation-onnx.py`, run on the laptop against
@@ -1451,15 +1557,22 @@ Anyone carrying "batching this model is six times slower" forward as a fact abou
 wrong on a GPU by about fifty times. The batch-16 CUDA figure prices a configuration nobody should
 ship, for the reason two paragraphs below.
 
-**The catalogue can hold those nine files as of 2026-08-20, and nothing has installed one.** The
-multi-file schema, the staging-directory install and the per-file pins are code with twenty-four
-tests behind them (`docs/PHASES.md` § *Built 2026-08-20 — the catalogue learns to hold more than one
-file*), but every test builds its own manifest: **no multi-file entry has ever been downloaded from
-a real URL, and no ONNX model has been loaded out of a directory this installer assembled.** What is
-proven is that the parser refuses the shapes it should, that an interrupted install leaves nothing
-`IsInstalled` reports, and that a staged file with a good digest is not refetched — all against a
-stub HTTP handler on this machine. The first real install is what will exercise the rest, and it
-cannot happen until an asset exists.
+**The catalogue holds those nine files as of 2026-08-20, and nothing has installed one.** The entry
+exists now — `opus-mt-tc-bible-big-mul-en-fp32`, the manifest's first multi-file entry, nine files
+in a directory of its own with a size and a SHA-256 each, the digests taken off the bytes the gate
+was scored against and re-hashed from disk that day, totalling 1,435,604,524 B. What has still never
+happened is an install: **no multi-file entry has ever been downloaded from a real URL, and no ONNX
+model has been loaded out of a directory this installer assembled.** The entry is marked
+`"verified": false` for exactly that reason — its URL points at a release tag nobody has pushed, so
+it would 404 — and both `models list` and the Models tab paint it as unverified, which is now the
+only entry either surface has ever had to paint that way. The multi-file schema, the
+staging-directory install and the per-file pins remain code with tests behind them rather than
+experience: every one of those tests builds its own manifest against a stub HTTP handler, and one
+new test checks the shipped entry is well formed, which is a different claim from checking it
+installs. **The first real install is what will exercise the rest, and it cannot happen until an
+asset exists.** Everything measured here loaded the checkpoint from
+`runs/translation-onnx/fp32-merged` through `--translate-model-path`, which is the same nine files
+and not the same code path.
 
 **The recorded export failure was misdiagnosed, and the correct diagnosis is cheap to act on.** It
 is not a skew between `optimum` 2.1.0 and `transformers` 4.57.6, and no pinned pair of them fixes

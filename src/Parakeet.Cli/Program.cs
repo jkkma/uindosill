@@ -126,6 +126,11 @@ namespace Parakeet.Cli
                 return DiariseCommand.RunAsync(context, parsed, ct);
             }
 
+            if (command == Commands.Translate)
+            {
+                return TranslateCommand.RunAsync(context, parsed, ct);
+            }
+
             if (command == Commands.Models)
             {
                 return ModelsCommand.RunAsync(context, parsed, ct);

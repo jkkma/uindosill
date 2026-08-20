@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Parakeet.Engine.Marian/Parakeet.Engine.Marian.csproj" />
+  </ItemGroup>
+
+</Project>

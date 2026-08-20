@@ -184,8 +184,30 @@ internal static class Commands
                 Help = "Write the transcript in English instead of the language it was spoken in: a pass over the " +
                        "finished text, off by default. Output files take an .en infix (call.en.srt), so a translated " +
                        "run never overwrites a plain one. NOT --language, which is a hint to the speech model about " +
-                       "what it is listening to and reaches no translator. Needs the translation model, which this " +
-                       "build has not got; with --fake it uses the canned translator and needs nothing.",
+                       "what it is listening to and reaches no translator. Needs the translation model installed " +
+                       "('uindosill models list'); with --fake it uses the canned translator and needs nothing.",
+            },
+            new OptionSpec
+            {
+                Name = "translate-model",
+                TakesValue = true,
+                ValueName = "id",
+                Help = "Catalogue id of the translation model. Default: the only translation entry there is.",
+            },
+            new OptionSpec
+            {
+                Name = "translate-model-path",
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Use an exported checkpoint directory directly instead of a catalogue entry. A directory, "
+                     + "not a file: the route is nine files.",
+            },
+            new OptionSpec
+            {
+                Name = "translate-threads",
+                TakesValue = true,
+                ValueName = "n",
+                Help = "Intra-op threads for the translator. Default: whatever ONNX Runtime chooses.",
             },
             new OptionSpec
             {
@@ -294,6 +316,71 @@ internal static class Commands
             "At most four speakers are told apart. Above that a fifth voice is merged into one of the four, and no\n" +
             "measurement in this repository prices what that costs — see docs/UNPROVEN.md.",
     };
+
+    public static readonly CommandSpec Translate = new()
+    {
+        Name = "translate",
+        Summary = "Translate lines of text into English without transcribing.",
+        Positionals = "<file> [file...]",
+        Options =
+        [
+            new OptionSpec
+            {
+                Name = "out",
+                Short = 'o',
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Output directory. Default: beside each input file.",
+            },
+            new OptionSpec
+            {
+                Name = "id",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Name the output <name>.en.txt instead of deriving it from the input's name. One input file only.",
+            },
+            new OptionSpec
+            {
+                Name = "model",
+                Short = 'm',
+                TakesValue = true,
+                ValueName = "id",
+                Help = "Catalogue id of the translation model. Default: the only translation entry there is.",
+            },
+            new OptionSpec
+            {
+                Name = "model-path",
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Use an exported checkpoint directory directly instead of a catalogue entry.",
+            },
+            new OptionSpec
+            {
+                Name = "threads",
+                Short = 't',
+                TakesValue = true,
+                ValueName = "n",
+                Help = "Intra-op threads for the ONNX sessions. Default: whatever ONNX Runtime chooses.",
+            },
+            Fake,
+            Help,
+        ],
+        Details =
+            "Text in, English out, line by line, no audio and no ASR — the same translator behind the same seam as\n" +
+            "'transcribe --translate', without the decode that costs orders of magnitude more and contributes\n" +
+            "nothing to a translation. This is the path the translation measurements are run through, which is why\n" +
+            "it exists at all: a translator that can only be reached through a three-hour transcription is one\n" +
+            "nobody checks against a corpus.\n\n" +
+            "One line in, one line out, in order, blank lines included — a blank line comes back blank rather than\n" +
+            "being dropped, because a file whose line numbers no longer line up is a file nothing can be scored\n" +
+            "against. A line past the tokenizer's 512-token limit is refused rather than truncated, and names\n" +
+            "itself.\n\n" +
+            "Every line is translated on its own at beam 6, which is what every published figure for this model was\n" +
+            "produced with. There is no beam or context option here on purpose: they are the degrees of freedom that\n" +
+            "would quietly make the output something nobody scored.",
+    };
+
+
 
     public static readonly CommandSpec Models = new()
     {
@@ -566,5 +653,5 @@ internal static class Commands
     };
 
     public static IReadOnlyList<CommandSpec> All { get; } =
-        [Transcribe, Diarise, Models, Bench, Doctor, Probe, Notice, Formats, Wer, Der, Rttm];
+        [Transcribe, Diarise, Translate, Models, Bench, Doctor, Probe, Notice, Formats, Wer, Der, Rttm];
 }
