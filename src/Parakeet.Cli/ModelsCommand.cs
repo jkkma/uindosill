@@ -273,7 +273,9 @@ internal static class ModelsCommand
 
     private static void WriteProgress(CliContext context, ModelInstallProgress progress)
     {
-        var percent = progress.Fraction is { } f ? $"{f * 100:0.0}%" : "  ?";
+        var percent = progress.Fraction is { } f
+            ? string.Create(CultureInfo.InvariantCulture, $"{f * 100:0.0}%")
+            : "  ?";
         var speed = progress.BytesPerSecond is { } bps ? $"{Bytes((long)bps)}/s" : string.Empty;
 
         var line = string.Create(

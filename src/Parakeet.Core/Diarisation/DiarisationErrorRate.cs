@@ -625,10 +625,11 @@ public static class DiarisationErrorRate
         {
             if (++visited > MappingSearchBudget)
             {
-                throw new InvalidOperationException(
+                throw new InvalidOperationException(string.Create(
+                    CultureInfo.InvariantCulture,
                     $"The speaker mapping search exceeded {MappingSearchBudget:N0} nodes for {referenceCount} reference " +
                     $"and {hypothesisCount} hypothesis speakers. A hypothesis with that many speakers is not a diarisation " +
-                    "of this material; look at it before scoring it.");
+                    $"of this material; look at it before scoring it."));
             }
 
             if (r == referenceCount)
