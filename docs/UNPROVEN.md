@@ -850,9 +850,11 @@ succeeds normally. With no such asset in the whole list it returns an **empty fe
 throwing**, which is the "you are up to date" answer and not a crash. And — the one that constrains
 the plan — `GithubSource` requests **`?per_page=10&page=1` and does not paginate**: with ten
 feed-less releases above the newest installer release, page 2 is never asked for and the check
-comes back empty and silent. So weights releases on this repository are safe as long as fewer than
-ten of them sit above the newest installer release, which argues for updating one weights release's
-assets rather than cutting a new release per revision. What this does not establish is any of the
+comes back empty and silent. Marking such a release `prerelease: true` is cleaner still — it is
+filtered out before it is even a candidate, and the Trace miss is not logged — but it does **not**
+buy back a page slot: ten prerelease releases on page 1 produce the same silent empty feed, with a
+`No releases found` warning. So weights releases on this repository are safe as long as fewer than
+ten of them sit above the newest installer release. What this does not establish is any of the
 network behaviour, the GitHub API's own ordering, or anything about a Velopack version other than
 the pinned one. It does establish that the sentence above — no test is possible without a network —
 is no longer true, and a `VelopackUpdater` test against a canned feed is now a thing somebody

@@ -644,10 +644,15 @@ faster than PyTorch — so what int8 buys is download size and nothing else that
 injectable downloader, so it was driven against a canned releases list: a release with no
 `releases.{channel}.json` asset is skipped rather than fatal, and an all-weights list yields an
 empty feed rather than an exception. The constraint it did surface is that the source asks for ten
-releases and does not paginate. `docs/UNPROVEN.md` § *The update check has never found an update*
-carries it. **No tag has been pushed, no asset uploaded, and `models.json` is untouched** — the
-catalogue cannot name a URL until an asset exists under an agreed tag, and the tag has to avoid
-`v*`, which is what triggers the 1.8 GB installer build.
+releases and does not paginate, so fewer than ten feed-less releases may sit above the newest
+installer release — a prerelease flag hides such a release from the candidate list but does not buy
+back a page slot. `docs/UNPROVEN.md` § *The update check has never found an update* carries it.
+**No tag has been pushed, no asset uploaded, and `models.json` is untouched** — the catalogue cannot
+name a URL until an asset exists under an agreed tag. The tag proposed and awaiting the maintainer
+is `weights/translation-mul-en-2026-08-20`, marked prerelease: outside the `v*` pattern that
+triggers the 1.8 GB installer build, and dated because it has to be immutable — `models.json` pins
+a URL and a digest together, so replacing assets under a standing tag would break already-installed
+copies with a digest mismatch as the only symptom.
 
 ## The honest summary
 
