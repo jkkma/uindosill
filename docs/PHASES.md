@@ -1362,6 +1362,34 @@ scaling factors, and the shadow.
 measuring loop that caught the earlier defects, and the palette audit and the headless renders were
 not wrong — they were answering a different question. A window has to be opened.
 
+### Built 2026-08-20 — the frame, and the decoration value that quietly removed resizing
+
+Turning the toolkit's title bar off has three settings and only one of them is right, which is
+worth writing down because two of them look right until the window is in front of you.
+
+`WindowDecorations="None"` removes the title bar, and it removes the whole frame with it. That
+takes `WS_THICKFRAME` — so **the window silently stopped being resizable** — and it takes the
+compositor's shadow, so on a light desktop the application ended wherever its white pixels stopped
+and there was no delimiter at all. Neither is visible in a screenshot of the window, because both
+are properties of what surrounds it: the styles have to be read off the handle, and the edge has to
+be looked at on a real screen.
+
+**`WindowDecorations="BorderOnly"` is the one to use.** No title bar, `WS_THICKFRAME` intact, the
+frame and its shadow intact, and the square corner preference still honoured — all four confirmed
+on Windows 11 on 2026-08-20. `ExtendClientAreaToDecorationsHint` stays on beside it, and the
+headerbar keeps its `WindowDecorationProperties.ElementRole="TitleBar"`, which is what moves the
+window and what makes double-click-to-maximise work.
+
+The design also asks for a 1px edge, `rgba(23,38,15,.08)`, and it is drawn inside the window now
+because with the frame gone there was nothing outside it to draw on. It is kept in alpha rather
+than flattened to a grey: that pixel is the boundary between the application and the desktop, so it
+has to darken a light background and a dark one, where a fixed light grey vanishes against white.
+It is deliberately not one of the two rules — those divide things inside the window and are opaque.
+
+What is **not** reproduced is the design's four-layer shadow. DWM draws its own and takes no stack,
+so the token sheet's three-line shadow describes the browser mock-up rather than this window;
+`docs/UNPROVEN.md` says so instead of quietly implying the design shipped.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
