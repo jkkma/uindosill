@@ -327,7 +327,69 @@ public static class ParakeetNativeLibrary
         return IntPtr.Zero;
     }
 
-    private static IEnumerable<(ComputeBackend Backend, string Directory)> CandidateDirectories()
+    /// <summary>
+    /// Which backends have a library sitting on disk, without loading anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A file-system question answered as one, deliberately. It says a backend's binary is
+    /// <i>present</i>, never that it will load or that the machine can run it — a CUDA drop with no
+    /// NVIDIA GPU behind it is present and unusable, and finding that out costs a load that can
+    /// take the process down (see the remarks on this class), which is why <c>uindosill doctor</c>
+    /// probes in a child process instead.
+    /// </para>
+    /// <para>
+    /// Presence is nonetheless the right signal for choosing a <i>default</i>: the CUDA directory is
+    /// exactly what the CUDA channel adds and the default channel omits, so a user who has one has
+    /// gone to the trouble of a 818 MB installer to get it. Reading Velopack's channel name would
+    /// answer a question about how the application was packaged; this answers the question about
+    /// what it can actually reach.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ComputeBackend> BackendsPresentOnDisk()
+    {
+        var present = new List<ComputeBackend>();
+
+        lock (Gate)
+        {
+            foreach (var backend in Enum.GetValues<ComputeBackend>())
+            {
+                var name = backend.ToString().ToLowerInvariant();
+                var found = false;
+
+                foreach (var root in CandidateRoots())
+                {
+                    foreach (var fileName in CandidateFileNames())
+                    {
+                        if (File.Exists(Path.Combine(root, name, fileName)))
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                    {
+                        break;
+                    }
+                }
+
+                if (found)
+                {
+                    present.Add(backend);
+                }
+            }
+        }
+
+        return present;
+    }
+
+    /// <summary>
+    /// Every directory a per-backend subdirectory could sit under, in search order. One copy,
+    /// because the loader and <see cref="BackendsPresentOnDisk"/> have to agree about where a
+    /// backend lives or the second will report a backend the first cannot find.
+    /// </summary>
+    private static List<string> CandidateRoots()
     {
         var roots = new List<string>();
 
@@ -359,6 +421,13 @@ public static class ParakeetNativeLibrary
         roots.Add(Path.Combine(baseDirectory, "runtimes", PortableRuntimeIdentifier, "native"));
         roots.Add(Path.Combine(baseDirectory, "runtimes", RuntimeInformation.RuntimeIdentifier, "native"));
         roots.Add(baseDirectory);
+
+        return roots;
+    }
+
+    private static IEnumerable<(ComputeBackend Backend, string Directory)> CandidateDirectories()
+    {
+        var roots = CandidateRoots();
 
         foreach (var backend in BackendOrder())
         {

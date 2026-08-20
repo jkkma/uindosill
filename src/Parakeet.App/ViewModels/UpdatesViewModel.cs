@@ -101,7 +101,9 @@ public sealed partial class UpdatesViewModel : ObservableObject
             // or a second copy of the application writing at the same moment all make this fail,
             // and a switch that silently forgets is worse than one that will not move: the next
             // launch would make the request the user just declined.
-            if (!_settings.Save(new AppSettings { CheckForUpdatesOnLaunch = value }))
+            // Update rather than Save: constructing a fresh AppSettings here would write this one
+            // field and reset the backend the user chose on the Models tab back to unset.
+            if (!_settings.Update(current => current with { CheckForUpdatesOnLaunch = value }))
             {
                 Status = $"That setting could not be saved to {_settings.Path}, so it will go back to "
                     + "its previous value the next time Uindosill starts.";

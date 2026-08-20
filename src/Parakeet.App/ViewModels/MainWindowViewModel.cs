@@ -4,11 +4,14 @@ using Parakeet.App.Services;
 using Parakeet.Core.Licensing;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.ParakeetCpp.Interop;
 
 namespace Parakeet.App.ViewModels;
 
 public sealed partial class MainWindowViewModel : ObservableObject
 {
+    private readonly AppSettingsStore _settings;
+
     [ObservableProperty]
     private ComputeBackend _backend = ComputeBackend.Vulkan;
 
@@ -20,12 +23,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IModelStore? store = null,
         ModelCatalog? catalog = null,
         IAppUpdater? updater = null,
-        AppSettingsStore? settings = null)
+        AppSettingsStore? settings = null,
+        Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
         var modelStore = store ?? new LocalModelStore();
         var modelCatalog = catalog ?? ModelCatalog.Default;
+        _settings = settings ?? new AppSettingsStore();
+
+        // The field, not the property: assigning the property here would fire OnBackendChanged and
+        // write the file on every launch, including the launches where nothing was chosen.
+        _backend = _settings.Load().Backend
+            ?? BestBackendPresent(backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
 
         Session = new ModelSession(engines);
 
@@ -69,9 +79,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // ShutdownAsync is handed to the updater rather than left to the window's close handler:
         // applying an update replaces the process without a Closing event, so the backend release
         // that avoids the teardown abort has to be reached from there too.
+        // _settings rather than the parameter: both view models write the same file, and handing
+        // one a null it resolves for itself would let the two disagree about which file that is
+        // the moment anything overrides the path.
         Updates = new UpdatesViewModel(
             updater ?? new NotInstalledUpdater(),
-            settings,
+            _settings,
             shutdown: ShutdownAsync);
     }
 
@@ -114,12 +127,59 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await Session.DisposeAsync().ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// The backend to start on when the user has never chosen one: the fastest tier whose binaries
+    /// are actually on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CUDA outranks Vulkan because its presence is not an accident. The default channel ships cpu
+    /// and vulkan; the cuda directory exists only in the second channel, whose installer is 818 MB
+    /// against 82 MB, so a user who has it went and got it. Starting them on Vulkan gave away the
+    /// 1.7x between the two measured tiers — RTF 0.0064 against 0.0110 on the desktop — and did it
+    /// on every launch, because nothing was persisted.
+    /// </para>
+    /// <para>
+    /// Nothing on disk means Vulkan, which is what shipped before any of this and what a build from
+    /// source with no vendored natives should still say. Presence is not capability: a CUDA drop
+    /// with no working NVIDIA driver behind it loads nothing, and the loader's chain for a CUDA
+    /// request is CUDA then CPU rather than CUDA then Vulkan — a rule written when asking for CUDA
+    /// was always deliberate. Now that it can be a default, that user lands on CPU rather than
+    /// Vulkan for one launch; the Models tab says so with a warning that names the fallback, and
+    /// the choice they make instead is remembered.
+    /// </para>
+    /// </remarks>
+    internal static ComputeBackend BestBackendPresent(IReadOnlyList<ComputeBackend> present)
+    {
+        ArgumentNullException.ThrowIfNull(present);
+
+        if (present.Contains(ComputeBackend.Cuda))
+        {
+            return ComputeBackend.Cuda;
+        }
+
+        if (present.Contains(ComputeBackend.Vulkan) || present.Count == 0)
+        {
+            return ComputeBackend.Vulkan;
+        }
+
+        return present.Contains(ComputeBackend.Cpu) ? ComputeBackend.Cpu : ComputeBackend.Vulkan;
+    }
+
+    /// <summary>
+    /// Remembers the choice. A backend that has to be re-picked on every launch is a backend most
+    /// users never pick, which is what made the CUDA channel's speed opt-in twice over.
+    /// </summary>
+    partial void OnBackendChanged(ComputeBackend value) =>
+        _settings.Update(current => current with { Backend = value });
+
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];
 
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
-        "CUDA is opt-in and needs its own runtime files. CPU always works and is the fallback.";
+        "CUDA is used automatically when this build has it, and needs its own runtime files. " +
+        "CPU always works and is the fallback. Whichever you pick is remembered.";
 
     /// <summary>
     /// The full notice package, shown in the application because the licence requires it to be

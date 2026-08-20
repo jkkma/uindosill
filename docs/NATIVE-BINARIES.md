@@ -202,6 +202,13 @@ delete the largest file in the drop.
 
 **Vulkan is the default GPU tier. CUDA is opt-in. CPU is the fallback and is never omitted.**
 
+"Opt-in" is about which channel a user installs rather than which backend the window then selects.
+As of 2026-08-20 the application starts on the fastest tier whose directory is actually present, so
+an install that has `cuda/` starts on CUDA rather than making the user pick it every launch — the
+directory is what the second channel adds, so its presence *is* the opt-in having happened. A
+choice made in the window overrides that and is remembered. The **CLI is unchanged** and still
+defaults to Vulkan without `--backend`, because its default is scriptable behaviour.
+
 Vulkan runs on NVIDIA, AMD and Intel with only a normal graphics driver, and skips the ~553 MB
 cudart download. Both come from the same upstream build matrix. `cjpais/Handy` already ships
 ggml-Vulkan on Windows in production.
