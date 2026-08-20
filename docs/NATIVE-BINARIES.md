@@ -203,11 +203,17 @@ delete the largest file in the drop.
 **Vulkan is the default GPU tier. CUDA is opt-in. CPU is the fallback and is never omitted.**
 
 "Opt-in" is about which channel a user installs rather than which backend the window then selects.
-As of 2026-08-20 the application starts on the fastest tier whose directory is actually present, so
-an install that has `cuda/` starts on CUDA rather than making the user pick it every launch — the
-directory is what the second channel adds, so its presence *is* the opt-in having happened. A
-choice made in the window overrides that and is remembered. The **CLI is unchanged** and still
-defaults to Vulkan without `--backend`, because its default is scriptable behaviour.
+As of 2026-08-20 **both front ends start on the fastest tier whose directory is actually present**,
+so an install that has `cuda/` uses CUDA rather than making the user ask for it every launch or
+every command — the directory is what the second channel adds, so its presence *is* the opt-in
+having happened. One rule serves both, `ParakeetNativeLibrary.PreferredBackend`, so an install
+cannot disagree with itself.
+
+A choice made in the window overrides it and is remembered; `--backend` overrides it per command,
+and `--backend vulkan` pins exactly what a bare invocation did before. Because CUDA falls back to
+CPU and never to Vulkan, `transcribe` now reports on stderr whenever the backend that loaded is not
+the one that was asked for — without that line, a CUDA drop with no working driver behind it would
+silently run twelve times slower than intended.
 
 Vulkan runs on NVIDIA, AMD and Intel with only a normal graphics driver, and skips the ~553 MB
 cudart download. Both come from the same upstream build matrix. `cjpais/Handy` already ships

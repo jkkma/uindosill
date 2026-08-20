@@ -35,7 +35,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // The field, not the property: assigning the property here would fire OnBackendChanged and
         // write the file on every launch, including the launches where nothing was chosen.
         _backend = _settings.Load().Backend
-            ?? BestBackendPresent(backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
+            ?? ParakeetNativeLibrary.PreferredBackend(
+                backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
 
         Session = new ModelSession(engines);
 
@@ -125,45 +126,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         await Session.DisposeAsync().ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// The backend to start on when the user has never chosen one: the fastest tier whose binaries
-    /// are actually on disk.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// CUDA outranks Vulkan because its presence is not an accident. The default channel ships cpu
-    /// and vulkan; the cuda directory exists only in the second channel, whose installer is 818 MB
-    /// against 82 MB, so a user who has it went and got it. Starting them on Vulkan gave away the
-    /// 1.7x between the two measured tiers — RTF 0.0064 against 0.0110 on the desktop — and did it
-    /// on every launch, because nothing was persisted.
-    /// </para>
-    /// <para>
-    /// Nothing on disk means Vulkan, which is what shipped before any of this and what a build from
-    /// source with no vendored natives should still say. Presence is not capability: a CUDA drop
-    /// with no working NVIDIA driver behind it loads nothing, and the loader's chain for a CUDA
-    /// request is CUDA then CPU rather than CUDA then Vulkan — a rule written when asking for CUDA
-    /// was always deliberate. Now that it can be a default, that user lands on CPU rather than
-    /// Vulkan for one launch; the Models tab says so with a warning that names the fallback, and
-    /// the choice they make instead is remembered.
-    /// </para>
-    /// </remarks>
-    internal static ComputeBackend BestBackendPresent(IReadOnlyList<ComputeBackend> present)
-    {
-        ArgumentNullException.ThrowIfNull(present);
-
-        if (present.Contains(ComputeBackend.Cuda))
-        {
-            return ComputeBackend.Cuda;
-        }
-
-        if (present.Contains(ComputeBackend.Vulkan) || present.Count == 0)
-        {
-            return ComputeBackend.Vulkan;
-        }
-
-        return present.Contains(ComputeBackend.Cpu) ? ComputeBackend.Cpu : ComputeBackend.Vulkan;
     }
 
     /// <summary>

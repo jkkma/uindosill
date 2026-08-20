@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 619 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 618 passed and
+**Status:** met. 637 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 636 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -71,7 +71,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (80 of the project's 107 CLI
+**Status:** usable, tested end to end against the canned engine (80 of the project's 125 CLI
 tests drive the real entry point; the other 27 never construct it — 17 parser unit tests, 7 that
 check `--vk-disable-bf16` and its opposite `--vk-bf16` against the real command specs through
 `CommandLineParser`, 2 on the resolver that turns the pair into the engine option, and 1 on the
@@ -749,9 +749,16 @@ deliberate; now that it can be a default, a machine with the CUDA drop and no wo
 on CPU for one launch. The Models tab already names that fallback in a warning, and the choice made
 instead is kept, so it is visible and it is once.
 
-**The CLI still defaults to Vulkan and was deliberately left alone.** Its default is scriptable
-behaviour that `docs/MODELS.md` and `--help` both describe, and changing it silently would be a
-different kind of change from picking a better default for a window with a dropdown in it.
+**The CLI took the same default, and had to grow a notice first.** A bare `--backend` now resolves
+the same way, through the same `ParakeetNativeLibrary.PreferredBackend`, so one install cannot
+answer the question two ways depending on which front end asked. That changes scriptable behaviour,
+which is why it came with the thing the CLI did not have: `transcribe` never reported the loaded
+backend at all. Survivable while the default was always Vulkan — the user had typed nothing to be
+contradicted — and not survivable once a machine can resolve to CUDA it cannot run, fail, and land
+on CPU twelve times slower with no line of output saying why. The notice goes to stderr with the
+other warnings, names both backends, and points at `--backend vulkan` when CUDA falls through,
+because the loader's chain skips Vulkan on purpose. `--backend vulkan` pins the old behaviour
+exactly.
 
 ## The honest summary
 

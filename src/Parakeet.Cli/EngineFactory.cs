@@ -1,6 +1,7 @@
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp;
+using Parakeet.Engine.ParakeetCpp.Interop;
 
 namespace Parakeet.Cli;
 
@@ -12,7 +13,8 @@ internal sealed record EngineRequest
 
     public string? ModelPath { get; init; }
 
-    public ComputeBackend Backend { get; init; } = ComputeBackend.Vulkan;
+    /// <summary>Defaults to the same tier a bare <c>--backend</c> resolves to, so the two cannot drift.</summary>
+    public ComputeBackend Backend { get; init; } = EngineFactory.DefaultBackend();
 
     public string? NativeDirectory { get; init; }
 
@@ -125,11 +127,28 @@ internal static class EngineFactory
         return !keepRequested;
     }
 
+    /// <summary>
+    /// The named backend, or — when nothing is named — the fastest tier whose binaries are on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The default was an unconditional Vulkan until 2026-08-20, which meant a build carrying the
+    /// CUDA drop ran at RTF 0.0110 where 0.0064 was available unless every invocation said
+    /// <c>--backend cuda</c>. The <c>cuda</c> directory is what the second channel adds and the
+    /// default channel omits, so its presence is a decision somebody already made — an 818 MB
+    /// installer against 82 MB — rather than something to make them repeat per command.
+    /// </para>
+    /// <para>
+    /// This changes what a script that omits <c>--backend</c> runs on, which is why the loaded
+    /// backend is now reported whenever it is not the one asked for. <c>--backend vulkan</c> pins
+    /// the old behaviour exactly.
+    /// </para>
+    /// </remarks>
     public static ComputeBackend ParseBackend(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return ComputeBackend.Vulkan;
+            return DefaultBackend();
         }
 
         return value.Trim().ToLowerInvariant() switch
@@ -140,4 +159,10 @@ internal static class EngineFactory
             _ => throw new CliUsageException($"Unknown backend '{value}'. Choose cpu, vulkan or cuda."),
         };
     }
+
+    /// <summary>
+    /// What <c>--backend</c> resolves to when it is not given. Shares its rule with the window's
+    /// first-run default so one install does not disagree with itself about which tier it runs.
+    /// </summary>
+    public static ComputeBackend DefaultBackend() => ParakeetNativeLibrary.PreferredBackendOnDisk();
 }
