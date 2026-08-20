@@ -493,9 +493,10 @@ rather than add to it.
 target token is mandatory: the same Spanish segments without `>>eng<<` return fluent German, so the
 prefix is an invariant the translator enforces rather than a convention a caller follows. Greedy
 decoding is not safe — over 44 real segments it dropped content that beam-6 kept — so the decode
-loop needs beam search and pays 2.1× to 2.3× for it. An int8 export weighs 227 MiB or 404 MiB
-depending on whether the embeddings quantise, which is a download decision rather than a rounding
-one. And English input passes through byte-identical, so the drift recorded below costs the pass
+loop needs beam search and pays 2.1× to 2.3× for it. An int8 export was projected at 227 MiB or
+404 MiB depending on whether the embeddings quantise, which is a download decision rather than a
+rounding one — and the export on 2026-08-20 measured 345.9 MiB and 694.3 MiB instead, for the reason
+*Built 2026-08-20* below gives. And English input passes through byte-identical, so the drift recorded below costs the pass
 nothing to carry. `docs/UNPROVEN.md` § *Translating into English* has the numbers and what stays
 open, including the encoder position limit, which turned out to be 1024 rather than the 512 the
 study assumed and is no longer the feature's largest risk.
@@ -503,9 +504,10 @@ study assumed and is no longer the feature's largest risk.
 **Seam before model, the way the diarisation discriminator shipped before any diarisation entry
 existed.** `ModelTask.Translation`, the manifest word, the badge and a fake translator can all land
 with no entry in `models.json` at all — and that is as far as it can go, because every catalogue
-entry today is one file and the ONNX route is five, which is a schema change with a defined meaning
-for a partial install behind it. **That step is built as of 2026-08-19** — see *Built 2026-08-19 —
-the translation seam* below.
+entry today is one file and the ONNX route is more than one, which is a schema change with a defined
+meaning for a partial install behind it. **That step is built as of 2026-08-19** — see *Built
+2026-08-19 — the translation seam* below. How many files the route actually has was an assumption
+until the export existed; it is nine, counted 2026-08-20 in *Built 2026-08-20 — the ONNX export*.
 
 **The gate, ratified 2026-08-19, before a single score exists.** Two criteria, both of which must
 hold. **One:** chrF++ into English clears the **per-language source-copy floor** — the score a
@@ -591,6 +593,62 @@ handed to the report directly in a test instead.
 project, no decode loop, no checkbox and no harness; the gate above still has no score against it.
 `docs/UNPROVEN.md` § *Translating into English* carries what the spike settled and what it did not.
 
+### Built 2026-08-20 — the ONNX export, and what it turned out to be
+
+**Step 2 of the feature above is an artefact and a script that reproduces it.** The step before the
+catalogue schema, because the schema pins `fileName`, `sizeBytes` and `sha256` per file and there
+was nothing to name, size or hash — and because "five files" was an assumption nobody had counted.
+`scripts/export-translation-onnx.py` is committed for the reason `validate-der.py` is: this
+repository ships an artefact no upstream publishes, so the thing that produces it belongs beside the
+code that loads it. The graphs themselves go nowhere near the working tree, and the run's own report
+— the manifest of names, sizes and digests, the verbatim smoke diffs, and the timings — is in the
+dated folder `translation-onnx-export-2026-08-20` beside the other research on the maintainer's
+Drive, per `CLAUDE.md`.
+
+**The recorded export failure was a Python version, not a library pair.** `optimum` 2.1.0 against
+`transformers` 4.57.6 failed inside optimum's own config normaliser, which is where the traceback
+pointed and why it looked like optimum's fault. It is CPython 3.14: `functools.partial` gained the
+descriptor protocol, optimum stores every `NORMALIZED_CONFIG_CLASS` as a class-attribute partial,
+and reading one through `self.` now binds the instance into the first positional slot. Twelve lines
+at the caller re-wrap those partials in `staticmethod` and the export runs unmodified — no pinning,
+no patched install, and no hand-written `torch.onnx.export`, which the maintainer had agreed to as
+the fallback and which is not needed. The shim is applied only when `functools.partial` is a
+descriptor, so the script is correct on 3.13 too and becomes a no-op when optimum stops handing 3.14
+a bare partial.
+
+**The route is nine files, not five, and the tokenizer is five of them on its own.** optimum offers
+two layouts and they are a different file count, so both were built rather than assumed: merged
+keeps one decoder behind a `use_cache_branch` input, split keeps a with-past decoder and a
+without-past one over nearly the same weights. **Merged is the one to ship** — it produced
+byte-identical translations to split at every precision tested and stores the decoder once, which
+is about 800 MiB of fp32 the split layout spends on nothing measurable. Past-key-values are exposed
+in both, so beam search is not foreclosed.
+
+**Both ends of the download decision are measured and neither is picked here.** The int8 route is
+345.9 MiB with ONNX Runtime's default dynamic operator set and 694.3 MiB with `Gather` dropped from
+it, against 1369.1 MiB at fp32 — merged layout, whole directory, tokenizer included. Those replace
+the 227.3-and-404.4 spread, which counted each parameter once; the export unties what the checkpoint
+ties, so the vocabulary matrix is stored three times. Which one ships is a download-size-against-
+quality call and it is the maintainer's, so the script produces both.
+
+**The export reproduces fp32 PyTorch exactly; int8 does not, and one segment in 44 collapses.** At
+fp32 every one of the 44 real segments the 2026-08-19 spike recorded at beam-6 came back
+string-identical, which is the check the ASR's silent int8 collapse is the reason for. At int8 most
+segments changed — mostly paraphrase, and one German segment came back with a degenerate repetition
+loop under both int8 variants. That is not a quality measurement and does not touch the gate; it is
+the reason the harness is the next thing worth building before the precision is chosen. **int8 is
+also about 9% slower** than the fp32 export on this laptop, while the export itself is about 2.4×
+faster than PyTorch — so what int8 buys is download size and nothing else that has been measured.
+
+**Hosting was checked before a tag was proposed.** Velopack 1.2.0's `GithubSource` takes an
+injectable downloader, so it was driven against a canned releases list: a release with no
+`releases.{channel}.json` asset is skipped rather than fatal, and an all-weights list yields an
+empty feed rather than an exception. The constraint it did surface is that the source asks for ten
+releases and does not paginate. `docs/UNPROVEN.md` § *The update check has never found an update*
+carries it. **No tag has been pushed, no asset uploaded, and `models.json` is untouched** — the
+catalogue cannot name a URL until an asset exists under an agreed tag, and the tag has to avoid
+`v*`, which is what triggers the 1.8 GB installer build.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -603,7 +661,7 @@ project, no decode loop, no checkbox and no harness; the gate above still has no
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, nothing measured.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, an int8 export weighs 227 MiB or 404 MiB depending on whether the embeddings quantise, and English input passes through byte-identical. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. Outstanding: a multi-file catalogue schema (every entry today is one file, the ONNX route is five), the decode loop with beam search, the window's checkbox and pane switcher, and the harness — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
+| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, nothing scored.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, which precision to ship being an open call rather than a finding. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. Outstanding: the multi-file catalogue schema, the decode loop with beam search, the window's checkbox and pane switcher, and the harness — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam

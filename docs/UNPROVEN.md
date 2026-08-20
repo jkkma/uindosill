@@ -839,6 +839,25 @@ shutdown happens *before* the restart. All of that is our code. None of it is Ve
 test at all, because every route to one needs either a network or a fabricated release feed. The
 first real release is what will exercise it, and it will exercise it on users.
 
+**The fabricated feed turns out to be cheap, and it answered a hosting question on 2026-08-20.**
+`GithubSource`'s fourth constructor parameter is an `IFileDownloader`, so the shipped Velopack 1.2.0
+binary can be driven against a canned GitHub releases response with no network at all. That was
+done to settle whether hosting the ONNX translation export as a weights-only GitHub release on this
+repository would break the update path, and it settles three things about **Velopack 1.2.0**
+specifically. A release carrying no `releases.{channel}.json` asset is **skipped**: the source logs
+the miss at Trace and walks on to the next release, and with a real feed behind it the check
+succeeds normally. With no such asset in the whole list it returns an **empty feed rather than
+throwing**, which is the "you are up to date" answer and not a crash. And — the one that constrains
+the plan — `GithubSource` requests **`?per_page=10&page=1` and does not paginate**: with ten
+feed-less releases above the newest installer release, page 2 is never asked for and the check
+comes back empty and silent. So weights releases on this repository are safe as long as fewer than
+ten of them sit above the newest installer release, which argues for updating one weights release's
+assets rather than cutting a new release per revision. What this does not establish is any of the
+network behaviour, the GitHub API's own ordering, or anything about a Velopack version other than
+the pinned one. It does establish that the sentence above — no test is possible without a network —
+is no longer true, and a `VelopackUpdater` test against a canned feed is now a thing somebody
+declined to write rather than a thing that cannot be written.
+
 ### The release workflow was run twice, and one step in it still has not been
 
 Rehearsed on 2026-08-19 through `workflow_dispatch` with the `draft` input, twice — 1.0.0-rc.1 and
@@ -1083,17 +1102,19 @@ machine's driver, 32.0.20102.3930, whose numbering does not match the window the
 listed that day (32.00.0203.280 to .297). The research item, and when it becomes relevant, is in
 `docs/PHASES.md` § *After v1*.
 
-### Translating into English — researched and spiked 2026-08-19, seam built, nothing measured
+### Translating into English — researched and spiked 2026-08-19, exported 2026-08-20, nothing scored
 
 **No translation model has run inside this product.** The recommended checkpoint has been exercised
-in a scratch environment outside the working tree — fp32 PyTorch, CPU, against transcripts this
-project produced — and what that settled is recorded below with the rest. What has *not* happened:
-nothing has run through ONNX Runtime, no quantised artefact exists, and no real-time factor for a
-translation pass has been measured, only per-segment times on one machine at one precision. C# now
+in a scratch environment outside the working tree — fp32 PyTorch and then ONNX Runtime, CPU, against
+transcripts this project produced — and what that settled is recorded below with the rest. What has
+*not* happened: no real-time factor for a translation pass has been measured, only per-segment times
+on one machine at three precisions, and nothing has been scored against the gate. C# now
 touches a translator, but only the canned one: the seam landed on 2026-08-19 (`docs/PHASES.md`
 § *Built 2026-08-19 — the translation seam*) with the contract, `ModelTask.Translation` and
-`--translate` wired to a fake that reads no weights. **Nothing in this repository has translated a
-word.** What the seam does carry is the three spike findings as invariants a test asserts — the
+`--translate` wired to a fake that reads no weights. **Nothing this product ships has translated a
+word.** The one thing in the repository that has is `scripts/export-translation-onnx.py`, which is a
+Python export tool the build does not touch and the product does not carry. What the seam does carry
+is the three spike findings as invariants a test asserts — the
 mandatory target token, the dropped word timings, the enforced pass order — so the figures below
 are what the decode loop will be measured against rather than a description of anything running. The study behind `docs/PHASES.md` § *Decided 2026-08-19* is separate again:
 every model claim in it was read off a card, a config, a vocabulary file or a repository listing
@@ -1153,17 +1174,84 @@ is the Serbo-Croatian macrolanguage and must not be quoted as a Croatian figure 
 Slovak, consistent with its absence from that card's source list. Every one of those figures is a
 beam-6 figure, which is now known to matter — the greedy-against-beam-6 delta is measured below.
 Whether a C# `SentencePieceTokenizer` reproduces HuggingFace's `MarianTokenizer` is still
-unestablished.
+unestablished — there is no C# tokenizer to establish it about — but as of 2026-08-20 there is
+something to establish it *against*: `tests/fixtures/translation/marian-tokenizer.json` records the
+ids `MarianTokenizer` emits for six fixed sentences at a named checkpoint revision, so the decode
+loop is written against a fixed target rather than against its own first output. Nothing reads it
+yet. One thing in it is already a trap avoided: `>>eng<<` is a single token, id 693, and a
+tokenizer that takes it apart produces plausible ids and silently loses the target.
 
-**What it costs is now half measured.** The recommended checkpoint is 238,290,944 parameters, and
-what an int8 export weighs turns on one choice the toolchain makes for you: **227.3 MiB** if every
-tensor quantises, **404.4 MiB** if the embeddings stay fp32 — they are 26% of this model, which is
-the whole of that spread. The study's "roughly 225 to 340 MiB" brackets only the optimistic half,
-and no ONNX artefact exists to settle it, because `optimum` 2.1.0 against `transformers` 4.57.6
-fails on this architecture inside optimum's own config normaliser, through the Python API and
-`optimum-cli` alike. The "one build-time Optimum run" the plan assumes is therefore a
-pinned-version or patched-tooling job rather than a command, and it belongs in the estimate as one.
-Peak memory with the ASR model, the diariser and a translator resident is still unmeasured on both
+**What it costs is measured, and it is not either of the two numbers this entry used to carry.** The
+export exists as of 2026-08-20 — `scripts/export-translation-onnx.py`, run on the laptop against
+checkpoint revision `bb1ef830d5`, with the artefacts left outside the working tree and their names,
+byte counts and SHA-256s in the manifest that run wrote. **The route is nine or ten files, not
+five**: two ONNX graphs in the merged layout (`encoder_model.onnx`, `decoder_model_merged.onnx`) or
+three in the split one (`decoder_model.onnx` and `decoder_with_past_model.onnx` in place of the
+merged decoder), plus `config.json`, `generation_config.json`, an `ort_config.json` the quantiser
+adds, and a tokenizer that is **five** files rather than one — `source.spm` 736,809 B,
+`target.spm` 808,244 B, `vocab.json` 1,514,254 B, `tokenizer_config.json` and
+`special_tokens_map.json`. Measured directory totals, merged layout: **1369.1 MiB** at fp32,
+**345.9 MiB** at int8, **694.3 MiB** at int8 with the embedding table left in fp32. The split layout
+is the same graphs with the decoder stored twice — 2166.2, 545.7 and 1068.3 MiB — and produced
+byte-identical translations to the merged one at every precision, so it costs about 800 MiB to buy
+nothing that has been measured.
+
+**The 227.3-or-404.4 spread was the right question about the wrong object, and both ends were low.**
+Those figures count each parameter once; the ONNX export does not tie what PyTorch ties. The
+`[58434, 1024]` matrix is emitted **three times** in the merged layout — as a `Gather` table in the
+encoder, as a `Gather` table in the decoder, and again transposed as the output projection's
+`MatMul` weight — and four times in the split one. So the toolchain's choice is real and it is a
+single knob, `operators_to_quantize`: with ONNX Runtime's default dynamic set the `Gather` tables
+quantise to UINT8 and the route is 345.9 MiB; dropping `Gather` leaves them FLOAT and the route is
+694.3 MiB. But dropping `Gather` does **not** leave "the embeddings" in fp32, because the output
+projection is a `MatMul` and quantises either way — which is why the intermediate variant is 694.3
+rather than the 404.4 an untied count predicts. **Which end ships is not decided here**: it is a
+download-size-against-quality call, the quality side of it is the paragraph below, and the export
+script deliberately produces both and picks neither.
+
+**The recorded export failure was misdiagnosed, and the correct diagnosis is cheap to act on.** It
+is not a skew between `optimum` 2.1.0 and `transformers` 4.57.6, and no pinned pair of them fixes
+it: it is **CPython 3.14**, which gave `functools.partial` the descriptor protocol. optimum stores
+every `NORMALIZED_CONFIG_CLASS` as a class-attribute partial and reads it as
+`self.NORMALIZED_CONFIG_CLASS(self._config)`, so under 3.14 the instance binds as the first
+positional argument, the config lands in the `allow_new` slot, and the constructor reports
+`got multiple values for argument 'allow_new'` from inside the normaliser — which is where the
+traceback pointed and why the cause looked like optimum's. Re-wrapping those 24 partials in
+`staticmethod` at the caller restores the pre-3.14 reading; the export then runs unmodified, and
+nothing in the venv is touched. The "one build-time Optimum run" the plan assumes is a command
+again — about 30 s for the fp32 export and 15 s per quantisation on this laptop — with a
+twelve-line interpreter shim in front of it. A 3.13 interpreter would need no shim at all, and that
+route was not taken or tested here.
+
+**The export reproduces fp32 PyTorch exactly, and int8 does not.** Both layouts at fp32 returned
+strings identical to the fp32 PyTorch reference on all 50 segments put through them: the six fixed
+smoke sentences in-process, and all 44 real segments — 13 Spanish, 31 German — that the 2026-08-19
+spike recorded at beam-6, re-translated and diffed string by string. That is the check the ASR's
+silent int8 collapse is the reason for, and fp32 passes it outright. **int8 does not**: with the
+default operator set 5 of 13 Spanish and 5 of 31 German segments matched, and with the embedding
+table left in fp32, 5 of 13 and 8 of 31. Most of the disagreements read as paraphrase —
+`the North Coast of the country` against `the north coast of the country`, `twelve kilometres`
+against `12 kilometres` — but not all of them: one German segment came back as
+`...Attribution Share Alike 4.0 Genocococococococeaea` under both int8 variants, a degenerate
+repetition the fp32 reference does not produce, and another turned `separated from the central
+coast by the mountain range of the coast` into `Separated from the central coastline by the coast
+coastline`. **What none of this is, is a quality measurement.** An exact-match rate against fp32 is
+not chrF++, it does not touch the gate, and paraphrase and corruption are counted the same by it;
+the only claim it supports is that the int8 route changes the output on most segments and collapses
+on at least one in 44. Whether that costs anything against the gate is unmeasured, and it is the
+next thing the harness is for.
+
+**int8 is also slower here, which leaves it with only the download argument.** Per-segment beam-6
+decode over the same 44 recorded segments, one segment per call after an uncounted warm-up, best of
+three passes on this laptop's CPU: PyTorch fp32 **1426.9 ms**, ONNX fp32 **579.9 ms**, ONNX int8
+**630.5 ms**, ONNX int8 with the embedding table in fp32 **624.8 ms**. So the export is worth about
+**2.4×** against PyTorch on its own, and int8 gives about **9%** of that back. Passes within a
+process agreed to under 2%, and a second process reproduced the ordering and the ratios while the
+absolute figures moved by up to 3.5%, so the direction is not noise — but it is one machine, one
+thread setting, and no CPU pinning. **These are not real-time factors**: nothing here divides by an
+audio duration, and they are not directly comparable to the spike's 0.579 s Spanish and 1.44 s
+German PyTorch figures, whose mix and protocol differ. Peak memory with the ASR model, the diariser
+and a translator resident is still unmeasured on both
 machines. **ONNX Runtime having no Vulkan execution provider is now verified** — its
 execution-provider list carries CUDA, TensorRT, OpenVINO, DirectML, oneDNN, QNN, CoreML, ROCm,
 MIGraphX, Vitis AI, WebGPU and others, and no Vulkan — but the conclusion drawn from that was wrong:
