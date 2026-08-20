@@ -240,31 +240,29 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task OnlyTheEntryWhoseUrlWasNeverCheckedIsFlagged()
+    public async Task NoShippedEntryIsFlaggedAsUnverified()
     {
-        // Every shipped entry pins a digest per file, so nothing here can say "no digest". One of
-        // them — the translation entry, whose release asset has not been uploaded, so its URL
-        // cannot have been checked against anything — is nonetheless unverified, and the listing
-        // says so on its line rather than only in the manifest. Until 2026-08-20 this asserted the
-        // flag never appeared at all, which made it a claim about the data; it is now a claim about
-        // the flag, checked against both states.
+        // Every shipped entry pins a digest per file, so nothing here can say "no digest" — and as
+        // of 2026-08-20 every one of them is verified too. The translation entry was the last
+        // exception: its nine files were published that day, and every LFS oid the repository
+        // publishes matched the digest the gate run recorded, so the listing carries no warning.
+        //
+        // This is deliberately a claim about the DATA. The claim about the FLAG — that it appears
+        // when it should — is the test below, against a catalogue built for the purpose, because a
+        // flag exercised only by whatever the shipped manifest happens to contain stops being
+        // exercised the moment the manifest changes. Between 2026-08-20's two commits this file
+        // held the opposite assertion, which is exactly that trap.
         using var harness = new Harness();
 
         await harness.RunAsync("models", "list");
         var output = harness.Out.ToString();
 
         Assert.DoesNotContain("no digest", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unverified catalogue entry", output, StringComparison.Ordinal);
 
-        var flagged = output
-            .Split('\n')
-            .Where(line => line.Contains("unverified catalogue entry", StringComparison.Ordinal))
-            .ToList();
-
-        // The flag is rendered beside the entry's display name rather than its id, so that is what
-        // is asserted; that there is exactly one such line is the other half.
-        var line = Assert.Single(flagged);
-        Assert.Contains("OPUS-MT Bible-Big", line, StringComparison.Ordinal);
+        // Still listed — listed without a warning is the point, not listed at all.
         Assert.Contains("opus-mt-tc-bible-big-mul-en-fp32", output, StringComparison.Ordinal);
+        Assert.Contains("OPUS-MT Bible-Big", output, StringComparison.Ordinal);
     }
 
     [Fact]

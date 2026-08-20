@@ -44,12 +44,17 @@
     "each with its own size and SHA-256. The nine digests are the ones the gate run itself recorded",
     "for the artefact it scored, re-hashed off disk on 2026-08-20 and matching byte for byte.",
     "",
-    "**It is marked \"verified\": false because the asset has not been uploaded.** The URL points at a",
-    "release tag that has not been pushed, so `models download` on it will 404 until it is. That is",
-    "the one outstanding step and it is the maintainer's: pushing a tag and uploading 1.34 GiB is not",
-    "something a session does on its own. The sizes and digests are real and pinned now, so the upload",
-    "is a transfer rather than a decision. Until then, --translate-model-path takes the exported",
-    "directory straight.",
+    "**It is verified, and the nine digests are attested twice over.** They were first taken off the",
+    "bytes the gate run scored and re-hashed from disk; the files were then published to Hugging Face",
+    "on 2026-08-20, and every one of the nine LFS oids the repository publishes — an LFS oid IS the",
+    "file's SHA-256 — matched the scored digest. That is stronger than any other entry here, which",
+    "rest on the listing alone. The upload forces all nine onto LFS including the four under a",
+    "kilobyte: an ordinary git blob has a git SHA-1 and publishes no SHA-256, and an entry is as",
+    "verified as its least-checked member.",
+    "",
+    "The URLs pin a COMMIT SHA rather than main, the way the diarisation entry does and for the same",
+    "reason: a URL and a digest are pinned together here, so a URL that can serve different bytes",
+    "later breaks every installed copy with a digest mismatch as the only symptom.",
     "",
     "Apache-2.0, and the third licence shape in Attributions: section 4(a) wants a copy of the licence",
     "rather than a link, so licences/Apache-License-2.0.txt ships. docs/LICENSING.md records what is",
@@ -294,60 +299,60 @@
       "files": [
         {
           "fileName": "config.json",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/config.json",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/config.json",
           "sizeBytes": 1056,
           "sha256": "8e32276ceea85ea685ccf31c3ed287cdd59f8833d73a098a9c31ce4b59e6e2b5"
         },
         {
           "fileName": "decoder_model_merged.onnx",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/decoder_model_merged.onnx",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/decoder_model_merged.onnx",
           "sizeBytes": 886620027,
           "sha256": "f7f631668f8331dc2b8ba076d0cc61cae16191b653c3a2ad8f4a9e7b6e565930"
         },
         {
           "fileName": "encoder_model.onnx",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/encoder_model.onnx",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/encoder_model.onnx",
           "sizeBytes": 545922847,
           "sha256": "8d4f23f2148904f7c0c54e25290ee1f74fe6aa40da9b4a47bf3273abe3d038de"
         },
         {
           "fileName": "generation_config.json",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/generation_config.json",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/generation_config.json",
           "sizeBytes": 308,
           "sha256": "5caffd85f61a34e2d2130455cf98d399d1938930e67a16f111cbda5838514a33"
         },
         {
           "fileName": "source.spm",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/source.spm",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/source.spm",
           "sizeBytes": 736809,
           "sha256": "32f072321d89ea780b21bc2899eb7163b09838eeb72fd0c9555d93a83a2b22a4"
         },
         {
           "fileName": "special_tokens_map.json",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/special_tokens_map.json",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/special_tokens_map.json",
           "sizeBytes": 79,
           "sha256": "2783f25e6fa0bd93f6e621623b33f32d5ab978715fb8c9f2584252b03837a323"
         },
         {
           "fileName": "target.spm",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/target.spm",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/target.spm",
           "sizeBytes": 808244,
           "sha256": "71e2e8679dc22f53bb2ec0ac99e62a4fb95ca475d3d1585083d26e35057b208f"
         },
         {
           "fileName": "tokenizer_config.json",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/tokenizer_config.json",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/tokenizer_config.json",
           "sizeBytes": 900,
           "sha256": "4673ac078091f3278f646088a899158758f4dd994102525706ab0c7751a81dbc"
         },
         {
           "fileName": "vocab.json",
-          "url": "https://github.com/jkkma/uindosill/releases/download/weights/translation-mul-en-2026-08-20/vocab.json",
+          "url": "https://huggingface.co/jkkma/opus-mt-tc-bible-big-mul-deu_eng_nld-onnx/resolve/7b7b2610f1aa57e6175ff352e73f9b0dbd9b871d/vocab.json",
           "sizeBytes": 1514254,
           "sha256": "68d5dcf5d26f9e64bf3ee22d0a6ef37acf8c5014678068fd8d5233e8c592a5cf"
         }
       ],
-      "verified": false,
+      "verified": true,
       "license": "Apache-2.0",
       "attributionId": "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx",
       "recommended": false,

@@ -9,12 +9,6 @@ namespace Parakeet.Core.Tests;
 
 public class ModelCatalogTests
 {
-    /// <summary>
-    /// The one entry whose asset has not been uploaded yet, so its URL cannot have been checked.
-    /// Delete this and the one exception that names it once the release tag is pushed.
-    /// </summary>
-    private const string AwaitingItsRelease = "opus-mt-tc-bible-big-mul-en-fp32";
-
     [Fact]
     public void EmbeddedCatalogueLoadsAndHasARecommendation()
     {
@@ -77,15 +71,12 @@ public class ModelCatalogTests
             Assert.NotEmpty(model.Files);
 
             // Verified means the URL was checked against a live repository, which is a different
-            // claim from "the digest is right". The translation entry's nine digests were taken off
-            // the bytes the gate was scored against — stronger than an LFS listing — and its URL
-            // points at a release tag nobody has pushed, so it is pinned and not verified, and the
-            // UI paints it as such. Named rather than blanket-excused: a second unverified entry
-            // fails here, and flipping this one to true once the asset is uploaded still passes,
-            // at which point the name below goes.
-            Assert.True(
-                model.Verified || model.Id == AwaitingItsRelease,
-                $"'{model.Id}' pins a digest but is not marked verified");
+            // claim from "the digest is right". Every entry is now both: the translation entry was
+            // the last exception here, and on 2026-08-20 its nine files were published and every
+            // one of the published LFS oids matched the digest taken off the bytes the gate was
+            // scored against. There is no longer an entry to excuse, so nothing is excused — a new
+            // unverified entry fails this outright.
+            Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
 
             // Per file, not per entry. An entry of nine files where eight are pinned is not a
             // pinned entry, and asserting only the aggregate would let the ninth through.

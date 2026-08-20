@@ -154,11 +154,12 @@ public sealed record OpenModelLicenceAttribution : IModelAttribution
 /// <para>
 /// <b>(c) and (d) are discharged by what the source actually carries, and this record cannot invent
 /// either.</b> A copyright line nobody published is a false notice in front of a user, which is the
-/// thing the catalogue's own comment about the deferred entries refuses; so <see cref="Creator"/>
-/// is the publishing identity as the repository states it, and anything further that turns out to
-/// be in the upstream tree is a change to this record rather than a guess baked into it. What is
-/// outstanding before these weights are redistributed is written down in <c>docs/LICENSING.md</c>
-/// rather than assumed away.
+/// thing the catalogue's own comment about the deferred entries refuses. So the upstream tree was
+/// read rather than recalled — the file listing and every text file in it, at the pinned revision,
+/// on 2026-08-20 — and both halves of the answer are fields here: what it carries is
+/// <see cref="RetainedSourceNotices"/>, and what it does not is <see cref="SourceNoticeFinding"/>,
+/// stated as a finding with its revision and its date so a later revision is a visible change
+/// rather than a silent one. <c>docs/LICENSING.md</c> records how the reading was done.
 /// </para>
 /// </remarks>
 public sealed record ApacheAttribution : IModelAttribution
@@ -182,6 +183,21 @@ public sealed record ApacheAttribution : IModelAttribution
     /// <summary>§4(b): what was changed, prominently.</summary>
     public required string ModificationNotice { get; init; }
 
+    /// <summary>
+    /// §4(c) and §4(d): what the upstream tree was found to carry and not carry, with the revision
+    /// read and the date it was read on. The negative half is the half worth stating — "there is no
+    /// NOTICE file" is a check that was performed, where silence is a check that might not have
+    /// been.
+    /// </summary>
+    public required string SourceNoticeFinding { get; init; }
+
+    /// <summary>
+    /// §4(c): the copyright, patent, trademark and attribution notices found in the source form,
+    /// retained. Each entry is what the source says, not a summary of it — a paraphrased
+    /// acknowledgement is not the acknowledgement the source asked to travel with the work.
+    /// </summary>
+    public required IReadOnlyList<string> RetainedSourceNotices { get; init; }
+
     /// <summary>§7, in the terms the licence sets out itself.</summary>
     public required string WarrantyDisclaimerNotice { get; init; }
 
@@ -194,6 +210,12 @@ public sealed record ApacheAttribution : IModelAttribution
         builder.Append("A copy ships at ").Append(LicencePath).Append('.').Append(newLine);
         builder.Append("Source: ").Append(MaterialUri).Append(newLine);
         builder.Append("Modifications: ").Append(ModificationNotice).Append(newLine);
+        builder.Append("Source notices: ").Append(SourceNoticeFinding).Append(newLine);
+        foreach (var notice in RetainedSourceNotices)
+        {
+            builder.Append("  - ").Append(notice).Append(newLine);
+        }
+
         builder.Append("Warranties: ").Append(WarrantyDisclaimerNotice).Append(newLine);
         return builder.ToString();
     }
@@ -291,6 +313,35 @@ public static class Attributions
                 + "graph and a decoder graph with past key values exposed. The weights are unchanged and "
                 + "unquantised — float32 in, float32 out. Uindosill redistributes the exported graphs and does "
                 + "not redistribute the original checkpoint.",
+            SourceNoticeFinding =
+                "The upstream repository was read at the pinned revision bb1ef830d5 on 2026-08-20 — its file "
+                + "listing and every text file in it. It ships no NOTICE file, so §4(d) has nothing to "
+                + "reproduce, and it carries no copyright, patent or trademark notice anywhere, so none is "
+                + "reproduced here rather than one being invented. The attribution notices it does carry are "
+                + "these:",
+            RetainedSourceNotices =
+            [
+                "Developed by the Language Technology Research Group at the University of Helsinki, as part of "
+                + "the OPUS-MT project (https://github.com/Helsinki-NLP/Opus-MT). Originally trained with "
+                + "Marian NMT and converted to PyTorch with the transformers library; training data from OPUS "
+                + "(https://opus.nlpl.eu/).",
+
+                "Original model: opusTCv20230926max50+bt+jhubc_transformer-big_2024-08-18.zip, at "
+                + "https://object.pouta.csc.fi/Tatoeba-MT-models/mul-deu+eng+nld/"
+                + "opusTCv20230926max50+bt+jhubc_transformer-big_2024-08-18.zip",
+
+                "The source asks to be cited: Tiedemann et al., \"Democratizing neural machine translation "
+                + "with OPUS-MT\" (Language Resources and Evaluation 58, 2023, doi:10.1007/s10579-023-09704-w); "
+                + "Tiedemann and Thottingal, \"OPUS-MT – Building open translation services for the World\" "
+                + "(EAMT 2020); and Tiedemann, \"The Tatoeba Translation Challenge – Realistic Data Sets for "
+                + "Low Resource and Multilingual MT\" (WMT 2020).",
+
+                "Acknowledgements, in the source's own words: \"The work is supported by the HPLT project, "
+                + "funded by the European Union’s Horizon Europe research and innovation programme under "
+                + "grant agreement No 101070350. We are also grateful for the generous computational resources "
+                + "and IT infrastructure provided by CSC -- IT Center for Science, Finland, and the EuroHPC "
+                + "supercomputer LUMI.\"",
+            ],
             WarrantyDisclaimerNotice =
                 "The work is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
                 + "either express or implied (section 7 of the License).",

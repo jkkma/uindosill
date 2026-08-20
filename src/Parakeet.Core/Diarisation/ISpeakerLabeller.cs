@@ -70,6 +70,20 @@ public sealed record SpeakerLabellerCapabilities
     /// caller must say so rather than present the labels as complete.
     /// </summary>
     public int? MaxSpeakers { get; init; }
+
+    /// <summary>
+    /// How long a recording this labeller's output has actually been established on, when that is
+    /// known. Null means no such bound has been measured — which is not the same as "any length".
+    /// </summary>
+    /// <remarks>
+    /// A separate limit from <see cref="MaxSpeakers"/> and a differently-shaped one. The cap is
+    /// architectural: it is in the model's geometry, it is the same on every file, and it is
+    /// knowable without running anything. This is empirical: it is where the evidence stops, and
+    /// past it the labels are not known to be wrong so much as not known to be right. Both belong
+    /// on the capability rather than in a caller, because a caller that has to remember either is a
+    /// caller that will one day forget.
+    /// </remarks>
+    public TimeSpan? ReliableUpTo { get; init; }
 }
 
 /// <summary>

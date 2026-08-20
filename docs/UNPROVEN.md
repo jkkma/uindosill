@@ -1017,6 +1017,72 @@ generalisation estimate. **No measurement anywhere in this repository prices wha
 with five or more speakers**, and the only figures that exist are NVIDIA's own: 38.90% on DIHARD III
 eval 5–9 spk and 34.81% on NOTSOFAR1 eval ≥5 spk, against 14.84% and 15.95% below the cap.
 
+**Measured 2026-08-20: on whole podcast episodes this model returns four speakers whatever the
+truth is, and the reason is not the cap.** The four episodes at the repository root went through
+`uindosill diarise` on the desktop's CPU — 2, 3, 5 and 7 speakers, counts the maintainer confirmed
+that day as the episodes' own, no ad-reads and no jingle voices, rather than anything this
+repository derived. **No DER is claimed from any of them: there are no per-turn references, and
+there will not be until somebody labels one.** What they give is a count.
+
+| episode | true | labels | ≥1% of speech | shares |
+|---|---:|---:|---:|---|
+| `two-hosts` | 2 | 4 | **3** | 37.6 / 32.6 / 29.6 / 0.1 |
+| `two-hosts-one-guest` | 3 | 4 | **4** | 49.5 / 23.9 / 17.0 / 9.6 |
+| `two-hosts-three-guests` | 5 | 4 | 4 | 37.3 / 26.3 / 19.4 / 17.0 |
+| `two-hosts-five-guests` | 7 | 4 | 4 | 37.6 / 23.2 / 21.9 / 17.3 |
+
+**Four labels on all four, for two different reasons, and only the bottom two are the cap.** Above
+the cap a fifth voice is merged, which is what the model says it does. Below it the model
+*over*-counts: two hosts produce three substantial clusters and one sliver, three speakers produce
+four. So on this material the number four carries almost no information, and a user reading "4
+speakers" cannot tell which of the two things happened.
+
+**It is duration, not the cap and not the domain, and a ladder says so.** Same audio, same onset
+(2104 s of `two-hosts`), window grown, counting only labels holding ≥1% of speech:
+
+| window | 10 min | 30 min | 40 min | 50 min | 60 min | 120 min | full 175 min |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| speakers ≥1% (true 2) | **2** | **2** | **2** | **2** | 3 | 3 | 3 |
+
+Correct to fifty minutes and wrong from an hour. `two-hosts-one-guest` from onset 600 s gives the
+same shape one rung later — correct at 30 and 60 minutes, wrong at 120. **AMI, the corpus the gate
+was passed on, has meetings averaging about half an hour**, which is inside the range where this is
+right; the gate could not have caught it. AMI dev re-scored the same day against its references gives
+DER **8.62%** at collar 0.25 and **11.91%** at collar 0, confusion **0.94%**, and 4 reference
+speakers against 4 found on all eighteen meetings — so this is not a model that mixes speakers up in
+general.
+
+**It is a threshold nobody should read as sharp.** Two of three one-hour windows of `two-hosts` came
+out correct — onsets 200 s and 6000 s — and only the one at 2104 s failed, so an hour is where the
+answer becomes window-dependent rather than where it turns wrong. Past two hours nothing tested has
+been correct.
+
+**Two diagnostics that rule out the obvious explanations.** The spurious cluster is **not localised**:
+in the failing hour-long window its first turn is at 2138 s and its last at 5650 s, spread across the
+whole span rather than appearing after long exposure. And the stretch a failing window contains that
+a passing one does not — 5000 to 5800 s — **is correct in isolation**, 54.1% / 45.0% over two
+speakers, so no content in it introduces a third voice. What that leaves is over-segmentation of one
+host into two labels, which the near-complementary time distributions of the two largest clusters in
+the full episode support and nothing here proves.
+
+**What this does not establish.** No DER on any podcast, so none of it says how *good* the labels
+are, only how many there are. One show, four episodes, one recording setup. The true counts are the
+maintainer's word rather than a labelled reference. No root cause: the streaming buffer, the
+four-slot arrival-order speaker cache and the post-processing thresholds are all plausible and none
+was tested. The ladder's cuts were made with the manifest's own ffmpeg line but only the 600-second
+one is pinned — it reproduced `two-hosts-a.wav`'s byte count exactly, which is a check on the
+others rather than a pin for them. And **nothing was re-tuned**: the post-processing is the one
+fixed on the 18 AMI dev meetings and applied unchanged, because changing it would invalidate the
+gate this model passed.
+
+**The product now says so before it runs.** `SpeakerLabellerCapabilities.ReliableUpTo` is **fifty
+minutes** for this model and `SpeakerLabelling.DescribeDurationRisk` turns it into a sentence, fired
+by `diarise` and by `transcribe --speakers` on a file longer than that, before the labeller decodes a
+sample. Fifty rather than a rounder sixty because fifty is the longest length at which every window
+tested came out right — an hour is where one of four failed, and a bound set there would have let
+that window through without a word. It warns and continues, like the speaker-count cap: a long recording still transcribes
+correctly and it is only the speaker labels that are unestablished.
+
 **Two further limits of the passing configuration.** It buffers 30.4 s, so the diariser trails the
 audio by half a minute — adequate for file transcription and not a live-captioning latency, and the
 1.04 s graph is a different export this project does not hold. And the model's four-speaker cap is
@@ -1260,11 +1326,126 @@ speaker said it, and the translator then had to read a nineteen-character compou
 almost certainly never appeared in a Bible corpus. Nothing here prices how often it happens — one
 sentence is one sentence — and no gate criterion looks for it: chrF++ against an English reference
 scores a wrong date as a few bad character n-grams, and the corpus the gate ran on is written text
-where numbers are digits. **The two things that would price it are a cascade measurement and the
-human adequacy check, and neither has been done.**
+where numbers are digits. **The two things that would price it were a cascade measurement and the
+human adequacy check. The cascade one has since been done — it is the next entry — and the adequacy check
+has not.**
 
 English passed through byte-identical, which reproduces the spike's finding through the product
 rather than beside it.
+
+**The cascade penalty is measured as of 2026-08-20, and it is small.** What ASR error costs the
+translation, in the same units as the gate and on the same sentences.
+`scripts/measure-cascade.py`, on the desktop's CPU, `fp32-merged`, beam-6, batch 1. FLEURS is
+n-way parallel, so the same sentence ids exist as Spanish audio, as Spanish text and as English
+reference text, and both arms run in one process over one id set:
+
+| | sentences | text-in chrF++ | cascade chrF++ | **penalty** | ASR WER |
+|---|---:|---:|---:|---:|---:|
+| es (`es_419`) | 348 | 56.17 | 53.22 | **−2.95** | 6.12% |
+| de (`de_de`) | 347 | 63.64 | 59.30 | **−4.34** | 9.93% |
+
+chrF++ at `nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`.
+
+**The text-in arm reproduced the gate's published figures exactly — 56.17 and 63.64 — and that is
+what makes the subtraction mean anything.** It is recomputed here rather than quoted, over the same
+ids in the same process on the same machine, so the difference between the two columns is the
+recogniser and not whatever else differed between two runs. That it lands on the same numbers the
+gate published is a check that this harness is measuring the gate's object.
+
+**The penalty decomposes, and it decomposes the reassuring way.** German has 1.62× Spanish's word
+error rate and 1.47× its penalty, so the loss scales roughly with how wrong the input is: the
+translator is not disproportionately brittle to slightly-off text, which was the alternative the
+measurement was built to distinguish. **Neither language's verdict moves.** Spanish clears its
+required margin by +34.77 text-in and +31.82 after the cascade against a bar of +23.60; German by
++42.86 and +38.52 against +24.22.
+
+**The word error rates are the first this project has measured outside English.** Every WER here
+until today was Earnings-22, which is English; **2 of the 24 source languages now have one**, at
+6.12% and 9.93%, through `uindosill wer` — whose normaliser is this project's own and
+English-oriented, so on Spanish and German its number rule is inert and what it does is lower-case,
+strip punctuation and drop fillers. Comparable to another figure from here and to nothing published.
+
+**It is a lower bound and the harness says so in its own docstring.** FLEURS is read speech of
+Wikipedia-derived sentences, which is the easy end for a recogniser; spontaneous speech is worse at
+the ASR step and worse again after it. `es_419` is FLEURS' only Spanish config, so the driving case
+is one variety. One recording per sentence is used — the first of the three FLEURS supplies, the
+same row the text is taken from. And **this is the pipeline without the German number rewrite**,
+which is measured separately above, because the cascade arm translates in Python and the rewrite is
+on the C# side.
+
+**Per the decision of 2026-08-20 this is recorded and is not a gate criterion.** A bar argued for
+after seeing the number is not a bar, and the gate already carries one criterion nobody has
+performed.
+
+**That failure now has a repair and an alarm, and the repair is measured to cost nothing.**
+`GermanNumberWords` rewrites German **compound** cardinals as digits in
+`TranslationRequest.Mark` — the one funnel every source string passes through — so
+`neunzehnhundertneunundzwanzig` reaches the model as `1929`. It fires only on a token that parses
+*completely* as a German cardinal *and* is built from two or more number words, which leaves
+`zwei`, `zwanzig`, `neunzehn` and `hundert` untouched and leaves `Achtung`, `Dreieck`, `Zweifel`
+and `dreißigjährige` untouched because each has a remainder the grammar cannot eat. **The condition
+on shipping it was that it change nothing on written text**, since the chrF++ table above was scored
+on FLEURS `raw_transcription` where numbers are already digits: over all 25 FLEURS `test` configs —
+**20,146 rows, 8,499 distinct sentences, all 24 sources plus English** — it changed **nothing**, so
+the sentences the shipping path sends the translator are still the sentences those figures describe.
+That check is a re-runnable opt-in test rather than a note.
+It is German-only, so the other 23 languages' number words are untouched, and it is unconditional
+because nothing in this pipeline knows the source language — which the 25-config result is the
+argument for and not a proof, since FLEURS is written prose and ASR output is not.
+
+**And the repair is now measured to help, on the corpus the cascade run produced.** The cascade arm
+above translates in Python and therefore does **not** apply the rewrite, which lives on the C# side
+in `TranslationRequest.Mark`; putting the same 347 recognised German sentences through
+`uindosill translate` produces the shipping output, and the two differ only in the path.
+`scripts/measure-cascade.py --compare-normaliser` does exactly that and wrote what follows.
+
+**chrF++ moves +0.15, from 59.30 to 59.45, and that number understates it by design.** A corpus
+metric cannot report a number error — the difference between *"in 1889"* and *"in the eighteenth
+century"* is a handful of character n-grams — which is the same reason the degenerate-repetition
+counter sits beside the score rather than inside it. **Numeral recall is the measure that can see
+it**: of the numbers the English reference carries, how many survive as digits into the hypothesis.
+Over all 347 German sentences it goes from **46 of 105 to 62 of 105**, 43.8% to 59.0%. Over the
+**17 sentences the rewrite changed** it goes from **2 of 29 to 18 of 29**, 7% to 62%.
+
+**All 17 of the changed lines carry a German compound number token**, which is what attributes the
+difference to the rewrite rather than to the port: the C# beam search's agreement with Python was
+established on FLEURS transcripts and has never been established on recogniser output, so a
+difference that landed anywhere else would have been unexplained. None did.
+
+**The failure this was built for was caught again, in the wild, and repaired.** FLEURS German
+sentence 1723 came through the recogniser as `im Jahr achtzehnhundertneunundachtzig`; without the
+rewrite the translator returned *"in the eighteenth century"*, with it *"in 1889"*, and the English
+reference says *"in 1889"*. That is a second instance of the 1929 failure, found rather than
+constructed, and the first evidence that the repair works on the thing it was written for.
+`neunzehnhundertsechsundsiebzig` → *1976*, `vierzigtausend` → *40,000* and `zehntausend` →
+*10,000* are the same story in the same run.
+
+**What this still does not establish.** Numeral recall is a crude measure defined in this
+repository and comparable to nothing published: it asks whether a number survived, not whether it
+landed in the right place, so a hypothesis carrying `1889` in the wrong clause scores as a hit.
+Nobody has rated the 17 changed sentences for whether every change is an improvement — three of them
+are cases where the German itself was misrecognised, and what a rewrite does to already-wrong input
+is not something a recall figure answers. It is one language of 24 and one corpus of one, and
+FLEURS is read speech, so the compound numbers in it are the easy end. And **the +0.15 does not
+touch the gate**: German's margin was +42.86 against a required +24.22, and nothing here moves a
+verdict.
+
+**The alarm is `TranslationNumerals` and it is deliberately not a metric.** If the source carries a
+numeral and the English does not, the segment is flagged — no per-language grammar, so it works for
+all 24. The English side goes through `TranscriptNormalizer`'s existing English number-word rule
+first, so a translation rendering `12` as *twelve* is not a false alarm, and separators are dropped
+on both sides so German `1.000` against English `1,000` is not one either. It is one-directional: a
+number the English *added* is not reported, because invention is a different defect and has not been
+observed.
+
+**Its rate on real recogniser output is now measured once, and it is low: 3 lines of 347.** On the
+German cascade corpus `uindosill translate` flagged lines 88, 223 and 335, naming `2335`, `22` and
+`130000`. That is 0.9%, which is the right order for something meant to be read rather than skipped
+past. **What is not measured is how many of those three are right.** Nobody has checked them against
+the audio, so the false-alarm rate is unknown — 0.9% is how often it *fires*, not how often it is
+correct to fire, and those are different numbers. One of the three is suggestive rather than
+reassuring: line 223's German was itself misrecognised, so the flag may be reporting a number the
+recogniser invented rather than one the translator lost.
 
 **What that number does not cover, and the list is longer than the number.** It is agreement on
 **FLEURS transcripts**, which are read Wikipedia-derived prose — punctuated, well formed, and
@@ -1557,22 +1738,34 @@ Anyone carrying "batching this model is six times slower" forward as a fact abou
 wrong on a GPU by about fifty times. The batch-16 CUDA figure prices a configuration nobody should
 ship, for the reason two paragraphs below.
 
-**The catalogue holds those nine files as of 2026-08-20, and nothing has installed one.** The entry
-exists now — `opus-mt-tc-bible-big-mul-en-fp32`, the manifest's first multi-file entry, nine files
-in a directory of its own with a size and a SHA-256 each, the digests taken off the bytes the gate
-was scored against and re-hashed from disk that day, totalling 1,435,604,524 B. What has still never
-happened is an install: **no multi-file entry has ever been downloaded from a real URL, and no ONNX
-model has been loaded out of a directory this installer assembled.** The entry is marked
-`"verified": false` for exactly that reason — its URL points at a release tag nobody has pushed, so
-it would 404 — and both `models list` and the Models tab paint it as unverified, which is now the
-only entry either surface has ever had to paint that way. The multi-file schema, the
-staging-directory install and the per-file pins remain code with tests behind them rather than
-experience: every one of those tests builds its own manifest against a stub HTTP handler, and one
-new test checks the shipped entry is well formed, which is a different claim from checking it
-installs. **The first real install is what will exercise the rest, and it cannot happen until an
-asset exists.** Everything measured here loaded the checkpoint from
-`runs/translation-onnx/fp32-merged` through `--translate-model-path`, which is the same nine files
-and not the same code path.
+**The catalogue holds those nine files, they are published, and one has now been installed from a
+real URL.** The entry is `opus-mt-tc-bible-big-mul-en-fp32`, the manifest's first multi-file entry,
+nine files in a directory of its own with a size and a SHA-256 each, totalling 1,435,604,524 B. Its
+digests were taken off the bytes the gate was scored against and re-hashed from disk; on 2026-08-20
+the files went to Hugging Face and **every one of the nine LFS `oid`s the repository publishes
+matched** — an LFS oid is the file's SHA-256, so the pin is attested by the repository as well as by
+the machine that built it, which no other entry here can say. `"verified": true` means both checks
+agreed, and the URLs pin the commit sha rather than `main`.
+
+**The first real multi-file install happened the same day and it worked.** `models download`
+assembled the nine in an `opus-mt-tc-bible-big-mul-en.part` staging folder, fetched, sized and
+hashed each one, renamed the folder into place, and printed all nine digests; `models verify`
+re-hashed them off disk afterwards and reported **9 of 9 files match**. So the staging-directory
+install, the per-file pins and the all-or-nothing rename are experience now rather than only tests
+against a stub HTTP handler.
+
+**And the graphs were then loaded out of that assembled directory and used.** The normaliser
+comparison above ran `uindosill translate` with no `--translate-model-path`, so the translator
+resolved through the catalogue to the store — `TranslatorFactory` refuses outright when the entry
+is not installed — and produced 347 English lines at 0.467 s each. That closes the last of it: the
+route from a pinned manifest entry to a running ONNX session has now been walked end to end, where
+before today every figure in this document reached the checkpoint through `--translate-model-path`
+against a directory the export script left behind.
+
+**What that install did not exercise is interruption.** Resume-per-file, and the guarantee that a
+crash leaves a staging folder rather than a half-installed model an engine would try to load, are
+still code with tests against a stub HTTP handler behind them: the one install that has ever run
+ran to completion.
 
 **The recorded export failure was misdiagnosed, and the correct diagnosis is cheap to act on.** It
 is not a skew between `optimum` 2.1.0 and `transformers` 4.57.6, and no pinned pair of them fixes
@@ -1716,8 +1909,9 @@ proposes FLEURS pinned by digest instead. Any FLEURS figure is a lower bound on 
 because it is read speech of Wikipedia-derived sentences and the ASR half of the cascade is
 correspondingly easy; `es_419` is its only Spanish config, so the driving case would be measured on
 one variety; and its n-way alignment across configs is asserted by its card and unverified here, so
-a harness has to check it and refuse to score on a mismatch. This project's own ASR error rate is
-measured in English only — nothing here measures WER in the other 24. COMET cannot score Maltese,
+a harness has to check it and refuse to score on a mismatch. This project's own ASR error rate was
+measured in English only until 2026-08-20; the cascade run above adds Spanish at 6.12% and German at
+9.93%, so it is **2 of 24 now and 22 still have none**. COMET cannot score Maltese,
 because the encoder underneath it was never trained on it. And no published chrF++ or BLEU for any
 candidate on FLEURS X→en at a stated signature was found, so this gate cannot be anchored to
 somebody else's number the way the DER gate is. The gate ratified on 2026-08-19 answers that by

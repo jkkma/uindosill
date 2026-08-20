@@ -113,7 +113,11 @@ Set-StrictMode -Version Latest
 $repo = Split-Path -Parent $PSScriptRoot
 
 # The four episodes the maintainer supplied on 2026-08-16, one show, filenames carrying the
-# speaker-count stratification the measurement plan asked for: nominally 2, 3, 5 and 7 voices.
+# speaker-count stratification the measurement plan asked for: 2, 3, 5 and 7 voices. Those counts
+# are the maintainer's own confirmation, given 2026-08-20 — no ad-reads and no jingle voices — and
+# not something this repository derived from the audio or from the filenames. They were "nominally"
+# until then, which is a different and weaker claim, and the 5- and 7-voice episodes are the only
+# material here that goes above the diariser's four-speaker cap.
 # They live at the Drive root rather than under the project folder, which is where they were put.
 $episodeNames = @(
     'two-hosts.mp3',

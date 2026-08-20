@@ -138,6 +138,30 @@ internal static class TranslateCommand
 
             File.WriteAllLines(destination, english, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
+            // The same flag `transcribe --translate` carries, because the failure it points at is a
+            // property of the translation and not of where the text came from. Reported per line
+            // rather than through TranslationNumerals.Describe: that names segments by timestamp,
+            // and this command's segments are one synthetic second apiece, so "[00:03]" would be a
+            // time that never existed where a line number is what the user has in front of them.
+            var lostNumbers = new List<string>();
+            for (var i = 0; i < english.Count; i++)
+            {
+                var missing = TranslationNumerals.Missing(lines[i], english[i]);
+                if (missing.Count > 0)
+                {
+                    lostNumbers.Add($"line {i + 1} ({string.Join(", ", missing)})");
+                }
+            }
+
+            if (lostNumbers.Count > 0)
+            {
+                context.WriteError(
+                    $"{stem}: {lostNumbers.Count} of {lines.Length} lines carry a number the English does not — " +
+                    string.Join("; ", lostNumbers.Take(5)) +
+                    (lostNumbers.Count > 5 ? $"; and {lostNumbers.Count - 5} more" : string.Empty) +
+                    ". A date or a quantity that changed in translation reads as confidently as one that did not.");
+            }
+
             totalLines += lines.Length;
             totalElapsed += elapsed;
 

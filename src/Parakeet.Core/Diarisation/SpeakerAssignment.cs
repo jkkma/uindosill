@@ -247,4 +247,81 @@ public static class SpeakerLabelling
             ? $"{found} speakers were labelled, which is the most this labeller can tell apart; a further voice, if there is one, has been merged into one of them."
             : null;
     }
+
+    /// <summary>
+    /// The sentence a caller owes the user <i>before</i> the run, when they have asked for more
+    /// speakers than the labeller can ever produce. Null when there is no cap, no count was asked
+    /// for, or the count is within the cap.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other half of <see cref="DescribeLimit"/>, and the half that was missing. That one fires
+    /// afterwards and reports what happened; this one fires before any audio is read and reports
+    /// what cannot happen. The difference matters because the two sentences send a reader in
+    /// opposite directions: <i>"4 speakers were labelled"</i> after a seven-voice recording reads as
+    /// a fact about the recording, and only <i>"seven was never reachable"</i> reads as a fact about
+    /// the tool. Someone who does not know the cap will believe the transcript.
+    /// </para>
+    /// <para>
+    /// It warns and does not refuse, which was decided with the maintainer on 2026-08-20. Somebody
+    /// with six speakers who knows they will get four still has a good transcript — the words are
+    /// unaffected, only the labels are capped — and blocking that run would cost them something
+    /// real to protect them from something they have just been told. It is also the house pattern:
+    /// a count that cannot be honoured is reported as ignored rather than applied.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// The sentence a caller owes the user when the recording is longer than anything this
+    /// labeller's output has been established on. Null when there is no such bound, the length is
+    /// unknown, or the file is inside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The third of these sentences, and the one measured last. <see cref="DescribeUnreachableCount"/>
+    /// is about a limit in the model's geometry; this is about where the evidence stops, which is a
+    /// property of what has been scored rather than of what the model is. On 2026-08-20 the
+    /// diariser's speaker count was measured across growing windows of this project's own podcast
+    /// material and came out right up to an hour and wrong on every file past two — while the corpus
+    /// its gate was passed on, AMI, has meetings averaging about half an hour. The gate could not
+    /// have caught it, so the honest thing is to say so where somebody transcribing a three-hour
+    /// recording will read it.
+    /// </para>
+    /// <para>
+    /// It warns and continues, for the same reason the cap does: a long recording still transcribes
+    /// correctly, and it is only the speaker labels that are unestablished.
+    /// </para>
+    /// </remarks>
+    public static string? DescribeDurationRisk(SpeakerLabellerCapabilities capabilities, TimeSpan? duration)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        if (duration is not { } length || capabilities.ReliableUpTo is not { } bound || length <= bound)
+        {
+            return null;
+        }
+
+        var who = capabilities.ModelId ?? capabilities.EngineName;
+        return $"this recording is {length.TotalMinutes:F0} minutes and {who}'s speaker labels have only been "
+            + $"established up to {bound.TotalMinutes:F0} minutes. Past that they are not known to be wrong so "
+            + "much as not known to be right: on this project's own podcast material the speaker count came out "
+            + "correct at every length up to that and wrong on every recording over two hours, where it reported "
+            + "four speakers whether there were two or seven. Treat the speaker labels on a recording this long "
+            + "as a guess; the words are unaffected.";
+    }
+
+    public static string? DescribeUnreachableCount(SpeakerLabellerCapabilities capabilities, int? requested)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        if (requested is not { } count || capabilities.MaxSpeakers is not { } max || count <= max)
+        {
+            return null;
+        }
+
+        var who = capabilities.ModelId ?? capabilities.EngineName;
+        return $"{count} speakers were asked for and {who} can tell apart at most {max}, so {count} was never "
+            + $"reachable. Voices past the {max} it finds are merged into those {max} rather than reported, and the "
+            + "speaker labels will look complete when they are not. Continuing rather than refusing: everything "
+            + "but the speaker labels is unaffected.";
+    }
 }
