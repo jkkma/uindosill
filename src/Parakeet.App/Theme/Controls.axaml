@@ -298,24 +298,73 @@
   </Style>
 
   <!-- ── Window buttons ──────────────────────────────────────────────────────────────────────
-       24px circles, 7px apart — genuinely circles rather than rounded rectangles, which is why
-       they keep their shape in a square design. Close goes red on hover with a white glyph. -->
+       A bare glyph on no ground, which is what the maintainer asked for on 2026-08-20 in place of
+       the 24px filled circles the design drew. The ground appears on hover and nowhere else, so
+       the headerbar carries no chrome until somebody reaches for it.
+
+       The button is much larger than the glyph on purpose. The circle used to be both the mark
+       and the target; without it, sizing the button to the glyph would leave an 11px thing to
+       hit. 46px wide and the full height of the bar is the target, and only the strokes are
+       visible.
+
+       Full height, and the headerbar drops its right padding to match, so the ground fills the
+       corner instead of floating in it — the top-right pixel of the window belongs to Close, which
+       is what makes it hittable by throwing the pointer at the corner.
+
+       Close takes CloseHoverBrush rather than the error colour: same family, but chosen for a fill
+       behind a white glyph rather than for small text on white. See Tokens.axaml. -->
   <Style Selector="Button.window">
-    <Setter Property="Width" Value="24" />
-    <Setter Property="Height" Value="24" />
+    <Setter Property="Width" Value="46" />
+    <!-- NaN, and it has to be said explicitly. The base Button style above sets Height="30" for
+         buttons in a row of controls; Avalonia resolves competing styles by declaration order and
+         each rule only overrides the properties it names, so leaving Height out left these 30px
+         tall and centred in a 45px bar — flush to the right edge and floating below the top one.
+         NaN is "auto", which is what lets VerticalAlignment="Stretch" actually stretch. -->
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="CornerRadius" Value="999" />
-    <Setter Property="Background" Value="{DynamicResource WindowButtonBrush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+    <!-- Its own template, for the same reason RadioButton.segment has one. Setting the hover
+         ground on Fluent's PART_ContentPresenter means competing with the Button ControlTheme's
+         own :pointerover setter for that property on that element, and these buttons lost that
+         argument and rendered no hover at all. A Border nothing else styles cannot lose it. -->
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Ground" Background="Transparent">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
-  <Style Selector="Button.window /template/ ContentPresenter">
-    <Setter Property="CornerRadius" Value="999" />
+
+  <!-- The glyph's colour lives here rather than on the elements, so the close-hover rule below has
+       something it can outrank. Written on the Path it was a local value, which beats every style
+       setter no matter the selector, and the cross stayed ink-dark on the red. -->
+  <Style Selector="Button.window Path">
+    <Setter Property="Stroke" Value="{DynamicResource InkBrush}" />
   </Style>
-  <Style Selector="Button.window:pointerover /template/ ContentPresenter">
+
+  <!-- #ECEEE9 is the palette's "window button" grey, orphaned when the filled circles were
+       dropped, and it is the right weight here: #EFF1EC is the rule you should only feel, which is
+       too faint to be the only feedback a button gives. -->
+  <Style Selector="Button.window:pointerover /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource WindowButtonBrush}" />
+  </Style>
+  <Style Selector="Button.window:pressed /template/ Border#Ground">
     <Setter Property="Background" Value="{DynamicResource RuleSeenBrush}" />
   </Style>
-  <Style Selector="Button.window.close:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource StatusErrorBrush}" />
+
+  <!-- Close is the exception that earns its colour: it is the only irreversible thing in the bar.
+       CloseHoverBrush rather than the error colour — see Tokens.axaml for why the two differ. -->
+  <Style Selector="Button.window.close:pointerover /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource CloseHoverBrush}" />
+  </Style>
+  <Style Selector="Button.window.close:pressed /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource CloseHoverBrush}" />
   </Style>
   <Style Selector="Button.window.close:pointerover Path">
     <Setter Property="Stroke" Value="{DynamicResource GroundBrush}" />

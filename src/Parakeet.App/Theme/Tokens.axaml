@@ -95,6 +95,18 @@
   <SolidColorBrush x:Key="StatusErrorBrush" Color="#B84E45" />
   <SolidColorBrush x:Key="StatusVerifiedBrush" Color="{StaticResource Matcha700}" />
 
+  <!-- Close, hovered. A separate token from the error colour rather than a reuse of it, because
+       the two have opposite requirements. StatusError is small dark text on white, and being dark
+       enough for that costs saturation: at chroma 0.139 it is the least saturated red in the
+       system, which is invisible in a line of text and reads as brown across a whole button.
+       This one sits behind a white glyph, where the requirement is contrast with white and
+       enough chroma to read as red — 5.66:1 and chroma 0.191, so it beats StatusError on both
+       counts rather than trading one for the other. Hue is 30.1 against 27.3; same family.
+
+       It has exactly one use. A second one means this is drifting into a general-purpose red, and
+       the system already has one of those. -->
+  <SolidColorBrush x:Key="CloseHoverBrush" Color="#C42B1C" />
+
   <!-- The warning panel's ground and edge, the one tinted surface that is neither accent. -->
   <SolidColorBrush x:Key="WarningPanelBrush" Color="#FCF8EF" />
   <SolidColorBrush x:Key="WarningPanelEdgeBrush" Color="#EFE2C7" />
