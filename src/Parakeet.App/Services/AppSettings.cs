@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Parakeet.Core.Models;
+using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.Services;
 
@@ -12,6 +13,19 @@ public sealed record AppSettings
     /// <c>docs/PHASES.md</c> decision 4, and the README says so where a user will read it.
     /// </summary>
     public bool CheckForUpdatesOnLaunch { get; init; } = true;
+
+    /// <summary>
+    /// The compute backend the user last chose, or null when they never have.
+    /// </summary>
+    /// <remarks>
+    /// Null is not a synonym for CPU or for Vulkan — it means "nobody has said", which is what lets
+    /// <see cref="Parakeet.App.ViewModels.MainWindowViewModel"/> pick the best backend actually
+    /// present on disk instead. A stored value always wins over that, including when it is the
+    /// slower one: someone who selected CPU because the GPU path misbehaves on their machine has
+    /// said something, and having the application quietly reinstate the GPU on the next launch
+    /// would be the setting mattering least exactly when it matters most.
+    /// </remarks>
+    public ComputeBackend? Backend { get; init; }
 
     public static AppSettings Default { get; } = new();
 }
@@ -63,6 +77,7 @@ public sealed class AppSettingsStore
             return new AppSettings
             {
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
+                Backend = ReadBackend(root),
             };
         }
 #pragma warning disable CA1031 // Any unreadable file means "as shipped", never a failure to start.
@@ -71,6 +86,22 @@ public sealed class AppSettingsStore
         {
             return AppSettings.Default;
         }
+    }
+
+    /// <summary>
+    /// Reads the file, applies <paramref name="change"/> to it, and writes it back.
+    /// </summary>
+    /// <remarks>
+    /// The only way callers should write a single setting, and the reason is a bug this file
+    /// invited the moment it held more than one: <c>Save(new AppSettings { OneField = value })</c>
+    /// compiles, reads correctly, and silently resets every other field to its default. Both
+    /// call sites did exactly that when there was only one setting and it was harmless. Take the
+    /// current settings and modify them, and it cannot happen.
+    /// </remarks>
+    public bool Update(Func<AppSettings, AppSettings> change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        return Save(change(Load()));
     }
 
     /// <summary>Returns false when the file could not be written; the caller carries on regardless.</summary>
@@ -86,10 +117,22 @@ public sealed class AppSettingsStore
                 Directory.CreateDirectory(directory);
             }
 
-            var json = JsonSerializer.Serialize(new Dictionary<string, bool>(StringComparer.Ordinal)
+            var values = new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["checkForUpdatesOnLaunch"] = settings.CheckForUpdatesOnLaunch,
-            });
+            };
+
+            // Omitted rather than written as null when nobody has chosen, so "never chosen" and
+            // "chosen and then unset" are the same file rather than two shapes Load has to agree
+            // about. Written as the name, never the enum's number: the numbers are an
+            // implementation detail, and reordering the enum would silently turn one user's saved
+            // CUDA into Vulkan.
+            if (settings.Backend is { } backend)
+            {
+                values["backend"] = backend.ToString().ToLowerInvariant();
+            }
+
+            var json = JsonSerializer.Serialize(values);
 
             // Written beside the target and moved into place, rather than over it.
             // File.WriteAllText truncates first, so a process that dies between the truncate and the
@@ -107,6 +150,32 @@ public sealed class AppSettingsStore
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The stored backend name, or null for absent, unreadable or unrecognised.
+    /// </summary>
+    /// <remarks>
+    /// An unknown name — a future backend read by an older build, or a hand-edited file — becomes
+    /// null and therefore "pick the best one present", rather than throwing or defaulting to CPU.
+    /// Same rule as the rest of this file: an unreadable setting degrades to as-shipped.
+    /// </remarks>
+    private static ComputeBackend? ReadBackend(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("backend", out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return value.GetString()?.Trim().ToLowerInvariant() switch
+        {
+            "cpu" => ComputeBackend.Cpu,
+            "vulkan" => ComputeBackend.Vulkan,
+            "cuda" => ComputeBackend.Cuda,
+            _ => null,
+        };
     }
 
     private static bool ReadBool(JsonElement root, string name, bool fallback) =>

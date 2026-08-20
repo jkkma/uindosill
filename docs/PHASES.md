@@ -41,8 +41,8 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 605 tests, no weights, no display, no network. One of them — the Media Foundation
-extension list — is Windows-only and skips itself here, so a Linux run reports 604 passed and
+**Status:** met. 619 tests, no weights, no display, no network. One of them — the Media Foundation
+extension list — is Windows-only and skips itself here, so a Linux run reports 618 passed and
 1 skipped.
 
 ## Phase 2 — engine — **DONE**
@@ -718,6 +718,40 @@ defaults to batch 1.
 
 Nothing has been scored, no margin has been ratified, and the human adequacy sheet has no rows in it
 yet. `docs/UNPROVEN.md` § *Translating into English* carries the floors and everything still open.
+
+### Built 2026-08-20 — the backend the application starts on
+
+**Two defects with one shape: the fastest tier a user had was never the one they got.** The window
+defaulted to `ComputeBackend.Vulkan` unconditionally and persisted nothing, so the CUDA channel —
+818 MB against the default channel's 82 MB, chosen deliberately — started on Vulkan every time, and
+a user who noticed had to change the dropdown on every launch. Against the desktop's measured tiers
+that is RTF 0.0110 where 0.0064 was available, given away twice over.
+
+**The default now comes from what is on disk, which is the honest signal.** `cuda` is a directory
+the default channel does not ship, so its presence means somebody went and got it —
+`ParakeetNativeLibrary.BackendsPresentOnDisk` answers that as the file-system question it is,
+sharing the loader's own root list so the two cannot disagree about where a backend lives. CUDA
+outranks Vulkan outranks CPU, and nothing on disk still means Vulkan, which is what a build from
+source with no vendored natives should say. Reading Velopack's channel name was the alternative and
+answers a different question — how the application was packaged, rather than what it can reach.
+
+**The choice is remembered, and a stored choice always wins**, including when it is the slower one:
+somebody who picked CPU because the GPU path misbehaves has said something, and reinstating the GPU
+under them would be the setting mattering least exactly when it matters most. Reading a default is
+not choosing one, so construction writes no file — otherwise the pick would harden into a stored
+choice and overrule a later release that picks better.
+
+Two things that fell out of it. `AppSettingsStore.Update` exists because the moment the file held
+more than one setting, `Save(new AppSettings { OneField = value })` silently reset the others — both
+call sites did exactly that while it was harmless, and now neither can. And the loader's rule that a
+CUDA request falls back to CPU rather than Vulkan was written when asking for CUDA was always
+deliberate; now that it can be a default, a machine with the CUDA drop and no working driver lands
+on CPU for one launch. The Models tab already names that fallback in a warning, and the choice made
+instead is kept, so it is visible and it is once.
+
+**The CLI still defaults to Vulkan and was deliberately left alone.** Its default is scriptable
+behaviour that `docs/MODELS.md` and `--help` both describe, and changing it silently would be a
+different kind of change from picking a better default for a window with a dropdown in it.
 
 ## The honest summary
 
