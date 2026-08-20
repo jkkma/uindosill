@@ -1398,8 +1398,17 @@ That is one corpus and one metric, and it does not establish *why* — but a lan
 data was thin on scoring worst is the outcome that absence predicts, and it was written down before
 the score existed.
 
-**Criterion two has a sheet and no ratings.** `--adequacy-sheet` wrote **60 Spanish rows** — source,
-model output and FLEURS reference side by side — and they are a person's job. **The 32-sentence
+**Criterion two has a sheet, no ratings, and nobody scheduled to write any.** `--adequacy-sheet`
+wrote **60 Spanish rows** — source, model output and FLEURS reference side by side — and the
+maintainer declined to rate them on 2026-08-20. That is recorded as the state it is rather than left
+looking pending: the sheet exists, it is 30 minutes of work, and **it is not queued to anybody**.
+**So the gate is not passed.** Criterion one clears in 23 of 24 languages, the collapse ceiling
+clears, and criterion two is unperformed — which is not the same as failed and is not the same as
+met. Anyone reading a chrF++ table here and concluding the translation gate holds is reading two
+thirds of it. What the missing third would have caught is the one thing no metric here looks at:
+whether the English carries what the Spanish said, judged by somebody who can read both — and the
+adjacent failure mode the spike found, output that is fluent German rather than English at all,
+which chrF++ against an English reference scores as merely bad rather than as wrong. **The 32-sentence
 Spanish shakedown slice that used to be recorded here is superseded**: Spanish over the full split
 scores **56.17** against its 21.40 floor, where the subsample said 53.78 against 20.80.
 
