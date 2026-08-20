@@ -60,14 +60,17 @@ internal static class LabellerFactory
         if (options.SpeakerCount is { } count && !labeller.Capabilities.SupportsFixedSpeakerCount)
         {
             context.WriteError(
-                $"--speaker-count {count} was given but this labeller decides the count itself; the value is ignored.");
+                $"--speaker-count {count}: this labeller estimates the count itself and cannot be told one, so its " +
+                $"labels are folded down to {count} afterwards, merging the pair that talk over each other least. " +
+                "If it finds that many or fewer, nothing is merged.");
         }
 
-        // The second, and the one that changes what a user does next. "The value is ignored" is true
-        // and reads as harmless — nothing was applied, so presumably nothing was lost. It does not
-        // say that the number asked for was never on offer. This does, before a byte of audio is
-        // read, because after the run the only thing left to say is DescribeLimit's "4 speakers were
-        // labelled", which reads as a fact about the recording rather than about the tool.
+        // The second, and the one that changes what a user does next. The line above now promises a
+        // fold down to the count, and for a count ABOVE the cap that promise cannot be kept: the
+        // labeller never produces more than four labels, so there is nothing to fold and nothing
+        // said would tell the user that seven was never on offer. This says it, before a byte of
+        // audio is read — because after the run the only thing left to say is DescribeLimit's
+        // "4 speakers were labelled", which reads as a fact about the recording rather than the tool.
         if (SpeakerLabelling.DescribeUnreachableCount(labeller.Capabilities, options.SpeakerCount) is { } unreachable)
         {
             context.WriteError($"WARNING: {unreachable}");

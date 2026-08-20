@@ -135,8 +135,30 @@ internal static class DiariseCommand
                 context.WriteError($"WARNING: {stem}: {longRun}");
             }
 
-            var turns = await labeller.LabelAsync(audio, options, progress: null, ct).ConfigureAwait(false);
+            var raw = await labeller.LabelAsync(audio, options, progress: null, ct).ConfigureAwait(false);
             var elapsed = Stopwatch.GetElapsedTime(started);
+
+            // Same repair as `transcribe --speakers`, which gets it inside SpeakerLabelling.LabelAsync.
+            // This command drives the labeller directly, so it applies it here rather than inheriting
+            // it, and says what it did: a merge the user's own flag asked for is not a silent one.
+            IReadOnlyList<string> merges = [];
+            var turns = options.SpeakerCount is { } wanted
+                ? SpeakerTurns.FoldDownTo(raw, wanted, out merges)
+                : raw;
+
+            foreach (var merge in merges)
+            {
+                context.WriteError($"{stem}: merged {merge}.");
+            }
+
+            if (merges.Count > 0)
+            {
+                context.WriteError(
+                    $"{stem}: folded to the {SpeakerTurns.Speakers(turns).Count} speakers you asked for. The margin " +
+                    "is the evidence, not the raw seconds: two hosts of a long recording overlap for minutes however " +
+                    "you cut them, so what matters is how far behind the next-closest pair was. A merge with little " +
+                    "or no margin means the count you gave has probably put two people under one name.");
+            }
 
             File.WriteAllText(destination, RttmFile.Write(turns, stem), System.Text.Encoding.UTF8);
 

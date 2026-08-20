@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 744 tests, no weights, no display, no network — **735 passed and 9 skipped**, and
+**Status:** met. 751 tests, no weights, no display, no network — **742 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
@@ -1094,6 +1094,32 @@ and it is a different kind of limit from `MaxSpeakers`: the cap is architectural
 running anything; this is empirical, and it is where the evidence stops. Past it the labels are not
 known to be wrong so much as not known to be right, which is the distinction the sentence has to
 carry. It warns and continues, `diarise` and `transcribe --speakers`, before a sample is decoded.
+
+**And then it was fixed, by repairing the output rather than re-running it.** The cause is in the
+geometry: the speaker cache is 188 encoder frames — 15.0 s in total, **3.52 s per speaker** — and the
+ONNX graph takes it as an input and never updates it, so a speaker's identity is 3.5 seconds of
+recent audio with no long-term anchor. That is the streaming design, and this project's port of the
+eviction is fixture-validated against NVIDIA's own function, so the repair had to go around it.
+
+**Windowing was tried first and is rejected on a number.** Eight-minute windows with two minutes of
+overlap, linked by matching labels on the overlap where the same audio is labelled twice: 26 of 30
+windows are internally correct, and scored on AMI dev the stitched result is **DER 23.53% against
+8.62%**. Missed speech and false alarm barely move; **confusion goes from 0.94% to 15.76%**, because
+one bad junction relabels everything after it.
+
+**`SpeakerTurns.FoldDownTo` ships instead.** The failure is always over-segmentation, which is the
+repairable direction — two labels merge, one label cannot be split into two people — so the labels
+are folded down to the count the user asked for by repeatedly merging the pair that talk over each
+other least. It is **a no-op on all 18 AMI dev meetings**, which is what lets it ship against a
+passed gate and is exactly what windowing could not offer.
+
+**It never fires unasked, and that is measured.** An automatic version would merge two *genuinely
+different* AMI speakers in `IS1008a`, whose least-colliding pair overlaps by 0.0 s across the whole
+meeting — one in eighteen. So the fold requires an explicit `--speaker-count`, and **that flag stops
+being ignored**: it becomes the cap the transcript is folded to, which is the rule already written
+down here for channel merging — the user's count wins, and it is recorded that it was forced. Each
+merge prints the seconds the pair overlapped *and how far behind the next-closest pair was*, because
+on a three-hour recording the raw seconds mislead and the margin is the evidence.
 
 **`docs/UNPROVEN.md` has the ladder, the shares and everything this does not establish** — no DER on
 any podcast, one show, the counts on the maintainer's word, and no root cause.
