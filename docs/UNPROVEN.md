@@ -1056,7 +1056,10 @@ else, so a change that passes the suite has not been shown to preserve the DER.
 on the desktop, against the Python's **74x** on the same machine and the same thread count — about
 **12% slower, and nothing here says why.** The mel featurizer is a plain scalar implementation where
 NumPy's is vectorised, and the two spend different amounts of time outside ONNX Runtime, but neither
-was profiled. Peak working set **1 261 MB**, measured on a 34-minute meeting in a single process;
+was profiled. **Both figures were re-measured on 2026-08-20 and both held** — 67x and 76.6x over the
+same 16 meetings, the same 12.5% gap, with the DER identical to four decimal places; that run is in
+§ *The execution provider changes the diariser's answer* below, which is also where the same graph's
+GPU figure now sits. Peak working set **1 261 MB**, measured on a 34-minute meeting in a single process;
 for scale the spike measured a bare ONNX Runtime session at 1 315 MB in steady state and the export's
 README states a 1 251 MB peak, so the footprint is the graph's rather than the host's. **Turning the
 ONNX Runtime memory arena off is the documented lever against that number and it has not been
@@ -1087,6 +1090,73 @@ interrupted download, or about any other machine.
 free, time-stamped, human-labelled material for meetings and for web video, and none for podcasts.
 So the labelling effort per stretch remains unmeasured, no podcast DER of anything exists, and the
 only podcast reference this project will ever have is the one it labels itself.
+
+### The execution provider changes the diariser's answer — measured 2026-08-20
+
+**A CUDA build of ONNX Runtime runs this graph 21.8x faster and does not produce the same
+diarisation.** Both halves of that are measured, on the desktop, against the 16 AMI test meetings,
+with one thing changed: the same Python driver, the same `onnxruntime-gpu` 1.29.0 install, the same
+mel featurizer and NVIDIA's own speaker cache on CPU torch in both arms, and only the
+`InferenceSession` provider list swapped. Nothing in the product moved —
+`Microsoft.ML.OnnxRuntime` 1.29.0 is still pinned and `Directory.Packages.props` is untouched.
+
+**The speed.** 9.062 h of audio: **76.6x realtime on the CPU EP and 1230.9x on the CUDA EP** for the
+whole pass, **78.1x against 1705.7x** for the ONNX graph alone. The two ratios differ because the
+featurizer and the cache stay on the CPU, so once the graph is 22x faster the featurizer is what is
+left. The shipping C# path, `uindosill diarise --threads 12`, measures **67x** over the same audio —
+9.06 h in 8.2 min — which is the number every claim below is relative to, and which confirms the
+**65x** already recorded above rather than replacing it. Per file it runs 57–58x for the first two
+meetings and 69x thereafter, so a one-file figure is a cold-cache figure.
+
+**The GPU demonstrably ran, which is checked rather than assumed** — a silent per-operator CPU
+fallback would look exactly like a GPU that is not much faster. Counted out of ONNX Runtime's own
+profile JSON, per node: **5,601 nodes on `CUDAExecutionProvider` and 3 on `CPUExecutionProvider`**,
+the three being shape operators ORT always places there. **sm_120 cost almost nothing and is not
+free of PTX**: the provider DLL's newest embedded PTX target is `sm_90` — `.target sm_70/75/80/86/89/90`
+and no `sm_120` — and one 5,406-byte entry appeared in the driver's compute cache at the minute the
+first CUDA session was built, so at least one module was JIT-compiled forward. What it cost is the
+part that matters: **session build 0.72 s against the CPU's 0.63 s**, first inference 0.088 s against
+1.431 s. Whether the rest came from `sm_120` cubins is **not established** — there is no CUDA
+toolkit here to dump the fatbins. **VRAM is about 1,385 MiB**, from adapter memory sampled at 100 ms
+across a full run (1,355 MiB idle to 2,740 MiB peak); that is a whole-adapter delta with other
+applications resident, because `nvidia-smi` returns `[N/A]` for per-process memory under WDDM.
+
+**The answer moves, and by far more than any port difference.** Post-processing is the dev-chosen
+configuration applied to both arms unchanged. **Zero of sixteen meetings produced identical
+probabilities**; the largest probability difference is **0.964**, and 0.57% of binarised
+frame-speaker cells differ. Pooled: **DER at collar 0 is 16.3324% on the CPU EP and 15.7062% on
+CUDA**, 13.5964% against 12.9451% at collar 0.25, with the same speaker error 0.0625. **That
+apparent improvement is one meeting**: TS3003c goes 24.8040% to 13.6666%, an **11.14-point** swing,
+and over the other fifteen the ordering reverses — 15.7756% on the CPU against 15.8403% on CUDA, so
+CUDA is 0.0647 points *worse* everywhere else. **"CUDA is more accurate" is not a claim any of this
+supports.**
+
+**Why it can move that far was already written down here.** The arrival-order speaker cache is
+stateful, and where two frames score identically `torch.topk` leaves the order among equals
+undefined — recorded above as something no port can be held to. A different execution provider is a
+different set of floating-point reductions, a different reduction flips a tie, and a flipped tie
+hands a cache slot to the other speaker for the rest of the recording. For scale, the C#-against-
+Python port difference on the same meetings is **0.0044 points**; changing the provider is **142
+times** that.
+
+**It is not run-to-run noise.** The CUDA arm was run twice over all 16 meetings and the two are
+byte-identical in all 16, `maxAbsDiff` exactly 0.0, same DER to four decimals. CUDA computes a
+different but perfectly reproducible answer, so a GPU DER can be measured once and trusted — it
+just cannot be inherited from the CPU one.
+
+**What is still unmeasured about it.** The CUDA DER above uses **post-processing tuned on CPU
+probabilities**, which is right for a controlled comparison and wrong for a shipping configuration:
+an honest CUDA figure needs the 18-meeting dev grid re-run on CUDA probabilities and the test set
+scored once after. **DirectML was never tried, because CUDA cooperated — and DirectML is the one
+that would ship**, the product being .NET and CUDA not being the Windows GPU path for it. So every
+figure in this entry is about a provider the product would not use, and none of it transfers:
+`Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 was never installed, no C# code ran on any GPU, and the
+study that would settle it is queued in `docs/PHASES.md` § *After v1*. The longest file here is 49.5 minutes, so accumulation over hours on a GPU is untouched.
+
+**And re-running the AMI test is not expensive, which corrects an assumption rather than a
+measurement.** It costs **8.2 minutes** through the product on CPU, 7.1 through the Python driver,
+and **26 seconds** on CUDA. Whatever argues against adopting a GPU provider, the price of
+re-measuring the gate is not it.
 
 ### NPU offload — assessed 2026-08-16, nothing measured
 
@@ -1198,6 +1268,59 @@ is the same graphs with the decoder stored twice — 2166.2, 545.7 and 1068.3 Mi
 byte-identical translations to the merged one at every precision, so it costs about 800 MiB to buy
 nothing that has been measured.
 
+**There is no fp16 route, and that is the toolchain's fault rather than the model's.** Asked for on
+2026-08-20 once int8 was dropped and the middle of the size range went empty, since half precision
+reaches about the same place by a different road — a narrower float rather than a lossy quantisation
+with scales and zero points, so not the kind of change that makes a decoder loop. `fp16-merged` was
+added to the export and **it does not load.** It converts, it weighs the expected **686.4 MiB**, and
+ONNX Runtime refuses the decoder. Two independent defects, both from ONNX Runtime's own float16
+converter not accounting for the merged decoder's `If` subgraphs: it renames the `If` node's outputs
+and inserts matching casts inside each branch while leaving the branches' declared output names
+pointing at values nothing inside produces — `Subgraph output (logits) is an outer scope value being
+returned directly` — and its dead-cast pass removes an outer-graph `Cast` that a subgraph still
+consumes, so after the first is repaired the second surfaces as `Node input
+'/model/decoder/Cast_2_output_0' is not a graph input, initializer, or output of a previous node`.
+`keep_io_types=False` changes neither. **The encoder converts and loads cleanly**, 545.9 MiB to
+**260.4**, because it has no subgraphs — so an **encoder-fp16 hybrid at about 1108.9 MiB** exists,
+saving 19%, and **its quality has not been measured and it has not been run through anything**. The
+broken variant is kept in the export table rather than deleted, and every converted graph is now
+load-checked at export time, so the next person meets the failure at export rather than at scoring.
+Nothing here was tried on the split layout, whose decoders carry no `If` node and might therefore
+convert — at a layout this project measured to buy nothing for 800 MiB.
+
+**The export reproduces its byte counts on a second machine and not all of its digests.** Re-run on
+the desktop on 2026-08-20 against the same checkpoint revision, every byte count matched the
+laptop's exactly — 1,435,604,524 B over 9 files at fp32-merged, 362,749,280 B over 10 at
+int8-merged — and **eight of the nine files matched by SHA-256**, including both configs, all five
+tokenizer files and `encoder_model.onnx`. **`decoder_model_merged.onnx` did not, at identical size,
+at both precisions**: `1ff241e1…` there against `f7f63166…` here at fp32, `33dccc76…` against
+`0a36526c…` at int8. The differing file is the one optimum *merges*, and the two runs used different
+interpreters — CPython 3.14.7 there, 3.12.10 here, where the shim reports itself unnecessary and the
+export runs unmodified, which is the first confirmation that a pre-3.14 interpreter needs none.
+
+**And the interpreter is not the cause: the merged decoder export is simply not deterministic.** The
+deciding test was run the same day — `fp32-merged` exported **twice on this machine**, same
+interpreter, same cached checkpoint, minutes apart. Byte count identical both times, eight of nine
+files identical by digest, and `decoder_model_merged.onnx` different again: `f7f63166…` against
+`a2dea65e…`. Same size, different bytes, on one machine. So the laptop-against-desktop mismatch was
+never about the machines, and **the file optimum merges comes out differently every time it is
+merged.** What varies inside it was not identified — equal size with unequal bytes points at
+ordering or at names of fixed length rather than at content, and that was not chased.
+
+**That changes what the export script is for, and it is worth being exact about.** `models.json`
+pins a URL and a SHA-256 **together**, and a multi-file entry pins one per file. Eight of the nine
+files are reproducible and verifiable by anyone; the ninth is not. So the artefact is something
+**built once, uploaded, and pinned to that build** — the script records what an artefact *is* and
+lets a reader check 8/9 of it, and it does **not** let a second party rebuild a byte-identical copy.
+That is a defensible position and it is not the one two READMEs describe: `runs-laptop/README.md`
+and `translation-onnx-export-2026-08-20/README.md` both say the script reproduces every byte count
+*and digest*. Byte counts, yes. Digests, eight of nine.
+
+Nothing measured on this machine is affected — the copy that was scored reproduced the CPU reference
+on all 240 identity sentences below — but the laptop's own 44-segment smoke check has not been
+re-run against it, and **no two copies of this graph have ever been shown to translate identically**;
+what has been shown is that each copy reproduces fp32 PyTorch.
+
 **The 227.3-or-404.4 spread was the right question about the wrong object, and both ends were low.**
 Those figures count each parameter once; the ONNX export does not tie what PyTorch ties. The
 `[58434, 1024]` matrix is emitted **three times** in the merged layout — as a `Gather` table in the
@@ -1207,9 +1330,14 @@ single knob, `operators_to_quantize`: with ONNX Runtime's default dynamic set th
 quantise to UINT8 and the route is 345.9 MiB; dropping `Gather` leaves them FLOAT and the route is
 694.3 MiB. But dropping `Gather` does **not** leave "the embeddings" in fp32, because the output
 projection is a `MatMul` and quantises either way — which is why the intermediate variant is 694.3
-rather than the 404.4 an untied count predicts. **Which end ships is not decided here**: it is a
-download-size-against-quality call, the quality side of it is the paragraph below, and the export
-script deliberately produces both and picks neither.
+rather than the 404.4 an untied count predicts. **Which end ships was decided on 2026-08-20 and it
+is fp32** — `docs/PHASES.md` § *Decided 2026-08-20 — int8 is dropped*. The export script still
+produces both and still picks neither, which is right: it records what the options are, and choices
+belong where decisions are written down. **int8's chrF++ was never measured.** It was dropped on
+speed, on a silent GPU collapse and on the export smoke, with the quality run that would have priced
+it stopped in its second language. So "int8 scores worse against the gate" is not a claim this
+repository makes, and the 1023.2 MiB the decision costs every download was paid without that number
+in hand.
 
 **Half the gate is now a number, and it is the half that needed no model.** The per-language
 source-copy floor — what a hypothesis earns by echoing its untranslated source — was computed on
@@ -1228,22 +1356,82 @@ than argued. Two things about the corpus travel with these figures: Dutch has on
 shared with English where every other language has 329 or more, and the floors are scored against
 FLEURS' punctuated `raw_transcription` on both sides.
 
-**Nothing has been scored against those floors.** No hypothesis exists for any language: the model
-half of the harness is about **five hours per precision** on this laptop — 2.16 s per sentence at
-int8, beam-6 — and was not run here. So there is no chrF++ for the model, no margin, no per-language
-margin ratified, and nothing that passes or fails criterion one. Criterion two, the human adequacy
-check on Spanish → English, has no sheet to rate yet either. **One Spanish slice exists and is not a
-result**: 32 sentences scored 53.78 against that language's 20.80 floor on the same run that
-measured the rate. It is 32 sentences of one language from a harness shakedown, it moved the floor
-by 0.6 points against the full-split figure just by being a subsample, and it is recorded here so
-nobody rediscovers it later and mistakes it for a measurement.
+**Criterion one is now scored, in every language, and no margin has been ratified against it.**
+Run on the desktop's CPU on 2026-08-20 against `fp32-merged`, FLEURS `test` in full, beam-6, batch 1:
+**8,149 sentences in 1.40 h at a mean 0.618 s per sentence**, none skipped for length, chrF++ at
+`nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`.
+
+| | chrF++ | floor | margin | | chrF++ | floor | margin |
+|---|---:|---:|---:|---|---:|---:|---:|
+| bg | 62.66 | 2.13 | +60.53 | lv | 57.67 | 14.54 | +43.13 |
+| cs | 60.88 | 15.96 | +44.92 | mt | 65.22 | 19.42 | +45.80 |
+| da | 67.66 | 21.64 | +46.02 | nl | 57.53 | 22.07 | +35.46 |
+| de | 63.64 | 20.78 | +42.86 | pl | 53.47 | 15.54 | +37.93 |
+| el | 54.42 | 2.37 | +52.05 | pt | **68.52** | 21.77 | +46.75 |
+| es | 56.17 | 21.40 | +34.77 | ro | 64.52 | 21.76 | +42.76 |
+| et | 58.58 | 16.84 | +41.74 | ru | 57.61 | 2.10 | +55.51 |
+| fi | 56.67 | 15.92 | +40.75 | sk | **44.26** | 16.11 | **+28.15** |
+| fr | 63.95 | 23.10 | +40.85 | sl | 56.23 | 16.42 | +39.81 |
+| hr | 59.00 | 16.44 | +42.56 | sv | 66.43 | 20.91 | +45.52 |
+| hu | 56.75 | 15.45 | +41.30 | uk | 59.42 | 2.00 | +57.42 |
+| it | 58.06 | 22.42 | +35.64 | lt | 54.35 | 15.47 | +38.88 |
+
+**The scores are script-independent and the floors are not, which changes what a per-language margin
+is.** chrF++ into English lands between 44.26 and 68.52 whatever the source script, while the floors
+run 2.00 to 23.10 — so `margin = score − floor` is a roughly constant number minus a floor that
+varies 11.5x, and a table of 24 margins is a **single absolute bar in disguise**. That is worth
+knowing before anybody ratifies 24 numbers believing they are making 24 decisions.
+
+**Slovak is the outlier and the record predicted it.** 44.26 against a next-lowest 53.47, nine
+points clear of the pack, on a language this entry already noted has **no row on the sibling
+`opus-mt-mul-en` card's Tatoeba table, consistent with its absence from that card's source list**.
+That is one corpus and one metric, and it does not establish *why* — but a language the training
+data was thin on scoring worst is the outcome that absence predicts, and it was written down before
+the score existed.
+
+**Criterion two has a sheet and no ratings.** `--adequacy-sheet` wrote **60 Spanish rows** — source,
+model output and FLEURS reference side by side — and they are a person's job. **The 32-sentence
+Spanish shakedown slice that used to be recorded here is superseded**: Spanish over the full split
+scores **56.17** against its 21.40 floor, where the subsample said 53.78 against 20.80.
+
+**The 2026-08-19 spike's `int8` figures were never turned into a score.** int8 was dropped on
+2026-08-20 before its quality run reached a second language, so no chrF++ exists for it — see
+*Which end ships* above.
+
+**fp32 collapsed nowhere in 8,149 sentences, and the 31 things the detector flagged are a different
+defect wearing the same shape.** The harness counts degenerate repetitions beside the score because
+chrF++ cannot report one — a single collapsed sentence among three hundred moves a corpus figure by
+a fraction of a point. It flagged **31 of 8,149, 0.38%**, concentrated in Maltese (**17 of 348, 4.9%**)
+and Greek (5). **Every one of the 31 is a run of trailing punctuation** — `Wild children may have
+experienced child abuse or severe trauma before they have been abandoned or evicted. . . . . . .` —
+and **not one is the semantic collapse the detector was calibrated on**, the int8
+`...Genocococococeaea` the export found. Those are two failures: one is a decoder that has finished
+translating and will not stop emitting, the other is a decoder that has lost the sentence. The first
+would look broken in a subtitle and costs no meaning; the second costs the meaning. **So the honest
+statement is that fp32 produced zero collapses and 31 punctuation runs**, and the detector's own
+guard is why they were counted together — it skips a repeated chunk that is all one character from
+`" .-\n"`, which catches `"..."` and misses `". "`, two characters. Both counts are worth having and
+they should not share a column, so as of the same day the harness reports them as two —
+`collapse` and `punctuationRun`, with `kind` on every row of `degenerate.jsonl`. **The run's own
+`summary.md` predates that split** and reports the combined 31; the split above was computed from
+that run's saved per-sentence hypotheses, which carry the repeated unit, and it is a relabelling of
+the same 31 rather than a second measurement.
 
 **Batching this model on a CPU is six times slower than not batching, which is the opposite of the
 usual.** The same 32 Spanish sentences took 12.75 s each at batch 16 and 2.16 s each at batch 1. A
 padded beam-search batch decodes until every member finishes, so one long sentence holds up fifteen
 short ones while beam-6 keeps 96 sequences in flight. The harness defaults to batch 1 because of
-that measurement; it is a laptop-CPU figure and has not been checked on the desktop or on any GPU
-execution provider.
+that measurement.
+
+**It reproduces on the desktop, slightly worse, and it inverts on a GPU.** Same protocol, same 32
+sentences, `int8-merged`, beam-6, on the desktop's CPU: **1.279 s at batch 1, 2.348 at 4, 3.897 at 8
+and 8.949 at 16** — a factor of **7.0** the wrong way against the laptop's 5.9. So batch 1 is the
+right default on two CPUs rather than one. But it is a **property of the CPU, not of the model**: on
+the CUDA EP the same padded batch runs **0.163 s per sentence at batch 1 and 0.021 at batch 16**,
+7.8x *faster* for batching, because the lanes a padded batch wastes are lanes a GPU had anyway.
+Anyone carrying "batching this model is six times slower" forward as a fact about the model will be
+wrong on a GPU by about fifty times. The batch-16 CUDA figure prices a configuration nobody should
+ship, for the reason two paragraphs below.
 
 **The catalogue can hold those nine files as of 2026-08-20, and nothing has installed one.** The
 multi-file schema, the staging-directory install and the per-file pins are code with twenty-four
@@ -1305,6 +1493,56 @@ MIGraphX, Vitis AI, WebGPU and others, and no Vulkan — but the conclusion draw
 package lags the one it would replace — `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 against the
 pinned `Microsoft.ML.OnnxRuntime` 1.29.0 (`Directory.Packages.props:47`) — and the two are
 alternative builds of a single native library, so adopting it moves the diariser onto it as well.
+
+**The desktop's fp32-against-int8 gap is 2.1x on Spanish, and it grows to 8.3x on longer decodes.**
+Same beam-6 decode, 32 FLEURS Spanish sentences, batch 1, on the desktop's CPU: `fp32-merged`
+**0.602 s per sentence** against `int8-merged` **1.279**. The laptop's 9% and that are not the same
+measurement — the laptop timed 44 recorded ASR segments — but a factor of two does not come out of a
+corpus change. **And 2.1x is the flattering end of it.** Both precisions were then started on the
+full FLEURS run, which sorts by length, and the cumulative rate was read off at matched indices in
+the same language (Bulgarian, the first scored):
+
+| sentences in | int8 s/sentence | fp32 s/sentence | ratio |
+|---:|---:|---:|---:|
+| 100 / 344 | 1.73 | 0.41 | 4.2x |
+| 150 / 344 | 2.90 | 0.44 | 6.6x |
+| 200 / 344 | 3.49 | 0.47 | 7.4x |
+| 239 / 344 | 4.07 | 0.49 | 8.3x |
+
+**The gap widens with decode length**, which is what a per-step cost looks like: dynamic
+quantisation re-quantises activations on every decoder step, beam-6 takes one set of steps per
+output token, and a Cyrillic source takes more tokens than a Spanish one. Those are cumulative
+averages over a length-sorted run, so the marginal ratio at the long end is steeper still. The int8
+column stops at 239 because that run was stopped there when the precision was dropped; the numbers
+above are what it had produced by then, on the same machine, corpus, ordering and code as the fp32
+column beside it.
+
+**On CUDA, int8 does not merely lose — it produces gibberish, and says nothing.** `int8-merged`
+through the CUDA EP returned **0 of 32 sentences matching the CPU**, none of them empty:
+`These couples may choose to plan the adoption of a baby` came back as `The so for`, and another
+sentence as a run of German function words and punctuation. No exception, no warning that the
+results were wrong — the only signal was a throughput too good to be true, 0.033 s per sentence at
+batch 16, which is the decoder giving up rather than the GPU being quick. The suspect is the
+dynamic-quantisation operator set under the merged decoder's `If` node on that provider; it was
+**not root-caused**, because what decides anything is that the cheap artefact does not run correctly
+there. This is the same shape as the ASR's silent int8 collapse, and the reason a speed figure
+without an identity check beside it is not evidence.
+
+**`fp32-merged` on CUDA is string-identical to the CPU, and its speed-up is 1.2x to 1.5x once it is
+configured so it does not crash.** Identity first: **240 of 240 sentences matched** — 60 each of
+Spanish, German, Russian and Greek, chosen to span Latin, Cyrillic and Greek script, beam-6, batch 1.
+So unlike the diariser, a GPU-produced hypothesis set for this component *could* stand in for a
+CPU-produced one. The speed is the disappointment. With IO binding on, where the KV cache stays on
+the device between decode steps, it is 0.163 s per sentence against the CPU's 0.602 — and it
+**crashes**, input-dependently, inside optimum rather than ORT: `the output OrtValue provided for
+output 'present.0.decoder.key' of node 'optimum::if' (If) has shape {6,16,22,64} but the computed
+output shape for this run is {6,16,1,64}`, a pre-allocated buffer whose shape went stale across the
+merged decoder's branch. It completed 32 Spanish, 60 German and 60 Russian and failed on 60 Spanish
+and 60 Greek, so it is the sequence of lengths rather than the language. With IO binding off — the
+only configuration that survives every input — the cache round-trips through host memory each step
+and the margin is **1.54x on Spanish, 1.53x German, 1.41x Russian, 1.24x Greek**. That is what a
+second native stack and a driver dependency would buy, for a component that is one of two sharing
+the native it would replace.
 
 **The encoder's position limit is settled, and it was never the largest gap.** The recommended
 checkpoint's `config.json` sets `max_position_embeddings` to **1024**, not the 512 the study carried

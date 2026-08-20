@@ -624,12 +624,14 @@ byte-identical translations to split at every precision tested and stores the de
 is about 800 MiB of fp32 the split layout spends on nothing measurable. Past-key-values are exposed
 in both, so beam search is not foreclosed.
 
-**Both ends of the download decision are measured and neither is picked here.** The int8 route is
+**Both ends of the download decision are measured and the script picks neither.** The int8 route is
 345.9 MiB with ONNX Runtime's default dynamic operator set and 694.3 MiB with `Gather` dropped from
 it, against 1369.1 MiB at fp32 — merged layout, whole directory, tokenizer included. Those replace
 the 227.3-and-404.4 spread, which counted each parameter once; the export unties what the checkpoint
-ties, so the vocabulary matrix is stored three times. Which one ships is a download-size-against-
-quality call and it is the maintainer's, so the script produces both.
+ties, so the vocabulary matrix is stored three times. Which one ships was the maintainer's call and
+was taken on 2026-08-20 — see *Decided 2026-08-20 — int8 is dropped* below — but it is taken there
+and not here, and the script still produces both, because what an export tool records is what the
+options were.
 
 **The export reproduces fp32 PyTorch exactly; int8 does not, and one segment in 44 collapses.** At
 fp32 every one of the 44 real segments the 2026-08-19 spike recorded at beam-6 came back
@@ -760,6 +762,125 @@ other warnings, names both backends, and points at `--backend vulkan` when CUDA 
 because the loader's chain skips Vulkan on purpose. `--backend vulkan` pins the old behaviour
 exactly.
 
+### Measured 2026-08-20 — the GPU priced against the CPU, and neither component takes it
+
+**Two of the three model components run on ONNX Runtime and neither had ever been run on a GPU.**
+Both now have been, in Python outside the working tree, with one thing changed per arm — the
+`InferenceSession` provider list — and with the diariser's two arms sharing a single
+`onnxruntime-gpu` install so that even the binary is held constant. **Nothing shipped moved:**
+`Microsoft.ML.OnnxRuntime` 1.29.0 is still pinned, `Directory.Packages.props` is untouched, and no
+figure here came out of code the product carries. The study is in the dated folder
+`execution-providers-2026-08-20` on the maintainer's Drive, per `CLAUDE.md`.
+
+**The instinct behind the ask was that the GPU should win everywhere and the CPU should be the
+fallback. It was tested rather than implemented, and it does not survive either component — for
+opposite reasons.**
+
+**The diariser is 21.8x faster on CUDA and gives a different answer.** Over 9.062 h of AMI test
+audio: 76.6x realtime on the CPU execution provider against **1230.9x** on CUDA for the whole pass,
+78.1x against **1705.7x** for the graph alone, the gap between those two being the mel featurizer,
+which stays on the CPU in both arms. The GPU demonstrably ran — 5,601 of 5,604 nodes on
+`CUDAExecutionProvider`, counted out of ORT's own profile rather than read off the requested list —
+and sm_120 cost 0.72 s of session build against the CPU's 0.63 s. **But zero of sixteen meetings
+produced identical probabilities**, the largest difference being 0.964, and pooled DER at collar 0
+moves from 16.3324% to 15.7062%. That apparent gain is **one meeting**: TS3003c swings 11.14 points,
+and over the other fifteen CUDA is 0.0647 points *worse*. The cause is already in the record — the
+arrival-order speaker cache is stateful and `torch.topk` leaves ties among equals undefined, so a
+different set of floating-point reductions hands a cache slot to a different speaker for the rest of
+a recording. For scale, the C#-against-Python port difference is 0.0044 points; the provider is 142
+times that. CUDA is bit-exactly reproducible against itself across two full runs, so the difference
+is fixed rather than noisy: a GPU DER can be measured once and trusted, and cannot be inherited.
+
+**The translator is the mirror image — identical output, and almost no speed.** `fp32-merged` on
+CUDA returned **240 of 240 sentences string-identical** to the CPU across Latin, Cyrillic and Greek
+script, so here a GPU-produced result *could* stand in for a CPU one. What it buys is **1.2x to
+1.5x** in the only configuration that survives every input; with IO binding on it is 3.7x and
+crashes input-dependently inside optimum on a stale pre-allocated KV buffer.
+
+**So v1 stays on the pinned CPU build, and the decision of 2026-08-19 is now measured rather than
+argued.** It was taken then on the strength of a package version —
+`Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 lagging 1.29.0 — and it holds for a better reason: the
+component with a real speed-up is the one whose accuracy claim the provider moves, and the component
+whose output survives the move is the one with nothing to gain. **What would revisit it** is
+re-running the diariser's 18-meeting dev grid on CUDA probabilities and scoring test once after; at
+26 seconds a pass that costs an afternoon of somebody's attention rather than a machine's, and it is
+the right first item *after* v1.0 rather than before. **Re-running the AMI test is not the expensive
+part**, which corrects an assumption rather than a measurement: 8.2 minutes through the product on
+CPU, 7.1 through the Python driver, 26 seconds on CUDA.
+
+**And no real-time factor from this project gets quoted without its execution provider beside it.**
+There are now two providers for one graph with an order of magnitude between them, and a bare "65x"
+no longer identifies a measurement.
+
+### Proposed 2026-08-20 — the per-language margins, and the one language the choice turns on
+
+**Not ratified. The gate reserves the margin for the maintainer and this is a proposal**, written by
+a session that has seen the scores, so it is anchored on quantities that do not depend on them and
+says where judgement has to enter. It is in `execution-providers-2026-08-20` on the Drive with the
+arithmetic; the shape and the consequence are here because the consequence is a decision.
+
+**The floor is cleared everywhere by 32 to 83 standard deviations, so anchoring the margin on
+corpus noise binds on nothing.** Bootstrapping the sentence pairs 200 times per language — the
+*difference* between score and floor, since the two are computed on the same sentences and are
+correlated — puts the corpus's resolution at **0.6 to 1.0 chrF++ points** against margins of 28 to
+60. The gate as literally written is therefore a **liveness check**: it asks whether the model beat
+echoing its own source, and the answer is yes everywhere, decisively. A quality bar has to come from
+somewhere else.
+
+**A table of 24 margins is one decision wearing 24 hats.** chrF++ into English is
+script-independent — 44.26 to 68.52 — while the floors are almost entirely script — 2.00 to 23.10.
+So `margin = score − floor` is a near-constant minus a floor that varies 11.5x, and the proposal is
+to say so: **margin_L = B − floor_L for a single absolute bar B**, plus a 3-standard-deviation sanity
+floor that currently binds on nothing. That keeps the gate's letter — the margin is fixed per
+language and differs in each — while making the thing under discussion a number a person can hold.
+
+**And choosing B is very nearly choosing whether Slovak ships.** Slovak scores **44.26** against a
+next-worst 53.47, a nine-point gap, so **every B between 44.26 and 53.47 fails exactly one
+language**. The record predicted it: `docs/UNPROVEN.md` already noted Slovak has no row on the
+sibling card's Tatoeba table, consistent with its absence from that card's source list. What makes
+it awkward is the **one-checkbox design** — this pipeline cannot detect the source language, and the
+translator is many-to-one, so there is no control to withhold one language with. Failing Slovak
+cannot mean "do not translate Slovak"; it can only mean "do not ship the feature" or "ship it and
+say so in the text".
+
+**Recommended, and marked as a recommendation: B = 45, Slovak documented rather than blocking the
+release.** A bar should be one you would notice falling below; 40 certifies whatever it is shown and
+54 describes this checkpoint rather than setting a standard. 45 sits just above the observed worst,
+which makes it a bar this model **fails in one language of 24** — and a gate nothing can fail has
+told you nothing. **B = 44 is the alternative on which everything passes**, and it should be taken
+knowing it was chosen to be passed.
+
+### Decided 2026-08-20 — int8 is dropped, and fp32-merged is what ships
+
+**The precision question closed the day it stopped being close.** `int8-merged` was the 345.9 MiB
+end of a download-size-against-quality call that the export deliberately left open. Three
+measurements taken on 2026-08-20 closed it against int8, none of them a quality score:
+
+- **It is slower, not faster, and increasingly so.** On the desktop's CPU, beam-6, batch 1:
+  `fp32-merged` 0.602 s per sentence against `int8-merged` 1.279 on 32 Spanish sentences — **2.1x**,
+  where the laptop had measured 9%. Read off at matched indices of the same length-sorted Bulgarian
+  run, the ratio is **4.2x at 100 sentences and 8.3x at 239**, because dynamic quantisation
+  re-quantises activations on every decoder step and beam-6 takes a set of steps per output token.
+  The saving int8 exists for gets worse the more work there is to do.
+- **It is silently wrong on a GPU.** Through the CUDA execution provider it returned 0 of 32
+  sentences matching the CPU, none of them empty, with no exception and no warning — `These couples
+  may choose to plan the adoption of a baby` came back as `The so for`. `fp32-merged` on the same
+  provider is string-identical to the CPU on 240 of 240.
+- **It already had a collapse on the record.** The export smoke found one German segment in 44
+  returning a degenerate repetition loop under both int8 variants and none under fp32.
+
+**What it costs is 1023.2 MiB on every download**, and that is the whole of the case for the thing
+that was dropped. **What was not done is score it**: the quality run that would have priced int8
+against the floors was stopped in its second language when the decision was taken, so **int8 has no
+chrF++ in this repository and no claim that it scores worse against the gate.** The harness's
+default `--variant` now points at `fp32-merged` so that omitting the flag scores what ships, and
+`scripts/export-translation-onnx.py` still produces every variant, because what an export tool
+records is what the options were.
+
+**The sibling variant goes with it.** `int8-merged-fp32-embeddings`, the 694.3 MiB middle, produced
+the same degenerate German segment as the default operator set, so nothing measured distinguishes it
+on quality and it has never been timed on this machine at all.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
@@ -772,7 +893,7 @@ exactly.
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
-| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, nothing scored.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, which precision to ship being an open call rather than a finding. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. Outstanding: scoring the model against those floors (~5 h per precision, a desktop job), ratifying the per-language margins, the human adequacy check, the decode loop with beam search, and the window's checkbox and pane switcher — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
+| translation | **Two criteria, both must hold, ratified 2026-08-19 before any score existed.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion one is scored**: `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. Outstanding: ratifying the per-language margins, the human adequacy check, the decode loop with beam search, and the window's checkbox and pane switcher — and no score exists against the gate on the left. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app; cap still unpriced |
 
 ### The dictation seam
@@ -1271,6 +1392,35 @@ the Lemonade daemon, both shapes v2 already rejected. Cheapest first measurement
 on this laptop against the same ten-minute file, its RTF beside 0.035 — a dev-machine experiment,
 not a shippable path. It runs under `CLAUDE.md`'s convention: the product to a dated Drive folder,
 the decision record and the unproven markers here.
+
+**A GPU execution provider for the two ONNX Runtime components — asked for 2026-08-20, and the
+measurement that would decide it does not exist.** CUDA was priced that day and both components
+declined it for opposite reasons (*Measured 2026-08-20 — the GPU priced against the CPU* above): the
+diariser is 21.8x faster on the graph and changes its DER by up to 11 points on a meeting, the
+translator's output is identical and worth only 1.2–1.5x. **Neither of those is the number that
+matters for shipping**, because the product is .NET and the Windows GPU path for .NET is
+**DirectML**, not CUDA — a different execution provider, different kernels, a different correctness
+surface, and `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 against the pinned 1.29.0. Nothing about
+DirectML has been run here at all, and **the 240-of-240 translation identity result is a CUDA result
+that does not transfer to it.** The other thing that makes this one experiment rather than two is
+that it is a **swap, not an addition**: one native serves both components, so the translator cannot
+be moved without moving the diariser.
+
+**What the study has to carry:** DirectML measured on both components on both machines, since the
+laptop's Radeon is the case DirectML exists for and the desktop's 5080 is the one that has a CUDA
+alternative; **the diariser's 18-meeting dev grid re-tuned on DirectML probabilities and the test set
+scored once after**, because a provider's DER cannot be inherited and CPU-chosen post-processing is
+not that provider's honest number; whether DirectML reproduces the CPU's translations string for
+string, which CUDA does and which decides whether a GPU may ever *produce* a gate score; the int8
+question, since CUDA returned gibberish for it silently and int8 has been dropped anyway, so this
+only matters if a small artefact is ever wanted again; and the packaging cost, which is a second
+native in an installer channel that is already over 800 MB. **Cheapest first measurement:** the
+diariser alone on DirectML on the desktop, 26 seconds a pass on CUDA and unlikely to be much worse,
+against the recorded 16.3368% — if DirectML's probabilities differ from the CPU's the way CUDA's do,
+the rest of the study is about how much re-validation is acceptable rather than about speed.
+**Not before v1.0**, and the reason is the one above: the component with a real speed-up is the one
+whose passed gate the swap moves. It runs under `CLAUDE.md`'s convention — the product to a dated
+Drive folder, the decision record and the unproven markers here.
 
 **Pinning the model digests used to head this list** and is done: all five entries carry the exact
 byte size and the SHA-256 read from the repository's LFS listing, `"verified": true`, and no entry

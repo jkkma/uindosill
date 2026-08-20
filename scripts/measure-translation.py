@@ -16,6 +16,22 @@ English than Greek does, and one number across 25 languages would be a different
 The second criterion — a human adequacy check on the Spanish → English driving case — is a person's
 job. `--adequacy-sheet` writes the sheet to rate.
 
+Beside the score, and not folded into it, every run counts **degenerate repetitions** — a hypothesis
+that starts repeating itself. chrF++ cannot report one: a single ruined sentence among three hundred
+good ones moves a corpus score by a fraction of a point, and the sixty-row adequacy sheet may never
+deal the rater one.
+
+**They are counted in two columns, because the detector finds two different failures.** A
+`collapse` is a decoder that lost the sentence — the int8 `...Genocococococeaea` the export first
+caught. A `punctuation run` is a decoder that finished translating correctly and would not stop
+emitting, `...before they have been abandoned or evicted. . . . . . .`. The first costs the meaning;
+the second costs none of it and would still look broken in a subtitle. Measured 2026-08-20 on
+fp32 over 8,149 FLEURS sentences: **31 punctuation runs and zero collapses**, so a single column
+would have reported 31 collapses where there were none. The detector is `degenerate_repetition` from
+`scripts/export-translation-onnx.py`, imported rather than copied; the split is `classify_repetition`
+here, because which failure a repeat is depends on what a repeat is made of and not on how it is
+found.
+
 ## What this measures, and four things it does not
 
 It measures **the translation model alone**. FLEURS source transcripts go in and English comes out;
@@ -41,16 +57,18 @@ result, so a later run against a moved corpus is visible rather than silent.
 
 ## Usage, and what a full run costs
 
-    python scripts/measure-translation.py --variant runs/translation-onnx/int8-merged
+    python scripts/measure-translation.py                       # fp32-merged, which is what ships
     python scripts/measure-translation.py --floor-only          # no model needed, minutes not hours
     python scripts/measure-translation.py --adequacy-sheet      # the Spanish sheet for a human
     python scripts/measure-translation.py --languages es,de,nl  # chunk it across sessions
 
-**A full run is hours, and it was measured before it was started.** 2.16 s per sentence on the
-laptop's CPU at int8 and beam-6, over FLEURS' ~340-sentence test split in 24 languages, is about
-five hours per precision. `--floor-only` computes every floor in minutes and needs no model at all,
-which is worth doing first: the floors are half the gate and they do not depend on which artefact
-ships. `--languages` splits the rest across sessions.
+**A full run is hours, and the rate is a property of the language as much as of the machine.** On
+the desktop's CPU at fp32 and beam-6, Spanish runs 0.57 s per sentence and Greek 0.78; Bulgarian at
+int8 was over 3 s and still climbing, because the run sorts by length and the tail is the long half.
+Budget from the corpus rather than from one language: 8,149 sentences over FLEURS' ~340-sentence
+test split in 24 languages. `--floor-only` computes every floor in minutes and needs no model at
+all, which is worth doing first: the floors are half the gate and they do not depend on which
+artefact ships. `--languages` splits the rest across sessions.
 
 Needs torch, transformers, optimum, onnxruntime, sentencepiece, sacrebleu and huggingface_hub. Use
 the venv `scripts/export-translation-onnx.py` describes, plus `pip install sacrebleu`.
@@ -180,6 +198,43 @@ def translate(model, tokenizer, sentences: list[str], beams: int, batch_size: in
     return [text or "" for text in outputs], time.perf_counter() - started
 
 
+def load_degenerate_repetition():
+    """The export script's collapse detector, borrowed rather than written again.
+
+    `scripts/export-translation-onnx.py` already carries `degenerate_repetition`, calibrated on the
+    thing it found: one German segment in 44 came back as `...Genocococococococeaea` under both int8
+    variants where fp32 produced none. That is the failure chrF++ cannot report — a corpus metric
+    averages one collapsed sentence away, and a rater reading sixty rows may never be shown it — so
+    it is counted here per language beside the score rather than left to be noticed. Two copies of
+    the detector would be two calibrations to keep in step, so this loads the one that exists; the
+    file's name has a hyphen in it, which is why it is loaded by path and not imported by name.
+
+    Importing it is cheap: everything heavy in that script is imported inside a function.
+    """
+    import importlib.util
+
+    path = Path(__file__).resolve().parent / "export-translation-onnx.py"
+    spec = importlib.util.spec_from_file_location("export_translation_onnx", path)
+    if spec is None or spec.loader is None:  # pragma: no cover - a missing sibling is a broken tree
+        raise SystemExit(f"cannot load {path}; the export script is where the detector lives")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.degenerate_repetition
+
+
+# A repeated chunk made only of these is a decoder that finished translating and would not stop;
+# anything else is a decoder that lost the sentence. The two look identical to the detector and cost
+# very different things, so they are counted apart. Measured 2026-08-20: fp32 over 8,149 FLEURS
+# sentences produced 31 of the first and none of the second, so a single column would have reported
+# 31 collapses where there were none.
+REPETITION_PUNCTUATION = set(" .,;:!?-–—…·•'\"()[]<>/\\|*_~=+")
+
+
+def classify_repetition(unit: str) -> str:
+    """`punctuation` for a trailing `. . . .` run, `collapse` for `Genocococococ`."""
+    return "punctuation" if all(character in REPETITION_PUNCTUATION for character in unit) else "collapse"
+
+
 def score(hypotheses: list[str], references: list[str]) -> tuple[float, str]:
     """chrF++ and the signature it was computed under, which travels with every number."""
     import sacrebleu
@@ -205,7 +260,10 @@ def toolchain() -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     root = Path(__file__).resolve().parent.parent
-    parser.add_argument("--variant", type=Path, default=root / "runs" / "translation-onnx" / "int8-merged",
+    # fp32-merged, because that is what ships as of 2026-08-20. int8 was dropped that day for the
+    # three measured reasons in `docs/PHASES.md`, and pointing the default at a variant nobody
+    # installs would score the wrong artefact for anyone who omits the flag.
+    parser.add_argument("--variant", type=Path, default=root / "runs" / "translation-onnx" / "fp32-merged",
                         help="the exported ONNX directory to score")
     parser.add_argument("--languages", default=None,
                         help="comma-separated source languages (default: all but English)")
@@ -252,7 +310,9 @@ def main() -> int:
     per_language: dict[str, dict] = {}
 
     model = tokenizer = None
+    degenerate_repetition = None
     if not args.floor_only:
+        degenerate_repetition = load_degenerate_repetition()
         print("\nloading the exported model ...", flush=True)
         from optimum.onnxruntime import ORTModelForSeq2SeqLM
         from transformers import AutoTokenizer
@@ -318,22 +378,50 @@ def main() -> int:
         if model is not None:
             hypotheses, seconds = translate(model, tokenizer, sources, args.num_beams, args.batch_size)
             hypothesis_score, signature = score(hypotheses, references)
+
+            # Counted, not averaged. A collapsed sentence and a merely poor one cost chrF++ about
+            # the same, and a bar on the average cannot express "good on the whole, and occasionally
+            # emits Genocococococeaea" — so the collapse gets a number of its own.
+            units = [degenerate_repetition(hypothesis) for hypothesis in hypotheses]
+            kinds = [None if unit is None else classify_repetition(unit) for unit in units]
+            collapsed = sum(1 for kind in kinds if kind == "collapse")
+            trailing = sum(1 for kind in kinds if kind == "punctuation")
+
             entry |= {
                 "chrF2pp": hypothesis_score,
                 "marginOverFloor": round(hypothesis_score - floor, 2),
+                "collapse": collapsed,
+                "punctuationRun": trailing,
                 "seconds": round(seconds, 1),
                 "secondsPerSentence": round(seconds / max(1, len(sources)), 3),
             }
+            flags = "".join(f"   {name.upper()} {count}" for name, count in
+                            (("collapse", collapsed), ("punct", trailing)) if count)
             print(f"  translated         chrF++ {hypothesis_score:6.2f}"
-                  f"   margin {hypothesis_score - floor:+6.2f}   {seconds:.0f}s")
+                  f"   margin {hypothesis_score - floor:+6.2f}   {seconds:.0f}s{flags}")
 
             (out / "hypotheses").mkdir(exist_ok=True)
             with (out / "hypotheses" / f"{code}.jsonl").open("w", encoding="utf-8") as handle:
-                for sentence_id, source, hypothesis, reference in zip(chosen, sources, hypotheses, references):
+                for sentence_id, source, hypothesis, reference, unit, kind in zip(
+                        chosen, sources, hypotheses, references, units, kinds):
                     handle.write(json.dumps({
                         "id": sentence_id, "source": source,
                         "hypothesis": hypothesis, "reference": reference,
+                        "degenerate": unit, "degenerateKind": kind,
                     }, ensure_ascii=False) + "\n")
+
+            # Every flagged hypothesis in one file, verbatim, across all languages, with which of
+            # the two failures it is. A count says how many and a rate says how often; only the text
+            # says what the failure looks like, and the two failures do not look alike.
+            if collapsed or trailing:
+                with (out / "degenerate.jsonl").open("a", encoding="utf-8") as handle:
+                    for sentence_id, source, hypothesis, unit, kind in zip(
+                            chosen, sources, hypotheses, units, kinds):
+                        if unit is not None:
+                            handle.write(json.dumps({
+                                "language": code, "id": sentence_id, "kind": kind,
+                                "repeatedUnit": unit, "source": source, "hypothesis": hypothesis,
+                            }, ensure_ascii=False) + "\n")
 
         per_language[code] = entry
 
@@ -402,29 +490,45 @@ def write_summary(path: Path, result: dict) -> None:
         "",
         "**This is the translation model alone — no audio, no ASR, so it is not the cascade.**",
         "",
-        "| language | scored | source-copy floor | chrF++ | margin |",
-        "|---|---:|---:|---:|---:|",
+        "| language | scored | source-copy floor | chrF++ | margin | collapse | punct. run |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
 
     for code, entry in sorted(result["languages"].items()):
         if "refused" in entry:
-            lines.append(f"| {code} | — | — | — | refused: {entry['refused']} |")
+            lines.append(f"| {code} | — | — | — | refused: {entry['refused']} | — | — |")
             continue
         if "chrF2pp" not in entry:
-            lines.append(f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | — | — |")
+            lines.append(
+                f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | — | — | — | — |")
             continue
         lines.append(
             f"| {code} | {entry['scoredSentences']} | {entry['sourceCopyFloor']:.2f} | "
-            f"{entry['chrF2pp']:.2f} | {entry['marginOverFloor']:+.2f} |")
+            f"{entry['chrF2pp']:.2f} | {entry['marginOverFloor']:+.2f} | "
+            f"{entry.get('collapse', 0)} | {entry.get('punctuationRun', 0)} |")
 
     if scored:
         margins = [entry["marginOverFloor"] for entry in scored.values()]
         worst = min(scored.items(), key=lambda item: item[1]["marginOverFloor"])
+        collapsed = sum(entry.get("collapse", 0) for entry in scored.values())
+        trailing = sum(entry.get("punctuationRun", 0) for entry in scored.values())
+        sentences = sum(entry["scoredSentences"] for entry in scored.values())
         lines += [
             "",
             f"{len(scored)} languages scored. Margin over floor: "
             f"worst {min(margins):+.2f} ({worst[0]}), median {sorted(margins)[len(margins) // 2]:+.2f}, "
             f"best {max(margins):+.2f}.",
+            "",
+            f"**Collapses: {collapsed} of {sentences} sentences** "
+            f"({100 * collapsed / max(1, sentences):.2f}%). "
+            f"**Trailing punctuation runs: {trailing}** "
+            f"({100 * trailing / max(1, sentences):.2f}%)."
+            + (" Both verbatim in `degenerate.jsonl`, with `kind` on each row."
+               if collapsed or trailing else ""),
+            "The detector flags four or more back-to-back repeats of a two-to-four character chunk; "
+            "what it flags is then split, because a decoder that finished translating and would not "
+            "stop emitting `. . . .` and a decoder that lost the sentence and emits "
+            "`Genocococococ` cost entirely different things and chrF++ reports neither.",
             "",
             "**No margin has been ratified**, so nothing here passes or fails the gate yet. "
             "`docs/PHASES.md` carries the criterion; the number that clears it is the maintainer's.",
