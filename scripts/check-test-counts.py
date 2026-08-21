@@ -21,8 +21,10 @@ on one machine, in sections that are retrospective by construction; updating the
 would destroy the measurement rather than refresh it.
 
 Reads the TRX files `dotnet test --logger trx` leaves under `tests/*/TestResults/`, and runs the
-suite itself if none are there. Pass --no-run to fail instead, which is what CI does: the workflow
-has already run the tests by this point, and a silent re-run would hide a reordered job.
+suite itself if none are there — or if the ones there are older than the assemblies they would be
+counted as, which is the same situation wearing a green tick. Pass --no-run to fail instead, which
+is what CI does: the workflow has already run the tests by this point, and a silent re-run would
+hide a reordered job.
 """
 
 from __future__ import annotations
@@ -59,6 +61,38 @@ def find_trx() -> list[Path]:
         if directory not in newest or path.stat().st_mtime > newest[directory].stat().st_mtime:
             newest[directory] = path
     return sorted(newest.values())
+
+
+def stale_trx(files: list[Path]) -> list[tuple[str, Path]]:
+    """Results files older than the assembly they claim to count.
+
+    Picking the newest TRX per project is not enough, and the gap is not hypothetical: a plain
+    `dotnet test` writes no TRX at all, so after one this script reads whatever an earlier session
+    left behind and reports it as today's number. On 2026-08-21 that made it pass three documents
+    that were four tests out of date — the guard failing open, which is worse than no guard,
+    because a green check is taken as an answer.
+
+    The assembly's timestamp is the comparison because it is what was actually run: results that
+    predate the binary describe a different binary. Sources are deliberately not compared — a source
+    newer than the assembly is a stale *build*, which the suite fixes by rebuilding, and folding the
+    two together would make this fail for a reason it cannot name precisely.
+    """
+    stale: list[tuple[str, Path]] = []
+    for trx in files:
+        project = trx.parent.parent
+        built = [
+            candidate for candidate in project.glob(f"bin/**/{project.name}.dll")
+        ]
+        if not built:
+            # Nothing to compare against — a results file with no build beside it is a clone that
+            # has been cleaned, not a stale number, and read_counters will still describe it.
+            continue
+
+        newest = max(candidate.stat().st_mtime for candidate in built)
+        if newest > trx.stat().st_mtime:
+            stale.append((project.name, trx))
+
+    return sorted(stale)
 
 
 def run_suite() -> None:
@@ -113,11 +147,29 @@ def main() -> int:
     args = parser.parse_args()
 
     files = find_trx()
-    if not files and not args.no_run:
+    stale = stale_trx(files)
+
+    # Missing and stale are the same situation — there are no results for the code as it stands —
+    # so they get the same treatment: run the suite, unless the caller said not to.
+    if (not files or stale) and not args.no_run:
         run_suite()
         files = find_trx()
+        stale = stale_trx(files)
+
     if not files:
         print(f"::error::No TRX files under {TRX_GLOB}. Run the suite with --logger trx first.")
+        return 1
+
+    if stale:
+        for project, trx in stale:
+            print(
+                f"::error::{trx.relative_to(ROOT)} is older than the {project} assembly it would "
+                f"be counted as, so it describes a build that no longer exists."
+            )
+        print(
+            "::error::Run `dotnet test Uindosill.slnx -c Release --logger trx` and check again. "
+            "A plain `dotnet test` writes no results file, which is how these came to be stale."
+        )
         return 1
 
     totals, per_project = read_counters(files)

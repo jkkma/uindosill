@@ -5,6 +5,7 @@ using Parakeet.Audio;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp.Interop;
+using Parakeet.Engine.Python;
 
 namespace Parakeet.Cli;
 
@@ -50,6 +51,28 @@ internal static class DoctorCommand
                 context.WriteLine($"  {model.Id,-32} {ModelsCommand.Bytes(model.SizeBytes),10}" +
                                   (model.IsSideloaded ? "  (sideloaded)" : string.Empty));
             }
+        }
+
+        context.WriteLine();
+        context.WriteLine("Python (speaker labelling and translation run in it)");
+
+        // Which of the three places answered, printed rather than left to be inferred. A figure
+        // taken against an unknown interpreter is a figure nobody can reproduce, and until this
+        // existed the only way to know which bundle a run had used was to reason about the
+        // environment it ran in. The bundle is also a separate download since 2026-08-21, so "which
+        // one is this" became a question a user can have rather than only a measurer.
+        if (PythonRuntime.TryResolve(out var python, out var whyNot))
+        {
+            context.WriteLine($"  interpreter  {python!.Interpreter}");
+            context.WriteLine($"  packages     {python.PackageRoot}");
+            context.WriteLine($"  found        {python.SourceDescription}");
+        }
+        else
+        {
+            // Not a failure of `doctor`: a machine with no bundle is a machine where two opt-ins are
+            // unavailable and everything else works, which is what this command exists to report.
+            context.WriteLine("  not available, so --translate and speaker labelling are not either:");
+            context.WriteLine($"  {whyNot}");
         }
 
         context.WriteLine();
