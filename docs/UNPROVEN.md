@@ -2310,6 +2310,16 @@ SmartScreen, or what it does to Velopack's delta packages — which is the figur
 unpleasant, since a delta against a tree of 43,760 mostly-unchanging files is a question nobody has
 asked.
 
+**The third artefact is written and has never been produced.** The CLI zip carries no interpreter,
+so on 2026-08-21 the same bundle became its own download — `uindosill-python-win-x64.zip`, packed by
+`scripts/package-windows.ps1` from the publish it already assembles, `python/` at its root, unpacked
+into `%LOCALAPPDATA%\Uindosill` where `PythonRuntime` now looks (`docs/PHASES.md` § *Decided
+2026-08-21*). The resolver's three-place search is covered by tests and the packing step reads its
+own zip back, but **the script has not been run with that step in it**: the zip has never been
+built, never unpacked, and never resolved from on a machine that did not also have a repository
+checkout. Its size is assumed equal to the bundle's 1.20 GB and has not been observed after
+compression.
+
 **Every execution-provider figure still comes from a development virtual environment**, not from a
 bundle: the AMI arms, the 32-sentence translator arms and the diariser's parity numbers were all
 taken against `~/webgpu-venv`. The bundle reproduced the translator's parity fixture and its

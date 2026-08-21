@@ -256,9 +256,12 @@ bill is here:
   do what it claims.
 - **Memory, at both ends.** The host holds a whole file's samples to write the WAV, and the child
   holds a whole file's mel to chunk it. Neither streams.
-- **An interpreter inside the installer.** Measured 2026-08-21, the assembled bundle is **1.20 GB**
-  — `scripts/bundle-python.ps1` builds it and reads it back — against the ~0.55 GB it was budgeted
-  at. No installer has been packed with one in it yet. See `docs/UNPROVEN.md`.
+- **An interpreter inside the installer, and a third download beside it.** Measured 2026-08-21, the
+  assembled bundle is **1.20 GB** — `scripts/bundle-python.ps1` builds it and reads it back —
+  against the ~0.55 GB it was budgeted at. The CLI zip carries none, so the same bundle also ships
+  as `uindosill-python-win-x64.zip`, unpacked into `%LOCALAPPDATA%\Uindosill`; `PythonRuntime` looks
+  there after `UINDOSILL_PYTHON` and the application's own copy. **No installer has been packed with
+  one in it yet, and that zip has never been produced by CI.** See `docs/UNPROVEN.md`.
 - **A second thing to version**, and a set of failure modes that did not exist in process — a child
   that will not start, a child that dies mid-request, a library that writes to the wrong handle.
   Every one of them is named above because every one of them had to be handled.

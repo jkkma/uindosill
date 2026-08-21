@@ -16,6 +16,11 @@
       * **The desktop application only.** The CLI ships as the zip beside it on the release, which
         is the CI artefact as it already exists. Velopack has no PATH feature, so putting the CLI in
         the installer would be custom code on install and on uninstall.
+      * **A third artefact since 2026-08-21: the bundled Python, zipped on its own.** The installer
+        carries a copy inside its publish and the CLI zip carries none, so a command-line user gets
+        the interpreter here and unpacks it into `%LOCALAPPDATA%\Uindosill`, where `PythonRuntime`
+        looks. It is packed once from the first channel's publish — both channels assemble the same
+        bundle — and read back like everything else.
       * **Unsigned.** v1.0 ships without a signing identity; `--signParams` and `--signTemplate` are
         deliberately not passed. Every user will see SmartScreen's unknown-publisher prompt, and
         docs/PHASES.md records that as an accepted cost rather than an oversight.
@@ -405,7 +410,9 @@ foreach ($channel in $Channels) {
     & dotnet @packArgs
     if ($LASTEXITCODE -ne 0) { throw "vpk pack failed for channel '$channel'." }
 
-    $built += [PSCustomObject]@{ Channel = $channel; Backends = $backends; ReleaseDir = $releaseDir }
+    $built += [PSCustomObject]@{
+        Channel = $channel; Backends = $backends; ReleaseDir = $releaseDir; PublishDir = $publishDir
+    }
 }
 
 Write-Step 'Reading the packages back'
@@ -483,6 +490,59 @@ foreach ($entry in $built) {
         }
 
         Write-Host "     natives inside the package: $($inside -join ', ')"
+    }
+    finally { $zip.Dispose() }
+}
+
+Write-Step 'Packing the bundled Python as its own download'
+
+# Decision of 2026-08-21: the CLI zip carries no interpreter, so the bundle is a third download
+# rather than 1.2 GB charged to every command-line user for two opt-ins most will never run.
+#
+# **The zip carries `python/` at its root, and that is the whole of the install instruction.**
+# `PythonRuntime` looks under `%LOCALAPPDATA%\Uindosill` — the directory the weights already live
+# in — so unpacking this there is all a CLI user does, with nothing to configure and no variable to
+# set. `includeBaseDirectory` is what puts that root in, and it is the difference between an unpack
+# that works and one that scatters an interpreter across a user's data directory.
+#
+# The installer is untouched by this: its copy is inside the publish where it always was, and an
+# installed desktop application prefers its own over a download that may be a different version.
+$bundleZip = Join-Path (Join-Path $OutputDirectory 'releases') 'uindosill-python-win-x64.zip'
+$bundleSource = @($built |
+    ForEach-Object { Join-Path $_.PublishDir 'python' } |
+    Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
+
+if (-not $bundleSource) {
+    Write-Note 'no bundled Python in any publish, so no bundle download was packed (-SkipPython)'
+}
+else {
+    # Never appended to: packaging/releases is not cleaned between runs, and CreateFromDirectory
+    # refuses an existing file rather than replacing it.
+    if (Test-Path -LiteralPath $bundleZip) { Remove-Item -LiteralPath $bundleZip -Force }
+
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $bundleSource, $bundleZip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+
+    # Read back for the same reason every other artefact here is: a zip that assembles is not a zip
+    # that carries what it promises, and the failure mode this catches — an interpreter with no
+    # engines beside it — is exactly what `PythonRuntime` calls half a bundle.
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($bundleZip)
+    try {
+        $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+
+        if ('python/python.exe' -notin $names) {
+            $failures += 'the bundle download has no python/python.exe at its root, so unpacking it ' +
+                         'into the user data directory would not produce a bundle anything can find.'
+        }
+
+        if (-not ($names | Where-Object { $_.StartsWith('python/uindosill_engines/', [StringComparison]::Ordinal) })) {
+            $failures += 'the bundle download carries no uindosill_engines package — half a bundle, ' +
+                         'which fails on a user machine rather than here.'
+        }
+
+        $size = (Get-Item -LiteralPath $bundleZip).Length
+        Write-Host ("     {0,-54} {1,13:N0} bytes" -f 'uindosill-python-win-x64.zip', $size)
+        Write-Host "     $($names.Count) entries, from $bundleSource"
     }
     finally { $zip.Dispose() }
 }
