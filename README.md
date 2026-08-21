@@ -48,7 +48,10 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
   and can only hand back 25 languages is a narrower product than the one intended. `--translate`
   reads real weights as of 2026-08-20: a Marian checkpoint exported here to ONNX, nine files and
   1.34 GiB, decoded on the CPU at beam 6 by a SentencePiece tokenizer and a beam search written for
-  this project. `uindosill translate` runs the same pass over a text file with no audio at all.
+  this project. `uindosill translate` runs the same pass over a text file with no audio at all. In
+  the app it is a checkbox beside the speaker one, and the English arrives *beside* the transcript
+  rather than instead of it — a switcher over the transcript pane shows either, with the same times
+  and the same speakers on both sides.
   **The gate it was written against is not passed**, and that is a statement about a criterion
   nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
   languages and Slovak misses by 0.74, and the human adequacy check has been declined. Translation
@@ -103,7 +106,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 767 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 778 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

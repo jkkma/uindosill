@@ -311,6 +311,10 @@ public class ShutdownTests
 
         public Parakeet.Core.Diarisation.ISpeakerLabeller? CreateSpeakerLabeller() => _inner.CreateSpeakerLabeller();
 
+        public bool SupportsTranslation => _inner.SupportsTranslation;
+
+        public Parakeet.Core.Translation.ITranscriptTranslator? CreateTranslator() => _inner.CreateTranslator();
+
         public void ReleaseBackend()
         {
             ReleaseCount++;
