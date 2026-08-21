@@ -128,6 +128,7 @@ The attribution notices it **does** carry are retained, per §4(c):
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
 | ONNX Runtime (`onnxruntime.dll`; runs the speaker diarisation model) | MIT — Copyright (c) Microsoft Corporation. Bundles 69 components under their own licences; its `ThirdPartyNotices.txt` ships verbatim at `licences/onnxruntime-ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
+| NVIDIA NeMo (source, vendored at `python/uindosill_engines/_vendor/nemo/`; runs the diariser's speaker cache) | Apache-2.0 — Copyright (c) 2025, NVIDIA CORPORATION | https://github.com/NVIDIA/NeMo |
 
 ### The CUDA runtime is the one component here that is not MIT
 
@@ -143,6 +144,38 @@ must have material additional functionality beyond the included portions, the re
 must be accessed only by that application, and the SDK may not be distributed as a stand-alone
 product. `docs/LICENSING.md` records how this product meets each, and what about that reading is
 still unverified.
+
+### NeMo is vendored as source, and it is deliberately not a rewrite
+
+`python/uindosill_engines/_vendor/nemo/` holds fifteen files, and **two of them are NVIDIA's**:
+`collections/asr/modules/sortformer_modules.py` (1,307 lines) and
+`collections/asr/parts/preprocessing/features.py` (494 lines), both copied **verbatim** with their
+copyright headers intact. They are here so the diariser's Arrival-Order Speaker Cache is NVIDIA's
+`streaming_update_async` *imported and called* rather than a port of it, which is what lets this
+project's diarisation error rate be a statement about NVIDIA's algorithm rather than about somebody's
+reading of it.
+
+**The other thirteen are this project's own** and carry no NVIDIA claim: eight empty `__init__.py`
+and five stubs totalling twenty-four lines, written so those two files import without the whole
+toolkit behind them. Two of the five stand in for real NeMo classes — `NeuralModule` becomes a plain
+`torch.nn.Module` and `Exportable` becomes an empty class — which is a substitution rather than a
+copy, and is faithful only for the speaker-cache path that is actually exercised. What underwrites
+that is the measurement: the assembled tree reproduces the project's AMI figure of 16.33%.
+
+The four conditions in Apache-2.0 §4 were checked before this was committed, not after:
+
+- **§4(a)**, a copy of the licence, ships at `licences/Apache-License-2.0.txt`.
+- **§4(b)**, prominent notices on changed files, is satisfied vacuously for the two NVIDIA files:
+  **neither was modified.** Both are byte-identical to what the diarisation spike carried. The
+  stubs are not NVIDIA's work and so are not modifications of it.
+- **§4(c)**, retaining attribution notices, holds — both NVIDIA files keep the copyright header and
+  the Apache-2.0 block they arrived with.
+- **§4(d)** does not apply: **NeMo ships no NOTICE file.** Its repository root carries `LICENSE` and
+  nothing else of the kind, checked 2026-08-21 against the GitHub contents API. That is the same
+  answer the Marian weights gave, and it is recorded here rather than assumed for the same reason.
+
+The model weights are a separate question with a separate answer — Streaming Sortformer is under the
+**NVIDIA Open Model License**, not Apache-2.0, and has its own section above.
 
 ## Deliberately not used
 

@@ -19,6 +19,21 @@
 # those scripts are built around stops meaning anything.
 tests/fixtures/diarisation/**/expected.json text eol=lf
 
+# The diariser's parity reference: a NumPy .npy array of float32 probabilities, compared against
+# this machine's own to decide whether a GPU backend reproduces the CPU. An .npy begins with a magic
+# string and a version pair that puts a NUL inside the first ten bytes, so git's sniff gets this one
+# right unaided — marked anyway, on the same grounds as the .f32 rule above. A fixture whose 0x0A
+# bytes were rewritten on checkout would not fail loudly; it would fail as a parity check that
+# rejects every backend on somebody else's clone, including the CPU.
+*.npy binary
+
+# Vendored NVIDIA NeMo source, kept LF so that a checkout is byte-identical to upstream rather than
+# merely equivalent to it. That is not tidiness: NOTICE.md claims these two files are unmodified
+# under Apache-2.0 §4(b), and the way anybody checks such a claim is to diff a checkout against
+# NVIDIA's. Under the default CRLF conversion every line of both files would differ, and the
+# claim would look false to exactly the person taking the trouble to verify it.
+python/uindosill_engines/_vendor/** text eol=lf
+
 # The two embedded typefaces. TrueType begins with a version tag full of NUL bytes, so git's
 # text-or-binary sniff gets these right on its own — but the rule above exists because that sniff
 # is a heuristic, and a font checked out with its 0x0A bytes rewritten is a font that fails to

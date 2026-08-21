@@ -120,7 +120,9 @@ internal static class TranscribeCommand
 
         // The opt-in. Off, nothing below changes; on, a labeller is created — or refused, in this
         // build, unless the canned one was asked for — and every file gets a second pass.
-        await using var labeller = speakerOptions is null ? null : CreateLabeller(context, parsed, speakerOptions);
+        await using var labeller = speakerOptions is null
+            ? null
+            : await CreateLabellerAsync(context, parsed, speakerOptions, ct).ConfigureAwait(false);
 
         // The other opt-in, created after the labeller because it runs after it. Its capabilities
         // are checked against the formats now rather than at write time: refusing a file's fourth
@@ -290,8 +292,9 @@ internal static class TranscribeCommand
     /// <c>--speakers</c> now loads the real model, and the second read of the audio it costs is a
     /// second decode as well as a second inference.
     /// </remarks>
-    private static ISpeakerLabeller CreateLabeller(CliContext context, ParsedCommandLine parsed, SpeakerLabellingOptions options) =>
-        LabellerFactory.Create(
+    private static Task<ISpeakerLabeller> CreateLabellerAsync(
+        CliContext context, ParsedCommandLine parsed, SpeakerLabellingOptions options, CancellationToken ct) =>
+        LabellerFactory.CreateAsync(
             context,
             new LabellerRequest
             {
@@ -299,8 +302,11 @@ internal static class TranscribeCommand
                 ModelId = parsed.Value("speaker-model"),
                 ModelPath = parsed.Value("speaker-model-path"),
                 Threads = ParseThreads(parsed.Value("speaker-threads"), "--speaker-threads"),
+                Backend = parsed.Value("speaker-backend"),
+                AllowUnverifiedBackend = parsed.HasFlag("speaker-backend-unverified"),
             },
-            options);
+            options,
+            ct);
 
     /// <summary>
     /// Parses a thread count. <paramref name="option"/> is the flag the caller's own command spells

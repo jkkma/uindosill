@@ -61,7 +61,7 @@ internal static class DiariseCommand
         };
         options.Validate();
 
-        await using var labeller = LabellerFactory.Create(
+        await using var labeller = await LabellerFactory.CreateAsync(
             context,
             new LabellerRequest
             {
@@ -69,8 +69,12 @@ internal static class DiariseCommand
                 ModelId = parsed.Value("model"),
                 ModelPath = parsed.Value("model-path"),
                 Threads = TranscribeCommand.ParseThreads(parsed.Value("threads"), "--threads"),
+                Backend = parsed.Value("backend"),
+                AllowUnverifiedBackend = parsed.HasFlag("backend-unverified"),
+                BackendOption = "--backend",
             },
-            options);
+            options,
+            ct).ConfigureAwait(false);
 
         await labeller.LoadAsync(ct).ConfigureAwait(false);
 

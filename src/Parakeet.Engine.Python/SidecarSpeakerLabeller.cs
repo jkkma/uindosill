@@ -1,0 +1,380 @@
+using System.Text.Json;
+using Parakeet.Audio;
+using Parakeet.Core.Audio;
+using Parakeet.Core.Diarisation;
+using Parakeet.Core.Transcription;
+
+namespace Parakeet.Engine.Python;
+
+/// <summary>
+/// Whether this machine's stack reproduces the diariser the published figures describe.
+/// </summary>
+/// <remarks>
+/// The numbers travel with the verdict rather than only a boolean, because "the check failed" with
+/// no magnitude tells a user nothing they can act on. A stack sitting just past the tolerance and
+/// one scoring 53% diarisation error are different situations and deserve different reactions.
+/// </remarks>
+public sealed record ParityResult
+{
+    public required bool Passed { get; init; }
+
+    /// <summary>Largest disagreement with the reference, over the fixture's probabilities.</summary>
+    public required double MaxAbsoluteDifference { get; init; }
+
+    /// <summary>
+    /// How many frame decisions differ. Zero is common on a passing <i>and</i> a failing stack —
+    /// CUDA disagrees at 8.1e-04 while flipping nothing on this fixture — which is exactly why the
+    /// verdict is taken on the probabilities and not on this.
+    /// </summary>
+    public required double DecisionFlipPercent { get; init; }
+
+    public required double Tolerance { get; init; }
+}
+
+/// <summary>How the sidecar's diariser is loaded and driven.</summary>
+public sealed record SidecarLabellerOptions
+{
+    /// <summary>Path to <c>sortformer-default.onnx</c>. Required; there is no default location.</summary>
+    public required string ModelPath { get; init; }
+
+    /// <summary>Catalogue id carried into the transcript's provenance beside the ASR model's.</summary>
+    public string ModelId { get; init; } = "sortformer-4spk-v2.1";
+
+    /// <summary>Intra-op threads for the ONNX session, or 0 to let ONNX Runtime choose.</summary>
+    public int IntraOpThreads { get; init; }
+
+    /// <summary>
+    /// Execution provider: <c>cpu</c>, <c>cuda</c> or <c>dml</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>This changes the answer, not only the speed.</b> Measured 2026-08-21 on AMI test: CPU
+    /// 16.3347%, CUDA 16.1021%, DirectML unfused 16.3319%, DirectML at its own default 53.15%. The
+    /// provider therefore travels into the transcript's provenance, and a non-CPU provider is
+    /// verified against the parity fixture before it is trusted.
+    /// </remarks>
+    public string Provider { get; init; } = "cpu";
+
+    /// <summary>ONNX Runtime graph optimisation level, or null for the provider's safe default.</summary>
+    public string? GraphOptimization { get; init; }
+
+    /// <summary>The tuned post-processing. Changing it invalidates the measured DER.</summary>
+    public SortformerPostProcessing PostProcessing { get; init; } = SortformerPostProcessing.Default;
+}
+
+/// <summary>
+/// The knobs NeMo's <c>ts_vad_post_processing</c> turns. Tuned on the 18 AMI development meetings
+/// and applied unchanged to the 16 test meetings; changing a default here invalidates the measured
+/// DER, which is that parameter set's number and no other's.
+/// </summary>
+public sealed record SortformerPostProcessing
+{
+    public static SortformerPostProcessing Default { get; } = new();
+
+    public double Onset { get; init; } = 0.5;
+
+    public double Offset { get; init; } = 0.5;
+
+    public TimeSpan PadOnset { get; init; } = TimeSpan.FromMilliseconds(50);
+
+    public TimeSpan PadOffset { get; init; } = TimeSpan.Zero;
+
+    /// <summary>Segments shorter than this are deleted. Zero in the tuned set.</summary>
+    public TimeSpan MinimumSpeechDuration { get; init; } = TimeSpan.Zero;
+
+    /// <summary>Gaps shorter than this between two segments of one speaker are filled.</summary>
+    public TimeSpan MinimumSilenceDuration { get; init; } = TimeSpan.FromSeconds(1);
+}
+
+/// <summary>
+/// Speaker labelling by NVIDIA's Streaming Sortformer 4spk v2.1, run in the bundled Python.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The engine moved out of process on 2026-08-21. What it buys is that the numerical core is
+/// NVIDIA's own <c>SortformerModules</c> — the arrival-order speaker cache imported and called
+/// rather than reimplemented — and that the mel featurizer is the one validated bit-exact against
+/// NeMo's <c>FilterbankFeatures</c>. What it costs is a process boundary, which is this class.
+/// </para>
+/// <para>
+/// <b>The audio crosses as a file, not as PCM down the pipe.</b> The host decodes and resamples,
+/// exactly as it did when the engine was in-process, and hands over a 16 kHz mono WAV that it
+/// deletes afterwards. A pipe carrying both a protocol and a megabyte of samples is a pipe with two
+/// failure modes, and the decode belongs to the side that already owns Media Foundation.
+/// </para>
+/// <para>
+/// <b>Four speakers, and no more.</b> The cap is architectural: above it a fifth voice is merged
+/// into one of the four rather than reported. Its labels are established only to fifty minutes.
+/// Both facts arrive through <see cref="Capabilities"/> so a caller cannot forget them.
+/// </para>
+/// </remarks>
+public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
+{
+    private const int TargetSampleRate = 16000;
+
+    private readonly SidecarLabellerOptions _options;
+    private readonly PythonSidecar _sidecar;
+    private readonly bool _ownsSidecar;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+
+    private SpeakerLabellerCapabilities? _capabilities;
+
+    public SidecarSpeakerLabeller(SidecarLabellerOptions options, PythonSidecar? sidecar = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+        _ownsSidecar = sidecar is null;
+        _sidecar = sidecar ?? new PythonSidecar(PythonRuntime.Resolve());
+    }
+
+    /// <summary>
+    /// Available only after <see cref="LoadAsync"/>: the backend and the model id are the sidecar's
+    /// to report, and reporting a guess before it has answered is how provenance becomes fiction.
+    /// </summary>
+    public SpeakerLabellerCapabilities Capabilities =>
+        _capabilities ?? throw new InvalidOperationException(
+            "The diariser's capabilities are not known until it has been loaded.");
+
+    public async ValueTask LoadAsync(CancellationToken ct = default)
+    {
+        if (_capabilities is not null)
+        {
+            return;
+        }
+
+        await _loadGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_capabilities is not null)
+            {
+                return;
+            }
+
+            await _sidecar.StartAsync(ct).ConfigureAwait(false);
+
+            var reply = await _sidecar.SendAsync("load", writer =>
+            {
+                writer.WriteString("engine", "diariser");
+                writer.WriteString("path", _options.ModelPath);
+                writer.WriteString("modelId", _options.ModelId);
+                writer.WriteNumber("threads", _options.IntraOpThreads);
+                writer.WriteString("provider", _options.Provider);
+                if (_options.GraphOptimization is { Length: > 0 } level)
+                {
+                    writer.WriteString("graphOptimization", level);
+                }
+            }, null, ct).ConfigureAwait(false);
+
+            _capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
+
+            // Every backend but the CPU is checked against the committed reference before it is
+            // used, because the failure this catches is silent: measured 2026-08-21, DirectML at
+            // ONNX Runtime's default settings scores 53.15% diarisation error against the CPU's
+            // 16.33% while emitting speaker turns that read as perfectly ordinary. Two chunks of
+            // synthetic mel is all it costs, and it is the only thing standing between a user and
+            // a transcript that is wrong in a way nothing in it reveals.
+            if (_capabilities.Backend != ComputeBackend.Cpu)
+            {
+                Parity = await CheckParityAsync(ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The parity check's result, or null when it was not run — which is the CPU case, since the
+    /// CPU is what everything else is compared against.
+    /// </summary>
+    public ParityResult? Parity { get; private set; }
+
+    private async Task<ParityResult?> CheckParityAsync(CancellationToken ct)
+    {
+        JsonElement reply;
+        try
+        {
+            reply = await _sidecar.SendAsync("parity", _ => { }, null, ct).ConfigureAwait(false);
+        }
+        catch (PythonEngineException)
+        {
+            // A missing or unreadable fixture is not a reason to refuse to work. It is a reason to
+            // say the check did not happen, which the null does.
+            return null;
+        }
+
+        if (!reply.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)
+        {
+            return null;
+        }
+
+        return new ParityResult
+        {
+            Passed = reply.TryGetProperty("passed", out var passed) && passed.ValueKind == JsonValueKind.True,
+            MaxAbsoluteDifference = reply.TryGetProperty("maxAbsDiff", out var max) ? max.GetDouble() : double.NaN,
+            DecisionFlipPercent = reply.TryGetProperty("decisionFlipPercent", out var flips) ? flips.GetDouble() : 0,
+            Tolerance = reply.TryGetProperty("tolerance", out var tolerance) ? tolerance.GetDouble() : double.NaN,
+        };
+    }
+
+    public async Task<IReadOnlyList<SpeakerTurn>> LabelAsync(
+        IAudioSource audio,
+        SpeakerLabellingOptions options,
+        IProgress<TranscriptionProgress>? progress = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(audio);
+        ArgumentNullException.ThrowIfNull(options);
+
+        await LoadAsync(ct).ConfigureAwait(false);
+
+        var wav = await WriteResampledWavAsync(audio, ct).ConfigureAwait(false);
+        try
+        {
+            var total = audio.Duration;
+            var relay = progress is null ? null : new Progress<(int Completed, int Total)>(step =>
+            {
+                // The sidecar counts chunks; the host reports audio. Converting here keeps the
+                // protocol's unit its own and the UI's unit the UI's.
+                var fraction = step.Total > 0 ? step.Completed / (double)step.Total : 0d;
+                progress.Report(new TranscriptionProgress
+                {
+                    Stage = TranscriptionStage.LabellingSpeakers,
+                    Processed = total is { } known ? known * Math.Clamp(fraction, 0d, 1d) : TimeSpan.Zero,
+                    Total = total,
+                });
+            });
+
+            var reply = await _sidecar.SendAsync("label", writer =>
+            {
+                writer.WriteString("wav", wav);
+                writer.WriteStartObject("postProcessing");
+                writer.WriteNumber("onset", _options.PostProcessing.Onset);
+                writer.WriteNumber("offset", _options.PostProcessing.Offset);
+                writer.WriteNumber("padOnset", _options.PostProcessing.PadOnset.TotalSeconds);
+                writer.WriteNumber("padOffset", _options.PostProcessing.PadOffset.TotalSeconds);
+                writer.WriteNumber("minimumSpeechSeconds", _options.PostProcessing.MinimumSpeechDuration.TotalSeconds);
+                writer.WriteNumber("minimumSilenceSeconds", _options.PostProcessing.MinimumSilenceDuration.TotalSeconds);
+                writer.WriteEndObject();
+            }, relay, ct).ConfigureAwait(false);
+
+            return ReadTurns(reply);
+        }
+        finally
+        {
+            TryDelete(wav);
+        }
+    }
+
+    /// <summary>
+    /// Drains the source, resamples to 16 kHz and writes a temporary mono WAV.
+    /// </summary>
+    /// <remarks>
+    /// The whole file lands in memory before it is written, which is what the in-process engine did
+    /// too — the diariser is not a streaming consumer, and its speaker cache needs the recording in
+    /// order anyway. Three hours of 16 kHz mono float32 is about 690 MB, which is the ceiling this
+    /// accepts.
+    /// </remarks>
+    private static async Task<string> WriteResampledWavAsync(IAudioSource audio, CancellationToken ct)
+    {
+        var resampler = new Resampler(audio.SampleRate, TargetSampleRate);
+        var samples = new List<float>();
+
+        await foreach (var block in audio.ReadAsync(ct).ConfigureAwait(false))
+        {
+            resampler.Process(block.Span, samples);
+        }
+
+        resampler.Complete(samples);
+
+        var path = Path.Combine(Path.GetTempPath(), $"uindosill-diarise-{Guid.NewGuid():N}.wav");
+        try
+        {
+            WavWriter.WriteFile(path, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(samples), TargetSampleRate);
+        }
+        catch (Exception exc)
+        {
+            TryDelete(path);
+            throw new PythonSidecarException(
+                $"Could not stage the audio for the diariser at {path}: {exc.Message}", exc);
+        }
+
+        return path;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // A temp file that outlives the run is untidy, not a failure worth surfacing.
+        }
+    }
+
+    private static SpeakerLabellerCapabilities ReadCapabilities(JsonElement element) => new()
+    {
+        EngineName = element.TryGetProperty("engineName", out var name)
+            ? name.GetString() ?? "sortformer-onnx-python"
+            : "sortformer-onnx-python",
+        ModelId = element.TryGetProperty("modelId", out var id) ? id.GetString() : null,
+        Backend = element.TryGetProperty("backend", out var backend)
+            ? ParseBackend(backend.GetString())
+            : ComputeBackend.Cpu,
+        SupportsFixedSpeakerCount = element.TryGetProperty("supportsFixedSpeakerCount", out var fixedCount)
+                                    && fixedCount.ValueKind == JsonValueKind.True,
+        MaxSpeakers = element.TryGetProperty("maxSpeakers", out var max) && max.ValueKind == JsonValueKind.Number
+            ? max.GetInt32()
+            : null,
+        ReliableUpTo = element.TryGetProperty("reliableUpToSeconds", out var reliable)
+                       && reliable.ValueKind == JsonValueKind.Number
+            ? TimeSpan.FromSeconds(reliable.GetDouble())
+            : null,
+    };
+
+    private static ComputeBackend ParseBackend(string? value) => value switch
+    {
+        "cuda" => ComputeBackend.Cuda,
+        "dml" => ComputeBackend.DirectMl,
+        "webgpu" => ComputeBackend.WebGpu,
+        _ => ComputeBackend.Cpu,
+    };
+
+    private static IReadOnlyList<SpeakerTurn> ReadTurns(JsonElement reply)
+    {
+        if (!reply.TryGetProperty("turns", out var turns) || turns.ValueKind != JsonValueKind.Array)
+        {
+            throw new PythonSidecarException("The diariser returned no turns array.");
+        }
+
+        var result = new List<SpeakerTurn>(turns.GetArrayLength());
+        foreach (var turn in turns.EnumerateArray())
+        {
+            var built = new SpeakerTurn
+            {
+                Start = TimeSpan.FromSeconds(turn.GetProperty("start").GetDouble()),
+                End = TimeSpan.FromSeconds(turn.GetProperty("end").GetDouble()),
+                Speaker = turn.GetProperty("speaker").GetString() ?? "spk?",
+            };
+
+            built.Validate();
+            result.Add(built);
+        }
+
+        return result;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _loadGate.Dispose();
+        if (_ownsSidecar)
+        {
+            await _sidecar.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+}

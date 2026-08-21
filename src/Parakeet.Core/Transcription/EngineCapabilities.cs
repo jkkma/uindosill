@@ -72,4 +72,31 @@ public enum ComputeBackend
 
     /// <summary>ggml-CUDA. Ships its own cudart, so no CUDA Toolkit on the user's machine.</summary>
     Cuda = 2,
+
+    /// <summary>
+    /// ONNX Runtime's DirectML provider: any Direct3D 12 GPU, so AMD and Intel as well as NVIDIA.
+    /// </summary>
+    /// <remarks>
+    /// The odd one out here, and deliberately its own member rather than folded into
+    /// <see cref="Vulkan"/>. The other three are ggml backends and describe the ASR engine; this one
+    /// belongs to the ONNX components and never runs parakeet.cpp. Reporting it as Vulkan would
+    /// claim a backend the transcript was not produced on, and reporting it as
+    /// <see cref="Cpu"/> would claim a numerical portability it does not have — measured
+    /// 2026-08-21, DirectML at its own default settings scores 53.15% DER against the CPU's
+    /// 16.33% on AMI test while looking entirely healthy.
+    /// </remarks>
+    DirectMl = 3,
+
+    /// <summary>
+    /// ONNX Runtime's WebGPU provider: any GPU with a Direct3D 12 or Vulkan driver, on one code
+    /// path for every vendor.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="DirectMl"/> this belongs to the ONNX components and never runs parakeet.cpp.
+    /// Measured 2026-08-21 on AMI test it scores <b>16.3319%</b> DER against the CPU's 16.3347% — a
+    /// difference of 0.0028 points, smaller than this project's own C#-against-Python port
+    /// difference — so unlike the other GPU providers here it does not move the number that is
+    /// published.
+    /// </remarks>
+    WebGpu = 4,
 }
