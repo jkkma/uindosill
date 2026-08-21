@@ -70,9 +70,10 @@ nothing has packaged one.
   nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
   languages and Slovak misses by 0.74, and the human adequacy check has been declined. Those scores
   came from `optimum` and `transformers` over these same graphs at beam 6, which is the decode the
-  sidecar now runs — but **the 8,149-sentence run has not been repeated against the sidecar
-  itself**, and what has been is a six-sentence parity fixture and one Spanish sentence on two
-  providers. That is a smoke test, not a corpus score. Translation carries no word timings, and the
+  sidecar now runs — and on 2026-08-21 the 8,149-sentence run **was** repeated against the sidecar
+  itself, which reproduced every recorded hypothesis character for character: **8,149 of 8,149, all
+  24 languages at 100%**, on WebGPU against the gate's CPU. One machine, so the figures describe
+  this decode rather than every machine's. Translation carries no word timings, and the
   word-timed subtitle format is refused rather than written against times that no longer fit the
   words. What is measured and what is not is in
   [UNPROVEN.md](docs/UNPROVEN.md); the decision is in [PHASES.md](docs/PHASES.md).

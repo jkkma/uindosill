@@ -300,8 +300,10 @@ say it disagreed. **The translator's fixture is the weaker instrument and says s
 compared by string equality, with no margin at all, so a provider wrong only on long or unusual
 inputs passes it. It catches the failure that has actually been seen — DirectML wrong on all 32
 sentences measured — and nothing subtler. What establishes a translator on a machine is the gate
-corpus, and **the 8,149-sentence gate has not been re-run against the sidecar translator**; what has
-been run is a six-sentence smoke test on one machine.
+corpus, and on 2026-08-21 that corpus was run against the sidecar on one machine: **8,149 of 8,149
+sentences reproduce the gate's recorded hypothesis character for character, all 24 languages at
+exactly 100%**, on WebGPU against the gate's CPU. That is one machine, not the thread-count caveat
+retired — see `docs/UNPROVEN.md`.
 
 ### Why the boundary is testable without a Python
 

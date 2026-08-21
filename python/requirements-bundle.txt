@@ -7,11 +7,17 @@
 #
 # **What "measured against" means differs by line, and the difference is worth stating.** The
 # execution-provider arms of 2026-08-21 ran on exactly these versions. The translator's
-# 8,149-sentence gate of 2026-08-20 did **not**: it ran under CPython 3.14 on `onnxruntime` 1.29.0,
-# and `tests/fixtures/translation/marian-tokenizer.json` records that stack under `producedBy`.
-# What carried across unchanged from it are the three that decide the decode — torch 2.13.0,
-# transformers 4.57.6, optimum 2.1.0. The interpreter and the runtime did not, and re-running
-# `scripts/measure-translation-agreement.ps1` is what would close that.
+# 8,149-sentence gate of 2026-08-20 did **not**: it ran on `onnxruntime` 1.29.0, on the CPU, as its
+# own `translation-quality.json` records under `producedBy`. What carried across unchanged from it
+# are CPython 3.12.10 and the three packages that decide the decode — torch 2.13.0,
+# transformers 4.57.6, optimum 2.1.0. The runtime did not, and **the gap that leaves is measured
+# rather than assumed**: on 2026-08-21 `scripts/measure-translation-agreement.ps1` put the whole
+# gate corpus back through these versions and got **8,149 of 8,149 recorded hypotheses back
+# character for character**, all 24 languages at 100%, on WebGPU against the gate's CPU.
+#
+# The CPython 3.14 stack in `tests/fixtures/translation/marian-tokenizer.json` is a different
+# artefact's — the tokenizer fixture and the export, not the gate — and this comment claimed it as
+# the gate's until 2026-08-21.
 #
 # **onnxruntime-webgpu, not onnxruntime.** It carries the CPU provider as well, so this one wheel is
 # both shipping providers. Measured 2026-08-21 on AMI test, WebGPU scores 16.3319% against the CPU's

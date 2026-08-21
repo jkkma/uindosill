@@ -20,8 +20,10 @@
     the same library that wrote the reference, at the same settings, over the same graphs. So the
     expected result went from "reproduces it to within a recorded handful of disagreements" to
     "reproduces it exactly", and the one recorded disagreement (Hungarian 1818, 171 dots against
-    248) should be gone. **It has not been run against the sidecar.** Until it has, the chrF++
-    figures describe the shipping decode by construction rather than by measurement.
+    248) should be gone. **Run against the sidecar on 2026-08-21: 8,149 of 8,149, all 24 languages
+    at exactly 100%, Hungarian 1818 included.** So the chrF++ figures are measured to describe the
+    shipping decode rather than argued to — on one machine, which is what re-running this on another
+    would extend.
 
     So the number this prints is an **agreement rate**, per language, and it is not a quality score.
     It says nothing about whether the translations are good; `docs/UNPROVEN.md` carries the chrF++
@@ -194,7 +196,7 @@ foreach ($code in $codes) {
                 id         = $rows[$i].id
                 source     = $rows[$i].source
                 recorded   = $rows[$i].hypothesis
-                csharp     = $english[$i]
+                sidecar    = $english[$i]
                 reference  = $rows[$i].reference
             })
         }
@@ -242,7 +244,7 @@ Set-Content -LiteralPath (Join-Path $out 'agreement.json') `
     -Value ($payload | ConvertTo-Json -Depth 6) -Encoding utf8NoBOM
 
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add('# C# decode loop against the recorded gate hypotheses')
+$lines.Add('# The shipping decode against the recorded gate hypotheses')
 $lines.Add('')
 $lines.Add("Reference run ``$(Split-Path -Leaf $runDirectory)``, variant ``$(Split-Path -Leaf $Variant)``, " +
            "$(if ($Threads -gt 0) { "$Threads intra-op threads" } else { "ONNX Runtime's own thread count" }).")

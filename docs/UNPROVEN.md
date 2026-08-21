@@ -2202,23 +2202,37 @@ describes the loop that runs. The one worth keeping in reach is the account of w
 processors this checkpoint's decode applies — two, and no more — because nothing in this repository
 reads that off the library any more; `attic/README.md` says where the reading lives.
 
-**The chrF++ table now describes the shipping decode by construction rather than by measurement,
-which is a better position than the port was in and is still not a measurement.** The 8,149-sentence
-run of 2026-08-20 went through `transformers.generate` at those settings, and the sidecar calls the
-same function at the same settings on the same pinned graphs, so there is no second implementation
-left to diverge. What that does not remove is the caveat the port's own agreement measurement
-carried, which applies unchanged: **ONNX Runtime partitions a matmul's reductions by thread count**,
-so a machine with a different core count computes slightly different logits, and the only thing
-between that and a different sentence is that no two candidates were close enough to swap. **The
-8,149-sentence gate has not been re-run against the sidecar translator**, on this machine or any
-other, and nothing below should be read as though it had.
+**The chrF++ table describes the shipping decode, and as of 2026-08-21 that is measured rather than
+argued.** The whole gate corpus went back through `uindosill translate` against the sidecar — 24
+languages, 8,149 sentences, held to the hypotheses the 2026-08-20 run itself recorded — and **8,149
+of 8,149 reproduce the recorded hypothesis character for character: 100%, every one of the 24
+languages at exactly 100%, and not one disagreeing pair to write out.** Run on the desktop against
+`fp32-merged` on **WebGPU**, at a mean **0.526 s per sentence** against the gate run's own 0.618 on
+the CPU. `runs/translation-agreement/20260821-081700-fp32-merged/` holds it.
 
-**What has actually been run is a smoke test, and it is worth stating at its real size.** On the
+**The one disagreement the C# port carried is gone, which is the result the retirement predicted.**
+Hungarian 1818 — the already-degenerate sentence where the port wrote 171 trailing dots against the
+recorded 248 — is now inside hu's 348 of 348. So the +0.04 chrF++ that the entry above computes in
+the port's favour describes nothing that ships, and all 24 published figures are the shipping
+decode's own rather than 23 of them.
+
+**What the run crossed, and the one thing it did not.** Same machine, and the same three packages
+that decide the decode as the gate — torch 2.13.0, transformers 4.57.6, optimum 2.1.0, on the same
+CPython 3.12.10 — but **a different ONNX Runtime and a different execution provider: 1.27.0 on
+WebGPU here against 1.29.0 on the CPU there**. So agreement survives a runtime version and a
+provider change, which is more than was asked of it. What it does not touch is the caveat the port's
+own agreement measurement carried, which applies unchanged: **ONNX Runtime partitions a matmul's
+reductions by thread count**, so a machine with a different core count computes slightly different
+logits, and the only thing between that and a different sentence is that no two candidates were
+close enough to swap. **No second machine has run this**, and the interpreter was a virtual
+environment matching `python/requirements-bundle.txt` line for line rather than an assembled bundle.
+
+**Before that corpus run there was a smoke test, and it is worth keeping at its real size.** On the
 desktop on 2026-08-21, against the real `fp32-merged` checkpoint through the sidecar: on the **CPU**,
 load 10.1 s, the six committed parity sentences back 6 of 6 identical, and 0.30 s for one 18-token
 Spanish sentence; on **WebGPU**, load 5.7 s, 6 of 6, and 0.19 s for the same sentence. **One
 machine, one checkpoint, six sentences and a stopwatch.** It is not a corpus score, and the loads
-were against a virtual environment rather than a bundle that does not exist yet.
+were against a virtual environment rather than an assembled bundle.
 
 **One thing that run did close.** *No sentence in the corpus exceeds 512 tokens*, above, records
 that the over-long path had never been exercised against anything. It has now: an **802-token source

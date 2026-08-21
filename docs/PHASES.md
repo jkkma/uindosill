@@ -1503,8 +1503,9 @@ and nothing subtler. Neither replaces a corpus score.
 
 **What this does not establish.** No AMD GPU has run any of it, and DirectML's defect was
 driver-mediated, so "faithful on one RTX 5080" does not transfer. No Apple platform has been
-attempted. The 8,149-sentence translation gate has **not** been re-run against the sidecar
-translator — what has been run is a six-sentence smoke test on one machine. And no installer has been
+attempted. The 8,149-sentence translation gate **was** re-run against the sidecar translator on
+2026-08-21 and reproduced all 8,149 recorded hypotheses exactly, but on **one machine** — a second
+core count computes slightly different logits and none has been tried. And no installer has been
 packed with a bundle inside it, so nothing is known about what it does to a download, to a delta
 package or to SmartScreen. `docs/UNPROVEN.md` carries each of these.
 
