@@ -1554,10 +1554,12 @@ without it**, alongside the four that decide installability.
 
 **Which of the three answered is now carried on the resolution rather than inferred**, which is what
 makes `UINDOSILL_PYTHON` a shipping mechanism rather than a development override, and is the first
-reason this project has had to report *which* interpreter a run used. **Nothing prints it yet.**
-Until 2026-08-21 `PythonRuntime.Resolution.Overridden` was computed and unit-tested with no
-production caller at all; it now has a `Source` and a phrase to describe it, and still no caller —
-which is why the 2026-08-21 agreement run's interpreter is written into its prose by hand.
+reason this project has had to report *which* interpreter a run used. **`uindosill doctor` prints
+it**: the interpreter, the package root, and which of the three answered — or, when none did, the
+reason with both paths in it. Until 2026-08-21 `PythonRuntime.Resolution.Overridden` was computed
+and unit-tested with **no production caller at all**, which is why that day's agreement run has its
+interpreter written into its prose by hand rather than recorded by the run that used it. A
+measurement taken from here on can be asked instead.
 
 **Unrun, and that is the whole of what is unproven here.** The code is built, tested and
 parse-checked; **`package-windows.ps1` has not been executed with these changes**, because no
