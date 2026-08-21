@@ -46,11 +46,18 @@ NeMo model card is therefore not on this scale until it is rescored at `--collar
 
 ## `sortformer/` — what the reference diariser computed
 
-Eight files, 859 KiB, written by `scripts/make-diariser-fixtures.py` and asserted by
-`tests/Parakeet.Engine.Sortformer.Tests/`. They are the whole of the correctness claim for the C#
-port of Streaming Sortformer, and they exist because the ONNX graph does not own the pipeline: the
-mel featurizer, the Arrival-Order Speaker Cache and the chunk loop are all the host's, and each is a
-place where a plausible implementation produces a worse DER without failing.
+Eight files, 859 KiB, written by `scripts/make-diariser-fixtures.py`. They were the whole of the
+correctness claim for the C# port of Streaming Sortformer, and they existed because the ONNX graph
+does not own the pipeline: the mel featurizer, the Arrival-Order Speaker Cache and the chunk loop
+were all the host's, and each is a place where a plausible implementation produces a worse DER
+without failing.
+
+**Nothing in the solution reads them any more.** The port was retired on 2026-08-21 — the diariser
+runs in a bundled Python, where those three pieces are NVIDIA's own code rather than a
+reimplementation of it — and the tests that asserted these files went with it to
+`attic/Parakeet.Engine.Sortformer.Tests/`, which is unbuilt. They are kept because they are the
+oracle: they are what a future reimplementation of any part of that pipeline would have to be held
+against, and regenerating them needs the reference environment described below.
 
 The generator **imports the reference and runs it** — NVIDIA's own `SortformerModules` and NeMo's
 own `FilterbankFeatures` — and commits what they returned. It needs torch, numpy, librosa and a

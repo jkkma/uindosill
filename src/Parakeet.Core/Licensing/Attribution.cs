@@ -476,20 +476,55 @@ public static class Attributions
                 "Copyright (c) Velopack Ltd. All rights reserved. Shipped in the desktop application "
                 + "only; the command-line tool carries none of it.",
         },
-        // Ships with any build that carries the speaker opt-in: one native library per RID, about
-        // 16 MB on win-x64. MIT itself, but it statically links 69 third-party components with
-        // their own notices — Intel MKL, protobuf, Eigen, oneDNN, abseil, XNNPACK and the rest —
-        // and the package's own ThirdPartyNotices.txt is 343 KB of them. Summarising that into a
-        // row here would be inventing a licence for each; the file is shipped verbatim instead.
+        // Ships with any build that carries the speaker or English opt-in — and since 2026-08-21 it
+        // arrives as the `onnxruntime-webgpu` wheel inside the bundled Python rather than as a NuGet
+        // package beside the managed assemblies, because both graphs run in that interpreter now. The
+        // obligation did not move with the binary: it is MIT and it statically links dozens of
+        // third-party components with their own notices — Intel MKL, protobuf, Eigen, oneDNN, abseil,
+        // XNNPACK and the rest — whose ThirdPartyNotices.txt is shipped verbatim rather than
+        // summarised into a row here, because summarising it would mean inventing a licence for each.
         new ComponentLicence
         {
-            Component = "ONNX Runtime (onnxruntime.dll, Microsoft.ML.OnnxRuntime 1.29.0)",
+            Component = "ONNX Runtime (onnxruntime-webgpu 1.27.0, inside the bundled Python)",
             License = "MIT",
             Uri = new Uri("https://github.com/microsoft/onnxruntime"),
             Notes =
-                "Copyright (c) Microsoft Corporation. Runs the speaker diarisation model. Bundles 69 " +
-                "third-party components under their own licences; ONNX Runtime's ThirdPartyNotices.txt " +
-                "is redistributed verbatim rather than summarised here.",
+                "Copyright (c) Microsoft Corporation. Runs the speaker diarisation and translation " +
+                "models. Bundles many third-party components under their own licences; ONNX Runtime's " +
+                "ThirdPartyNotices.txt is redistributed verbatim rather than summarised here. The copy " +
+                "in licences/ is the 1.29.0 .NET package's; reconciling it against the 1.27.0 wheel's " +
+                "own is an open item in docs/LICENSING.md.",
+        },
+        // The interpreter and its packages, as one row rather than fifty-one. That is a decision and
+        // not a shortcut: enumerating them is owed, docs/LICENSING.md records the enumeration as far
+        // as it has been taken, and every attempt so far has been made against a development virtual
+        // environment rather than against an assembled bundle — which is known to differ by at least
+        // one package. A row per package written from the wrong environment would be a notice that
+        // names things this product does not ship and omits things it does.
+        new ComponentLicence
+        {
+            Component = "Bundled CPython 3.12.10 and the Python packages the engines run in",
+            License = "PSF License (CPython) and the packages' own — see docs/LICENSING.md",
+            Uri = new Uri("https://docs.python.org/3/license.html"),
+            Notes =
+                "The speaker labelling and English opt-ins run out of process in an interpreter that " +
+                "ships inside this application; nothing is installed on the machine. Its packages are " +
+                "pinned in python/requirements-bundle.txt and are predominantly Apache-2.0, BSD and MIT, " +
+                "with LGPL-2.1 native libraries among them. The full enumeration and what is still " +
+                "unverified about it are in docs/LICENSING.md.",
+        },
+        // NVIDIA's own source, called rather than reimplemented. Two files, unmodified, under
+        // Apache-2.0 — separate from the diarisation *weights*, which are under the NVIDIA Open
+        // Model License and have their own row. NOTICE.md carries the §4 check.
+        new ComponentLicence
+        {
+            Component = "NVIDIA NeMo (vendored source, python/uindosill_engines/_vendor/nemo/)",
+            License = "Apache-2.0",
+            Uri = new Uri("https://github.com/NVIDIA/NeMo"),
+            Notes =
+                "Copyright (c) 2025, NVIDIA CORPORATION. Two files carried unmodified so the diariser's " +
+                "arrival-order speaker cache is NVIDIA's own code rather than a port of it; the rest of " +
+                "the vendored tree is stubs written for this project. See NOTICE.md.",
         },
         // The one entry here that is not MIT, and the reason this list is rendered rather than
         // summarised as "MIT dependencies". cudart64_12.dll, cublas64_12.dll and cublasLt64_12.dll

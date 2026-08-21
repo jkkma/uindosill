@@ -10,6 +10,15 @@ want a copy of the licence, a statement of what was changed, and the notices the
 Which entry has which licence is asserted by a test, so adding a fourth is a deliberate act rather
 than a drift.
 
+**And from 2026-08-21 the installer is built to carry a Python — though none has been built yet.**
+The diariser and the translator moved out of C# and into a bundled interpreter, and
+`scripts/bundle-python.ps1` assembles one and `scripts/package-windows.ps1` puts it in the publish;
+what has not happened is a packaging run. The obligation arrives with the decision rather than with
+the first release, because it turns fifty third-party wheels and a CPython from things this project
+*depends on* into things it *redistributes*. That is a different obligation and it is
+not discharged; the section below is the record of what will be owed, not a claim that anything has
+been done about it.
+
 ## The transcription weights are CC BY 4.0 (NVIDIA)
 
 Commercial redistribution and bundling **are** permitted. The condition is **not** "just
@@ -215,18 +224,147 @@ As everywhere else here: **no lawyer has read any of this.**
 
 ## ONNX Runtime is MIT, and carries 69 licences that are not
 
-The diariser runs on `onnxruntime.dll` from `Microsoft.ML.OnnxRuntime` 1.29.0 — the same source
-commit as the Python `onnxruntime` 1.29 the spike measured on, so the graph the product runs is the
-graph that was scored. The package itself is MIT, *Copyright (c) Microsoft Corporation*, and MIT
-requires the copyright notice **and the permission text** to travel with the binary, not the licence
-name. `licences/onnxruntime-LICENSE.txt` is that file, copied out of the restored package rather than
-from the repository, since a package and its repository can disagree.
+**It is no longer a .NET package.** Until 2026-08-21 the diariser ran `onnxruntime.dll` from
+`Microsoft.ML.OnnxRuntime` 1.29.0; it now runs the Python `onnxruntime-webgpu` **1.27.0** wheel
+inside the bundled interpreter, and so does the translator. Nothing in `Uindosill.slnx` references
+ONNX Runtime any more — the two projects that did are in `attic/`. Either way the package is MIT,
+*Copyright (c) Microsoft Corporation*, and MIT requires the copyright notice **and the permission
+text** to travel with the binary, not the licence name.
 
-It also statically links 69 third-party components — Intel MKL, protobuf, Eigen, oneDNN, abseil,
-XNNPACK, mimalloc and the rest — whose own notices are in a 343 KB `ThirdPartyNotices.txt`. That file
-is **redistributed verbatim** at `licences/onnxruntime-ThirdPartyNotices.txt` rather than summarised
-into the component table. Summarising it would mean transcribing 69 licences by hand, and getting one
-wrong is the same breach as omitting it.
+`licences/onnxruntime-LICENSE.txt` is that file, copied out of the restored .NET package rather than
+from the repository, since a package and its repository can disagree — and it is still the right
+text: the wheel's own `LICENSE` is byte-identical to it, compared on this machine 2026-08-21.
+
+**Its neighbour is where the version change shows.** ONNX Runtime statically links third-party
+components — Intel MKL, protobuf, Eigen, oneDNN, abseil, XNNPACK, mimalloc and the rest — whose own
+notices are in one file. `licences/onnxruntime-ThirdPartyNotices.txt` is the 1.29.0 package's, 343 KB
+and 69 notice blocks; the 1.27.0 wheel ships its own at 331 KB and 67, inside its package directory.
+The two carry the same fifty named components, and the difference is exactly two blocks the older
+file has and the newer does not — **Mbed TLS** and `microsoft/cpp_client_telemetry`. So the file the
+build copies into every publish **over-discloses rather than under-discloses**, which is the safe
+direction to be wrong in and is still not the shipped binary's own notice.
+
+That file is **redistributed verbatim** rather than summarised into the component table. Summarising
+it would mean transcribing dozens of licences by hand, and getting one wrong is the same breach as
+omitting it.
+
+## The bundled Python is fifty more redistributions, and none of them is discharged
+
+**Depending on a package and shipping it are different obligations, and this is the change that
+crosses from one to the other.** `PythonRuntime.Resolve` looks for `<app>/python/python.exe` — an
+interpreter beside the application, so a user installs nothing and no system Python is consulted.
+What that interpreter is made of is now something this project hands to people.
+
+**The set is pinned and it is not small.** `python/requirements-bundle.txt` names nine top-level
+packages and says why each version is the version it is; `scripts/bundle-python.ps1` unpacks a
+pinned embeddable CPython and installs them into it. Resolved against the working venv on
+2026-08-21 and then verified against an assembled bundle the same day, the transitive closure of
+those nine is **fifty distributions**. The pins live in that file and are not repeated here.
+
+**Every licence below was read off the installed `.dist-info/METADATA` on this machine**, not
+recalled. Grouped by what the metadata actually says, with the four that are not simply permissive
+held back for the paragraph after:
+
+- **MIT** — charset-normalizer, filelock, narwhals, onnxruntime-webgpu, platformdirs, pyyaml,
+  setuptools, urllib3; **MIT-0** — cffi.
+- **BSD-3-Clause** — fsspec, idna, joblib, lazy-loader, markupsafe, networkx, pooch, protobuf,
+  pycparser, scikit-learn, soundfile, threadpoolctl; **BSD-2-Clause** — decorator.
+- **Apache-2.0** — flatbuffers, ml-dtypes, msgpack, onnx, optimum-onnx, requests, sentencepiece,
+  transformers.
+- **ISC** — librosa. **PSF-2.0** — typing-extensions.
+- **Compound, where the expression is the licence** — numpy is *BSD-3-Clause AND 0BSD AND MIT AND
+  Zlib AND CC0-1.0*; torch is *Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND
+  BSD-3-Clause AND BSL-1.0 AND MIT*; llvmlite is *BSD-2-Clause AND Apache-2.0 WITH LLVM-exception*;
+  regex is *Apache-2.0 AND CNRI-Python*; packaging is *Apache-2.0 OR BSD-2-Clause*.
+- **A family without a version** — mpmath, numba and sympy say only "BSD"; huggingface-hub and
+  optimum say only "Apache"; scipy's `License` field is a copyright line rather than an identifier.
+  Their classifiers name the same family and nothing narrower. BSD-2 and BSD-3 differ by a clause
+  and there is more than one Apache licence, so these are recorded as read rather than resolved.
+- **No `License` field at all** — colorama, jinja2, safetensors and tokenizers. All that is known
+  about them here is a trove classifier naming a family: BSD for the first two, Apache for the other
+  two. **That is a weaker check than the rest of this file and is marked rather than tidied away.**
+
+**Four of the fifty are not simply permissive, and they are the ones to read twice.**
+
+1. **soxr is LGPL-2.1-or-later**, and its wheel bundles libsoxr (LGPL-2.1) and PFFFT. Nothing in
+   this project imports it; librosa declares it, and librosa is here for one call.
+2. **soundfile is BSD-3-Clause and its wheel is not.** `_soundfile_data/libsndfile_x64.dll` ships
+   with a `COPYING` beside it that is the **LGPL-2.1**. A table that read the package metadata and
+   stopped there would have recorded this one as BSD and missed it.
+3. **certifi is MPL-2.0** — file-level copyleft, weaker than the LGPL and still not MIT.
+4. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
+
+The LGPL is the one with a shape this product has to think about: it attaches conditions about
+relinking to a binary a recipient receives, and both of these arrive as prebuilt DLLs inside wheels.
+**Whether shipping them in an installer satisfies those conditions has not been worked out here.**
+
+**Most of the notice texts already travel, by accident of how wheels are built.** Forty-six of the
+fifty carry a `LICENSE`, `COPYING` or `NOTICE` inside their `.dist-info`, and `pip install --target`
+copies that directory, so those texts land in the bundle without anyone deciding they should.
+`onnxruntime-webgpu` is a forty-seventh by another route — its texts are in the package directory
+rather than the metadata. torch's wheel carries thirty-four third-party licence directories of its
+own and ONNX Runtime's carries 331 KB in one file; **nobody here has read either.**
+
+**Three ship no licence text anywhere: `flatbuffers`, `sentencepiece` and `tokenizers`.** All three
+are Apache — the first two say so in their metadata and the third only by classifier — and
+Apache-2.0 §4(a) wants a copy rather than a link, which is the same condition the translation weights
+already put on this repository. Those three texts have to be supplied by hand or the bundle does not
+meet them.
+
+**The closure was checked against an assembled bundle, and it is fifty.** The worry was general and
+sound — a set resolved from an existing virtual environment can differ from the one `pip` produces
+against `python/requirements-bundle.txt`, and `hf-xet` was the named candidate, since
+`huggingface-hub` declares it for x86_64 and amd64 without an extra. A bundle was assembled on
+2026-08-21 by `scripts/bundle-python.ps1` and its `Lib/site-packages` enumerated: **exactly the fifty
+above, and no `hf-xet`.** So the list is the shipped list rather than an approximation of it.
+
+**What that check does not settle** is that it stays fifty. It is one resolution, on one day, on
+Windows on x86-64, against an index that moves; `pip` is free to bring in a new transitive dependency
+the next time this runs. Nothing re-enumerates the bundle automatically and nothing compares a fresh
+enumeration against this list, so a fifty-first arriving silently is the failure mode that remains —
+and `scripts/bundle-python.ps1` is where a check for it would go.
+
+**CPython is the PSF License Agreement, and the Windows build adds a second party.** Version 2 of
+the Agreement, read from the installed CPython 3.12.10 on this machine on 2026-08-21: §2 permits
+redistribution *provided that* "PSF's License Agreement and PSF's notice of copyright ... are
+retained", and §3's summary-of-changes obligation does not arise because nothing is modified. The
+Windows binary build's `LICENSE.txt` then adds *Additional Conditions for this Windows binary build*
+covering Microsoft Distributable Code linked into every `.exe`, `.dll` and `.pyd`, with four
+restrictions: do not alter Microsoft's notices; do not use Microsoft's trademarks in a program's
+name or in a way suggesting endorsement; do not distribute the code to run on a non-Microsoft
+platform; do not put it in malicious or deceptive programs. The first two are the same shape as the
+NVIDIA endorsement clauses above, and this product already meets them for the same reason.
+
+`bundle-python.ps1` unpacks the embeddable zip whole and deletes nothing from it, so whatever licence
+text the archive carries arrives in `<app>/python` on its own. **That satisfies §2 by accident**, and
+a later step that trims the bundle for size would break it silently. Two things are unverified: the
+text read was the *installer* build's `LICENSE.txt` for that version rather than the embeddable
+zip's own, and the embeddable zip is the one that ships.
+
+**The vendored NeMo is the one part of the bundle whose obligation is already written down.**
+`python/uindosill_engines/_vendor/nemo/` holds two of NVIDIA's Apache-2.0 files and thirteen of this
+project's own; `NOTICE.md` carries the entry and the §4 check against it, and neither is repeated
+here.
+
+**Nothing above is discharged.** No notice package has been assembled for any of it, no audit has
+been run, and `uindosill notice` and the Licences tab say nothing about the Python. This section is
+the record of **what will be owed when an installer carries one** — written before the bundle is
+built rather than after, which is where the Marian §4(c) check was done and for the same reason.
+
+As everywhere else here: **no lawyer has read any of this.**
+
+## The C# engines moved to `attic/`, and their obligations did not
+
+`Parakeet.Engine.Sortformer` and `Parakeet.Engine.Marian` — the C# diariser and translator — left
+`src/` on 2026-08-21 for an unbuilt `attic/`. They are not in `Uindosill.slnx`, nothing references
+them, and **nothing ships them**, which is the whole of what changed: they are still files in a
+public repository under this project's MIT licence, and the two `PackageReference`s to
+`Microsoft.ML.OnnxRuntime` in their project files are the last ones in the tree.
+
+The weights sections above are untouched by the move, and that is the point worth stating. The same
+CC BY 4.0, NVIDIA Open Model License and Apache-2.0 material is used for the same purpose against
+the same conditions. **What changed is which process loads it, not who the licensee is or what the
+licence asks for.**
 
 ## Display it in the application
 
@@ -238,8 +376,15 @@ element-by-element assertion is the one above, on the shared renderer both surfa
 
 ## Dependencies
 
-parakeet.cpp MIT, ggml MIT, Avalonia MIT, NAudio MIT, CommunityToolkit.Mvvm MIT, Velopack MIT.
+parakeet.cpp MIT, ggml MIT, Avalonia MIT, NAudio MIT, CommunityToolkit.Mvvm MIT, Velopack MIT, and
+the two typefaces the window is drawn in — Instrument Sans and Chivo Mono — under **OFL-1.1**.
 Listed in `NOTICE.md` and rendered in the same panel.
+
+The OFL is the one licence here with a condition about the *name*: §5 forbids redistributing a
+modified font under its reserved name, which is why both faces ship whole and unmodified rather than
+subsetted to the few hundred glyphs the interface uses. Its copyright notice and licence must travel
+with every copy, so `licences/InstrumentSans-OFL.txt` and `licences/ChivoMono-OFL.txt` do; the CLI
+zip carries neither font, having no window to draw.
 
 Velopack is the newest and the only one that is not in every artefact: it builds the installer and
 performs the update check, so it ships in the desktop application and not in the CLI zip. Its

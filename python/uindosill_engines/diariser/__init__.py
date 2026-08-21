@@ -24,6 +24,51 @@ MAX_SPEAKERS = 4
 #: a fixed onset: right at 10, 30, 40 and 50 minutes across two episodes, then wrong past an hour.
 RELIABLE_UP_TO_SECONDS = 50 * 60
 
+#: What `auto` will settle on, best first — and the list the `providers` op reports as usable, so
+#: that what the host is told it may pick and what `auto` actually picks cannot drift apart.
+AUTO_ORDER = ["webgpu", "cuda"]
+
+
+def resolve_auto() -> list[str]:
+    """The providers `auto` will try for the diariser on this machine, best first.
+
+    Resolved here rather than by the host, because a host inspecting drivers would be guessing at
+    what only ONNX Runtime can answer. Only providers this project has measured are reachable this
+    way; the rest must be asked for by name.
+
+    **`get_available_providers()` is a weaker signal than it looks, so this is a shortlist rather
+    than an answer.** It reports the providers compiled into the wheel, not the ones this machine can
+    create — and since the bundle ships `onnxruntime-webgpu`, `WebGpuExecutionProvider` is in that
+    list on every machine, including one with no usable adapter at all. So the candidates are *tried*
+    in order by :meth:`Diariser.load`, which moves to the next when a session refuses to build.
+    Predicting instead of trying would leave both opt-ins dead on a VM or an RDP session, with the
+    CPU path — the reference path — unreachable.
+
+    **Measured is not the same as passing, and CUDA is the case that makes the difference.** It is
+    second in this list and it *fails* the parity fixture — 8.143e-04 against a threshold of 1e-4 —
+    so on a machine with CUDA and no WebGPU, `auto` selects a provider whose answer is not the one
+    the published figure describes. That is deliberate rather than an oversight: the alternative is
+    70x realtime where 971x was available, the failure is reported rather than silent (the host warns
+    on the backend and again on the parity result), and a diarisation is an opt-in a user chose. It
+    is written down here because "auto" reads like "safe" and on that machine it is not.
+
+    WebGPU before CUDA, and not because it is faster — it is not. Measured 2026-08-21 on AMI test:
+    WebGPU 16.3319% DER against the CPU's 16.3324%, a difference of 0.0005 points, while CUDA moves
+    the number to 16.1021%. A provider that reproduces the CPU's answer lets one published figure
+    describe every machine; one that does not means the figure describes whoever measured it. CUDA
+    buys 1.6x over WebGPU and costs that.
+
+    It is also the only provider here that is correct at ONNX Runtime's *default* optimisation level
+    — DirectML is catastrophically wrong there — and it needs no CUDA or cuDNN libraries, which is
+    about 1.65 GB of installer.
+    """
+    import onnxruntime as ort
+
+    from .engine import PROVIDERS
+
+    available = set(ort.get_available_providers())
+    return [p for p in AUTO_ORDER if PROVIDERS[p][0] in available] + ["cpu"]
+
 
 class Diariser:
     """Holds the loaded model for the life of the sidecar.
@@ -57,41 +102,29 @@ class Diariser:
         # until a model is actually asked for. torch alone is seconds of import.
         from .engine import SortformerEngine
 
-        # "auto" is resolved here rather than by the host, because the only thing that knows whether
-        # a provider will actually initialise is the ONNX Runtime that would have to initialise it.
-        # A host inspecting drivers would be guessing at that, and guessing wrong lands on a silent
-        # CPU fallback. Only providers whose parity with the CPU has been measured are reachable
-        # this way; the rest must be asked for by name.
-        if provider == "auto":
-            import onnxruntime as ort
+        # See resolve_auto: a shortlist to try rather than a prediction, because whether a provider
+        # will build a session is not a question `get_available_providers()` answers.
+        #
+        # **An explicit provider is one candidate and is never fallen back from.** Somebody who typed
+        # `cuda` and silently got the CPU has been told nothing, which is the failure this engine's
+        # registration assertion exists to prevent; only `auto` promised a choice, so only `auto`
+        # gets to make a second one.
+        candidates = resolve_auto() if provider == "auto" else [provider]
 
-            available = set(ort.get_available_providers())
-
-            # WebGPU before CUDA, and not because it is faster — it is not. Measured 2026-08-21 on
-            # AMI test: WebGPU 16.3319% DER against the CPU's 16.3347%, a difference of 0.0028
-            # points, while CUDA moves the number to 16.1021%. A provider that reproduces the CPU's
-            # answer lets one published figure describe every machine; one that does not means the
-            # figure describes whoever measured it. CUDA buys 1.6x over WebGPU and costs that.
-            #
-            # It is also the only provider here that is correct at ONNX Runtime's *default*
-            # optimisation level — DirectML is catastrophically wrong there — and it needs no CUDA
-            # or cuDNN libraries, which is about 1.65 GB of installer.
-            if "WebGpuExecutionProvider" in available:
-                provider = "webgpu"
-            elif "CUDAExecutionProvider" in available:
-                provider = "cuda"
-            else:
-                provider = "cpu"
-
-        try:
-            self._engine = SortformerEngine(
-                onnx_path=path,
-                threads=threads or 12,
-                provider=provider,
-                graph_optimization=graph_optimization,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise RequestError("model", f"could not load the diarisation graph: {exc}") from exc
+        failures = []
+        for candidate in candidates:
+            try:
+                self._engine = SortformerEngine(
+                    onnx_path=path,
+                    threads=threads or 12,
+                    provider=candidate,
+                    graph_optimization=graph_optimization,
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                failures.append(f"{candidate}: {exc}")
+        else:
+            raise RequestError("model", "could not load the diarisation graph. " + "; ".join(failures))
 
         self._model_id = model_id or os.path.splitext(os.path.basename(path))[0]
         self._model_path = path

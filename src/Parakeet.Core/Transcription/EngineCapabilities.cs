@@ -93,8 +93,8 @@ public enum ComputeBackend
     /// </summary>
     /// <remarks>
     /// Like <see cref="DirectMl"/> this belongs to the ONNX components and never runs parakeet.cpp.
-    /// Measured 2026-08-21 on AMI test it scores <b>16.3319%</b> DER against the CPU's 16.3347% — a
-    /// difference of 0.0028 points, smaller than this project's own C#-against-Python port
+    /// Measured 2026-08-21 on AMI test it scores <b>16.3319%</b> DER against the CPU's 16.3324% — a
+    /// difference of 0.0005 points, smaller than this project's own C#-against-Python port
     /// difference — so unlike the other GPU providers here it does not move the number that is
     /// published.
     /// </remarks>

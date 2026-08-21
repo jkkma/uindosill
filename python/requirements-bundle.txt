@@ -1,0 +1,59 @@
+# What the bundled Python carries, pinned.
+#
+# Every version here is one this project has measured against, and **every line carries one** —
+# an unpinned line in a file whose whole argument is pinning is a hole with a promise over it.
+# Loosening one is a decision to be recorded rather than a convenience: a resolver picking something
+# newer at package time would ship a stack nobody scored.
+#
+# **What "measured against" means differs by line, and the difference is worth stating.** The
+# execution-provider arms of 2026-08-21 ran on exactly these versions. The translator's
+# 8,149-sentence gate of 2026-08-20 did **not**: it ran under CPython 3.14 on `onnxruntime` 1.29.0,
+# and `tests/fixtures/translation/marian-tokenizer.json` records that stack under `producedBy`.
+# What carried across unchanged from it are the three that decide the decode — torch 2.13.0,
+# transformers 4.57.6, optimum 2.1.0. The interpreter and the runtime did not, and re-running
+# `scripts/measure-translation-agreement.ps1` is what would close that.
+#
+# **onnxruntime-webgpu, not onnxruntime.** It carries the CPU provider as well, so this one wheel is
+# both shipping providers. Measured 2026-08-21 on AMI test, WebGPU scores 16.3319% against the CPU's
+# 16.3324% — a difference of 0.0005 points — which is what makes it selectable automatically; CUDA
+# is faster and moves the number, and would cost about 1.65 GB of CUDA and cuDNN libraries besides.
+#
+# **1.27.0 rather than the 1.29.0 this repository pins for .NET**, because that is the newest release
+# `onnxruntime-webgpu` is published at. The version costs nothing here: measured 2026-08-21, the
+# diariser's parity fixture on cpu@1.27.0 against cpu@1.29.0 is 0.000e+00 — bit-identical.
+onnxruntime-webgpu==1.27.0
+
+# **torch is the CPU build and stays the CPU build.** It is here because `transformers.generate`
+# needs it and because the diariser calls NVIDIA's own SortformerModules, which is torch code; no
+# graph runs on it. That also means IO binding is off in the translator — `optimum` binds a KV cache
+# to a torch device — and the published 0.459 s/sentence WebGPU figure is a binding-off figure, so
+# it is a floor rather than a ceiling.
+#
+# On Windows the default PyPI wheel is the CPU build. On Linux it is not, and a bundle built there
+# would silently pull about 2 GB of CUDA libraries, so the index is named rather than assumed.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
+
+# The translator: HuggingFace's own tokenizer and beam search over optimum's ONNX Runtime sessions.
+# transformers is pinned to the version the checkpoint was exported by — its `generation_config.json`
+# records `"transformers_version": "4.57.6"` — because the decode's inherited defaults (length
+# penalty 1.0, early stopping off) are that version's.
+transformers==4.57.6
+optimum==2.1.0
+# The distribution that actually ships `ORTModelForSeq2SeqLM` and the merged KV-cache plumbing.
+# `optimum==2.1.0` does not pin it: `optimum/onnxruntime/modeling_seq2seq.py` appears in this
+# package's RECORD and not in optimum's, so leaving it loose left the decode itself unpinned.
+optimum-onnx==0.1.0
+sentencepiece==0.2.2
+
+# The diariser: soundfile reads the 16 kHz mono WAV the host writes, and librosa is used for exactly
+# one call, `librosa.filters.mel`, which builds the mel filterbank matrix.
+#
+# **That one call costs about 330 MB**, measured 2026-08-21: it drags in numba, llvmlite, scipy,
+# scikit-learn, soxr and pooch. It is here anyway because `diariser/feats.py` is the spike's file
+# carried across byte for byte, and that fidelity is what makes the 16.3324% figure describe this
+# code. Replacing the call with a committed filterbank would be a different artefact needing its own
+# measurement; docs/UNPROVEN.md records it as an open question rather than an oversight.
+librosa==1.0.0
+soundfile==0.14.0
+numpy==2.5.2

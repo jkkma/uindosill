@@ -44,11 +44,11 @@ public sealed record SidecarLabellerOptions
     public int IntraOpThreads { get; init; }
 
     /// <summary>
-    /// Execution provider: <c>cpu</c>, <c>cuda</c> or <c>dml</c>.
+    /// Execution provider: <c>auto</c>, <c>cpu</c>, <c>cuda</c>, <c>webgpu</c> or <c>dml</c>.
     /// </summary>
     /// <remarks>
     /// <b>This changes the answer, not only the speed.</b> Measured 2026-08-21 on AMI test: CPU
-    /// 16.3347%, CUDA 16.1021%, DirectML unfused 16.3319%, DirectML at its own default 53.15%. The
+    /// 16.3324%, WebGPU 16.3319%, CUDA 16.1021%, DirectML at its own default 53.15%. The
     /// provider therefore travels into the transcript's provenance, and a non-CPU provider is
     /// verified against the parity fixture before it is trusted.
     /// </remarks>
@@ -134,6 +134,50 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         _capabilities ?? throw new InvalidOperationException(
             "The diariser's capabilities are not known until it has been loaded.");
 
+    /// <summary>
+    /// The two limits of this model that a caller needs <i>before</i> anything is loaded, and
+    /// nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These are the questions the window has to answer while the queue is being built and the
+    /// weights are still on disk: how many voices can be told apart, and how long a recording the
+    /// labels have been established on. Both drive warnings that are worth reading before a batch
+    /// starts and worthless after it — "seven speakers was never reachable" said afterwards is not
+    /// a warning, it is an epitaph — so they cannot wait for a 453 MiB load to answer them.
+    /// </para>
+    /// <para>
+    /// <b>This is a second copy of two constants that live in the sidecar, and it is checked
+    /// against them.</b> <c>MAX_SPEAKERS</c> and <c>RELIABLE_UP_TO_SECONDS</c> belong to the engine
+    /// and are reported by it; a copy here that quietly disagreed would put a different number in
+    /// front of a user than the one the run honours. <see cref="LoadAsync"/> therefore refuses a
+    /// sidecar whose answer differs from this, which is the only thing that keeps the duplicate
+    /// from going stale — the check fires on the machine where the two halves are actually
+    /// together.
+    /// </para>
+    /// <para>
+    /// <b>The backend is not here, and its absence is the point.</b> It is the one thing only the
+    /// sidecar can answer, and this type has no field for it. Read <see cref="Capabilities"/> for
+    /// what ran and this for what the model is.
+    /// </para>
+    /// </remarks>
+    public static SpeakerLabellerLimits DeclaredLimits { get; } = new()
+    {
+        Name = "sortformer-onnx-python",
+
+        // The model estimates the count and cannot be told one.
+        SupportsFixedSpeakerCount = false,
+
+        // Architectural: the graph has four speaker slots, and a fifth voice is merged into one of
+        // the four rather than reported.
+        MaxSpeakers = 4,
+
+        // Where the evidence stops, not where the model does. Measured 2026-08-20 by growing a
+        // window from a fixed onset: right at 10, 30, 40 and 50 minutes across two episodes, then
+        // wrong past an hour.
+        ReliableUpTo = TimeSpan.FromMinutes(50),
+    };
+
     public async ValueTask LoadAsync(CancellationToken ct = default)
     {
         if (_capabilities is not null)
@@ -164,7 +208,14 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                 }
             }, null, ct).ConfigureAwait(false);
 
-            _capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
+            // Read into a local and published to the field only once every check has passed.
+            // `_capabilities` is also the "already loaded" short-circuit at the top of this method,
+            // so assigning it first would mean a throw from either check below left this labeller
+            // marked loaded — and the next call would return immediately, having skipped both. In a
+            // batch, where one labeller serves every file and a per-file failure does not stop the
+            // run, that turns a refusal into a warning that fires once and is then never seen again.
+            var capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
+            CheckDeclaredLimits(capabilities);
 
             // Every backend but the CPU is checked against the committed reference before it is
             // used, because the failure this catches is silent: measured 2026-08-21, DirectML at
@@ -172,10 +223,12 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // 16.33% while emitting speaker turns that read as perfectly ordinary. Two chunks of
             // synthetic mel is all it costs, and it is the only thing standing between a user and
             // a transcript that is wrong in a way nothing in it reveals.
-            if (_capabilities.Backend != ComputeBackend.Cpu)
+            if (capabilities.Backend != ComputeBackend.Cpu)
             {
                 Parity = await CheckParityAsync(ct).ConfigureAwait(false);
             }
+
+            _capabilities = capabilities;
         }
         finally
         {
@@ -317,6 +370,39 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         }
     }
 
+    /// <summary>
+    /// Refuses a sidecar whose limits are not the ones this build has been telling people about.
+    /// </summary>
+    /// <remarks>
+    /// The whole justification for <see cref="DeclaredLimits"/> existing is this check. A window
+    /// that has already warned about a fifty-minute bound and a four-speaker cap has made a promise
+    /// on the engine's behalf, and a bundled Python that disagrees turns that promise into a
+    /// misstatement nothing else would catch — the labels would come back looking ordinary. It is
+    /// the same failure the protocol-version check guards against and it gets the same treatment:
+    /// the two halves are out of step, so say so rather than run.
+    /// </remarks>
+    private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported)
+    {
+        // Name is not compared: it is the catalogue's id where there is one, and the two sides get
+        // it from different places by design. The numbers are the claim.
+        if (reported.MaxSpeakers != DeclaredLimits.MaxSpeakers
+            || reported.ReliableUpTo != DeclaredLimits.ReliableUpTo
+            || reported.SupportsFixedSpeakerCount != DeclaredLimits.SupportsFixedSpeakerCount)
+        {
+            throw new PythonSidecarException(
+                $"The bundled Python's diariser reports a cap of {Describe(reported.MaxSpeakers)} speakers and " +
+                $"labels established to {Describe(reported.ReliableUpTo)}, and this build has been saying " +
+                $"{Describe(DeclaredLimits.MaxSpeakers)} and {Describe(DeclaredLimits.ReliableUpTo)}. Those " +
+                "numbers are what the warnings before a run are written from, so the two halves are out of step — " +
+                "reinstall rather than mixing them.");
+        }
+    }
+
+    private static string Describe(int? value) => value?.ToString() ?? "no limit on the";
+
+    private static string Describe(TimeSpan? value) =>
+        value is { } bound ? $"{bound.TotalMinutes:F0} minutes" : "no measured length";
+
     private static SpeakerLabellerCapabilities ReadCapabilities(JsonElement element) => new()
     {
         EngineName = element.TryGetProperty("engineName", out var name)
@@ -324,7 +410,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             : "sortformer-onnx-python",
         ModelId = element.TryGetProperty("modelId", out var id) ? id.GetString() : null,
         Backend = element.TryGetProperty("backend", out var backend)
-            ? ParseBackend(backend.GetString())
+            ? ExecutionProviders.Parse(backend.GetString())
             : ComputeBackend.Cpu,
         SupportsFixedSpeakerCount = element.TryGetProperty("supportsFixedSpeakerCount", out var fixedCount)
                                     && fixedCount.ValueKind == JsonValueKind.True,
@@ -335,14 +421,6 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                        && reliable.ValueKind == JsonValueKind.Number
             ? TimeSpan.FromSeconds(reliable.GetDouble())
             : null,
-    };
-
-    private static ComputeBackend ParseBackend(string? value) => value switch
-    {
-        "cuda" => ComputeBackend.Cuda,
-        "dml" => ComputeBackend.DirectMl,
-        "webgpu" => ComputeBackend.WebGpu,
-        _ => ComputeBackend.Cpu,
     };
 
     private static IReadOnlyList<SpeakerTurn> ReadTurns(JsonElement reply)

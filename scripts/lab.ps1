@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Thirteen scripts with thirteen names and thirteen flag sets is twelve names too many to remember
+    Fourteen scripts with fourteen names and fourteen flag sets is thirteen names too many to remember
     when you are switching between machines. This dispatches to them and nothing else: every task is
     still a script you can run directly, and this changes none of their behaviour.
 
@@ -69,8 +69,8 @@
     .\scripts\lab.ps1 wer -Backend cpu -Models tdt-0.6b-v3-f16
 
 .EXAMPLE
-    # Does the C# decode loop reproduce the English the translation gate was scored on? Start with
-    # Spanish: 348 sentences is minutes, and a port that is going to disagree disagrees there too.
+    # Does the shipping decode reproduce the English the translation gate was scored on? Start with
+    # Spanish: 348 sentences is minutes, and a decode that is going to disagree disagrees there too.
     .\scripts\lab.ps1 agreement -Languages es
 
 .EXAMPLE
@@ -102,7 +102,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement')]
+    [ValidateSet('vendor', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement', 'bundle')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -266,6 +266,7 @@ $tasks = [ordered]@{
     'der'           = 'measure-der.ps1'
     'agreement'     = 'measure-translation-agreement.ps1'
     'package'       = 'package-windows.ps1'
+    'bundle'        = 'bundle-python.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.

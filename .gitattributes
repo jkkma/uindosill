@@ -27,6 +27,15 @@ tests/fixtures/diarisation/**/expected.json text eol=lf
 # rejects every backend on somebody else's clone, including the CPU.
 *.npy binary
 
+# The translator's parity fixture and the sentences it is taken over. Written by the sidecar's own
+# `writeParityReference` op, which writes LF explicitly, and the sources by a generator that does the
+# same. Under the default CRLF conversion every regeneration would report both files as changed, and
+# the "re-running must be a no-op" property they are checked by would stop meaning anything — the
+# same rule, for the same reason, as the diarisation fixtures above. (The diariser's own reference is
+# an `.npy` and is covered by the binary rule above.)
+python/uindosill_engines/translator/parity-reference.json text eol=lf
+python/uindosill_engines/translator/parity-sources.json text eol=lf
+
 # Vendored NVIDIA NeMo source, kept LF so that a checkout is byte-identical to upstream rather than
 # merely equivalent to it. That is not tidiness: NOTICE.md claims these two files are unmodified
 # under Apache-2.0 §4(b), and the way anybody checks such a claim is to diff a checkout against

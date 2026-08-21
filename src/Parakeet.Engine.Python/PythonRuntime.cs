@@ -40,6 +40,32 @@ public static class PythonRuntime
     }
 
     /// <summary>
+    /// Resolves both halves, or reports why not. False is an answer rather than a failure.
+    /// </summary>
+    /// <remarks>
+    /// The window needs this shape and the command line does not. A missing bundled Python is a
+    /// reason to disable the speaker and English opt-ins <i>with the reason beside them</i> — the
+    /// same treatment a model that has not been downloaded gets — and a checkbox cannot be drawn
+    /// out of an exception. The command line meets the same situation as a command that fails, so
+    /// it uses <see cref="Resolve"/> and gets the message thrown.
+    /// </remarks>
+    public static bool TryResolve(out Resolution? resolution, out string? reason, string? baseDirectory = null)
+    {
+        try
+        {
+            resolution = Resolve(baseDirectory);
+            reason = null;
+            return true;
+        }
+        catch (PythonSidecarException exception)
+        {
+            resolution = null;
+            reason = exception.Message;
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Resolves both halves, or throws with the reason. <paramref name="baseDirectory"/> defaults
     /// to the application's own directory.
     /// </summary>

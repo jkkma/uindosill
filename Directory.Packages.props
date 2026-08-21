@@ -32,7 +32,13 @@
     <PackageVersion Include="NAudio.Wasapi" Version="2.3.0" />
     <PackageVersion Include="NAudio.Core" Version="2.3.0" />
 
-    <!-- Speaker diarisation. Microsoft.ML.OnnxRuntime carries only natives and pulls
+    <!-- **No project in Uindosill.slnx references this any more.** Both graphs moved into the
+         bundled Python on 2026-08-21, so ONNX Runtime arrives as a wheel rather than a NuGet
+         package; what still reads this line is `attic/Parakeet.Engine.Sortformer` and
+         `attic/Parakeet.Engine.Marian`, which are unbuilt. It is kept rather than deleted so that
+         adding one of them back to the solution to read it does not also mean reconstructing a pin.
+
+         Speaker diarisation. Microsoft.ML.OnnxRuntime carries only natives and pulls
          Microsoft.ML.OnnxRuntime.Managed for the C# API, so one reference gets both. 1.29.0 is
          built from the same source commit (2e2543f) as the Python onnxruntime 1.29 the diarisation
          spike measured on, so the graph this runs is the graph that was scored, not a later one.

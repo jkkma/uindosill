@@ -111,42 +111,30 @@ internal static class LabellerFactory
         }
 
         // Which provider ran changes the speaker labels and not only the clock, so a backend that
-        // moves the published figure says so. Measured on AMI test 2026-08-21: cpu 16.3347%,
+        // moves the published figure says so. Measured on AMI test 2026-08-21: cpu 16.3324%,
         // webgpu 16.3319%, cuda 16.1021%, DirectML at its own defaults 53.15%.
         //
         // Nothing is said for cpu or webgpu, and that silence is a measurement rather than an
-        // oversight: webgpu lands 0.0028 points from the CPU, which is closer than this project's
+        // oversight: webgpu lands 0.0005 points from the CPU, which is closer than this project's
         // own C#-against-Python port managed, so the published figure describes it. Warning on
         // every run about a backend that agrees would train people to ignore the line that matters.
-        var warning = labeller.Capabilities.Backend switch
+        // The finding itself lives in Parakeet.Core, where the window reads the same one; what this
+        // side adds is the remedy, which is a flag the window does not have.
+        if (SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend) is { } finding)
         {
-            ComputeBackend.Cuda =>
-                "Speaker labelling on cuda. It does not reproduce the CPU's probabilities — on AMI test it " +
-                "scores 16.10% against the CPU's 16.33%, and two CUDA runs on different driver and library " +
-                "versions have differed by 0.40 points — so these labels are this machine's result rather " +
-                "than the published one. Use webgpu for a figure that transfers.",
-            ComputeBackend.DirectMl =>
-                "WARNING: speaker labelling on DirectML, which has not passed parity here. At ONNX Runtime's " +
-                "default settings it scores 53.15% diarisation error against the CPU's 16.33% while producing " +
-                "speaker turns that look entirely normal. Treat these labels as unverified.",
-            _ => null,
-        };
-
-        if (warning is { } line)
-        {
-            context.WriteError(line);
+            context.WriteError(labeller.Capabilities.Backend == ComputeBackend.Cuda
+                ? finding + $" {request.BackendOption} webgpu is the one that transfers."
+                : finding);
         }
 
         // What the machine itself found, which outranks anything measured elsewhere. A backend can
         // be faithful on the hardware it was measured on and not on this one — DirectML's defect is
         // driver-mediated — so the reference figures above are a prior and this is the evidence.
-        if (labeller is SidecarSpeakerLabeller { Parity: { } parity } && !parity.Passed)
+        if (labeller is SidecarSpeakerLabeller { Parity: { Passed: false } parity })
         {
             context.WriteError(
-                $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by " +
-                $"up to {parity.MaxAbsoluteDifference:0.###e+00} against a tolerance of {parity.Tolerance:0.###e+00}. " +
-                "The speaker labels below are this machine's own result and no diarisation error rate published by " +
-                $"this project describes them. {request.BackendOption} cpu is the one that does.");
+                SpeakerLabelling.DescribeParityFailure(parity.MaxAbsoluteDifference, parity.Tolerance) +
+                $" {request.BackendOption} cpu is the one that does.");
         }
 
         // The seam's capabilities are the caller's to honour, and there are two separate things a

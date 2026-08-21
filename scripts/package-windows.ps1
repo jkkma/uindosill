@@ -58,6 +58,11 @@ param(
     [ValidateSet('win', 'win-cuda')]
     [string[]] $Channels = @('win', 'win-cuda'),
 
+    # Skip assembling the bundled Python. For iterating on packaging alone: the resulting installer
+    # carries no interpreter, so speaker labelling and translation are both dead in it, and the
+    # read-back below says so rather than letting it pass as a release.
+    [switch] $SkipPython,
+
     # Where the publish, the packages and the release feed land. Gitignored; nothing a build
     # produces belongs in the working tree.
     [string] $OutputDirectory,
@@ -283,6 +288,21 @@ foreach ($channel in $Channels) {
     }
     Write-Note "publish: $($publishedFiles.Count) files, self-contained"
 
+    # The bundled Python, which is where two of this product's three models actually run. It goes
+    # into the publish rather than being packed separately because Velopack ships a directory: what
+    # is here is what a user receives, and `PythonRuntime.Resolve` looks for `<app>/python`.
+    #
+    # Assembled after the publish on purpose. `dotnet publish` clears its output directory, so a
+    # bundle written first would be deleted by the very next run with -SkipPython.
+    $bundleDir = Join-Path $publishDir 'python'
+    if ($SkipPython) {
+        Write-Note 'not bundling Python: -SkipPython — speaker labelling and translation will be dead in this build'
+    }
+    else {
+        & (Join-Path $PSScriptRoot 'bundle-python.ps1') -Destination $bundleDir
+        if ($LASTEXITCODE -ne 0) { throw "Assembling the bundled Python failed for channel '$channel'." }
+    }
+
     # The build copies whatever is in native/ into the output, so a machine that has vendored CUDA
     # produces a CUDA-carrying publish for every channel. The channel is what decides which survives
     # into the package, and dropping the rest here — before packing, on disk, where it can be listed
@@ -315,16 +335,45 @@ foreach ($channel in $Channels) {
     # package's own RID assets), which is exactly why they are checked here: a build that silently
     # stopped copying them would produce a package that looks complete.
     foreach ($required in @(
-        'onnxruntime.dll',
         'licences/NVIDIA-Open-Model-License-2025-10-24.txt',
         'licences/onnxruntime-LICENSE.txt',
         'licences/onnxruntime-ThirdPartyNotices.txt')) {
         $path = Join-Path $publishDir $required
         if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
-            throw "$required is missing or empty in the publish. The speaker labelling opt-in needs " +
-                  "ONNX Runtime, and shipping it or the diarisation weights without these notices is a " +
-                  "licence breach rather than an untidy output directory. See docs/LICENSING.md."
+            throw "$required is missing or empty in the publish. The diarisation weights are under the NVIDIA " +
+                  "Open Model License, whose section 3.1 wants a copy of the Agreement rather than a link, and " +
+                  "'uindosill notice' prints the path to that copy — so a publish without it prints a promise it " +
+                  "does not keep. ONNX Runtime is MIT and still redistributed, inside the Python bundle rather than " +
+                  "beside the .NET assemblies since 2026-08-21, so its notices are still owed. See docs/LICENSING.md."
         }
+    }
+
+    # ONNX Runtime is no longer a .NET dependency: since 2026-08-21 both graphs run in the bundled
+    # Python, so the DLL itself now arrives inside `python/Lib/site-packages/onnxruntime` rather than
+    # beside the managed assemblies. Its notices still come from `licences/` and are still asserted
+    # above — what moved is the binary, not the obligation.
+    #
+    # **The committed notices are 1.29.0's and the bundle ships onnxruntime-webgpu 1.27.0.** Two
+    # versions, one ThirdPartyNotices.txt; docs/LICENSING.md is where that is reconciled or recorded
+    # as a gap, and this comment exists so the next person to read this file knows it is one.
+    if (-not $SkipPython) {
+        foreach ($required in @(
+            'python.exe',
+            'uindosill_engines/serve.py',
+            'uindosill_engines/diariser/parity-reference.npy',
+            'uindosill_engines/translator/parity-reference.json',
+            'Lib/site-packages/onnxruntime')) {
+            $path = Join-Path $bundleDir $required
+            if (-not (Test-Path -LiteralPath $path)) {
+                throw "python/$required is missing from the publish. Two of this product's three models run in " +
+                      "that bundle, and both parity references are what stand between a user and a silently " +
+                      "wrong execution provider."
+            }
+        }
+
+        $bundleSize = (Get-ChildItem -LiteralPath $bundleDir -Recurse -File |
+            Measure-Object -Property Length -Sum).Sum
+        Write-Note ("python bundle: {0:N2} GB" -f ($bundleSize / 1GB))
     }
 
     Write-Step "Packing '$channel' $Version"

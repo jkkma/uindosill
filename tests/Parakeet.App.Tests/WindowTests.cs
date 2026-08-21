@@ -311,7 +311,16 @@ public class ShutdownTests
 
         public Parakeet.Core.Diarisation.ISpeakerLabeller? CreateSpeakerLabeller() => _inner.CreateSpeakerLabeller();
 
-        public Parakeet.Core.Diarisation.SpeakerLabellerCapabilities? SpeakerLimits => _inner.SpeakerLimits;
+        public Parakeet.Core.Diarisation.SpeakerLabellerLimits? SpeakerLimits => _inner.SpeakerLimits;
+
+        public string? DescribeLabeller(Parakeet.Core.Diarisation.ISpeakerLabeller labeller) =>
+            _inner.DescribeLabeller(labeller);
+
+        public string? DescribeUnavailable(Parakeet.Core.Models.ModelTask task) =>
+            _inner.DescribeUnavailable(task);
+
+        public string? DescribeTranslator(Parakeet.Core.Translation.ITranscriptTranslator translator) =>
+            _inner.DescribeTranslator(translator);
 
         public bool SupportsTranslation => _inner.SupportsTranslation;
 
@@ -711,7 +720,7 @@ public class TranscribeViewModelTests
         Assert.Contains(withLabeller.Formats, f => f.Id == "rttm");
 
         var without = new TranscribeViewModel(
-            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName)),
+            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => true),
             () => new EngineSelection());
         Assert.DoesNotContain(without.Formats, f => f.Id == "rttm");
     }
@@ -737,7 +746,7 @@ public class TranscribeViewModelTests
     [Fact]
     public void WithoutTheDiarisationModelTheOptInIsDisabledWithAReasonAUserCanActOn()
     {
-        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName)), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => true), () => new EngineSelection());
 
         Assert.False(viewModel.CanLabelSpeakers);
         Assert.Contains("not installed", viewModel.SpeakerHint, StringComparison.Ordinal);
@@ -755,13 +764,13 @@ public class TranscribeViewModelTests
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
 
-        var before = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var before = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.False(before.CanLabelSpeakers);
         Assert.DoesNotContain(before.Formats, f => f.Id == "rttm");
 
         File.WriteAllText(store.PathFor(model), "not really a graph");
 
-        var after = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var after = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.True(after.CanLabelSpeakers);
         Assert.Null(after.SpeakerHint);
         Assert.Contains(after.Formats, f => f.Id == "rttm");
@@ -777,7 +786,7 @@ public class TranscribeViewModelTests
         var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
-        var viewModel = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
 
         var notified = new List<string?>();
         viewModel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
@@ -805,7 +814,7 @@ public class TranscribeViewModelTests
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
         File.WriteAllText(store.PathFor(model), "not really a graph");
 
-        var viewModel = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         viewModel.LabelSpeakers = true;
         Assert.Contains(viewModel.Formats, f => f.Id == "rttm");
 

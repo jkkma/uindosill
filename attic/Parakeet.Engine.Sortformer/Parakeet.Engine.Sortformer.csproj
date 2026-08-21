@@ -13,7 +13,7 @@
     appears there, so this is not a convention that can quietly erode.
   -->
   <ItemGroup>
-    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+    <ProjectReference Include="../../src/Parakeet.Core/Parakeet.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
