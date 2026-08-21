@@ -65,14 +65,16 @@ public interface ISpeakerLabeller : IAsyncDisposable   // who spoke when; the op
 ```
 
 The second contract sits beside the first for the same reason the first exists: the diarisation
-engine behind it is still being chosen by measurement, and the choice must stay one project's
-business. A labeller reads the audio itself and returns turns on the file's timeline; it never sees
-the transcript. Attributing words to turns and cutting segments where the speaker changes is a pure
-function of two lists (`SpeakerAssignment`), so the ASR engine and the labeller stay independently
-testable, and both audio sources being single-read means the opt-in opens the file a second time —
-a cost only the opt-in pays. `FakeSpeakerLabeller` is to this seam what the fake engine is to the
-other; the only labeller in this build is the fake, and both the CLI flag and the window's checkbox
-say so rather than pretend.
+engine behind it was chosen by measurement rather than by argument — sherpa-onnx was scored on AMI
+and held out — and that choice must stay one project's business. A labeller reads the audio itself
+and returns turns on the file's timeline; it never sees the transcript. Attributing words to turns
+and cutting segments where the speaker changes is a pure function of two lists
+(`SpeakerAssignment`), so the ASR engine and the labeller stay independently testable, and both
+audio sources being single-read means the opt-in opens the file a second time — a cost only the
+opt-in pays. `FakeSpeakerLabeller` is to this seam what the fake engine is to the other, and
+`--fake` still selects it so the opt-in stays exercisable on a machine with no weights installed;
+the labeller behind `--speakers` is `SortformerSpeakerLabeller` in `Parakeet.Engine.Sortformer`,
+and the window's checkbox loads the same one.
 
 ```csharp
 public interface ITranscriptTranslator : IAsyncDisposable   // the transcript in English; the opt-in's last pass
