@@ -39,7 +39,10 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
   and every format gains `Speaker 1:`, and `rttm` becomes available. It costs a second read of the
   file and a second model — NVIDIA's Streaming Sortformer, a separate 453 MiB download — and it
   **tells apart at most four speakers**, which is architectural rather than a setting: a fifth voice
-  is merged into one of the four and the product says so rather than degrading quietly. Measured on
+  is merged into one of the four and the product says so rather than degrading quietly. Its labels
+  are also **established only up to fifty minutes** — past that this model tends to hear one person
+  as two, so the window asks how many speakers there are and folds its labels down to that, rather
+  than estimating a number it is measured to get wrong. Measured on
   the AMI meeting corpus at **16.3% diarisation error rate** (collar 0, overlap scored) against the
   best published figure on the same audio, 18.8%; what that does and does not cover is in
   [UNPROVEN.md](docs/UNPROVEN.md), and it covers no podcast audio at all.
@@ -106,7 +109,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 778 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 793 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

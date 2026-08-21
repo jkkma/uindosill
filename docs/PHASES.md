@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 778 tests, no weights, no display, no network — **769 passed and 9 skipped**, and
+**Status:** met. 793 tests, no weights, no display, no network — **784 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the
@@ -1139,6 +1139,37 @@ on a three-hour recording the raw seconds mislead and the margin is the evidence
 
 **`docs/UNPROVEN.md` has the ladder, the shares and everything this does not establish** — no DER on
 any podcast, one show, the counts on the maintainer's word, and no root cause.
+
+### Settled 2026-08-20 — the repair reaches the window, and past the bound it is required
+
+**Both halves of the above were on the command line and neither was in the application**, which is
+the worse half of the gap: `--speaker-count` drove the fold and `DescribeDurationRisk` fired before
+`diarise` read a sample, while the window passed `SpeakerLabellingOptions.Default` — count null, fold
+never reached — and reported only `DescribeLimit` afterwards. A two-hour recording labelled there
+came back with speaker names, no warning that they were past where the evidence stops, and no
+control that would have repaired them.
+
+**The window now carries the count, and the warning arrives when the file is queued rather than when
+the batch ends.** Opening a container reads its header and not its audio, so the length is known at
+the moment a file is dropped — which is what makes the warning something a person can still act on
+rather than a note beside a finished transcript. The merges the fold makes are reported on the row
+with their margins, exactly as the command line prints them.
+
+**Past the bound a blank count stops the batch.** Not a default of two, and not a silent estimate:
+the fold merges whichever pair collides least whether or not the evidence supports it, so a guessed
+count forces an answer rather than estimating one, and puts two people under one name with no margin
+behind the merge. The window asks instead, and both ways out are decisions — give the number, or turn
+labelling off and take the transcript without names. Inside the bound nothing changes, because that
+is the range where estimating is measured to work.
+
+**`--speakers` keeps warning and running, and that asymmetry is deliberate.** A window has somebody
+in front of it who can answer a question; a command line is scripted, and a refusal there breaks a
+pipeline that has been running for months.
+
+**What this does not touch.** No measurement moved. The count is still a count rather than a DER, a
+count given past the bound is still unpriced, and the four-speaker cap is still architectural — above
+it the fold has nothing to fold, which is why a count over the cap is reported as unreachable rather
+than accepted.
 
 ### Published 2026-08-20 — the weights, and the licence check that had to come first
 

@@ -1133,11 +1133,27 @@ product offers.
 
 **The product now says so before it runs.** `SpeakerLabellerCapabilities.ReliableUpTo` is **fifty
 minutes** for this model and `SpeakerLabelling.DescribeDurationRisk` turns it into a sentence, fired
-by `diarise` and by `transcribe --speakers` on a file longer than that, before the labeller decodes a
-sample. Fifty rather than a rounder sixty because fifty is the longest length at which every window
-tested came out right — an hour is where one of four failed, and a bound set there would have let
-that window through without a word. It warns and continues, like the speaker-count cap: a long recording still transcribes
-correctly and it is only the speaker labels that are unestablished.
+by `diarise`, by `transcribe --speakers` and by the window on a file longer than that, before the
+labeller decodes a sample. Fifty rather than a rounder sixty because fifty is the longest length at
+which every window tested came out right — an hour is where one of four failed, and a bound set
+there would have let that window through without a word.
+
+**The command line warns and continues; the window refuses to start, and the asymmetry is the
+point.** Past the bound a blank count is not "let the model decide", it is "let the model do the one
+thing it is measured to get wrong here", silently, on a recording somebody is about to spend half an
+hour transcribing. A window has a person in front of it who can answer, so it asks: set a count, or
+turn labelling off and take the transcript without names. A command line is scripted, and a refusal
+there breaks a pipeline that has been running for months, so `--speakers` keeps warning and running.
+Both ways out of the window's refusal are decisions rather than guesses, and **the field is
+deliberately not defaulted to two**: the fold merges whichever pair collides least whether or not
+the evidence supports it, so a guessed count does not estimate the answer, it forces one — two
+people under one name with no margin behind the merge, which is worse than the over-segmentation it
+was reaching for. Inside the bound a blank count still runs and the model still estimates, because
+that is the range where estimating is measured to work.
+
+**None of that changes what is known.** The refusal is a user-interface decision about when to ask a
+question, not evidence about the labels: a count given past the bound is still unpriced, there is
+still no DER on any podcast, and a folded transcript is still a count rather than a measurement.
 
 **Two further limits of the passing configuration.** It buffers 30.4 s, so the diariser trails the
 audio by half a minute — adequate for file transcription and not a live-captioning latency, and the

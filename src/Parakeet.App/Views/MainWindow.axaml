@@ -306,23 +306,67 @@
                      Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
                      strip so the opt-in reads as a decision rather than a fourth checkbox. -->
                 <Border Classes="tinted" Padding="10,8">
-                  <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures its children
-                       with infinite width on the stacking axis, so TextWrapping on the hint never
-                       engaged and the reason the opt-in was disabled ran off the right edge —
-                       "…it is a 453 MiB dow". The hint is the whole point of disabling rather than
-                       hiding the control, so it has to be readable. -->
-                  <DockPanel LastChildFill="True">
-                    <CheckBox DockPanel.Dock="Left"
-                              Content="Label speakers"
-                              FontWeight="SemiBold"
-                              Margin="0,0,9,0"
-                              VerticalAlignment="Center"
-                              IsChecked="{Binding LabelSpeakers}"
-                              IsEnabled="{Binding CanLabelSpeakers}" />
-                    <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
-                               VerticalAlignment="Center"
-                               IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  </DockPanel>
+                  <!-- The outer panel stacks vertically, which is what makes the wrapping below
+                       work: a StackPanel measures its children with infinite size along the axis it
+                       stacks on, so only the horizontal ones break TextWrapping. -->
+                  <StackPanel Spacing="7">
+                    <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures its children
+                         with infinite width on the stacking axis, so TextWrapping on the hint never
+                         engaged and the reason the opt-in was disabled ran off the right edge —
+                         "…it is a 453 MiB dow". The hint is the whole point of disabling rather than
+                         hiding the control, so it has to be readable. -->
+                    <DockPanel LastChildFill="True">
+                      <CheckBox DockPanel.Dock="Left"
+                                Content="Label speakers"
+                                FontWeight="SemiBold"
+                                Margin="0,0,9,0"
+                                VerticalAlignment="Center"
+                                IsChecked="{Binding LabelSpeakers}"
+                                IsEnabled="{Binding CanLabelSpeakers}" />
+                      <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </DockPanel>
+
+                    <!-- The speaker count, and the only repair this product has for a recording
+                         longer than the diariser's labels are established on. Hidden rather than
+                         disabled while the opt-in is off, which is the one place this window departs
+                         from its own convention and does so deliberately: a disabled control is
+                         shown when the user cannot reach the thing it needs, and here they can —
+                         the checkbox is right above it and ticking it brings this to life. It is a
+                         detail of the opt-in, not a setting of its own.
+
+                         Blank means estimate, which is why the placeholder says so and why there is no
+                         default of two. The fold this drives is wrong to apply unasked: on one of
+                         the eighteen AMI development meetings the two genuinely different speakers
+                         who collide least never overlap at all, so an automatic rule merges two real
+                         people there. -->
+                    <StackPanel Orientation="Horizontal" Spacing="8"
+                                IsVisible="{Binding CanSetSpeakerCount}">
+                      <TextBlock Text="How many speakers" Classes="secondary" VerticalAlignment="Center" />
+                      <!-- Wide enough for the placeholder, which is the longest thing this field
+                           ever shows. At 128 the spin buttons ate it and it read "estimat", which a
+                           headless render would not have caught and the opened window did. -->
+                      <NumericUpDown Value="{Binding SpeakerCount}" Minimum="1" Maximum="99"
+                                     Increment="1" Width="170" FormatString="0"
+                                     PlaceholderText="estimate" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding SpeakerCountHint}" Classes="meta" TextWrapping="Wrap"
+                               IsVisible="{Binding SpeakerCountHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                    <!-- Past where the evidence stops, said before the batch rather than beside the
+                         finished transcript. The command line has fired this since the bound was
+                         measured; the window reported only the cap, and a cap is an afterwards
+                         sentence about what happened rather than a warning about what is not known
+                         to work. -->
+                    <!-- No MaxWidth: it wraps to the strip like the hint above it, and a paragraph
+                         that broke at a different measure from the one directly over it reads as a
+                         different column rather than as the next thing to know. -->
+                    <TextBlock Text="{Binding SpeakerDurationWarning}" Classes="warning"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding SpeakerDurationWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
                 </Border>
 
                 <!-- The English opt-in, the second of v1's two, and drawn as the twin of the first:

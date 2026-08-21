@@ -58,6 +58,18 @@ public sealed partial class JobViewModel : ObservableObject
 
     public string FileName { get; }
 
+    /// <summary>
+    /// How long the recording is, read from its header when it was queued, or null when that could
+    /// not be answered from the header.
+    /// </summary>
+    /// <remarks>
+    /// A property of the file rather than of a run, which is why <see cref="Reset"/> leaves it
+    /// alone: running a file a second time does not change its length. It is what the window's
+    /// long-recording warning is computed over, and it has to exist before anything is decoded —
+    /// the point of that warning is that it is readable while there is still a decision to make.
+    /// </remarks>
+    public TimeSpan? Duration { get; init; }
+
     public List<string> OutputFiles { get; } = [];
 
     /// <summary>
