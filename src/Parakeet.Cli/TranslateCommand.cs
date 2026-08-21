@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
+using Parakeet.Engine.Python;
 
 namespace Parakeet.Cli;
 
@@ -60,7 +61,7 @@ internal static class TranslateCommand
             }
         }
 
-        await using var translator = TranslatorFactory.Create(
+        await using var translator = await TranslatorFactory.CreateAsync(
             context,
             new TranslatorRequest
             {
@@ -68,16 +69,29 @@ internal static class TranslateCommand
                 ModelId = parsed.Value("model"),
                 ModelPath = parsed.Value("model-path"),
                 Threads = TranscribeCommand.ParseThreads(parsed.Value("threads"), "--threads"),
-            });
+                Backend = parsed.Value("backend"),
+                AllowUnverifiedBackend = parsed.HasFlag("backend-unverified"),
+                BackendOption = "--backend",
+            },
+            ct).ConfigureAwait(false);
 
+        // The factory has already loaded it, so these capabilities are the sidecar's own answers
+        // rather than this side's expectation of them.
         TranslatorFactory.Check(translator, []);
-        await translator.LoadAsync(ct).ConfigureAwait(false);
 
         var capabilities = translator.Capabilities;
         context.WriteError(
             $"{capabilities.ModelId ?? capabilities.EngineName}: into {TranslationTarget.LanguageTag} only, " +
             $"{capabilities.Backend.ToString().ToLowerInvariant()}, no word timings" +
             $"{(capabilities.MaxSourceTokens is { } cap ? $", sources over {cap} tokens refused" : string.Empty)}.");
+
+        // The search, beside the graph. The graphs are pinned and the search over them is not, so a
+        // scoring run that records only which checkpoint ran has recorded half of what produced its
+        // English — beam width alone moved this project's own measured output.
+        if (translator is SidecarTranscriptTranslator { DecodeDescription: { } decode })
+        {
+            context.WriteError($"Decode: {decode}.");
+        }
 
         var outputDirectory = parsed.Value("out");
         if (outputDirectory is { Length: > 0 })

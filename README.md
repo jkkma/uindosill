@@ -2,7 +2,10 @@
 
 A Windows desktop app that transcribes audio and video files **locally** with NVIDIA Parakeet.
 Drop files in, get text out — plain text, SRT, VTT, word-timed VTT for karaoke-style highlighting,
-JSON with timestamps, Markdown. No cloud, no Python, no account.
+JSON with timestamps, Markdown. No cloud, no account, and **no Python you have to install** — the
+two opt-ins below run in an interpreter that ships inside the application. That bundle does not
+exist yet: the code looks for it beside the executable and says so when it is not there, and
+nothing has packaged one.
 
 > **Status: the CLI and the desktop app both produce correct transcripts from real weights on real
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
@@ -44,22 +47,34 @@ JSON with timestamps, Markdown. No cloud, no Python, no account.
   as two, so the window asks how many speakers there are and folds its labels down to that, rather
   than estimating a number it is measured to get wrong. Measured on
   the AMI meeting corpus at **16.3% diarisation error rate** (collar 0, overlap scored) against the
-  best published figure on the same audio, 18.8%; what that does and does not cover is in
+  best published figure on the same audio, 18.8%. **That figure names its backend**: 16.3319% on
+  WebGPU, which is the default, and 16.3324% on the CPU — 0.0005 points apart, and that agreement
+  is why the default is WebGPU rather than CUDA's faster 16.1021%, since a figure only one provider
+  reproduces describes whoever measured it. What that does and does not cover is in
   [UNPROVEN.md](docs/UNPROVEN.md), and it covers no podcast audio at all.
 - **An English version of the transcript is v1's second opt-in, and it now translates.** Decided
   2026-08-19 and aboard v1.0 rather than deferred, because a release that transcribes 25 languages
   and can only hand back 25 languages is a narrower product than the one intended. `--translate`
   reads real weights as of 2026-08-20: a Marian checkpoint exported here to ONNX, nine files and
-  1.34 GiB, decoded on the CPU at beam 6 by a SentencePiece tokenizer and a beam search written for
-  this project. `uindosill translate` runs the same pass over a text file with no audio at all. In
-  the app it is a checkbox beside the speaker one, and the English arrives *beside* the transcript
-  rather than instead of it — a switcher over the transcript pane shows either, with the same times
-  and the same speakers on both sides.
+  1.34 GiB, decoded at beam 6 by HuggingFace's own beam search inside the bundled Python — on
+  WebGPU where it loads, then CUDA, then the CPU. **The provider changes the English, not only the
+  speed**, so it is picked for faithfulness: on 32 FLEURS sentences WebGPU returned the CPU's own
+  translations on 32 of 32 at 1.30x the speed, and DirectML on 0 of 32 while falling into a
+  repetition loop, so DirectML is refused by name. The SentencePiece tokenizer and the beam search
+  written for this project decoded it until 2026-08-21 and are now in `attic/`.
+  `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
+  a checkbox beside the speaker one, and the English arrives *beside* the transcript rather than
+  instead of it — a switcher over the transcript pane shows either, with the same times and the
+  same speakers on both sides.
   **The gate it was written against is not passed**, and that is a statement about a criterion
   nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
-  languages and Slovak misses by 0.74, and the human adequacy check has been declined. Translation
-  carries no word timings, and the word-timed subtitle format is refused rather than written against
-  times that no longer fit the words. What is measured and what is not is in
+  languages and Slovak misses by 0.74, and the human adequacy check has been declined. Those scores
+  came from `optimum` and `transformers` over these same graphs at beam 6, which is the decode the
+  sidecar now runs — but **the 8,149-sentence run has not been repeated against the sidecar
+  itself**, and what has been is a six-sentence parity fixture and one Spanish sentence on two
+  providers. That is a smoke test, not a corpus score. Translation carries no word timings, and the
+  word-timed subtitle format is refused rather than written against times that no longer fit the
+  words. What is measured and what is not is in
   [UNPROVEN.md](docs/UNPROVEN.md); the decision is in [PHASES.md](docs/PHASES.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. Not built; the open decisions are in
@@ -92,10 +107,14 @@ When a release does arrive, three things are worth knowing before you download i
   what it says exactly is one of the things [UNPROVEN.md](docs/UNPROVEN.md) records.
   [PHASES.md](docs/PHASES.md) records what shipping unsigned accepts, and why signing left v1.
 - **Two flavours.** The default installer carries the CPU and Vulkan backends and is about 82 MB;
-  the `win-cuda` one adds the NVIDIA CUDA runtime and is about 819 MB. Take the first unless you
-  know you want CUDA. Whichever you install is meant to keep updating itself from the same flavour:
-  the channel is recorded at install time and the app never overrides it, which was read off an
-  installed copy — but no release exists yet, so no update has ever been fetched from one.
+  the `win-cuda` one adds the NVIDIA CUDA runtime and is about 819 MB. **Both figures were measured
+  before the Python bundle and neither includes it**, because no installer has been packed with one
+  yet; the bundle itself measures **1.20 GB**, and [UNPROVEN.md](docs/UNPROVEN.md) carries what that
+  means for a download nobody has built.
+  Take the first unless you know you want CUDA. Whichever you install is meant to keep updating
+  itself from the same flavour: the channel is recorded at install time and the app never overrides
+  it, which was read off an installed copy — but no release exists yet, so no update has ever been
+  fetched from one.
 - **Your models are not in it, and not touched by it.** The application installs into
   `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights live in `%LOCALAPPDATA%\Uindosill\models`.
   Uninstalling deletes the first and leaves the second — that was measured against 4.3 GiB of
@@ -109,7 +128,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 795 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 767 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -126,12 +145,18 @@ natives dropped after a build are not seen until the next one.
 ```bash
 pwsh scripts/vendor-natives.ps1           # cpu and vulkan natives, ~18 MB, verified against the pins
 dotnet build Uindosill.slnx -c Release    # copies native/ into the output
-uindosill doctor                          # what this machine has, and which backends load
+uindosill doctor                          # models installed, and which transcription backends load
 uindosill models list
 uindosill models download tdt-0.6b-v3-f16
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
 ```
+
+`doctor` is narrower than it sounds. It probes the three parakeet.cpp backends — cpu, vulkan, cuda
+— each in a child process, and reports the runtime, the audio extensions this machine can open and
+the models installed. **It does not start the Python sidecar**, so it says nothing about whether
+the speaker and English passes will run here or which execution provider they would pick; those
+answer at load, and the window disables both opt-ins with the reason when there is no interpreter.
 
 Speaker labels are a separate model and a separate download, and everything about the opt-in stays
 off until it is there:
@@ -153,6 +178,28 @@ on an AMD integrated GPU whose driver mishandles it; `--vk-bf16` on `transcribe`
 bf16 on, for measuring the difference or for a driver known to have fixed it. Why the default is
 what it is, and what it measured, is in [UNPROVEN.md](docs/UNPROVEN.md).
 
+The two sidecar engines each take an execution provider, and it is a **faithfulness** setting
+before it is a speed one — `auto|cpu|cuda|webgpu`, defaulting to `auto`, which is resolved inside
+the sidecar because the only thing that knows whether a provider will initialise is the ONNX
+Runtime that would have to initialise it:
+
+```bash
+uindosill transcribe --speakers --speaker-backend cpu meeting.wav     # two engines, so two flags
+uindosill transcribe --translate --translate-backend webgpu call.mp4
+uindosill diarise --backend cuda meeting.wav                          # one engine each, so --backend
+uindosill translate --backend cpu segments.txt
+```
+
+`dml` is a fifth name each of them refuses, and unlocking it takes a second flag —
+`--speaker-backend-unverified`, `--translate-backend-unverified`, or `--backend-unverified` on the
+two standalone commands. That is not caution about a slow backend. At ONNX Runtime's default
+settings DirectML scores **53.15% DER** while returning plausible speaker turns, a clean exit and a
+13x speed-up, and on the translator it returned none of the CPU's 32 sentences. **A provider can be
+catastrophically wrong and look healthy**, which is why both engines check a committed parity
+fixture at load on every provider but the CPU, and why measuring DirectML stays possible while
+reaching it by accident does not. A run whose numbers are going to be written down should name the
+provider that produced them.
+
 ### In a container with no toolchain
 
 Every test here runs on Linux with no weights and no display, which is a design constraint rather
@@ -171,12 +218,15 @@ the Windows natives and a model, neither of which is in the clone.
 
 ### The scripts
 
-`scripts/` holds twelve PowerShell tasks — two for vendoring, four measurement harnesses (speed
+`scripts/` holds fourteen PowerShell tasks — two for vendoring, four measurement harnesses (speed
 and memory, the second machine, word error rate against human transcripts, and diarisation error
-rate against hand-labelled speaker turns), two transcript comparisons, two for the v2 spike, one
-that moves run reports and test material over rclone, and one that builds the installer — and
-`scripts/lab.ps1` is one entry point for them: run it bare to list the tasks, each with the parameters its own script declares.
-It dispatches and nothing else, so every task is still runnable on its own.
+rate against hand-labelled speaker turns), two transcript comparisons, one that holds
+`uindosill translate` against the hypotheses the translation gate itself recorded, two for the v2
+spike, one that moves run reports and test material over rclone, one that assembles the bundled
+Python, and one that builds the installer
+— and `scripts/lab.ps1` is one entry point for them: run it bare to list the tasks, each with the
+parameters its own script declares. It dispatches and nothing else, so every task is still runnable
+on its own.
 
 They divide along the same container line rather than all being out of reach.
 `scripts/compare-transcripts.ps1` reads two transcript JSONs and needs nothing else, so it runs
@@ -196,6 +246,8 @@ styles with `uindosill wer`. `scripts/measure-der.ps1` scores speaker-turn hypot
 `uindosill der` — a diarisation error rate validated against pyannote.metrics on committed fixture
 pairs (`tests/fixtures/diarisation/`) — and cuts the pinned development stretches from the test
 episodes with ffmpeg; the scoring half needs only the built CLI and runs anywhere.
+`scripts/measure-translation-agreement.ps1` needs no audio at all but does need the exported
+checkpoint and a Python the sidecar can run in, since what it drives is `uindosill translate`.
 `scripts/measure-second-machine.ps1` probes hardware through CIM and
 is Windows throughout, as is `scripts/vendor-cuda.ps1`, which reads a PE import table.
 `scripts/package-windows.ps1` builds the installer. It passes `vpk`'s `[win]` directive, which is
@@ -213,15 +265,32 @@ src/
   Parakeet.Core/               net10.0            contracts + pure logic; no NuGet, no platform, no UI
   Parakeet.Audio/              net10.0            WAV/RF64 parser + Media Foundation decoding
   Parakeet.Engine.ParakeetCpp/ net10.0            the ONLY project that touches native interop
-  Parakeet.Cli/                net10.0            transcribe / models / bench / doctor / notice / wer / der / rttm
+  Parakeet.Engine.Python/      net10.0            the ONLY project that starts the sidecar process
+  Parakeet.Cli/                net10.0            transcribe / diarise / translate / models / bench /
+                                                  doctor / notice / formats / wer / der / rttm
   Parakeet.App/                net10.0            Avalonia desktop UI
-tests/                                            one per project, all runnable on Linux
+python/
+  uindosill_engines/           the sidecar        serve.py + protocol.py, diariser/, translator/,
+                                                  and a vendored slice of NeMo under _vendor/
+tools/
+  FakeSidecar/                 net10.0            a scripted stand-in for that process, so the
+                                                  tests need no Python and still run on Linux
+tests/                                            one per src project, all runnable on Linux
+attic/                                            the retired C# diariser and translator; unbuilt,
+                                                  referenced by nothing — see attic/README.md
 ```
 
 The one rule that matters: **`Parakeet.Core` references no engine, no platform and no UI.** That is
 enforced by the build, not by convention — adding a `PackageReference` to `Parakeet.Core.csproj`
 fails the build with an explanation. That seam is what keeps an engine swap to one project instead
 of a rewrite.
+
+A second seam runs alongside it now, and it is drawn where it is on purpose: **the sidecar does the
+two things only a model can do** — turn a WAV into speaker turns, count a string's tokens and
+translate it — and is told nothing about what either means. The `>>eng<<` target token, the length
+a source is refused against rather than truncated at, the refusal of the word-timed format under
+`--translate`, the speaker count folded down afterwards and every warning owed before a run are all
+still C#. Moving the engines across a process boundary did not move the decisions with them.
 
 ## Stack
 
@@ -231,6 +300,7 @@ of a rewrite.
 | UI | Avalonia 12.1.1 | Plain `net10.0` TFM on Windows, so the desktop app cross-builds from Linux CI. |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 | Avalonia's documented default; source-generator based. |
 | Engine | `mudler/parakeet.cpp` via P/Invoke | MIT, ABI v6, and the only candidate with a published decode-parity result. |
+| The other two models | Diariser and translator in a bundled Python sidecar — one child process per run, JSON lines over stdin and stdout, WebGPU by default | Both are ONNX Runtime models, and the C# ports of them were about 7,400 lines reimplementing what NVIDIA and HuggingFace already ship. **ONNX Runtime lives in that process now: no .NET project in this solution references it.** WebGPU because it reproduces the CPU's answer to 0.0005 DER points and CUDA does not (2026-08-21; `attic/README.md` has what was retired). |
 | Model format | GGUF | `mudler/parakeet-cpp-gguf`, f16 only — the quantisations were withdrawn from the catalogue 2026-08-20. |
 | Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
 | Deployment | Self-contained + ReadyToRun, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | No single-file, no trimming, no NativeAOT. |

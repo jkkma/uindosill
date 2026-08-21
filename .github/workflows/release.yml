@@ -51,6 +51,18 @@ jobs:
         with:
           global-json-file: global.json
 
+      # The bundled Python the installer carries is assembled by scripts/bundle-python.ps1, which
+      # installs the pinned wheels with the HOST interpreter's pip and refuses to run unless that
+      # interpreter is the same feature version as the bundle. `pip install --target` resolves wheels
+      # for whatever is running it, so a 3.13 runner would put cp313 wheels into a cp312 bundle and
+      # the failure would be an ImportError on a user's machine rather than an error here.
+      #
+      # Pinned to 3.12 for that reason, and it must move whenever the version in bundle-python.ps1
+      # does. The runner image's default Python is not relied on: it changes without warning.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       # vpk is pinned in .config/dotnet-tools.json, and scripts/package-windows.ps1 refuses to run
       # if that pin and the Velopack PackageVersion in Directory.Packages.props disagree. Velopack
       # itself only logs a mismatch — the throw is commented out in 1.2.0 — so the check that stops

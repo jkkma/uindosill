@@ -12,8 +12,11 @@ namespace Parakeet.Cli.Tests;
 /// figure in <c>docs/PHASES.md</c> was produced. What is exercised here is everything but the model:
 /// the option surface, the naming that lets <c>der</c> pair a hypothesis with its reference, the
 /// refusals, and the fact that the RTTM carries the labeller's own speaker labels rather than
-/// display names. The model itself is held up by the fixtures in
-/// <c>Parakeet.Engine.Sortformer.Tests</c>, which need no weights either.
+/// display names. The model itself is no longer held up by anything in this solution: it runs in the
+/// bundled Python as of 2026-08-21, where the pipeline around the graph is NVIDIA's own code, and
+/// the fixtures that held the retired C# port are in <c>attic/Parakeet.Engine.Sortformer.Tests</c>,
+/// which is unbuilt. What stands in its place is a committed parity fixture the sidecar runs at
+/// load, on a machine that has the weights — which CI does not.
 /// </remarks>
 public class DiariseCommandTests
 {

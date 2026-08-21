@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 795 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 767 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,21 +36,25 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Nine of those 778 skip themselves, and they are the ones that read something a clone does not
-carry.** Both are asked for by name, because a count that depends on what is installed cannot be
-written into a document CI checks:
+**Two of those 767 skip themselves.** One is the Media Foundation extension list, which is
+platform-specific. The other is asked for by name, because a count that depends on what is installed
+cannot be written into a document CI checks:
 
 ```bash
-UINDOSILL_TRANSLATION_MODEL=runs/translation-onnx/fp32-merged dotnet test Uindosill.slnx -c Release
 UINDOSILL_FLEURS_DIR=<a google/fleurs snapshot's data/ directory> dotnet test Uindosill.slnx -c Release
 ```
 
-The first runs the seven checkpoint tests — the tokenizer against its committed fixture and the
-translator against real weights — and is what to run after any change to `Parakeet.Engine.Marian`.
-The second runs one test, and it is the one that says the German number rewrite in
-`TranslationRequest.Mark` is still a no-op on written text. **Run it after any change to
-`GermanNumberWords`**: if it ever fires on FLEURS, the sentences the shipping path sends the
-translator are no longer the sentences the published chrF++ figures describe.
+It is the test that says the German number rewrite in `TranslationRequest.Mark` is still a no-op on
+written text. **Run it after any change to `GermanNumberWords`**: if it ever fires on FLEURS, the
+sentences the shipping path sends the translator are no longer the sentences the published chrF++
+figures describe.
+
+**The seven checkpoint tests that used to sit beside it went to `attic/` on 2026-08-21** with the
+C# translator they exercised. Nothing in the suite now reads real translation weights, and nothing
+replaces them: the sidecar's own translation parity fixture is a smoke test that needs a checkpoint
+and a Python, so it runs at load on a real machine rather than in CI. **After any change to
+`python/uindosill_engines/translator/`, drive it by hand** — a load on the CPU and a load on
+`webgpu`, each reporting `parity` — because the suite cannot.
 
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have
@@ -84,7 +88,7 @@ gigabytes.
 writes the publish, the packages and the release feed under it, and one channel alone is over
 800 MB. Nothing there is an input to anything — delete it whenever.
 
-`scripts/lab.ps1` is one entry point for the thirteen scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the fourteen scripts; run it bare to list them.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
 machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they

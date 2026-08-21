@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Does the C# decode loop reproduce the English the translation gate was scored on?
+    Does the shipping decode reproduce the English the translation gate was scored on?
 
 .DESCRIPTION
     The two ONNX graphs are pinned by digest. The search over them is not, and it is a real degree
@@ -12,8 +12,16 @@
     **The reference already exists and was not built for this.** The 2026-08-20 gate run recorded
     every hypothesis it produced — 8,149 sentences across 24 languages, source and output — in
     `hypotheses/*.jsonl` under its run directory, written by HuggingFace's beam search over the
-    same graphs. That is the acceptance test for the port. Not "does the output look reasonable":
-    does it reproduce these strings.
+    same graphs. Not "does the output look reasonable": does it reproduce these strings.
+
+    **What is on the other side of the comparison changed on 2026-08-21**, and this is now the
+    single highest-value thing to run. It was written to hold a C# port of that beam search to the
+    reference; that port is retired to `attic/` and the decode is `transformers.generate` again —
+    the same library that wrote the reference, at the same settings, over the same graphs. So the
+    expected result went from "reproduces it to within a recorded handful of disagreements" to
+    "reproduces it exactly", and the one recorded disagreement (Hungarian 1818, 171 dots against
+    248) should be gone. **It has not been run against the sidecar.** Until it has, the chrF++
+    figures describe the shipping decode by construction rather than by measurement.
 
     So the number this prints is an **agreement rate**, per language, and it is not a quality score.
     It says nothing about whether the translations are good; `docs/UNPROVEN.md` carries the chrF++

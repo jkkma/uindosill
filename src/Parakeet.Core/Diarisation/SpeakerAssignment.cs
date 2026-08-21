@@ -284,28 +284,6 @@ public static class SpeakerLabelling
     }
 
     /// <summary>
-    /// The sentence a caller owes the user <i>before</i> the run, when they have asked for more
-    /// speakers than the labeller can ever produce. Null when there is no cap, no count was asked
-    /// for, or the count is within the cap.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The other half of <see cref="DescribeLimit"/>, and the half that was missing. That one fires
-    /// afterwards and reports what happened; this one fires before any audio is read and reports
-    /// what cannot happen. The difference matters because the two sentences send a reader in
-    /// opposite directions: <i>"4 speakers were labelled"</i> after a seven-voice recording reads as
-    /// a fact about the recording, and only <i>"seven was never reachable"</i> reads as a fact about
-    /// the tool. Someone who does not know the cap will believe the transcript.
-    /// </para>
-    /// <para>
-    /// It warns and does not refuse, which was decided with the maintainer on 2026-08-20. Somebody
-    /// with six speakers who knows they will get four still has a good transcript — the words are
-    /// unaffected, only the labels are capped — and blocking that run would cost them something
-    /// real to protect them from something they have just been told. It is also the house pattern:
-    /// a count that cannot be honoured is reported as ignored rather than applied.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// The sentence a caller owes the user when the recording is longer than anything this
     /// labeller's output has been established on. Null when there is no such bound, the length is
     /// unknown, or the file is inside it.
@@ -329,13 +307,27 @@ public static class SpeakerLabelling
     public static string? DescribeDurationRisk(SpeakerLabellerCapabilities capabilities, TimeSpan? duration)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
+        return DescribeDurationRisk(capabilities.Limits, duration);
+    }
 
-        if (duration is not { } length || capabilities.ReliableUpTo is not { } bound || length <= bound)
+    /// <summary>
+    /// The same sentence, from what is known before anything is loaded.
+    /// </summary>
+    /// <remarks>
+    /// Two overloads and one body, because the window has to say this while the weights are still on
+    /// disk and the command line says it off a loaded labeller. Two bodies would be two sentences,
+    /// and the one beside the field would drift from the one that stops the batch.
+    /// </remarks>
+    public static string? DescribeDurationRisk(SpeakerLabellerLimits limits, TimeSpan? duration)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+
+        if (duration is not { } length || limits.ReliableUpTo is not { } bound || length <= bound)
         {
             return null;
         }
 
-        var who = capabilities.ModelId ?? capabilities.EngineName;
+        var who = limits.Name;
         return $"this recording is {length.TotalMinutes:F0} minutes and {who}'s speaker labels have only been "
             + $"established up to {bound.TotalMinutes:F0} minutes. Past that they are not known to be wrong so "
             + "much as not known to be right: on this project's own podcast material the speaker count came out "
@@ -344,19 +336,94 @@ public static class SpeakerLabelling
             + "as a guess; the words are unaffected.";
     }
 
+    /// <summary>
+    /// The sentence a caller owes the user <i>before</i> the run, when they have asked for more
+    /// speakers than the labeller can ever produce. Null when there is no cap, no count was asked
+    /// for, or the count is within the cap.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other half of <see cref="DescribeLimit"/>, and the half that was missing. That one fires
+    /// afterwards and reports what happened; this one fires before any audio is read and reports
+    /// what cannot happen. The difference matters because the two sentences send a reader in
+    /// opposite directions: <i>"4 speakers were labelled"</i> after a seven-voice recording reads as
+    /// a fact about the recording, and only <i>"seven was never reachable"</i> reads as a fact about
+    /// the tool. Someone who does not know the cap will believe the transcript.
+    /// </para>
+    /// <para>
+    /// It warns and does not refuse, which was decided with the maintainer on 2026-08-20. Somebody
+    /// with six speakers who knows they will get four still has a good transcript — the words are
+    /// unaffected, only the labels are capped — and blocking that run would cost them something
+    /// real to protect them from something they have just been told. It is also the house pattern:
+    /// a count that cannot be honoured is reported as ignored rather than applied.
+    /// </para>
+    /// </remarks>
     public static string? DescribeUnreachableCount(SpeakerLabellerCapabilities capabilities, int? requested)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
+        return DescribeUnreachableCount(capabilities.Limits, requested);
+    }
 
-        if (requested is not { } count || capabilities.MaxSpeakers is not { } max || count <= max)
+    /// <summary>The same sentence, from what is known before anything is loaded.</summary>
+    public static string? DescribeUnreachableCount(SpeakerLabellerLimits limits, int? requested)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+
+        if (requested is not { } count || limits.MaxSpeakers is not { } max || count <= max)
         {
             return null;
         }
 
-        var who = capabilities.ModelId ?? capabilities.EngineName;
+        var who = limits.Name;
         return $"{count} speakers were asked for and {who} can tell apart at most {max}, so {count} was never "
             + $"reachable. Voices past the {max} it finds are merged into those {max} rather than reported, and the "
             + "speaker labels will look complete when they are not. Continuing rather than refusing: everything "
             + "but the speaker labels is unaffected.";
     }
+
+    /// <summary>
+    /// What a backend means for the figures this project publishes, or null when it means nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than in the command line's factory because the window owes the same sentence, and
+    /// a measured finding written down twice is a finding one of whose copies goes stale. What each
+    /// surface adds is its own remedy — the command line can name a flag and the window cannot,
+    /// since it chooses the backend itself — so the remedy is not part of this.
+    /// </para>
+    /// <para>
+    /// <b>Null for CPU and for WebGPU, and that silence is a measurement.</b> On AMI test,
+    /// 2026-08-21: cpu 16.3324%, webgpu 16.3319%, cuda 16.1021%, DirectML at its own defaults
+    /// 53.15%. WebGPU lands 0.0005 points from the CPU — closer than this project's own
+    /// C#-against-Python port managed — so the published figure describes it, and warning on every
+    /// run about a backend that agrees would train people to ignore the line that matters.
+    /// </para>
+    /// </remarks>
+    public static string? DescribeBackend(ComputeBackend backend) => backend switch
+    {
+        ComputeBackend.Cuda =>
+            "Speaker labelling ran on cuda. It does not reproduce the CPU's probabilities — on AMI test it scores " +
+            "16.10% against the CPU's 16.33%, and two CUDA runs on different driver and library versions have " +
+            "differed by 0.40 points — so these labels are this machine's result rather than the published one.",
+        ComputeBackend.DirectMl =>
+            "WARNING: speaker labelling ran on DirectML, which has not passed parity here. At ONNX Runtime's " +
+            "default settings it scores 53.15% diarisation error against the CPU's 16.33% while producing speaker " +
+            "turns that look entirely normal. Treat these labels as unverified.",
+        _ => null,
+    };
+
+    /// <summary>
+    /// What a failed parity check means, given how far the probabilities were off.
+    /// </summary>
+    /// <remarks>
+    /// Takes the two numbers rather than a result type, so that this project's one shared vocabulary
+    /// for diarisation does not have to learn about the sidecar. The magnitude is in the sentence
+    /// because "the check failed" with no number tells a user nothing they can act on: a stack
+    /// sitting just past the tolerance and one scoring 53% diarisation error deserve different
+    /// reactions.
+    /// </remarks>
+    public static string DescribeParityFailure(double maxAbsoluteDifference, double tolerance) =>
+        $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
+        $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels are " +
+        "this machine's own result and no diarisation error rate published by this project describes them.";
 }

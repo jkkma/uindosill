@@ -1229,6 +1229,44 @@ free, time-stamped, human-labelled material for meetings and for web video, and 
 So the labelling effort per stretch remains unmeasured, no podcast DER of anything exists, and the
 only podcast reference this project will ever have is the one it labels itself.
 
+### The C# diariser retired 2026-08-21, and the two DER figures became one
+
+**The divergence the entry above records closed by removing one of its arms.** From 2026-08-19 this
+repository carried two DER figures for one model — the Python reference's **16.3324%** and the C#
+port's **16.3368%**, 0.0044 points apart — and which one described a given surface depended on the
+surface, because the CLI and the window ran the port while every published figure came from the
+Python. On 2026-08-21 both moved onto the same bundled-Python sidecar (`src/Parakeet.Engine.Python`
+driving `python/uindosill_engines/diariser/`) and the port went to `attic/`. The sidecar measures
+**16.3324% at collar 0 with overlap on the CPU** — the Python reference's figure to four decimals —
+and it is now the only one the product can produce. `docs/PHASES.md` § *Decided 2026-08-21* carries
+the reasoning; `attic/README.md` carries what the port was.
+
+**The entry above stays as written, and it is not merely history.** Three of its findings outlive
+the code they were measured on: the mel featurizer's double-precision transform, the speaker cache's
+double-accumulated silence mean, and `torch.topk` leaving the order among equal scores undefined are
+properties of the model rather than of C#, so they bound whatever reads this graph next. And the
+0.0044 points they cost is the only figure this project has for how faithfully a reimplementation of
+this model can be done — which is why the directory was kept unbuilt rather than deleted. **What
+closed is the divergence, not the reasons for it.**
+
+**Two of that entry's cost figures now describe the attic.** **65x** realtime with 12 intra-op
+threads, and a peak working set of **1 261 MB** measured on a 34-minute meeting in a single process,
+are the C# port's. The shipping path is a host process and a child, and **nobody has measured what
+the pair holds** — which makes the standing gap recorded under the translation entry below (*Peak
+memory with the ASR model, the diariser and a translator resident is still unmeasured on both
+machines*) larger rather than smaller, there now being a second process to account for. The ONNX
+Runtime memory arena lever the entry above records as never pulled is still never pulled, and is now
+a Python-side option rather than a C# one.
+
+**What the move did not touch.** The **resampler** is still on the C# side of the seam — the sidecar
+is handed a 16 kHz mono WAV by path — so every DER above is still on 16 kHz AMI audio that bypasses
+it, and its effect on a transcript is still untested. The **second decode** the opt-in costs on a
+real file has still not been timed on either machine. The four-speaker cap and the fifty-minute
+duration bound are unchanged, because neither was in the port. The install path for the 474 MB graph
+is unchanged too — `models download` and the catalogue are C# and untouched — but **the end-to-end
+run recorded above, which produced a named transcript and an RTTM from a minute of AMI audio, went
+through the port**, and no equivalent run through the sidecar is recorded here.
+
 ### The execution provider changes the diariser's answer — measured 2026-08-20
 
 **A CUDA build of ONNX Runtime runs this graph 21.8x faster and does not produce the same
@@ -1243,7 +1281,10 @@ whole pass, **78.1x against 1705.7x** for the ONNX graph alone. The two ratios d
 featurizer and the cache stay on the CPU, so once the graph is 22x faster the featurizer is what is
 left. The shipping C# path, `uindosill diarise --threads 12`, measures **67x** over the same audio —
 9.06 h in 8.2 min — which is the number every claim below is relative to, and which confirms the
-**65x** already recorded above rather than replacing it. Per file it runs 57–58x for the first two
+**65x** already recorded above rather than replacing it. **Both of those now describe `attic/`**: the
+C# path was retired on 2026-08-21 and what ships measures **70.2x** on the CPU and **593.7x** on
+WebGPU through the sidecar (§ *That provider comparison is superseded*). The 76.6x above is the
+closest thing to a like-for-like predecessor, being the Python driver rather than the port. Per file it runs 57–58x for the first two
 meetings and 69x thereafter, so a one-file figure is a cold-cache figure.
 
 **The GPU demonstrably ran, which is checked rather than assumed** — a silent per-operator CPU
@@ -1295,6 +1336,100 @@ study that would settle it is queued in `docs/PHASES.md` § *After v1*. The long
 measurement.** It costs **8.2 minutes** through the product on CPU, 7.1 through the Python driver,
 and **26 seconds** on CUDA. Whatever argues against adopting a GPU provider, the price of
 re-measuring the gate is not it.
+
+### That provider comparison is superseded — the same question, re-measured on the shipping path 2026-08-21
+
+**One sentence in the entry above is now false, and the one beside it is true in a way that
+misleads.** *"DirectML was never tried, because CUDA cooperated — and DirectML is the one that would
+ship"* is wrong in both halves: DirectML has been tried, and it is **refused by name in both
+engines**. *"`Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 was never installed, no C# code ran on any
+GPU"* is still literally true — the package was never adopted, and no C# runs on a GPU now either,
+because both graphs left C# altogether — but what it was written to say, that no shipping
+configuration of this product touches a GPU, stopped being true on 2026-08-21. **The provider that
+ships is WebGPU**, and the C# host drives all four of them through the sidecar over one protocol.
+The study that entry queued in `docs/PHASES.md` § *After v1* has been run — it is
+§ *Decided 2026-08-21*. The original is left as written because the reasoning that produced the
+wrong expectation is worth reading beside the measurement that refuted it.
+
+Measured on the desktop, 16 AMI test meetings, 9.062 h, collar 0 with overlap, the dev-chosen
+post-processing applied unchanged to every arm:
+
+**The five arms are not all from one ONNX Runtime install, and the table says which is which
+because the deltas are not comparable across the two.** `onnxruntime-webgpu` is published at 1.27.0
+and `onnxruntime-directml` at 1.24.4, so the DirectML arms were run against a different build — with
+its own CPU arm, which is not the same number:
+
+| provider | ONNX Runtime | DER | vs its own cpu arm | realtime |
+|---|---|---:|---:|---:|
+| cpu | 1.27.0 | 16.3324% | — | 70.2x |
+| **webgpu** | 1.27.0 | **16.3319%** | **−0.0005** | **593.7x** |
+| cuda | 1.29.0 | 16.1021% | −0.2303 | 971.7x |
+| cpu | 1.24.4 | 16.3347% | — | 71.5x |
+| directml, ONNX Runtime's defaults | 1.24.4 | **53.1522%** | **+36.8175** | 945.6x |
+| directml, `ORT_DISABLE_ALL` | 1.24.4 | 16.3319% | −0.0028 | 619.0x |
+
+**Two CPU numbers, both correct, and mixing them is the trap.** 16.3324% is the CPU on 1.27.0 and
+16.3347% on 1.24.4 — 0.0023 points apart, which is what an ONNX Runtime version is worth on this
+graph. Reading DirectML-unfused's −0.0028 as WebGPU's −0.0005 (or the reverse) is comparing arms
+that never ran on the same runtime, and it was written that way in this project's own source
+comments until 2026-08-21.
+
+**The 1.27.0 CPU row is the same 16.3324% the entry above measured on 2026-08-20, and the same
+figure the gate was passed on** — so the CPU answer has now reproduced across three runs, two ONNX Runtime
+installations and two process architectures. It is the fixed point everything else here is measured
+against, and it is the reason a moved figure can be attributed to a provider at all.
+
+**The two CUDA figures are two different arms, and this document is not to be read as holding one
+number for them.** **15.7062%** above is the arm of 2026-08-20 — `onnxruntime-gpu` 1.29.0 through
+that day's Python driver. **16.1021%** is the arm of 2026-08-21, through the sidecar. Both are
+collar 0 with overlap over the same sixteen meetings with the same post-processing, and they are
+**0.3959 points apart** — ninety times the C#-against-Python port difference the entry above uses
+for scale. What moved between them was not isolated; what did *not* move is the CPU arm, which rules
+out the corpus, the scorer and the post-processing and leaves the CUDA stack. **So a CUDA DER from
+this project does not survive a change of driver and library**, and neither figure may be quoted
+without naming the run it came from. That non-portability is an argument against a CUDA *figure*
+rather than against CUDA, and it is a property of any provider whose answer differs from the CPU's —
+which is the property the choice below turns on.
+
+**WebGPU was chosen for agreement rather than for speed.** CUDA is 1.6x faster than it and moves the
+number the gate is written in; a provider that reproduces the CPU's answer lets **one** published
+figure describe every machine, and one that does not means the figure describes whoever measured it.
+The 1.6x of speed is the price, paid deliberately.
+
+**The parity fixture is what makes that checkable, and its threshold is measured rather than
+chosen.** It compares head probabilities over synthetic mel generated from a seed — no audio, no
+licence, 12 KB — at a tolerance of **1e-4**:
+
+| | maximum absolute difference | |
+|---|---:|---|
+| cpu, ONNX Runtime 1.27.0 against 1.29.0 | **0.000e+00** | bit-identical |
+| webgpu | 1.073e-06 | pass |
+| cuda | 8.143e-04 | **fail** |
+
+Two orders of magnitude separate a faithful provider from a diverging one, which is what makes 1e-4
+a threshold rather than a guess — and the CPU row says the fixture does not drift across ONNX
+Runtime versions, so a failure is the provider and not the pin. **CUDA fails it**, consistently with
+the 0.2303 points it moves the DER by. It stays reachable, and the window reports the diariser's
+backend and a failed parity check on the finished job rather than deciding for the user.
+
+**The DirectML defect is located, and it is the reason a provider is now checked before it is
+believed.** At optimisation level `BASIC` or above DirectML fuses the whole graph into **one node**
+whose head output differs from the CPU by up to **0.796 on a probability**, with **2.997% of frame
+decisions flipping** on the first chunk with an empty cache. Metacommands off, dynamic fusion off
+and seven named ORT passes disabled individually all reproduced it exactly; only `ORT_DISABLE_ALL`
+moves it, and at that level the same provider lands on 16.3319% — the WebGPU figure. So the
+wrongness is in the optimiser rather than in the hardware. **53% DER arrived with plausible RTTMs, a
+clean exit and a 13x speed-up**: nothing about the run looked like a failure, which is the finding
+that shaped the rest of this.
+
+**What is still unmeasured about the provider that ships.** The post-processing WebGPU runs is the
+grid tuned on **CPU** probabilities, which is the objection the entry above raises against its own
+CUDA figure and which applies here unchanged — the 18-meeting dev grid has not been re-run on
+WebGPU probabilities and the test set has not been scored once after. What stands in its place is
+that WebGPU reproduces the CPU to 1.073e-06 and −0.0005 points, which is an argument that a re-tune
+would change nothing rather than a measurement that it does not. **The longest file in this
+comparison is 49.5 minutes**, so accumulation over hours on a GPU is as untouched as it was. And
+every row above is one card, one driver, one run — see *No AMD GPU has run any of this* below.
 
 ### The crosstalk tie-break changed 2026-08-20, and nothing scores whether it is right
 
@@ -1364,6 +1499,12 @@ proven; it means the unproven parts moved. They are below, and the two that matt
 **the gate is still not passed** — its human criterion is unperformed — and that **the English this
 loop produces is the English the gate was scored on only to the extent that a measurement says so**,
 which is a number rather than an assumption.
+
+**Superseded in part on 2026-08-21, and the pointer is here rather than at the end because this
+entry is long.** The C# decode loop described below was retired that day and both engines moved into
+a bundled Python. Everything measured here stands as measured; which of it still describes the
+product is § *The C# translator retired 2026-08-21, and what the entry above now describes*, below.
+Read that before quoting anything here about the beam search, the tokenizer or DirectML.
 
 What has *not* happened: **no real-time factor for a translation pass has been measured** end to
 end, only per-sentence times; no translated transcript has been produced from real audio and
@@ -2045,6 +2186,189 @@ is recorded as one.
 **The MADLAD-400 exclusion is dated rather than permanent.** It rests on a byte count and a grep
 taken from `llama.cpp` `master` on 2026-08-19 with no commit pin, against an upstream issue that is
 open, so it says what that binary could not do that day and nothing about what it will do.
+
+### The C# translator retired 2026-08-21, and what the entry above now describes
+
+**`Parakeet.Engine.Marian` went to `attic/`, and what ships is the library the gate ran on.** The
+decode is `optimum`'s `ORTModelForSeq2SeqLM` driven by `transformers.generate` at **beam 6,
+`max_new_tokens` 512, length penalty 1.0, early stopping off, IO binding off**, inside the same
+bundled Python as the diariser. `docs/PHASES.md` § *Decided 2026-08-21* carries the reasoning.
+
+**Four passages above are now history rather than description**, and they stand because each is the
+record of a question that had to be answered: *The beam search is a port of one implementation*,
+*8,148 of the 8,149 reproduce the recorded hypothesis character for character*, *The C# tokenizer
+reproduces HuggingFace's `MarianTokenizer`*, and *What the C# port is, precisely*. None of them
+describes the loop that runs. The one worth keeping in reach is the account of which logits
+processors this checkpoint's decode applies — two, and no more — because nothing in this repository
+reads that off the library any more; `attic/README.md` says where the reading lives.
+
+**The chrF++ table now describes the shipping decode by construction rather than by measurement,
+which is a better position than the port was in and is still not a measurement.** The 8,149-sentence
+run of 2026-08-20 went through `transformers.generate` at those settings, and the sidecar calls the
+same function at the same settings on the same pinned graphs, so there is no second implementation
+left to diverge. What that does not remove is the caveat the port's own agreement measurement
+carried, which applies unchanged: **ONNX Runtime partitions a matmul's reductions by thread count**,
+so a machine with a different core count computes slightly different logits, and the only thing
+between that and a different sentence is that no two candidates were close enough to swap. **The
+8,149-sentence gate has not been re-run against the sidecar translator**, on this machine or any
+other, and nothing below should be read as though it had.
+
+**What has actually been run is a smoke test, and it is worth stating at its real size.** On the
+desktop on 2026-08-21, against the real `fp32-merged` checkpoint through the sidecar: on the **CPU**,
+load 10.1 s, the six committed parity sentences back 6 of 6 identical, and 0.30 s for one 18-token
+Spanish sentence; on **WebGPU**, load 5.7 s, 6 of 6, and 0.19 s for the same sentence. **One
+machine, one checkpoint, six sentences and a stopwatch.** It is not a corpus score, and the loads
+were against a virtual environment rather than a bundle that does not exist yet.
+
+**One thing that run did close.** *No sentence in the corpus exceeds 512 tokens*, above, records
+that the over-long path had never been exercised against anything. It has now: an **802-token source
+was refused without being decoded**. The limit travels with the request so the sidecar counts before
+it translates, and the refusal is still thrown on the C# side — the same division of labour the rest
+of the seam keeps. One source, once: the path is exercised, not characterised, and nothing has
+checked the count the refusal turns on against what the model would actually have accepted.
+
+**And one conclusion above is now measured to be wrong.** *ONNX Runtime having no Vulkan execution
+provider is now verified* ends by concluding **"DirectML is the Windows GPU path"**, and reasons from
+there about `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 lagging the pinned 1.29.0 and about adopting
+it moving the diariser as well. DirectML was measured on 2026-08-21 and is refused by both engines:
+on the translator it returned **0 of 32** sentences matching the CPU — a repetition-loop collapse —
+at **21.5x slower** than the CPU. The encoder and the decoder are each clean on DirectML at full
+optimisation when driven directly, so that collapse is in `optimum`'s merged KV-cache path rather
+than in the provider, which is the opposite of the diariser's defect and is why the two engines
+refuse it for different reasons. The package was never adopted and the question is moot on this
+side: **no project in `Uindosill.slnx` references ONNX Runtime at all**, the pin surviving in
+`Directory.Packages.props` with nothing consuming it. The provider table and the diariser's DirectML
+defect are in *That provider comparison is superseded*, above.
+
+**What the retirement cost the suite.** The seven checkpoint tests that read real translation
+weights — the tokenizer against its committed fixture, the translator against the checkpoint — went
+to the attic with the code they exercised, and **nothing in the suite replaces them**. Nothing in CI
+now reads real translation weights at all. What stands in their place is the parity fixture below,
+which needs a checkpoint and an interpreter and therefore fires at load on a real machine.
+
+### The translator's parity fixture has no margin, and says so
+
+**Six sentences, compared by string equality.**
+`python/uindosill_engines/translator/parity-sources.json` carries the six sources verbatim from
+`tests/fixtures/translation/marian-tokenizer.json` — four of them real ASR output from this
+project's own pipeline, Spanish and German — and `parity-reference.json` carries what the CPU
+produced for them. A provider either reproduces those six strings or it does not.
+
+**That is a verdict with no distance in it, and the diariser's fixture is the contrast.** The
+diariser compares probabilities against 1e-4 and reports how far it missed by, so a provider
+drifting towards wrongness is visible before it arrives. A string matches or it does not, so **there
+is no number to watch**, and a provider wrong only on long or unusual input passes. It catches the
+failure that has actually been seen — DirectML wrong on all 32 sentences of the provider comparison
+— and nothing subtler. That is the whole of its claim, and it is made here so that a green parity
+line is not read as a quality result.
+
+**It also cannot run in CI**, needing the fp32 checkpoint and an interpreter, which is why
+`CLAUDE.md` asks for a CPU load and a WebGPU load by hand after any change to
+`python/uindosill_engines/translator/`. Six sentences on demand is what replaced seven hermetic
+checkpoint tests. It is less coverage, recorded as less.
+
+**What would give it a margin** is a distance rather than a verdict — token-level agreement, or a
+score against a slice of the gate run's own recorded per-sentence hypotheses, which that run wrote
+down. Neither has been built.
+
+### The bundled interpreter is 1.20 GB, and no installer has been built with one in it
+
+**The bundle itself is measured.** `scripts/bundle-python.ps1` assembles it — pinned embeddable
+CPython 3.12.10 with its SHA-256 checked before unpacking, the pins in
+`python/requirements-bundle.txt` installed with `pip install --target`, and the `uindosill_engines`
+source beside them — and on 2026-08-21 it produced **1.20 GB in 43,760 files**. That is **not** the
+~0.55 GB the migration budgeted: the estimate counted `onnxruntime-webgpu` at 0.07 and a CPU-only
+torch at 0.48 and missed the transitive set. Where the difference goes is measured too: about
+**330 MB** is `librosa` and what it drags in — numba, llvmlite, scipy, scikit-learn, soxr, pooch —
+for exactly one call, `librosa.filters.mel`; about **95 MB** more is `sympy` and `networkx`, which
+are torch's.
+
+**The assembled bundle was driven end to end the same day**: it answered the handshake, loaded the
+real translation checkpoint on WebGPU in 5.5 s, passed the translation parity fixture 6 of 6, and
+translated a sentence in 0.15 s — and the shipping CLI drove it through `UINDOSILL_PYTHON` and
+produced correct English. So the bundle works; what has not been measured is everything downstream
+of it.
+
+**What is still unmeasured is the installer.** No package has been built with a bundle inside it, so
+nothing is known about how long it takes to install, what the sidecar costs to start from a cold
+one, what an unsigned 1.2 GB of interpreter and native wheels does to a virus scanner or to
+SmartScreen, or what it does to Velopack's delta packages — which is the figure most likely to be
+unpleasant, since a delta against a tree of 43,760 mostly-unchanging files is a question nobody has
+asked.
+
+**Every execution-provider figure still comes from a development virtual environment**, not from a
+bundle: the AMI arms, the 32-sentence translator arms and the diariser's parity numbers were all
+taken against `~/webgpu-venv`. The bundle reproduced the translator's parity fixture and its
+per-sentence time; the diariser has not been re-scored from one.
+
+**For scale, the installer this repository has actually built and installed** is 81.9 MB for the
+default channel and 818.6 MB for the CUDA one (§ *The installer was built, run, updated and
+uninstalled*). Adding 1.2 GB to the default channel is a different download from the one
+that was measured, and the delta figures recorded there — 74,470 bytes against a 77,462,188-byte
+full package — describe a tree with no interpreter in it.
+
+**Both opt-ins are disabled when the bundled Python is absent, with that as the stated reason.**
+That is the right behaviour and it has a consequence worth writing down: until a bundle exists,
+speaker labelling and translation are reachable only on a machine carrying an interpreter and the
+packages by hand, so **nothing has been observed from an install** — which is the same gap
+`docs/PHASES.md` has recorded since 2026-08-15 about transcription from a CI-built binary, now
+extended to two more features.
+
+**One consequence of the bundle being CPU-only is already priced.** The translator's IO binding
+needs a torch device the CPU-only bundle will not have, so every translator figure here is measured
+with **IO binding off** — a floor rather than a ceiling, as the CUDA measurement that reached
+0.163 s per sentence with binding on, and crashed input-dependently inside `optimum`, shows.
+
+### No AMD GPU has run any of this, and WebGPU's faithfulness is one card
+
+**The provider that ships was chosen because it reproduces the CPU's answer, and that agreement is
+one NVIDIA card, one driver, one run.** 16.3319% against 16.3324% on the diariser, 1.073e-06 on the
+diariser's parity fixture, 32 of 32 string-identical on the translator: every one of those figures
+comes from the RTX 5080 desktop on 2026-08-21. **Nothing about a WebGPU implementation on another
+vendor's driver follows from them**, and the reason is measured rather than cautious — DirectML, on
+that same card and that same graph, is wrong by 36.82 DER points at ONNX Runtime's default
+optimisation and right at `ORT_DISABLE_ALL`. What a provider does to this graph is a property of the
+stack under it.
+
+**The machine that would answer it is already in this document.** The second machine's Radeon 880M
+is the only non-NVIDIA GPU this project has, and it has never run either engine. The cheapest first
+step is the diariser's parity fixture — synthetic mel from a seed, no audio, no licence, and a
+number rather than a verdict — which would separate a faithful implementation near 1e-06 from a
+diverging one near 1e-03 before any corpus is scored.
+
+Until that is done, the honest statement is that **WebGPU is verified on the one card it has been
+verified on**, and anybody running another is running a configuration this project has not measured.
+
+### No Apple platform has ever been attempted
+
+**Recorded as never attempted, which is not the same as a gap and not the same as a regression.**
+macOS is not a target: the CLI publishes `win-x64;win-arm64;linux-x64` and the desktop app
+`win-x64;win-arm64`, the natives this project vendors are parakeet.cpp v0.5.0's Windows assets, and
+nothing here has ever been built, run or measured on Apple hardware. CoreML appears in the
+execution-provider list recorded above and nothing has asked for it.
+
+The move of 2026-08-21 changes none of that in either direction: a sidecar would need an interpreter
+bundle for the platform, and **no bundle exists for any platform yet** (above). This entry exists so
+that the absence of any Apple figure reads as a target that was never in scope, rather than as
+something that once worked.
+
+### Cancelling a translation now waits for a decode in another process
+
+**`SupportsCancellation` is false for the translator as of 2026-08-21.** The in-process beam search
+it replaced declared it true and meant it — the search polled between steps, so a long segment did
+not have to finish. A decode running in a child process cannot be interrupted, so a cancel now stops
+the next segment being sent and **the one in flight finishes**. That is a behaviour rather than a
+defect, and it is written down because what is not measured is how long the wait is.
+
+**Nothing here bounds one segment's decode.** The figures that exist are means over corpora of
+written sentences — 0.618 s per sentence over the 8,149-sentence gate run, 0.595 s on the CPU over
+32 FLEURS Spanish sentences — and a mean over FLEURS is not the tail of the distribution a
+30-second segment of real speech at beam 6 sits in, on a machine slower than this one. It is the
+same shape as the mid-batch window close bounded by one native batch call, recorded above, and it
+has the same answer: the worst case has not been timed.
+
+The ASR's own `SupportsDecodeCancellation` is a different thing and is unchanged —
+§ *Cancellation: not possible mid-decode*.
 
 ### The CUDA drop's licensing — read, recorded, and the notice gap closed
 

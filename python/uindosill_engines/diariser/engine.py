@@ -73,12 +73,20 @@ PROVIDERS = {
 }
 
 #: DirectML fuses this graph into a single node at any optimisation level above none, and the fused
-#: path computes a different function: measured 2026-08-21, AMI test DER 53.15% against 16.33%,
-#: while running 13x faster and emitting entirely plausible RTTMs. ORT_DISABLE_ALL is the only lever
-#: that moves it — metacommands, dynamic fusion and seven named ORT passes were each disabled
-#: individually and every one reproduced the defect to four decimal places. Unfused it agrees with
-#: the CPU to 1.6e-06 with zero binarised decisions differing. This default is load-bearing; do not
-#: relax it without re-scoring AMI.
+#: path computes a different function: measured 2026-08-21 on ONNX Runtime 1.24.4, AMI test DER
+#: 53.1522% against the same build's CPU 16.3347%, while running 13x faster and emitting entirely
+#: plausible RTTMs. Over the 16 test meetings the fused probabilities differ from the CPU's by up to
+#: 0.9996 and flip 23.70% of frame-speaker cells. ORT_DISABLE_ALL is the only lever that moves it —
+#: metacommands, dynamic fusion and seven named ORT passes were each disabled individually and every
+#: one reproduced the defect to four decimal places.
+#:
+#: Unfused it scores 16.3319% and is close, but **not to 1.6e-06 and not with nothing flipping**:
+#: that pair is the two-chunk parity fixture's number, and on the 16 AMI meetings the same
+#: comparison is a maximum difference of 0.4159 with 104 of 1,631,220 frame-speaker cells differing,
+#: 101 of them in two meetings. Ordinary float divergence amplified where the speaker cache breaks a
+#: tie, in other words, rather than the exactness the fixture suggests. Said here because the
+#: difference between "agrees to 1.6e-06" and "agrees except where it does not" is what somebody
+#: would decide to relax this default on. Do not relax it without re-scoring AMI.
 DEFAULT_GRAPH_OPTIMIZATION = {"dml": "ORT_DISABLE_ALL"}
 
 

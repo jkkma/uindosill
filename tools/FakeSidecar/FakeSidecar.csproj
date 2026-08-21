@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>FakeSidecar</AssemblyName>
+    <RootNamespace>Uindosill.FakeSidecar</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- Not in Uindosill.slnx: nothing ships it and nothing depends on its assembly. It is built
+         because Parakeet.Engine.Python.Tests references it, and that is the only reason it exists. -->
+  </PropertyGroup>
+
+  <!--
+    A stand-in for the bundled Python, and the reason there is a `tools/` directory at all.
+
+    Parakeet.Engine.Python starts a real child process and talks a line protocol to it. Everything
+    interesting about that code — the handshake, correlating replies to requests by id, progress
+    interleaving with results, what happens when the child dies mid-request — is above the process
+    boundary and testable, but only against something that can be a process. This is that something.
+
+    It is a project rather than a class in the test assembly because a child has to be an executable
+    the host can start by path, and the arguments the host passes are fixed at `-u -m
+    uindosill_engines`, so the stand-in has to be an executable that ignores its own arguments. It
+    is not under `tests/` because `tests/Directory.Build.props` makes every project there an xUnit
+    test project, and a second entry point would collide with the one xUnit generates — and because
+    `scripts/check-test-counts.py` expects every project under `tests/` to have produced results.
+
+    Deliberately no reference to Parakeet.Engine.Python. A stand-in that shared types with the thing
+    it is standing in for would agree with it by construction, which is the one thing a stand-in
+    must not do.
+  -->
+
+</Project>

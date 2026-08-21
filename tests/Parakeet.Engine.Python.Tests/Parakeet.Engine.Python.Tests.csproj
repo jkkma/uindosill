@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Parakeet.Engine.Python/Parakeet.Engine.Python.csproj" />
+
+    <!--
+      Built, never referenced. FakeSidecar is a child process rather than a library: the host starts
+      it by path, so what this project needs from it is an executable on disk and not an assembly to
+      compile against. ReferenceOutputAssembly="false" says exactly that, and the reference is still
+      what makes it build first.
+    -->
+    <ProjectReference Include="../../tools/FakeSidecar/FakeSidecar.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+  <!--
+    Copied beside the tests rather than located by walking up out of the output directory, because
+    the walk depends on the configuration and the target framework and would break the day either
+    moves. `fake-sidecar/` is where FakeSidecarProcess looks and the only place it looks.
+  -->
+  <Target Name="CopyFakeSidecar" AfterTargets="Build">
+    <ItemGroup>
+      <FakeSidecarOutput Include="$(MSBuildThisFileDirectory)../../tools/FakeSidecar/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FakeSidecarOutput)"
+          DestinationFolder="$(OutDir)fake-sidecar/%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

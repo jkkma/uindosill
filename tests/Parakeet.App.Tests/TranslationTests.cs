@@ -209,7 +209,7 @@ public class TranslationTests
     public void WithoutTheTranslationModelTheOptInIsDisabledWithAReasonAUserCanActOn()
     {
         var viewModel = new TranscribeViewModel(
-            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-tr").FullName)),
+            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-tr").FullName), () => true),
             () => new EngineSelection());
 
         Assert.False(viewModel.CanTranslate);
@@ -234,12 +234,12 @@ public class TranslationTests
             File.WriteAllText(store.PathFor(model, file), "not really a checkpoint");
         }
 
-        var partial = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var partial = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.False(partial.CanTranslate);
 
         File.WriteAllText(store.PathFor(model, model.Files[^1]), "not really a checkpoint");
 
-        var complete = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var complete = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.True(complete.CanTranslate);
         Assert.Null(complete.TranslationHint);
     }
@@ -259,7 +259,7 @@ public class TranslationTests
             File.WriteAllText(store.PathFor(model, file), "not really a checkpoint");
         }
 
-        var viewModel = new TranscribeViewModel(new EngineProvider(store), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         viewModel.TranslateToEnglish = true;
         Assert.True(viewModel.CanTranslate);
 

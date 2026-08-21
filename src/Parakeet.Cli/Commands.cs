@@ -186,12 +186,13 @@ internal static class Commands
                 Name = "speaker-backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Execution provider for the diariser: cpu, cuda, webgpu or dml. Default: the fastest " +
-                       "verified one on this machine, which is cuda where it loads and cpu otherwise. " +
-                       "This changes the speaker labels, not only the speed — measured on AMI test, cpu scores " +
-                       "16.33% DER and cuda 16.10%, and a figure from one provider does not describe another. " +
-                       "dml is refused unless --speaker-backend-unverified is given: at ONNX Runtime's default " +
-                       "settings it scores 53.15% while looking healthy.",
+                Help = "Execution provider for the diariser: cpu, cuda, webgpu or dml. Default: webgpu where " +
+                       "it loads, then cuda, then cpu — webgpu first because it is the one that reproduces " +
+                       "the published figure rather than the one that is fastest. This changes the speaker " +
+                       "labels, not only the speed — measured on AMI test, cpu scores 16.3324% DER, webgpu " +
+                       "16.3319% and cuda 16.1021%, and a figure from one provider does not describe " +
+                       "another. dml is refused unless --speaker-backend-unverified is given: at ONNX " +
+                       "Runtime's default settings it scores 53.15% while looking healthy.",
             },
             new OptionSpec
             {
@@ -230,6 +231,25 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "n",
                 Help = "Intra-op threads for the translator. Default: whatever ONNX Runtime chooses.",
+            },
+            new OptionSpec
+            {
+                Name = "translate-backend",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Execution provider for the translator: cpu, cuda, webgpu or dml. Default: webgpu " +
+                       "where it loads, then cuda, then cpu. This changes the English, not only the speed — " +
+                       "measured on 32 FLEURS sentences at beam 6, webgpu returned the cpu's own " +
+                       "translations on 32 of 32 at 1.30x the speed and cuda on 240 of 240. dml is refused " +
+                       "unless --translate-backend-unverified is given: it matched on 0 of 32, its decoder " +
+                       "falling into a repetition loop, at 21.5x slower.",
+            },
+            new OptionSpec
+            {
+                Name = "translate-backend-unverified",
+                Help = "Allow a translator backend this project has not measured as faithful. For measuring " +
+                       "one, not for using one: a backend that rewrites the output produces English no " +
+                       "figure in this project describes.",
             },
             new OptionSpec
             {
@@ -320,10 +340,12 @@ internal static class Commands
                 Name = "backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Execution provider: cpu, cuda, webgpu or dml. Default: the fastest verified one on this " +
-                       "machine. This changes the speaker turns, not only the speed — on AMI test cpu scores " +
-                       "16.33% DER and cuda 16.10% — so a scoring run must say which one produced it. dml needs " +
-                       "--backend-unverified; at ONNX Runtime's defaults it scores 53.15% while looking healthy.",
+                Help = "Execution provider: cpu, cuda, webgpu or dml. Default: webgpu where it loads, then " +
+                       "cuda, then cpu — the one that reproduces the published figure ahead of the one that " +
+                       "is fastest. This changes the speaker turns, not only the speed — on AMI test cpu " +
+                       "scores 16.3324% DER, webgpu 16.3319% and cuda 16.1021% — so a scoring run must say " +
+                       "which one produced it. dml needs --backend-unverified; at ONNX Runtime's defaults " +
+                       "it scores 53.15% while looking healthy.",
             },
             new OptionSpec
             {
@@ -401,6 +423,25 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "n",
                 Help = "Intra-op threads for the ONNX sessions. Default: whatever ONNX Runtime chooses.",
+            },
+            new OptionSpec
+            {
+                Name = "backend",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Execution provider for the translator: cpu, cuda, webgpu or dml. Default: webgpu " +
+                       "where it loads, then cuda, then cpu. This changes the English, not only the speed — " +
+                       "measured on 32 FLEURS sentences at beam 6, webgpu returned the cpu's own " +
+                       "translations on 32 of 32 at 1.30x the speed and cuda on 240 of 240. dml is refused " +
+                       "unless --backend-unverified is given: it matched on 0 of 32, its decoder " +
+                       "falling into a repetition loop, at 21.5x slower.",
+            },
+            new OptionSpec
+            {
+                Name = "backend-unverified",
+                Help = "Allow a translator backend this project has not measured as faithful. For measuring " +
+                       "one, not for using one: a backend that rewrites the output produces English no " +
+                       "figure in this project describes.",
             },
             Fake,
             Help,

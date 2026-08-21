@@ -47,6 +47,46 @@ public sealed record SpeakerLabellingOptions
     }
 }
 
+/// <summary>
+/// What is knowable about a labeller <i>before</i> it is loaded: the two limits and whose they are.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A smaller type than <see cref="SpeakerLabellerCapabilities"/> and smaller on purpose. The window
+/// has to answer "how many voices can this tell apart" and "how long a recording are its labels
+/// established on" while the queue is being built and the weights are still on disk, because both
+/// drive warnings that are worth reading before a batch and worthless after it. Those questions have
+/// answers that do not depend on anything being loaded.
+/// </para>
+/// <para>
+/// <b><see cref="SpeakerLabellerCapabilities.Backend"/> is deliberately absent.</b> It is the one
+/// field only a loaded engine can answer — since the diariser moved out of process the provider is
+/// chosen inside the sidecar — and a declared guess at it is how provenance becomes fiction. A
+/// caller wanting the backend has to hold a labeller that has loaded, which is the point.
+/// </para>
+/// </remarks>
+public sealed record SpeakerLabellerLimits
+{
+    /// <summary>
+    /// What to call the labeller in a sentence: its model id where there is one, its engine name
+    /// otherwise. Collapsed here rather than carried as two fields, because every reader of it made
+    /// the same choice and one of them would eventually make it differently.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>True when <see cref="SpeakerLabellingOptions.SpeakerCount"/> reaches the model.</summary>
+    public bool SupportsFixedSpeakerCount { get; init; }
+
+    /// <summary>The most distinct voices the model can keep apart, when it has such a limit.</summary>
+    public int? MaxSpeakers { get; init; }
+
+    /// <summary>
+    /// How long a recording this labeller's output has actually been established on, when that is
+    /// known. Null means no such bound has been measured — not "any length".
+    /// </summary>
+    public TimeSpan? ReliableUpTo { get; init; }
+}
+
 /// <summary>What a loaded speaker labeller can do and where its labels come from.</summary>
 public sealed record SpeakerLabellerCapabilities
 {
@@ -84,6 +124,24 @@ public sealed record SpeakerLabellerCapabilities
     /// caller that will one day forget.
     /// </remarks>
     public TimeSpan? ReliableUpTo { get; init; }
+
+    /// <summary>
+    /// The part of this that a caller can also learn without loading anything.
+    /// </summary>
+    /// <remarks>
+    /// A projection rather than a component so that no construction site changes, and so that the
+    /// sentences drawn before a run and the sentences drawn after it come out of one body of code —
+    /// see <see cref="SpeakerLabelling.DescribeUnreachableCount(SpeakerLabellerLimits, int?)"/>. A
+    /// hint beside a field that disagrees with the warning that stops the batch is worse than
+    /// either alone.
+    /// </remarks>
+    public SpeakerLabellerLimits Limits => new()
+    {
+        Name = ModelId ?? EngineName,
+        SupportsFixedSpeakerCount = SupportsFixedSpeakerCount,
+        MaxSpeakers = MaxSpeakers,
+        ReliableUpTo = ReliableUpTo,
+    };
 }
 
 /// <summary>

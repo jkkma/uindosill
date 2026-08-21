@@ -18,7 +18,7 @@
     rule — is small enough to hold to a committed fixture.
   -->
   <ItemGroup>
-    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+    <ProjectReference Include="../../src/Parakeet.Core/Parakeet.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

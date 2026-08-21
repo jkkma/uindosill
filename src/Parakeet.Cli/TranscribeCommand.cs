@@ -68,7 +68,7 @@ internal static class TranscribeCommand
         // and it is not one that arrives after a three-hour decode.
         if (translationOptions is not null)
         {
-            TranslatorFactory.Resolve(context, TranslationRequestFrom(parsed));
+            TranslatorFactory.Resolve(context, TranslationRequestFrom(parsed), formats);
         }
 
         // Resolved before the ASR engine, and only resolved — the labeller itself is built below,
@@ -129,7 +129,7 @@ internal static class TranscribeCommand
         // output after the first three have been written is not a refusal.
         await using var translator = translationOptions is null
             ? null
-            : TranslatorFactory.Create(context, TranslationRequestFrom(parsed));
+            : await TranslatorFactory.CreateAsync(context, TranslationRequestFrom(parsed), ct).ConfigureAwait(false);
 
         if (translator is not null)
         {
@@ -229,6 +229,8 @@ internal static class TranscribeCommand
         ModelId = parsed.Value("translate-model"),
         ModelPath = parsed.Value("translate-model-path"),
         Threads = ParseThreads(parsed.Value("translate-threads"), "--translate-threads"),
+        Backend = parsed.Value("translate-backend"),
+        AllowUnverifiedBackend = parsed.HasFlag("translate-backend-unverified"),
     };
 
     /// <summary>Null when <c>--translate</c> was not given: the whole pass is behind that flag.</summary>

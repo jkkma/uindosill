@@ -13,22 +13,32 @@ also what lets every test run on Linux with no weights present.
 ```
 Parakeet.Core           contracts + pure logic          (no dependencies at all)
    ▲     ▲     ▲     ▲
-   │     │     │     └── Parakeet.Engine.ParakeetCpp    (the only project with native interop)
-   │     │     └──────── Parakeet.Engine.Sortformer     (ONNX Runtime; the speaker diariser)
+   │     │     │     └── Parakeet.Engine.ParakeetCpp    (the only project that binds a native library)
+   │     │     └──────── Parakeet.Engine.Python         (a child process; the diariser and the translator)
    │     └────────────── Parakeet.Audio                 (WAVE reader + Media Foundation, one net10.0)
    └──────────────────── Parakeet.Cli / Parakeet.App
 ```
 
-**One project per model, and that is the pattern rather than a coincidence.** `Parakeet.Core`
-declares `ITranscriptionEngine`, `ISpeakerLabeller` and `ITranscriptTranslator` and knows nothing
-about what implements any of them; parakeet.cpp's interop is in one project and ONNX Runtime's is in
-another, so neither can leak into the other or into anything above them. The diariser's project also
-owns the three things its ONNX graph does *not* — a NeMo-faithful mel featurizer, the Arrival-Order
-Speaker Cache, and the streaming chunk loop — because all three are that model's business and none
-of them is diarisation in general. The translator's project does not exist yet: its contract and a
-fake shipped ahead of it, the way the diarisation discriminator shipped ahead of any diarisation
-entry, and when it arrives it is a fourth box on that diagram rather than a second responsibility
-for one of the three.
+**One project per engine boundary, and that is the pattern rather than a coincidence.**
+`Parakeet.Core` declares `ITranscriptionEngine`, `ISpeakerLabeller` and `ITranscriptTranslator` and
+knows nothing about what implements any of them; parakeet.cpp's interop is in one project and the
+bundled Python's is in another, so neither can leak into the other or into anything above them.
+
+**What the second of those owns is a process rather than a library**, which is why two models share
+it. The diariser and the translator both moved into a bundled Python on 2026-08-21, and everything
+about that — finding the interpreter, the line protocol, the lifetime of the child — is one boundary
+rather than two. `Parakeet.Engine.Python` therefore also references `Parakeet.Audio`, because the
+host keeps the decode and the resampling and hands the child a finished WAV. It references no ONNX
+Runtime, and **neither does anything else in the solution: no .NET project here runs a graph any
+more.**
+
+The C# implementations of both models are in `attic/` — unbuilt, unreferenced, and not in
+`Uindosill.slnx`. Between them they were about 7,400 lines reimplementing an arrival-order speaker
+cache, a mel featurizer, a SentencePiece processor, a Marian tokenizer and a beam search, each of
+which is a second place for a measured number to drift from the thing that produced it.
+`attic/README.md` says what they carried and names the commit where they last built; there are no
+tags in this repository, so a SHA is the only reference there is. That moving two models to another
+language cost one project and not a rewrite is the seam at the top of this document being paid for.
 
 ## The contracts
 
@@ -73,8 +83,11 @@ and cutting segments where the speaker changes is a pure function of two lists
 audio sources being single-read means the opt-in opens the file a second time — a cost only the
 opt-in pays. `FakeSpeakerLabeller` is to this seam what the fake engine is to the other, and
 `--fake` still selects it so the opt-in stays exercisable on a machine with no weights installed;
-the labeller behind `--speakers` is `SortformerSpeakerLabeller` in `Parakeet.Engine.Sortformer`,
-and the window's checkbox loads the same one.
+the labeller behind `--speakers` is `SidecarSpeakerLabeller` in `Parakeet.Engine.Python`, which
+drives the model in a child interpreter, and the window's checkbox loads the same one. When that
+interpreter is absent both opt-ins are disabled **with the reason beside them** rather than failing
+at the moment they are used — which is why `PythonRuntime` answers with a `bool` and a sentence as
+well as by throwing. A checkbox cannot be drawn out of an exception.
 
 ```csharp
 public interface ITranscriptTranslator : IAsyncDisposable   // the transcript in English; the opt-in's last pass
@@ -99,7 +112,9 @@ across — because each of those failures produces a file that looks entirely co
 
 `EngineCapabilities` is not decoration. It carries `SupportsDecodeCancellation` and
 `SupportsThreadCount`, both **false** for parakeet.cpp, both verified against the header rather than
-assumed. A UI that offers a control the engine ignores is worse than one that offers nothing.
+assumed. A UI that offers a control the engine ignores is worse than one that offers nothing — and
+the same rule is what turned `TranslatorCapabilities.SupportsCancellation` false when the translator
+crossed a process boundary. See *The process boundary* below.
 
 ## Where the work actually happens
 
@@ -141,7 +156,7 @@ quietest nearby frame: one implementation, not two.
 
 ## The interop layer
 
-`Parakeet.Engine.ParakeetCpp` is the only project that touches native code.
+`Parakeet.Engine.ParakeetCpp` is the only project that binds a native library of this product's own.
 
 - `[LibraryImport]` source-generated bindings, not `DllImport`.
 - `SafeHandle` for `parakeet_ctx*`, so a context cannot be collected mid-decode or leaked on throw.
@@ -162,33 +177,185 @@ documented order (requested backend, then CPU — with Vulkan interposed only fo
 never falling *into* CUDA) and reports every path
 it tried when it fails. See `docs/NATIVE-BINARIES.md`.
 
-`Parakeet.Engine.Sortformer` touches native code too, but through ONNX Runtime's own NuGet package
-rather than a vendored drop: the natives travel per RID inside the package and a `-r win-x64` publish
-resolves them without help, which is why nothing about vendoring or the resolver changes. Only one
-file in that project knows ONNX Runtime exists.
+**Nothing else in the solution loads a native library of ours, and nothing loads ONNX Runtime at
+all.** The diariser's and the translator's natives are ONNX Runtime's, and since 2026-08-21 they are
+`pip`'s business inside a child interpreter rather than this repository's: no project references
+`Microsoft.ML.OnnxRuntime`, no RID-specific asset has to be resolved for one, and everything above
+applies to exactly one library. What replaced that reference is a process.
+
+## The process boundary
+
+The diariser and the translator do not run in this process. Each is a child interpreter started by
+`PythonSidecar`, driven over its stdin and stdout, and kept alive for the whole run.
+
+**One child per engine, and not one per file.** The diariser's graph is 453 MiB and the translator's
+1.34 GiB, so a batch that reloaded them per file would spend more of itself loading than working.
+The child is started lazily — nothing spawns until a model is actually wanted — and stopped on
+dispose. The two engines *could* share one — the constructor takes a sidecar — but neither the
+command line nor the window passes one, so a run with both opt-ins on has two children and two sets
+of resident weights.
+
+**It is `python -m uindosill_engines`, and the interpreter is the bundled one.** Deliberately not
+whatever `python` resolves to on PATH — picking that up is how a working install turns into a
+support thread about somebody's conda environment. The package root reaches the child through
+`PYTHONPATH` rather than through a working directory, because the host's working directory is the
+user's and arbitrary, and which code runs must not depend on it. `UINDOSILL_PYTHON` and
+`UINDOSILL_PYTHON_PACKAGES` override each half for development and for the measurement harnesses,
+and the resolution records that an override was used: a figure taken against an unknown interpreter
+is a figure nobody can reproduce.
+
+**The protocol is one JSON object per line, UTF-8, newline-terminated.** No framing beyond the
+newline, because every payload on it is small — audio arrives as a path and a diarisation result is
+a few thousand numbers. Nothing streams bytes over this channel on purpose.
+
+**stdout belongs to the protocol and to nothing else.** `torch`, `librosa` and `numba` all print to
+stdout given the right provocation, and a single stray line of theirs lands in the middle of a JSON
+stream and desynchronises the host for the rest of the run. `protocol.claim_stdout` therefore takes
+a duplicate of the real handle for the channel and points `sys.stdout` at stderr — before any model
+library is imported, because importing is itself enough to make some of them print. The host holds
+the other end up: it keeps the last 200 lines of the child's stderr so that a death has a traceback
+attached rather than being reported as "it died", and a line on stdout that does not parse as JSON
+is recorded there and skipped rather than ending a run.
+
+**The audio crosses as a file.** The host drains the source, resamples to 16 kHz mono, writes a WAV
+into the temporary directory, hands over the path, and deletes it in a `finally`. A pipe carrying
+both a protocol and a megabyte of PCM is a pipe with two failure modes; the decode belongs to the
+side that already owns Media Foundation; and handing over a finished WAV is what stops the sidecar
+from having a second opinion about what the file contains.
+
+**Requests are correlated by id, not by order.** Progress interleaves with results and a second
+request may be sent before the first has finished, so neither side assumes a reply arrives before
+the next message does. A message that carries no id at all goes into the error tail; a reply to an
+id nobody is waiting on is dropped. Either would mean a misbehaving sidecar, and a host that died on
+one would turn a misbehaviour into an outage.
+
+**A failure is a message, not a crash**, and that is what lets a batch continue past one bad file.
+The `kind` field is a closed vocabulary — `request`, `model`, `audio`, `internal` — so a caller can
+tell "this file could not be read" from "the model is not there" without matching on message text,
+which is how a reworded message silently changes behaviour. It arrives as `PythonEngineException`
+and it is **one file**. A failure *of* the sidecar — it would not start, it died, it broke the
+protocol — arrives as `PythonSidecarException` and it is **every remaining file**; everything still
+pending when the child's stdout closes is failed with that one rather than left waiting on a reply
+that is never coming.
+
+**The protocol carries a version and the host refuses a number it does not know.** `hello` is the
+first request, before any weights are touched, precisely so that a bundled Python out of step with
+the application says so in a sentence about reinstalling rather than several megabytes into a model
+load. Shutdown is asked for and then enforced: a `shutdown` op, five seconds, and a kill of the
+process tree if the child has not gone.
+
+### What the boundary costs
+
+What it buys is that the numerical core is NVIDIA's and HuggingFace's own code rather than a port of
+it — `docs/PHASES.md` § *Decided 2026-08-21* has that argument and the measurements under it. The
+bill is here:
+
+- **Cancellation, for the translator.** A decode running in another process cannot be interrupted,
+  so `SupportsCancellation` is now **false**: cancelling stops the next segment being sent, and the
+  one in flight finishes. The capability says so rather than the UI offering a control that does not
+  do what it claims.
+- **Memory, at both ends.** The host holds a whole file's samples to write the WAV, and the child
+  holds a whole file's mel to chunk it. Neither streams.
+- **An interpreter inside the installer.** Measured 2026-08-21, the assembled bundle is **1.20 GB**
+  — `scripts/bundle-python.ps1` builds it and reads it back — against the ~0.55 GB it was budgeted
+  at. No installer has been packed with one in it yet. See `docs/UNPROVEN.md`.
+- **A second thing to version**, and a set of failure modes that did not exist in process — a child
+  that will not start, a child that dies mid-request, a library that writes to the wrong handle.
+  Every one of them is named above because every one of them had to be handled.
+
+### The division that was kept
+
+**The policy did not move with the engines**, and that is the point of drawing the boundary where it
+is. Still on this side: the `>>eng<<` target token, which `TranslationRequest.Build` is the only
+thing that applies, because a source handed to this checkpoint without it comes back as fluent
+German rather than as an error; the token limit a source is **refused** against rather than
+truncated at — sent with the request so that a source about to be refused is not decoded first, but
+counted, judged and thrown here; refusing `-f vtt-words` under the opt-in, since word timings do not
+survive translation; and folding a requested speaker count down afterwards, merging the pair that
+talk over each other least, because this model estimates a count and cannot be told one. The sidecar
+does the things only a model can do — turn a WAV into speaker turns, count a string's tokens and
+translate it — and is told nothing about what any of them means. It is the division `ISpeakerLabeller`
+already drew in process, kept deliberately, so that crossing a process boundary did not also move
+the decisions.
+
+One consequence looks like a mistake and is not. **`SpeakerLabellerLimits` is a second copy of two
+constants that live in the sidecar.** The four-speaker cap and the fifty-minute bound have to be on
+screen while a queue is being built and the weights are still on disk — "seven speakers was never
+reachable" said afterwards is not a warning, it is an epitaph — and at that moment there may be no
+interpreter to ask. So the host *declares* them and `LoadAsync` refuses a sidecar whose answer
+differs, which is the only thing that keeps a duplicate honest: the check fires on the machine where
+the two halves are actually together. The backend is deliberately **not** in that type. It is the
+one thing only the sidecar can answer, and a declared guess at it would be provenance turning into
+fiction.
+
+**A non-CPU backend is checked against a committed fixture before it is trusted, and the result is
+reported rather than enforced.** Measured 2026-08-21, DirectML at ONNX Runtime's default settings
+scores 53.1522% diarisation error on AMI test against the CPU's 16.3324%, while emitting speaker
+turns that read as perfectly ordinary — a failure with nothing in its own output to reveal it. So
+the diariser compares probabilities against a committed reference at a threshold of 1e-4 that was
+measured rather than chosen: WebGPU lands at 1.073e-06 and passes, CUDA at 8.143e-04 and does not,
+and two CPU runs across ONNX Runtime 1.27.0 and 1.29.0 are bit-identical. Failing does not stop the
+run — the user asked for that provider, and what the command line and the window do is name it and
+say it disagreed. **The translator's fixture is the weaker instrument and says so**: six sentences
+compared by string equality, with no margin at all, so a provider wrong only on long or unusual
+inputs passes it. It catches the failure that has actually been seen — DirectML wrong on all 32
+sentences measured — and nothing subtler. What establishes a translator on a machine is the gate
+corpus, and **the 8,149-sentence gate has not been re-run against the sidecar translator**; what has
+been run is a six-sentence smoke test on one machine.
+
+### Why the boundary is testable without a Python
+
+**`tools/FakeSidecar` is a child process that speaks the line protocol from a script on disk.** A
+test writes `script.json` into a temporary directory and hands that directory over as the package
+root, which makes `PYTHONPATH` a private channel from one test to one child: no parent-process
+environment is touched, so nothing races and no test has to be serialised against another.
+
+What it will not do is interpret. It emits the script's lines verbatim, with only `{id}`
+substituted, which is how a test produces a message with no id, a line that is not JSON at all, a
+reply to a request that was never made, or a child that dies in the middle of one. None of those
+could come from a well-behaved emitter and all of them have to be survived. It deliberately
+references nothing from `Parakeet.Engine.Python`: a stand-in that shared types with the thing it
+stands in for would agree with it by construction, which is the one thing a stand-in must not do.
+It lives under `tools/` rather than `tests/` because `tests/Directory.Build.props` makes every
+project there an xUnit project, and a second entry point would collide with the one xUnit generates.
+
+**What it cannot reach is anything numerical.** A clone carries no Python, so the suite has no
+weights, no ONNX Runtime and no parity check in it — both fixtures above run at load, on a machine
+that has both halves, and CI never sees them. That is a loss rather than a tidy-up: seven checkpoint
+tests went to `attic/` with the C# translator and nothing in the suite replaces them.
 
 ## The diariser owns three things its graph does not
 
 The ONNX export runs the pre-encoder, the encoder and the head. Everything else is the host's, and
 each piece is a place where a plausible implementation gives a worse diarisation error rate without
-failing — so each is held against the reference implementation by committed fixtures rather than by
-a reading of it.
+failing at all. **Since 2026-08-21 that host is the sidecar, and the point of moving was that none
+of the three would be written a second time**: `feats.py` and `postproc.py` came across from the
+spike byte for byte and `engine.py` with one import path edited, because those files are what the
+measured 16.33% was produced by and a rewrite would be a different artefact needing a different
+measurement.
 
 - **The mel featurizer** reproduces NeMo's `FilterbankFeatures` for this checkpoint: pre-emphasis,
   a 400-sample Hann window with `periodic=false` inside a 512-point transform, 128 Slaney mel
   filters, `log(x + 2^-24)`, and **no normalisation** — the checkpoint says `normalize: NA`, where
   nearly every NeMo ASR config says `per_feature`, and using the common setting makes a correct
-  model look mediocre. It streams: the samples pass through and features exist only for the chunk
-  being fed to the graph, so three hours costs megabytes rather than the 690 MB the reference
-  implementation's load-it-all approach would.
+  model look mediocre. Every constant is read out of the `preprocessor:` block of the checkpoint's
+  own `model_config.yaml` rather than off a model card. **It no longer streams.** The C# one
+  produced features a chunk at a time; this computes the whole file's mel up front, which is 128
+  float32 every 10 ms — about 51 kB per second of audio, so hundreds of megabytes on a long
+  recording. That is arithmetic: nothing has profiled the sidecar's peak working set.
 - **The Arrival-Order Speaker Cache** is what makes speaker 2 the same person at minute thirty as at
   minute one. The graph takes the cache and the FIFO as inputs and returns embeddings; it does not
   update them. Eviction is not first-in-first-out — frames are scored by how confidently exactly one
   speaker is active, boosted twice so every speaker keeps a floor and none dominates, and the best
-  188 survive in arrival order with unused slots filled by a running mean of silence.
+  188 survive in arrival order with unused slots filled by a running mean of silence. **It is
+  NVIDIA's `SortformerModules`, imported and called rather than ported**, and the price of the
+  alternative is on record: the C# port of it scored 16.3368% on AMI test against the reference's
+  16.3324%, 0.0044 points for a port that was done carefully.
 - **The chunk loop** slices the mel spectrogram with asymmetric first and last chunks, trims the
   graph's fixed 381-frame output back to the length it reports, and applies the prediction mask the
-  export omits.
+  export omits. This one is still this project's code, because it is the part NVIDIA ships as a
+  training loop rather than as anything callable — but it is the spike's own loop rather than a
+  second reading of it.
 
 ## Output
 

@@ -1,7 +1,8 @@
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Models;
+using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
-using Parakeet.Engine.Marian;
+using Parakeet.Engine.Python;
 
 namespace Parakeet.Cli;
 
@@ -18,6 +19,25 @@ internal sealed record TranslatorRequest
 
     /// <summary>Intra-op threads for the ONNX sessions, or 0 to let ONNX Runtime choose.</summary>
     public int Threads { get; init; }
+
+    /// <summary>
+    /// Execution provider, or null for <c>auto</c> — resolved inside the sidecar, because only the
+    /// ONNX Runtime that would have to initialise a provider knows whether it will.
+    /// </summary>
+    public string? Backend { get; init; }
+
+    /// <summary>Allow a backend this project has not measured as faithful.</summary>
+    public bool AllowUnverifiedBackend { get; init; }
+
+    /// <summary>
+    /// The flag the calling command spells the backend with — <c>transcribe</c> has
+    /// <c>--translate-backend</c> and <c>translate</c> has <c>--backend</c>.
+    /// </summary>
+    /// <remarks>
+    /// Carried rather than hardcoded, on <c>LabellerRequest</c>'s terms: a shared message that names
+    /// one command's flag tells half its readers to fix a flag their command does not have.
+    /// </remarks>
+    public string BackendOption { get; init; } = "--translate-backend";
 }
 
 /// <summary>
@@ -38,7 +58,31 @@ internal static class TranslatorFactory
         "source.spm", "target.spm", "vocab.json", "tokenizer_config.json",
     ];
 
-    public static ITranscriptTranslator Create(CliContext context, TranslatorRequest request)
+    /// <summary>
+    /// Builds the translator and loads it, so that its capabilities are real before anything is
+    /// said about them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Loading here rather than lazily, and asynchronous for that reason, exactly as
+    /// <c>LabellerFactory.CreateAsync</c> is. With the engine out of process the provider is chosen
+    /// inside the sidecar — only ONNX Runtime knows what will initialise — so the answer has to come
+    /// back before it can be reported, and it is the load that runs the parity check whose warning
+    /// belongs in front of a run rather than after it.
+    /// </para>
+    /// <para>
+    /// <b>What it costs is 1.34 GiB held through the decode.</b> In <c>transcribe --translate</c> the
+    /// translator now loads before the ASR does, and its graphs sit in the sidecar unused until the
+    /// last pass. That is the price of finding out here that the bundled Python will not start, that
+    /// the checkpoint is unreadable, or that the provider does not reproduce the reference — none of
+    /// which <see cref="Resolve"/> can discover from the file system, and all of which would
+    /// otherwise be discovered after a three-hour decode.
+    /// </para>
+    /// </remarks>
+    public static async Task<ITranscriptTranslator> CreateAsync(
+        CliContext context,
+        TranslatorRequest request,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(request);
@@ -51,29 +95,112 @@ internal static class TranslatorFactory
 
         var (directory, descriptor) = ResolveModel(context, request);
 
-        return new MarianTranscriptTranslator(new MarianTranslatorOptions
+        ITranscriptTranslator translator = new SidecarTranscriptTranslator(new SidecarTranslatorOptions
         {
             ModelDirectory = directory,
             ModelId = descriptor?.Id ?? Path.GetFileName(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
             IntraOpThreads = request.Threads,
+            Provider = ResolveBackend(request),
             SourceLanguages = descriptor?.Languages ?? [],
         });
+
+        // Disposed on a failed load rather than leaked: the sidecar is a process, and one left
+        // running per failure is one process per file in a batch.
+        try
+        {
+            await translator.LoadAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await translator.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        // Which provider ran changes the English and not only the clock. Nothing is said for cpu,
+        // webgpu or cuda, and that silence is a measurement rather than an oversight: measured
+        // 2026-08-21 on 32 FLEURS sentences at beam 6, webgpu returned the CPU's own translations on
+        // 32 of 32 and cuda on 240 of 240. DirectML is the one worth a line.
+        if (translator.Capabilities.Backend == ComputeBackend.DirectMl)
+        {
+            context.WriteError(
+                "WARNING: translating on DirectML, which this project has not measured as faithful. On 32 FLEURS " +
+                "sentences at beam 6 it agreed with the CPU on 0 of 32 — the decoder falls into a repetition loop " +
+                "— at 21.5x slower. Treat this English as unverified.");
+        }
+
+        ReportParity(context, translator, request.BackendOption);
+        return translator;
+    }
+
+    /// <summary>
+    /// Which execution provider the translator is allowed to use, from what the user asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A whitelist rather than a passthrough, for the reason <c>LabellerFactory</c>'s is one and
+    /// with a different measurement behind it. On 2026-08-21, 32 FLEURS es_419 sentences at beam 6:
+    /// <c>webgpu</c> returned the CPU's own translations on <b>32 of 32</b> at 1.30x the speed and
+    /// <c>cuda</c> on <b>240 of 240</b>, while <c>dml</c> matched on <b>0 of 32</b> — the decoder
+    /// falls into a repetition loop — at 21.5x <i>slower</i>.
+    /// </para>
+    /// <para>
+    /// DirectML's failure here is not the diariser's and does not have the diariser's fix. There the
+    /// graph optimiser fuses the model into one wrong node and <c>ORT_DISABLE_ALL</c> rescues it;
+    /// here the encoder and the decoder are each clean at full optimisation when driven directly, so
+    /// the fault is in <c>optimum</c>'s merged KV-cache path and no optimisation level moves it. It
+    /// stays reachable behind the unverified flag so that measuring it stays possible.
+    /// </para>
+    /// </remarks>
+    private static string ResolveBackend(TranslatorRequest request)
+    {
+        if (request.Backend is not { Length: > 0 } asked)
+        {
+            return "auto";
+        }
+
+        var backend = asked.Trim().ToLowerInvariant();
+        return backend switch
+        {
+            "auto" or "cpu" or "cuda" or "webgpu" => backend,
+            "dml" or "directml" when request.AllowUnverifiedBackend => "dml",
+            "dml" or "directml" => throw new CliUsageException(
+                $"{request.BackendOption} dml is refused. Measured on 32 FLEURS sentences at beam 6, DirectML " +
+                "agreed with the CPU on 0 of 32 translations — its decoder falls into a repetition loop — while " +
+                $"running 21.5x slower, so it is neither faithful nor fast. Add {request.BackendOption}-unverified " +
+                $"to measure it anyway, or use {request.BackendOption} webgpu, which returned the CPU's own " +
+                "translations on 32 of 32 at 1.30x the speed."),
+            _ => throw new CliUsageException(
+                $"Unknown translator backend '{asked}' for {request.BackendOption}. Choose cpu, cuda, webgpu or dml."),
+        };
     }
 
     /// <summary>
     /// Checks that a translator can be had, without building one — so <c>transcribe</c> refuses
     /// before it loads 1.34 GiB of ASR weights and decodes a file whose translation it cannot write.
     /// </summary>
-    public static void Resolve(CliContext context, TranslatorRequest request)
+    public static void Resolve(CliContext context, TranslatorRequest request, IReadOnlyList<string>? formats = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(request);
+
+        // The word-timed format is refused here rather than only after the load, because whether it
+        // is refused does not depend on anything the load discovers. Leaving it to Check alone meant
+        // `--translate -f vtt-words` started a Python, loaded 1.34 GiB of graphs and ran a parity
+        // fixture before refusing on a combination of two flags — a usage error reported at the cost
+        // of a model load.
+        if (formats is not null)
+        {
+            RefuseWordTimings(formats);
+        }
 
         if (request.Fake)
         {
             return;
         }
 
+        // The backend too, and not only the model. A refused provider name is a usage error, and a
+        // usage error discovered after a three-hour decode is a usage error reported too late.
+        ResolveBackend(request);
         ResolveModel(context, request);
     }
 
@@ -165,15 +292,64 @@ internal static class TranslatorFactory
                 "Only a many-to-one translator can run this pass.");
         }
 
-        if (!capabilities.PreservesWordTimings
-            && formats.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.OrdinalIgnoreCase))
+        if (!capabilities.PreservesWordTimings)
         {
-            throw new CliUsageException(
-                $"-f {TranscriptFormats.WordTimedVtt.Id} times every word, and translation does not carry word " +
-                "timings: the English words are not the words that were spoken and nothing aligns them. It is " +
-                "refused rather than written with the old timings on the new text. Drop the format, or drop " +
-                "--translate and get the word timings of what was actually said.");
+            RefuseWordTimings(formats);
         }
+    }
+
+    /// <summary>
+    /// Refuses the word-timed subtitle format under a translation pass.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the pre-flight and the post-load check so the two cannot come to differ. The
+    /// pre-flight can make this call without a translator because the answer is a property of
+    /// translation rather than of a checkpoint — no translator this product can ship preserves word
+    /// timings — and <see cref="Check"/> makes it again because one that somehow did should not be
+    /// refused.
+    /// </remarks>
+    private static void RefuseWordTimings(IReadOnlyList<string> formats)
+    {
+        if (!formats.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        throw new CliUsageException(
+            $"-f {TranscriptFormats.WordTimedVtt.Id} times every word, and translation does not carry word " +
+            "timings: the English words are not the words that were spoken and nothing aligns them. It is " +
+            "refused rather than written with the old timings on the new text. Drop the format, or drop " +
+            "--translate and get the word timings of what was actually said.");
+    }
+
+    /// <summary>
+    /// Says so when this machine's translator does not reproduce the committed reference.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of <c>LabellerFactory</c>'s parity line, and it exists for the same reason: a
+    /// provider measured faithful elsewhere is a prior, and what happened here is the evidence. What
+    /// it catches is a translation that is wrong in a way nothing about it reveals — measured
+    /// 2026-08-21, DirectML returned the CPU's translation on 0 of 32 FLEURS sentences while every
+    /// one of them came back as an ordinary-looking sentence.
+    /// </remarks>
+    public static void ReportParity(CliContext context, ITranscriptTranslator translator, string backendOption)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(translator);
+
+        if (translator is not SidecarTranscriptTranslator { Parity: { } parity } || parity.Passed)
+        {
+            return;
+        }
+
+        var examples = parity.Differing.Count > 0
+            ? " " + string.Join(" ", parity.Differing)
+            : string.Empty;
+
+        context.WriteError(
+            $"WARNING: this machine's translator reproduced {parity.Identical} of {parity.Total} of the " +
+            $"reference's translations.{examples} The English below is this machine's own result and no figure " +
+            $"published by this project describes it. {backendOption} cpu is the one that does.");
     }
 
     /// <summary>The context report, which needs the options and so cannot live in <see cref="Check"/>'s caller.</summary>

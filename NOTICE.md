@@ -125,9 +125,13 @@ The attribution notices it **does** carry are retained, per §4(c):
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia |
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
+| Instrument Sans (typeface; desktop application only) | OFL-1.1 — Copyright 2022 The Instrument Sans Project Authors; `licences/InstrumentSans-OFL.txt` travels with it | https://github.com/Instrument/instrument-sans |
+| Chivo Mono (typeface; desktop application only) | OFL-1.1 — Copyright 2019 The Chivo Project Authors; `licences/ChivoMono-OFL.txt` travels with it | https://github.com/Omnibus-Type/Chivo |
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
-| ONNX Runtime (`onnxruntime.dll`; runs the speaker diarisation model) | MIT — Copyright (c) Microsoft Corporation. Bundles 69 components under their own licences; its `ThirdPartyNotices.txt` ships verbatim at `licences/onnxruntime-ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
+| ONNX Runtime (`onnxruntime-webgpu` 1.27.0, in the bundled Python; runs the speaker diarisation model and the translator) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; the wheel ships its own `ThirdPartyNotices.txt`, and `licences/onnxruntime-ThirdPartyNotices.txt` carries the 1.29.0 package's 69 blocks verbatim | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
+| CPython (embeddable 3.12.10; the interpreter the diariser and the translator run in) | PSF License Agreement Version 2, plus the Microsoft Distributable Code conditions its Windows binary build adds | https://www.python.org/ |
+| The bundled Python packages (pinned in `python/requirements-bundle.txt`) | Mostly MIT, BSD and Apache-2.0 — but `soxr` is LGPL-2.1-or-later and `soundfile`'s wheel carries LGPL-2.1 `libsndfile`. Read package by package in `docs/LICENSING.md`; **not yet assembled into a notice package** | https://pypi.org/ |
 | NVIDIA NeMo (source, vendored at `python/uindosill_engines/_vendor/nemo/`; runs the diariser's speaker cache) | Apache-2.0 — Copyright (c) 2025, NVIDIA CORPORATION | https://github.com/NVIDIA/NeMo |
 
 ### The CUDA runtime is the one component here that is not MIT
@@ -144,6 +148,21 @@ must have material additional functionality beyond the included portions, the re
 must be accessed only by that application, and the SDK may not be distributed as a stand-alone
 product. `docs/LICENSING.md` records how this product meets each, and what about that reading is
 still unverified.
+
+### The bundled Python is a redistribution whose notices are not written yet
+
+The diariser and the translator run out of process in an interpreter the installer will carry, so
+the packages they import stop being dependencies and become files a recipient receives. That set is
+a CPython 3.12.10 and the wheels `python/requirements-bundle.txt` pins — **fifty distributions** once
+the transitive set is resolved, counted 2026-08-21.
+
+**Their notices have not been assembled, and this file does not pretend otherwise.** What has been
+established is in `docs/LICENSING.md`: every licence read off the installed package metadata rather
+than recalled; the four that are not simply permissive (`soxr` LGPL-2.1-or-later, the LGPL-2.1
+`libsndfile` inside `soundfile`'s wheel, `certifi` MPL-2.0, `tqdm` MPL-2.0 AND MIT); the three that
+ship no licence text at all (`flatbuffers`, `sentencepiece`, `tokenizers`); and what remains unread.
+It is recorded there rather than here because a notice file should say what travels with the
+product, and until an installer carries a Python, none of it does.
 
 ### NeMo is vendored as source, and it is deliberately not a rewrite
 

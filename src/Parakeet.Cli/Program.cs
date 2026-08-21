@@ -5,6 +5,7 @@ using Parakeet.Cli;
 using Parakeet.Core.Models;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
+using Parakeet.Engine.Python;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -88,11 +89,18 @@ namespace Parakeet.Cli
                 context.WriteError("Cancelled.");
                 return ExitCodes.RuntimeError;
             }
+            // The two from the sidecar are on this list for the reason all the others are: their
+            // messages are written to be read. A missing bundled Python says which half is missing
+            // and what to do about it, and a sidecar that died carries the tail of the child's own
+            // stderr — both of which a stack trace throws away and replaces with a file and a line
+            // number that mean nothing to the person holding it.
             catch (Exception ex) when (ex is ParakeetNativeException
                                           or ParakeetNativeLoadException
                                           or ParakeetAbiMismatchException
                                           or AudioDecodeException
                                           or ModelInstallException
+                                          or PythonSidecarException
+                                          or PythonEngineException
                                           or FileNotFoundException
                                           or DirectoryNotFoundException
                                           or IOException

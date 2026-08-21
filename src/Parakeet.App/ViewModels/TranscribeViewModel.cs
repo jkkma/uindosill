@@ -239,10 +239,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
         OnPropertyChanged(nameof(SpeakerDurationWarning));
     }
 
-    public string? SpeakerHint => CanLabelSpeakers
-        ? null
-        : "Speaker labelling needs its own model, which is not installed yet. Install it from the Models tab; "
-          + "it is a 453 MiB download and tells apart up to four speakers.";
+    /// <summary>
+    /// Why the opt-in is off, when it is. Asked of the provider rather than stated here: since the
+    /// diariser moved into the bundled Python there are two reasons it can be unavailable and only
+    /// the provider can tell which one applies.
+    /// </summary>
+    public string? SpeakerHint => CanLabelSpeakers ? null : _engines.DescribeUnavailable(ModelTask.Diarisation);
 
     /// <summary>
     /// Whether the speaker-count field is live. Only with the opt-in on: a count with nothing to
@@ -291,7 +293,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             return limits.SupportsFixedSpeakerCount
                 ? null
-                : $"{limits.ModelId ?? limits.EngineName} estimates the count itself and cannot be told one, so its "
+                : $"{limits.Name} estimates the count itself and cannot be told one, so its "
                   + $"labels are folded down to {count} afterwards, merging the pair that talk over each other least. "
                   + "If it finds that many or fewer, nothing is merged.";
         }
@@ -370,10 +372,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     public bool CanTranslate => _engines.SupportsTranslation;
 
-    public string? TranslationHint => CanTranslate
-        ? null
-        : "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
-          + "it is a 1.34 GiB download, runs on the CPU, and reads 25 languages into English only.";
+    /// <summary>The twin of <see cref="SpeakerHint"/>, and for the same two reasons.</summary>
+    public string? TranslationHint => CanTranslate ? null : _engines.DescribeUnavailable(ModelTask.Translation);
 
     /// <summary>
     /// Re-asks whether a translator is available and brings the checkbox and its hint into line.
@@ -996,15 +996,24 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 .LabelAsync(document, labeller, second, speakerOptions, progress, merges, ct)
                 .ConfigureAwait(true);
 
-            // Three sentences, widest first, and each about a different thing: the recording is
-            // longer than the labels are established on, the count merged these labels into those,
-            // and the labeller finished at its ceiling. The first is on screen before the batch
-            // started (SpeakerDurationWarning) and repeated here because it belongs to the
-            // transcript too — an options panel is not where somebody reads a result a week later.
+            // Four sentences, widest first, and each about a different thing: what ran and whether
+            // it reproduces the published figure, the recording being longer than the labels are
+            // established on, the count merging these labels into those, and the labeller finishing
+            // at its ceiling. The duration one is on screen before the batch started
+            // (SpeakerDurationWarning) and repeated here because it belongs to the transcript too —
+            // an options panel is not where somebody reads a result a week later.
+            //
+            // The backend sentence is first because it is the one that changes what every other
+            // sentence is about: on a stack that does not reproduce the reference, the labels those
+            // three describe are this machine's own. It comes from the provider because only the
+            // provider knows what kind of labeller this is, and it is read here rather than at
+            // Start because the provider is chosen inside the sidecar and is not known until load.
             speakerWarning = Join(
                 Join(
-                    SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
-                    DescribeMerges(merges)),
+                    _engines.DescribeLabeller(labeller),
+                    Join(
+                        SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
+                        DescribeMerges(merges))),
                 SpeakerLabelling.DescribeLimit(labeller, document));
 
             text.Clear();
@@ -1022,6 +1031,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // translation destroys the signal it rests on.
         var transcribed = document;
         string? numeralWarning = null;
+        string? translatorWarning = null;
 
         if (translator is not null)
         {
@@ -1034,6 +1044,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
             // two-model cascade meets worst. Compared against what was heard rather than against a
             // second reading of the English.
             numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+
+            // What ran, on the same terms as the labeller's. The translator checks itself against a
+            // committed reference at load and this window was running that check and discarding the
+            // answer — which costs the check and delivers none of what it buys.
+            translatorWarning = _engines.DescribeTranslator(translator);
 
             text.Clear();
             text.Append(JobViewModel.Render(document));
@@ -1051,9 +1066,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
             OutputFiles = written,
             Elapsed = DateTimeOffset.UtcNow - started,
 
-            // Silence first, then the labeller at its cap, then a number the English lost: the
-            // file, the names, one segment — widest first, as the command line orders them.
-            Warning = Join(Join(silence, speakerWarning), numeralWarning),
+            // Silence first, then the labeller at its cap, then what the translator's provider means
+            // for the English, then a number the English lost: the file, the names, the whole
+            // translation, one segment — widest first, as the command line orders them.
+            Warning = Join(Join(Join(silence, speakerWarning), translatorWarning), numeralWarning),
         };
 
         vm.Complete(result, translator is null ? null : transcribed);
