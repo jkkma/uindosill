@@ -259,6 +259,11 @@ public static class SpeakerLabelling
             Segments = SpeakerAssignment.Apply(document.Segments, turns, options),
             SpeakerTurns = turns,
             SpeakerModelId = labeller.Capabilities.ModelId,
+
+            // Read off the loaded labeller, which is the only thing that knows: since the diariser
+            // moved out of process the provider is resolved inside the sidecar, so this is not a
+            // value any caller could have supplied.
+            SpeakerBackend = labeller.Capabilities.Backend,
         };
     }
 

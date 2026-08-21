@@ -68,6 +68,13 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Speaker labels", speakerModel));
             }
 
+            // And on which provider, because the model does not settle what the labels are: the
+            // same graph scores a different diarisation error rate on each of the three.
+            if (document.SpeakerBackend is { } speakerBackend)
+            {
+                rows.Add(("Speaker backend", speakerBackend.ToString().ToLowerInvariant()));
+            }
+
             // And which model wrote the English, when this is not what the engine heard. A reader
             // holding a translation without knowing it is reading a second model's opinion of a
             // first model's output, which is a different thing to judge.
@@ -79,6 +86,11 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
             if (document.TranslationModelId is { } translationModel)
             {
                 rows.Add(("Translation model", translationModel));
+            }
+
+            if (document.TranslationBackend is { } translationBackend)
+            {
+                rows.Add(("Translation backend", translationBackend.ToString().ToLowerInvariant()));
             }
 
             if (rows.Count > 0)

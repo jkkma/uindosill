@@ -24,6 +24,14 @@ public sealed record FakeSpeakerLabellerOptions
     public bool FailOnLoad { get; init; }
 
     /// <summary>
+    /// The provider this labeller claims to have run on. Cpu by default, which is what the fake has
+    /// always reported. It is settable so a test can prove the transcript's speaker provenance is
+    /// read off the loaded labeller rather than defaulted into the document — a distinction no
+    /// assertion can make while every labeller in the suite says the same word.
+    /// </summary>
+    public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
+
+    /// <summary>
     /// Whether the fake lets <see cref="SpeakerLabellingOptions.SpeakerCount"/> reach it, which is
     /// the capability it then advertises. True by default, as it has always behaved.
     /// </summary>
@@ -106,7 +114,7 @@ public sealed class FakeSpeakerLabeller : ISpeakerLabeller
         {
             EngineName = "fake",
             ModelId = "fake-speakers",
-            Backend = ComputeBackend.Cpu,
+            Backend = _options.Backend,
             SupportsFixedSpeakerCount = _options.SupportsFixedSpeakerCount,
             MaxSpeakers = _options.MaxSpeakers,
             ReliableUpTo = _options.ReliableUpTo,

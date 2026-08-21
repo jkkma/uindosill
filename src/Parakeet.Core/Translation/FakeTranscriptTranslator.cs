@@ -21,6 +21,13 @@ public sealed record FakeTranslatorOptions
     public bool FailOnLoad { get; init; }
 
     /// <summary>
+    /// The provider this translator claims to have run on, on the same terms as its sibling on the
+    /// canned labeller: Cpu by default, settable so a test can tell a populated provenance field
+    /// from a defaulted one.
+    /// </summary>
+    public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
+
+    /// <summary>
     /// Refuse a source longer than this many tokens, as a real translator refuses one past its
     /// encoder window. The fake has no SentencePiece model, so it counts whitespace-separated
     /// tokens and says so; what it exercises is the refusal path, not the count.
@@ -62,7 +69,7 @@ public sealed class FakeTranscriptTranslator : ITranscriptTranslator
         {
             EngineName = "fake",
             ModelId = "fake-translator",
-            Backend = ComputeBackend.Cpu,
+            Backend = _options.Backend,
 
             // The token the recommended family reads. The fake carries the real one so that
             // everything built on top of it — the marking, the assertions, the CLI — is exercised
