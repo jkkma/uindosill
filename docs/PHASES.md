@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 793 tests, no weights, no display, no network — **784 passed and 9 skipped**, and
+**Status:** met. 795 tests, no weights, no display, no network — **786 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. **The other seven, added 2026-08-20, read the
 translation checkpoint**: the tokenizer's check against the ids HuggingFace really emitted and the

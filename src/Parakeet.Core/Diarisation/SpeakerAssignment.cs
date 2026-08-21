@@ -13,11 +13,29 @@ namespace Parakeet.Core.Diarisation;
 /// <para>
 /// <b>Attribution.</b> A word goes to the turn that overlaps it most; when no turn overlaps it at
 /// all, to the nearest turn within <see cref="SpeakerLabellingOptions.AttributionTolerance"/>;
-/// otherwise it stays unattributed. That is one speaker per word even inside crosstalk — the
-/// dominant one — and not two: the transcript is a single line of text with one name in front of
-/// it, and a word said by two people at once is still one word in that text. The word-level
-/// choice the study left open is taken here, and it is the simpler one; dual attribution needs a
-/// transcript shape that does not exist yet.
+/// otherwise it stays unattributed. That is one speaker per word even inside crosstalk, and not
+/// two: the transcript is a single line of text with one name in front of it, and a word said by
+/// two people at once is still one word in that text. The word-level choice the study left open is
+/// taken here, and it is the simpler one; dual attribution needs a transcript shape that does not
+/// exist yet.
+/// </para>
+/// <para>
+/// <b>Crosstalk ties, and why the tie-break is the turn that ends later.</b> "Overlaps it most"
+/// decides nothing while two turns both contain the word — the overlap is the word's own length
+/// for each, so every word inside a crosstalk stretch ties, and the tie-break alone chooses the
+/// name. Two shapes reach it. In a <i>back-channel</i> one speaker's "yeah" lands inside another's
+/// turn, and the words are the interrupted speaker's; in a <i>handoff</i> one speaker finishes
+/// while the next is already under way, and the words run on into what the next speaker says.
+/// Ending later separates them, because the container of a back-channel also outlasts it: the
+/// interrupted speaker keeps their words, and at a handoff the incoming speaker takes the
+/// overlapped ones, so the name changes where the crosstalk starts rather than where it ends.
+/// Preferring the turn that <i>started</i> earlier — what this did until 2026-08-20 — is right for
+/// the first shape and wrong for the second, and it holds the outgoing name across the whole
+/// overlap: measured on a 2 h 37 m two-host podcast, 465 of 26,105 attributed words (1.78%),
+/// touching 138 of 1,874 segments. What no measurement here settles is whether the new name is the
+/// <i>correct</i> one — both people really are talking, this repository holds no
+/// speaker-attributed reference transcript, and diarisation error rate scores turns rather than
+/// attribution. See <c>docs/UNPROVEN.md</c>.
 /// </para>
 /// <para>
 /// <b>Splitting.</b> A segment is cut between two consecutive words of different speakers when the
@@ -94,9 +112,10 @@ public static class SpeakerAssignment
 
     /// <summary>
     /// The turn that overlaps <c>[start, end]</c> most — a word is short enough that "the turn" and
-    /// "the speaker" are the same question; ties go to the turn that started first, then to the
-    /// label that sorts first, so the answer is deterministic. When nothing overlaps, the nearest
-    /// turn within the tolerance; otherwise null.
+    /// "the speaker" are the same question; ties go to the turn that ends later, then to the label
+    /// that sorts first, so the answer is deterministic. When nothing overlaps, the nearest turn
+    /// within the tolerance; otherwise null. A word inside crosstalk ties by construction, so that
+    /// first tie-break is the whole of the decision there; the class remarks say why it is the end.
     /// </summary>
     internal static string? Dominant(SpeakerTurn[] sortedTurns, TimeSpan start, TimeSpan end, SpeakerLabellingOptions options)
     {
@@ -111,8 +130,8 @@ public static class SpeakerAssignment
             if (overlap > TimeSpan.Zero)
             {
                 if (best is null || overlap > bestOverlap
-                    || (overlap == bestOverlap && (turn.Start < best.Start
-                        || (turn.Start == best.Start && string.CompareOrdinal(turn.Speaker, best.Speaker) < 0))))
+                    || (overlap == bestOverlap && (turn.End > best.End
+                        || (turn.End == best.End && string.CompareOrdinal(turn.Speaker, best.Speaker) < 0))))
                 {
                     best = turn;
                     bestOverlap = overlap;

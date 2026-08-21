@@ -1296,6 +1296,47 @@ measurement.** It costs **8.2 minutes** through the product on CPU, 7.1 through 
 and **26 seconds** on CUDA. Whatever argues against adopting a GPU provider, the price of
 re-measuring the gate is not it.
 
+### The crosstalk tie-break changed 2026-08-20, and nothing scores whether it is right
+
+**Who gets the words while two people are talking at once was decided by an accident of the
+tie-break, and now it is decided on purpose — but "on purpose" is an argument, not a
+measurement.** It was found by ear rather than by any check here: on a 2 h 37 m two-host podcast a
+listener heard the second host take over in the middle of a subtitle cue that carried the first
+host's name to its end. The diariser had not missed it. Its turns put the incoming speaker's start
+at 1750.35 s, inside a cue running 1748.13–1753.65; the attribution is what lost it.
+
+**Why it was lost, and it is structural rather than a slip.** `SpeakerAssignment.Dominant` gives a
+word to the turn that overlaps it most, which decides nothing inside crosstalk: while two turns
+both contain a word, the overlap is that word's own length for each, so every word in the stretch
+ties and the tie-break alone picks the name. It picked the turn that **started earlier**, which is
+right for a back-channel — someone's "yeah" inside another's turn, where the words belong to the
+speaker being interrupted — and wrong for a handoff, where it holds the outgoing name across the
+whole overlap and moves the change to the crosstalk's end. The tie-break is now the turn that
+**ends later**, which separates the two shapes rather than trading one bias for its mirror: the
+container of a back-channel also outlasts it, so that case is unchanged, and at a handoff the
+incoming speaker takes the overlapped words.
+
+**What is measured is the size of the change, on one file.** Replaying both rules over that
+episode's 26,105 attributed words: **465 words change label (1.78%), touching 138 of 1,874
+segments (7.4%)** and 83.4 s of word audio, 304 one way and 161 the other. The raw diarisation
+under it holds **7.0 minutes of double-active speech across 505 stretches — 4.8% of the 146.2
+minutes of speech — median 0.53 s, longest 7.0 s**, so most handoffs move the name by about half a
+second and a few by seconds. On the instance that prompted it, the change now lands on the word the
+listener said it should.
+
+**What is not measured is whether the new name is the correct one, and this repository cannot
+settle it.** Inside a handoff overlap both people really are speaking, so neither rule is right for
+every word in it — one speaker per word cannot represent two — and the new rule mislabels the
+outgoing speaker's tail words exactly as the old one mislabelled the incoming speaker's opening
+ones. **No speaker-attributed reference transcript exists here**, and the diarisation error rate
+cannot stand in for one: `uindosill der` scores turns, not attribution, so the passing AMI figure
+of 16.33% is untouched by this change and equally unable to detect it. The whole of the evidence is
+one episode, one language, two speakers, and one listener on one instance.
+
+**What would settle it** is a reference transcript whose words carry speaker labels — AMI's
+annotations do — scored for attribution accuracy rather than for turns, with both tie-breaks run
+over it; or, failing that, a listening test over the 465 words that moved. Neither has been done.
+
 ### NPU offload — assessed 2026-08-16, nothing measured
 
 The second machine's XDNA 2 NPU is idle under this product, and that much is settled rather than

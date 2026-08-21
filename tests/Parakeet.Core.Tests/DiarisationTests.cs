@@ -577,6 +577,53 @@ public class SpeakerAssignmentTests
     }
 
     [Fact]
+    public void AtAHandoffTheOverlappedWordsGoToTheSpeakerWhoCarriesOn()
+    {
+        // A finishes while B is already under way. Both turns contain every word of "also you can",
+        // so the overlap ties on each and the tie-break alone decides: the turn that ends later is
+        // B's, who is still talking afterwards, so the name changes where the crosstalk starts.
+        var segment = new TranscriptSegment
+        {
+            Start = TimeSpan.Zero,
+            End = TimeSpan.FromSeconds(12),
+            Text = "and generalizing also you can",
+            Words =
+            [
+                Word("and", 1.0, 1.4), Word("generalizing", 1.5, 2.4),
+                Word("also", 6.2, 6.6), Word("you", 6.7, 6.9), Word("can", 7.0, 7.4),
+            ],
+        };
+
+        var result = SpeakerAssignment.Apply([segment], [Turn(0, 8, "A"), Turn(6, 14, "B")]);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("A", result[0].Speaker);
+        Assert.Equal("and generalizing", result[0].Text);
+        Assert.Equal("B", result[1].Speaker);
+        Assert.Equal("also you can", result[1].Text);
+    }
+
+    [Fact]
+    public void ABackChannelDoesNotTakeTheWordsOfTheSpeakerItInterrupts()
+    {
+        // The other shape that reaches the same tie, and the one it must not break: B's "yeah"
+        // lands inside A's turn, and A both starts earlier and ends later, so A keeps every word.
+        var segment = new TranscriptSegment
+        {
+            Start = TimeSpan.Zero,
+            End = TimeSpan.FromSeconds(12),
+            Text = "one two three",
+            Words = [Word("one", 1.0, 1.4), Word("two", 6.2, 6.6), Word("three", 9.0, 9.4)],
+        };
+
+        var result = SpeakerAssignment.Apply([segment], [Turn(0, 11, "A"), Turn(6, 7, "B")]);
+
+        Assert.Single(result);
+        Assert.Equal("A", result[0].Speaker);
+        Assert.All(result[0].Words, w => Assert.Equal("A", w.Speaker));
+    }
+
+    [Fact]
     public void ASegmentWhoseWordsDoNotReproduceItsTextIsNotCut()
     {
         var segment = new TranscriptSegment
