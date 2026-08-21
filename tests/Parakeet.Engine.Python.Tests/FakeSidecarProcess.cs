@@ -60,14 +60,15 @@ internal sealed class FakeSidecarProcess : IDisposable
     /// <remarks>
     /// Built directly rather than through <see cref="PythonRuntime.Resolve"/>, which is what makes
     /// this possible at all: the record is public with <c>required</c> initialisers, so a test can
-    /// name any executable without arranging a bundle on disk. <c>Overridden</c> is true because it
-    /// is — this is not the bundled interpreter.
+    /// name any executable without arranging a bundle on disk. The source is
+    /// <see cref="PythonRuntime.BundleSource.Environment"/> because that is what it is — this is not
+    /// a bundle in either of the two places one ships to.
     /// </remarks>
     public PythonRuntime.Resolution Resolution => new()
     {
         Interpreter = ExecutablePath,
         PackageRoot = _directory,
-        Overridden = true,
+        Source = PythonRuntime.BundleSource.Environment,
     };
 
     /// <summary>A started sidecar, with the handshake already done.</summary>

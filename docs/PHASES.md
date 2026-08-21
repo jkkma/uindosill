@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 773 tests, no weights, no display, no network — **771 passed and 2 skipped**, and
+**Status:** met. 777 tests, no weights, no display, no network — **775 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -1537,15 +1537,34 @@ two rejected options are why: putting it *in* the zip charges every CLI user 1.2
 most of them will never run, taking the artefact from ~250 MB to about 1.45 GB; and a README saying
 "install the desktop app first" ships a command line that refuses two of its own documented commands.
 
-**What it costs is a third thing to publish, pin and document** — and one thing it earns is worth
-naming: `UINDOSILL_PYTHON` stops being a development-only override and becomes the shipping path's
-own mechanism, which is the first reason this project has had to report *which* interpreter a run
-used. Nothing does yet: `PythonRuntime.Resolution.Overridden` is computed and unit-tested with no
-production caller reading it, so a run against an overridden interpreter says so nowhere — including
-in the 2026-08-21 agreement run's own artefacts, where the interpreter is written into the prose by
-hand. **Unbuilt as of 2026-08-21**: no packaging step produces the third artefact, nothing on the
-command line takes a path to it, and the discovery order for a bundle that is neither beside the
-application nor named by the variable is undecided.
+**What it costs is a third thing to publish, pin and document.**
+
+**Built the same day, and the discovery order is the decision inside the decision.**
+`PythonRuntime` looks in three places and stops at the first whole bundle: `UINDOSILL_PYTHON` —
+which now takes a bundle *directory* as well as an interpreter file, because a bundle is one thing
+and pointing at it should not need two variables — then `<app>/python`, then `python` under
+`%LOCALAPPDATA%\Uindosill`. That third path is where the download is meant to be unpacked, and it is
+chosen rather than invented: the model weights are already there, so a user who has found one
+directory has found both. **The application's own bundle wins over a downloaded one** because the
+two are pinned together and only one of them was tested. `scripts/package-windows.ps1` packs the
+bundle it already assembles into `uindosill-python-win-x64.zip` with `python/` at its root — so
+unpacking it into that directory is the whole install instruction — and reads it back for an
+interpreter and a package before it will pass. `release.yml` uploads it and **refuses a release
+without it**, alongside the four that decide installability.
+
+**Which of the three answered is now carried on the resolution rather than inferred**, which is what
+makes `UINDOSILL_PYTHON` a shipping mechanism rather than a development override, and is the first
+reason this project has had to report *which* interpreter a run used. **Nothing prints it yet.**
+Until 2026-08-21 `PythonRuntime.Resolution.Overridden` was computed and unit-tested with no
+production caller at all; it now has a `Source` and a phrase to describe it, and still no caller —
+which is why the 2026-08-21 agreement run's interpreter is written into its prose by hand.
+
+**Unrun, and that is the whole of what is unproven here.** The code is built, tested and
+parse-checked; **`package-windows.ps1` has not been executed with these changes**, because no
+installer has ever been packed with a bundle in it. So install time, cold start, SmartScreen against
+an unsigned 1.2 GB, and what a Velopack delta package does against 43,760 mostly-unchanging files
+are all exactly as unknown as they were — and the release now carries a ~1.2 GB asset that CI has
+never produced.
 
 **The study is on the Drive**, in the dated folder `directml-2026-08-21` beside the other research —
 the arms above with their per-meeting numbers, the raw output every table is computed from, and what

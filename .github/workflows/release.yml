@@ -240,16 +240,21 @@ jobs:
             releases.win.json
             releases.win-cuda.json
             uindosill-cli-win-x64.zip
+            uindosill-python-win-x64.zip
           )
           shopt -u nullglob
 
-          # The four that must always be there. A release missing one of them is a release nobody
-          # can install or update from, and it is cheaper to fail here than to find that out after.
+          # The five that must always be there. Missing one of the first four is a release nobody
+          # can install or update from; missing the fifth is a release where `uindosill diarise` and
+          # `transcribe --translate` refuse for every command-line user, because the CLI zip carries
+          # no interpreter and this is the download that supplies one (decision, 2026-08-21). Either
+          # way it is cheaper to fail here than to find out after.
           for required in \
             UindosillDesktop-win-Setup.exe \
             UindosillDesktop-win-cuda-Setup.exe \
             releases.win.json \
-            releases.win-cuda.json
+            releases.win-cuda.json \
+            uindosill-python-win-x64.zip
           do
             if [ ! -s "$required" ]; then
               echo "::error::$required was not produced, so this release would be incomplete."

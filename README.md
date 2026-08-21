@@ -94,8 +94,11 @@ obviously broken.
 ## Getting it
 
 **There is an installer, and no release to download it from yet.** Packaging is built —
-a `v*` tag produces a Windows installer for the desktop app in two flavours, plus the CLI as a zip
-beside it — but no version has been tagged, so the releases page is empty. Until one is, there are
+a `v*` tag produces a Windows installer for the desktop app in two flavours, the CLI as a zip beside
+it, and the bundled Python as a third zip for CLI users — unpack that one into
+`%LOCALAPPDATA%\Uindosill` and `uindosill diarise` and `transcribe --translate` find it, since the
+CLI zip carries no interpreter of its own — but no version has been tagged, so the releases page is
+empty. Until one is, there are
 two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact from any
 CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and vulkan
 natives already in place, kept for seven days. Both still need a model, which the CLI or the app's
@@ -129,7 +132,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 773 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 777 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

@@ -7,9 +7,17 @@ namespace Parakeet.Engine.Python.Tests;
 /// Where the interpreter is looked for, and what is said when it is not there.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The messages are the point rather than incidental. "The bundled Python is not there" and
 /// "UINDOSILL_PYTHON points at something that is not a file" send a reader in opposite directions,
 /// and the first is a reinstall while the second is a typo in the reader's own shell.
+/// </para>
+/// <para>
+/// Every one of these hands over both directories. The resolver's second place is under
+/// <c>%LOCALAPPDATA%</c>, and a test that let it read the real one would pass or fail depending on
+/// whether whoever ran the suite had downloaded a bundle — which is the same class of dependency as
+/// needing weights, and this assembly has none.
+/// </para>
 /// </remarks>
 [Collection("environment")]
 public sealed class PythonRuntimeTests : IDisposable
@@ -46,26 +54,95 @@ public sealed class PythonRuntimeTests : IDisposable
         return root;
     }
 
+    /// <summary>A directory with no bundle in it, standing in for either of the two places.</summary>
+    private static string StageNothing() =>
+        Directory.CreateTempSubdirectory("uindosill-empty").FullName;
+
     [Fact]
     public void TheBundleBesideTheApplicationIsWhatIsFoundWithoutAnOverride()
     {
         var root = StageBundle();
 
-        var resolved = PythonRuntime.Resolve(root);
+        var resolved = PythonRuntime.Resolve(root, StageNothing());
 
         Assert.Equal(Path.Combine(root, "python", ExecutableName), resolved.Interpreter);
         Assert.Equal(Path.Combine(root, "python"), resolved.PackageRoot);
+        Assert.Equal(PythonRuntime.BundleSource.Application, resolved.Source);
         Assert.False(resolved.Overridden);
     }
 
     [Fact]
-    public void AMissingBundleSaysItIsMissingAndSaysWhatToDoInstead()
+    public void ADownloadedBundleUnderUserDataIsFoundWhenTheApplicationHasNone()
     {
-        var empty = Directory.CreateTempSubdirectory("uindosill-empty").FullName;
+        // The decision of 2026-08-21: the CLI zip carries no interpreter, so the bundle is a third
+        // download, and this is where it is meant to be unpacked.
+        var downloaded = StageBundle();
 
-        var failure = Assert.Throws<PythonSidecarException>(() => PythonRuntime.Resolve(empty));
+        var resolved = PythonRuntime.Resolve(StageNothing(), downloaded);
+
+        Assert.Equal(Path.Combine(downloaded, "python", ExecutableName), resolved.Interpreter);
+        Assert.Equal(PythonRuntime.BundleSource.UserData, resolved.Source);
+        Assert.False(resolved.Overridden);
+    }
+
+    [Fact]
+    public void TheApplicationsOwnBundleWinsOverADownloadedOne()
+    {
+        // An installed desktop copy ships its own and must not start using a download that may be a
+        // different version — the two are pinned together, and only one of them was tested.
+        var application = StageBundle();
+        var downloaded = StageBundle();
+
+        var resolved = PythonRuntime.Resolve(application, downloaded);
+
+        Assert.Equal(Path.Combine(application, "python", ExecutableName), resolved.Interpreter);
+        Assert.Equal(PythonRuntime.BundleSource.Application, resolved.Source);
+    }
+
+    [Fact]
+    public void TheVariableMayNameABundleDirectoryAndThenAnswersBothHalves()
+    {
+        // What a user with a downloaded bundle in a directory of their own choosing sets. A bundle
+        // is one thing, so pointing at it should not take two variables.
+        var downloaded = StageBundle();
+        Environment.SetEnvironmentVariable(
+            PythonRuntime.InterpreterVariable, Path.Combine(downloaded, "python"));
+
+        var resolved = PythonRuntime.Resolve(StageNothing(), StageNothing());
+
+        Assert.Equal(Path.Combine(downloaded, "python", ExecutableName), resolved.Interpreter);
+        Assert.Equal(Path.Combine(downloaded, "python"), resolved.PackageRoot);
+        Assert.Equal(PythonRuntime.BundleSource.Environment, resolved.Source);
+        Assert.True(resolved.Overridden);
+    }
+
+    [Fact]
+    public void ADirectoryWithNoInterpreterInItIsBlamedOnTheDirectory()
+    {
+        // Pointed at the bundle's parent rather than the bundle: a plausible mistake, and one whose
+        // message has to say what a bundle looks like rather than repeat the path back.
+        var downloaded = StageBundle();
+        Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, downloaded);
+
+        var failure = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(StageNothing(), StageNothing()));
+
+        Assert.Contains("is read as a bundle", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(ExecutableName, failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMissingBundleSaysBothPlacesItLookedAndWhatToDoInstead()
+    {
+        var application = StageNothing();
+        var userData = StageNothing();
+
+        var failure = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(application, userData));
 
         Assert.Contains("The bundled Python is not at", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(application, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(userData, failure.Message, StringComparison.Ordinal);
         Assert.Contains(PythonRuntime.InterpreterVariable, failure.Message, StringComparison.Ordinal);
     }
 
@@ -77,10 +154,11 @@ public sealed class PythonRuntimeTests : IDisposable
         var missing = Path.Combine(Path.GetTempPath(), "uindosill-no-such-interpreter");
         Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, missing);
 
-        var failure = Assert.Throws<PythonSidecarException>(() => PythonRuntime.Resolve(StageBundle()));
+        var failure = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(StageBundle(), StageNothing()));
 
         Assert.Contains(PythonRuntime.InterpreterVariable, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("which is not a file", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("neither a file nor a directory", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,9 +167,11 @@ public sealed class PythonRuntimeTests : IDisposable
         var root = StageBundle();
         Directory.Delete(Path.Combine(root, "python", "uindosill_engines"));
 
-        var failure = Assert.Throws<PythonSidecarException>(() => PythonRuntime.Resolve(root));
+        var failure = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(root, StageNothing()));
 
         Assert.Contains("uindosill_engines", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("half a bundle", failure.Message, StringComparison.Ordinal);
         Assert.Contains(PythonRuntime.PackagesVariable, failure.Message, StringComparison.Ordinal);
     }
 
@@ -109,10 +189,12 @@ public sealed class PythonRuntimeTests : IDisposable
         Environment.SetEnvironmentVariable(
             PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
 
-        var resolved = PythonRuntime.Resolve(bundle);
+        var resolved = PythonRuntime.Resolve(bundle, StageNothing());
 
         Assert.Equal(Path.Combine(other, "python", ExecutableName), resolved.Interpreter);
         Assert.True(resolved.Overridden);
+        Assert.Contains(
+            PythonRuntime.InterpreterVariable, resolved.SourceDescription, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -121,9 +203,8 @@ public sealed class PythonRuntimeTests : IDisposable
         // What the window needs: a checkbox cannot be drawn out of an exception, and a missing
         // bundle is a reason to disable an opt-in with the reason beside it rather than to crash a
         // binding getter.
-        var empty = Directory.CreateTempSubdirectory("uindosill-empty").FullName;
-
-        Assert.False(PythonRuntime.TryResolve(out var resolution, out var reason, empty));
+        Assert.False(PythonRuntime.TryResolve(
+            out var resolution, out var reason, StageNothing(), StageNothing()));
 
         Assert.Null(resolution);
         Assert.Contains("The bundled Python is not at", reason!, StringComparison.Ordinal);
@@ -132,7 +213,8 @@ public sealed class PythonRuntimeTests : IDisposable
     [Fact]
     public void TryResolveSaysNothingWhenThereIsNothingToSay()
     {
-        Assert.True(PythonRuntime.TryResolve(out var resolution, out var reason, StageBundle()));
+        Assert.True(PythonRuntime.TryResolve(
+            out var resolution, out var reason, StageBundle(), StageNothing()));
 
         Assert.NotNull(resolution);
         Assert.Null(reason);
