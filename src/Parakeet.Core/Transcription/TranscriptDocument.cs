@@ -40,6 +40,15 @@ public sealed record TranscriptDocument
     /// </summary>
     public string? SpeakerModelId { get; init; }
 
+    /// <summary>
+    /// Which execution provider named the speakers, when a labeller ran. Beside
+    /// <see cref="SpeakerModelId"/> rather than folded into it, because the model alone does not
+    /// identify the answer: measured on AMI test, the same graph scores 16.3324% DER on the CPU,
+    /// 16.3319% on WebGPU and 16.1021% on CUDA (docs/UNPROVEN.md). A transcript naming only the
+    /// model says which weights ran and not which labels they produced, which is half a provenance.
+    /// </summary>
+    public ComputeBackend? SpeakerBackend { get; init; }
+
     /// <summary>True when speaker labelling ran, whether or not it found anyone.</summary>
     public bool HasSpeakers => SpeakerModelId is not null || SpeakerTurns.Count > 0;
 
@@ -62,6 +71,14 @@ public sealed record TranscriptDocument
     /// <see cref="SpeakerModelId"/>, for the same reason both of those are here.
     /// </summary>
     public string? TranslationModelId { get; init; }
+
+    /// <summary>
+    /// Which execution provider wrote the English, when a translation pass ran. Its own field
+    /// rather than one shared with <see cref="SpeakerBackend"/>: the two engines resolve their
+    /// providers independently inside the sidecar, so a single run can label speakers on one and
+    /// translate on another, and a shared field would have to pick which of them to lie about.
+    /// </summary>
+    public ComputeBackend? TranslationBackend { get; init; }
 
     /// <summary>True when a translation pass ran.</summary>
     public bool IsTranslated => TranslatedTo is not null;

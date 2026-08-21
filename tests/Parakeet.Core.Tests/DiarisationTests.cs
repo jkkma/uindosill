@@ -788,11 +788,20 @@ public class SpeakerLabellingPipelineTests
         var document = await TranscriptionRunner.RunAsync(engine, new ArrayAudioSource(samples), sourceName: "call.wav");
         Assert.False(document.HasSpeakers);
 
-        await using var labeller = new FakeSpeakerLabeller();
+        // A backend the fake does not default to, so that the assertion below distinguishes a
+        // provenance read off the loaded labeller from one written into the document by habit.
+        await using var labeller = new FakeSpeakerLabeller(new FakeSpeakerLabellerOptions { Backend = ComputeBackend.WebGpu });
         var labelled = await SpeakerLabelling.LabelAsync(document, labeller, new ArrayAudioSource(samples));
 
         Assert.True(labelled.HasSpeakers);
         Assert.Equal("fake-speakers", labelled.SpeakerModelId);
+        Assert.Equal(ComputeBackend.WebGpu, labelled.SpeakerBackend);
+
+        // The ASR provenance is not overwritten by the labeller's, and the two differ here on
+        // purpose: one document, transcribed on one provider and labelled on another, which is the
+        // arrangement the shipping application actually produces — parakeet.cpp picks cuda or
+        // vulkan while the diariser resolves webgpu inside the sidecar.
+        Assert.Equal(ComputeBackend.Cpu, labelled.Backend);
         Assert.NotEmpty(labelled.SpeakerTurns);
         Assert.Equal(["Speaker 1", "Speaker 2"], SpeakerTurns.Speakers(labelled.SpeakerTurns));
         Assert.All(labelled.Segments, s => Assert.NotNull(s.Speaker));
@@ -1087,6 +1096,7 @@ public class SpeakerFormattingTests
     {
         SourceName = "two hosts.mp3",
         SpeakerModelId = "fake-speakers",
+        SpeakerBackend = ComputeBackend.WebGpu,
         SpeakerTurns =
         [
             new SpeakerTurn { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(2.6), Speaker = "Speaker 1" },
@@ -1126,6 +1136,7 @@ public class SpeakerFormattingTests
         var markdown = TranscriptFormats.Markdown.Format(Labelled());
         Assert.Contains("**[00:00:00]** **Speaker 1:** first thing we should do", markdown, StringComparison.Ordinal);
         Assert.Contains("| Speaker labels | fake-speakers |", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Speaker backend | webgpu |", markdown, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1135,6 +1146,7 @@ public class SpeakerFormattingTests
         var root = json.RootElement;
 
         Assert.Equal("fake-speakers", root.GetProperty("speakerModel").GetString());
+        Assert.Equal("webgpu", root.GetProperty("speakerBackend").GetString());
         Assert.Equal("Speaker 1", root.GetProperty("segments")[0].GetProperty("speaker").GetString());
         Assert.Equal("Speaker 1", root.GetProperty("segments")[0].GetProperty("words")[0].GetProperty("speaker").GetString());
         Assert.Equal("Speaker 2", root.GetProperty("segments")[1].GetProperty("speaker").GetString());
@@ -1149,6 +1161,7 @@ public class SpeakerFormattingTests
         var unlabelled = Labelled() with
         {
             SpeakerModelId = null,
+            SpeakerBackend = null,
             SpeakerTurns = [],
             Segments = [.. Labelled().Segments.Select(s => s with { Speaker = null, Words = [.. s.Words.Select(w => w with { Speaker = null })] })],
         };

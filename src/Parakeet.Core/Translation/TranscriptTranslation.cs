@@ -77,6 +77,11 @@ public static class TranscriptTranslation
             Segments = translated,
             TranslatedTo = TranslationTarget.LanguageTag,
             TranslationModelId = capabilities.ModelId,
+
+            // The same reason its sibling on the speaker pass is read here: the translator resolves
+            // its own provider inside the sidecar, and the capabilities of the loaded engine are
+            // where that answer exists.
+            TranslationBackend = capabilities.Backend,
         };
     }
 

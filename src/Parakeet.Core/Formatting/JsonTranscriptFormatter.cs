@@ -51,6 +51,15 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                     writer.WriteString("speakerModel", speakerModel);
                 }
 
+                // Which provider produced those labels, not merely which model was loaded. The two
+                // are separate answers here in a way they are not for the ASR engine above: the
+                // diariser's provider is resolved inside the sidecar, and the providers disagree —
+                // AMI test scores 16.3324% DER on the CPU, 16.3319% on WebGPU and 16.1021% on CUDA.
+                if (document.SpeakerBackend is { } speakerBackend)
+                {
+                    writer.WriteString("speakerBackend", speakerBackend.ToString().ToLowerInvariant());
+                }
+
                 // Likewise present only when a translation pass ran. "text" and every segment below
                 // are the English in that case, and these two fields are the only thing that says so.
                 if (document.TranslatedTo is { } target)
@@ -61,6 +70,13 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 if (document.TranslationModelId is { } translationModel)
                 {
                     writer.WriteString("translationModel", translationModel);
+                }
+
+                // And which provider wrote it, for the same reason and with a sharper edge: a
+                // translator that diverges does not shift a score, it returns different sentences.
+                if (document.TranslationBackend is { } translationBackend)
+                {
+                    writer.WriteString("translationBackend", translationBackend.ToString().ToLowerInvariant());
                 }
             }
 

@@ -102,7 +102,9 @@ public class TranslationTests
     [Fact]
     public async Task TheDocumentRecordsWhatTranslatedItAndIntoWhat()
     {
-        await using var translator = new FakeTranscriptTranslator();
+        // A backend the fake does not default to, so the assertion below tells a provenance read
+        // off the loaded translator from one defaulted into the document.
+        await using var translator = new FakeTranscriptTranslator(new FakeTranslatorOptions { Backend = ComputeBackend.WebGpu });
         var document = Document(Spoken(0, 3, "hola"));
 
         Assert.False(document.IsTranslated);
@@ -112,6 +114,7 @@ public class TranslationTests
         Assert.True(translated.IsTranslated);
         Assert.Equal("en", translated.TranslatedTo);
         Assert.Equal("fake-translator", translated.TranslationModelId);
+        Assert.Equal(ComputeBackend.WebGpu, translated.TranslationBackend);
 
         // The ASR provenance is not overwritten by the translator's: both models are on the page.
         Assert.Equal("tdt-0.6b-v3-f16", translated.ModelId);
@@ -251,17 +254,19 @@ public class TranslationTests
     [Fact]
     public async Task TheEnglishIsMarkedInEveryFormatThatCanCarryItAndTheRestAreUnchanged()
     {
-        await using var translator = new FakeTranscriptTranslator();
+        await using var translator = new FakeTranscriptTranslator(new FakeTranslatorOptions { Backend = ComputeBackend.WebGpu });
         var source = Document(Spoken(0, 3, "hola qué tal"));
         var translated = await TranscriptTranslation.TranslateAsync(source, translator);
 
         var json = TranscriptFormats.Json.Format(translated);
         Assert.Contains("\"translatedTo\": \"en\"", json, StringComparison.Ordinal);
         Assert.Contains("\"translationModel\": \"fake-translator\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"translationBackend\": \"webgpu\"", json, StringComparison.Ordinal);
 
         var markdown = TranscriptFormats.Markdown.Format(translated);
         Assert.Contains("| Translated into | en |", markdown, StringComparison.Ordinal);
         Assert.Contains("| Translation model | fake-translator |", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Translation backend | webgpu |", markdown, StringComparison.Ordinal);
 
         var vtt = TranscriptFormats.Vtt.Format(translated);
         Assert.Contains("NOTE Translated into en by fake-translator.", vtt, StringComparison.Ordinal);
@@ -275,7 +280,9 @@ public class TranslationTests
 
         // And an untranslated document is byte-identical to what it always was.
         Assert.DoesNotContain("translatedTo", TranscriptFormats.Json.Format(source), StringComparison.Ordinal);
+        Assert.DoesNotContain("translationBackend", TranscriptFormats.Json.Format(source), StringComparison.Ordinal);
         Assert.DoesNotContain("Translated into", TranscriptFormats.Markdown.Format(source), StringComparison.Ordinal);
+        Assert.DoesNotContain("Translation backend", TranscriptFormats.Markdown.Format(source), StringComparison.Ordinal);
         Assert.StartsWith("WEBVTT\n\n1\n", TranscriptFormats.Vtt.Format(source), StringComparison.Ordinal);
     }
 
