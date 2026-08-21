@@ -116,8 +116,6 @@ internal static class TranscribeCommand
             context.WriteError("Using the canned engine: the audio pipeline is real, the words are not.");
         }
 
-        WarnAboutBackendFallback(context, parsed, requestedBackend, engine);
-
         // The opt-in. Off, nothing below changes; on, a labeller is created — or refused, in this
         // build, unless the canned one was asked for — and every file gets a second pass.
         await using var labeller = speakerOptions is null
@@ -140,9 +138,35 @@ internal static class TranscribeCommand
 
         WarnAboutThreads(context, parsed, engine);
 
+        // Pre-tripped by --fake, which is the canned engine's whole point: it answers cpu whatever
+        // was asked for, and a fallback line about a backend it was never going to use is noise.
+        var backendChecked = parsed.HasFlag("fake");
+        var backendWasNamed = parsed.Value("backend") is { Length: > 0 };
+
+        // The engine loads lazily, on the first decode, so the backend it resolved to is not
+        // knowable until something asks it to load. Doing that here — once for the batch, from the
+        // first file that exists — is what puts the fallback line ahead of the fifty minutes it is
+        // there to explain, rather than after them or, as it was, never.
+        async ValueTask EnsureEngineLoadedAsync(CancellationToken token)
+        {
+            if (backendChecked)
+            {
+                await engine.LoadAsync(token).ConfigureAwait(false);
+                return;
+            }
+
+            backendChecked = true;
+
+            if (await LoadAndDescribeBackendAsync(engine, requestedBackend, backendWasNamed, token)
+                    .ConfigureAwait(false) is { } fallback)
+            {
+                context.WriteError(fallback);
+            }
+        }
+
         var runner = new BatchTranscriptionRunner((job, progress, token) => RunOneAsync(
-            context, engine, labeller, translator, job, options, speakerOptions, translationOptions,
-            progress, quiet, token));
+            context, engine, EnsureEngineLoadedAsync, labeller, translator, job, options, speakerOptions,
+            translationOptions, progress, quiet, token));
 
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
@@ -332,7 +356,8 @@ internal static class TranscribeCommand
     }
 
     /// <summary>
-    /// Says so when the backend that loaded is not the backend that was asked for.
+    /// Loads the engine and describes the outcome when the backend that came back is not the
+    /// backend that was asked for. Null when they agree, which is every ordinary run.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -350,24 +375,39 @@ internal static class TranscribeCommand
     /// a reader who did not choose CUDA needs telling that the middle tier is still there and how
     /// to ask for it. On stderr, with the other notices, so a piped transcript is unaffected.
     /// </para>
+    /// <para>
+    /// The load is not incidental to the check, it is the check. A parakeet.cpp engine reports the
+    /// backend it was <em>asked</em> for until <c>LoadAsync</c> rewrites the capability from what
+    /// the native loader resolved, so a comparison made against a freshly constructed engine
+    /// compares the request against itself and can never fire. It was written that way on
+    /// 2026-08-20 and was dead until 2026-08-21 — the failure above, going unreported by the line
+    /// written to report it.
+    /// </para>
     /// </remarks>
-    private static void WarnAboutBackendFallback(
-        CliContext context, ParsedCommandLine parsed, ComputeBackend requested, ITranscriptionEngine engine)
+    internal static async ValueTask<string?> LoadAndDescribeBackendAsync(
+        ITranscriptionEngine engine, ComputeBackend requested, bool wasNamed, CancellationToken ct)
     {
-        if (parsed.HasFlag("fake"))
-        {
-            return;
-        }
+        ArgumentNullException.ThrowIfNull(engine);
 
-        var loaded = engine.Capabilities.Backend;
+        await engine.LoadAsync(ct).ConfigureAwait(false);
+        return DescribeBackendFallback(requested, engine.Capabilities.Backend, wasNamed);
+    }
+
+    /// <summary>
+    /// The message, given the two backends and whether the user named one. Split from the load so
+    /// that the wording is checkable without a model on disk, which is all CI has.
+    /// </summary>
+    internal static string? DescribeBackendFallback(
+        ComputeBackend requested, ComputeBackend loaded, bool wasNamed)
+    {
         if (loaded == requested)
         {
-            return;
+            return null;
         }
 
         static string Name(ComputeBackend backend) => backend.ToString().ToLowerInvariant();
 
-        var how = parsed.Value("backend") is { Length: > 0 }
+        var how = wasNamed
             ? $"{Name(requested)} was requested"
             : $"{Name(requested)} was chosen automatically, because this build carries its binaries,";
 
@@ -375,7 +415,7 @@ internal static class TranscribeCommand
             ? "  Vulkan is not tried after CUDA; pass --backend vulkan for the other GPU tier."
             : string.Empty;
 
-        context.WriteError($"{how} but the native loader fell back to {Name(loaded)}.{suggestion}");
+        return $"{how} but the native loader fell back to {Name(loaded)}.{suggestion}";
     }
 
     private static void WarnAboutThreads(CliContext context, ParsedCommandLine parsed, ITranscriptionEngine engine)
@@ -393,6 +433,7 @@ internal static class TranscribeCommand
     private static async Task<JobResult> RunOneAsync(
         CliContext context,
         ITranscriptionEngine engine,
+        Func<CancellationToken, ValueTask> ensureEngineLoaded,
         ISpeakerLabeller? labeller,
         ITranscriptTranslator? translator,
         TranscriptionJob job,
@@ -414,6 +455,12 @@ internal static class TranscribeCommand
                 Error = $"File not found: {job.InputPath}",
             };
         }
+
+        // After the file is known to be there and before its audio is opened: a queue of names that
+        // are all typos should not pay for a model load, and a fallback to CPU has to be on screen
+        // before the decode it explains rather than after it. Idempotent — only the first file
+        // through here loads anything.
+        await ensureEngineLoaded(ct).ConfigureAwait(false);
 
         await using var audio = AudioSources.Open(job.InputPath);
 
