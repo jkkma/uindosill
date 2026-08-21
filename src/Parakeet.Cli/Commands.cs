@@ -183,6 +183,25 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "speaker-backend",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Execution provider for the diariser: cpu, cuda, webgpu or dml. Default: the fastest " +
+                       "verified one on this machine, which is cuda where it loads and cpu otherwise. " +
+                       "This changes the speaker labels, not only the speed — measured on AMI test, cpu scores " +
+                       "16.33% DER and cuda 16.10%, and a figure from one provider does not describe another. " +
+                       "dml is refused unless --speaker-backend-unverified is given: at ONNX Runtime's default " +
+                       "settings it scores 53.15% while looking healthy.",
+            },
+            new OptionSpec
+            {
+                Name = "speaker-backend-unverified",
+                Help = "Allow a diariser backend that has not passed the parity check on this machine. For " +
+                       "measuring one, not for using one: a backend that fails parity produces speaker labels " +
+                       "no figure in this project describes.",
+            },
+            new OptionSpec
+            {
                 Name = "translate",
                 Help = "Write the transcript in English instead of the language it was spoken in: a pass over the " +
                        "finished text, off by default. Output files take an .en infix (call.en.srt), so a translated " +
@@ -295,6 +314,22 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "n",
                 Help = "Intra-op threads for the ONNX session. Default: whatever ONNX Runtime chooses.",
+            },
+            new OptionSpec
+            {
+                Name = "backend",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Execution provider: cpu, cuda, webgpu or dml. Default: the fastest verified one on this " +
+                       "machine. This changes the speaker turns, not only the speed — on AMI test cpu scores " +
+                       "16.33% DER and cuda 16.10% — so a scoring run must say which one produced it. dml needs " +
+                       "--backend-unverified; at ONNX Runtime's defaults it scores 53.15% while looking healthy.",
+            },
+            new OptionSpec
+            {
+                Name = "backend-unverified",
+                Help = "Allow a backend that has not passed the parity check on this machine. For measuring one, " +
+                       "not for using one.",
             },
             new OptionSpec
             {

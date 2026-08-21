@@ -6,6 +6,7 @@
     <Project Path="src/Parakeet.Core/Parakeet.Core.csproj" />
     <Project Path="src/Parakeet.Engine.Marian/Parakeet.Engine.Marian.csproj" />
     <Project Path="src/Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
+    <Project Path="src/Parakeet.Engine.Python/Parakeet.Engine.Python.csproj" />
     <Project Path="src/Parakeet.Engine.Sortformer/Parakeet.Engine.Sortformer.csproj" />
   </Folder>
   <Folder Name="/tests/">

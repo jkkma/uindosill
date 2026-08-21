@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Engine.Python</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One project owns one engine's interop, as Parakeet.Engine.ParakeetCpp owns parakeet.cpp's.
+    What this one owns is a process rather than a library: the diariser and the translator run in
+    a bundled Python, and everything about that — finding the interpreter, the line protocol, the
+    lifetime of the child — is here so that Parakeet.Core keeps knowing nothing about it.
+
+    No ONNX Runtime reference on purpose. This project starts a process; it does not run a graph,
+    and the day it needs Microsoft.ML.OnnxRuntime is the day something has leaked across the seam.
+
+    Parakeet.Audio is referenced for WavWriter and Resampler: the sidecar is handed a 16 kHz mono
+    WAV by path rather than PCM down the pipe, so the host owns the decode and the rate conversion
+    exactly as it did when the engine was in-process.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+    <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Engine.Python.Tests" />
+  </ItemGroup>
+
+</Project>
