@@ -286,6 +286,19 @@
                                  Increment="5" Width="110" FormatString="0 's'" />
                 </StackPanel>
 
+                <!-- There is no spoken-language picker here, and that is a decision rather than an
+                     omission. parakeet.cpp's ABI does take a target language, but the tdt
+                     checkpoints this catalogue ships are not prompt-conditioned and never read it:
+                     four runs over one clip — no hint, `en`, `de`, and the nonexistent `zz` —
+                     produced byte-identical output at exit 0, where a prompt-conditioned model
+                     would have failed the `zz` decode (docs/UNPROVEN.md § The language hint). A
+                     control that changes nothing is the failure this window refuses to ship, and
+                     one drawn permanently disabled is still a control nobody can use. It comes
+                     back when a checkpoint that reads the hint does.
+
+                     It would not have been a translation control either way: the translator below
+                     is many-to-one, told the target and never the source. -->
+
                 <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while
                      no labeller is in the build — a control that silently does nothing is the
                      failure this application refuses to ship.
@@ -311,19 +324,73 @@
                                IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   </DockPanel>
                 </Border>
+
+                <!-- The English opt-in, the second of v1's two, and drawn as the twin of the first:
+                     its own tinted strip, off by default, disabled with a reason rather than hidden
+                     while its model is not installed.
+
+                     Matcha like the one above, because translating is a v1 feature too. There is
+                     no language picker beside it and that is a finding rather than an omission —
+                     the checkpoint is many-to-one, told the target and never the source, so there
+                     is nothing for a picker to say. The direction is fixed: into English, never
+                     out of it. -->
+                <Border Classes="tinted" Padding="10,8">
+                  <DockPanel LastChildFill="True">
+                    <CheckBox DockPanel.Dock="Left"
+                              Name="TranslateToEnglish"
+                              Content="English version"
+                              FontWeight="SemiBold"
+                              Margin="0,0,9,0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding TranslateToEnglish}"
+                              IsEnabled="{Binding CanTranslate}" />
+                    <TextBlock Text="{Binding TranslationHint}" Classes="meta" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding TranslationHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </DockPanel>
+                </Border>
               </StackPanel>
 
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
                          Classes="meta" FontSize="11.5" Margin="0,10,0,0" />
 
+              <!-- The transcript/English switcher, and it exists only when there is something to
+                   switch to: a run that did not translate gets no switcher rather than a second
+                   pill that leads to an empty pane.
+
+                   The same pills as the headerbar's view switcher, which is one of the four shapes
+                   in this design that keeps a corner — a pill reads as tappable. Two panes rather
+                   than one pane with a toggle, because the point is to compare: the English is
+                   produced *beside* the transcript, not instead of it, and the times, the speakers
+                   and their chips are the same on both sides.
+
+                   Left-aligned rather than centred: the headerbar's switcher is the window's, and
+                   a second centred pill row underneath it would read as a peer of that rather than
+                   as a control belonging to the panel below. -->
+              <Border DockPanel.Dock="Top" Classes="switcher" Name="TranscriptPaneSwitcher"
+                      HorizontalAlignment="Left" Margin="0,0,0,9"
+                      IsVisible="{Binding CanShowTranslation}">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Name="PaneTranscript" Classes="segment" GroupName="TranscriptPane"
+                               Content="Transcript"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+                  <RadioButton Name="PaneEnglish" Classes="segment" GroupName="TranscriptPane"
+                               Content="English"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+                </StackPanel>
+              </Border>
+
               <!-- The transcript of the selected file: selectable, read-only, one row per segment
                    with the speaker as a chip rather than a "S1: " prefix. The chip is what makes a
                    labelled transcript readable at a glance, and it is a v1 feature, so it is
                    matcha — see the four chip styles in Theme/Controls.axaml. Unlabelled
-                   transcripts simply have no chip and read as paragraphs. -->
+                   transcripts simply have no chip and read as paragraphs.
+
+                   Bound to VisibleLines rather than to SelectedJob.Lines, because which of the two
+                   collections that is depends on the switcher above. -->
               <Border Classes="panel" Padding="15,13">
                 <ScrollViewer>
-                  <ItemsControl ItemsSource="{Binding SelectedJob.Lines}">
+                  <ItemsControl ItemsSource="{Binding VisibleLines}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TranscriptLineViewModel">
                         <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,9">

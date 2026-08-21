@@ -8,8 +8,10 @@ using Parakeet.Audio;
 using Parakeet.Core.Diarisation;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
+using Parakeet.Core.Models;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Translation;
 
 namespace Parakeet.App.ViewModels;
 
@@ -40,6 +42,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     private const int TranscriptRefreshMilliseconds = 250;
 
+    /// <summary>
+    /// What goes between a translated run's file name and its extension, so its output is its own
+    /// rather than the transcription run's.
+    /// </summary>
+    private const string TranslatedInfix = "." + TranslationTarget.LanguageTag;
+
     private readonly IEngineProvider _engines;
     private readonly Func<EngineSelection> _selection;
     private readonly ModelSession? _session;
@@ -56,6 +64,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private string? _outputDirectory;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleLines))]
+    [NotifyPropertyChangedFor(nameof(CanShowTranslation))]
     private JobViewModel? _selectedJob;
 
     [ObservableProperty]
@@ -76,6 +86,27 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _labelSpeakers;
+
+    /// <summary>
+    /// The English opt-in. Off by default and off every time the window opens, on the same terms
+    /// as the speaker one: it runs a second model over every segment, and most transcriptions are
+    /// already in the language somebody wanted.
+    /// </summary>
+    [ObservableProperty]
+    private bool _translateToEnglish;
+
+    /// <summary>
+    /// Which pane the transcript area is showing: 0 the transcript, 1 the English.
+    /// </summary>
+    /// <remarks>
+    /// On the view model rather than on the row, so switching files keeps the pane a person chose
+    /// rather than snapping back to the source every time they click down the queue. A row with no
+    /// translation hides the switcher entirely and <see cref="VisibleLines"/> falls back to the
+    /// transcript, so the index cannot strand anybody on an empty pane.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleLines))]
+    private int _transcriptPane;
 
     public TranscribeViewModel(
         IEngineProvider engines, Func<EngineSelection> selection, ModelSession? session = null)
@@ -101,6 +132,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             .Where(f => f.Id != TranscriptFormats.Rttm.Id)
             .Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
         RefreshSpeakerAvailability();
+        RefreshTranslationAvailability();
     }
 
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
@@ -179,6 +211,81 @@ public sealed partial class TranscribeViewModel : ObservableObject
         ? null
         : "Speaker labelling needs its own model, which is not installed yet. Install it from the Models tab; "
           + "it is a 453 MiB download and tells apart up to four speakers.";
+
+    /// <summary>
+    /// Whether the English opt-in does anything. Disabled with a reason when it does not, on the
+    /// same terms as the speaker one.
+    /// </summary>
+    public bool CanTranslate => _engines.SupportsTranslation;
+
+    public string? TranslationHint => CanTranslate
+        ? null
+        : "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
+          + "it is a 1.34 GiB download, runs on the CPU, and reads 25 languages into English only.";
+
+    /// <summary>
+    /// Re-asks whether a translator is available and brings the checkbox and its hint into line.
+    /// </summary>
+    /// <remarks>
+    /// The twin of <see cref="RefreshSpeakerAvailability"/> and called from the same places, for
+    /// the reason spelled out there: the view model is built once for the life of the window, so a
+    /// snapshot taken in the constructor tells a user to install the model they have just
+    /// installed. It also turns the opt-in <em>off</em> when the entry goes away, so a batch cannot
+    /// start with the box ticked and nothing behind it.
+    ///
+    /// No format comes and goes with this one — <c>rttm</c> is the speaker opt-in's output and
+    /// translation has no output of its own. What it has instead is a format it <em>forbids</em>,
+    /// handled at Start, because <c>vtt-words</c> is a legitimate choice right up until the moment
+    /// this box is ticked.
+    /// </remarks>
+    public void RefreshTranslationAvailability()
+    {
+        if (!_engines.SupportsTranslation && TranslateToEnglish)
+        {
+            TranslateToEnglish = false;
+        }
+
+        OnPropertyChanged(nameof(CanTranslate));
+        OnPropertyChanged(nameof(TranslationHint));
+    }
+
+    /// <summary>
+    /// Whether the selected row has an English transcript to switch to, which is what decides
+    /// whether the pane switcher is drawn at all.
+    /// </summary>
+    public bool CanShowTranslation => SelectedJob?.HasTranslation ?? false;
+
+    /// <summary>
+    /// The lines the transcript area draws: the English ones when the switcher is on them and the
+    /// row has them, the spoken ones otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is not defensive tidiness. The switcher is hidden on a row with no
+    /// translation, so a person can leave it on English, click a file that was never translated,
+    /// and be looking at a pane that no longer exists — which without this returns an empty
+    /// collection and reads as a transcript that came back blank.
+    /// </remarks>
+    public IEnumerable<TranscriptLineViewModel>? VisibleLines =>
+        SelectedJob is not { } job ? null
+        : TranscriptPane == 1 && job.HasTranslation ? job.TranslatedLines
+        : job.Lines;
+
+    /// <summary>
+    /// Re-asks what the transcript area should be showing, after the selected row's content
+    /// changes underneath it.
+    /// </summary>
+    /// <remarks>
+    /// Selecting a different row notifies through <see cref="SelectedJob"/>, but a row that
+    /// finishes while it is already selected does not — the switcher would stay hidden on the
+    /// transcript that had just been translated until the user clicked another file and back.
+    /// Reset and Clear go the other way and are the same problem in reverse: a switcher still
+    /// offering an English pane whose lines have just been thrown away.
+    /// </remarks>
+    private void RefreshTranscriptPane()
+    {
+        OnPropertyChanged(nameof(CanShowTranslation));
+        OnPropertyChanged(nameof(VisibleLines));
+    }
 
     public bool HasJobs => Jobs.Count > 0;
 
@@ -297,6 +404,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         LiveTranscript = string.Empty;
         StatusMessage = null;
         RefreshQueueState();
+        RefreshTranscriptPane();
     }
 
     /// <summary>
@@ -324,6 +432,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
 
         RefreshQueueState();
+        RefreshTranscriptPane();
         return StartAsync();
     }
 
@@ -375,6 +484,29 @@ public sealed partial class TranscribeViewModel : ObservableObject
         if (!LabelSpeakers && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.Ordinal))
         {
             StatusMessage = "RTTM speaker turns need 'Label speakers' on: without it there are no turns to write.";
+            return;
+        }
+
+        // Refused rather than degraded, which is the command line's rule too. Translation carries
+        // no word timings — the English words are not the words that were spoken and nothing
+        // aligns them — so a word-timed file written under this opt-in would highlight the wrong
+        // word at every moment, and look entirely correct while doing it.
+        if (TranslateToEnglish && formats.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.Ordinal))
+        {
+            StatusMessage =
+                $"'{TranscriptFormats.WordTimedVtt.DisplayName}' times every word, and translation does not carry "
+                + "word timings. Drop that format, or turn the English version off and get the word timings of "
+                + "what was actually said.";
+            return;
+        }
+
+        // The same question the speaker opt-in asks, for the same reason: the Models tab can
+        // remove the translation entry while this window is open, and a ticked box with nothing
+        // behind it would write the source transcript into files named .en.
+        if (TranslateToEnglish && !_engines.SupportsTranslation)
+        {
+            RefreshTranslationAvailability();
+            StatusMessage = "The translation model is no longer installed. Download it again from the Models tab.";
             return;
         }
 
@@ -431,6 +563,19 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 return;
             }
 
+            // One translator for the whole batch, on the same terms as the labeller: 1.34 GiB of
+            // graphs loaded once rather than per file, and disposed with the batch.
+            await using var translator = TranslateToEnglish && _engines.SupportsTranslation
+                ? _engines.CreateTranslator()
+                : null;
+
+            if (TranslateToEnglish && translator is null)
+            {
+                StatusMessage = "The translation model is no longer installed. Download it again from the Models tab.";
+                RefreshTranslationAvailability();
+                return;
+            }
+
             // What has not been transcribed, which is not the same as what is in the queue. A row
             // that finished keeps its transcript, its outputs and its "Done"; the alternative is
             // that adding a fourth file to a queue of three re-decodes the three, which costs
@@ -444,6 +589,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 InputPath = vm.Path,
                 Formats = formats,
                 OutputDirectory = string.IsNullOrWhiteSpace(OutputDirectory) ? null : OutputDirectory,
+
+                // What makes a translated run's output its own. SubRip has no comment syntax, so
+                // SRT cannot carry the marker in-band and is covered by its name instead — and the
+                // infix is also what stops a translated run overwriting the transcription run's
+                // files when both are asked for the same recording.
+                StemSuffix = translator is null ? string.Empty : TranslatedInfix,
             }).ToList();
 
             foreach (var vm in pending)
@@ -451,7 +602,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 vm.Reset();
             }
 
-            var runner = new BatchTranscriptionRunner((job, _, token) => RunJobAsync(engine, labeller, job, options, token));
+            RefreshTranscriptPane();
+
+            var runner = new BatchTranscriptionRunner(
+                (job, _, token) => RunJobAsync(engine, labeller, translator, job, options, token));
             var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(true);
 
             // The runner swallows per-file exceptions so the queue keeps going, which means a
@@ -527,6 +681,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private async Task<JobResult> RunJobAsync(
         ITranscriptionEngine engine,
         ISpeakerLabeller? labeller,
+        ITranscriptTranslator? translator,
         TranscriptionJob job,
         TranscriptionOptions options,
         CancellationToken ct)
@@ -598,9 +753,37 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Publish();
         }
 
+        // Last, and after the speakers on purpose: SpeakerAssignment attributes a speaker per word
+        // and cuts segments where the speaker changes, and a translated segment has no words. Run
+        // the other way round it would fall back to "whoever talks most across the span" on every
+        // segment — a coarser label, arrived at silently.
+        //
+        // The transcript as the engine wrote it is kept rather than replaced, which is what lets
+        // the window offer both panes; it is also what the silence check below has to read, since
+        // translation destroys the signal it rests on.
+        var transcribed = document;
+        string? numeralWarning = null;
+
+        if (translator is not null)
+        {
+            vm.Status = "Translating";
+            document = await TranscriptTranslation
+                .TranslateAsync(document, translator, progress: progress, ct: ct)
+                .ConfigureAwait(true);
+
+            // Dates and figures are what a listener checks a transcript for, and they are where a
+            // two-model cascade meets worst. Compared against what was heard rather than against a
+            // second reading of the English.
+            numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+
+            text.Clear();
+            text.Append(JobViewModel.Render(document));
+            Publish();
+        }
+
         var written = await TranscriptWriter.WriteAsync(document, job, ct: ct).ConfigureAwait(true);
 
-        var silence = DescribeSilence(engine, document);
+        var silence = DescribeSilence(engine, transcribed);
         var result = new JobResult
         {
             Job = job,
@@ -608,12 +791,19 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Document = document,
             OutputFiles = written,
             Elapsed = DateTimeOffset.UtcNow - started,
-            Warning = silence is null ? speakerWarning : speakerWarning is null ? silence : $"{silence} {speakerWarning}",
+
+            // Silence first, then the labeller at its cap, then a number the English lost: the
+            // file, the names, one segment — widest first, as the command line orders them.
+            Warning = Join(Join(silence, speakerWarning), numeralWarning),
         };
 
-        vm.Complete(result);
+        vm.Complete(result, translator is null ? null : transcribed);
+        RefreshTranscriptPane();
         return result;
     }
+
+    private static string? Join(string? first, string? second) =>
+        first is null ? second : second is null ? first : $"{first} {second}";
 
     private static string? DescribeSilence(ITranscriptionEngine engine, TranscriptDocument document)
     {

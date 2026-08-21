@@ -32,6 +32,21 @@ public sealed partial class JobViewModel : ObservableObject
     [ObservableProperty]
     private string _transcript = string.Empty;
 
+    /// <summary>
+    /// The English transcript, when the run was a translated one, and empty when it was not.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="Transcript"/> rather than over it, which is the whole reason the window
+    /// can offer a switcher at all. The command line keeps both for a narrower purpose — the
+    /// anomaly checks read the transcript as the engine wrote it, because a translated segment has
+    /// no word confidences — and the window keeps both for this one: a person who asked for
+    /// English still wants to see what was actually said, and a pane that replaced the source
+    /// would make the two impossible to compare.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTranslation))]
+    private string _translatedTranscript = string.Empty;
+
     public JobViewModel(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -54,6 +69,20 @@ public sealed partial class JobViewModel : ObservableObject
     /// copies out of the window and what the pipeline's own tests pin; this is the view's shape.
     /// </remarks>
     public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> Lines { get; } = [];
+
+    /// <summary>
+    /// The English transcript in the same shape, empty on a run that did not translate. Speakers
+    /// and their chips are carried across unchanged, because translating a line does not change
+    /// whose line it is — an invariant <c>TranscriptTranslation</c> enforces rather than assumes.
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> TranslatedLines { get; } = [];
+
+    /// <summary>
+    /// Whether this row has an English transcript to switch to. What the pane switcher's
+    /// visibility hangs on: a run that did not translate gets no switcher rather than a dead
+    /// second pill.
+    /// </summary>
+    public bool HasTranslation => TranslatedTranscript.Length > 0;
 
     public bool IsFinished => State is JobState.Completed or JobState.Failed or JobState.Cancelled;
 
@@ -121,11 +150,23 @@ public sealed partial class JobViewModel : ObservableObject
         Error = null;
         Warning = null;
         Transcript = string.Empty;
+        TranslatedTranscript = string.Empty;
         Lines.Clear();
+        TranslatedLines.Clear();
         OutputFiles.Clear();
     }
 
-    public void Complete(JobResult result)
+    /// <summary>
+    /// Puts a finished run on the row. <paramref name="source"/> is the transcript as the engine
+    /// wrote it, given only when the run translated — <see cref="JobResult.Document"/> is the
+    /// English one by then, and the window shows both.
+    /// </summary>
+    /// <remarks>
+    /// Optional rather than a second overload because the reconciliation pass at the end of a
+    /// batch completes failed and cancelled rows through this same method and has no documents at
+    /// all. Null means what it says: one transcript, no translation, no switcher.
+    /// </remarks>
+    public void Complete(JobResult result, TranscriptDocument? source = null)
     {
         ArgumentNullException.ThrowIfNull(result);
 
@@ -149,8 +190,19 @@ public sealed partial class JobViewModel : ObservableObject
 
         if (result.Document is { } document)
         {
-            Transcript = Render(document);
-            Relines(document);
+            // With a source in hand the result's document is the English one, and the two panes
+            // are filled from different documents. Without one there is nothing to switch to and
+            // the translated half stays empty, which is what HasTranslation reads.
+            var spoken = source ?? document;
+
+            Transcript = Render(spoken);
+            Relines(spoken, Lines);
+
+            if (source is not null)
+            {
+                TranslatedTranscript = Render(document);
+                Relines(document, TranslatedLines);
+            }
         }
     }
 
@@ -161,22 +213,30 @@ public sealed partial class JobViewModel : ObservableObject
     /// and what a word error rate is scored on, and a name is not a word anybody said.
     /// </summary>
     /// <summary>
-    /// Rebuilds <see cref="Lines"/> from a finished document, assigning each speaker one of the
-    /// four chip styles in the order they are first heard.
+    /// Rebuilds one of the line collections from a finished document, assigning each speaker one
+    /// of the four chip styles in the order they are first heard.
     /// </summary>
     /// <remarks>
     /// The diariser numbers speakers in the order it first hears them, and this follows that same
     /// order rather than sorting by name — so the chip a speaker gets does not move when a name is
     /// edited, and two files transcribed in the same session do not swap colours between them.
     ///
+    /// It is also what keeps the two panes' chips in step. Each document is walked separately and
+    /// builds its own map, and they agree because translation is forbidden from changing who said
+    /// a segment or how many there are: same speakers, same order, same colours either side of the
+    /// switcher. A speaker whose every segment came back empty is the one case the two can differ,
+    /// and an empty line is dropped from both.
+    ///
     /// The modulo is a backstop rather than a policy. Four is the diariser's architectural ceiling,
     /// so a fifth speaker is not something this pipeline can produce; if one ever arrives it wraps
     /// to the first chip rather than throwing, because a colour clash is a smaller failure than a
     /// window that will not draw a transcript.
     /// </remarks>
-    private void Relines(TranscriptDocument document)
+    private static void Relines(
+        TranscriptDocument document,
+        System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> target)
     {
-        Lines.Clear();
+        target.Clear();
 
         var chips = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -194,7 +254,7 @@ public sealed partial class JobViewModel : ObservableObject
                 }
             }
 
-            Lines.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip));
+            target.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip));
         }
     }
 

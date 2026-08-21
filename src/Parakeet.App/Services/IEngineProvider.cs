@@ -1,6 +1,8 @@
 using Parakeet.Core.Diarisation;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Translation;
+using Parakeet.Engine.Marian;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
 using Parakeet.Engine.Sortformer;
@@ -40,6 +42,17 @@ public interface IEngineProvider
 
     /// <summary>The labeller behind the speaker opt-in, or null when <see cref="SupportsSpeakerLabelling"/> is false.</summary>
     ISpeakerLabeller? CreateSpeakerLabeller();
+
+    /// <summary>
+    /// True when this provider can hand out a translator. Shown the same way
+    /// <see cref="SupportsSpeakerLabelling"/> is: the checkbox is disabled with a reason rather
+    /// than hidden, because the reason — a model that has not been downloaded — is one the user
+    /// can act on from the tab next door.
+    /// </summary>
+    bool SupportsTranslation { get; }
+
+    /// <summary>The translator behind the English opt-in, or null when <see cref="SupportsTranslation"/> is false.</summary>
+    ITranscriptTranslator? CreateTranslator();
 
     /// <summary>
     /// Frees whatever the engine technology keeps alive for the whole process, once every engine
@@ -119,6 +132,41 @@ public sealed class EngineProvider : IEngineProvider
     }
 
     /// <summary>
+    /// True when the translation checkpoint is installed, and false with a reason when it is not.
+    /// </summary>
+    /// <remarks>
+    /// A question about the files on disk, like <see cref="SupportsSpeakerLabelling"/> — and here
+    /// it is nine of them rather than one, which is why it goes through the store's own
+    /// <c>IsInstalled</c> rather than a <c>File.Exists</c>. A partial install is not installed:
+    /// the graphs load out of an assembled directory and a set missing its tokenizer loads until
+    /// it does not.
+    /// </remarks>
+    public bool SupportsTranslation =>
+        ModelCatalog.Default.TranslationModels.FirstOrDefault() is { } model && _store.IsInstalled(model);
+
+    public ITranscriptTranslator? CreateTranslator()
+    {
+        if (ModelCatalog.Default.TranslationModels.FirstOrDefault() is not { } model)
+        {
+            return null;
+        }
+
+        // The same all-or-nothing question as above, asked again at the point of use: the Models
+        // tab can remove the entry between the window opening and Start being pressed.
+        if (!_store.IsInstalled(model))
+        {
+            return null;
+        }
+
+        return new MarianTranscriptTranslator(new MarianTranslatorOptions
+        {
+            ModelDirectory = _store.PathFor(model),
+            ModelId = model.Id,
+            SourceLanguages = model.Languages,
+        });
+    }
+
+    /// <summary>
     /// A no-op until a model has been loaded in this process — the native library is not loaded
     /// before then, so there is nothing to release and nothing is touched.
     /// </summary>
@@ -143,6 +191,12 @@ public sealed class FakeEngineProvider : IEngineProvider
     public bool SupportsSpeakerLabelling => true;
 
     public ISpeakerLabeller? CreateSpeakerLabeller() => new FakeSpeakerLabeller();
+
+    /// <summary>The canned translator, for the same reason: the English opt-in runs end to end
+    /// here with no 1.34 GiB checkpoint in CI, and its output is visibly not English.</summary>
+    public bool SupportsTranslation => true;
+
+    public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator();
 
     public void ReleaseBackend() => ReleaseCount++;
 }

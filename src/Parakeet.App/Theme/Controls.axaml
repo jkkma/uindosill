@@ -166,6 +166,25 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <!-- A disabled combo box dims; it does not fill.
+
+       Fluent paints a disabled ComboBox with a solid grey ground, which is the only grey block
+       anywhere in this window and reads as a filled field rather than an unavailable one. Every
+       other disabled control here says so by going pale — see CheckBox:disabled below. The
+       backend picker on the Models tab is disabled for as long as a model is loaded, which is
+       most of the time anyone is looking at that tab, so this is not a rare state to get wrong.
+
+       On the template's own border rather than through a resource key, which is the same reason
+       the ListBoxItem selection below is done that way: the theme's pseudo-class styles set it
+       there, so an override written as a resource compiles and does nothing. -->
+  <Style Selector="ComboBox:disabled /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
+  </Style>
+  <Style Selector="ComboBox:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
+  </Style>
+
   <!-- ── Checkbox ────────────────────────────────────────────────────────────────────────────
        17px and square. Fluent draws a 20px rounded box, so both are set on the template part. -->
   <Style Selector="CheckBox">
