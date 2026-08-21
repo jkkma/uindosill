@@ -8,6 +8,15 @@
       it by path, so what this project needs from it is an executable on disk and not an assembly to
       compile against. ReferenceOutputAssembly="false" says exactly that, and the reference is still
       what makes it build first.
+
+      **It is in Uindosill.slnx, and that is load-bearing rather than tidiness.** A solution build
+      unsets the parent's configuration across a ProjectReference, so a referenced project that the
+      solution does not list falls back to its own default — Debug. When FakeSidecar was outside the
+      solution, `dotnet build Uindosill.slnx -c Release` wrote `tools/FakeSidecar/bin/Debug/`, the
+      copy below looked in `bin/Release/` and found nothing, and thirty tests failed on a missing
+      executable. `SetConfiguration` metadata does not rescue it; being in the solution does. It
+      looked intermittent because anyone who had built this test project directly had a `bin/Release`
+      left over from that, which the copy then found.
     -->
     <ProjectReference Include="../../tools/FakeSidecar/FakeSidecar.csproj"
                       ReferenceOutputAssembly="false"
@@ -23,6 +32,16 @@
     <ItemGroup>
       <FakeSidecarOutput Include="$(MSBuildThisFileDirectory)../../tools/FakeSidecar/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
+
+    <!--
+      Loud rather than silent, because the failure this replaces was neither. A copy that finds
+      nothing succeeds, and the first thing anybody hears about it is thirty tests failing on a
+      missing file — at which point the question is whether the tests are wrong. Failing here says
+      what actually happened, in the build, next to the reason.
+    -->
+    <Error Condition="'@(FakeSidecarOutput)' == ''"
+           Text="Nothing to copy from tools/FakeSidecar/bin/$(Configuration)/$(TargetFramework)/. The stand-in did not build in this configuration, so every test that drives a sidecar would fail on a missing executable. See the ProjectReference above: it is outside the solution, and SetConfiguration is what carries the configuration to it." />
+
     <Copy SourceFiles="@(FakeSidecarOutput)"
           DestinationFolder="$(OutDir)fake-sidecar/%(RecursiveDir)"
           SkipUnchangedFiles="true" />
