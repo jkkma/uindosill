@@ -6,8 +6,14 @@
     <AssemblyName>FakeSidecar</AssemblyName>
     <RootNamespace>Uindosill.FakeSidecar</RootNamespace>
     <IsPackable>false</IsPackable>
-    <!-- Not in Uindosill.slnx: nothing ships it and nothing depends on its assembly. It is built
-         because Parakeet.Engine.Python.Tests references it, and that is the only reason it exists. -->
+    <!-- Nothing ships it and nothing depends on its assembly; it is built because
+         Parakeet.Engine.Python.Tests references it, and that is the only reason it exists.
+
+         It is in Uindosill.slnx all the same, and that is not bookkeeping. A solution build unsets
+         the parent's configuration across a ProjectReference, so a project the solution does not
+         list falls back to its own default — which meant a Release solution build produced a Debug
+         stand-in, the test project's copy step found nothing in bin/Release, and thirty tests failed
+         on a missing file. See the reference in that project for the whole of it. -->
   </PropertyGroup>
 
   <!--
