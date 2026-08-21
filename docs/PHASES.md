@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 767 tests, no weights, no display, no network — **765 passed and 2 skipped**, and
+**Status:** met. 773 tests, no weights, no display, no network — **771 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (91 of the project's 138 CLI
+**Status:** usable, tested end to end against the canned engine (91 of the project's 144 CLI
 tests drive the real entry point; the other 44 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, and 9 checking those two flags against the real command specs through
@@ -1544,6 +1544,36 @@ nothing in the suite replaces them. And the window's speaker limits are now a **
 two constants that live in the sidecar — policed at load, by refusing a sidecar that disagrees, and
 in CI, by reading them out of the Python source — because a warning about a four-speaker cap has to
 be on screen before a batch starts and there may be no interpreter to ask.
+
+### Fixed 2026-08-21 — the backend notice that could never fire
+
+**The line the entry above describes was dead from the day it was written.** *Built 2026-08-20 — the
+backend the application starts on* closes by saying `transcribe` had grown the notice it did not
+have, because a machine carrying the CUDA drop with no working driver behind it now resolves to CUDA
+automatically, falls to CPU, and runs twelve times slower with nothing on stderr to say why. The
+notice was there. It was called with an engine `EngineFactory` had just constructed, and a
+`ParakeetCppEngine` answers `Capabilities.Backend` with the backend it was *asked* for until
+`LoadAsync` rewrites it from `ParakeetNativeLibrary.LoadedBackend`. Nothing loads at construction.
+So the comparison was the requested backend against itself, the equality guard returned every time,
+and the whole failure the notice exists for went on being silent — with a line of code and a
+paragraph of record both asserting otherwise.
+
+**The check now happens where the answer exists: after the load, on the first file of the batch.**
+The engine loads lazily, on the first decode, so nothing knows the resolved backend until something
+asks it to load; `transcribe` now asks, once, from `RunOneAsync` — after the file is known to exist,
+so a queue of typos still costs no model load, and before the audio is opened, so the line is ahead
+of the fifty minutes it explains rather than after them. The message and its reasoning are unchanged.
+`--fake` is still excluded: the canned engine answers cpu whatever was asked for.
+
+**It is verified against the real loader, and the test that holds it is not.** On the desktop, with
+the vendored natives and the installed f16 weights, `--backend cuda` pointed at a native tree
+carrying only `cpu/` prints *"cuda was requested but the native loader fell back to cpu"* and the
+Vulkan hint; a bare `--backend` against the same tree prints the *chosen automatically* wording; two
+files print it once; and `--backend cpu` prints nothing. None of that is reproducible in CI, which
+has no natives and no weights, so the six tests in `BackendFallbackTests` hold the two halves that
+are: the wording, and the timing — through a stub engine that reports one backend before its load
+and another after, so a check made too early reads the requested backend back as agreement and the
+suite goes red. That is the only shape of this bug CI can catch, and it is the shape it had.
 
 ## The honest summary
 
