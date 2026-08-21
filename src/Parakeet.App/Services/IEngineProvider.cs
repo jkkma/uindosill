@@ -44,6 +44,21 @@ public interface IEngineProvider
     ISpeakerLabeller? CreateSpeakerLabeller();
 
     /// <summary>
+    /// What the speaker opt-in's labeller can and cannot do, without loading it. Null when there is
+    /// no labeller to describe.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than read off a created labeller because the window needs these answers while
+    /// nothing is running: the cap and the length the labels are established to are what the
+    /// speaker-count field and the long-recording warning are drawn from, and both have to be in
+    /// front of a person <em>before</em> they spend twenty minutes on a batch. Capabilities are
+    /// built in a labeller's constructor and cost nothing — <see cref="ISpeakerLabeller.LoadAsync"/>
+    /// is where the weights come in — so this is a cheap question with an expensive answer to get
+    /// any other way.
+    /// </remarks>
+    SpeakerLabellerCapabilities? SpeakerLimits { get; }
+
+    /// <summary>
     /// True when this provider can hand out a translator. Shown the same way
     /// <see cref="SupportsSpeakerLabelling"/> is: the checkbox is disabled with a reason rather
     /// than hidden, because the reason — a model that has not been downloaded — is one the user
@@ -132,6 +147,21 @@ public sealed class EngineProvider : IEngineProvider
     }
 
     /// <summary>
+    /// The limits of the labeller this provider would hand out, read off one that is built and
+    /// never loaded.
+    /// </summary>
+    /// <remarks>
+    /// Built rather than declared here on purpose. The cap is the model's geometry and the bound is
+    /// where its evidence stops, and both are stated once, in the labeller that owns them — a copy
+    /// in this file would be a second place for the fifty minutes to live and the one that goes
+    /// stale when a measurement moves it. Constructing a labeller costs a record: the weights arrive
+    /// in <see cref="ISpeakerLabeller.LoadAsync"/>, which is not called here, so the instance holds
+    /// nothing to release and is left to the collector rather than disposed through a property that
+    /// cannot await.
+    /// </remarks>
+    public SpeakerLabellerCapabilities? SpeakerLimits => CreateSpeakerLabeller()?.Capabilities;
+
+    /// <summary>
     /// True when the translation checkpoint is installed, and false with a reason when it is not.
     /// </summary>
     /// <remarks>
@@ -177,8 +207,21 @@ public sealed class EngineProvider : IEngineProvider
 public sealed class FakeEngineProvider : IEngineProvider
 {
     private readonly FakeEngineOptions _options;
+    private readonly FakeSpeakerLabellerOptions _speakers;
 
-    public FakeEngineProvider(FakeEngineOptions? options = null) => _options = options ?? FakeEngineOptions.Default;
+    /// <summary>
+    /// <paramref name="speakers"/> is how a test gives the canned labeller the shipping one's
+    /// shape — a cap, a length its labels are established to, a count it cannot be told — which is
+    /// what the window's speaker-count field and long-recording warning are drawn from. Its default
+    /// has none of those, as this provider has always behaved.
+    /// </summary>
+    public FakeEngineProvider(
+        FakeEngineOptions? options = null, FakeSpeakerLabellerOptions? speakers = null)
+    {
+        _options = options ?? FakeEngineOptions.Default;
+        _speakers = speakers ?? FakeSpeakerLabellerOptions.Default;
+        _speakers.Validate();
+    }
 
     /// <summary>How many times the backend was released, so a test can see that shutdown got here.</summary>
     public int ReleaseCount { get; private set; }
@@ -190,7 +233,9 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// <summary>The canned labeller, so the window's opt-in runs end to end in the headless tests.</summary>
     public bool SupportsSpeakerLabelling => true;
 
-    public ISpeakerLabeller? CreateSpeakerLabeller() => new FakeSpeakerLabeller();
+    public ISpeakerLabeller? CreateSpeakerLabeller() => new FakeSpeakerLabeller(_speakers);
+
+    public SpeakerLabellerCapabilities? SpeakerLimits => CreateSpeakerLabeller()?.Capabilities;
 
     /// <summary>The canned translator, for the same reason: the English opt-in runs end to end
     /// here with no 1.34 GiB checkpoint in CI, and its output is visibly not English.</summary>

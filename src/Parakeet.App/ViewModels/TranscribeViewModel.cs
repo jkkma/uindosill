@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -85,7 +86,35 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// a second time and runs a second model, and it is not what most transcriptions want.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSetSpeakerCount))]
+    [NotifyPropertyChangedFor(nameof(SpeakerCountHint))]
+    [NotifyPropertyChangedFor(nameof(SpeakerDurationWarning))]
     private bool _labelSpeakers;
+
+    /// <summary>
+    /// How many people are talking, when the user knows. Null — the field left blank — lets the
+    /// labeller estimate it, which is what it has always done.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the window's half of the one repair this product has for a long recording. The
+    /// shipping diariser cannot be told a count, so the number does not steer the model: the labels
+    /// it produces are folded down to this many afterwards, merging the pair that talk over each
+    /// other least. That works because the failure past the length its labels are established to is
+    /// always over-segmentation — one person's identity drifting onto a second label — and merging
+    /// is the direction that can be repaired, where splitting one label back into two people is not.
+    /// </para>
+    /// <para>
+    /// Blank rather than a default of two, and blank is not "no opinion" being tidy. The fold is
+    /// wrong to apply unasked: on one of the eighteen AMI development meetings the pair of
+    /// <em>genuinely different</em> speakers who collide least never overlap at all across the whole
+    /// meeting, so an automatic rule would merge two real people there. It fires only when somebody
+    /// says they know the number.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpeakerCountHint))]
+    private int? _speakerCount;
 
     /// <summary>
     /// The English opt-in. Off by default and off every time the window opens, on the same terms
@@ -205,12 +234,135 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         OnPropertyChanged(nameof(CanLabelSpeakers));
         OnPropertyChanged(nameof(SpeakerHint));
+        OnPropertyChanged(nameof(CanSetSpeakerCount));
+        OnPropertyChanged(nameof(SpeakerCountHint));
+        OnPropertyChanged(nameof(SpeakerDurationWarning));
     }
 
     public string? SpeakerHint => CanLabelSpeakers
         ? null
         : "Speaker labelling needs its own model, which is not installed yet. Install it from the Models tab; "
           + "it is a 453 MiB download and tells apart up to four speakers.";
+
+    /// <summary>
+    /// Whether the speaker-count field is live. Only with the opt-in on: a count with nothing to
+    /// count is the silently-inert setting this window refuses to draw.
+    /// </summary>
+    public bool CanSetSpeakerCount => CanLabelSpeakers && LabelSpeakers;
+
+    /// <summary>
+    /// What the count will actually do, said before it is acted on — including when it cannot be
+    /// done at all.
+    /// </summary>
+    /// <remarks>
+    /// The window's version of what <c>LabellerFactory</c> prints on the command line, and it says
+    /// the same two things for the same reasons. A count the labeller cannot be told is honoured by
+    /// folding afterwards, and a user is owed that distinction rather than left to assume the model
+    /// was steered. A count <em>above the cap</em> is a different fact and the one that changes what
+    /// somebody does next: it was never reachable, the fold has nothing to fold, and afterwards the
+    /// only sentence left is "4 speakers were labelled", which reads as a fact about the recording
+    /// rather than about the tool.
+    /// </remarks>
+    public string? SpeakerCountHint
+    {
+        get
+        {
+            if (!CanSetSpeakerCount || _engines.SpeakerLimits is not { } limits)
+            {
+                return null;
+            }
+
+            if (SpeakerCount is not { } count)
+            {
+                // Blank stops being an option once something in the queue is past the bound, and the
+                // hint has to say so here rather than let Start be the first place anybody hears it.
+                return LongestPastTheBound() is { } risky
+                    ? $"{risky.FileName} is past that bound, so this one needs a count: the model would estimate "
+                      + "it, and past about an hour it tends to hear one person as two. Give the number, or turn "
+                      + "'Label speakers' off and take the transcript without names."
+                    : "Leave this blank and the model estimates it. Set it when you know: past about an hour "
+                      + "this model tends to hear one person as two, and a count is the only repair for that.";
+            }
+
+            if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)
+            {
+                return unreachable;
+            }
+
+            return limits.SupportsFixedSpeakerCount
+                ? null
+                : $"{limits.ModelId ?? limits.EngineName} estimates the count itself and cannot be told one, so its "
+                  + $"labels are folded down to {count} afterwards, merging the pair that talk over each other least. "
+                  + "If it finds that many or fewer, nothing is merged.";
+        }
+    }
+
+    /// <summary>
+    /// The long-recording warning, in front of the person who can still act on it. Null when the
+    /// opt-in is off, when the labeller has no such bound, or when everything queued is inside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The half that was missing. The command line fires this before the labeller decodes a sample;
+    /// the window had only <see cref="SpeakerLabelling.DescribeLimit"/>, which is an
+    /// <em>afterwards</em> sentence and a differently-shaped one — it reports what happened, where
+    /// this reports what is not known to work. So a two-hour recording labelled through this window
+    /// came back with speaker names and nothing saying they were past where the evidence stops.
+    /// </para>
+    /// <para>
+    /// Drawn from the durations read when the files were queued, so it is on screen while the count
+    /// beside it can still be set and before any of the twenty minutes are spent. The longest file
+    /// carries the sentence, because it is the worst case and the one that names a real number.
+    /// </para>
+    /// </remarks>
+    public string? SpeakerDurationWarning
+    {
+        get
+        {
+            if (!CanSetSpeakerCount || _engines.SpeakerLimits is not { } limits)
+            {
+                return null;
+            }
+
+            var over = JobsPastTheBound().ToList();
+            if (over.Count == 0)
+            {
+                return null;
+            }
+
+            var longest = over.MaxBy(job => job.Duration!.Value)!;
+            var sentence = SpeakerLabelling.DescribeDurationRisk(limits, longest.Duration);
+
+            return over.Count == 1
+                ? $"{longest.FileName}: {sentence}"
+                : $"{over.Count} of the files queued are longer than that. The longest, {longest.FileName}: {sentence}";
+        }
+    }
+
+    /// <summary>Every queued file longer than the labeller's labels have been established on.</summary>
+    private IEnumerable<JobViewModel> JobsPastTheBound() =>
+        _engines.SpeakerLimits is { } limits
+            ? Jobs.Where(job => SpeakerLabelling.DescribeDurationRisk(limits, job.Duration) is not null)
+            : [];
+
+    /// <summary>
+    /// The longest queued file past that bound, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// What both the hint and the guard at Start are computed from, so the sentence a person reads
+    /// beside the field and the one that stops the batch cannot disagree about which file is the
+    /// problem.
+    /// </remarks>
+    private JobViewModel? LongestPastTheBound() => JobsPastTheBound().MaxBy(job => job.Duration!.Value);
+
+    /// <summary>
+    /// How long a recording this labeller's labels have been established on, as a phrase. Invariant
+    /// because the surrounding interface is English throughout, and whole minutes keep a decimal
+    /// separator out of it either way.
+    /// </summary>
+    private string EstablishedLength => _engines.SpeakerLimits?.ReliableUpTo is { } bound
+        ? string.Create(CultureInfo.InvariantCulture, $"{bound.TotalMinutes:F0} minutes")
+        : "this model's established length";
 
     /// <summary>
     /// Whether the English opt-in does anything. Disabled with a reason when it does not, on the
@@ -340,6 +492,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanRunAgain));
         OnPropertyChanged(nameof(StartHint));
+
+        // The queue is what the long-recording warning is computed over, so both move with it: a
+        // three-hour file dropped onto a window whose opt-in is already on has to raise the warning
+        // then, not at the next unrelated notification — and the hint beside the count field has to
+        // stop saying the field can be left blank at the same moment Start begins to refuse it.
+        OnPropertyChanged(nameof(SpeakerDurationWarning));
+        OnPropertyChanged(nameof(SpeakerCountHint));
     }
 
     /// <summary>
@@ -381,7 +540,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 continue;
             }
 
-            Jobs.Add(new JobViewModel(path));
+            Jobs.Add(new JobViewModel(path) { Duration = ProbeDuration(path) });
             added++;
         }
 
@@ -390,6 +549,55 @@ public sealed partial class TranscribeViewModel : ObservableObject
         StatusMessage = rejected.Count == 0
             ? added == 0 ? "Those files are already in the queue." : $"Added {added} file{(added == 1 ? string.Empty : "s")}."
             : string.Join("; ", rejected);
+    }
+
+    /// <summary>
+    /// How long a queued file is, or null when that cannot be answered from its header.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Opening a container reads its header and not its audio, which is the same thing
+    /// <c>diarise</c> relies on to warn before it decodes a sample. What it buys here is the
+    /// long-recording warning appearing when the file is dropped rather than twenty minutes into a
+    /// batch, which is the difference between a warning somebody can act on and a note beside a
+    /// finished transcript.
+    /// </para>
+    /// <para>
+    /// A file that will not open is queued anyway with no duration. Being unreadable is a real
+    /// result and the run reports it properly, per file, with the row marked failed and the rest of
+    /// the batch untouched; refusing it here would turn one broken header into a file the user
+    /// cannot even queue, and swallowing the error is right because this is advisory and nothing
+    /// downstream depends on the answer.
+    /// </para>
+    /// </remarks>
+    private static TimeSpan? ProbeDuration(string path)
+    {
+        try
+        {
+            var source = AudioSources.Open(path);
+            try
+            {
+                return source.Duration;
+            }
+            finally
+            {
+                // Sources are IAsyncDisposable and this runs on the UI thread, so the wait is
+                // guarded rather than taken: what is open here is a file handle over a header that
+                // has already been read, and both readers complete their close synchronously. The
+                // branch is the contract's, not this path's.
+                var closing = source.DisposeAsync();
+                if (!closing.IsCompleted)
+                {
+                    closing.AsTask().GetAwaiter().GetResult();
+                }
+            }
+        }
+#pragma warning disable CA1031 // A header that will not read is not a reason to refuse the file.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return null;
+        }
     }
 
     [RelayCommand]
@@ -521,6 +729,36 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        // Refused with a reason rather than thrown from Validate deep inside the batch. The field
+        // cannot go below one, so this is the path a saved setting or a test takes; zero speakers is
+        // not a smaller request than one, it is a different one, and blank already means "estimate".
+        if (LabelSpeakers && SpeakerCount is { } requested && requested < 1)
+        {
+            StatusMessage = "The speaker count is how many people are talking, so it starts at one. "
+                + "Leave it blank to let the model estimate.";
+            return;
+        }
+
+        // Past the bound a blank count is not "let the model decide", it is "let the model do the one
+        // thing it is measured to get wrong here" — over-segment one host into two labels, silently,
+        // on a recording somebody is about to spend half an hour transcribing. So the batch stops
+        // and asks.
+        //
+        // It stops rather than inventing a number, and that distinction is the whole design. The
+        // fold merges whichever pair collides least whether or not the evidence supports it, so a
+        // guessed count does not estimate the answer — it forces one, and puts two people under one
+        // name with no margin behind the merge. Both ways out are decisions: give the number, or
+        // take the transcript without names. Neither is a guess, and the words are unaffected by
+        // either.
+        if (LabelSpeakers && SpeakerCount is null && LongestPastTheBound() is { } risky)
+        {
+            StatusMessage =
+                $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
+                + "labels have been established, and past that it tends to hear one person as two. Set "
+                + "'How many speakers', or turn 'Label speakers' off and take the transcript without names.";
+            return;
+        }
+
         IsRunning = true;
         StatusMessage = null;
         LiveTranscript = string.Empty;
@@ -604,8 +842,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             RefreshTranscriptPane();
 
+            // The user's count, carried into every file of the batch. Built once here rather than
+            // per file so a batch cannot end up with two files labelled under different rules, and
+            // built even when the opt-in is off, where it is never read.
+            var speakerOptions = new SpeakerLabellingOptions { SpeakerCount = SpeakerCount };
+            speakerOptions.Validate();
+
             var runner = new BatchTranscriptionRunner(
-                (job, _, token) => RunJobAsync(engine, labeller, translator, job, options, token));
+                (job, _, token) => RunJobAsync(engine, labeller, translator, job, options, speakerOptions, token));
             var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(true);
 
             // The runner swallows per-file exceptions so the queue keeps going, which means a
@@ -684,6 +928,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         ITranscriptTranslator? translator,
         TranscriptionJob job,
         TranscriptionOptions options,
+        SpeakerLabellingOptions speakerOptions,
         CancellationToken ct)
     {
         var vm = Jobs.First(j => string.Equals(j.Path, job.InputPath, StringComparison.OrdinalIgnoreCase));
@@ -745,8 +990,22 @@ public sealed partial class TranscribeViewModel : ObservableObject
             // the labelled transcript then replaces the streamed one in the window, names in front.
             vm.Status = "Labelling speakers";
             await using var second = AudioSources.Open(job.InputPath);
-            document = await SpeakerLabelling.LabelAsync(document, labeller, second, progress: progress, ct: ct).ConfigureAwait(true);
-            speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
+
+            var merges = new List<string>();
+            document = await SpeakerLabelling
+                .LabelAsync(document, labeller, second, speakerOptions, progress, merges, ct)
+                .ConfigureAwait(true);
+
+            // Three sentences, widest first, and each about a different thing: the recording is
+            // longer than the labels are established on, the count merged these labels into those,
+            // and the labeller finished at its ceiling. The first is on screen before the batch
+            // started (SpeakerDurationWarning) and repeated here because it belongs to the
+            // transcript too — an options panel is not where somebody reads a result a week later.
+            speakerWarning = Join(
+                Join(
+                    SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
+                    DescribeMerges(merges)),
+                SpeakerLabelling.DescribeLimit(labeller, document));
 
             text.Clear();
             text.Append(JobViewModel.Render(document));
@@ -804,6 +1063,25 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     private static string? Join(string? first, string? second) =>
         first is null ? second : second is null ? first : $"{first} {second}";
+
+    /// <summary>
+    /// What the speaker count actually merged, or null when it merged nothing.
+    /// </summary>
+    /// <remarks>
+    /// A merge the user's own number asked for is still not a silent one, and each entry already
+    /// carries the seconds the pair spent talking over each other <em>and</em> how far behind the
+    /// next-closest pair was. The margin is what says whether the fold had a real choice to make:
+    /// two hosts of a three-hour recording overlap for minutes however it is cut, so the absolute
+    /// reads alarming on its own and means nothing without the runner-up beside it. Near-zero
+    /// margin is a merge the count forced rather than one the timeline supports.
+    /// </remarks>
+    private static string? DescribeMerges(IReadOnlyList<string> merges) =>
+        merges.Count == 0
+            ? null
+            : $"Folded to the speaker count you asked for: merged {string.Join("; ", merges)}. The margin is the "
+              + "evidence rather than the raw seconds — two hosts of a long recording overlap for minutes however "
+              + "you cut them, so what matters is how far behind the next-closest pair was. A merge with little or "
+              + "no margin means the count has probably put two people under one name.";
 
     private static string? DescribeSilence(ITranscriptionEngine engine, TranscriptDocument document)
     {

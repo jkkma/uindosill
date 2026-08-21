@@ -665,6 +665,74 @@ public class SpeakerLabellingPipelineTests
         Assert.Equal(TimeSpan.FromSeconds(4.5), turns[0].End);     // runs half a second into the next
     }
 
+    /// <summary>
+    /// A fake that says it cannot be told a count is not told one, and the fold is what honours it.
+    /// </summary>
+    /// <remarks>
+    /// The shipping labeller's arrangement, which is why the fake has to be able to take it: the
+    /// model estimates the count, over-segments on a long recording, and the caller's number is
+    /// applied afterwards by merging. A stand-in that quietly honoured the count either way would
+    /// leave the fold with nothing to fold, so the repair the product depends on would pass its
+    /// tests by never running.
+    /// </remarks>
+    [Fact]
+    public async Task AFakeThatCannotBeToldACountLeavesItToTheFold()
+    {
+        var samples = TestAudio.Build((16, true));
+        await using var labeller = new FakeSpeakerLabeller(new FakeSpeakerLabellerOptions
+        {
+            SpeakerCount = 4,
+            Overlap = TimeSpan.FromSeconds(0.5),
+            SupportsFixedSpeakerCount = false,
+        });
+
+        Assert.False(labeller.Capabilities.SupportsFixedSpeakerCount);
+
+        // Asked for two and it still produces four: the count did not reach it, which is the point.
+        var raw = await labeller.LabelAsync(
+            new ArrayAudioSource(samples), new SpeakerLabellingOptions { SpeakerCount = 2 });
+        Assert.Equal(4, SpeakerTurns.Speakers(raw).Count);
+
+        // Through the driver, the same count comes out honoured — and says which labels it merged.
+        await using var engine = new FakeTranscriptionEngine();
+        var document = await TranscriptionRunner.RunAsync(
+            engine, new ArrayAudioSource(samples), sourceName: "call.wav");
+
+        var merges = new List<string>();
+        var labelled = await SpeakerLabelling.LabelAsync(
+            document,
+            labeller,
+            new ArrayAudioSource(samples),
+            new SpeakerLabellingOptions { SpeakerCount = 2 },
+            merges: merges);
+
+        Assert.Equal(["Speaker 1", "Speaker 2"], SpeakerTurns.Speakers(labelled.SpeakerTurns));
+        Assert.Equal(2, merges.Count);
+        Assert.All(merges, merge => Assert.Contains("they talked over each other for", merge, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The fake advertises a cap and then respects it, so the sentence a caller owes at the ceiling
+    /// is testable without the real model.
+    /// </summary>
+    [Fact]
+    public async Task AFakeWithACapNeverProducesMoreLabelsThanItAdvertises()
+    {
+        await using var labeller = new FakeSpeakerLabeller(new FakeSpeakerLabellerOptions
+        {
+            SpeakerCount = 6,
+            TurnLength = TimeSpan.FromSeconds(1),
+            MaxSpeakers = 4,
+        });
+
+        var turns = await labeller.LabelAsync(
+            new ArrayAudioSource(TestAudio.Build((12, true))), SpeakerLabellingOptions.Default);
+
+        Assert.Equal(4, SpeakerTurns.Speakers(turns).Count);
+        Assert.Equal(4, labeller.Capabilities.MaxSpeakers);
+        Assert.NotNull(SpeakerLabelling.DescribeUnreachableCount(labeller.Capabilities, 7));
+    }
+
     [Fact]
     public async Task LabellingADocumentNamesEveryoneAndCarriesProvenance()
     {
