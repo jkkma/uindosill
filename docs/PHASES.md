@@ -1524,14 +1524,28 @@ call, `librosa.filters.mel`, which builds the mel filterbank matrix. It is paid 
 16.3324% describe this code; replacing the call with a committed filterbank is a different artefact
 needing its own measurement. About 95 MB more is `sympy` and `networkx`, which are torch's.
 
-**The CLI zip does not carry it, and that is an open decision rather than an oversight.** The
+**The CLI zip does not carry it, and as of 2026-08-21 the bundle is its own download.** The
 installer bundles the interpreter into the desktop application's publish, where `PythonRuntime`
 looks for it; the CLI ships as a separate ~250 MB zip (decision 3, 2026-08-16 — Velopack has no PATH
-feature). As it stands `uindosill diarise` and `uindosill transcribe --translate` from that zip
-refuse with "the bundled Python is not at …", and the only way through is `UINDOSILL_PYTHON`, which
-is a developer override rather than an answer. Three ways out, none of them taken yet: put the bundle
-in the CLI zip and accept about 1.45 GB, ship it as a third download the CLI can be pointed at, or
-say in the zip's own README that the two opt-ins need the desktop install beside it.
+feature). As it stood `uindosill diarise` and `uindosill transcribe --translate` from that zip
+refused with "the bundled Python is not at …", and the only way through was `UINDOSILL_PYTHON`,
+which is a developer override rather than an answer.
+
+**Decided: a third release artefact, and the CLI is pointed at it.** The bundle ships beside the
+installer and the zip as its own ~1.2 GB download, and a CLI that has been given one uses it. The
+two rejected options are why: putting it *in* the zip charges every CLI user 1.2 GB for two opt-ins
+most of them will never run, taking the artefact from ~250 MB to about 1.45 GB; and a README saying
+"install the desktop app first" ships a command line that refuses two of its own documented commands.
+
+**What it costs is a third thing to publish, pin and document** — and one thing it earns is worth
+naming: `UINDOSILL_PYTHON` stops being a development-only override and becomes the shipping path's
+own mechanism, which is the first reason this project has had to report *which* interpreter a run
+used. Nothing does yet: `PythonRuntime.Resolution.Overridden` is computed and unit-tested with no
+production caller reading it, so a run against an overridden interpreter says so nowhere — including
+in the 2026-08-21 agreement run's own artefacts, where the interpreter is written into the prose by
+hand. **Unbuilt as of 2026-08-21**: no packaging step produces the third artefact, nothing on the
+command line takes a path to it, and the discovery order for a bundle that is neither beside the
+application nor named by the variable is undecided.
 
 **The study is on the Drive**, in the dated folder `directml-2026-08-21` beside the other research —
 the arms above with their per-meeting numbers, the raw output every table is computed from, and what
