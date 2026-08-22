@@ -127,7 +127,15 @@ public static class SpeakerAssignment
         foreach (var turn in sortedTurns)
         {
             var overlap = Min(turn.End, end) - Max(turn.Start, start);
-            if (overlap > TimeSpan.Zero)
+
+            // A zero-length word — the decoder's end-before-start collapse — overlaps nothing, so it
+            // is judged by containment: inside a turn it is that turn's, and inside two it takes the
+            // tie-break every other word in the crosstalk takes. Until 2026-08-22 it fell to the gap
+            // rule below with a negative gap, which the nearest-turn rule read as "closest", and went
+            // to the turn that started earlier — the opposite of the tie-break, cutting B | A | B
+            // around one word under the other name.
+            var contained = start == end && overlap == TimeSpan.Zero;
+            if (overlap > TimeSpan.Zero || contained)
             {
                 if (best is null || overlap > bestOverlap
                     || (overlap == bestOverlap && (turn.End > best.End
@@ -434,9 +442,13 @@ public static class SpeakerLabelling
     /// reactions.
     /// </remarks>
     public static string DescribeParityFailure(double maxAbsoluteDifference, double tolerance) =>
-        $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
-        $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels are " +
-        "this machine's own result and no diarisation error rate published by this project describes them.";
+        // Invariant, as every user-facing figure in this repository is: on a comma-decimal machine
+        // this read "8,143e-04" until 2026-08-22, and CA1305 cannot see an interpolated string.
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
+            $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels are " +
+            $"this machine's own result and no diarisation error rate published by this project describes them.");
 
     /// <summary>
     /// What a failed parity check means when the sidecar gave a reason rather than a magnitude —

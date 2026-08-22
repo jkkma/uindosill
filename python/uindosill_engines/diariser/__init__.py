@@ -190,6 +190,12 @@ class Diariser:
             # and guessing would put a silent pitch shift into a measured pipeline.
             raise RequestError("audio", f"expected 16 kHz mono, got {sample_rate} Hz")
 
+        if wav.size == 0:
+            # No samples, no turns. The host refuses an empty WAV before it stages one, so this is a
+            # container with no frames reaching the sidecar some other way — and the featurizer's
+            # `x[:, 0]` on a (1, 0) tensor was an IndexError reported as `internal` until 2026-08-22.
+            return []
+
         probs = self._engine.run_wav(np.ascontiguousarray(wav), progress=progress)
 
         options = post_processing or {}

@@ -95,6 +95,24 @@ public class DiariseCommandTests
     }
 
     [Fact]
+    public async Task TheSummaryLineIsInvariantOnACommaDecimalMachine()
+    {
+        // The outer string was invariant and the nested `$" over {d.TotalMinutes:F1} min"` inside
+        // one of its holes was not — a separate interpolated string, formatted in the current
+        // culture — so the line read "0.0 s of speech over 0,0 min" under es-PY until 2026-08-22.
+        // Green in CI either way; red on the maintainer's machine before the fix.
+        using var harness = new Harness();
+        var input = harness.WriteWav("meeting.wav", 12);
+
+        var exit = await harness.RunAsync("diarise", "--fake", input);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        var summary = harness.Out.ToString();
+        Assert.Matches(@"s of speech over \d+\.\d min, \d+\.\d s", summary);
+        Assert.DoesNotMatch(@"\d,\d", summary);
+    }
+
+    [Fact]
     public async Task TheRttmOpensWithTheLiteralSpeakerBytesAndNoByteOrderMark()
     {
         // The scorers this file exists to be read by -- md-eval, pyannote -- match field one

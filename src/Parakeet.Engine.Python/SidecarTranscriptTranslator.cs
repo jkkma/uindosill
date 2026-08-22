@@ -397,8 +397,12 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
             : 1d;
         var early = capabilities.TryGetProperty("earlyStopping", out var e) && e.ValueKind == JsonValueKind.True;
 
-        return $"beam {beams.GetInt32()}, at most {maxNew} new tokens, length penalty {penalty:0.##}, " +
-               $"early stopping {(early ? "on" : "off")}";
+        // Invariant: this sentence goes into run reports, and "length penalty 0,6" on a comma-decimal
+        // machine is a figure a scorer elsewhere cannot parse.
+        return string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"beam {beams.GetInt32()}, at most {maxNew} new tokens, length penalty {penalty:0.##}, " +
+            $"early stopping {(early ? "on" : "off")}");
     }
 
     public async IAsyncEnumerable<TranscriptSegment> TranslateAsync(

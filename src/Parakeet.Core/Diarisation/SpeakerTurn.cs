@@ -290,7 +290,12 @@ public static class SpeakerTurns
                     ? null
                     : runnerUp,
             });
-            current = [.. current.Select(t => t.Speaker == drop ? t with { Speaker = keep } : t)];
+            // Relabelled and then coalesced, so that two turns of the survivor that now overlap are
+            // one turn before the next pair is weighed. Summed per turn, a region where both of them
+            // overlapped the other label counted twice, and the next fold's evidence — the overlap
+            // it reports, and in principle which pair it picks — was wrong by that much until
+            // 2026-08-22.
+            current = [.. Merge(current.Select(t => t.Speaker == drop ? t with { Speaker = keep } : t))];
             remaining.Remove(drop);
         }
 

@@ -23,7 +23,8 @@ public static class WavWriter
             BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(i * 2, 2), value);
         }
 
-        WriteRiff(stream, data, sampleRate, channels, bitsPerSample: 16, formatTag: 1);
+        WriteRiffHeader(stream, data.Length, sampleRate, channels, bitsPerSample: 16, formatTag: 1);
+        stream.Write(data);
     }
 
     /// <summary>Writes 32-bit IEEE float, the format that survives a round trip unchanged.</summary>
@@ -31,13 +32,23 @@ public static class WavWriter
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        var data = new byte[samples.Length * 4];
-        for (var i = 0; i < samples.Length; i++)
-        {
-            BinaryPrimitives.WriteSingleLittleEndian(data.AsSpan(i * 4, 4), samples[i]);
-        }
+        // Streamed in blocks rather than encoded into a second whole-file array: the caller's span
+        // is already one copy of the recording, and staging a three-hour file for the diariser paid
+        // for two until 2026-08-22 — 690 MB of samples and 690 MB of their bytes, alive together.
+        WriteRiffHeader(stream, (long)samples.Length * 4, sampleRate, channels, bitsPerSample: 32, formatTag: 3);
 
-        WriteRiff(stream, data, sampleRate, channels, bitsPerSample: 32, formatTag: 3);
+        Span<byte> block = stackalloc byte[16 * 1024];
+        var perBlock = block.Length / 4;
+        for (var offset = 0; offset < samples.Length; offset += perBlock)
+        {
+            var count = Math.Min(perBlock, samples.Length - offset);
+            for (var i = 0; i < count; i++)
+            {
+                BinaryPrimitives.WriteSingleLittleEndian(block.Slice(i * 4, 4), samples[offset + i]);
+            }
+
+            stream.Write(block[..(count * 4)]);
+        }
     }
 
     public static void WriteFile(string path, ReadOnlySpan<float> samples, int sampleRate, int channels = 1)
@@ -56,15 +67,16 @@ public static class WavWriter
         WriteFloat32(stream, samples, sampleRate, channels);
     }
 
-    private static void WriteRiff(
-        Stream stream, byte[] data, int sampleRate, int channels, int bitsPerSample, int formatTag)
+    /// <summary>The 44-byte canonical header for <paramref name="dataLength"/> bytes of samples to follow.</summary>
+    private static void WriteRiffHeader(
+        Stream stream, long dataLength, int sampleRate, int channels, int bitsPerSample, int formatTag)
     {
         var blockAlign = channels * bitsPerSample / 8;
         var byteRate = sampleRate * blockAlign;
 
         Span<byte> header = stackalloc byte[44];
         WriteAscii(header[..4], "RIFF");
-        BinaryPrimitives.WriteUInt32LittleEndian(header[4..8], (uint)(36 + data.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(header[4..8], (uint)(36 + dataLength));
         WriteAscii(header[8..12], "WAVE");
         WriteAscii(header[12..16], "fmt ");
         BinaryPrimitives.WriteUInt32LittleEndian(header[16..20], 16);
@@ -75,10 +87,9 @@ public static class WavWriter
         BinaryPrimitives.WriteUInt16LittleEndian(header[32..34], (ushort)blockAlign);
         BinaryPrimitives.WriteUInt16LittleEndian(header[34..36], (ushort)bitsPerSample);
         WriteAscii(header[36..40], "data");
-        BinaryPrimitives.WriteUInt32LittleEndian(header[40..44], (uint)data.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[40..44], (uint)dataLength);
 
         stream.Write(header);
-        stream.Write(data);
     }
 
     private static void WriteAscii(Span<byte> destination, string value)

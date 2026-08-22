@@ -623,6 +623,30 @@ public class SpeakerAssignmentTests
     }
 
     [Fact]
+    public void AZeroLengthWordInsideTheCrosstalkTakesTheSameTieBreakAsItsNeighbours()
+    {
+        // The decoder collapses an end-before-start word to zero length. Inside two turns it
+        // overlaps neither, so until 2026-08-22 it fell to the nearest-turn rule with a negative
+        // gap for both — the more negative being the turn that started earlier — and went to A
+        // where every word around it went to B: three pieces, B | A | B, one word under the
+        // other name. Containment is overlap for a point, and the later-ending turn wins the tie.
+        var segment = new TranscriptSegment
+        {
+            Start = TimeSpan.Zero,
+            End = TimeSpan.FromSeconds(12),
+            Text = "also uh you",
+            Words = [Word("also", 6.2, 6.6), Word("uh", 7.0, 7.0), Word("you", 7.2, 7.4)],
+        };
+
+        var result = SpeakerAssignment.Apply([segment], [Turn(0, 8, "A"), Turn(6, 14, "B")]);
+
+        var piece = Assert.Single(result);
+        Assert.Equal("B", piece.Speaker);
+        Assert.Equal("also uh you", piece.Text);
+        Assert.All(piece.Words, w => Assert.Equal("B", w.Speaker));
+    }
+
+    [Fact]
     public void ABackChannelDoesNotTakeTheWordsOfTheSpeakerItInterrupts()
     {
         // The other shape that reaches the same tie, and the one it must not break: B's "yeah"
@@ -1113,6 +1137,36 @@ public class SpeakerLabellingPipelineTests
     /// the seconds for the same reason no derived figure is: it is recomputable from both, and a
     /// stored copy is a second version of one fact.
     /// </remarks>
+    [Fact]
+    public void AfterAFoldTheSurvivorsOverlapIsCountedOnceRatherThanOncePerTurn()
+    {
+        // a[0,10] b[5,15] c[7,12], folded to one. The first merge takes (a, c), the least-colliding
+        // pair, and relabels c as a — which leaves a[0,10] and a[7,12] overlapping each other, and
+        // both overlapping b over [7,10]. Summed per turn, the second merge's evidence read 10 s of
+        // a-against-b where the union is 7 s; until 2026-08-22 the relabelled turns were coalesced
+        // only after the last fold.
+        SpeakerTurn[] turns = [T(0, 10, "a"), T(5, 15, "b"), T(7, 12, "c")];
+
+        var folded = SpeakerTurns.FoldDownTo(turns, 1, out var merges);
+
+        Assert.Equal(2, merges.Count);
+        Assert.Equal("c", merges[0].Dropped);
+        Assert.Equal(3, merges[0].OverlapSeconds, 6);
+        Assert.Equal(7, merges[1].OverlapSeconds, 6);
+        Assert.Single(SpeakerTurns.Speakers(folded));
+    }
+
+    [Fact]
+    public void TheParityFailureSentenceIsInvariantOnACommaDecimalMachine()
+    {
+        // CA1305 cannot see an interpolated string, and this one printed "8,143e-04" under es-PY.
+        var sentence = SpeakerLabelling.DescribeParityFailure(8.143e-04, 1e-04);
+
+        Assert.Contains("8.143e-04", sentence, StringComparison.Ordinal);
+        Assert.Contains("1e-04", sentence, StringComparison.Ordinal);
+        Assert.DoesNotContain(",", sentence.Split("reference.")[1].Split("The speaker")[0], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AMergeWithNoOtherPairSaysSoRatherThanQuotingAMargin()
     {

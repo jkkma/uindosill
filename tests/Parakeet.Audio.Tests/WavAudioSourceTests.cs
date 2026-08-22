@@ -65,6 +65,23 @@ public class WavAudioSourceTests
         Assert.Equal(expected, actual);
     }
 
+    [Fact]
+    public async Task Float32IsStreamedInBlocksAndStillRoundTripsAtAnyLength()
+    {
+        // The writer encodes in 16 KB blocks rather than into a second whole-file array (which is
+        // what the diariser's staging paid for until 2026-08-22); a length that is neither a block
+        // multiple nor small has to come back sample for sample, with the header's sizes right.
+        var expected = Ramp(100_001);
+        using var stream = new MemoryStream();
+        WavWriter.WriteFloat32(stream, expected, 16_000);
+        stream.Position = 0;
+
+        await using var source = WavAudioSource.Create(stream);
+
+        Assert.Equal(100_001, source.FrameCount);
+        Assert.Equal(expected, await ReadAllAsync(source));
+    }
+
     [Theory]
     [InlineData(8)]
     [InlineData(16)]

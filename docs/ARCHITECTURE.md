@@ -316,8 +316,10 @@ turns that read as perfectly ordinary — a failure with nothing in its own outp
 the diariser compares probabilities against a committed reference at a threshold of 1e-4 that was
 measured rather than chosen: WebGPU lands at 1.073e-06 and passes, CUDA at 8.143e-04 and does not,
 and two CPU runs across ONNX Runtime 1.27.0 and 1.29.0 are bit-identical. Failing does not stop the
-run — the user asked for that provider, and what the command line and the window do is name it and
-say it disagreed. **The translator's fixture is the weaker instrument and says so**: six sentences
+run — under a named provider the user asked for it, and under `auto` the run has already landed on
+the best provider that built, which is the one being checked — and what the command line and the
+window do is name it and say it disagreed. `--speaker-backend-unverified` lifts the refusal of `dml`
+by name and nothing else; it does not lift a failed check, because nothing does. **The translator's fixture is the weaker instrument and says so**: six sentences
 compared by string equality, with no margin at all, so a provider wrong only on long or unusual
 inputs passes it. It catches the failure that has actually been seen — DirectML wrong on all 32
 sentences measured — and nothing subtler. What establishes a translator on a machine is the gate

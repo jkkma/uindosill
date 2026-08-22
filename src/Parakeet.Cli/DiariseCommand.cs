@@ -172,13 +172,21 @@ internal static class DiariseCommand
             totalElapsed += elapsed;
             totalAudio += duration ?? TimeSpan.Zero;
 
+            // The two optional clauses are built under the invariant culture on their own: a nested
+            // `$"…"` inside a hole is its own interpolated string, formatted in the current culture,
+            // and until 2026-08-22 this line read "0.0 s of speech over 0,0 min" on a comma-decimal
+            // machine — the one shape of this bug the analyzers cannot see.
+            var over = duration is { } d
+                ? string.Create(CultureInfo.InvariantCulture, $" over {d.TotalMinutes:F1} min")
+                : string.Empty;
+            var realtime = duration is { TotalSeconds: > 0 } known
+                ? string.Create(CultureInfo.InvariantCulture, $" ({known.TotalSeconds / elapsed.TotalSeconds:F0}x realtime)")
+                : string.Empty;
+
             context.WriteLine(string.Create(
                 CultureInfo.InvariantCulture,
-                $"{stem}: {turns.Count} turns, {speakers} speakers, {speech.TotalSeconds:F1} s of speech" +
-                $"{(duration is { } d ? $" over {d.TotalMinutes:F1} min" : string.Empty)}, " +
-                $"{elapsed.TotalSeconds:F1} s" +
-                $"{(duration is { TotalSeconds: > 0 } known ? $" ({known.TotalSeconds / elapsed.TotalSeconds:F0}x realtime)" : string.Empty)} " +
-                $"-> {destination}"));
+                $"{stem}: {turns.Count} turns, {speakers} speakers, {speech.TotalSeconds:F1} s of speech{over}, " +
+                $"{elapsed.TotalSeconds:F1} s{realtime} -> {destination}"));
         }
 
         if (parsed.Positionals.Count > 1 && totalAudio > TimeSpan.Zero && totalElapsed > TimeSpan.Zero)

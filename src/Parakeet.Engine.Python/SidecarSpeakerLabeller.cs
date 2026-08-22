@@ -410,7 +410,16 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     internal static async Task<string> WriteResampledWavAsync(IAudioSource audio, CancellationToken ct)
     {
         var resampler = new Resampler(audio.SampleRate, TargetSampleRate);
-        var samples = new List<float>();
+
+        // Sized from the duration when there is one, so the list does not double its way up to the
+        // file's length and end holding a buffer half again as large as the audio. The writer below
+        // streams the bytes, so this is the one whole-file copy the staging holds — the "690 MB for
+        // three hours" figure is this buffer and not, as it was until 2026-08-22, this buffer and
+        // a second one of its bytes.
+        var expected = audio.Duration is { } duration
+            ? (int)Math.Min(int.MaxValue - 64, (duration.TotalSeconds * TargetSampleRate) + 1024)
+            : 0;
+        var samples = new List<float>(expected);
 
         await foreach (var block in audio.ReadAsync(ct).ConfigureAwait(false))
         {
