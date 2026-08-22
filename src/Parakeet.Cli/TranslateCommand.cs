@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
+using Parakeet.Core.Formatting;
 using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
 using Parakeet.Engine.Python;
@@ -150,7 +150,7 @@ internal static class TranslateCommand
                 return ExitCodes.RuntimeError;
             }
 
-            File.WriteAllLines(destination, english, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.WriteAllLines(destination, english, TextOutput.Utf8NoBom);
 
             // The same flag `transcribe --translate` carries, because the failure it points at is a
             // property of the translation and not of where the text came from. Reported per line

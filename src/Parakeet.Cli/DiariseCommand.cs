@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Parakeet.Audio;
 using Parakeet.Core.Diarisation;
+using Parakeet.Core.Formatting;
 
 namespace Parakeet.Cli;
 
@@ -164,7 +165,7 @@ internal static class DiariseCommand
                     "or no margin means the count you gave has probably put two people under one name.");
             }
 
-            File.WriteAllText(destination, RttmFile.Write(turns, stem), System.Text.Encoding.UTF8);
+            File.WriteAllText(destination, RttmFile.Write(turns, stem), TextOutput.Utf8NoBom);
 
             var speakers = SpeakerTurns.Speakers(turns).Count;
             var speech = turns.Aggregate(TimeSpan.Zero, (sum, t) => sum + t.Duration);

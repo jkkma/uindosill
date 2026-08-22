@@ -1,5 +1,6 @@
 using System.Globalization;
 using Parakeet.Core.Diarisation;
+using Parakeet.Core.Formatting;
 
 namespace Parakeet.Cli;
 
@@ -67,7 +68,7 @@ internal static class RttmCommand
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(outputPath, rttm);
+            File.WriteAllText(outputPath, rttm, TextOutput.Utf8NoBom);
         }
         else
         {

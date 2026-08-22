@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Parakeet.Audio;
 using Parakeet.Core.Models;
@@ -42,6 +43,18 @@ public class DerCommandTests
             var path = Path.Combine(Directory, name);
             System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, content);
+            return path;
+        }
+
+        /// <summary>
+        /// As <see cref="Write"/>, with a UTF-8 byte order mark in front: the shape a file
+        /// written by another tool arrives in.
+        /// </summary>
+        public string WriteWithByteOrderMark(string name, string content)
+        {
+            var path = Path.Combine(Directory, name);
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(content)]);
             return path;
         }
 
@@ -102,6 +115,25 @@ public class DerCommandTests
         Assert.Contains("9.09%", output, StringComparison.Ordinal);      // 2 / 22 strict, collar 0
         Assert.Contains("50.00%", output, StringComparison.Ordinal);     // the overlap region: half of it missed
         Assert.Contains("x→A, y→B", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReferenceAndHypothesisWithByteOrderMarksScoreTheSameFigure()
+    {
+        // The scorer reads what other tools wrote, and a good many of them write UTF-8 with a
+        // mark. Tolerating it is the point: the alternative is not a refusal but a first turn
+        // dropped as an unknown record type, which moves the figure without moving the exit
+        // code. Pinned against the same 8.33% the mark-free pair above scores.
+        using var harness = new Harness();
+        var reference = harness.WriteWithByteOrderMark("stretch.ref.rttm", Reference);
+        var hypothesis = harness.WriteWithByteOrderMark("stretch.rttm", Hypothesis);
+
+        var exit = await harness.RunAsync("der", "--reference", reference, hypothesis);
+        var output = harness.Out.ToString();
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.Contains("8.33%", output, StringComparison.Ordinal);
+        Assert.Contains("x\u2192A, y\u2192B", output, StringComparison.Ordinal);
     }
 
     [Fact]
