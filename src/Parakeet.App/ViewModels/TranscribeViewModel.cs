@@ -92,8 +92,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private bool _labelSpeakers;
 
     /// <summary>
-    /// How many people are talking, when the user knows. Null — the field left blank — lets the
-    /// labeller estimate it, which is what it has always done.
+    /// How many people are talking. Null is the field not yet filled in, and with the opt-in on
+    /// that is a state Start refuses rather than a request to estimate: this window requires the
+    /// number.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -105,11 +106,19 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// is the direction that can be repaired, where splitting one label back into two people is not.
     /// </para>
     /// <para>
-    /// Blank rather than a default of two, and blank is not "no opinion" being tidy. The fold is
-    /// wrong to apply unasked: on one of the eighteen AMI development meetings the pair of
-    /// <em>genuinely different</em> speakers who collide least never overlap at all across the whole
-    /// meeting, so an automatic rule would merge two real people there. It fires only when somebody
-    /// says they know the number.
+    /// Required rather than optional, and not because the estimate always fails — inside the
+    /// established bound it is measured correct. It is required because when the estimate fails it
+    /// fails silently: a drifted host arrives as a plausible extra speaker, nothing in the output
+    /// says which of "four people" and "one person heard twice" happened, and the one person who
+    /// trivially knows the real number was never asked. The command line keeps the blank-and-
+    /// estimate path, which is what the measurements run through.
+    /// </para>
+    /// <para>
+    /// Still blank rather than defaulting to two, because the number has to come from the user for
+    /// the fold to mean anything. The fold is wrong to apply unasked: on one of the eighteen AMI
+    /// development meetings the pair of <em>genuinely different</em> speakers who collide least
+    /// never overlap at all across the whole meeting, so a guessed default would merge two real
+    /// people there and stamp it with a margin. It fires only when somebody says they know.
     /// </para>
     /// </remarks>
     [ObservableProperty]
@@ -276,14 +285,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (SpeakerCount is not { } count)
             {
-                // Blank stops being an option once something in the queue is past the bound, and the
-                // hint has to say so here rather than let Start be the first place anybody hears it.
-                return LongestPastTheBound() is { } risky
-                    ? $"{risky.FileName} is past that bound, so this one needs a count: the model would estimate "
-                      + "it, and past about an hour it tends to hear one person as two. Give the number, or turn "
-                      + "'Label speakers' off and take the transcript without names."
-                    : "Leave this blank and the model estimates it. Set it when you know: past about an hour "
-                      + "this model tends to hear one person as two, and a count is the only repair for that.";
+                // Blank is not an option while the opt-in is on, and the hint says so here rather
+                // than let Start be the first place anybody hears it. One sentence for every queue:
+                // the long-recording escalation is SpeakerDurationWarning's job, drawn right beside
+                // this field.
+                return "Give the number of people talking; 'Label speakers' does not run without it. "
+                    + "The model can estimate the count, but a wrong estimate is silent — past about an hour "
+                    + "it tends to hear one person as two — so this window always asks.";
             }
 
             if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)
@@ -731,31 +739,36 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         // Refused with a reason rather than thrown from Validate deep inside the batch. The field
         // cannot go below one, so this is the path a saved setting or a test takes; zero speakers is
-        // not a smaller request than one, it is a different one, and blank already means "estimate".
+        // not a smaller request than one, it is a different one.
         if (LabelSpeakers && SpeakerCount is { } requested && requested < 1)
         {
-            StatusMessage = "The speaker count is how many people are talking, so it starts at one. "
-                + "Leave it blank to let the model estimate.";
+            StatusMessage = "The speaker count is how many people are talking, so it starts at one.";
             return;
         }
 
-        // Past the bound a blank count is not "let the model decide", it is "let the model do the one
-        // thing it is measured to get wrong here" — over-segment one host into two labels, silently,
-        // on a recording somebody is about to spend half an hour transcribing. So the batch stops
-        // and asks.
+        // The opt-in does not run without a count, whatever the queue holds. It began as a
+        // past-the-bound rule, and what widened it is what the estimate's failure looks like from
+        // the outside: a drifted host arrives as a plausible extra speaker, nothing in the output
+        // says which of "four people" and "one person heard twice" happened, and an archived
+        // transcript carries no trace of the difference. The person pressing Start trivially knows
+        // the number; the model, when it is wrong, does not know that it is.
         //
         // It stops rather than inventing a number, and that distinction is the whole design. The
         // fold merges whichever pair collides least whether or not the evidence supports it, so a
         // guessed count does not estimate the answer — it forces one, and puts two people under one
         // name with no margin behind the merge. Both ways out are decisions: give the number, or
         // take the transcript without names. Neither is a guess, and the words are unaffected by
-        // either.
-        if (LabelSpeakers && SpeakerCount is null && LongestPastTheBound() is { } risky)
+        // either. A file past the bound still gets the sentence that names it, because "this
+        // specific recording is where the estimate is measured to go wrong" is more actionable
+        // than the rule alone.
+        if (LabelSpeakers && SpeakerCount is null)
         {
-            StatusMessage =
-                $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
-                + "labels have been established, and past that it tends to hear one person as two. Set "
-                + "'How many speakers', or turn 'Label speakers' off and take the transcript without names.";
+            StatusMessage = LongestPastTheBound() is { } risky
+                ? $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
+                    + "labels have been established, and past that it tends to hear one person as two. Set "
+                    + "'How many speakers', or turn 'Label speakers' off and take the transcript without names."
+                : "'Label speakers' needs to know how many. Set 'How many speakers', or turn it off and take "
+                    + "the transcript without names.";
             return;
         }
 

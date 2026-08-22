@@ -699,9 +699,11 @@ public class TranscribeViewModelTests
 
         // On: the window's transcript and the files carry the names. Through 'Run again', because
         // the row is finished and Start runs only what has not been run — turning the opt-in on
-        // and asking for the same file back is exactly what that button is for.
+        // and asking for the same file back is exactly what that button is for. The count comes
+        // with it, because the opt-in no longer runs without one.
         viewModel.Formats.First(f => f.Id == "rttm").IsSelected = true;
         viewModel.LabelSpeakers = true;
+        viewModel.SpeakerCount = 2;
         Assert.False(viewModel.CanStart);
         Assert.True(viewModel.CanRunAgain);
 
