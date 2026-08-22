@@ -39,6 +39,9 @@ internal static class ExitCodes
     public const int UsageError = 2;
     public const int RuntimeError = 1;
 
-    /// <summary>At least one file in a batch failed while others succeeded.</summary>
+    /// <summary>
+    /// At least one file in a batch failed, or was written without a pass it asked for — speaker
+    /// labels, the English version — while the batch as a whole produced output.
+    /// </summary>
     public const int PartialFailure = 3;
 }

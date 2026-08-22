@@ -233,10 +233,18 @@ one would turn a misbehaviour into an outage.
 The `kind` field is a closed vocabulary — `request`, `model`, `audio`, `internal` — so a caller can
 tell "this file could not be read" from "the model is not there" without matching on message text,
 which is how a reworded message silently changes behaviour. It arrives as `PythonEngineException`
-and it is **one file**. A failure *of* the sidecar — it would not start, it died, it broke the
-protocol — arrives as `PythonSidecarException` and it is **every remaining file**; everything still
-pending when the child's stdout closes is failed with that one rather than left waiting on a reply
-that is never coming.
+and it is **one file** — and it costs that file its pass, not its transcript. Both surfaces run
+each opt-in pass through `OptInPass`, which hands the transcript back as it was together with the
+reason, so the file is written without speakers or without English and says so: on stderr and in
+exit code 3 on the command line, in the row's status and warning in the window. Until 2026-08-22 a
+pass that failed after the ASR pass failed the file, and a finished decode went unwritten. A
+failure *of* the sidecar — it would not start, it died, it broke the protocol — arrives as
+`PythonSidecarException` and it is **every remaining file**; everything still pending when the
+child's stdout closes is failed with that one rather than left waiting on a reply that is never
+coming, and the sidecar records the fault so that every later request — and every later
+`LoadAsync` on an engine already loaded — is refused at once, before the file behind it is decoded
+and staged, rather than by the write that would have followed. The child is not restarted; a
+handshake that failed is refused again by the next `StartAsync` rather than forgotten.
 
 **The protocol carries a version and the host refuses a number it does not know.** `hello` is the
 first request, before any weights are touched, precisely so that a bundled Python out of step with

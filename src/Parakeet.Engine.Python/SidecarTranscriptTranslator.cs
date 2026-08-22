@@ -196,6 +196,9 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
     {
         if (_loaded)
         {
+            // Loaded — but the child may have died since, on the labeller's terms: said here, at
+            // once, rather than by the first segment's write. Not restarted.
+            _sidecar.ThrowIfFaulted();
             return;
         }
 
@@ -204,6 +207,7 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
         {
             if (_loaded)
             {
+                _sidecar.ThrowIfFaulted();
                 return;
             }
 

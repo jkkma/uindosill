@@ -49,6 +49,37 @@ public sealed record TranscriptionJob
     public OverwritePolicy Overwrite { get; init; } = OverwritePolicy.Rename;
 
     public string DisplayName => Path.GetFileName(InputPath);
+
+    /// <summary>
+    /// This job with its outputs reduced to what a transcript written without the passes in
+    /// <paramref name="failed"/> can honestly carry. A translation that did not happen means the
+    /// plain stem rather than the <c>.en</c> one that promises English; speaker labels that did
+    /// not happen mean no turns-only format, because an <c>.rttm</c> with no turns is the empty
+    /// file the command line refuses to write when the opt-in is off.
+    /// </summary>
+    public TranscriptionJob WithoutFailedPasses(IReadOnlyList<PassFailure> failed)
+    {
+        ArgumentNullException.ThrowIfNull(failed);
+
+        var job = this;
+
+        if (failed.Any(failure => failure.Pass == OptInPass.Translation))
+        {
+            job = job with { StemSuffix = string.Empty };
+        }
+
+        if (failed.Any(failure => failure.Pass == OptInPass.Speakers))
+        {
+            job = job with
+            {
+                Formats = Formats
+                    .Where(id => !TranscriptFormats.TryGet(id, out var format) || !ReferenceEquals(format, TranscriptFormats.Rttm))
+                    .ToList(),
+            };
+        }
+
+        return job;
+    }
 }
 
 public sealed record JobResult
@@ -70,6 +101,75 @@ public sealed record JobResult
 
     /// <summary>Set when segmentation found nothing to decode; the caller must say so.</summary>
     public string? Warning { get; init; }
+
+    /// <summary>
+    /// The opt-in passes that failed for this file, when the transcript was written without them.
+    /// Empty when every pass that was asked for ran. <see cref="State"/> stays
+    /// <see cref="JobState.Completed"/> — the words are — and both surfaces read this beside it:
+    /// the command line for its exit code and the window for the row's status.
+    /// </summary>
+    public IReadOnlyList<PassFailure> FailedPasses { get; init; } = [];
+}
+
+/// <summary>
+/// One of the two opt-in passes over a finished transcript — speaker labels, the English version —
+/// and the policy for when it fails: the transcript is handed back as it was, with the reason.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The transcript is the product and the pass is a decoration of it, so a pass that fails for one
+/// file costs that file its decoration and nothing else. Until 2026-08-22 it cost the file: the
+/// labeller or the translator threw after the ASR pass had finished, the batch runner recorded the
+/// job as failed, and minutes of decode went unwritten — for a source the sidecar could not read,
+/// a segment refused for its length, or a sidecar that had died, in which case every remaining
+/// file paid its own decode before failing the same way. The words were unaffected by any of it.
+/// </para>
+/// <para>
+/// The failure is not swallowed. It comes back as a <see cref="PassFailure"/> whose sentence names
+/// the pass and the reason; the job carries it in <see cref="JobResult.FailedPasses"/>; and both
+/// surfaces say it where they say everything else — the command line on stderr and in its exit
+/// code, the window on the row. Cancellation is not a failure and is not caught.
+/// </para>
+/// </remarks>
+public sealed record OptInPass(string Name, string Product)
+{
+    /// <summary>The speaker pass: <see cref="Product"/> is "speaker labels".</summary>
+    public static OptInPass Speakers { get; } = new("Speaker labelling", "speaker labels");
+
+    /// <summary>The English pass: <see cref="Product"/> is "the English version".</summary>
+    public static OptInPass Translation { get; } = new("Translation", "the English version");
+
+    /// <summary>
+    /// Runs <paramref name="run"/> over <paramref name="document"/> and returns what it produced,
+    /// or — when it throws anything but a cancellation — <paramref name="document"/> unchanged and
+    /// the failure.
+    /// </summary>
+    public async Task<(TranscriptDocument Document, PassFailure? Failure)> RunAsync(
+        TranscriptDocument document,
+        Func<Task<TranscriptDocument>> run)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(run);
+
+        try
+        {
+            return (await run().ConfigureAwait(false), null);
+        }
+#pragma warning disable CA1031 // The pass is a decoration; the transcript under it is what the user waited for.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            return (document, new PassFailure(this, ex.Message, ex));
+        }
+    }
+}
+
+/// <summary>An opt-in pass that failed for one file, and why.</summary>
+public sealed record PassFailure(OptInPass Pass, string Reason, Exception? Exception = null)
+{
+    /// <summary>The sentence both surfaces print: which pass, that the transcript went out without its product, and the reason.</summary>
+    public string Describe() =>
+        $"{Pass.Name} failed for this file, so the transcript was written without {Pass.Product}: {Reason}";
 }
 
 public sealed record BatchProgress

@@ -182,6 +182,11 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     {
         if (_capabilities is not null)
         {
+            // Loaded — but the child may have died since, and this is where that is found out:
+            // before the caller decodes and stages a whole file for it, rather than by the write
+            // that would follow. The sidecar is not restarted; a failure of the sidecar is every
+            // remaining file, by design, and what this buys is that each of them learns it at once.
+            _sidecar.ThrowIfFaulted();
             return;
         }
 
@@ -190,6 +195,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         {
             if (_capabilities is not null)
             {
+                _sidecar.ThrowIfFaulted();
                 return;
             }
 

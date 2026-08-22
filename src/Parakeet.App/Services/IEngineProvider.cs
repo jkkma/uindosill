@@ -384,19 +384,24 @@ public sealed class FakeEngineProvider : IEngineProvider
 {
     private readonly FakeEngineOptions _options;
     private readonly FakeSpeakerLabellerOptions _speakers;
+    private readonly FakeTranslatorOptions _translator;
 
     /// <summary>
     /// <paramref name="speakers"/> is how a test gives the canned labeller the shipping one's
     /// shape — a cap, a length its labels are established to, a count it cannot be told — which is
     /// what the window's speaker-count field and long-recording warning are drawn from. Its default
-    /// has none of those, as this provider has always behaved.
+    /// has none of those, as this provider has always behaved. <paramref name="translator"/> is the
+    /// same handle on the canned translator, and exists so a test can make a pass fail.
     /// </summary>
     public FakeEngineProvider(
-        FakeEngineOptions? options = null, FakeSpeakerLabellerOptions? speakers = null)
+        FakeEngineOptions? options = null,
+        FakeSpeakerLabellerOptions? speakers = null,
+        FakeTranslatorOptions? translator = null)
     {
         _options = options ?? FakeEngineOptions.Default;
         _speakers = speakers ?? FakeSpeakerLabellerOptions.Default;
         _speakers.Validate();
+        _translator = translator ?? FakeTranslatorOptions.Default;
     }
 
     /// <summary>How many times the backend was released, so a test can see that shutdown got here.</summary>
@@ -426,7 +431,7 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// here with no 1.34 GiB checkpoint in CI, and its output is visibly not English.</summary>
     public bool SupportsTranslation => true;
 
-    public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator();
+    public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator(_translator);
 
     public void ReleaseBackend() => ReleaseCount++;
 }

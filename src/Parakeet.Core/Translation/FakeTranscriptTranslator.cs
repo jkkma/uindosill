@@ -21,6 +21,13 @@ public sealed record FakeTranslatorOptions
     public bool FailOnLoad { get; init; }
 
     /// <summary>
+    /// Load, then throw from <see cref="ITranscriptTranslator.TranslateAsync"/> on every file — the
+    /// shape of a per-file failure inside the pass, which is what the callers' fallback to the
+    /// untranslated transcript is exercised against.
+    /// </summary>
+    public bool FailOnTranslate { get; init; }
+
+    /// <summary>
     /// The provider this translator claims to have run on, on the same terms as its sibling on the
     /// canned labeller: Cpu by default, settable so a test can tell a populated provenance field
     /// from a defaulted one.
@@ -122,6 +129,11 @@ public sealed class FakeTranscriptTranslator : ITranscriptTranslator
         options.Validate();
 
         await LoadAsync(ct).ConfigureAwait(false);
+
+        if (_options.FailOnTranslate)
+        {
+            throw new InvalidOperationException("Fake translator was configured to fail on every file.");
+        }
 
         var requests = TranslationRequest.Build(segments, options, Capabilities.TargetToken);
         _requests.Clear();
