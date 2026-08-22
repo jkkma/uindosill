@@ -46,6 +46,16 @@ public static class WavWriter
         WritePcm16(stream, samples, sampleRate, channels);
     }
 
+    /// <summary>
+    /// <see cref="WriteFloat32"/> to a path: the file a reader gets back sample for sample, for when
+    /// the audio is an input to a measurement rather than a fixture.
+    /// </summary>
+    public static void WriteFloat32File(string path, ReadOnlySpan<float> samples, int sampleRate, int channels = 1)
+    {
+        using var stream = File.Create(path);
+        WriteFloat32(stream, samples, sampleRate, channels);
+    }
+
     private static void WriteRiff(
         Stream stream, byte[] data, int sampleRate, int channels, int bitsPerSample, int formatTag)
     {

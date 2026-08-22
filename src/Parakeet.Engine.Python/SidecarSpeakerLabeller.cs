@@ -320,15 +320,28 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     }
 
     /// <summary>
-    /// Drains the source, resamples to 16 kHz and writes a temporary mono WAV.
+    /// Drains the source, resamples to 16 kHz and writes a temporary mono WAV — as 32-bit float, so
+    /// the sidecar reads exactly the samples the host produced.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The whole file lands in memory before it is written, which is what the in-process engine did
     /// too — the diariser is not a streaming consumer, and its speaker cache needs the recording in
     /// order anyway. Three hours of 16 kHz mono float32 is about 690 MB, which is the ceiling this
-    /// accepts.
+    /// accepts; on disk it is the same figure, since the file is the buffer written out.
+    /// </para>
+    /// <para>
+    /// Float rather than 16-bit PCM because the sidecar's output is held to the Python reference's,
+    /// and PCM16 moved it. Measured 2026-08-22 on the CPU (<c>docs/UNPROVEN.md</c>): on a 48 kHz
+    /// MP3 decoded and resampled here, the reference diarising the PCM16 file against the same floats
+    /// written exact scored 2.50% DER at collar 0.25 and flipped 1.10% of frame-speaker cells, while
+    /// the speaker count stood still — ten times the CUDA gap that keeps CUDA out of <c>auto</c>. On
+    /// 16 kHz 16-bit input, which is AMI and therefore every published figure, the round trip moves
+    /// 0.25% of samples by one LSB and the DER by nothing, which is why it went unseen. A float file
+    /// is twice the size and costs the reference nothing to read: soundfile hands back the bytes.
+    /// </para>
     /// </remarks>
-    private static async Task<string> WriteResampledWavAsync(IAudioSource audio, CancellationToken ct)
+    internal static async Task<string> WriteResampledWavAsync(IAudioSource audio, CancellationToken ct)
     {
         var resampler = new Resampler(audio.SampleRate, TargetSampleRate);
         var samples = new List<float>();
@@ -343,7 +356,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         var path = Path.Combine(Path.GetTempPath(), $"uindosill-diarise-{Guid.NewGuid():N}.wav");
         try
         {
-            WavWriter.WriteFile(path, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(samples), TargetSampleRate);
+            WavWriter.WriteFloat32File(path, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(samples), TargetSampleRate);
         }
         catch (Exception exc)
         {

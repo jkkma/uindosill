@@ -1261,6 +1261,46 @@ machines*) larger rather than smaller, there now being a second process to accou
 Runtime memory arena lever the entry above records as never pulled is still never pulled, and is now
 a Python-side option rather than a C# one.
 
+### The handoff WAV was 16-bit PCM, and on decoded input that moved the answer — measured 2026-08-22
+
+**The one place the sidecar path differed from the reference path was the file between them.** The
+host decodes, resamples to 16 kHz in float and writes a temporary WAV the sidecar reads with
+soundfile; until 2026-08-22 that WAV was 16-bit PCM (`WavWriter.WriteFile` → `WritePcm16`, read back
+as `int16/32768`, written as `*32767` rounded), while the reference reads its audio straight into
+float. Two regimes, same recording path, same implementation — the Python reference on the CPU,
+ONNX Runtime 1.27.0, scored with `uindosill der` against the float arm as reference:
+
+| input | samples the handoff changed | DER @0.25 | DER @0 | overlap DER | frame-speaker cells flipped at 0.5 |
+|---|---|---|---|---|---|
+| 48 kHz MP3, decoded and resampled (two-hosts-new-episode, 157 min) | **99.9%**, max 4.27e-05, mean 7.99e-06 | **2.50%** | 2.85% | 6.66% | **5,189 of 472,432 (1.10%)** |
+| 16 kHz 16-bit PCM (two-hosts-b stretch, 10 min) | **0.25%**, one LSB, only \|x\| ≥ 16369 | **0.00%** | 0.00% | 0.00% | 0 of 29,992 |
+
+On the episode the components were miss 0.28%, false alarm 0.39%, **confusion 1.83%** — about 159 s
+of speech carrying a different label — with the speaker count and mapping unchanged (998 → 1005
+turns) and a maximum per-cell probability difference of 0.95. **The second row is why nobody saw
+the first.** AMI is 16 kHz 16-bit PCM, so every published figure was taken in the regime where the
+round trip nudges a quarter of one percent of samples on loud peaks and moves nothing — the
+sidecar's 16.3324% matched the reference to four decimals *through* this handoff. The product's
+everyday input is the first regime.
+
+**What it is on the project's own scale.** WebGPU against the CPU moved AMI DER by 0.0005 points
+and was admitted to `auto`; CUDA moved it 0.23 points and was not. The PCM16 handoff on decoded input
+moves the output 2.50 points from the reference's — ten times the gap that keeps CUDA out — on the
+path `diarise` and the window both take. **What it is not:** an accuracy figure. Both arms are
+hypotheses; no podcast reference exists; the quantised answer is not known to be worse, only
+different. The standard this repository holds backends to is reproducing the reference's answer, and
+by that standard it was a defect.
+
+**Since 2026-08-22 the handoff is 32-bit float** (`WavWriter.WriteFloat32File`), so the sidecar
+reads the bytes the host produced — soundfile returns IEEE float WAV unchanged, and reads 16-bit PCM
+as `int16/32768` exactly as `WavAudioSource` does, both checked. A test holds the handoff to the
+host's samples bit for bit. The file is twice the size (302 → 605 MB for the episode; three hours is
+the ~690 MB the method already accepts in memory), and **the time to write it is unmeasured**.
+
+**What this does not establish.** One episode and one stretch, one machine, the CPU provider. The
+2.50% is a distance, not an error. And nothing here says what the decoded-input regime does to
+*accuracy* on either side of the fix — that needs a podcast reference this project does not have.
+
 **What the move did not touch.** The **resampler** is still on the C# side of the seam — the sidecar
 is handed a 16 kHz mono WAV by path — so every DER above is still on 16 kHz AMI audio that bypasses
 it, and its effect on a transcript is still untested. The **second decode** the opt-in costs on a
