@@ -128,6 +128,16 @@ internal static class TranslatorFactory
                 "— at 21.5x slower. Treat this English as unverified.");
         }
 
+        // `auto` tried something better first and it did not build — said once, with the reason,
+        // for the same reason LabellerFactory says it: a translation at CPU speed on a machine with
+        // a GPU is a question until somebody reads why.
+        if (translator is SidecarTranscriptTranslator { FellBackFrom.Count: > 0 } sidecar)
+        {
+            context.WriteError(
+                $"{request.BackendOption} auto passed over {string.Join("; ", sidecar.FellBackFrom)} — this run is on " +
+                $"{translator.Capabilities.Backend.ToString().ToLowerInvariant()}.");
+        }
+
         ReportParity(context, translator, request.BackendOption);
         return translator;
     }
@@ -337,19 +347,17 @@ internal static class TranslatorFactory
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(translator);
 
-        if (translator is not SidecarTranscriptTranslator { Parity: { } parity } || parity.Passed)
+        // Three failing shapes — a count short of the total, a reason given instead of one, and a
+        // check that could not run, which until 2026-08-22 was reported as nothing at all — and the
+        // result describes its own; what is added here is what the English is and the remedy.
+        if (translator is not SidecarTranscriptTranslator { Parity: { } parity } || parity.Describe() is not { } finding)
         {
             return;
         }
 
-        var examples = parity.Differing.Count > 0
-            ? " " + string.Join(" ", parity.Differing)
-            : string.Empty;
-
         context.WriteError(
-            $"WARNING: this machine's translator reproduced {parity.Identical} of {parity.Total} of the " +
-            $"reference's translations.{examples} The English below is this machine's own result and no figure " +
-            $"published by this project describes it. {backendOption} cpu is the one that does.");
+            finding + " The English below is this machine's own result and no figure published by this project " +
+            $"describes it. {backendOption} cpu is the one that does.");
     }
 
     /// <summary>The context report, which needs the options and so cannot live in <see cref="Check"/>'s caller.</summary>

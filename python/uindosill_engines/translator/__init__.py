@@ -35,6 +35,7 @@ class Translator:
     def __init__(self) -> None:
         self._engine: Any = None
         self._model_id: str = ""
+        self._fell_back_from: list[str] = []
 
     @property
     def loaded(self) -> bool:
@@ -85,6 +86,11 @@ class Translator:
         else:
             raise RequestError("model", "could not load the translation graphs. " + "; ".join(failures))
 
+        # What `auto` passed over on the way to the provider that built, with the reasons — kept
+        # for the capabilities and not only for the case where nothing built; see the diariser's
+        # twin. Capped per entry: an ONNX Runtime message can run to a screenful.
+        self._fell_back_from = [failure[:300] for failure in failures]
+
         self._model_id = model_id or os.path.basename(path.rstrip("/\\"))
         return self.capabilities()
 
@@ -112,6 +118,9 @@ class Translator:
             "maxNewTokens": engine_module.MAX_NEW_TOKENS,
             "lengthPenalty": engine_module.LENGTH_PENALTY,
             "earlyStopping": engine_module.EARLY_STOPPING,
+            # The providers `auto` tried first and could not build, with their reasons; empty when
+            # the first candidate built or the provider was named.
+            "fellBackFrom": list(self._fell_back_from),
         }
 
     def translate(self, source: str, max_tokens: int | None = None) -> dict[str, Any]:

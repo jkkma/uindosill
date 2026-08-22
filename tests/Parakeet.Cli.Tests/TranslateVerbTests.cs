@@ -1,4 +1,5 @@
 using Parakeet.Core.Models;
+using Parakeet.Core.Translation;
 
 namespace Parakeet.Cli.Tests;
 
@@ -84,6 +85,30 @@ public sealed class TranslateVerbTests
         Assert.Equal("[en] Caracas es la capital.", english[0]);
         Assert.Equal(string.Empty, english[1]);
         Assert.Equal("[en] Buenos días.", english[2]);
+    }
+
+    [Fact]
+    public async Task ALinePastTheTokenLimitIsRefusedByLineNumberRatherThanWithAStackTrace()
+    {
+        // The help promises a refusal that names itself. Until 2026-08-22 the refusal was a
+        // SegmentTooLongException nothing caught, and the user got a stack trace with a 0-based
+        // segment index in it. Driven through the verb's own loop with a translator that has a
+        // limit, because the canned --fake one has none and a flag to give it one would be a flag
+        // in the product for the tests' sake.
+        using var harness = new Harness();
+        var input = harness.Write("long.txt", "one two", "one two three four five six");
+        await using var translator = new FakeTranscriptTranslator(new FakeTranslatorOptions { MaxSourceTokens = 4 });
+
+        var exit = await TranslateCommand.TranslateFilesAsync(
+            harness.Context, translator, [input], outputDirectory: null, id: null, CancellationToken.None);
+
+        Assert.Equal(ExitCodes.RuntimeError, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains("line 2", error, StringComparison.Ordinal);
+        Assert.Contains("limit of 4", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("Segment 1", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(harness.Path_("long.en.txt")));
     }
 
     [Fact]

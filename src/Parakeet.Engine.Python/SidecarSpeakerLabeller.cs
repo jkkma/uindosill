@@ -18,17 +18,52 @@ public sealed record ParityResult
 {
     public required bool Passed { get; init; }
 
-    /// <summary>Largest disagreement with the reference, over the fixture's probabilities.</summary>
-    public required double MaxAbsoluteDifference { get; init; }
+    /// <summary>
+    /// False when the check itself could not be run — the sidecar answered the <c>parity</c>
+    /// request with an error rather than a verdict. <see cref="Passed"/> is then false too, and
+    /// <see cref="Reason"/> carries the error: the labels are unverified rather than known wrong.
+    /// </summary>
+    /// <remarks>
+    /// The third state, and the one that used to be silent. Until 2026-08-22 a check that crashed
+    /// was reported as null — the same null as "not run" on the CPU — and the labels went out
+    /// with nothing said. A missing fixture is still null: the sidecar reports that structurally,
+    /// before anything runs, and it is not a failure of anything on this machine.
+    /// </remarks>
+    public bool Ran { get; init; } = true;
+
+    /// <summary>
+    /// Why it failed when no magnitude says so: the sidecar's own reason — a shape that does not
+    /// match the reference's, probabilities that are not finite — or, when <see cref="Ran"/> is
+    /// false, the error the check came back with. Null when the verdict is in the numbers below.
+    /// </summary>
+    public string? Reason { get; init; }
+
+    /// <summary>
+    /// Largest disagreement with the reference, over the fixture's probabilities. NaN when the
+    /// verdict carried no magnitude — see <see cref="Reason"/>.
+    /// </summary>
+    public double MaxAbsoluteDifference { get; init; } = double.NaN;
 
     /// <summary>
     /// How many frame decisions differ. Zero is common on a passing <i>and</i> a failing stack —
     /// CUDA disagrees at 8.1e-04 while flipping nothing on this fixture — which is exactly why the
     /// verdict is taken on the probabilities and not on this.
     /// </summary>
-    public required double DecisionFlipPercent { get; init; }
+    public double DecisionFlipPercent { get; init; }
 
-    public required double Tolerance { get; init; }
+    public double Tolerance { get; init; } = double.NaN;
+
+    /// <summary>
+    /// The sentence a run prints about this result, or null when there is nothing to say because
+    /// the check passed. One place for the three failing shapes — a magnitude past the tolerance,
+    /// a reason given instead of one, a check that could not run — so the command line and the
+    /// window cannot come to describe them differently.
+    /// </summary>
+    public string? Describe() =>
+        !Ran ? SpeakerLabelling.DescribeParityNotRun(Reason ?? "the sidecar gave no reason")
+        : Passed ? null
+        : Reason is { Length: > 0 } reason ? SpeakerLabelling.DescribeParityFailure(reason)
+        : SpeakerLabelling.DescribeParityFailure(MaxAbsoluteDifference, Tolerance);
 }
 
 /// <summary>How the sidecar's diariser is loaded and driven.</summary>
@@ -40,7 +75,12 @@ public sealed record SidecarLabellerOptions
     /// <summary>Catalogue id carried into the transcript's provenance beside the ASR model's.</summary>
     public string ModelId { get; init; } = "sortformer-4spk-v2.1";
 
-    /// <summary>Intra-op threads for the ONNX session, or 0 to let ONNX Runtime choose.</summary>
+    /// <summary>
+    /// Intra-op threads for the ONNX session, or 0 for the diariser's own default of 12 — the
+    /// number every CPU figure in this project was measured with. Not "let ONNX Runtime choose":
+    /// that is the translator's 0, and the two differ on purpose, because changing the diariser's
+    /// thread count is changing the conditions its 16.33% was produced under.
+    /// </summary>
     public int IntraOpThreads { get; init; }
 
     /// <summary>
@@ -222,6 +262,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // run, that turns a refusal into a warning that fires once and is then never seen again.
             var capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
             CheckDeclaredLimits(capabilities);
+            FellBackFrom = ExecutionProviders.ReadFellBackFrom(reply.GetProperty("capabilities"));
 
             // Every backend but the CPU is checked against the committed reference before it is
             // used, because the failure this catches is silent: measured 2026-08-21, DirectML at
@@ -248,6 +289,13 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// </summary>
     public ParityResult? Parity { get; private set; }
 
+    /// <summary>
+    /// The providers <c>auto</c> tried and passed over before the one that loaded, each with the
+    /// reason it did not build. Empty when the first candidate built, or when the provider was
+    /// named — a named provider is never fallen back from.
+    /// </summary>
+    public IReadOnlyList<string> FellBackFrom { get; private set; } = [];
+
     private async Task<ParityResult?> CheckParityAsync(CancellationToken ct)
     {
         JsonElement reply;
@@ -255,26 +303,38 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         {
             reply = await _sidecar.SendAsync("parity", _ => { }, null, ct).ConfigureAwait(false);
         }
-        catch (PythonEngineException)
+        catch (PythonEngineException exception)
         {
-            // A missing or unreadable fixture is not a reason to refuse to work. It is a reason to
-            // say the check did not happen, which the null does.
-            return null;
+            // The check was asked for and could not answer. That is not the CPU's "not run" and
+            // not a fixture that is missing — the sidecar reports a missing fixture structurally,
+            // below, before anything runs — it is a check that crashed, and until 2026-08-22 it was
+            // reported as the same null as the other two, so the labels went out unverified with
+            // nothing said. It is a result now, one that says it did not run and why.
+            return new ParityResult { Passed = false, Ran = false, Reason = exception.Message };
         }
 
         if (!reply.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)
         {
+            // No fixture committed: nothing was compared and nothing failed, and the null says so.
             return null;
         }
 
         return new ParityResult
         {
             Passed = reply.TryGetProperty("passed", out var passed) && passed.ValueKind == JsonValueKind.True,
-            MaxAbsoluteDifference = reply.TryGetProperty("maxAbsDiff", out var max) ? max.GetDouble() : double.NaN,
-            DecisionFlipPercent = reply.TryGetProperty("decisionFlipPercent", out var flips) ? flips.GetDouble() : 0,
-            Tolerance = reply.TryGetProperty("tolerance", out var tolerance) ? tolerance.GetDouble() : double.NaN,
+            Reason = reply.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
+                ? reason.GetString()
+                : null,
+            MaxAbsoluteDifference = Number(reply, "maxAbsDiff") ?? double.NaN,
+            DecisionFlipPercent = Number(reply, "decisionFlipPercent") ?? 0,
+            Tolerance = Number(reply, "tolerance") ?? double.NaN,
         };
     }
+
+    private static double? Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetDouble()
+            : null;
 
     public async Task<IReadOnlyList<SpeakerTurn>> LabelAsync(
         IAudioSource audio,

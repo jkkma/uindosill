@@ -358,6 +358,121 @@ public sealed class SidecarEngineTests
         Assert.Equal(1.0e-04, labeller.Parity.Tolerance, 12);
     }
 
+    [Fact]
+    public async Task ADiariserParityCheckThatCrashesIsAResultThatSaysItDidNotRunRatherThanNothing()
+    {
+        // The third state. A check that crashes is not the CPU's "not run" and not a missing
+        // fixture; until 2026-08-22 it came back as the same null as both, and the labels went out
+        // unverified with nothing said anywhere.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { DiariserCapabilities } },
+            new { op = "parity", emit = new[] { """{"id":{id},"type":"error","kind":"internal","message":"boom"}""" } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
+
+        await labeller.LoadAsync();
+
+        var parity = Assert.IsType<ParityResult>(labeller.Parity);
+        Assert.False(parity.Ran);
+        Assert.False(parity.Passed);
+        Assert.Contains("boom", parity.Reason, StringComparison.Ordinal);
+        Assert.Contains("could not be run", parity.Describe(), StringComparison.Ordinal);
+        Assert.Contains("boom", parity.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADiariserParityReasonIsCarriedWhenTheSidecarGivesOneInsteadOfAMagnitude()
+    {
+        // A shape that does not match, probabilities that are not finite: the sidecar says so in
+        // words, and the words are what reaches the user — not a difference of NaN.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { DiariserCapabilities } },
+            new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":true,"passed":false,"reason":"2 of 3048 probabilities are not finite","tolerance":1.0e-04}""" } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
+
+        await labeller.LoadAsync();
+
+        var parity = Assert.IsType<ParityResult>(labeller.Parity);
+        Assert.True(parity.Ran);
+        Assert.False(parity.Passed);
+        Assert.Equal("2 of 3048 probabilities are not finite", parity.Reason);
+        Assert.True(double.IsNaN(parity.MaxAbsoluteDifference));
+        Assert.Contains("not finite", parity.Describe(), StringComparison.Ordinal);
+        Assert.DoesNotContain("NaN", parity.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATranslatorParityCheckThatCrashesIsAResultThatSaysItDidNotRunRatherThanNothing()
+    {
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { TranslatorCapabilities } },
+            new { op = "parity", emit = new[] { """{"id":{id},"type":"error","kind":"internal","message":"boom"}""" } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(TranslatorOptions, sidecar);
+
+        await translator.LoadAsync();
+
+        var parity = Assert.IsType<TranslationParityResult>(translator.Parity);
+        Assert.False(parity.Ran);
+        Assert.False(parity.Passed);
+        Assert.Contains("could not be run", parity.Describe(), StringComparison.Ordinal);
+        Assert.Contains("boom", parity.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheProvidersAutoPassedOverArriveWithTheirReasons()
+    {
+        // What explains a run at CPU speed on a machine with a GPU. Until 2026-08-22 the sidecar
+        // kept the reasons only for the case where every candidate failed, so the one fact that
+        // explained the run was discarded at the moment it was known.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"cpu","supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000,"fellBackFrom":["webgpu: no adapter","cuda: library not found"]}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions { ModelPath = "unread.onnx", Provider = "auto" }, sidecar);
+
+        await labeller.LoadAsync();
+
+        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
+        Assert.Equal(["webgpu: no adapter", "cuda: library not found"], labeller.FellBackFrom);
+    }
+
+    [Fact]
+    public async Task ATranslatorThatFellBackSaysFromWhat()
+    {
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"marian-onnx-python","modelId":"opus-mt","backend":"cpu","maxSourceTokens":512,"beams":6,"maxNewTokens":512,"lengthPenalty":1.0,"earlyStopping":false,"fellBackFrom":["webgpu: no adapter"]}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(TranslatorOptions, sidecar);
+
+        await translator.LoadAsync();
+
+        Assert.Equal(ComputeBackend.Cpu, translator.Capabilities.Backend);
+        Assert.Equal(["webgpu: no adapter"], translator.FellBackFrom);
+    }
+
     private static TranscriptSegment Segment(string text) => new()
     {
         Text = text,

@@ -179,7 +179,9 @@ internal static class Commands
                 Name = "speaker-threads",
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Intra-op threads for the diariser. Default: whatever ONNX Runtime chooses.",
+                Help = "Intra-op threads for the diariser. Default: 12 — the diariser's own, and the number every CPU " +
+                       "figure in this project was measured with; not ONNX Runtime's choice, which is what the " +
+                       "translator defaults to.",
             },
             new OptionSpec
             {
@@ -333,7 +335,8 @@ internal static class Commands
                 Short = 't',
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Intra-op threads for the ONNX session. Default: whatever ONNX Runtime chooses.",
+                Help = "Intra-op threads for the ONNX session. Default: 12 — the diariser's own, and the number every " +
+                       "CPU figure in this project was measured with.",
             },
             new OptionSpec
             {

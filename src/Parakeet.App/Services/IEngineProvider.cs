@@ -126,7 +126,7 @@ public interface IEngineProvider
 public sealed class EngineProvider : IEngineProvider
 {
     private readonly IModelStore _store;
-    private readonly Lazy<bool> _python;
+    private readonly Lazy<(bool Found, string? Reason)> _python;
 
     /// <summary>
     /// <paramref name="hasBundledPython"/> answers "is there an interpreter to run the engines in",
@@ -141,9 +141,20 @@ public sealed class EngineProvider : IEngineProvider
     /// nobody will keep.
     /// </remarks>
     public EngineProvider(IModelStore? store = null, Func<bool>? hasBundledPython = null)
+        : this(store, hasBundledPython is null ? null : () => (hasBundledPython(), (string?)null))
+    {
+    }
+
+    /// <summary>
+    /// The same, with the reason beside the answer — what <see cref="PythonRuntime.TryResolve"/>
+    /// gives and what <see cref="DescribeUnavailable"/> reads, so that a window whose interpreter
+    /// is missing says what the resolver found rather than a sentence written before it looked.
+    /// </summary>
+    public EngineProvider(IModelStore? store, Func<(bool Found, string? Reason)>? python)
     {
         _store = store ?? new LocalModelStore();
-        _python = new Lazy<bool>(hasBundledPython ?? (() => PythonRuntime.TryResolve(out _, out _)));
+        _python = new Lazy<(bool Found, string? Reason)>(python ?? (() =>
+            PythonRuntime.TryResolve(out _, out var reason) ? (true, null) : (false, reason)));
     }
 
     public bool IsModelAvailable(EngineSelection selection)
@@ -209,7 +220,7 @@ public sealed class EngineProvider : IEngineProvider
     /// there is no button in the Models tab that installs one — and this is read from binding
     /// getters that run on every keystroke in the speaker-count field.
     /// </remarks>
-    private bool HasBundledPython => _python.Value;
+    private bool HasBundledPython => _python.Value.Found;
 
     private ModelDescriptor? DiarisationModel =>
         ModelCatalog.Default.DiarisationModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
@@ -246,15 +257,32 @@ public sealed class EngineProvider : IEngineProvider
         // not running it: the cost was paid and the one thing it buys — a user knowing their English
         // is not the English any published figure describes — was not delivered. The command line
         // has said it since the flag existed.
-        if (translator is not SidecarTranscriptTranslator { Parity: { Passed: false } parity })
+        if (translator is not SidecarTranscriptTranslator sidecar)
         {
             return null;
         }
 
-        var examples = parity.Differing.Count > 0 ? " " + string.Join(" ", parity.Differing) : string.Empty;
-        return $"WARNING: this machine's translator reproduced {parity.Identical} of {parity.Total} of the " +
-               $"reference's translations.{examples} The English above is this machine's own result and no " +
-               "figure published by this project describes it.";
+        // Why this backend, when `auto` wanted another: the reason the sidecar kept, which until
+        // 2026-08-22 it kept only for the case where every candidate failed.
+        var fellBack = sidecar.FellBackFrom.Count > 0
+            ? $"The translator's preferred backends did not build on this machine ({string.Join("; ", sidecar.FellBackFrom)}), " +
+              $"so this run used {translator.Capabilities.Backend.ToString().ToLowerInvariant()}."
+            : null;
+
+        // The result describes its own three failing shapes — including the check that could not
+        // run, which used to be reported as nothing — and this adds what the English is.
+        var parity = sidecar.Parity?.Describe() is { } finding
+            ? finding + " The English above is this machine's own result and no figure published by this project describes it."
+            : null;
+
+        return Join(fellBack, parity);
+    }
+
+    /// <summary>The sentences that have something to say, space-separated, or null when none does.</summary>
+    private static string? Join(params string?[] sentences)
+    {
+        var said = string.Join(" ", sentences.Where(sentence => sentence is { Length: > 0 }));
+        return said.Length > 0 ? said : null;
     }
 
     /// <inheritdoc />
@@ -287,13 +315,17 @@ public sealed class EngineProvider : IEngineProvider
 
         if (!HasBundledPython)
         {
-            // Not a download, and not something the Models tab can fix. The interpreter ships with
-            // the application, so its absence means this copy of the application is incomplete —
-            // which is a reinstall, and saying "download the model" instead would send somebody to
-            // re-fetch something they already have.
-            return "The model is installed, but the Python this feature runs in is not beside the application. "
-                 + "It ships with uindosill rather than being something to install, so this copy is incomplete: "
-                 + "reinstalling is the repair.";
+            // Not a download, and not something the Models tab can fix. The resolver's own reason
+            // leads, because it names what was actually looked for — the two bundle directories,
+            // or an override that points at nothing — where a sentence written before it looked
+            // can only guess; until 2026-08-22 this guessed "reinstall", which is the wrong advice
+            // when UINDOSILL_PYTHON is set to a path that does not exist.
+            var reason = _python.Value.Reason;
+            return reason is { Length: > 0 }
+                ? "The model is installed, but the Python this feature runs in was not found. " + reason
+                : "The model is installed, but the Python this feature runs in is not beside the application. "
+                  + "It ships with uindosill rather than being something to install, so this copy is incomplete: "
+                  + "reinstalling is the repair.";
         }
 
         return null;
@@ -304,16 +336,24 @@ public sealed class EngineProvider : IEngineProvider
     {
         ArgumentNullException.ThrowIfNull(labeller);
 
-        var backend = SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend);
-        var parity = labeller is SidecarSpeakerLabeller { Parity: { Passed: false } failed }
-            ? SpeakerLabelling.DescribeParityFailure(failed.MaxAbsoluteDifference, failed.Tolerance)
-            : null;
+        var sidecar = labeller as SidecarSpeakerLabeller;
 
-        // This window chooses the backend itself, so neither sentence gets the command line's
-        // "use --speaker-backend cpu" remedy: there is no flag here to follow the advice with.
-        return string.Join(" ", new[] { backend, parity }.Where(line => line is { Length: > 0 })) is { Length: > 0 } said
-            ? said
+        // Why this backend, when `auto` wanted another — first, because it is the sentence that
+        // explains the speed of the run, and until 2026-08-22 the sidecar kept the reason only for
+        // the case where every candidate failed.
+        var fellBack = sidecar is { FellBackFrom.Count: > 0 }
+            ? $"The diariser's preferred backends did not build on this machine ({string.Join("; ", sidecar.FellBackFrom)}), " +
+              $"so this run used {labeller.Capabilities.Backend.ToString().ToLowerInvariant()}."
             : null;
+        var backend = SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend);
+
+        // The result describes its own three failing shapes, including the check that could not
+        // run — which used to be reported as nothing.
+        var parity = sidecar?.Parity?.Describe();
+
+        // This window chooses the backend itself, so none of these gets the command line's
+        // "use --speaker-backend cpu" remedy: there is no flag here to follow the advice with.
+        return Join(fellBack, backend, parity);
     }
 
     /// <summary>
