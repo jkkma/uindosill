@@ -401,6 +401,33 @@ public class FormatterTests
     }
 
     [Fact]
+    public void TheTranslationDecodeReachesTheJsonAndTheMarkdownProvenance()
+    {
+        // The graphs are pinned and the search over them is not, so a transcript that names the
+        // checkpoint and the provider has named half of what produced its English. Until 2026-08-22
+        // the sidecar reported the decode and only the translate verb's stderr ever showed it.
+        var document = Document() with
+        {
+            TranslatedTo = "en",
+            TranslationModelId = "opus-mt",
+            TranslationBackend = ComputeBackend.WebGpu,
+            TranslationDecode = "beam 6, at most 512 new tokens, length penalty 1, early stopping off",
+        };
+
+        using var json = JsonDocument.Parse(TranscriptFormats.Json.Format(document));
+        Assert.Equal(
+            "beam 6, at most 512 new tokens, length penalty 1, early stopping off",
+            json.RootElement.GetProperty("translationDecode").GetString());
+
+        var markdown = TranscriptFormats.Markdown.Format(document);
+        Assert.Contains("| Translation decode | beam 6, at most 512 new tokens", markdown, StringComparison.Ordinal);
+
+        // Absent when there is nothing to say, as the other translation fields are.
+        using var plain = JsonDocument.Parse(TranscriptFormats.Json.Format(Document()));
+        Assert.False(plain.RootElement.TryGetProperty("translationDecode", out _));
+    }
+
+    [Fact]
     public void JsonIsValidWhenNothingWasTranscribed()
     {
         var json = TranscriptFormats.Json.Format(TranscriptDocument.Empty);

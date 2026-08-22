@@ -88,7 +88,7 @@ internal static class TranslateCommand
         // The search, beside the graph. The graphs are pinned and the search over them is not, so a
         // scoring run that records only which checkpoint ran has recorded half of what produced its
         // English — beam width alone moved this project's own measured output.
-        if (translator is SidecarTranscriptTranslator { DecodeDescription: { } decode })
+        if (translator.Capabilities.DecodeDescription is { } decode)
         {
             context.WriteError($"Decode: {decode}.");
         }
@@ -144,6 +144,19 @@ internal static class TranslateCommand
                 context.WriteError(
                     $"{path} and {earlier} would both be written to {destination}. Give them different names, " +
                     "run them separately, or use --id on one file at a time.");
+                return ExitCodes.UsageError;
+            }
+
+            // A destination that is also an input — `translate a.txt a.en.txt`, where the second
+            // input is the first one's output name — would be overwritten before it is read. Until
+            // 2026-08-22 only a second destination was checked against, not the inputs.
+            var destinationFull = Path.GetFullPath(destination);
+            if (inputs.FirstOrDefault(input => string.Equals(Path.GetFullPath(input), destinationFull, PathComparison)) is { } clobbered)
+            {
+                context.WriteError(
+                    $"{path} would be written to {destination}, which is also an input ({clobbered}) and would be " +
+                    "overwritten before it is read. Rename it, leave it out, or use --id or --out to put the output " +
+                    "somewhere else.");
                 return ExitCodes.UsageError;
             }
 
@@ -252,6 +265,10 @@ internal static class TranslateCommand
     /// start and an end, and the translator is required to hand them back untouched, which this
     /// command relies on to keep the output in the input's order.
     /// </remarks>
+    /// <summary>Windows paths compare without case; elsewhere they do not.</summary>
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
     private static IReadOnlyList<TranscriptSegment> ToSegments(IReadOnlyList<string> lines)
     {
         var segments = new List<TranscriptSegment>(lines.Count);

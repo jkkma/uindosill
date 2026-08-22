@@ -51,10 +51,16 @@ internal sealed record TranslatorRequest
 /// </remarks>
 internal static class TranslatorFactory
 {
-    /// <summary>The nine files a translation entry installs, of which these must all be present.</summary>
+    /// <summary>
+    /// The nine files a translation entry installs, of which these eight must be present — the
+    /// sidecar's own list (<c>translator/engine.py</c>'s <c>REQUIRED_FILES</c>), which is the
+    /// authority: without <c>generation_config.json</c> the decode loads and silently loses its
+    /// <c>bad_words_ids</c>, so a host list that did not name it let a checkpoint through that the
+    /// sidecar then refused, until 2026-08-22.
+    /// </summary>
     private static readonly string[] RequiredFiles =
     [
-        "encoder_model.onnx", "decoder_model_merged.onnx", "config.json",
+        "encoder_model.onnx", "decoder_model_merged.onnx", "config.json", "generation_config.json",
         "source.spm", "target.spm", "vocab.json", "tokenizer_config.json",
     ];
 
@@ -384,8 +390,9 @@ internal static class TranslatorFactory
         {
             throw new CliUsageException(
                 $"'{what}' is not a complete translation checkpoint: {string.Join(", ", missing)} " +
-                $"{(missing.Count == 1 ? "is" : "are")} missing from {directory}. The route is nine files — two " +
-                "graphs, two configs and a five-file tokenizer — and a partial set loads until it does not.");
+                $"{(missing.Count == 1 ? "is" : "are")} missing from {directory}. Eight of the checkpoint's nine files " +
+                "are required — two graphs, two configs and four of the five tokenizer files — and a partial set " +
+                "loads until it does not.");
         }
     }
 }

@@ -380,6 +380,10 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
 
         DecodeDescription = Describe(capabilities);
         FellBackFrom = ExecutionProviders.ReadFellBackFrom(capabilities);
+
+        // On the capability as well as on this class, so the driver can carry it into the
+        // transcript's provenance without knowing which translator it is talking to.
+        Capabilities = Capabilities with { DecodeDescription = DecodeDescription };
     }
 
     private static string? Describe(JsonElement capabilities)

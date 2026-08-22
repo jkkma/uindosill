@@ -56,7 +56,7 @@ public class SidecarFailureTests
             System.IO.Directory.CreateDirectory(path);
             foreach (var name in new[]
             {
-                "encoder_model.onnx", "decoder_model_merged.onnx", "config.json",
+                "encoder_model.onnx", "decoder_model_merged.onnx", "config.json", "generation_config.json",
                 "source.spm", "target.spm", "vocab.json", "tokenizer_config.json",
             })
             {
