@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Parakeet.Core.Transcription;
 
 namespace Parakeet.Engine.Python;
@@ -31,4 +32,33 @@ internal static class ExecutionProviders
         "webgpu" => ComputeBackend.WebGpu,
         _ => ComputeBackend.Cpu,
     };
+
+    /// <summary>
+    /// The providers <c>auto</c> tried and passed over before the one that loaded, each with the
+    /// reason it did not build — empty when the first candidate built or the provider was named.
+    /// </summary>
+    /// <remarks>
+    /// Read from the <c>fellBackFrom</c> list both engines put in their capabilities. Until
+    /// 2026-08-22 the sidecar kept these reasons only for the case where every candidate failed,
+    /// so a run that landed on the CPU because WebGPU would not initialise said nothing about why,
+    /// and the one fact that explained its speed was discarded at the moment it was known.
+    /// </remarks>
+    public static IReadOnlyList<string> ReadFellBackFrom(JsonElement capabilities)
+    {
+        if (!capabilities.TryGetProperty("fellBackFrom", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var reasons = new List<string>();
+        foreach (var entry in list.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.String && entry.GetString() is { Length: > 0 } reason)
+            {
+                reasons.Add(reason);
+            }
+        }
+
+        return reasons;
+    }
 }

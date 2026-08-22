@@ -198,6 +198,60 @@ public sealed class PythonRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void AnInterpreterFileWithThePackageBesideItNeedsNoSecondVariable()
+    {
+        // The development case: a venv's interpreter named outright, and this project's package
+        // directory beside it. Until 2026-08-22 the file form skipped that directory and fell
+        // straight to the application's bundle, then blamed a directory the interpreter was never
+        // "pointed at".
+        var other = StageBundle();
+        var interpreter = Path.Combine(other, "python", ExecutableName);
+        var beside = Path.GetDirectoryName(interpreter)!;
+        Directory.CreateDirectory(Path.Combine(beside, "uindosill_engines"));
+        Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, interpreter);
+
+        var resolved = PythonRuntime.Resolve(StageNothing(), StageNothing());
+
+        Assert.Equal(interpreter, resolved.Interpreter);
+        Assert.Equal(beside, resolved.PackageRoot);
+        Assert.True(resolved.InterpreterOverridden);
+        Assert.False(resolved.PackagesOverridden);
+    }
+
+    [Fact]
+    public void APackagesOnlyOverrideKeepsTheBundledInterpreterAndSaysSo()
+    {
+        // Only the package root is named, so the interpreter is still the bundle's — and the
+        // description says so rather than naming a variable nobody set.
+        var bundle = StageBundle();
+        var other = StageBundle();
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
+
+        var resolved = PythonRuntime.Resolve(bundle, StageNothing());
+
+        Assert.Equal(Path.Combine(bundle, "python", ExecutableName), resolved.Interpreter);
+        Assert.Equal(Path.Combine(other, "python"), resolved.PackageRoot);
+        Assert.True(resolved.PackagesOverridden);
+        Assert.False(resolved.InterpreterOverridden);
+        Assert.Contains(PythonRuntime.PackagesVariable, resolved.SourceDescription, StringComparison.Ordinal);
+        Assert.Contains("bundled", resolved.SourceDescription, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APackagesOnlyOverrideWithNoBundleBlamesTheBundleAndNotAVariableNobodySet()
+    {
+        var other = StageBundle();
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
+
+        var failure = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(StageNothing(), StageNothing()));
+
+        Assert.Contains(PythonRuntime.PackagesVariable, failure.Message, StringComparison.Ordinal);
+        Assert.Contains("bundle beside the application", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain($"{PythonRuntime.InterpreterVariable} points at", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryResolveReportsTheReasonInsteadOfThrowingIt()
     {
         // What the window needs: a checkbox cannot be drawn out of an exception, and a missing

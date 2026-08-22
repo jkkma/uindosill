@@ -779,6 +779,27 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
+    public void TheReasonTheInterpreterWasNotFoundReachesTheHintRatherThanAGuessAboutReinstalling()
+    {
+        // The resolver knows what it looked for — two bundle directories, or an override that
+        // points at nothing — and until 2026-08-22 the window threw that away and said "reinstall",
+        // which is the wrong advice when UINDOSILL_PYTHON names a path that does not exist.
+        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        File.WriteAllText(store.PathFor(model), "not really a graph");
+
+        var provider = new EngineProvider(
+            store,
+            () => (false, "UINDOSILL_PYTHON points at C:\\nowhere\\python.exe, which is neither a file nor a directory holding one."));
+        var viewModel = new TranscribeViewModel(provider, () => new EngineSelection());
+
+        Assert.False(viewModel.CanLabelSpeakers);
+        Assert.Contains("points at", viewModel.SpeakerHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("reinstalling", viewModel.SpeakerHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheOptInComesAliveWithoutReopeningTheWindow()
     {
         // The view model is constructed once for the life of the window, so a snapshot taken in its

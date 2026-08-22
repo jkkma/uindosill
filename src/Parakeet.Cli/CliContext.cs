@@ -40,8 +40,9 @@ internal static class ExitCodes
     public const int RuntimeError = 1;
 
     /// <summary>
-    /// At least one file in a batch failed, or was written without a pass it asked for — speaker
-    /// labels, the English version — while the batch as a whole produced output.
+    /// At least one file in a batch failed or was cancelled, or was written without a pass it asked
+    /// for — speaker labels, the English version — while the batch as a whole produced output. A
+    /// batch in which nothing finished is <see cref="RuntimeError"/>, cancelled or not.
     /// </summary>
     public const int PartialFailure = 3;
 }

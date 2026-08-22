@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 821 tests, no weights, no display, no network — **819 passed and 2 skipped**, and
+**Status:** met. 832 tests, no weights, no display, no network — **830 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,14 +90,14 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (103 of the project's 158 CLI
-tests drive the real entry point; the other 55 never construct it — 18 on the backend default and
+**Status:** usable, tested end to end against the canned engine (103 of the project's 160 CLI
+tests drive the real entry point; the other 57 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
-`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, 4 driving
-`RunOneAsync` and `Report` directly with a labeller or translator made to fail, and 1 on the
-anomaly report, which is computed before the translation pass — because no invocation can reach
-what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, 6 driving
+`RunOneAsync`, `Report` and the translate verb's file loop directly with a labeller or translator
+made to fail or refuse and a batch made to cancel, and 1 on the anomaly report, which is computed
+before the translation pass — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding
@@ -1759,6 +1759,54 @@ the suite can run — CI has no interpreter, and the suite stays that way — so
 on the bundled CPython 3.12: the descriptor probe before and after the change, the channel with
 `NaN` and `Infinity` in a reply, and the diariser check against an engine returning non-finite
 probabilities. The suite is 821.
+
+### Fixed 2026-08-22 — messages and exit codes: the `translate` stack trace, the Ctrl-C that exited 0, and three things the host was told and threw away
+
+**Seven defects, from the same review, none of them numerical: each one a sentence that was owed
+and not said, or a code that said the wrong thing.** `uindosill translate` over a line past the
+tokenizer's limit threw `SegmentTooLongException` through a catch list that did not name it, so
+the refusal the help promises — "refused rather than truncated, and names itself" — arrived as a
+stack trace with a zero-based segment index in it. Ctrl-C during a batch marked every unfinished
+file cancelled, printed "cancelled" per file, and exited 0, so a script that checked the exit code
+read an interrupted run as a complete one. A parity check that crashed — the sidecar answering
+`parity` with an error — was reported as null, the same null as "not run on the CPU" and "no
+fixture committed", so the labels or the English went out unverified with nothing said; and the
+reason the sidecar gives instead of a magnitude (a shape that does not match, probabilities that
+are not finite, from the entry above) was read by nobody, so that failure printed a difference of
+NaN. Under `auto`, the reasons WebGPU or CUDA did not build were kept only for the case where
+every candidate failed, so a run at CPU speed on a machine with a GPU could not say why. The
+window asked `PythonRuntime.TryResolve` for a reason and discarded it, telling a user whose
+`UINDOSILL_PYTHON` points at nothing to reinstall; the file form of that variable never looked
+beside the interpreter for the package, and then blamed a directory the interpreter was never
+"pointed at"; and a packages-only override whose bundle was missing blamed a variable nobody set.
+Last, `threads: 0` means "let ONNX Runtime choose" for the translator and 12 for the diariser,
+and two help strings said the former of the latter.
+
+**Every one of those is now a sentence, in the place it is owed.** `TranslateCommand` catches the
+refusal itself and prints the line — counted from one, which is what the user has in front of
+them — and `SegmentTooLongException` joins the entry point's catch list for every other route.
+`Report` counts a cancelled file as one that did not finish: some finished is a partial failure,
+none finished is a runtime error, and `ExitCodes` says so. Both parity results carry a third
+state, `Ran`, and a `Reason`; each describes its own three failing shapes through one
+`Describe()`, and the command line and the window print that, so "the check … could not be run:
+…" and "does not reproduce the reference: 2 of 3048 probabilities are not finite" reach the user
+in the sidecar's own words. Both resolvers put what `auto` passed over into the capabilities as
+`fellBackFrom`, each entry with its reason, and the host prints one line — driven by hand on this
+machine through a `cuda` candidate that cannot build here: `backend: cpu`, `fellBackFrom: ["cuda:
+asked for CUDAExecutionProvider and onnxruntime registered ['CPUExecutionProvider'] …"]`. The
+window's provider keeps the resolver's reason beside the answer and leads with it; the file form
+tries the interpreter's own directory before the application's bundle and each message names what
+was actually tried; the packages-only form says the interpreter is still the bundle's. The
+diariser names `DEFAULT_THREADS = 12`, its options and both help strings say 12 — the number every
+CPU figure was measured with — and the translator keeps ONNX Runtime's choice, the difference
+stated.
+
+Eleven tests: the over-long line refused by line number through the verb's own loop with a
+translator given a limit; the cancelled batch's exit codes; the crashed check and the reason-only
+failure on the diariser and the crashed check on the translator, each a result that says so; both
+engines carrying what `auto` passed over; the file form with the package beside the interpreter,
+the packages-only override and its message; and the window's hint carrying the resolver's reason.
+The suite is 832.
 
 ## The honest summary
 

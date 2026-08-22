@@ -182,4 +182,24 @@ public class PassFallbackTests
         Assert.Equal(ExitCodes.PartialFailure, TranscribeCommand.Report(harness.Context, [complete, failed], quiet: true));
         Assert.Equal(ExitCodes.RuntimeError, TranscribeCommand.Report(harness.Context, [failed, failed], quiet: true));
     }
+
+    [Fact]
+    public void ACancelledBatchDoesNotExitZero()
+    {
+        // Ctrl-C asks the runner for a clean stop, and the runner marks every file it did not
+        // finish as cancelled rather than dropping it — and until 2026-08-22 the report then exited
+        // 0, so a script read an interrupted run as a complete one. A cancelled file is a file that
+        // did not finish: some finished is a partial failure, none finished is a runtime error.
+        using var harness = new Harness();
+        var job = new TranscriptionJob { InputPath = "a.wav" };
+
+        var complete = new JobResult { Job = job, State = JobState.Completed };
+        var cancelled = new JobResult { Job = job, State = JobState.Cancelled };
+        var failed = new JobResult { Job = job, State = JobState.Failed, Error = "no" };
+
+        Assert.Equal(ExitCodes.PartialFailure, TranscribeCommand.Report(harness.Context, [complete, cancelled], quiet: true));
+        Assert.Equal(ExitCodes.RuntimeError, TranscribeCommand.Report(harness.Context, [cancelled], quiet: true));
+        Assert.Equal(ExitCodes.RuntimeError, TranscribeCommand.Report(harness.Context, [failed, cancelled], quiet: true));
+        Assert.Equal(ExitCodes.PartialFailure, TranscribeCommand.Report(harness.Context, [complete, failed, cancelled], quiet: true));
+    }
 }

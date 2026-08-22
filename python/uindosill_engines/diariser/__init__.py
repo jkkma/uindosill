@@ -28,6 +28,11 @@ RELIABLE_UP_TO_SECONDS = 50 * 60
 #: that what the host is told it may pick and what `auto` actually picks cannot drift apart.
 AUTO_ORDER = ["webgpu", "cuda"]
 
+#: What `threads: 0` means for this engine — and not "let ONNX Runtime choose", which is what the
+#: translator's 0 means. Every CPU figure in this project was measured with 12, so 12 is the number
+#: a host that names nothing gets; the host's help says so.
+DEFAULT_THREADS = 12
+
 
 def resolve_auto() -> list[str]:
     """The providers `auto` will try for the diariser on this machine, best first.
@@ -82,6 +87,7 @@ class Diariser:
         self._engine: Any = None
         self._model_id: str = ""
         self._model_path: str = ""
+        self._fell_back_from: list[str] = []
 
     @property
     def loaded(self) -> bool:
@@ -116,7 +122,7 @@ class Diariser:
             try:
                 self._engine = SortformerEngine(
                     onnx_path=path,
-                    threads=threads or 12,
+                    threads=threads or DEFAULT_THREADS,
                     provider=candidate,
                     graph_optimization=graph_optimization,
                 )
@@ -125,6 +131,12 @@ class Diariser:
                 failures.append(f"{candidate}: {exc}")
         else:
             raise RequestError("model", "could not load the diarisation graph. " + "; ".join(failures))
+
+        # What `auto` passed over on the way to the provider that built, each with its reason —
+        # kept for the capabilities rather than only for the case where nothing built, because a
+        # run that landed on the CPU is explained by exactly these and the host has no other way to
+        # learn them. Capped per entry: an ONNX Runtime message can run to a screenful.
+        self._fell_back_from = [failure[:300] for failure in failures]
 
         self._model_id = model_id or os.path.splitext(os.path.basename(path))[0]
         self._model_path = path
@@ -145,6 +157,9 @@ class Diariser:
             "supportsFixedSpeakerCount": False,
             "maxSpeakers": MAX_SPEAKERS,
             "reliableUpToSeconds": RELIABLE_UP_TO_SECONDS,
+            # The providers `auto` tried first and could not build, with their reasons; empty when
+            # the first candidate built or the provider was named.
+            "fellBackFrom": list(self._fell_back_from),
         }
 
     def label(

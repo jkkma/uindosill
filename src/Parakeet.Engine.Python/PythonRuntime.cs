@@ -77,12 +77,28 @@ public static class PythonRuntime
         /// <summary>True when either half came from an environment variable rather than a bundle.</summary>
         public bool Overridden => Source == BundleSource.Environment;
 
+        /// <summary>True when the interpreter came from <see cref="InterpreterVariable"/>.</summary>
+        public bool InterpreterOverridden { get; init; }
+
+        /// <summary>True when the package root came from <see cref="PackagesVariable"/>.</summary>
+        public bool PackagesOverridden { get; init; }
+
         /// <summary>
         /// One phrase naming where this came from, for a run to report rather than a caller to guess.
         /// </summary>
+        /// <remarks>
+        /// Which half was overridden matters to the phrase: a run whose package root alone was named
+        /// still ran the bundled interpreter, and saying it was "named by UINDOSILL_PYTHON" — a
+        /// variable nobody set — would send whoever reads the report looking for the wrong thing.
+        /// </remarks>
         public string SourceDescription => Source switch
         {
-            BundleSource.Environment => $"named by {InterpreterVariable}",
+            BundleSource.Environment => (InterpreterOverridden, PackagesOverridden) switch
+            {
+                (true, true) => $"named by {InterpreterVariable} and {PackagesVariable}",
+                (false, true) => $"bundled beside the application, with the package root named by {PackagesVariable}",
+                _ => $"named by {InterpreterVariable}",
+            },
             BundleSource.Application => "bundled beside the application",
             BundleSource.UserData => "downloaded, under " + UserDataPaths.DirectoryName,
             _ => "unknown",
@@ -217,6 +233,7 @@ public static class PythonRuntime
 
         if (interpreterOverride is { Length: > 0 } && Directory.Exists(interpreterOverride))
         {
+            // The directory form: a bundle, answering both halves unless the package root is named.
             interpreter = Path.Combine(interpreterOverride, ExecutableName);
             packageRoot = packagesOverride is { Length: > 0 } ? packagesOverride : interpreterOverride;
 
@@ -228,30 +245,64 @@ public static class PythonRuntime
                     "interpreter at its root; point the variable at an interpreter file instead if " +
                     "that is what it is.");
             }
+
+            if (!HasEngines(packageRoot))
+            {
+                throw new PythonSidecarException(packagesOverride is { Length: > 0 }
+                    ? $"No 'uindosill_engines' package under {packageRoot}, which {PackagesVariable} names."
+                    : $"No 'uindosill_engines' package under {packageRoot}, the bundle directory " +
+                      $"{InterpreterVariable} names; set {PackagesVariable} if it lives somewhere else.");
+            }
         }
-        else
+        else if (interpreterOverride is { Length: > 0 })
         {
-            interpreter = interpreterOverride is { Length: > 0 }
-                ? interpreterOverride
-                : Path.Combine(baseDirectory, BundleDirectoryName, ExecutableName);
-
-            packageRoot = packagesOverride is { Length: > 0 }
-                ? packagesOverride
-                : Path.Combine(baseDirectory, BundleDirectoryName);
-
+            // The file form. The interpreter is named outright; the package root is named too, or
+            // is beside the interpreter — the repository's `python/` next to a venv's interpreter,
+            // the development case — or is the application's own bundle, in that order. Until
+            // 2026-08-22 the middle one was not tried, and the message then blamed a directory the
+            // interpreter was never "pointed at".
+            interpreter = interpreterOverride;
             if (!File.Exists(interpreter))
             {
                 throw new PythonSidecarException(
                     $"{InterpreterVariable} points at {interpreter}, which is neither a file nor a " +
                     "directory holding one.");
             }
-        }
 
-        if (!HasEngines(packageRoot))
+            var beside = Path.GetDirectoryName(interpreter) ?? baseDirectory;
+            packageRoot = packagesOverride is { Length: > 0 } ? packagesOverride
+                : HasEngines(beside) ? beside
+                : Path.Combine(baseDirectory, BundleDirectoryName);
+
+            if (!HasEngines(packageRoot))
+            {
+                throw new PythonSidecarException(packagesOverride is { Length: > 0 }
+                    ? $"No 'uindosill_engines' package under {packageRoot}, which {PackagesVariable} names."
+                    : $"No 'uindosill_engines' package beside {interpreter} or under {packageRoot}; set " +
+                      $"{PackagesVariable} to the directory that holds it.");
+            }
+        }
+        else
         {
-            throw new PythonSidecarException(
-                $"No 'uindosill_engines' package under {packageRoot}. That directory is what the " +
-                $"interpreter is pointed at; set {PackagesVariable} if it lives somewhere else.");
+            // Only the package root is named, so the interpreter is still the bundle's — and a
+            // bundle that is not there is the bundle's absence, not the fault of a variable nobody
+            // set. Until 2026-08-22 this blamed UINDOSILL_PYTHON.
+            interpreter = Path.Combine(baseDirectory, BundleDirectoryName, ExecutableName);
+            packageRoot = packagesOverride!;
+
+            if (!File.Exists(interpreter))
+            {
+                throw new PythonSidecarException(
+                    $"{PackagesVariable} names the package root {packageRoot}, and the interpreter still comes " +
+                    $"from the bundle beside the application — but there is no {ExecutableName} at {interpreter}. " +
+                    $"Set {InterpreterVariable} as well if the interpreter lives somewhere else.");
+            }
+
+            if (!HasEngines(packageRoot))
+            {
+                throw new PythonSidecarException(
+                    $"No 'uindosill_engines' package under {packageRoot}, which {PackagesVariable} names.");
+            }
         }
 
         return new Resolution
@@ -259,6 +310,8 @@ public static class PythonRuntime
             Interpreter = interpreter,
             PackageRoot = packageRoot,
             Source = BundleSource.Environment,
+            InterpreterOverridden = interpreterOverride is { Length: > 0 },
+            PackagesOverridden = packagesOverride is { Length: > 0 },
         };
     }
 

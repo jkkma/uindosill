@@ -130,11 +130,26 @@ internal static class LabellerFactory
         // What the machine itself found, which outranks anything measured elsewhere. A backend can
         // be faithful on the hardware it was measured on and not on this one — DirectML's defect is
         // driver-mediated — so the reference figures above are a prior and this is the evidence.
-        if (labeller is SidecarSpeakerLabeller { Parity: { Passed: false } parity })
+        if (labeller is SidecarSpeakerLabeller sidecar)
         {
-            context.WriteError(
-                SpeakerLabelling.DescribeParityFailure(parity.MaxAbsoluteDifference, parity.Tolerance) +
-                $" {request.BackendOption} cpu is the one that does.");
+            // `auto` tried something better first and it did not build. Said once, here, because
+            // the reason explains the run — a diarisation at CPU speed on a machine with a GPU is
+            // a question until somebody reads why — and until 2026-08-22 the sidecar kept these
+            // reasons only for the case where every candidate failed.
+            if (sidecar.FellBackFrom.Count > 0)
+            {
+                context.WriteError(
+                    $"{request.BackendOption} auto passed over {string.Join("; ", sidecar.FellBackFrom)} — this run " +
+                    $"is on {labeller.Capabilities.Backend.ToString().ToLowerInvariant()}.");
+            }
+
+            // Three failing shapes and one sentence per shape, from the result itself: a magnitude
+            // past the tolerance, a reason the sidecar gave instead of one, and a check that could
+            // not run — which until 2026-08-22 was reported as nothing at all.
+            if (sidecar.Parity?.Describe() is { } parityLine)
+            {
+                context.WriteError(parityLine + $" {request.BackendOption} cpu is the one that does.");
+            }
         }
 
         // The seam's capabilities are the caller's to honour, and there are two separate things a

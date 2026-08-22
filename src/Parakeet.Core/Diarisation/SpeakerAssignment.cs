@@ -437,4 +437,26 @@ public static class SpeakerLabelling
         $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
         $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels are " +
         "this machine's own result and no diarisation error rate published by this project describes them.";
+
+    /// <summary>
+    /// What a failed parity check means when the sidecar gave a reason rather than a magnitude —
+    /// a shape that does not match the reference's, probabilities that are not finite.
+    /// </summary>
+    public static string DescribeParityFailure(string reason) =>
+        $"WARNING: this machine's diariser does not reproduce the reference: {reason}. The speaker labels are " +
+        "this machine's own result and no diarisation error rate published by this project describes them.";
+
+    /// <summary>
+    /// What it means that the parity check could not be run at all: not that the labels are wrong,
+    /// and not that they are right — that the one check standing between a user and a silently
+    /// wrong provider did not happen, and the labels are unverified.
+    /// </summary>
+    /// <remarks>
+    /// A third state, and until 2026-08-22 a silent one: a check that crashed was reported exactly
+    /// as a check that was never asked for, and the run went on with nothing said.
+    /// </remarks>
+    public static string DescribeParityNotRun(string reason) =>
+        $"WARNING: the check that compares this machine's diariser against the reference could not be run: {reason}. " +
+        "The speaker labels are unverified — not known to be wrong, and not known to be the ones any diarisation " +
+        "error rate published by this project describes.";
 }

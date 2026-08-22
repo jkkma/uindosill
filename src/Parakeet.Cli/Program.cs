@@ -3,6 +3,7 @@ using System.Text;
 using Parakeet.Audio;
 using Parakeet.Cli;
 using Parakeet.Core.Models;
+using Parakeet.Core.Translation;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
 using Parakeet.Engine.Python;
@@ -93,7 +94,9 @@ namespace Parakeet.Cli
             // messages are written to be read. A missing bundled Python says which half is missing
             // and what to do about it, and a sidecar that died carries the tail of the child's own
             // stderr — both of which a stack trace throws away and replaces with a file and a line
-            // number that mean nothing to the person holding it.
+            // number that mean nothing to the person holding it. The translator's refusal of an
+            // over-long segment is the same kind of sentence, and until 2026-08-22 it was the one
+            // missing from here: `uindosill translate` over a line past the limit printed a trace.
             catch (Exception ex) when (ex is ParakeetNativeException
                                           or ParakeetNativeLoadException
                                           or ParakeetAbiMismatchException
@@ -101,6 +104,7 @@ namespace Parakeet.Cli
                                           or ModelInstallException
                                           or PythonSidecarException
                                           or PythonEngineException
+                                          or SegmentTooLongException
                                           or FileNotFoundException
                                           or DirectoryNotFoundException
                                           or IOException

@@ -93,7 +93,30 @@ internal static class TranslateCommand
             context.WriteError($"Decode: {decode}.");
         }
 
-        var outputDirectory = parsed.Value("out");
+        return await TranslateFilesAsync(
+            context, translator, parsed.Positionals, parsed.Value("out"), id, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The verb's work once the translator exists: one output per input, line for line.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="RunAsync"/> so that a test can hand it a translator with a token
+    /// limit, which the <c>--fake</c> one has no flag for — and a flag whose only purpose is to make
+    /// a fake refuse would be a flag in the product for the tests' sake.
+    /// </remarks>
+    internal static async Task<int> TranslateFilesAsync(
+        CliContext context,
+        ITranscriptTranslator translator,
+        IReadOnlyList<string> inputs,
+        string? outputDirectory,
+        string? id,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(translator);
+        ArgumentNullException.ThrowIfNull(inputs);
+
         if (outputDirectory is { Length: > 0 })
         {
             Directory.CreateDirectory(outputDirectory);
@@ -107,7 +130,7 @@ internal static class TranslateCommand
         var totalLines = 0;
         var totalElapsed = TimeSpan.Zero;
 
-        foreach (var path in parsed.Positionals)
+        foreach (var path in inputs)
         {
             ct.ThrowIfCancellationRequested();
 
@@ -132,11 +155,35 @@ internal static class TranslateCommand
             var started = Stopwatch.GetTimestamp();
             var english = new List<string>(lines.Length);
 
-            await foreach (var segment in translator
-                .TranslateAsync(segments, TranslationOptions.Default, progress: null, ct)
-                .ConfigureAwait(false))
+            try
             {
-                english.Add(segment.Text);
+                await foreach (var segment in translator
+                    .TranslateAsync(segments, TranslationOptions.Default, progress: null, ct)
+                    .ConfigureAwait(false))
+                {
+                    english.Add(segment.Text);
+                }
+            }
+            catch (SegmentTooLongException refused)
+            {
+                // The refusal the help promises, by line number — counted from one, because a line
+                // number is what the user has in front of them, where the exception counts segments
+                // from zero for the transcript case. Until 2026-08-22 this was a stack trace.
+                var detail = refused.Limit > 0
+                    ? $"line {refused.SegmentIndex + 1} is {refused.Tokens} tokens, past this translator's limit of {refused.Limit}"
+                    : $"line {refused.SegmentIndex + 1}: {refused.Message}";
+                context.WriteError(
+                    $"{path}: {detail}. It is refused rather than truncated — a shortened source comes back as fluent " +
+                    "English with no sign that anything was dropped — so split the line and run again. Nothing was " +
+                    "written for this file.");
+                return ExitCodes.RuntimeError;
+            }
+            catch (InvalidOperationException broken)
+            {
+                // The translator broke its own contract — a defect to report in its own words, not
+                // a trace to decode.
+                context.WriteError($"{path}: {broken.Message}");
+                return ExitCodes.RuntimeError;
             }
 
             var elapsed = Stopwatch.GetElapsedTime(started);
@@ -185,11 +232,11 @@ internal static class TranslateCommand
                 $"({elapsed.TotalSeconds / Math.Max(1, lines.Length):F3} s/line) -> {destination}"));
         }
 
-        if (parsed.Positionals.Count > 1)
+        if (inputs.Count > 1)
         {
             context.WriteLine(string.Create(
                 CultureInfo.InvariantCulture,
-                $"{parsed.Positionals.Count} files: {totalLines} lines in {totalElapsed.TotalMinutes:F1} min = " +
+                $"{inputs.Count} files: {totalLines} lines in {totalElapsed.TotalMinutes:F1} min = " +
                 $"{totalElapsed.TotalSeconds / Math.Max(1, totalLines):F3} s/line"));
         }
 

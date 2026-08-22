@@ -707,12 +707,19 @@ internal static class TranscribeCommand
 
     /// <summary>
     /// Prints what each file came to and turns the batch into an exit code: success only when every
-    /// file was written with everything it asked for; partial failure when some failed, or when any
-    /// was written without a pass it asked for; runtime error when every file failed.
+    /// file was written with everything it asked for; partial failure when some failed or were
+    /// cancelled, or when any was written without a pass it asked for; runtime error when no file
+    /// finished at all.
     /// </summary>
+    /// <remarks>
+    /// A cancelled file counts as one that did not finish, which it is. Until 2026-08-22 it counted
+    /// as nothing: Ctrl-C during a batch printed "cancelled" per file and exited 0, and a script
+    /// that checked the exit code read an interrupted run as a complete one.
+    /// </remarks>
     internal static int Report(CliContext context, IReadOnlyList<JobResult> results, bool quiet)
     {
         var failed = 0;
+        var cancelled = 0;
         var incomplete = 0;
 
         foreach (var result in results)
@@ -761,6 +768,7 @@ internal static class TranscribeCommand
                     break;
 
                 case JobState.Cancelled:
+                    cancelled++;
                     context.WriteError($"{result.Job.DisplayName}: cancelled");
                     break;
 
@@ -769,11 +777,12 @@ internal static class TranscribeCommand
             }
         }
 
-        if (failed == 0 && incomplete == 0)
+        var unfinished = failed + cancelled;
+        if (unfinished == 0 && incomplete == 0)
         {
             return ExitCodes.Success;
         }
 
-        return failed == results.Count ? ExitCodes.RuntimeError : ExitCodes.PartialFailure;
+        return unfinished == results.Count ? ExitCodes.RuntimeError : ExitCodes.PartialFailure;
     }
 }

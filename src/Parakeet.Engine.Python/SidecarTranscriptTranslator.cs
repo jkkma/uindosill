@@ -67,13 +67,55 @@ public sealed record TranslationParityResult
 {
     public required bool Passed { get; init; }
 
-    /// <summary>How many of the fixture's sentences came back exactly as the reference has them.</summary>
-    public required int Identical { get; init; }
+    /// <summary>
+    /// False when the check itself could not be run — the sidecar answered the <c>parity</c>
+    /// request with an error rather than a verdict; <see cref="Reason"/> carries it, and the
+    /// English is unverified rather than known wrong. <see cref="ParityResult.Ran"/> on the
+    /// diariser's result says why this is a state of its own and not the null of "not run".
+    /// </summary>
+    public bool Ran { get; init; } = true;
 
-    public required int Total { get; init; }
+    /// <summary>
+    /// The sidecar's reason when the verdict is not a count — a fixture of the wrong length — or,
+    /// when <see cref="Ran"/> is false, the error the check came back with.
+    /// </summary>
+    public string? Reason { get; init; }
+
+    /// <summary>How many of the fixture's sentences came back exactly as the reference has them.</summary>
+    public int Identical { get; init; }
+
+    public int Total { get; init; }
 
     /// <summary>Up to three of the disagreements, each as expected-against-actual.</summary>
-    public required IReadOnlyList<string> Differing { get; init; }
+    public IReadOnlyList<string> Differing { get; init; } = [];
+
+    /// <summary>
+    /// The first sentence a run prints about this result, or null when the check passed. The
+    /// callers add what the English is and what to do about it, because those differ between a
+    /// command line with a flag to recommend and a window without one.
+    /// </summary>
+    public string? Describe()
+    {
+        if (!Ran)
+        {
+            return "WARNING: the check that compares this machine's translator against the reference could not be " +
+                   $"run: {Reason ?? "the sidecar gave no reason"}.";
+        }
+
+        if (Passed)
+        {
+            return null;
+        }
+
+        if (Reason is { Length: > 0 } reason)
+        {
+            return $"WARNING: this machine's translator does not reproduce the reference: {reason}.";
+        }
+
+        var examples = Differing.Count > 0 ? " " + string.Join(" ", Differing) : string.Empty;
+        return $"WARNING: this machine's translator reproduced {Identical} of {Total} of the reference's " +
+               $"translations.{examples}";
+    }
 }
 
 /// <summary>
@@ -253,6 +295,13 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
     /// </summary>
     public TranslationParityResult? Parity { get; private set; }
 
+    /// <summary>
+    /// The providers <c>auto</c> tried and passed over before the one that loaded, each with the
+    /// reason it did not build. Empty when the first candidate built, or when the provider was
+    /// named — a named provider is never fallen back from.
+    /// </summary>
+    public IReadOnlyList<string> FellBackFrom { get; private set; } = [];
+
     private async Task<TranslationParityResult?> CheckParityAsync(CancellationToken ct)
     {
         JsonElement reply;
@@ -261,15 +310,18 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
             reply = await _sidecar.SendAsync(
                 "parity", writer => writer.WriteString("engine", "translator"), null, ct).ConfigureAwait(false);
         }
-        catch (PythonEngineException)
+        catch (PythonEngineException exception)
         {
-            // A missing or unreadable fixture is not a reason to refuse to work. It is a reason to
-            // say the check did not happen, which the null does.
-            return null;
+            // The check crashed, which is neither the CPU's "not run" nor a fixture that is missing
+            // — the sidecar reports that structurally, below. Until 2026-08-22 all three were the
+            // same null, and English went out unverified with nothing said; this is now a result
+            // that says the check did not run and why.
+            return new TranslationParityResult { Passed = false, Ran = false, Reason = exception.Message };
         }
 
         if (!reply.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)
         {
+            // No fixture committed: nothing was compared and nothing failed, and the null says so.
             return null;
         }
 
@@ -287,6 +339,9 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
         return new TranslationParityResult
         {
             Passed = reply.TryGetProperty("passed", out var passed) && passed.ValueKind == JsonValueKind.True,
+            Reason = reply.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
+                ? reason.GetString()
+                : null,
             Identical = reply.TryGetProperty("identical", out var same) && same.ValueKind == JsonValueKind.Number
                 ? same.GetInt32()
                 : 0,
@@ -324,6 +379,7 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
         };
 
         DecodeDescription = Describe(capabilities);
+        FellBackFrom = ExecutionProviders.ReadFellBackFrom(capabilities);
     }
 
     private static string? Describe(JsonElement capabilities)
