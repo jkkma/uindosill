@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 783 tests, no weights, no display, no network — **781 passed and 2 skipped**, and
+**Status:** met. 784 tests, no weights, no display, no network — **782 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -1199,6 +1199,18 @@ is the surface with somebody in front of it.
 
 **What this does not touch.** No measurement moved and no engine changed. The estimate is as good or
 as bad as it was; the window simply stops accepting it in place of an answer it can ask for.
+
+### Decided 2026-08-22 — the sidecar is handed float, because PCM16 moved the answer
+
+**The WAV the host writes for the diariser sidecar is 32-bit float, not 16-bit PCM.** The sidecar's
+whole claim is that its output is the Python reference's, and the one place the two paths differed
+was that file: the host resamples in float and was writing `int16`, the reference reads float.
+Measured 2026-08-22 on the CPU, same recording, same implementation, the PCM16 arm scored 2.50% DER
+against the float arm on a 48 kHz MP3 decoded here — ten times the CUDA gap that keeps CUDA out of
+`auto` — and 0.00% on 16-bit input, which is AMI and therefore every published figure, which is why
+it had gone unseen. `docs/UNPROVEN.md` carries both rows and what they do not establish; the
+handoff is now held to the host's samples bit for bit by a test. The cost is a temporary file twice
+the size, and the published AMI figure can only move toward the reference it already matched.
 
 ### Published 2026-08-20 — the weights, and the licence check that had to come first
 
