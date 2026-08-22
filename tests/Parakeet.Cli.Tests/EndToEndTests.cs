@@ -90,6 +90,36 @@ public class EndToEndTests
     }
 
     [Fact]
+    public async Task NoWrittenFormatOpensWithAByteOrderMark()
+    {
+        // One encoding for every format the product writes: UTF-8, no mark. RTTM is the format
+        // where a mark is a scoring bug rather than a cosmetic one -- its first field is a
+        // record type a scorer compares to the literal SPEAKER -- but no format here wants one,
+        // and pinning all of them is what stops the next writer reintroducing it in one.
+        using var harness = new Harness();
+        var input = harness.WriteWav("clip.wav", (0.5, false), (2.5, true), (0.6, false));
+
+        var exit = await harness.RunAsync(
+            "transcribe", "--fake", "--speakers", "-f", "txt,srt,vtt,vtt-words,json,md,rttm", input);
+
+        Assert.Equal(ExitCodes.Success, exit);
+
+        var written = System.IO.Directory.GetFiles(harness.Directory, "clip*")
+            .Where(p => !p.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.Equal(7, written.Count);
+        foreach (var path in written)
+        {
+            var bytes = await File.ReadAllBytesAsync(path);
+            Assert.NotEmpty(bytes);
+            Assert.False(
+                bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
+                $"{Path.GetFileName(path)} opens with a UTF-8 byte order mark");
+        }
+    }
+
+    [Fact]
     public async Task SubtitlesContainRealTimecodes()
     {
         using var harness = new Harness();

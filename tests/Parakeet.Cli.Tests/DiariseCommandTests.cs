@@ -95,6 +95,27 @@ public class DiariseCommandTests
     }
 
     [Fact]
+    public async Task TheRttmOpensWithTheLiteralSpeakerBytesAndNoByteOrderMark()
+    {
+        // The scorers this file exists to be read by -- md-eval, pyannote -- match field one
+        // against the literal SPEAKER, and a byte order mark in front of it is a record type
+        // neither knows. Both skip unknown types, so the cost of the mark is not an error but
+        // a first turn quietly missing from a figure that still looks healthy.
+        //
+        // On disk rather than on the formatter's string, because the mark is a property of how
+        // the file was written and this command writes its own rather than going through the
+        // transcript writer.
+        using var harness = new Harness();
+        var input = harness.WriteWav("meeting.wav", 12);
+
+        Assert.Equal(ExitCodes.Success, await harness.RunAsync("diarise", "--fake", input));
+
+        var bytes = await File.ReadAllBytesAsync(Path.ChangeExtension(input, ".rttm"));
+
+        Assert.Equal("SPEAKER"u8.ToArray(), bytes[..7]);
+    }
+
+    [Fact]
     public async Task TheIdNamesBothTheFileAndTheColumnDerMatchesOn()
     {
         // AMI's audio is ES2004a.Mix-Headset.wav and its reference is ES2004a.rttm, so `der` — which

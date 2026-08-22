@@ -203,7 +203,7 @@ public static class TranscriptWriter
             }
 
             var content = formatter.Format(document, formatOptions);
-            await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(path, content, TextOutput.Utf8NoBom, ct).ConfigureAwait(false);
             written.Add(path);
         }
 

@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 788 tests, no weights, no display, no network — **786 passed and 2 skipped**, and
+**Status:** met. 793 tests, no weights, no display, no network — **791 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,11 +90,13 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (91 of the project's 144 CLI
-tests drive the real entry point; the other 44 never construct it — 18 on the backend default and
+**Status:** usable, tested end to end against the canned engine (96 of the project's 147 CLI
+tests drive the real entry point; the other 51 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
-17 parser unit tests, and 9 checking those two flags against the real command specs through
-`CommandLineParser` — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+17 parser unit tests, 9 checking those two flags against the real command specs through
+`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, and 1 on the
+anomaly report, which is computed before the translation pass — because no invocation can reach
+what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding

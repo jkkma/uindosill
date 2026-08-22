@@ -414,6 +414,25 @@ public class RttmAndLabelTests
         Assert.Equal(TimeSpan.FromSeconds(3.5), parsed.Turns[1].End);
     }
 
+    [Fact]
+    public void RttmReaderStripsAByteOrderMarkRatherThanSkippingTheFirstTurn()
+    {
+        // Files arrive from other tools and plenty of them write UTF-8 with a mark. U+FEFF is
+        // not whitespace to Trim, so unstripped it would make field one of line one a record
+        // type the reader does not know -- and its tolerance for those is to skip the line,
+        // which would turn a mark into one silently missing turn rather than an error.
+        var parsed = RttmFile.Parse(
+            "\uFEFF" +
+            "SPEAKER stretch 1 0.000 2.000 <NA> <NA> host_a <NA> <NA>\n" +
+            "SPEAKER stretch 1 2.000 3.000 <NA> <NA> host_b <NA> <NA>\n");
+
+        Assert.Equal(2, parsed.Turns.Count);
+        Assert.Equal(0, parsed.SkippedLines);
+        Assert.Equal(["stretch"], parsed.FileIds);
+        Assert.Equal("host_a", parsed.Turns[0].Speaker);
+        Assert.Equal(TimeSpan.Zero, parsed.Turns[0].Start);
+    }
+
     [Theory]
     [InlineData("SPEAKER f 1 0.5 2 <NA> <NA>\n")]                        // too few fields
     [InlineData("SPEAKER f 1 abc 2 <NA> <NA> host_a <NA> <NA>\n")]        // onset not a number

@@ -45,6 +45,14 @@ public static class RttmFile
         var skipped = 0;
         var lineNumber = 0;
 
+        // A byte order mark survives whenever content arrives here as bytes rather than
+        // through a reader that strips it, and U+FEFF is not whitespace to Trim. Left in
+        // place it makes the first field of the first line U+FEFF followed by SPEAKER, which
+        // is not a record type this reader knows, and the tolerance below would skip that
+        // line — dropping one turn and scoring the rest without a word. Tools still write
+        // the mark, so it is stripped rather than refused.
+        content = content.TrimStart('\uFEFF');
+
         foreach (var raw in content.Split('\n'))
         {
             lineNumber++;

@@ -413,6 +413,30 @@ public class FormatterTests
     }
 
     [Fact]
+    public void RttmOpensWithTheLiteralSpeakerBytesAndNoByteOrderMark()
+    {
+        // NIST md-eval and pyannote both read the first whitespace-separated field of a line
+        // as the record type and compare it to the literal SPEAKER. A UTF-8 byte order mark in
+        // front of it makes the type U+FEFF followed by SPEAKER, which matches nothing, and a
+        // reader whose tolerance for unknown record types is a feature drops the first turn of
+        // the file and scores the rest without saying so.
+        //
+        // Asserted in bytes because that is the only place the mark is visible: not in the
+        // string the formatter returns, not in a diff, and not in a terminal.
+        var document = Document() with
+        {
+            SpeakerTurns =
+            [
+                new SpeakerTurn { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(8), Speaker = "Speaker 1" },
+            ],
+        };
+
+        var bytes = TextOutput.Utf8NoBom.GetBytes(TranscriptFormats.Rttm.Format(document));
+
+        Assert.Equal("SPEAKER"u8.ToArray(), bytes[..7]);
+    }
+
+    [Fact]
     public void EveryFormatterHandlesAnEmptyDocument()
     {
         foreach (var formatter in TranscriptFormats.All)
