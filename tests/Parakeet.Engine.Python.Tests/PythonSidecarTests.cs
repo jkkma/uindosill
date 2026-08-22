@@ -358,6 +358,121 @@ public sealed class PythonSidecarTests
         Assert.True(reply.GetProperty("ok").GetBoolean());
     }
 
+    [Fact]
+    public async Task ALineThatIsJsonButNotAMessageIsRecordedRatherThanFatal()
+    {
+        // JSON is not the same thing as a message. A bare number, an array, a string, an id that
+        // is not an integer — each parses, and each used to throw past the catch that guards
+        // parsing, from inside the reader, which ended the reader for the rest of the run. The
+        // contract is that a line the host cannot read is one more line of the stderr tail.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(new
+        {
+            unsolicited = new[]
+            {
+                "0",
+                "[1,2]",
+                "\"done\"",
+                """{"id":"two","type":"result"}""",
+                """{"id":1.5,"type":"result"}""",
+                """{"id":99999999999,"type":"result"}""",
+                """{"id":9999,"type":5}""",
+            },
+            rules = new object[]
+            {
+                new { op = "hello", emit = new[] { FakeSidecarProcess.Handshake } },
+                new { op = "ping", emit = new[] { """{"id":{id},"type":"result","said":"still here"}""" } },
+            },
+        });
+        using var staged = fake;
+        await using var child = sidecar;
+
+        Assert.Equal("still here", (await sidecar.SendAsync("ping", _ => { })).GetProperty("said").GetString());
+        Assert.False(sidecar.IsFaulted);
+
+        var recorded = sidecar.DescribeStandardError();
+        Assert.Contains("non-protocol line on stdout: 0", recorded, StringComparison.Ordinal);
+        Assert.Contains("non-protocol line on stdout: [1,2]", recorded, StringComparison.Ordinal);
+        Assert.Contains("protocol message with no id: {\"id\":1.5", recorded, StringComparison.Ordinal);
+        Assert.Contains("protocol message with no id: {\"id\":99999999999", recorded, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AProgressReportWithACountThatIsNotAnIntegerIsSkippedAndTheResultStillArrives()
+    {
+        // A count that arrives as a string is not reported as zero — a progress bar that jumps
+        // back to nothing is a lie — and it is not fatal either: the reader records it and reads
+        // on, and the result behind it completes the request.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly(
+            new
+            {
+                op = "label",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"progress","completed":"1","total":4}""",
+                    """{"id":{id},"type":"progress","completed":2,"total":4.0}""",
+                    """{"id":{id},"type":"progress","completed":3,"total":4}""",
+                    """{"id":{id},"type":"result","turns":[]}""",
+                },
+            }));
+        using var staged = fake;
+        await using var child = sidecar;
+
+        var seen = new SynchronousProgress();
+        var reply = await sidecar.SendAsync("label", _ => { }, seen);
+
+        Assert.True(reply.TryGetProperty("turns", out _));
+        Assert.Equal([(3, 4)], seen.Reported);
+        Assert.Contains(
+            "progress message with a count that is not an integer",
+            sidecar.DescribeStandardError(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnErrorWhoseFieldsAreMistypedStillFailsItsRequestAndNotTheReader()
+    {
+        // The id and the type are enough to know which request failed. A kind that is not a
+        // string is what a missing one is — internal, the bucket for the sidecar's own bugs — the
+        // message likewise, and a traceback is kept when it is text and dropped when it is not.
+        // The channel stays up for the next request.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly(
+            new
+            {
+                op = "load",
+                emit = new[] { """{"id":{id},"type":"error","kind":7,"message":["not","a","string"],"traceback":null}""" },
+            },
+            new { op = "ping", emit = new[] { """{"id":{id},"type":"result","said":"fine"}""" } }));
+        using var staged = fake;
+        await using var child = sidecar;
+
+        var failure = await Assert.ThrowsAsync<PythonEngineException>(() => sidecar.SendAsync("load", _ => { }));
+        Assert.Equal("internal", failure.Kind);
+        Assert.Equal("", failure.Message);
+        Assert.Null(failure.PythonTraceback);
+
+        Assert.Equal("fine", (await sidecar.SendAsync("ping", _ => { })).GetProperty("said").GetString());
+        Assert.False(sidecar.IsFaulted);
+    }
+
+    [Fact]
+    public async Task ARequestCancelledBeforeItIsWrittenIsACancellationAndTheChannelIsStillUsable()
+    {
+        // The other half of cancellation: not in flight, but before the write. The token is
+        // cancelled before the call, so the wait for the write gate is the first thing that sees
+        // it and nothing reaches the child. What is pinned is that this surfaces as a cancellation
+        // and not as a fault of the sidecar, and that the channel answers the next request.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly(
+            new { op = "ping", emit = new[] { """{"id":{id},"type":"result","said":"fine"}""" } }));
+        using var staged = fake;
+        await using var child = sidecar;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => sidecar.SendAsync("ping", _ => { }, null, new CancellationToken(canceled: true)));
+
+        Assert.Equal("fine", (await sidecar.SendAsync("ping", _ => { })).GetProperty("said").GetString());
+        Assert.False(sidecar.IsFaulted);
+    }
+
     /// <summary>Records on whatever thread reports, so the ordering above is testable.</summary>
     private sealed class SynchronousProgress : IProgress<(int Completed, int Total)>
     {

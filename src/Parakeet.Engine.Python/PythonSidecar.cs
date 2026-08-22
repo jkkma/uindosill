@@ -16,10 +16,13 @@ namespace Parakeet.Engine.Python;
 /// dispose.
 /// </para>
 /// <para>
-/// <b>stdout is the protocol and stderr is everything else.</b> The Python side enforces that at
-/// its end (see <c>protocol.claim_stdout</c>); this side keeps the tail of stderr so that when the
-/// child dies there is something to report other than "it died". A traceback that nobody kept is
-/// the difference between a bug report and a shrug.
+/// <b>stdout is the protocol and stderr is everything else.</b> The Python side redirects its own
+/// file descriptor 1 at start-up (see <c>protocol.claim_stdout</c>), so a <c>print</c>, an
+/// <c>os.write</c>, a C extension's <c>printf</c> and a child process it spawns all land on
+/// stderr; this side keeps the tail of stderr so that when the child dies there is something to
+/// report other than "it died", and treats whatever still reaches stdout without being a protocol
+/// message as one more line of that tail rather than as a reason to stop reading. A traceback that
+/// nobody kept is the difference between a bug report and a shrug.
 /// </para>
 /// <para>
 /// Requests are correlated by id rather than by order, because progress messages interleave with
@@ -124,6 +127,12 @@ public sealed class PythonSidecar : IAsyncDisposable
             CreateNoWindow = true,
             StandardOutputEncoding = new UTF8Encoding(false),
             StandardErrorEncoding = new UTF8Encoding(false),
+
+            // All three. A redirected stdin with no encoding named takes the console's input code
+            // page, and on a CP850 console that hands the child "Jos\x82" for "José". Nothing
+            // depended on it, because the writer below escapes non-ASCII — which is the kind of
+            // coincidence that holds until the day it does not.
+            StandardInputEncoding = new UTF8Encoding(false),
         };
 
         start.ArgumentList.Add("-u");   // unbuffered: a buffered reply is a deadlock that looks like a slow model
@@ -212,7 +221,6 @@ public sealed class PythonSidecar : IAsyncDisposable
             Completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously),
             Progress = progress,
         };
-        _pending[id] = pending;
 
         var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
@@ -224,33 +232,46 @@ public sealed class PythonSidecar : IAsyncDisposable
             writer.WriteEndObject();
         }
 
-        var line = Encoding.UTF8.GetString(buffer.ToArray());
+        // The newline travels with the line, in one write. Written separately, a cancellation
+        // landing between the two left a request on the pipe with no terminator, and the next
+        // request's line glued onto it as one line neither side could read.
+        var line = Encoding.UTF8.GetString(buffer.ToArray()) + "\n";
 
-        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        _pending[id] = pending;
+        using var registration = ct.Register(() => pending.Completion.TrySetCanceled(ct));
+
         try
         {
-            var input = _process?.StandardInput
-                ?? throw new PythonSidecarException("The Python engines are not running.");
-            await input.WriteAsync(line.AsMemory(), ct).ConfigureAwait(false);
-            await input.WriteAsync("\n".AsMemory(), ct).ConfigureAwait(false);
-            await input.FlushAsync(ct).ConfigureAwait(false);
+            await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var input = _process?.StandardInput
+                    ?? throw new PythonSidecarException("The Python engines are not running.");
+                await input.WriteAsync(line.AsMemory(), ct).ConfigureAwait(false);
+                await input.FlushAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception exc) when (exc is not OperationCanceledException)
+            {
+                // A write that fails is a child that is gone, and the tail of what it said before
+                // it went belongs on this message as much as on the reader's — this is the one a
+                // batch sees when the child died between two files, with nothing pending to carry
+                // the other.
+                throw Faulted(new PythonSidecarException(
+                    $"The Python engines stopped accepting input: {exc.Message}" + DescribeStandardError(), exc));
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
-        catch (Exception exc) when (exc is not OperationCanceledException)
+        catch
         {
+            // Cancelled at the gate or during the write, or the write failed: either way nothing
+            // reached the child under this id, so nothing is left waiting for a reply to it.
             _pending.TryRemove(id, out _);
-
-            // A write that fails is a child that is gone, and the tail of what it said before it
-            // went belongs on this message as much as on the reader's — this is the one a batch
-            // sees when the child died between two files, with nothing pending to carry the other.
-            throw Faulted(new PythonSidecarException(
-                $"The Python engines stopped accepting input: {exc.Message}" + DescribeStandardError(), exc));
-        }
-        finally
-        {
-            _writeGate.Release();
+            throw;
         }
 
-        using var registration = ct.Register(() => pending.Completion.TrySetCanceled(ct));
         return await pending.Completion.Task.ConfigureAwait(false);
     }
 
@@ -271,6 +292,8 @@ public sealed class PythonSidecar : IAsyncDisposable
         }
         catch (Exception exc)
         {
+            // The stream, not a message: Dispatch records what it cannot read rather than throwing,
+            // so what arrives here is the pipe itself failing under the reader.
             FailAll(Faulted(new PythonSidecarException(
                 $"The Python engines' output ended: {exc.Message}" + DescribeStandardError(), exc)));
             return;
@@ -282,6 +305,19 @@ public sealed class PythonSidecar : IAsyncDisposable
             "The Python engines exited unexpectedly." + DescribeStandardError())));
     }
 
+    /// <summary>Routes one line of the child's stdout to the request it answers, or records it as noise.</summary>
+    /// <remarks>
+    /// The envelope is the <c>id</c>: a line that is not a JSON object carrying an integer one is
+    /// not a protocol message, whatever else it is — a library's stray <c>print</c>, a bare JSON
+    /// value, an id that is not an integer — and it goes into the stderr tail rather than ending
+    /// the run. Inside the envelope each field is read only when it has the type the protocol
+    /// gives it: a progress report with a count that is not an integer is recorded and skipped
+    /// rather than reported as zero, and an error's <c>kind</c>, <c>message</c> and
+    /// <c>traceback</c> default as they do when they are missing. Nothing here throws on the
+    /// shape of a message. This runs on the reader, and a reader that died on one message would
+    /// take every later request down with it — which it did, until 2026-08-22, on a bare
+    /// <c>0</c>.
+    /// </remarks>
     private void Dispatch(string line)
     {
         JsonDocument document;
@@ -298,52 +334,76 @@ public sealed class PythonSidecar : IAsyncDisposable
             return;
         }
 
-        var root = document.RootElement;
-        if (!root.TryGetProperty("id", out var idElement) || idElement.ValueKind != JsonValueKind.Number)
+        using (document)
         {
-            RecordStandardError("protocol message with no id: " + Truncate(line));
-            document.Dispose();
-            return;
-        }
-
-        var id = idElement.GetInt32();
-        var type = root.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
-
-        if (type == "progress")
-        {
-            if (_pending.TryGetValue(id, out var running) && running.Progress is { } report)
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
             {
-                var completed = root.TryGetProperty("completed", out var c) ? c.GetInt32() : 0;
-                var total = root.TryGetProperty("total", out var t) ? t.GetInt32() : 0;
-                report.Report((completed, total));
+                // JSON, but not a message. A bare number, string or array is the same stray line
+                // as one that does not parse; it parsed by coincidence.
+                RecordStandardError("non-protocol line on stdout: " + Truncate(line));
+                return;
             }
 
-            document.Dispose();
-            return;
-        }
+            if (Int32Field(root, "id") is not { } id)
+            {
+                RecordStandardError("protocol message with no id: " + Truncate(line));
+                return;
+            }
 
-        if (!_pending.TryRemove(id, out var pending))
-        {
-            document.Dispose();
-            return;
-        }
+            var type = StringField(root, "type");
 
-        if (type == "error")
-        {
-            var kind = root.TryGetProperty("kind", out var k) ? k.GetString() ?? "internal" : "internal";
-            var message = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
-            var trace = root.TryGetProperty("traceback", out var tb) ? tb.GetString() : null;
-            document.Dispose();
-            pending.Completion.TrySetException(new PythonEngineException(kind, message, trace));
-            return;
-        }
+            if (type == "progress")
+            {
+                if (Int32Field(root, "completed") is not { } completed || Int32Field(root, "total") is not { } total)
+                {
+                    RecordStandardError("progress message with a count that is not an integer: " + Truncate(line));
+                    return;
+                }
 
-        // The document owns the memory the element points at, so it is cloned rather than disposed
-        // out from under the awaiting caller.
-        var clone = root.Clone();
-        document.Dispose();
-        pending.Completion.TrySetResult(clone);
+                if (_pending.TryGetValue(id, out var running) && running.Progress is { } report)
+                {
+                    report.Report((completed, total));
+                }
+
+                return;
+            }
+
+            if (!_pending.TryRemove(id, out var pending))
+            {
+                return;
+            }
+
+            if (type == "error")
+            {
+                var kind = StringField(root, "kind") ?? "internal";
+                var message = StringField(root, "message") ?? "";
+                var trace = StringField(root, "traceback");
+                pending.Completion.TrySetException(new PythonEngineException(kind, message, trace));
+                return;
+            }
+
+            // The document owns the memory the element points at, so it is cloned rather than
+            // disposed out from under the awaiting caller.
+            pending.Completion.TrySetResult(root.Clone());
+        }
     }
+
+    /// <summary>The field as a string, or null when it is missing or is not one.</summary>
+    private static string? StringField(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    /// <summary>
+    /// The field as an integer, or null when it is missing, is not a number, or is a number an
+    /// <see cref="int"/> does not hold — <c>1.0</c> and <c>99999999999</c> both read as null
+    /// rather than throwing, which is the whole difference between this and <c>GetInt32</c>.
+    /// </summary>
+    private static int? Int32Field(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
+            ? number
+            : null;
 
     private async Task ReadErrorLoopAsync()
     {

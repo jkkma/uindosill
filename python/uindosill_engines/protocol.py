@@ -8,8 +8,10 @@ that carries both a protocol and a megabyte of PCM is a pipe with two failure mo
 **stdout belongs to the protocol and to nothing else.** That is the one rule this file exists to
 enforce. `torch`, `librosa` and `numba` all print to stdout given the right provocation, and a
 single stray line of theirs lands in the middle of a JSON stream and desynchronises the host for
-the rest of the run. :func:`claim_stdout` takes the real handle away at start-up and puts stderr in
-its place, so anything that writes to `print` gets logged instead of corrupting the channel.
+the rest of the run. :func:`claim_stdout` takes a duplicate of the real handle for the channel at
+start-up and then points file descriptor 1 itself at stderr, not only `sys.stdout` — so a `print`,
+an `os.write(1, ...)`, a C extension's `printf` and a child process this one spawns all get logged
+instead of corrupting the channel.
 
 Every message carries the `id` of the request it belongs to and a `type`:
 
@@ -56,13 +58,22 @@ class RequestError(Exception):
 
 
 def claim_stdout() -> Any:
-    """Take the real stdout for the protocol and point `sys.stdout` at stderr.
+    """Take the real stdout for the protocol and point file descriptor 1 at stderr.
 
     Returns the handle to write protocol messages to. Called once, before any model library is
     imported — importing is itself enough to make some of them print.
+
+    Replacing `sys.stdout` alone is not enough, and until 2026-08-22 it was all this did: the
+    descriptor underneath still led to the pipe, so `os.write(1, ...)`, `sys.__stdout__`, a C
+    extension's `printf` and every child process this one spawned wrote into the protocol — and a
+    write without a newline glued onto the next reply, which the host then could not read. The
+    `dup2` makes descriptor 1 *be* stderr, for the C runtime and for inherited handles too, so the
+    only route to the channel is the duplicated descriptor this returns.
     """
     channel = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", newline="\n")
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
     sys.stdout = sys.stderr
+    sys.__stdout__ = sys.stderr
     return channel
 
 
@@ -78,7 +89,24 @@ class Channel:
         self._in = inp if inp is not None else sys.stdin
 
     def send(self, message: dict[str, Any]) -> None:
-        self._out.write(json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n")
+        try:
+            line = json.dumps(message, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        except ValueError as exc:
+            # Left to itself `json.dumps` writes `NaN` or `Infinity`, which is not JSON: the host
+            # records the line as noise and the request it answered waits on for a reply that has
+            # already been sent. An error for the same id reaches the host as a reply, and it says
+            # what was wrong with the one it replaces.
+            line = json.dumps(
+                {
+                    "id": message.get("id"),
+                    "type": "error",
+                    "kind": "internal",
+                    "message": f"the reply to request {message.get('id')!r} carried a number JSON cannot: {exc}",
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        self._out.write(line + "\n")
         self._out.flush()
 
     def result(self, request_id: Any, **fields: Any) -> None:
