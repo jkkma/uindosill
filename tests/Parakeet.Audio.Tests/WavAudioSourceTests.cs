@@ -172,6 +172,39 @@ public class WavAudioSourceTests
     }
 
     [Fact]
+    public async Task AZeroSizeChunkBeforeTheDataIsWalkedPastRatherThanEndingTheWalk()
+    {
+        // A zero-size chunk is legal and advances the walk by nothing; until 2026-08-22 "advances by
+        // nothing" read as "the walk is stuck" and a valid file was reported as having no data chunk.
+        await using var source = WavAudioSource.Create(WavFixtures.ZeroSizeJunkBeforeData(frames: 64));
+
+        Assert.Equal(64, source.FrameCount);
+        Assert.Equal(64, (await ReadAllAsync(source)).Length);
+    }
+
+    [Fact]
+    public async Task ADataChunkDeclaringZeroWithAudioAfterItIsReadToTheEndOfTheFile()
+    {
+        // The same recovery a declared 0xFFFFFFFF always had: a header a streaming writer never
+        // came back to patch is read as the rest of the file.
+        await using var source = WavAudioSource.Create(WavFixtures.DataDeclaresZeroButAudioFollows(frames: 100));
+
+        Assert.Equal(100, source.FrameCount);
+        Assert.Equal(100, (await ReadAllAsync(source)).Length);
+    }
+
+    [Fact]
+    public void AnEmptyDataChunkFollowedByMetadataIsEmptyRatherThanReadAsAudio()
+    {
+        // The other reading of a zero: a finished file with no audio and a LIST chunk behind the
+        // data. The metadata is a chunk header, so it is not mistaken for samples.
+        var exception = Assert.Throws<AudioDecodeException>(
+            () => WavAudioSource.Create(WavFixtures.EmptyDataThenMetadata()));
+
+        Assert.Contains("no audio frames", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FileWithoutFmtChunkIsRejected()
     {
         var stream = WavFixtures.MissingChunk(dropFmt: true);
@@ -366,6 +399,97 @@ internal static class WavFixtures
         WriteAscii(stream, "data");
         WriteUInt32(stream, (uint)data.Length);
         stream.Write(data);
+        stream.Position = 0;
+        return stream;
+    }
+
+    /// <summary>A legal zero-size chunk ahead of the data, which used to end the walk.</summary>
+    public static MemoryStream ZeroSizeJunkBeforeData(int frames)
+    {
+        var data = new byte[frames * 2];
+        var stream = new MemoryStream();
+
+        WriteAscii(stream, "RIFF");
+        WriteUInt32(stream, 0);
+        WriteAscii(stream, "WAVE");
+
+        WriteAscii(stream, "JUNK");
+        WriteUInt32(stream, 0);
+
+        WriteAscii(stream, "fmt ");
+        WriteUInt32(stream, 16);
+        WriteUInt16(stream, 1);
+        WriteUInt16(stream, 1);
+        WriteUInt32(stream, 16_000);
+        WriteUInt32(stream, 32_000);
+        WriteUInt16(stream, 2);
+        WriteUInt16(stream, 16);
+
+        WriteAscii(stream, "data");
+        WriteUInt32(stream, (uint)data.Length);
+        stream.Write(data);
+        stream.Position = 0;
+        return stream;
+    }
+
+    /// <summary>
+    /// A data chunk declaring zero with audio after it: a streaming writer that never came back
+    /// to patch the header. The samples are a steady negative value, whose first byte is not
+    /// printable, so they cannot be mistaken for a chunk header.
+    /// </summary>
+    public static MemoryStream DataDeclaresZeroButAudioFollows(int frames)
+    {
+        var data = new byte[frames * 2];
+        for (var i = 0; i < data.Length; i += 2)
+        {
+            data[i] = 0x00;
+            data[i + 1] = 0xF0;
+        }
+
+        var stream = new MemoryStream();
+        WriteAscii(stream, "RIFF");
+        WriteUInt32(stream, 0);
+        WriteAscii(stream, "WAVE");
+
+        WriteAscii(stream, "fmt ");
+        WriteUInt32(stream, 16);
+        WriteUInt16(stream, 1);
+        WriteUInt16(stream, 1);
+        WriteUInt32(stream, 16_000);
+        WriteUInt32(stream, 32_000);
+        WriteUInt16(stream, 2);
+        WriteUInt16(stream, 16);
+
+        WriteAscii(stream, "data");
+        WriteUInt32(stream, 0);
+        stream.Write(data);
+        stream.Position = 0;
+        return stream;
+    }
+
+    /// <summary>An empty data chunk with a metadata chunk after it: a finished file with no audio.</summary>
+    public static MemoryStream EmptyDataThenMetadata()
+    {
+        var stream = new MemoryStream();
+        WriteAscii(stream, "RIFF");
+        WriteUInt32(stream, 0);
+        WriteAscii(stream, "WAVE");
+
+        WriteAscii(stream, "fmt ");
+        WriteUInt32(stream, 16);
+        WriteUInt16(stream, 1);
+        WriteUInt16(stream, 1);
+        WriteUInt32(stream, 16_000);
+        WriteUInt32(stream, 32_000);
+        WriteUInt16(stream, 2);
+        WriteUInt16(stream, 16);
+
+        WriteAscii(stream, "data");
+        WriteUInt32(stream, 0);
+
+        WriteAscii(stream, "LIST");
+        WriteUInt32(stream, 4);
+        stream.Write("INFO"u8);
         stream.Position = 0;
         return stream;
     }

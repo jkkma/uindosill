@@ -1137,7 +1137,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         var written = await TranscriptWriter.WriteAsync(document, job.WithoutFailedPasses(failures), ct: ct)
             .ConfigureAwait(true);
 
-        var silence = DescribeSilence(engine, transcribed);
+        var silence = Join(DescribeSilence(engine, transcribed), DescribeUnsegmented(engine, transcribed));
         var result = new JobResult
         {
             Job = job,
@@ -1204,5 +1204,25 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
 
         return "No speech was found in this file.";
+    }
+
+    /// <summary>
+    /// The command line's sentence for audible material the gate kept out of a transcript that is
+    /// not empty — quiet speech or a fan, which an energy detector cannot tell apart, so it gives
+    /// the amount and leaves the judgement to whoever knows what was recorded.
+    /// </summary>
+    private static string? DescribeUnsegmented(ITranscriptionEngine engine, TranscriptDocument document)
+    {
+        if (document.IsEmpty
+            || (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport is not { UnsegmentedAudibleIsMaterial: true } report)
+        {
+            return null;
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS sat below " +
+            $"the voice-activity gate and was not decoded. If this is quiet speech over background noise, try " +
+            $"'fixed windows' below, which decodes everything.");
     }
 }

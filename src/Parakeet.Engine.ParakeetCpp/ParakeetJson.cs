@@ -150,7 +150,9 @@ internal static class ParakeetJson
             return TimeSpan.Zero;
         }
 
-        return TimeSpan.FromSeconds(seconds);
+        // Rounded to the tick, not truncated: 0.57 through TimeSpan.FromSeconds is 5,699,999 ticks
+        // and prints as 00:00:00,569 in a subtitle while the JSON says 0.57 (GOTCHAS §25).
+        return Parakeet.Core.Audio.AudioMath.SecondsToTime(seconds);
     }
 
     private static JsonDocument Parse(string json)

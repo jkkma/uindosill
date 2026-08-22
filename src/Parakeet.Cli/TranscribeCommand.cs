@@ -596,7 +596,11 @@ internal static class TranscribeCommand
             // cap is said after either, because it is about the names and not the words. A number
             // the English lost is said last, because it is about one segment rather than the file.
             Warning = Join(
-                Join(DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options), speakerWarning),
+                Join(
+                    Join(
+                        DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options),
+                        DescribeUnsegmented(engine, transcribed)),
+                    speakerWarning),
                 numeralWarning),
         };
     }
@@ -641,6 +645,28 @@ internal static class TranscribeCommand
         return string.Create(
             CultureInfo.InvariantCulture,
             $"No speech found. Peak level {report.PeakDb:0.#} dBFS across {report.TotalAudio:hh\\:mm\\:ss} of audio.");
+    }
+
+    /// <summary>
+    /// Says how much audible material the gate kept out when the transcript is <i>not</i> empty —
+    /// the case the sentence above cannot cover, and the one an energy detector is weakest at: it
+    /// cannot tell quiet speech from a fan, so it says how much there was of either and leaves the
+    /// judgement to the person who knows what was recorded. Until 2026-08-22 a partial loss — the
+    /// first phrase under a gate that opened too high — was reported nowhere.
+    /// </summary>
+    internal static string? DescribeUnsegmented(ITranscriptionEngine engine, TranscriptDocument document)
+    {
+        if (document.IsEmpty
+            || (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport is not { UnsegmentedAudibleIsMaterial: true } report)
+        {
+            return null;
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS sat below " +
+            $"the voice-activity gate and was not decoded. If this recording is quiet speech over background noise, " +
+            $"re-run with --no-vad to decode everything.");
     }
 
     /// <summary>

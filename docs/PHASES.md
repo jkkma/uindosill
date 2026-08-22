@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 832 tests, no weights, no display, no network — **830 passed and 2 skipped**, and
+**Status:** met. 852 tests, no weights, no display, no network — **850 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -1807,6 +1807,53 @@ failure on the diariser and the crashed check on the translator, each a result t
 engines carrying what `auto` passed over; the file form with the package beside the interpreter,
 the packages-only override and its message; and the window's hint carrying the resolver's reason.
 The suite is 832.
+
+### Fixed 2026-08-22 — the audio path: a gate that opened too high, a flush that trimmed the wrong segment, a cap a short fragment could walk past, and times one tick short
+
+**Seven defects in the segmenter, the WAV reader and the resampler, from the same review.** The
+adaptive gate's floor was seeded on the absolute line, so the gate opened one margin above it —
+−47 dBFS — and quiet speech sat under it until a pause let the floor fall: a −45.6 dBFS tone from
+the first sample produced nothing for ten seconds, and after a loud passage a −46 dBFS stretch
+with no gap was never speech; neither said so, because the only sentence about the gate needed an
+empty transcript. `Flush` trimmed the zero-padding it adds to the last partial frame off whichever
+segment was emitted during the flush, including one the silence rule had closed short of the
+padded frame, so that segment ended early and the segmented-audio figure was short by the same.
+The "too short to emit" early return in the silence rule skipped the cap check, so with a minimum
+segment length past the speech-plus-padding minimum — reachable through the API, set by no shipped
+surface — a buffer grew to three times the cap. The WAV chunk walker stopped at any zero-size
+chunk, so a valid file with an empty `JUNK` before its `data` "had no data chunk"; a `data` chunk
+declaring zero with audio after it was refused while a declared `0xFFFFFFFF` was recovered; and the
+resampler's flush stopped at the last input *sample* rather than the end of its period, so 8,000
+samples at 8 kHz came out as 15,999 at 16 kHz. Last, every sample-indexed time on the ASR path —
+segment starts and durations, the report, the WAV duration — and every parsed decimal — the native
+decoder's word times, the sidecar's turns — went through `TimeSpan.FromSeconds(double)`, which
+truncates to the tick: a start at sample 9,120 of a 16 kHz file is 0.57 s and printed as
+`00:00:00,569` in a subtitle while the JSON said 0.57 (GOTCHAS §25, which the RTTM path alone had
+fixed).
+
+**The gate opens at the line, and what it keeps out is counted.** The floor is seeded one margin
+below the absolute line; the segmenter counts every frame above the line that ended outside every
+segment, `SegmentationReport` carries it with the line it was counted against and says when it is
+material — a second, and a tenth of what was segmented — and the command line and the window print
+"N s of audio above −55 dBFS sat below the voice-activity gate and was not decoded" with the
+`--no-vad` / "fixed windows" remedy. `Flush` trims padding only from a segment whose emission
+reached the buffer's end; the silence rule falls through to the cap rather than returning; the
+walker advances past a zero-size chunk, reads a zero-length `data` with bytes behind it as the rest
+of the file unless those bytes are a plausible chunk header, and the resampler's last output may
+land anywhere before the end of the last sample's period. `AudioMath.SamplesToTime` (integer
+arithmetic, exact) and `AudioMath.SecondsToTime` (rounded) replace every `FromSeconds` that carried
+a measured time; `SpeakerTurns.FromSeconds` is now a name for the latter. What the seed changes on
+real files is unmeasured and `UNPROVEN.md` says so: the WER figures were taken with the previous
+gate, and the expected effect is confined to file starts and to quiet material after a loud
+passage.
+
+Twenty tests: quiet speech segmented from the first frame; the kept-out material counted and
+material on the loud-then-quiet case and zero on an ordinary file; the flush reproduction ending
+at 2.79 s with the report agreeing; the cap holding against a short fragment; five rates coming
+out as sixteen thousand samples a second, chunked equal to whole, identity untouched; the zero-size
+`JUNK`, the zero-length `data` with audio and the empty `data` with metadata; and times that land
+on their tick — the helper at several rates, a segment's start, duration and end, the segmenter's
+own start, and a decoded word's. The suite is 852.
 
 ## The honest summary
 

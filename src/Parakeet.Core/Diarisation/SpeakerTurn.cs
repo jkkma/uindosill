@@ -123,8 +123,7 @@ public static class SpeakerTurns
     /// tick short, and a few hundred turns of that is a microsecond the scorer disagrees with
     /// pyannote.metrics by.
     /// </summary>
-    public static TimeSpan FromSeconds(double seconds) =>
-        TimeSpan.FromTicks((long)Math.Round(seconds * TimeSpan.TicksPerSecond, MidpointRounding.AwayFromZero));
+    public static TimeSpan FromSeconds(double seconds) => Parakeet.Core.Audio.AudioMath.SecondsToTime(seconds);
 
     /// <summary>The distinct speaker labels, in order of first appearance by start time.</summary>
     public static IReadOnlyList<string> Speakers(IEnumerable<SpeakerTurn> turns)

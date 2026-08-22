@@ -3452,6 +3452,25 @@ seed plus an absolute "this is definitely speech" ceiling the adaptive threshold
 above. Regression tests: `RecordingThatStartsOnSpeechIsStillDetected`,
 `SustainedLoudPassageDoesNotHideTheSpeechAfterIt`.
 
+**The pessimistic seed had a smaller version of the same failure, found 2026-08-22.** Seeded *on*
+the absolute line (−55 dBFS), the gate opened at line plus margin, −47 dBFS, and quiet speech sat
+under it until a sub-floor pause let the floor fall: a −45.6 dBFS tone from the first sample
+produced nothing for its first ten seconds, and after a −26 dBFS passage the floor is held at the
+ceiling and a −46 dBFS stretch that follows with no gap is never speech at all — with no warning in
+either case, because the only sentence about the gate needed an empty transcript. Since 2026-08-22
+the floor is seeded one margin below the line, so the gate opens at −55 dBFS and the first case is
+segmented from its first frame; and the segmenter counts every frame above the line that ended
+outside every segment, so the second case — which an energy gate cannot fix, because it cannot
+tell quiet speech from a fan — is reported: "N s of audio above −55 dBFS sat below the
+voice-activity gate and was not decoded", on the command line and in the window, when that is at
+least a second and a tenth of what was segmented. **What this changes on real files is unmeasured.**
+The opening threshold is lower for the first seconds of every file, until the floor climbs, so a
+recording whose room tone sits between −55 and −47 dBFS now decodes some of it at the start; the
+WER figures above were taken with the previous gate and have not been re-run. The expected effect
+is confined to file starts and to quiet material after a loud passage, and it is written here
+rather than assumed to be nothing. Tests: `QuietSpeechAtTheStartOfAFileIsSegmentedFromTheFirstFrame`,
+`AudibleMaterialTheGateKeptOutIsCountedAndSaidToBeMaterial`.
+
 ### A publish that is green in CI and framework-dependent everywhere
 
 `SelfContained` was set in `Directory.Build.props` under a condition on a property the project files

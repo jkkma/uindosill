@@ -97,8 +97,7 @@ public sealed class WavAudioSource : IAudioSource
 
     public int Channels => Format.Channels;
 
-    public TimeSpan? Duration =>
-        TimeSpan.FromSeconds(_dataLength / (double)Format.BlockAlign / Format.SampleRate);
+    public TimeSpan? Duration => AudioMath.SamplesToTime(_dataLength / Format.BlockAlign, Format.SampleRate);
 
     /// <summary>Total mono frames in the file.</summary>
     public long FrameCount => _dataLength / Format.BlockAlign;
@@ -190,10 +189,26 @@ public sealed class WavAudioSource : IAudioSource
                     break;
             }
 
+            // A data chunk that declares no length but has bytes after it is, almost always, a
+            // header a streaming writer never came back to patch — the same shape as a declared
+            // 0xFFFFFFFF, and recovered the same way, as the rest of the file. Almost: a finished
+            // file can hold an empty data chunk followed by metadata, so the bytes after it are
+            // looked at first, and a plausible chunk header there means the chunk really is empty
+            // and the walk goes on. Until 2026-08-22 a zero here was refused as "no audio frames"
+            // while 0xFFFFFFFF was recovered.
+            if (id == "data" && size == 0 && chunkStart < stream.Length && !LooksLikeChunkHeaderAt(stream, chunkStart))
+            {
+                dataLength = stream.Length - chunkStart;
+                break;
+            }
+
             // Chunks are word-aligned: an odd size is followed by a pad byte that is not counted.
+            // A zero-size chunk advances by nothing, and the walk reads the next header from where
+            // this one's body would have been; until 2026-08-22 that case stopped the walk, so a
+            // zero-size JUNK before the data chunk made a valid file "have no data chunk".
             var advance = size + (size % 2);
             var next = chunkStart + advance;
-            if (next <= chunkStart || next > stream.Length)
+            if (next > stream.Length)
             {
                 break;
             }
@@ -233,6 +248,47 @@ public sealed class WavAudioSource : IAudioSource
         }
 
         return (format, dataOffset, dataLength);
+    }
+
+    /// <summary>
+    /// True when the eight bytes at <paramref name="position"/> read as a chunk header — four
+    /// printable ASCII characters and a size that fits inside the file. Leaves the position where it
+    /// found it.
+    /// </summary>
+    /// <remarks>
+    /// A heuristic, and said to be one: PCM bytes can spell four printable characters and a small
+    /// size by chance — under one in a thousand files — and that file is then refused as having no
+    /// audio frames rather than read as audio, which is the right way round for a guess to fail.
+    /// </remarks>
+    private static bool LooksLikeChunkHeaderAt(Stream stream, long position)
+    {
+        if (position + 8 > stream.Length)
+        {
+            return false;
+        }
+
+        var saved = stream.Position;
+        try
+        {
+            stream.Position = position;
+            Span<byte> header = stackalloc byte[8];
+            ReadExactly(stream, header, "chunk header");
+
+            for (var i = 0; i < 4; i++)
+            {
+                if (header[i] is < 0x20 or > 0x7E)
+                {
+                    return false;
+                }
+            }
+
+            long declared = BinaryPrimitives.ReadUInt32LittleEndian(header[4..8]);
+            return position + 8 + declared <= stream.Length;
+        }
+        finally
+        {
+            stream.Position = saved;
+        }
     }
 
     private static WavFormat ParseFormatChunk(Stream stream, long size)

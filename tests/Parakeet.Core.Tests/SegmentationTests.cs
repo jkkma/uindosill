@@ -240,4 +240,103 @@ public class StreamingSegmenterTests
 
         Assert.IsType<ArgumentOutOfRangeException>(exception);
     }
+
+    [Fact]
+    public void QuietSpeechAtTheStartOfAFileIsSegmentedFromTheFirstFrame()
+    {
+        // −45.6 dBFS from the first sample: a quiet talker, or a microphone too far away. With the
+        // floor seeded on the absolute line the gate opened at −47 dBFS and this sat under it for
+        // ten seconds, until a pause let the floor fall; seeded one margin below, the gate opens at
+        // the line and the first frame is speech. (On a tone that never pauses the floor then climbs
+        // toward it and gates it again after a few seconds — the adaptive gate doing its job on
+        // material that is not speech — which is why three seconds and not thirty are asked for.)
+        var samples = Tone(seconds: 3, dbfs: -45.6);
+        var (segments, report) = Run(samples);
+
+        Assert.NotEmpty(segments);
+        Assert.Equal(TimeSpan.Zero, segments[0].Start);
+        Assert.True(report.SegmentedAudio >= TimeSpan.FromSeconds(2.5), $"segmented only {report.SegmentedAudio}");
+    }
+
+    [Fact]
+    public void AudibleMaterialTheGateKeptOutIsCountedAndSaidToBeMaterial()
+    {
+        // Loud speech, then quiet speech with no gap: the floor is capped at the ceiling by the loud
+        // passage, the threshold sits at −35 dBFS, and the −46 dBFS that follows is never speech.
+        // An energy gate cannot tell that from a fan, so it is not pretended to — it is counted, and
+        // the report says when the count is worth a sentence. Until 2026-08-22 a partial loss like
+        // this was reported nowhere: LooksLikeMissedSpeech needs an empty transcript.
+        var loud = Tone(seconds: 8, dbfs: -26);
+        var quiet = Tone(seconds: 6, dbfs: -46);
+        var tail = TestAudio.Build((2, false));
+        var (segments, report) = Run([.. loud, .. quiet, .. tail]);
+
+        Assert.NotEmpty(segments);
+        Assert.True(report.UnsegmentedAudibleAudio >= TimeSpan.FromSeconds(5), $"counted {report.UnsegmentedAudibleAudio}");
+        Assert.True(report.UnsegmentedAudibleIsMaterial);
+
+        // And an ordinary file — speech between stretches of a quiet room — has nothing to say.
+        var (_, ordinary) = Run(TestAudio.Build((1, false), (2, true), (1, false)));
+        Assert.Equal(TimeSpan.Zero, ordinary.UnsegmentedAudibleAudio);
+        Assert.False(ordinary.UnsegmentedAudibleIsMaterial);
+    }
+
+    [Fact]
+    public void FlushTrimsThePaddingOnlyFromASegmentThatContainsIt()
+    {
+        // Sixteen quiet frames, sixty-seven of tone, thirteen quiet and then a hundred samples. The
+        // silence rule closes the segment inside the padded frame's own processing — post-roll ends
+        // it at frame 93 of 97 — so the padded frame is not in it, and until 2026-08-22 the padding
+        // was trimmed off it anyway: the segment ended 24 ms early and the segmented-audio figure
+        // was short by the same.
+        const int frame = 480;
+        var samples = new float[(96 * frame) + 100];
+        var random = new Random(7);
+        TestAudio.FillQuiet(samples.AsSpan(0, 16 * frame), random);
+        TestAudio.FillTone(samples.AsSpan(16 * frame, 67 * frame));
+        TestAudio.FillQuiet(samples.AsSpan(83 * frame), random);
+
+        var (segments, report) = Run(samples);
+        var last = segments[^1];
+
+        Assert.Equal(Parakeet.Core.Audio.AudioMath.SamplesToTime(93 * frame, TestAudio.SampleRate), last.End);
+        Assert.Equal(
+            segments.Sum(s => s.Samples.Length),
+            (int)Math.Round(report.SegmentedAudio.TotalSeconds * TestAudio.SampleRate));
+    }
+
+    [Fact]
+    public void AFragmentTooShortToEmitDoesNotLetTheBufferGrowPastTheCap()
+    {
+        // A minimum segment length past the speech-plus-padding minimum — which no shipped surface
+        // sets, but the options allow — made "too short to emit" an early return that skipped the
+        // cap check, so a short burst followed by a long silence grew one buffer to the end of the
+        // file. Not with the defaults; reachable through the API; 88 s against a 30 s cap in the
+        // reproduction.
+        var options = VoiceActivityOptions.Default with
+        {
+            MinSegmentLength = TimeSpan.FromSeconds(2),
+            MaxSegmentLength = TimeSpan.FromSeconds(5),
+        };
+        var samples = TestAudio.Build((0.2, true), (20, false));
+        var (segments, _) = Run(samples, options);
+
+        Assert.NotEmpty(segments);
+        Assert.All(segments, s => Assert.True(
+            s.Duration <= TimeSpan.FromSeconds(5.05),
+            $"segment #{s.Index} is {s.Duration.TotalSeconds:0.##} s against a 5 s cap"));
+    }
+
+    /// <summary>A plain sine at a chosen RMS level, for tests about the gate's thresholds.</summary>
+    private static float[] Tone(double seconds, double dbfs)
+    {
+        var amplitude = (float)(Math.Pow(10, dbfs / 20) * Math.Sqrt(2));
+        var samples = new float[(int)(seconds * TestAudio.SampleRate)];
+        for (var i = 0; i < samples.Length; i++)
+        {
+            samples[i] = (float)(amplitude * Math.Sin(2 * Math.PI * 220 * i / TestAudio.SampleRate));
+        }
+
+        return samples;
+    }
 }

@@ -137,7 +137,12 @@ Parakeet degrades on long single-pass audio, so a file-transcription product tha
 whole recording produces quietly wrong output on exactly the inputs it exists to serve. The segmenter
 therefore has two rules it never breaks:
 
-1. **Audio classified as speech is never dropped.** Tested.
+1. **Audio classified as speech is never dropped — and audio the gate keeps out is counted.**
+   Tested. The second half is the honest limit of the first: an energy gate cannot tell quiet
+   speech from a fan, so what it kept out above the absolute line is reported as an amount when
+   it is material (a second, and a tenth of what was segmented) rather than silently lost — a
+   partial loss used to be reported nowhere, since the only sentence about the gate needed an
+   empty transcript.
 2. **A forced cut goes at the quietest frame nearby, not at an arbitrary sample.** Tested for
    contiguity.
 
