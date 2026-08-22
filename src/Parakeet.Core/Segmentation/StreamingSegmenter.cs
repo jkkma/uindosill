@@ -57,6 +57,8 @@ public sealed class StreamingSegmenter
     private bool _digitalSilence = true;
     private float _peak;
     private float _noiseFloorDb;
+    private long _unsegmentedAudibleFrames;
+    private bool _lastEmitReachedBufferEnd;
 
     public StreamingSegmenter(int sampleRate, VoiceActivityOptions? options = null)
     {
@@ -78,12 +80,16 @@ public sealed class StreamingSegmenter
 
         // Start from "quiet room" and adapt upward, never from the first frame. Seeding from the
         // first frame means a recording that opens on speech teaches the detector that speech is
-        // the noise floor, and the file comes back empty.
-        _noiseFloorDb = _options.AbsoluteThresholdDb;
+        // the noise floor, and the file comes back empty. Seeded one margin *below* the absolute
+        // line rather than on it, so that the gate opens at the line: seeded on it, the opening
+        // threshold was line plus margin — −47 dBFS with the defaults — and quiet speech sat under
+        // it until a sub-floor pause let the floor fall. Until 2026-08-22 that lost the first ten
+        // seconds of a −45.6 dBFS tone with no warning.
+        _noiseFloorDb = _options.AbsoluteThresholdDb - _options.SpeechMarginDb;
     }
 
     /// <summary>Frames whose energy sat above the speech threshold.</summary>
-    public TimeSpan SpeechDuration => TimeSpan.FromSeconds(_speechFrames * _frameSamples / (double)_sampleRate);
+    public TimeSpan SpeechDuration => AudioMath.SamplesToTime(_speechFrames * _frameSamples, _sampleRate);
 
     /// <summary>Running estimate of the noise floor, in dBFS.</summary>
     public float NoiseFloorDb => _noiseFloorDb;
@@ -143,8 +149,12 @@ public sealed class StreamingSegmenter
 
         // The padding above is measurement scaffolding, not audio. Left in place it makes the
         // final segment end after the file does — a transcript whose last timestamp is past the
-        // end of the media, and a subtitle cue a player has nowhere to show.
-        if (padding > 0 && completed.Count > emittedBefore)
+        // end of the media, and a subtitle cue a player has nowhere to show. Trimmed only from a
+        // segment that actually holds it: the silence rule can close a segment short of the
+        // buffer's end inside the padded frame's own processing, and until 2026-08-22 that segment
+        // lost its last samples to padding it never contained — 24 ms early in the reproduction,
+        // with the segmented-audio figure under-counted by the same.
+        if (padding > 0 && completed.Count > emittedBefore && _lastEmitReachedBufferEnd)
         {
             var last = completed[^1];
             var real = last.Samples.Length - padding;
@@ -164,6 +174,11 @@ public sealed class StreamingSegmenter
             }
         }
 
+        // Whatever is still buffered was never in a segment and never will be — the pre-roll an
+        // onset never came for. Dropped through the counting path, so the report's figure for
+        // audible-but-unsegmented material covers the whole file.
+        DropFront(_frameDb.Count);
+
         _state = State.Idle;
         _speechRun = 0;
         _silenceRun = 0;
@@ -172,9 +187,11 @@ public sealed class StreamingSegmenter
     public SegmentationReport CreateReport() => new()
     {
         SegmentCount = _nextIndex,
-        TotalAudio = TimeSpan.FromSeconds(_totalSamples / (double)_sampleRate),
-        SegmentedAudio = TimeSpan.FromSeconds(_segmentedSamples / (double)_sampleRate),
+        TotalAudio = AudioMath.SamplesToTime(_totalSamples, _sampleRate),
+        SegmentedAudio = AudioMath.SamplesToTime(_segmentedSamples, _sampleRate),
         SpeechAudio = SpeechDuration,
+        UnsegmentedAudibleAudio = AudioMath.SamplesToTime(_unsegmentedAudibleFrames * _frameSamples, _sampleRate),
+        AudibleThresholdDb = _options.AbsoluteThresholdDb,
         IsDigitalSilence = _digitalSilence,
         PeakDb = AudioMath.ToDecibels(_peak),
         NoiseFloorDb = _noiseFloorDb,
@@ -265,7 +282,7 @@ public sealed class StreamingSegmenter
                 // Open a segment starting pre-roll frames before the onset.
                 var onsetFrame = _frameDb.Count - _speechRun;
                 var keepFrom = Math.Max(0, onsetFrame - _preRollFrames);
-                TrimFront(keepFrom);
+                DropFront(keepFrom);
                 _state = State.Speech;
                 _silenceRun = 0;
             }
@@ -279,7 +296,7 @@ public sealed class StreamingSegmenter
         var retain = _preRollFrames + _minSpeechFrames;
         if (_frameDb.Count > retain)
         {
-            TrimFront(_frameDb.Count - retain);
+            DropFront(_frameDb.Count - retain);
         }
     }
 
@@ -299,18 +316,20 @@ public sealed class StreamingSegmenter
             var offsetFrame = _frameDb.Count - _silenceRun;
             var endFrame = Math.Min(_frameDb.Count, offsetFrame + _postRollFrames);
 
-            // Too short to be worth a decode on its own: keep accumulating so the fragment is
-            // glued to the next utterance rather than decoded alone or, worse, dropped.
-            if (endFrame < _minSegmentFrames)
+            // Long enough to be worth a decode on its own: close it here. Too short, and it keeps
+            // accumulating so the fragment is glued to the next utterance rather than decoded alone
+            // or, worse, dropped — but it falls through to the cap below rather than returning,
+            // because "too short to emit" and "at the cap" are not exclusive: with a minimum
+            // segment length past the speech-plus-padding minimum, the early return let the buffer
+            // grow to three times the cap before 2026-08-22.
+            if (endFrame >= _minSegmentFrames)
             {
+                EmitFrames(endFrame, completed, speechDetected: true);
+                _state = State.Idle;
+                _speechRun = 0;
+                _silenceRun = 0;
                 return;
             }
-
-            EmitFrames(endFrame, completed, speechDetected: true);
-            _state = State.Idle;
-            _speechRun = 0;
-            _silenceRun = 0;
-            return;
         }
 
         if (_frameDb.Count >= _maxSegmentFrames)
@@ -364,12 +383,33 @@ public sealed class StreamingSegmenter
         {
             Index = _nextIndex++,
             SampleRate = _sampleRate,
-            Start = TimeSpan.FromSeconds(_bufferStartSample / (double)_sampleRate),
+            Start = AudioMath.SamplesToTime(_bufferStartSample, _sampleRate),
             Samples = samples,
             SpeechDetected = speechDetected,
         });
 
         _segmentedSamples += sampleCount;
+        _lastEmitReachedBufferEnd = frameCount == _frameDb.Count;
+        TrimFront(frameCount);
+    }
+
+    /// <summary>
+    /// Drops frames that will never be in a segment — the idle stretch behind a pre-roll window,
+    /// the frames before an onset's pre-roll — and counts the audible ones as it goes: a frame
+    /// above the absolute line that the adaptive gate kept out is material an energy detector
+    /// cannot tell from quiet speech, and the report owes a number for it rather than silence.
+    /// </summary>
+    private void DropFront(int frameCount)
+    {
+        frameCount = Math.Clamp(frameCount, 0, _frameDb.Count);
+        for (var i = 0; i < frameCount; i++)
+        {
+            if (_frameDb[i] >= _options.AbsoluteThresholdDb)
+            {
+                _unsegmentedAudibleFrames++;
+            }
+        }
+
         TrimFront(frameCount);
     }
 

@@ -119,10 +119,13 @@ public sealed class Resampler
 
             // On the last flush the kernel is allowed to run off the end — beyond the signal there
             // is silence, and truncating the sum is what that means — but the output's own centre
-            // must still land inside it. Emitting past that invents audio: the count would depend
-            // on the filter's width rather than on the recording's length, and a 48 kHz file would
-            // come out 32 samples longer than it is.
-            if (flush && centre > lastAvailable)
+            // must still land inside it: at or after the first sample, and before the point one
+            // sample past the last, which is where the recording ends. Emitting past that invents
+            // audio: the count would depend on the filter's width rather than on the recording's
+            // length, and a 48 kHz file would come out 32 samples longer than it is. Stopping at
+            // the last sample itself was the opposite mistake, and until 2026-08-22 it was this
+            // line's: 8,000 samples at 8 kHz came out as 15,999 at 16 kHz, one short of the second.
+            if (flush && centre >= lastAvailable + 1)
             {
                 break;
             }

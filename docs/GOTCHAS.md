@@ -449,6 +449,17 @@ an RTTM file or an Audacity label export goes through it. The general lesson is 
 validate a scorer against the reference implementation on material long enough for a hundred small
 errors to add up to one you can see.
 
+**The ASR path had the same bug on every sample-indexed time, and a subtitle showed it.** Segment
+starts and durations, the segmenter's report and the WAV duration all went through
+`FromSeconds(samples / (double)rate)`; the native decoder's word times and the sidecar's turn
+boundaries through `FromSeconds(double)`. A segment starting at sample 9,120 of a 16 kHz file is
+0.57 s, came out as 5,699,999 ticks, and the SRT said `00:00:00,569` while the JSON beside it said
+`0.57` — one in a few hundred boundaries, about twenty thousand per three hours. Since 2026-08-22
+the sample-indexed times go through `AudioMath.SamplesToTime`, which is integer arithmetic and
+exact, and the parsed decimals through `AudioMath.SecondsToTime`, which rounds; `SpeakerTurns.
+FromSeconds` is now a name for the latter. Nothing is left on `TimeSpan.FromSeconds` that carries
+a measured time.
+
 ## 26. The updater runs your `Main`, and its defaults are not your decisions
 
 Three traps in one place, all of them quiet.

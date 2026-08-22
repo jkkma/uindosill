@@ -24,7 +24,7 @@ public sealed class AudioSegment
     /// </summary>
     public bool SpeechDetected { get; init; } = true;
 
-    public TimeSpan Duration => TimeSpan.FromSeconds(Samples.Length / (double)SampleRate);
+    public TimeSpan Duration => AudioMath.SamplesToTime(Samples.Length, SampleRate);
 
     public TimeSpan End => Start + Duration;
 
@@ -45,6 +45,32 @@ public sealed record SegmentationReport
 
     /// <summary>Audio whose frames were above the speech threshold.</summary>
     public TimeSpan SpeechAudio { get; init; }
+
+    /// <summary>
+    /// Audio above <see cref="AudibleThresholdDb"/> that the adaptive gate kept out of every
+    /// segment — and so out of the decoder. An energy detector cannot tell quiet speech from a
+    /// fan, so this is a count of either, reported rather than guessed at;
+    /// <see cref="UnsegmentedAudibleIsMaterial"/> says when it is worth a sentence.
+    /// </summary>
+    public TimeSpan UnsegmentedAudibleAudio { get; init; }
+
+    /// <summary>The absolute line, in dBFS, that <see cref="UnsegmentedAudibleAudio"/> counts above.</summary>
+    public float AudibleThresholdDb { get; init; } = -55f;
+
+    /// <summary>
+    /// True when <see cref="UnsegmentedAudibleAudio"/> is worth telling the user about: at least a
+    /// second of it, at least a tenth of what was segmented, and segments to compare against — the
+    /// empty-transcript case has its own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The bar is a design choice, not a measurement. The breath between two utterances sits above
+    /// the line on most recordings and must not earn a sentence on every one of them; the first
+    /// phrase lost to a gate that opened too high, or a quiet stretch after a loud one, must.
+    /// </remarks>
+    public bool UnsegmentedAudibleIsMaterial =>
+        SegmentCount > 0
+        && UnsegmentedAudibleAudio >= TimeSpan.FromSeconds(1)
+        && UnsegmentedAudibleAudio.Ticks * 10 >= SegmentedAudio.Ticks;
 
     /// <summary>Every sample seen was exactly zero.</summary>
     public bool IsDigitalSilence { get; init; }

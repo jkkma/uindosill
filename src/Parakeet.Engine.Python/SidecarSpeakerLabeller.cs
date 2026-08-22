@@ -514,8 +514,10 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         {
             var built = new SpeakerTurn
             {
-                Start = TimeSpan.FromSeconds(turn.GetProperty("start").GetDouble()),
-                End = TimeSpan.FromSeconds(turn.GetProperty("end").GetDouble()),
+                // Rounded to the tick rather than truncated, as the RTTM reader already did; a
+                // turn end that arithmetic left a hair under its decimal is otherwise a tick short.
+                Start = AudioMath.SecondsToTime(turn.GetProperty("start").GetDouble()),
+                End = AudioMath.SecondsToTime(turn.GetProperty("end").GetDouble()),
                 Speaker = turn.GetProperty("speaker").GetString() ?? "spk?",
             };
 

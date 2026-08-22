@@ -38,6 +38,18 @@ public class ParakeetJsonTests
     }
 
     [Fact]
+    public void WordTimesLandOnTheTickTheySayRatherThanOneUnder()
+    {
+        // 0.57 through TimeSpan.FromSeconds is 5,699,999 ticks, which a subtitle prints as
+        // 00:00:00,569 while the JSON beside it says 0.57 (GOTCHAS §25). Rounded now, as the RTTM
+        // reader's times always were.
+        var clip = ParakeetJson.ParseBatch("""[{"text":"x","words":[{"w":"x","start":0.57,"end":1.23}]}]""")[0];
+
+        Assert.Equal(5_700_000, clip.Words[0].Start.Ticks);
+        Assert.Equal(12_300_000, clip.Words[0].End.Ticks);
+    }
+
+    [Fact]
     public void FrameSecondsComesFromTheEngineRatherThanBeingDerived()
     {
         // The engine supplies hop_length * subsampling_factor / sample_rate, so nothing here
