@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 808 tests, no weights, no display, no network — **806 passed and 2 skipped**, and
+**Status:** met. 817 tests, no weights, no display, no network — **815 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,11 +90,12 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (96 of the project's 151 CLI
-tests drive the real entry point; the other 51 never construct it — 18 on the backend default and
+**Status:** usable, tested end to end against the canned engine (103 of the project's 158 CLI
+tests drive the real entry point; the other 55 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
-`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, and 1 on the
+`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, 4 driving
+`RunOneAsync` and `Report` directly with a labeller or translator made to fail, and 1 on the
 anomaly report, which is computed before the translation pass — because no invocation can reach
 what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
@@ -1692,6 +1693,24 @@ the sidecar's memory of its death and a loaded labeller refusing the next file u
 `PassFallbackTests`, and the two load failures and two per-file failures in the window's
 `OptInFailureTests`. The fakes grew `FailOnLabel` and `FailOnTranslate` so all of it runs with no
 weights.
+
+### Fixed 2026-08-22 — a format's alias walked around its guards
+
+**`-f words --translate` wrote the word-timed file the refusal exists to prevent, and `-f .rttm`
+with no `--speakers` wrote the empty `.rttm` the other refusal names.** The parser accepts several
+spellings for a format — `words` and `webvtt-words` for `vtt-words`, a leading dot, any case,
+`text` and `plain` for `txt` — and only the writer resolved them, at write time. The two guards on
+the format list compared the spelling as typed against a canonical id, so an alias passed both;
+and `-f vtt,webvtt` reached the writer as two entries and wrote one file twice, the second as
+`name (2).vtt`. Reproduced with the built binary from the same review as the entry above; the
+window was never affected, since its list is its own checkboxes.
+
+**The list is canonical before anything reads it.** `TranscriptFormats.Canonical` resolves each
+spelling through the registry and names each format once, in first-seen order, and `transcribe`
+runs its list through it straight after validation — so the rttm guard, the word-timed refusal in
+`TranslatorFactory`, the jobs and the writer all read one spelling. Nine tests: the registry's
+resolution and its refusal of a spelling that names nothing, four spellings against the word-timed
+refusal, two against the turns guard, and five spellings of two formats writing two files.
 
 ## The honest summary
 

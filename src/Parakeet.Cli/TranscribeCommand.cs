@@ -43,6 +43,14 @@ internal static class TranscribeCommand
             }
         }
 
+        // Canonical from here on, because everything below reads this list and only the writer
+        // resolved its aliases: the rttm guard a few lines down and the word-timed refusal in
+        // TranslatorFactory compared the typed spelling against a canonical id, so `-f .rttm`
+        // wrote the empty .rttm the guard exists to refuse and `-f words --translate` wrote the
+        // word-timed file the refusal names — and `-f vtt,webvtt` wrote one file twice, the second
+        // as `name (2).vtt`. One spelling per format, once, for every guard, the jobs and the writer.
+        formats = TranscriptFormats.Canonical(formats);
+
         var overwrite = (parsed.HasFlag("overwrite"), parsed.HasFlag("skip-existing")) switch
         {
             (true, true) => throw new CliUsageException("--overwrite and --skip-existing contradict each other."),
