@@ -196,6 +196,71 @@ public class TranscriptWriterTests
     }
 
     [Fact]
+    public async Task AWriteLeavesNoStagingFileBehind()
+    {
+        // The content goes to a staging name and is moved into place, so a write that stops leaves
+        // nothing under the final name; a write that finishes leaves nothing under the staging one.
+        using var temp = new TempDirectory();
+        var job = new TranscriptionJob
+        {
+            InputPath = Path.Combine(temp.Path, "input.wav"),
+            Formats = ["txt"],
+            OutputDirectory = temp.Path,
+        };
+        var document = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hello" }],
+        };
+
+        var written = await TranscriptWriter.WriteAsync(document, job);
+
+        Assert.Contains("hello", await File.ReadAllTextAsync(Assert.Single(written)), StringComparison.Ordinal);
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp"));
+    }
+
+    [Fact]
+    public void TwoInputsThatWouldWriteOneFileAreFoundBeforeAnythingIsWritten()
+    {
+        // The same name in two folders under one output directory, and a.wav beside a.mp3 with no
+        // output directory at all: both write one stem to one place, and until 2026-08-22 the
+        // second silently replaced the first under --overwrite.
+        using var temp = new TempDirectory();
+        var shared = Path.Combine(temp.Path, "out");
+        var underOut = new[]
+        {
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "a", "call.wav"), OutputDirectory = shared },
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "b", "call.wav"), OutputDirectory = shared },
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "b", "other.wav"), OutputDirectory = shared },
+        };
+        var beside = new[]
+        {
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "c", "a.wav") },
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "c", "a.mp3") },
+        };
+        var distinct = new[]
+        {
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "a", "call.wav") },
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "b", "call.wav") },
+        };
+
+        var collision = Assert.Single(TranscriptWriter.FindOutputCollisions(underOut));
+        Assert.Equal(2, collision.Count);
+        Assert.All(collision, job => Assert.EndsWith("call.wav", job.InputPath, StringComparison.Ordinal));
+
+        Assert.Single(TranscriptWriter.FindOutputCollisions(beside));
+        Assert.Empty(TranscriptWriter.FindOutputCollisions(distinct));
+
+        // The translated run's infix is part of the stem, so a plain and a translated job of one
+        // file do not collide — that is what the infix is for.
+        var plainAndTranslated = new[]
+        {
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "a", "call.wav") },
+            new TranscriptionJob { InputPath = Path.Combine(temp.Path, "a", "call.wav"), StemSuffix = ".en" },
+        };
+        Assert.Empty(TranscriptWriter.FindOutputCollisions(plainAndTranslated));
+    }
+
+    [Fact]
     public void RenamePolicyFindsAFreeName()
     {
         using var temp = new TempDirectory();

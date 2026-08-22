@@ -48,6 +48,20 @@ public class BackendFallbackTests
     }
 
     [Fact]
+    public void ALibraryWhoseBackendCannotBeReadOffItsPathIsSaidToBeUnknownRatherThanFallenBackTo()
+    {
+        // A flat native directory or the system search path: the loader finds a library and has no
+        // backend name to record. Until 2026-08-22 the requested one was recorded in its place, so a
+        // flat CPU build was "vulkan" in the transcript's provenance and this line said nothing.
+        var message = TranscribeCommand.DescribeBackendFallback(ComputeBackend.Vulkan, loaded: null, wasNamed: false);
+
+        Assert.NotNull(message);
+        Assert.Contains("no backend name", message, StringComparison.Ordinal);
+        Assert.Contains("not known", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("fell back", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ANamedBackendIsQuotedBackAsTheUsersOwnChoice()
     {
         var message = TranscribeCommand.DescribeBackendFallback(

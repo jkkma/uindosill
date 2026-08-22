@@ -206,9 +206,12 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
             _context = handle;
             ColdLoadDuration = stopwatch.Elapsed;
 
+            // The loader's answer, and only the loader's: a library found in a flat directory or on
+            // the search path has no backend in its path, and filling the gap with the one that was
+            // requested put a guess into the transcript's provenance until 2026-08-22.
             _capabilities = _capabilities with
             {
-                Backend = ParakeetNativeLibrary.LoadedBackend ?? _options.Backend,
+                Backend = ParakeetNativeLibrary.LoadedBackend,
                 NativeAbiVersion = abi,
             };
         }

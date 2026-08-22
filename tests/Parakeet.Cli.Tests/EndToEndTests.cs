@@ -90,6 +90,29 @@ public class EndToEndTests
     }
 
     [Fact]
+    public async Task TwoInputsThatWouldWriteOneFileAreRefusedBeforeEitherIsDecoded()
+    {
+        // The same name in two folders under -o: both write out/clip.txt, and until 2026-08-22
+        // --overwrite made the second silently replace the first after both had been decoded. The
+        // `translate` verb has always refused this shape; `transcribe` now does the same, by name.
+        using var harness = new Harness();
+        Directory.CreateDirectory(Path.Combine(harness.Directory, "a"));
+        Directory.CreateDirectory(Path.Combine(harness.Directory, "b"));
+        var first = harness.WriteWav(Path.Combine("a", "clip.wav"), (0.3, false), (1, true));
+        var second = harness.WriteWav(Path.Combine("b", "clip.wav"), (0.3, false), (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--overwrite", "-o", output, first, second);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains(first, error, StringComparison.Ordinal);
+        Assert.Contains(second, error, StringComparison.Ordinal);
+        Assert.Contains("clip.<format>", error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(output) && Directory.GetFiles(output).Length > 0);
+    }
+
+    [Fact]
     public async Task NoWrittenFormatOpensWithAByteOrderMark()
     {
         // One encoding for every format the product writes: UTF-8, no mark. RTTM is the format

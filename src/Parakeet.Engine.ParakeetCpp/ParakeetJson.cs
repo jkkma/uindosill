@@ -68,9 +68,18 @@ internal static class ParakeetJson
             throw new ParakeetNativeException($"Expected a clip object, got {element.ValueKind}.");
         }
 
-        var text = element.TryGetProperty("text", out var textElement) && textElement.ValueKind == JsonValueKind.String
-            ? textElement.GetString() ?? string.Empty
-            : string.Empty;
+        // A clip with no string `text` is not an empty clip, it is a clip this binding cannot read:
+        // the field is the one thing parakeet_capi.h guarantees at this ABI, and reading its absence
+        // as "" dropped the segment and its words from the transcript with nothing said, until
+        // 2026-08-22. The ABI check catches a version skew; this catches the shape inside one.
+        if (!element.TryGetProperty("text", out var textElement) || textElement.ValueKind != JsonValueKind.String)
+        {
+            throw new ParakeetNativeException(
+                "A clip in the decoder's JSON has no string 'text' field, which parakeet_capi.h documents at this ABI. " +
+                "It is refused rather than read as empty, because an empty clip silently drops its words from the transcript.");
+        }
+
+        var text = textElement.GetString() ?? string.Empty;
 
         double? frameSeconds = element.TryGetProperty("frame_sec", out var frame) && frame.ValueKind == JsonValueKind.Number
             ? frame.GetDouble()
@@ -110,8 +119,15 @@ internal static class ParakeetJson
                 continue;
             }
 
-            var start = ReadSeconds(item, "start");
-            var end = ReadSeconds(item, "end");
+            // A word without a usable time means the clip has no usable timings. The callers' rule
+            // is that a segment with no words is timed by its text's share of the segment, and that
+            // is honest where a stack of zero-length words at the segment's head is not: until
+            // 2026-08-22 a missing or non-numeric time read as zero, and each such word became a
+            // 700 ms cue at the segment's start.
+            if (!TryReadSeconds(item, "start", out var start) || !TryReadSeconds(item, "end", out var end))
+            {
+                return [];
+            }
 
             // An end before its start is not survivable downstream: it produces subtitle cues
             // players silently drop. Collapse it to a zero-length word and let the cue builder
@@ -137,22 +153,29 @@ internal static class ParakeetJson
         return words;
     }
 
-    private static TimeSpan ReadSeconds(JsonElement element, string name)
+    /// <summary>
+    /// The number of seconds under <paramref name="name"/>, or false when there is no number there.
+    /// A number that is negative or not finite is a time the engine did report, badly, and clamps
+    /// to zero as it always has; a field that is missing or is not a number is no time at all.
+    /// </summary>
+    private static bool TryReadSeconds(JsonElement element, string name, out TimeSpan time)
     {
+        time = TimeSpan.Zero;
         if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number)
         {
-            return TimeSpan.Zero;
+            return false;
         }
 
         var seconds = value.GetDouble();
         if (!double.IsFinite(seconds) || seconds < 0)
         {
-            return TimeSpan.Zero;
+            return true;
         }
 
         // Rounded to the tick, not truncated: 0.57 through TimeSpan.FromSeconds is 5,699,999 ticks
         // and prints as 00:00:00,569 in a subtitle while the JSON says 0.57 (GOTCHAS §25).
-        return Parakeet.Core.Audio.AudioMath.SecondsToTime(seconds);
+        time = Parakeet.Core.Audio.AudioMath.SecondsToTime(seconds);
+        return true;
     }
 
     private static JsonDocument Parse(string json)

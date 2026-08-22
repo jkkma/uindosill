@@ -19,8 +19,13 @@ public sealed record EngineCapabilities
     /// </remarks>
     public string? Quantisation { get; init; }
 
-    /// <summary>Which compute backend the loaded native library is actually using.</summary>
-    public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
+    /// <summary>
+    /// Which compute backend the loaded native library is actually using — or null when that is
+    /// not known: a library found in a flat directory or on the system search path has no backend
+    /// in its path, and recording the one that was requested would put a guess into the
+    /// transcript's provenance, which it did until 2026-08-22.
+    /// </summary>
+    public ComputeBackend? Backend { get; init; } = ComputeBackend.Cpu;
 
     /// <summary>Native ABI version reported by the engine, when it has one.</summary>
     public int? NativeAbiVersion { get; init; }
