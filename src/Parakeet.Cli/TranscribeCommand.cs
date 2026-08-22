@@ -430,7 +430,7 @@ internal static class TranscribeCommand
             "entry point, so ggml decides. The value is recorded in the run summary and nowhere else.");
     }
 
-    private static async Task<JobResult> RunOneAsync(
+    internal static async Task<JobResult> RunOneAsync(
         CliContext context,
         ITranscriptionEngine engine,
         Func<CancellationToken, ValueTask> ensureEngineLoaded,
@@ -473,33 +473,57 @@ internal static class TranscribeCommand
         var document = await TranscriptionRunner.RunAsync(
             engine, audio, options, job.DisplayName, progress, ct).ConfigureAwait(false);
 
+        // The two opt-in passes below can fail where the transcript did not — a file the sidecar
+        // could not read, a segment refused for its length, a child that died — and when one does,
+        // the transcript is written without it and this file says so, rather than the finished
+        // decode going unwritten. What the pass was for is a decoration of the words; the words are
+        // what was waited for. The failure is printed here, when it happens, because in a long
+        // batch "file three had no speakers" is worth knowing before file forty has been decoded;
+        // Report reads the same list for the exit code and does not print it twice.
+        var failures = new List<PassFailure>();
+
         string? speakerWarning = null;
         if (labeller is not null && speakerOptions is not null)
         {
-            // Both audio sources are single-read, so the second pass opens the file again. That is
-            // a second decode of the whole file, and it is a cost only the opt-in pays.
-            await using var second = AudioSources.Open(job.InputPath);
-
-            // Before the labeller decodes a sample, and it is the one warning here that is about
-            // the file rather than about the request: past where this labeller's output has been
-            // established, the speaker labels are a guess and nothing after the run will say so.
-            if (SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, second.Duration) is { } longRun)
+            async Task<TranscriptDocument> LabelAsync()
             {
-                context.WriteError($"WARNING: {job.InputPath}: {longRun}");
+                // Both audio sources are single-read, so the second pass opens the file again. That
+                // is a second decode of the whole file, and it is a cost only the opt-in pays.
+                await using var second = AudioSources.Open(job.InputPath);
+
+                // Before the labeller decodes a sample, and it is the one warning here that is about
+                // the file rather than about the request: past where this labeller's output has been
+                // established, the speaker labels are a guess and nothing after the run will say so.
+                if (SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, second.Duration) is { } longRun)
+                {
+                    context.WriteError($"WARNING: {job.InputPath}: {longRun}");
+                }
+
+                return await SpeakerLabelling.LabelAsync(
+                    document, labeller, second, speakerOptions, progress, ct).ConfigureAwait(false);
             }
 
-            document = await SpeakerLabelling.LabelAsync(
-                document, labeller, second, speakerOptions, progress, ct).ConfigureAwait(false);
-            speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
+            var (labelled, failure) = await OptInPass.Speakers.RunAsync(document, LabelAsync).ConfigureAwait(false);
+            document = labelled;
 
-            // A merge the user's own --speaker-count asked for is still a merge, and the seconds
-            // beside each one are its evidence: near zero is one voice that drifted onto a second
-            // label, a large number is two people the count has just put under one name. Read off
-            // the document, which is also where the saved transcript's copy comes from, so the line
-            // printed here and the record archived beside it cannot disagree.
-            foreach (var merge in document.SpeakerFolds)
+            if (failure is null)
             {
-                context.WriteError($"{job.InputPath}: merged {merge.Describe()}.");
+                speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
+
+                // A merge the user's own --speaker-count asked for is still a merge, and the seconds
+                // beside each one are its evidence: near zero is one voice that drifted onto a second
+                // label, a large number is two people the count has just put under one name. Read off
+                // the document, which is also where the saved transcript's copy comes from, so the line
+                // printed here and the record archived beside it cannot disagree.
+                foreach (var merge in document.SpeakerFolds)
+                {
+                    context.WriteError($"{job.InputPath}: merged {merge.Describe()}.");
+                }
+            }
+            else
+            {
+                failures.Add(failure);
+                context.WriteError($"{job.InputPath}: {failure.Describe()}");
             }
         }
 
@@ -516,14 +540,26 @@ internal static class TranscribeCommand
         string? numeralWarning = null;
         if (translator is not null && translationOptions is not null)
         {
-            document = await TranscriptTranslation.TranslateAsync(
-                document, translator, translationOptions, progress, ct).ConfigureAwait(false);
+            var (english, failure) = await OptInPass.Translation.RunAsync(
+                document,
+                () => TranscriptTranslation.TranslateAsync(document, translator, translationOptions, progress, ct))
+                .ConfigureAwait(false);
 
-            // Dates and figures are what a listener checks a transcript for, and they are where a
-            // two-model cascade meets worst. Compared against the transcript as the engine wrote
-            // it, which is what `transcribed` is being kept for, so the comparison is against what
-            // was heard rather than against a second reading of the English.
-            numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+            if (failure is null)
+            {
+                document = english;
+
+                // Dates and figures are what a listener checks a transcript for, and they are where a
+                // two-model cascade meets worst. Compared against the transcript as the engine wrote
+                // it, which is what `transcribed` is being kept for, so the comparison is against what
+                // was heard rather than against a second reading of the English.
+                numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+            }
+            else
+            {
+                failures.Add(failure);
+                context.WriteError($"{job.InputPath}: {failure.Describe()}");
+            }
         }
 
         if (!quiet && context.Interactive)
@@ -533,7 +569,11 @@ internal static class TranscribeCommand
             context.Error.Write('\r');
         }
 
-        var files = await TranscriptWriter.WriteAsync(document, job, ct: ct).ConfigureAwait(false);
+        // Written as what it is: a transcript the translation failed on is the spoken one and goes
+        // under the plain name rather than the .en one that promises English, and one the speaker
+        // pass failed on has no turns for an .rttm to carry.
+        var files = await TranscriptWriter.WriteAsync(document, job.WithoutFailedPasses(failures), ct: ct)
+            .ConfigureAwait(false);
 
         return new JobResult
         {
@@ -542,6 +582,7 @@ internal static class TranscribeCommand
             Document = document,
             OutputFiles = files,
             Elapsed = DateTimeOffset.UtcNow - started,
+            FailedPasses = failures,
             // Silence wins when both apply: an empty transcript has no segments to flag, and the
             // reason it is empty is the only thing worth saying about it. A labeller at its speaker
             // cap is said after either, because it is about the names and not the words. A number
@@ -656,15 +697,26 @@ internal static class TranscribeCommand
         context.Error.Write(line.Length > 78 ? line[..78] : line.PadRight(78));
     }
 
-    private static int Report(CliContext context, IReadOnlyList<JobResult> results, bool quiet)
+    /// <summary>
+    /// Prints what each file came to and turns the batch into an exit code: success only when every
+    /// file was written with everything it asked for; partial failure when some failed, or when any
+    /// was written without a pass it asked for; runtime error when every file failed.
+    /// </summary>
+    internal static int Report(CliContext context, IReadOnlyList<JobResult> results, bool quiet)
     {
         var failed = 0;
+        var incomplete = 0;
 
         foreach (var result in results)
         {
             switch (result.State)
             {
                 case JobState.Completed:
+                    if (result.FailedPasses.Count > 0)
+                    {
+                        incomplete++;
+                    }
+
                     if (!quiet)
                     {
                         var rtf = result.Document?.RealTimeFactor;
@@ -678,7 +730,11 @@ internal static class TranscribeCommand
                             context.WriteLine($"  wrote {file}");
                         }
 
-                        if (result.OutputFiles.Count == 0)
+                        // Nothing written and nothing failed means the existing output was kept;
+                        // nothing written after a failed pass means the only format asked for was
+                        // one the pass would have fed, and the sentence printed when it failed
+                        // already says so.
+                        if (result.OutputFiles.Count == 0 && result.FailedPasses.Count == 0)
                         {
                             context.WriteLine("  wrote nothing (existing output kept)");
                         }
@@ -705,7 +761,7 @@ internal static class TranscribeCommand
             }
         }
 
-        if (failed == 0)
+        if (failed == 0 && incomplete == 0)
         {
             return ExitCodes.Success;
         }

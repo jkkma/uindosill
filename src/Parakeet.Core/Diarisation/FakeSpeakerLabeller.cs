@@ -24,6 +24,13 @@ public sealed record FakeSpeakerLabellerOptions
     public bool FailOnLoad { get; init; }
 
     /// <summary>
+    /// Load, then throw from <see cref="ISpeakerLabeller.LabelAsync"/> on every file — the shape
+    /// of a per-file engine error, which is what the callers' fallback to an unlabelled transcript
+    /// is exercised against.
+    /// </summary>
+    public bool FailOnLabel { get; init; }
+
+    /// <summary>
     /// The provider this labeller claims to have run on. Cpu by default, which is what the fake has
     /// always reported. It is settable so a test can prove the transcript's speaker provenance is
     /// read off the loaded labeller rather than defaulted into the document — a distinction no
@@ -162,6 +169,11 @@ public sealed class FakeSpeakerLabeller : ISpeakerLabeller
         options.Validate();
 
         await LoadAsync(ct).ConfigureAwait(false);
+
+        if (_options.FailOnLabel)
+        {
+            throw new InvalidOperationException("Fake speaker labeller was configured to fail on every file.");
+        }
 
         progress?.Report(new TranscriptionProgress { Stage = TranscriptionStage.LabellingSpeakers, Total = audio.Duration });
 

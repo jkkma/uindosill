@@ -186,15 +186,27 @@ public sealed partial class JobViewModel : ObservableObject
         IsIndeterminate = false;
         Progress = 100;
         Error = result.Error;
-        Warning = result.Warning;
         OutputFiles.Clear();
         OutputFiles.AddRange(result.OutputFiles);
+
+        // A pass that failed is said twice on purpose, and in two registers: the status names what
+        // the row is missing — "Done — 2 files, without speaker labels" — so it reads at a glance
+        // beside the rows that have them, and the warning line carries the reason. "Done" alone
+        // over a transcript that was asked for speakers and has none would be this window's own
+        // silent failure.
+        var without = result.FailedPasses.Count == 0
+            ? string.Empty
+            : ", without " + string.Join(" or ", result.FailedPasses.Select(f => f.Pass.Product).Distinct());
+
+        Warning = result.FailedPasses.Count == 0
+            ? result.Warning
+            : string.Join(" ", result.FailedPasses.Select(f => f.Describe()).Append(result.Warning).Where(w => w is { Length: > 0 }));
 
         Status = result.State switch
         {
             JobState.Completed when result.OutputFiles.Count > 0 =>
-                $"Done — {result.OutputFiles.Count} file{(result.OutputFiles.Count == 1 ? string.Empty : "s")}",
-            JobState.Completed => "Done",
+                $"Done — {result.OutputFiles.Count} file{(result.OutputFiles.Count == 1 ? string.Empty : "s")}{without}",
+            JobState.Completed => "Done" + without,
             JobState.Failed => "Failed",
             JobState.Cancelled => "Cancelled",
             _ => "Done",

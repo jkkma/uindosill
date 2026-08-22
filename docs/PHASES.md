@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 793 tests, no weights, no display, no network — **791 passed and 2 skipped**, and
+**Status:** met. 808 tests, no weights, no display, no network — **806 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (96 of the project's 147 CLI
+**Status:** usable, tested end to end against the canned engine (96 of the project's 151 CLI
 tests drive the real entry point; the other 51 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -1649,6 +1649,49 @@ has no natives and no weights, so the six tests in `BackendFallbackTests` hold t
 are: the wording, and the timing — through a stub engine that reports one backend before its load
 and another after, so a check made too early reads the requested backend back as agreement and the
 suite goes red. That is the only shape of this bug CI can catch, and it is the shape it had.
+
+### Fixed 2026-08-22 — a failed opt-in pass no longer costs the transcript, and the window loads before it decodes
+
+**Two defects with one shape, found by an adversarial review of the v1 features.** The speaker pass
+and the English pass both run after the ASR pass, and until this date a failure in either — a file
+the sidecar could not read, a segment refused for its length, a child that had died — failed the
+file: `RunOneAsync` and the window's `RunJobAsync` ran ASR, then labeller, then translator, then
+writer, with nothing between them, and the batch runner recorded the exception as a failed job with
+no output. The words were finished and unaffected; minutes of decode went unwritten. A dead sidecar
+made it every remaining file, each one decoded in full and then discarded the same way, because
+the diariser stages a whole file before it sends anything and the death was discovered only by the
+write after the staging. The `PythonEngineException`/`PythonSidecarException` split that
+`ARCHITECTURE.md` describes as what lets a caller decide was read by no caller.
+
+**Now the transcript is the product and the pass is a decoration of it.** Both surfaces run each
+pass through `OptInPass`, which returns the document as it was with the reason when the pass
+throws anything but a cancellation; the file is written without speakers or without English, under
+the plain name rather than the `.en` one and without the turns-only format rather than with an
+empty one, and it says so — on stderr when it happens and in exit code 3 on the command line, in
+the row's status ("Done — 2 files, without speaker labels") and warning in the window, and in the
+window's summary so "Finished 3 files" cannot be read as three files with speakers.
+`PythonSidecar` records its first failure — a child that exited, a write that failed, a handshake
+that was refused — and refuses every later request at once with that reason, and both sidecar
+engines ask it at `LoadAsync`, which every pass goes through, so a file after the death is refused
+before it is decoded and staged. The child is not restarted: a failure of the sidecar is still
+every remaining file, by design; what changed is that each of them learns it in milliseconds.
+
+**The window also loads both engines before the first file, which the command line already did.**
+`LabellerFactory` and `TranslatorFactory` load eagerly for a reason their remarks state — a
+bundled Python that will not start or a checkpoint that will not load is worth finding out before a
+three-hour decode — and `TranscribeViewModel.StartAsync` created the engines and let the first
+file's pass load them, so the same failure arrived after that file's full decode, and again after
+every other file's. It now loads in `StartAsync`, inside the try, so the failure is a sentence in
+the status bar with every row still waiting. A second `StartAsync` on a sidecar whose handshake
+failed also no longer returns as though it had succeeded — it was keyed on "a process exists" —
+which was how a protocol-mismatched bundle refused on one file could have answered the next.
+
+Fifteen tests hold it: the helper's three rules and the output reduction in `OptInPassTests`,
+the sidecar's memory of its death and a loaded labeller refusing the next file unread in
+`SidecarFaultTests`, the two fallbacks, a pass that succeeds and the exit code in the CLI's
+`PassFallbackTests`, and the two load failures and two per-file failures in the window's
+`OptInFailureTests`. The fakes grew `FailOnLabel` and `FailOnTranslate` so all of it runs with no
+weights.
 
 ## The honest summary
 

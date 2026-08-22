@@ -827,6 +827,27 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 return;
             }
 
+            // Loaded here, before a file is decoded, on the command line's terms (LabellerFactory
+            // and TranslatorFactory do the same): a bundled Python that will not start, a
+            // checkpoint that will not load, a provider that refuses — each is a sentence in the
+            // status bar now, rather than a failed row after the first file's full decode and
+            // again after every other file's, which is what loading inside the pass cost until
+            // 2026-08-22. It also means the labeller's capabilities are real from here on, so the
+            // backend and parity sentences read off a loaded engine rather than a guess at one.
+            if (labeller is not null)
+            {
+                StatusMessage = "Loading the speaker labelling model…";
+                await labeller.LoadAsync(ct).ConfigureAwait(true);
+            }
+
+            if (translator is not null)
+            {
+                StatusMessage = "Loading the translation model…";
+                await translator.LoadAsync(ct).ConfigureAwait(true);
+            }
+
+            StatusMessage = null;
+
             // What has not been transcribed, which is not the same as what is in the queue. A row
             // that finished keeps its transcript, its outputs and its "Done"; the alternative is
             // that adding a fourth file to a queue of three re-decodes the three, which costs
@@ -887,6 +908,17 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 ? $"Finished {results.Count} file{(results.Count == 1 ? string.Empty : "s")}."
                 : $"Finished with {failed} failure{(failed == 1 ? string.Empty : "s")}" +
                   (cancelled > 0 ? $" and {cancelled} cancelled." : ".");
+
+            // A file written without a pass it asked for is finished and is not what was asked
+            // for, and a summary that said only "finished" would be the first to hide it. The row
+            // carries the reason; this names what is missing so that "Finished 3 files" cannot be
+            // read as three files with speakers.
+            var incomplete = results.Where(r => r.State == JobState.Completed && r.FailedPasses.Count > 0).ToList();
+            if (incomplete.Count > 0)
+            {
+                var missing = incomplete.SelectMany(r => r.FailedPasses).Select(f => f.Pass.Product).Distinct();
+                ran += $" {incomplete.Count} of them written without {string.Join(" or ", missing)} — the row says why.";
+            }
 
             // What was skipped is said out loud. A queue of four reporting that it finished one is
             // otherwise indistinguishable from a queue of four that lost three.
@@ -996,41 +1028,61 @@ public sealed partial class TranscribeViewModel : ObservableObject
             ProcessingTime = DateTimeOffset.UtcNow - started,
         };
 
+        // Either opt-in pass can fail where the transcript did not, and when one does the transcript
+        // is written and shown without it and the row says so — the command line's rule, for the
+        // command line's reason: the words were waited for, the pass is a decoration of them, and a
+        // row marked Failed over a finished decode is that decode thrown away.
+        var failures = new List<PassFailure>();
+
         string? speakerWarning = null;
         if (labeller is not null)
         {
             // The second pass. Both audio sources are single-read, so the file is opened again;
             // the labelled transcript then replaces the streamed one in the window, names in front.
             vm.Status = "Labelling speakers";
-            await using var second = AudioSources.Open(job.InputPath);
 
-            document = await SpeakerLabelling
-                .LabelAsync(document, labeller, second, speakerOptions, progress, ct)
-                .ConfigureAwait(true);
+            async Task<TranscriptDocument> LabelAsync()
+            {
+                await using var second = AudioSources.Open(job.InputPath);
+                return await SpeakerLabelling
+                    .LabelAsync(document, labeller, second, speakerOptions, progress, ct)
+                    .ConfigureAwait(true);
+            }
 
-            // Four sentences, widest first, and each about a different thing: what ran and whether
-            // it reproduces the published figure, the recording being longer than the labels are
-            // established on, the count merging these labels into those, and the labeller finishing
-            // at its ceiling. The duration one is on screen before the batch started
-            // (SpeakerDurationWarning) and repeated here because it belongs to the transcript too —
-            // an options panel is not where somebody reads a result a week later.
-            //
-            // The backend sentence is first because it is the one that changes what every other
-            // sentence is about: on a stack that does not reproduce the reference, the labels those
-            // three describe are this machine's own. It comes from the provider because only the
-            // provider knows what kind of labeller this is, and it is read here rather than at
-            // Start because the provider is chosen inside the sidecar and is not known until load.
-            speakerWarning = Join(
-                Join(
-                    _engines.DescribeLabeller(labeller),
+            var (labelled, failure) = await OptInPass.Speakers.RunAsync(document, LabelAsync).ConfigureAwait(true);
+
+            if (failure is null)
+            {
+                document = labelled;
+
+                // Four sentences, widest first, and each about a different thing: what ran and whether
+                // it reproduces the published figure, the recording being longer than the labels are
+                // established on, the count merging these labels into those, and the labeller finishing
+                // at its ceiling. The duration one is on screen before the batch started
+                // (SpeakerDurationWarning) and repeated here because it belongs to the transcript too —
+                // an options panel is not where somebody reads a result a week later.
+                //
+                // The backend sentence is first because it is the one that changes what every other
+                // sentence is about: on a stack that does not reproduce the reference, the labels those
+                // three describe are this machine's own. It comes from the provider because only the
+                // provider knows what kind of labeller this is, and it is read here rather than at
+                // Start because the provider is chosen inside the sidecar and is not known until load.
+                speakerWarning = Join(
                     Join(
-                        SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
-                        DescribeMerges(document.SpeakerFolds))),
-                SpeakerLabelling.DescribeLimit(labeller, document));
+                        _engines.DescribeLabeller(labeller),
+                        Join(
+                            SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
+                            DescribeMerges(document.SpeakerFolds))),
+                    SpeakerLabelling.DescribeLimit(labeller, document));
 
-            text.Clear();
-            text.Append(JobViewModel.Render(document));
-            Publish();
+                text.Clear();
+                text.Append(JobViewModel.Render(document));
+                Publish();
+            }
+            else
+            {
+                failures.Add(failure);
+            }
         }
 
         // Last, and after the speakers on purpose: SpeakerAssignment attributes a speaker per word
@@ -1042,32 +1094,48 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // the window offer both panes; it is also what the silence check below has to read, since
         // translation destroys the signal it rests on.
         var transcribed = document;
+        var translated = false;
         string? numeralWarning = null;
         string? translatorWarning = null;
 
         if (translator is not null)
         {
             vm.Status = "Translating";
-            document = await TranscriptTranslation
-                .TranslateAsync(document, translator, progress: progress, ct: ct)
+
+            var (english, failure) = await OptInPass.Translation.RunAsync(
+                document,
+                () => TranscriptTranslation.TranslateAsync(document, translator, progress: progress, ct: ct))
                 .ConfigureAwait(true);
 
-            // Dates and figures are what a listener checks a transcript for, and they are where a
-            // two-model cascade meets worst. Compared against what was heard rather than against a
-            // second reading of the English.
-            numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+            if (failure is null)
+            {
+                document = english;
+                translated = true;
 
-            // What ran, on the same terms as the labeller's. The translator checks itself against a
-            // committed reference at load and this window was running that check and discarding the
-            // answer — which costs the check and delivers none of what it buys.
-            translatorWarning = _engines.DescribeTranslator(translator);
+                // Dates and figures are what a listener checks a transcript for, and they are where a
+                // two-model cascade meets worst. Compared against what was heard rather than against a
+                // second reading of the English.
+                numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
 
-            text.Clear();
-            text.Append(JobViewModel.Render(document));
-            Publish();
+                // What ran, on the same terms as the labeller's. The translator checks itself against a
+                // committed reference at load and this window was running that check and discarding the
+                // answer — which costs the check and delivers none of what it buys.
+                translatorWarning = _engines.DescribeTranslator(translator);
+
+                text.Clear();
+                text.Append(JobViewModel.Render(document));
+                Publish();
+            }
+            else
+            {
+                failures.Add(failure);
+            }
         }
 
-        var written = await TranscriptWriter.WriteAsync(document, job, ct: ct).ConfigureAwait(true);
+        // Written as what it is — the spoken transcript under the plain name when the translation
+        // failed, and with no turns-only format when the speakers did.
+        var written = await TranscriptWriter.WriteAsync(document, job.WithoutFailedPasses(failures), ct: ct)
+            .ConfigureAwait(true);
 
         var silence = DescribeSilence(engine, transcribed);
         var result = new JobResult
@@ -1077,6 +1145,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Document = document,
             OutputFiles = written,
             Elapsed = DateTimeOffset.UtcNow - started,
+            FailedPasses = failures,
 
             // Silence first, then the labeller at its cap, then what the translator's provider means
             // for the English, then a number the English lost: the file, the names, the whole
@@ -1084,7 +1153,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Warning = Join(Join(Join(silence, speakerWarning), translatorWarning), numeralWarning),
         };
 
-        vm.Complete(result, translator is null ? null : transcribed);
+        // The pane switcher is drawn for a row that has both documents; a row whose translation
+        // failed has one, so it gets no switcher rather than two panes of the same text.
+        vm.Complete(result, translated ? transcribed : null);
         RefreshTranscriptPane();
         return result;
     }

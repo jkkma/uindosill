@@ -43,6 +43,7 @@ public sealed class PythonSidecar : IAsyncDisposable
     private Process? _process;
     private Task? _reader;
     private Task? _errorReader;
+    private PythonSidecarException? _fault;
     private int _nextId;
     private volatile bool _disposed;
 
@@ -50,6 +51,45 @@ public sealed class PythonSidecar : IAsyncDisposable
 
     /// <summary>What the sidecar said about itself at the handshake.</summary>
     public JsonElement? Hello { get; private set; }
+
+    /// <summary>
+    /// True once the child is known to be gone, or to have failed its handshake, or to have broken
+    /// the protocol — after which every request is refused at once rather than written to a pipe
+    /// nothing is reading.
+    /// </summary>
+    /// <remarks>
+    /// Before this existed a dead child was discovered by the next write, and only by it: the
+    /// diariser decodes and stages a whole file before it sends anything, so in a batch every file
+    /// after the one the child died on paid its own decode and then failed the same way. The first
+    /// failure is the one that is kept, because it carries the reason — the traceback tail, the
+    /// protocol number — and everything after it is a consequence.
+    /// </remarks>
+    public bool IsFaulted => _fault is not null;
+
+    /// <summary>Throws the recorded failure, if there is one.</summary>
+    /// <remarks>
+    /// For a caller with work to do before its request, so that the sidecar's death is found out
+    /// before that work rather than by the write after it. A fresh exception each time, with the
+    /// recorded one as its inner, so every caller gets its own stack and the first one's message.
+    /// </remarks>
+    public void ThrowIfFaulted()
+    {
+        if (_fault is { } fault)
+        {
+            throw new PythonSidecarException(fault.Message, fault);
+        }
+    }
+
+    /// <summary>
+    /// Records <paramref name="fresh"/> as the sidecar's failure unless one is already recorded,
+    /// and returns the one that stands — <paramref name="fresh"/> itself when it was first, or a
+    /// new exception carrying the earlier one's message when it was not.
+    /// </summary>
+    private PythonSidecarException Faulted(PythonSidecarException fresh)
+    {
+        var standing = Interlocked.CompareExchange(ref _fault, fresh, null);
+        return standing is null ? fresh : new PythonSidecarException(standing.Message, standing);
+    }
 
     private sealed class Pending
     {
@@ -59,8 +99,16 @@ public sealed class PythonSidecar : IAsyncDisposable
     }
 
     /// <summary>Starts the interpreter and completes the handshake. Idempotent.</summary>
+    /// <remarks>
+    /// "Started" means handshaken. A child whose handshake failed is not started a second time and
+    /// is not pretended to have started: it was killed when the handshake failed, the reason was
+    /// recorded, and every later call throws it again — otherwise a protocol-2 sidecar refused once
+    /// would be answering a protocol-1 host's requests from the second file on.
+    /// </remarks>
     public async Task StartAsync(CancellationToken ct = default)
     {
+        ThrowIfFaulted();
+
         if (_process is not null)
         {
             return;
@@ -100,15 +148,45 @@ public sealed class PythonSidecar : IAsyncDisposable
         _reader = Task.Run(ReadLoopAsync, CancellationToken.None);
         _errorReader = Task.Run(ReadErrorLoopAsync, CancellationToken.None);
 
-        var hello = await SendAsync("hello", _ => { }, null, ct).ConfigureAwait(false);
-        Hello = hello;
-
-        var protocol = hello.TryGetProperty("protocol", out var value) ? value.GetInt32() : -1;
-        if (protocol != ProtocolVersion)
+        try
         {
-            throw new PythonSidecarException(
-                $"The Python engines speak protocol {protocol} and this build speaks {ProtocolVersion}. " +
-                "The bundled Python and the application are out of step — reinstall rather than mixing them.");
+            var hello = await SendAsync("hello", _ => { }, null, ct).ConfigureAwait(false);
+            Hello = hello;
+
+            var protocol = hello.TryGetProperty("protocol", out var value) && value.ValueKind == JsonValueKind.Number
+                ? value.GetInt32()
+                : -1;
+            if (protocol != ProtocolVersion)
+            {
+                throw new PythonSidecarException(
+                    $"The Python engines speak protocol {protocol} and this build speaks {ProtocolVersion}. " +
+                    "The bundled Python and the application are out of step — reinstall rather than mixing them.");
+            }
+        }
+        catch (Exception exc)
+        {
+            // Recorded before the kill, so that this reason stands over the "exited unexpectedly"
+            // the reader will report once the child is gone — unless the child went first, in which
+            // case its own death, with the stderr tail attached, is the better reason and is kept.
+            Faulted(exc as PythonSidecarException
+                ?? new PythonSidecarException($"The Python engines failed their handshake: {exc.Message}", exc));
+            TryKill();
+            throw;
+        }
+    }
+
+    private void TryKill()
+    {
+        try
+        {
+            if (_process is { HasExited: false } process)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // Already gone.
         }
     }
 
@@ -126,6 +204,7 @@ public sealed class PythonSidecar : IAsyncDisposable
         CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        ThrowIfFaulted();
 
         var id = Interlocked.Increment(ref _nextId);
         var pending = new Pending
@@ -159,7 +238,12 @@ public sealed class PythonSidecar : IAsyncDisposable
         catch (Exception exc) when (exc is not OperationCanceledException)
         {
             _pending.TryRemove(id, out _);
-            throw new PythonSidecarException($"The Python engines stopped accepting input: {exc.Message}", exc);
+
+            // A write that fails is a child that is gone, and the tail of what it said before it
+            // went belongs on this message as much as on the reader's — this is the one a batch
+            // sees when the child died between two files, with nothing pending to carry the other.
+            throw Faulted(new PythonSidecarException(
+                $"The Python engines stopped accepting input: {exc.Message}" + DescribeStandardError(), exc));
         }
         finally
         {
@@ -187,13 +271,15 @@ public sealed class PythonSidecar : IAsyncDisposable
         }
         catch (Exception exc)
         {
-            FailAll(new PythonSidecarException($"The Python engines' output ended: {exc.Message}", exc));
+            FailAll(Faulted(new PythonSidecarException(
+                $"The Python engines' output ended: {exc.Message}" + DescribeStandardError(), exc)));
             return;
         }
 
-        // stdout closed: the child is gone, so nothing still waiting will ever be answered.
-        FailAll(new PythonSidecarException(
-            "The Python engines exited unexpectedly." + DescribeStandardError()));
+        // stdout closed: the child is gone, so nothing still waiting will ever be answered — and
+        // nothing sent later will be either, which is what recording the fault is for.
+        FailAll(Faulted(new PythonSidecarException(
+            "The Python engines exited unexpectedly." + DescribeStandardError())));
     }
 
     private void Dispatch(string line)
