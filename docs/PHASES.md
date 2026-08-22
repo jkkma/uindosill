@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 859 tests, no weights, no display, no network — **857 passed and 2 skipped**, and
+**Status:** met. 865 tests, no weights, no display, no network — **863 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (104 of the project's 162 CLI
+**Status:** usable, tested end to end against the canned engine (105 of the project's 163 CLI
 tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -1891,6 +1891,42 @@ Seven tests: the no-word path under the cap; the unknown backend's sentence; the
 on three shapes and the plain-beside-translated case that must not collide; the command line
 refusing a collision before either file is decoded; a write leaving no staging file; the clip with
 no text refused; and the word without a time emptying the clip's timings. The suite is 859.
+
+### Fixed 2026-08-22 — the diariser's host side: a zero-length word that went the wrong way, a fold that counted twice, two figures that printed with commas, a flag whose help overstated it, and a staging that held the file twice
+
+**Six defects around the speaker labels, from the same review, none of them in the model.** A
+zero-length word — the decoder's end-before-start collapse — overlaps nothing, so inside two turns
+it fell to the nearest-turn rule with a negative gap for both and went to the turn that started
+earlier, the opposite of the tie-break every word around it took: B | A | B, one word under the
+other name. After a fold relabelled a dropped label, the survivor's turns were coalesced only after
+the last fold, so two turns of the survivor that now overlapped each other both counted their
+overlap with the next label, and the next merge's evidence read 10 s where the union was 7 s.
+`DescribeParityFailure` formatted its two magnitudes in a plain interpolated string, and the
+`diarise` summary nested a `$"… {minutes:F1} min"` inside a hole of an invariant one — its own
+interpolated string, formatted in the current culture — so on a comma-decimal machine the first read
+`8,143e-04` and the second "0.0 s of speech over 0,0 min"; the translator's decode description had
+the same shape in `length penalty 0,6`. `--speaker-backend-unverified`'s help said it allowed a
+backend that had not passed the parity check, when it unlocks `dml` by name and nothing else, and
+`ARCHITECTURE.md` said a failed check runs because "the user asked for that provider", which under
+`auto` they did not. Staging a file for the diariser held it twice — the resampled samples in a
+list that doubled its way up, and a second whole-file array of their bytes — so the "690 MB for
+three hours" figure was half the truth. And a zero-frame WAV reaching the sidecar was an
+`IndexError` in the featurizer, reported as `internal`.
+
+**Each is now what it should be.** A zero-length word is judged by containment and takes the
+crosstalk's tie-break; the fold coalesces the survivor after every relabel; the three figures are
+invariant; the help says what the flag unlocks and that nothing lifts a failed check, and
+`ARCHITECTURE.md` says why a failed check runs under both a named provider and `auto`;
+`WavWriter.WriteFloat32` streams its samples in 16 KB blocks and the staging list is sized from
+the duration, so the file is held once; and the sidecar answers a zero-frame WAV with no turns —
+driven by hand on the real graph here. **Not decided here:** whether CUDA stays second in the
+diariser's `auto` order, where the code and its own docstring keep it deliberately and three newer
+sentences say it is out — that is the maintainer's call and is still open.
+
+Six tests: the zero-length word in crosstalk; the fold's second merge at 7 s; the parity sentence
+and the decode description under a comma-decimal culture; the `diarise` summary line likewise
+(green in CI either way, red on a comma-decimal machine before the fix); and the float32 writer
+round-tripping a length that is neither small nor a block multiple. The suite is 865.
 
 ## The honest summary
 

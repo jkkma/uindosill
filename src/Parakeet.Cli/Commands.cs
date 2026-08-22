@@ -199,9 +199,10 @@ internal static class Commands
             new OptionSpec
             {
                 Name = "speaker-backend-unverified",
-                Help = "Allow a diariser backend that has not passed the parity check on this machine. For " +
-                       "measuring one, not for using one: a backend that fails parity produces speaker labels " +
-                       "no figure in this project describes.",
+                Help = "Unlock dml, the one diariser backend refused by name: at ONNX Runtime's default settings it " +
+                       "scores 53.15% DER while looking healthy. For measuring it, not for using it. This flag does not " +
+                       "lift a failed parity check — a backend that fails the check runs anyway, with a warning that its " +
+                       "labels are this machine's own and no figure in this project describes them.",
             },
             new OptionSpec
             {

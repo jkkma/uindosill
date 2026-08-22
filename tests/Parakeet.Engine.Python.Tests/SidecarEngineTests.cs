@@ -473,6 +473,29 @@ public sealed class SidecarEngineTests
         Assert.Equal(["webgpu: no adapter"], translator.FellBackFrom);
     }
 
+    [Fact]
+    public async Task TheDecodeDescriptionIsInvariantOnACommaDecimalMachine()
+    {
+        // "length penalty 0,65" is what this read under es-PY until 2026-08-22: the sentence goes
+        // into run reports, and CA1305 cannot see an interpolated string.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"marian-onnx-python","modelId":"opus-mt","backend":"cpu","maxSourceTokens":512,"beams":6,"maxNewTokens":512,"lengthPenalty":0.65,"earlyStopping":true}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(TranslatorOptions, sidecar);
+
+        await translator.LoadAsync();
+
+        Assert.Equal("beam 6, at most 512 new tokens, length penalty 0.65, early stopping on", translator.DecodeDescription);
+    }
+
     private static TranscriptSegment Segment(string text) => new()
     {
         Text = text,
