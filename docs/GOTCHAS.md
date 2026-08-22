@@ -523,6 +523,24 @@ there and always older than the change being checked.
 projects ran, and `| tail -8` in the same session hid two of the six assemblies — which is how a run
 that covered everything looked like a run that had lost a third of the suite.
 
+**A retired project's leftovers used to keep voting, and the staleness guard could not see them.**
+`bin/`, `obj/` and `TestResults/` are gitignored, so moving a project to `attic/` takes its sources
+out of the solution and leaves all three sitting in the working copy. The leftover TRX is not stale
+by the rule above — it is *newer* than the leftover DLL, because one run produced both — so the
+pair is self-consistent and sailed through. On 2026-08-22 the remains of
+`Parakeet.Engine.Sortformer.Tests` and `Parakeet.Engine.Marian.Tests` added 46 and 31 tests to a
+suite that no longer contains either, and the check reported **854 against a documented 777** with
+every per-assembly line looking plausible. A `TestResults/` now counts only when a `*.csproj` sits
+beside it, and the directories skipped are **named in a line above the totals** rather than dropped
+in silence: they do not appear in `git status`, so that notice is the only thing in the repository
+that says they are on the disk at all. Deleting them is safe and is the actual fix.
+
+That rule and the staleness rule are both exercised by `python3 scripts/check-test-counts.py
+--self-check`, which builds a live project and a retired one's leftovers in a temporary directory
+and needs no toolchain. It exists because each failure needs the working copy in one particular
+shape and a checkout is only ever in one shape at a time, so the real tree can demonstrate neither.
+CI runs it beside the count check.
+
 ## 29. Scripted logits mean nothing in absolute terms, because the search takes a log-softmax first
 
 The beam search's tests write their own distributions — `Logits((Eos, -5f))` and the like — so that
