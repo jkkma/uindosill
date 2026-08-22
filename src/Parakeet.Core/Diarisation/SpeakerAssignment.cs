@@ -215,17 +215,24 @@ public static class SpeakerLabelling
     /// <summary>
     /// Labels <paramref name="audio"/> with <paramref name="labeller"/>, renames the voices for
     /// display when the options ask for it, attributes the document's words and segments, and
-    /// returns a document that also carries the raw turns and the labeller's model id as
-    /// provenance. The caller opens <paramref name="audio"/> — a fresh source, because the one the
-    /// transcript came from has been read to its end.
+    /// returns a document that also carries the raw turns, the labeller's model id and backend, and
+    /// what the requested speaker count did to the labels, all as provenance. The caller opens
+    /// <paramref name="audio"/> — a fresh source, because the one the transcript came from has been
+    /// read to its end.
     /// </summary>
+    /// <remarks>
+    /// The folds come back on the returned document rather than through a collection the caller
+    /// passes in, which is what this took until 2026-08-22. A caller that wanted to print them and
+    /// a transcript that had to record them were two channels carrying one fact, and the transcript
+    /// was the one that went unfilled — an archived run showed no trace of its own fold. One
+    /// channel now, and every surface reads it off the document.
+    /// </remarks>
     public static async Task<TranscriptDocument> LabelAsync(
         TranscriptDocument document,
         ISpeakerLabeller labeller,
         IAudioSource audio,
         SpeakerLabellingOptions? options = null,
         IProgress<TranscriptionProgress>? progress = null,
-        ICollection<string>? merges = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -240,15 +247,8 @@ public static class SpeakerLabelling
         // its own count can over-segment one person into two labels on a long recording, and that
         // is the one failure a post-step can repair — two labels merge, one label cannot be split.
         // A no-op when the model already produced no more labels than were asked for.
-        IReadOnlyList<string> folds = [];
+        IReadOnlyList<SpeakerFold> folds = [];
         var counted = options.SpeakerCount is { } wanted ? SpeakerTurns.FoldDownTo(raw, wanted, out folds) : raw;
-        if (merges is not null)
-        {
-            foreach (var fold in folds)
-            {
-                merges.Add(fold);
-            }
-        }
 
         var turns = options.DisplayNameFormat is { } format
             ? SpeakerTurns.RenameByFirstAppearance(counted, format)
@@ -264,6 +264,12 @@ public static class SpeakerLabelling
             // moved out of process the provider is resolved inside the sidecar, so this is not a
             // value any caller could have supplied.
             SpeakerBackend = labeller.Capabilities.Backend,
+
+            // The count as asked for, and what honouring it cost. Both, because they answer
+            // different questions and neither implies the other: a count that folded nothing still
+            // constrained the run, and folds cannot occur without a count.
+            RequestedSpeakerCount = options.SpeakerCount,
+            SpeakerFolds = folds,
         };
     }
 

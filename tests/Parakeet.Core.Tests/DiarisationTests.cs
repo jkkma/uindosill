@@ -745,17 +745,81 @@ public class SpeakerLabellingPipelineTests
         var document = await TranscriptionRunner.RunAsync(
             engine, new ArrayAudioSource(samples), sourceName: "call.wav");
 
-        var merges = new List<string>();
         var labelled = await SpeakerLabelling.LabelAsync(
             document,
             labeller,
             new ArrayAudioSource(samples),
-            new SpeakerLabellingOptions { SpeakerCount = 2 },
-            merges: merges);
+            new SpeakerLabellingOptions { SpeakerCount = 2 });
 
         Assert.Equal(["Speaker 1", "Speaker 2"], SpeakerTurns.Speakers(labelled.SpeakerTurns));
-        Assert.Equal(2, merges.Count);
-        Assert.All(merges, merge => Assert.Contains("they talked over each other for", merge, StringComparison.Ordinal));
+
+        // On the document, not into a collection the caller passed in: this is what a saved
+        // transcript records, and the command line and the window print it from here too.
+        Assert.Equal(2, labelled.RequestedSpeakerCount);
+        Assert.Equal(2, labelled.SpeakerFolds.Count);
+        Assert.All(
+            labelled.SpeakerFolds,
+            fold => Assert.Contains("they talked over each other for", fold.Describe(), StringComparison.Ordinal));
+
+        // The fold names the labeller's own cluster ids on both sides, which is a different
+        // vocabulary to the display names above — the merge happened before the rename, and the
+        // dropped label has no display name because it did not survive to earn one.
+        Assert.All(labelled.SpeakerFolds, fold => Assert.StartsWith("SPEAKER_", fold.Dropped, StringComparison.Ordinal));
+        Assert.All(labelled.SpeakerFolds, fold => Assert.StartsWith("SPEAKER_", fold.Kept, StringComparison.Ordinal));
+
+        // And out the other end, through the formatter a saved transcript actually goes through.
+        // The two halves are covered apart from each other — the fold on the document here, the
+        // serialisation in SpeakerFormattingTests — and this is the join between them, which is
+        // where the reported failure lived: the fold happened, and the archived file showed no
+        // trace of it. Asserted on a document that a labeller produced rather than one built by
+        // hand, because a hand-built document cannot demonstrate that the pass fills the field.
+        using var json = JsonDocument.Parse(TranscriptFormats.Json.Format(labelled));
+        var written = json.RootElement.GetProperty("speakerFolds");
+
+        Assert.Equal(2, written.GetArrayLength());
+        Assert.Equal(2, json.RootElement.GetProperty("requestedSpeakerCount").GetInt32());
+        Assert.All(
+            written.EnumerateArray(),
+            fold =>
+            {
+                Assert.StartsWith("SPEAKER_", fold.GetProperty("from").GetString(), StringComparison.Ordinal);
+                Assert.StartsWith("SPEAKER_", fold.GetProperty("into").GetString(), StringComparison.Ordinal);
+                Assert.True(fold.GetProperty("overlapSec").GetDouble() >= 0);
+            });
+    }
+
+    /// <summary>
+    /// A count that merged nothing is still recorded, and that is the case the field exists for.
+    /// </summary>
+    /// <remarks>
+    /// The failure this was written against: an archived run made with <c>--speaker-count 2</c>
+    /// whose model had already returned two labels folds nothing, and with only the fold list to go
+    /// on it is byte-for-byte indistinguishable from a run where no count was given. Those are
+    /// different transcripts to judge — one had its label set constrained to a number a human
+    /// supplied — so the count travels whether or not it changed the labels.
+    /// </remarks>
+    [Fact]
+    public async Task ACountThatFoldsNothingIsStillRecorded()
+    {
+        var samples = TestAudio.Build((12, true));
+        await using var labeller = new FakeSpeakerLabeller(new FakeSpeakerLabellerOptions { SpeakerCount = 2 });
+        await using var engine = new FakeTranscriptionEngine();
+        var document = await TranscriptionRunner.RunAsync(
+            engine, new ArrayAudioSource(samples), sourceName: "call.wav");
+
+        var counted = await SpeakerLabelling.LabelAsync(
+            document, labeller, new ArrayAudioSource(samples), new SpeakerLabellingOptions { SpeakerCount = 2 });
+
+        Assert.Equal(2, counted.RequestedSpeakerCount);
+        Assert.Empty(counted.SpeakerFolds);
+
+        // And a run given no count at all says so, rather than reporting the number the labeller
+        // happened to find as though somebody had asked for it.
+        var uncounted = await SpeakerLabelling.LabelAsync(
+            document, labeller, new ArrayAudioSource(samples));
+
+        Assert.Null(uncounted.RequestedSpeakerCount);
+        Assert.Empty(uncounted.SpeakerFolds);
     }
 
     /// <summary>
@@ -990,8 +1054,20 @@ public class SpeakerLabellingPipelineTests
 
         SpeakerTurns.FoldDownTo(drifted, 2, out var merges);
         var reported = Assert.Single(merges);
-        Assert.Contains("'early'", reported, StringComparison.Ordinal);
-        Assert.Contains("0.0 s", reported, StringComparison.Ordinal);
+
+        // Which side is which, which the sentence alone could not pin: the pair tie on speech, so
+        // the survivor is the one that appeared first, and 'late' is the label that goes away.
+        Assert.Equal("late", reported.Dropped);
+        Assert.Equal("early", reported.Kept);
+        Assert.Equal(0, reported.OverlapSeconds);
+        Assert.Contains("'early'", reported.Describe(), StringComparison.Ordinal);
+        Assert.Contains("0.0 s", reported.Describe(), StringComparison.Ordinal);
+
+        // The numbers are carried as numbers rather than only inside the sentence, because a saved
+        // transcript is queried rather than read: "which archived runs merged a pair that overlapped
+        // for more than a minute" is not a question a formatted string answers.
+        Assert.NotNull(reported.RunnerUpSeconds);
+        Assert.True(reported.RunnerUpSeconds > 0);
 
         // And when the least-colliding pair is not actually complementary, the number says so
         // rather than the message pretending the merge was clean.
@@ -1002,11 +1078,40 @@ public class SpeakerLabellingPipelineTests
 
         SpeakerTurns.FoldDownTo(conversing, 2, out var loud);
         Assert.NotEmpty(loud);
-        Assert.All(loud, m => Assert.Contains("talked over each other for", m, StringComparison.Ordinal));
+        Assert.All(loud, m => Assert.Contains("talked over each other for", m.Describe(), StringComparison.Ordinal));
 
         // No fold, nothing reported.
         SpeakerTurns.FoldDownTo(drifted, 3, out var none);
         Assert.Empty(none);
+    }
+
+    /// <summary>
+    /// The margin is rendered from the two seconds figures, including when there is no runner-up.
+    /// </summary>
+    /// <remarks>
+    /// Folding two labels into one leaves nothing to compare the merge with, and the sentence has
+    /// to say that rather than divide by a number it does not have. The ratio is not stored beside
+    /// the seconds for the same reason no derived figure is: it is recomputable from both, and a
+    /// stored copy is a second version of one fact.
+    /// </remarks>
+    [Fact]
+    public void AMergeWithNoOtherPairSaysSoRatherThanQuotingAMargin()
+    {
+        SpeakerTurn[] two = [T(0, 10, "a"), T(20, 30, "b")];
+
+        SpeakerTurns.FoldDownTo(two, 1, out var merges);
+        var only = Assert.Single(merges);
+
+        Assert.Null(only.RunnerUpSeconds);
+        Assert.Contains("no other pair to compare it with", only.Describe(), StringComparison.Ordinal);
+        Assert.DoesNotContain("x more", only.Describe(), StringComparison.Ordinal);
+
+        // With a runner-up and a non-zero overlap, the ratio is what the sentence leads on — the
+        // absolute alone says nothing about whether the fold had a real choice to make.
+        SpeakerTurn[] three = [T(0, 10, "a"), T(5, 15, "b"), T(30, 40, "c"), T(31, 39, "a")];
+
+        SpeakerTurns.FoldDownTo(three, 2, out var withMargin);
+        Assert.All(withMargin, m => Assert.Contains("the next-closest pair overlapped", m.Describe(), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1097,6 +1202,22 @@ public class SpeakerFormattingTests
         SourceName = "two hosts.mp3",
         SpeakerModelId = "fake-speakers",
         SpeakerBackend = ComputeBackend.WebGpu,
+
+        // Two turns from a labeller that found three: the arrangement --speaker-count exists for,
+        // where one voice drifted onto a second label and the user's number merged it back. The
+        // fold's labels are the labeller's cluster ids, which the turns above no longer carry —
+        // renaming runs after the merge, and a label that was merged away never earns a name.
+        RequestedSpeakerCount = 2,
+        SpeakerFolds =
+        [
+            new SpeakerFold
+            {
+                Dropped = "SPEAKER_02",
+                Kept = "SPEAKER_00",
+                OverlapSeconds = 0.4,
+                RunnerUpSeconds = 57.6,
+            },
+        ],
         SpeakerTurns =
         [
             new SpeakerTurn { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(2.6), Speaker = "Speaker 1" },
@@ -1137,6 +1258,15 @@ public class SpeakerFormattingTests
         Assert.Contains("**[00:00:00]** **Speaker 1:** first thing we should do", markdown, StringComparison.Ordinal);
         Assert.Contains("| Speaker labels | fake-speakers |", markdown, StringComparison.Ordinal);
         Assert.Contains("| Speaker backend | webgpu |", markdown, StringComparison.Ordinal);
+
+        // The count a human supplied and what honouring it did to the labels — the same sentence
+        // the command line prints, from the one place that builds it.
+        Assert.Contains("| Speaker count requested | 2 |", markdown, StringComparison.Ordinal);
+        Assert.Contains(
+            "| Speaker folds | 'SPEAKER_02' into 'SPEAKER_00' (they talked over each other for 0.4 s; "
+            + "the next-closest pair overlapped 57.6 s, 144.0x more) |",
+            markdown,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1155,6 +1285,85 @@ public class SpeakerFormattingTests
         Assert.Equal(2.6, turns[1].GetProperty("start").GetDouble());
     }
 
+    /// <summary>
+    /// The requested count and the merges it forced travel in the JSON provenance.
+    /// </summary>
+    /// <remarks>
+    /// Written against a real gap: on <c>two-hosts-new-episode.2026-08-20-csharp-diariser.json</c>,
+    /// archived from a run made with <c>--speaker-count 2</c>, nothing in the file recorded either
+    /// the count or the merge it forced. The fold was printed to the terminal and lost with it, so
+    /// a transcript whose labels had been edited after the model was done looked exactly like one
+    /// that had not — and the numbers a reader would judge the edit by existed nowhere.
+    /// </remarks>
+    [Fact]
+    public void JsonRecordsTheRequestedCountAndEveryFoldItForced()
+    {
+        using var json = JsonDocument.Parse(TranscriptFormats.Json.Format(Labelled()));
+        var root = json.RootElement;
+
+        Assert.Equal(2, root.GetProperty("requestedSpeakerCount").GetInt32());
+
+        var folds = root.GetProperty("speakerFolds");
+        var fold = Assert.Single(folds.EnumerateArray());
+        Assert.Equal("SPEAKER_02", fold.GetProperty("from").GetString());
+        Assert.Equal("SPEAKER_00", fold.GetProperty("into").GetString());
+
+        // Numbers, not the sentence: an archived run is queried, and "which of these merged a pair
+        // that overlapped for more than a minute" is not a question prose answers.
+        Assert.Equal(0.4, fold.GetProperty("overlapSec").GetDouble());
+        Assert.Equal(57.6, fold.GetProperty("runnerUpSec").GetDouble());
+    }
+
+    /// <summary>
+    /// A count honoured without merging anything is still recorded, and is what tells the two runs
+    /// apart.
+    /// </summary>
+    [Fact]
+    public void JsonKeepsTheRequestedCountEvenWhenNothingWasFolded()
+    {
+        var unfolded = TranscriptFormats.Json.Format(Labelled() with { SpeakerFolds = [] });
+        using var json = JsonDocument.Parse(unfolded);
+
+        Assert.Equal(2, json.RootElement.GetProperty("requestedSpeakerCount").GetInt32());
+        Assert.False(json.RootElement.TryGetProperty("speakerFolds", out _));
+
+        // And a labelled run nobody gave a count to carries neither, rather than reporting the
+        // number the labeller happened to find as though it had been asked for.
+        var uncounted = TranscriptFormats.Json.Format(
+            Labelled() with { RequestedSpeakerCount = null, SpeakerFolds = [] });
+        using var without = JsonDocument.Parse(uncounted);
+
+        Assert.False(without.RootElement.TryGetProperty("requestedSpeakerCount", out _));
+        Assert.False(without.RootElement.TryGetProperty("speakerFolds", out _));
+    }
+
+    /// <summary>
+    /// A merge with nothing to compare it against says so in JSON as well as in the sentence.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than an absent key: a reader deciding whether a fold was well founded needs to
+    /// tell "there was no other pair" from "this field was not written", and those are the same
+    /// thing to a consumer that only checks for presence.
+    /// </remarks>
+    [Fact]
+    public void JsonWritesANullMarginWhenThereWasNoOtherPair()
+    {
+        var lonely = Labelled() with
+        {
+            RequestedSpeakerCount = 1,
+            SpeakerFolds =
+            [
+                new SpeakerFold { Dropped = "SPEAKER_01", Kept = "SPEAKER_00", OverlapSeconds = 12.25 },
+            ],
+        };
+
+        using var json = JsonDocument.Parse(TranscriptFormats.Json.Format(lonely));
+        var fold = Assert.Single(json.RootElement.GetProperty("speakerFolds").EnumerateArray());
+
+        Assert.Equal(12.25, fold.GetProperty("overlapSec").GetDouble());
+        Assert.Equal(JsonValueKind.Null, fold.GetProperty("runnerUpSec").ValueKind);
+    }
+
     [Fact]
     public void AnUnlabelledDocumentSerialisesWithoutAnySpeakerField()
     {
@@ -1162,6 +1371,8 @@ public class SpeakerFormattingTests
         {
             SpeakerModelId = null,
             SpeakerBackend = null,
+            RequestedSpeakerCount = null,
+            SpeakerFolds = [],
             SpeakerTurns = [],
             Segments = [.. Labelled().Segments.Select(s => s with { Speaker = null, Words = [.. s.Words.Select(w => w with { Speaker = null })] })],
         };

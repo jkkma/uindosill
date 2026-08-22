@@ -329,6 +329,60 @@ public class FormatterTests
         Assert.Equal("first", first.GetProperty("words")[0].GetProperty("w").GetString());
     }
 
+    /// <summary>
+    /// Every provenance field is metadata, including the ones that describe an edit made to the
+    /// labels rather than the machinery that produced them.
+    /// </summary>
+    /// <remarks>
+    /// The whole block is one switch and the speaker fields have to be inside it. A caller that
+    /// asked for no metadata and got back the count somebody ran with, or the merges that count
+    /// forced, would be getting provenance it had opted out of — and these two are the newest, so
+    /// they are the ones most likely to be added outside the guard.
+    /// </remarks>
+    [Fact]
+    public void SuppressingMetadataSuppressesTheSpeakerProvenanceToo()
+    {
+        var labelled = Document() with
+        {
+            SpeakerModelId = "sortformer-4spk-v2.1",
+            SpeakerBackend = ComputeBackend.Cuda,
+            RequestedSpeakerCount = 2,
+            SpeakerFolds =
+            [
+                new SpeakerFold
+                {
+                    Dropped = "SPEAKER_02",
+                    Kept = "SPEAKER_00",
+                    OverlapSeconds = 0.4,
+                    RunnerUpSeconds = 57.6,
+                },
+            ],
+        };
+
+        var bare = TranscriptFormats.Json.Format(
+            labelled, TranscriptFormatOptions.Default with { IncludeMetadata = false });
+        using var json = JsonDocument.Parse(bare);
+
+        Assert.False(json.RootElement.TryGetProperty("model", out _));
+        Assert.False(json.RootElement.TryGetProperty("speakerModel", out _));
+        Assert.False(json.RootElement.TryGetProperty("requestedSpeakerCount", out _));
+        Assert.False(json.RootElement.TryGetProperty("speakerFolds", out _));
+        Assert.Equal(2, json.RootElement.GetProperty("segments").GetArrayLength());
+
+        // And with metadata on, all four are there — otherwise this test passes on a formatter
+        // that never writes them at all.
+        using var full = JsonDocument.Parse(TranscriptFormats.Json.Format(labelled));
+        Assert.Equal("sortformer-4spk-v2.1", full.RootElement.GetProperty("speakerModel").GetString());
+        Assert.Equal("cuda", full.RootElement.GetProperty("speakerBackend").GetString());
+        Assert.Equal(2, full.RootElement.GetProperty("requestedSpeakerCount").GetInt32());
+        Assert.Equal(1, full.RootElement.GetProperty("speakerFolds").GetArrayLength());
+
+        var markdown = TranscriptFormats.Markdown.Format(
+            labelled, TranscriptFormatOptions.Default with { IncludeMetadata = false });
+        Assert.DoesNotContain("Speaker count requested", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("Speaker folds", markdown, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void JsonIsValidWhenNothingWasTranscribed()
     {

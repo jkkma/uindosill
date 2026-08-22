@@ -48,6 +48,71 @@ public sealed record SpeakerTurn
     }
 }
 
+/// <summary>
+/// One merge <see cref="SpeakerTurns.FoldDownTo(IReadOnlyList{SpeakerTurn}, int, out IReadOnlyList{SpeakerFold})"/>
+/// made, with the evidence it made it on: which label was absorbed into which, how long the two
+/// spent talking over each other, and how far behind the next-closest pair was.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A record rather than the sentence it renders, because the same fold is owed to three audiences
+/// that cannot share a string: the command line prints it, the window puts it in a warning, and a
+/// saved transcript carries it as provenance a reader queries months later. <see cref="Describe"/>
+/// is the one place the sentence is built, so the line a user reads and the numbers an archived
+/// JSON holds cannot drift apart.
+/// </para>
+/// <para>
+/// <b>Both labels are the labeller's own, before any display renaming.</b> The fold runs on the
+/// diariser's cluster ids and <see cref="SpeakerTurns.RenameByFirstAppearance"/> runs after it, so
+/// <see cref="Dropped"/> names something that no longer exists by the time the transcript is
+/// written — its turns are under <see cref="Kept"/>. Renaming half the pair would be the only
+/// alternative, since a label that was merged away never earns a display name, and a record that
+/// mixed two vocabularies would be worse than one that states which vocabulary it is in.
+/// </para>
+/// </remarks>
+public sealed record SpeakerFold
+{
+    /// <summary>The label that was merged away. Its turns now carry <see cref="Kept"/>.</summary>
+    public required string Dropped { get; init; }
+
+    /// <summary>The label that survived — whichever of the pair held more speech.</summary>
+    public required string Kept { get; init; }
+
+    /// <summary>Seconds the two labels were active at the same instant.</summary>
+    public required double OverlapSeconds { get; init; }
+
+    /// <summary>
+    /// The next-closest pair's overlap in seconds, or null when the pair merged was the only one
+    /// there was. This is the margin, and it — not <see cref="OverlapSeconds"/> on its own — is
+    /// what says whether the fold had a real choice to make: two hosts of a three-hour recording
+    /// overlap for minutes however the labels are cut, so an alarming absolute can still be the
+    /// clearest pair in the file by a factor of two.
+    /// </summary>
+    public double? RunnerUpSeconds { get; init; }
+
+    /// <summary>
+    /// The sentence a user reads, in the invariant culture. These seconds are quoted back in bug
+    /// reports and printed beside run summaries that are invariant too, so a decimal separator
+    /// taken from the operator's locale would leave one run's own output disagreeing with itself.
+    /// </summary>
+    public string Describe()
+    {
+        var margin = RunnerUpSeconds is not { } runnerUp
+            ? "no other pair to compare it with"
+            : OverlapSeconds > 0
+                ? string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"the next-closest pair overlapped {runnerUp:F1} s, {runnerUp / OverlapSeconds:F1}x more")
+                : string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"the next-closest pair overlapped {runnerUp:F1} s");
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"'{Dropped}' into '{Kept}' (they talked over each other for {OverlapSeconds:F1} s; {margin})");
+    }
+}
+
 /// <summary>Helpers over a list of turns that more than one caller needs.</summary>
 public static class SpeakerTurns
 {
@@ -153,7 +218,7 @@ public static class SpeakerTurns
     /// asked for a count and the count wins, but nobody should be told it was well founded.
     /// </remarks>
     public static IReadOnlyList<SpeakerTurn> FoldDownTo(
-        IReadOnlyList<SpeakerTurn> turns, int cap, out IReadOnlyList<string> merges)
+        IReadOnlyList<SpeakerTurn> turns, int cap, out IReadOnlyList<SpeakerFold> merges)
     {
         ArgumentNullException.ThrowIfNull(turns);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cap);
@@ -165,7 +230,7 @@ public static class SpeakerTurns
             return turns;
         }
 
-        var made = new List<string>();
+        var made = new List<SpeakerFold>();
         var current = turns.ToList();
         var remaining = labels.ToList();
 
@@ -214,23 +279,18 @@ public static class SpeakerTurns
             // The MARGIN is the evidence, not the absolute. Two hosts of a three-hour podcast overlap
             // for a couple of minutes however you cut them, so 131.8 s reads alarming on its own and
             // is in fact the clearest pair in the file by a factor of two. What says whether the fold
-            // had a real choice to make is how far the next-best pair was behind it.
-            // Invariant, like every other figure this product prints. These seconds are evidence a
-            // user quotes back in a bug report, and the run summary printed beside them is invariant
-            // too, so a decimal separator taken from the operator's locale would leave one run's own
-            // output disagreeing with itself and stop two machines' reports comparing.
-            var margin = double.IsPositiveInfinity(runnerUp) || runnerUp == double.MaxValue
-                ? "no other pair to compare it with"
-                : bestCollision > 0
-                    ? string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"the next-closest pair overlapped {runnerUp:F1} s, {runnerUp / bestCollision:F1}x more")
-                    : string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"the next-closest pair overlapped {runnerUp:F1} s");
-            made.Add(string.Create(
-                CultureInfo.InvariantCulture,
-                $"'{drop}' into '{keep}' (they talked over each other for {bestCollision:F1} s; {margin})"));
+            // had a real choice to make is how far the next-best pair was behind it — so it is
+            // carried beside the absolute rather than folded into a verdict here, and every surface
+            // that reports the fold reports both.
+            made.Add(new SpeakerFold
+            {
+                Dropped = drop,
+                Kept = keep,
+                OverlapSeconds = bestCollision,
+                RunnerUpSeconds = double.IsPositiveInfinity(runnerUp) || runnerUp == double.MaxValue
+                    ? null
+                    : runnerUp,
+            });
             current = [.. current.Select(t => t.Speaker == drop ? t with { Speaker = keep } : t)];
             remaining.Remove(drop);
         }

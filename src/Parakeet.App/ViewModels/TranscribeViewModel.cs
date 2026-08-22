@@ -1004,9 +1004,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
             vm.Status = "Labelling speakers";
             await using var second = AudioSources.Open(job.InputPath);
 
-            var merges = new List<string>();
             document = await SpeakerLabelling
-                .LabelAsync(document, labeller, second, speakerOptions, progress, merges, ct)
+                .LabelAsync(document, labeller, second, speakerOptions, progress, ct)
                 .ConfigureAwait(true);
 
             // Four sentences, widest first, and each about a different thing: what ran and whether
@@ -1026,7 +1025,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
                     _engines.DescribeLabeller(labeller),
                     Join(
                         SpeakerLabelling.DescribeDurationRisk(labeller.Capabilities, document.AudioDuration),
-                        DescribeMerges(merges))),
+                        DescribeMerges(document.SpeakerFolds))),
                 SpeakerLabelling.DescribeLimit(labeller, document));
 
             text.Clear();
@@ -1104,10 +1103,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// reads alarming on its own and means nothing without the runner-up beside it. Near-zero
     /// margin is a merge the count forced rather than one the timeline supports.
     /// </remarks>
-    private static string? DescribeMerges(IReadOnlyList<string> merges) =>
+    private static string? DescribeMerges(IReadOnlyList<SpeakerFold> merges) =>
         merges.Count == 0
             ? null
-            : $"Folded to the speaker count you asked for: merged {string.Join("; ", merges)}. The margin is the "
+            : $"Folded to the speaker count you asked for: merged {string.Join("; ", merges.Select(m => m.Describe()))}. The margin is the "
               + "evidence rather than the raw seconds — two hosts of a long recording overlap for minutes however "
               + "you cut them, so what matters is how far behind the next-closest pair was. A merge with little or "
               + "no margin means the count has probably put two people under one name.";

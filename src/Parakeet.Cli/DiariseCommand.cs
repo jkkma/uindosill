@@ -145,14 +145,14 @@ internal static class DiariseCommand
             // Same repair as `transcribe --speakers`, which gets it inside SpeakerLabelling.LabelAsync.
             // This command drives the labeller directly, so it applies it here rather than inheriting
             // it, and says what it did: a merge the user's own flag asked for is not a silent one.
-            IReadOnlyList<string> merges = [];
+            IReadOnlyList<SpeakerFold> merges = [];
             var turns = options.SpeakerCount is { } wanted
                 ? SpeakerTurns.FoldDownTo(raw, wanted, out merges)
                 : raw;
 
             foreach (var merge in merges)
             {
-                context.WriteError($"{stem}: merged {merge}.");
+                context.WriteError($"{stem}: merged {merge.Describe()}.");
             }
 
             if (merges.Count > 0)
