@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 852 tests, no weights, no display, no network — **850 passed and 2 skipped**, and
+**Status:** met. 859 tests, no weights, no display, no network — **857 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,11 +90,11 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (103 of the project's 160 CLI
-tests drive the real entry point; the other 57 never construct it — 18 on the backend default and
+**Status:** usable, tested end to end against the canned engine (104 of the project's 162 CLI
+tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
-`CommandLineParser`, 6 holding the fallback line's timing against a stub engine, 6 driving
+`CommandLineParser`, 7 holding the fallback line's timing and wording against a stub engine, 6 driving
 `RunOneAsync`, `Report` and the translate verb's file loop directly with a labeller or translator
 made to fail or refuse and a batch made to cancel, and 1 on the anomaly report, which is computed
 before the translation pass — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
@@ -1854,6 +1854,43 @@ out as sixteen thousand samples a second, chunked equal to whole, identity untou
 `JUNK`, the zero-length `data` with audio and the empty `data` with metadata; and times that land
 on their tick — the helper at several rates, a segment's start, duration and end, the segmenter's
 own start, and a decoded word's. The suite is 852.
+
+### Fixed 2026-08-22 — output and provenance: a cue cap one path ignored, a backend the provenance guessed, two inputs that wrote one file, a write that could be cut in half, and a decoder shape read as empty
+
+**Five defects between the transcript and the disk, from the same review.** The subtitle cue
+builder enforced its 7 s cap only on the word-timed path; a segment that arrived without word
+timings — every segment of a translated subtitle — was split by characters alone and timed by
+share, so a 26 s cue came out of a 30 s segment under a cap the options and `ARCHITECTURE.md` both
+state. The native loader recorded a library found in a flat directory as the backend that was
+*requested*, and one found on the system search path as nothing, which the engine then filled in
+with the request again — so a flat CPU build went into a transcript's provenance as `vulkan`, and
+the fallback line had nothing to compare. Two inputs that write one stem to one place — the same
+name in two folders under `-o`, or `a.wav` beside `a.mp3` — were both decoded and the second then
+replaced the first under `--overwrite`, was skipped under `--skip`, or was renamed beside it; the
+`translate` verb had always refused that shape. `TranscriptWriter` wrote straight to the final name
+with a cancellable write, so a Ctrl-C mid-write left a truncated transcript that the Rename policy
+treated as a finished one and wrote the next run beside. And `ParakeetJson` read a clip with no
+string `text` as an empty clip, dropping the segment and its words with nothing said, and read a
+word with no numeric time as a word at zero, stacking each one at the segment's head as a 700 ms
+cue.
+
+**Each is now what it should have been.** The no-word path tightens its character capacity until
+no chunk's share of the segment is past the cap, a word being the unit. `EngineCapabilities.Backend`
+is nullable, the loader records a flat-directory or search-path load as unknown, the engine takes
+the loader's answer and nothing else, the transcript's provenance writes `"backend": null`, and the
+command line and the Models tab say that which backend is running is not known rather than that it
+fell back. `TranscriptWriter.FindOutputCollisions` groups jobs by destination stem and directory,
+and `transcribe` refuses a batch with a collision by name before anything is decoded, as `translate`
+does; the writer stages beside the final name and moves into place, so a write that stops leaves
+nothing under the final name. A clip with no string `text` is a `ParakeetNativeException` — the
+shape inside an ABI the version check already holds — and a word without a numeric time makes the
+clip one with no timings, which the callers time by share; a negative or non-finite time still
+clamps to zero, as it always did.
+
+Seven tests: the no-word path under the cap; the unknown backend's sentence; the collision finder
+on three shapes and the plain-beside-translated case that must not collide; the command line
+refusing a collision before either file is decoded; a write leaving no staging file; the clip with
+no text refused; and the word without a time emptying the clip's timings. The suite is 859.
 
 ## The honest summary
 

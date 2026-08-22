@@ -103,7 +103,10 @@ public static class ParakeetNativeLibrary
     /// <summary>Path of the library that was actually loaded, once one has been.</summary>
     public static string? LoadedPath { get; private set; }
 
-    /// <summary>Backend directory the loaded library came from.</summary>
+    /// <summary>
+    /// Backend directory the loaded library came from — or null when it came from a flat directory
+    /// or the OS search path, where its backend cannot be read off its path and is not guessed.
+    /// </summary>
     public static ComputeBackend? LoadedBackend { get; private set; }
 
     /// <summary>Every path tried, in order. The content of a good load-failure message.</summary>
@@ -462,7 +465,7 @@ public static class ParakeetNativeLibrary
     /// <summary><see cref="PreferredBackend"/> over <see cref="BackendsPresentOnDisk"/>.</summary>
     public static ComputeBackend PreferredBackendOnDisk() => PreferredBackend(BackendsPresentOnDisk());
 
-    private static IEnumerable<(ComputeBackend Backend, string Directory)> CandidateDirectories()
+    private static IEnumerable<(ComputeBackend? Backend, string Directory)> CandidateDirectories()
     {
         var roots = CandidateRoots();
 
@@ -476,10 +479,12 @@ public static class ParakeetNativeLibrary
         }
 
         // A flat directory with no per-backend subdirectory: the shape a developer gets from
-        // unzipping one upstream release.
+        // unzipping one upstream release. Which backend that library is cannot be read off its
+        // path, and it is not recorded as the requested one — until 2026-08-22 it was, and a flat
+        // CPU build went into the transcript's provenance as "vulkan". It is recorded as unknown.
         foreach (var root in roots)
         {
-            yield return (_requestedBackend, root);
+            yield return (null, root);
         }
     }
 

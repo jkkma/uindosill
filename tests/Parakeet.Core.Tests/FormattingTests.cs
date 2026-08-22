@@ -118,6 +118,23 @@ public class SubtitleCueBuilderTests
     }
 
     [Fact]
+    public void SegmentWithoutWordTimestampsRespectsTheDurationCapToo()
+    {
+        // The no-word path split by characters only, so a 26 s cue came out of a 30 s segment
+        // against a 7 s cap that only the word-timed path enforced — and every cue of a translated
+        // subtitle is on this path, because translation carries no word timings.
+        var text = string.Join(' ', Enumerable.Repeat("word", 12));
+        var cues = SubtitleCueBuilder.Build([Segment(10, 36, text, withWords: false)]);
+
+        Assert.True(cues.Count >= 4, $"only {cues.Count} cue(s) for 26 s under a 7 s cap");
+        Assert.All(cues, c => Assert.True(
+            c.End - c.Start <= SubtitleOptions.Default.MaxCueDuration + TimeSpan.FromMilliseconds(1),
+            $"a {(c.End - c.Start).TotalSeconds:0.##} s cue against a 7 s cap"));
+        Assert.Equal(TimeSpan.FromSeconds(10), cues[0].Start);
+        Assert.InRange(cues[^1].End.TotalSeconds, 35, 37);
+    }
+
+    [Fact]
     public void EmptySegmentsAreSkipped()
     {
         var cues = SubtitleCueBuilder.Build([Segment(0, 2, "   ", withWords: false), Segment(3, 5, "real text")]);

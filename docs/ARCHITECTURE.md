@@ -385,8 +385,10 @@ measurement.
 `SubtitleCueBuilder` turns transcript segments into cues: split on word boundaries using the engine's
 word timestamps, capped at 42 characters × 2 lines and 7 seconds, wrapped at a balanced break rather
 than greedily, and tidied so cues never overlap — overlapping cues make players drop one silently.
-Segments that arrive without word timestamps are still split and timed by character share, because a
-thirty-second wall of text is not a subtitle and dropping the text is worse than approximate timing.
+Segments that arrive without word timestamps are still split and timed by character share — under the
+same 7 s cap, which until 2026-08-22 only the word-timed path enforced, so every cue of a translated
+subtitle spanned its whole segment — because a thirty-second wall of text is not a subtitle and
+dropping the text is worse than approximate timing.
 
 A cue also keeps the words each of its lines was wrapped from (`SubtitleCue.LineWords`), which is
 what `vtt-words` needs to put a timestamp against each word. That mapping is carried rather than

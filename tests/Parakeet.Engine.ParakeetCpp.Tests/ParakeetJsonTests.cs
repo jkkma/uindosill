@@ -50,6 +50,30 @@ public class ParakeetJsonTests
     }
 
     [Fact]
+    public void AClipWithNoTextFieldIsAShapeErrorRatherThanAnEmptySegment()
+    {
+        // `text` is the one field parakeet_capi.h guarantees at this ABI. Reading its absence as ""
+        // dropped the segment and its words from the transcript with nothing said, until 2026-08-22;
+        // the ABI check catches a version skew and this catches the shape inside one.
+        var failure = Assert.Throws<ParakeetNativeException>(
+            () => ParakeetJson.ParseBatch("""[{"frame_sec":0.08,"words":[{"w":"x","start":0.1,"end":0.2}]}]"""));
+
+        Assert.Contains("'text'", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWordWithoutATimeMeansTheClipHasNoTimingsRatherThanAStackAtItsHead()
+    {
+        // A missing or non-numeric time read as zero until 2026-08-22, so each such word was a
+        // zero-length word at the segment's start and each became a 700 ms cue there. No words is
+        // the honest answer — the callers then time the text by its share of the segment.
+        var clip = ParakeetJson.ParseBatch("""[{"text":"a b c","words":[{"w":"a","start":0.1,"end":0.2},{"w":"b","end":0.4},{"w":"c","start":"x","end":0.6}]}]""")[0];
+
+        Assert.Equal("a b c", clip.Text);
+        Assert.Empty(clip.Words);
+    }
+
+    [Fact]
     public void FrameSecondsComesFromTheEngineRatherThanBeingDerived()
     {
         // The engine supplies hop_length * subsampling_factor / sample_rate, so nothing here

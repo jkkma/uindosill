@@ -224,9 +224,16 @@ public sealed partial class ModelsViewModel : ObservableObject
                 ? string.Create(CultureInfo.InvariantCulture, $", loaded in {d.TotalSeconds:0.0} s")
                 : string.Empty;
 
-            var fellBack = _session.RequestedBackend is { } requested && _session.LoadedBackend != requested
-                ? $"  ⚠ {requested.ToString().ToLowerInvariant()} was requested — the native loader fell back."
-                : string.Empty;
+            // Three answers, not two: the backend that was asked for, another one, or none known — a
+            // library found in a flat directory or on the search path has no backend in its path, and
+            // that is not a fallback, it is a gap the transcript's provenance now records as one.
+            var fellBack = _session.RequestedBackend is not { } requested
+                ? string.Empty
+                : _session.LoadedBackend is null
+                    ? "  ⚠ The library was found outside a backend directory, so which backend is running is not known."
+                    : _session.LoadedBackend != requested
+                        ? $"  ⚠ {requested.ToString().ToLowerInvariant()} was requested — the native loader fell back."
+                        : string.Empty;
 
             return $"Loaded: {name} on {backend}{took}.{fellBack}";
         }

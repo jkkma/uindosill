@@ -106,6 +106,22 @@ internal static class TranscribeCommand
             })
             .ToList();
 
+        // Two inputs that would write one file — the same name in two folders under -o, a.wav
+        // beside a.mp3 — are refused here, as `translate` refuses them, rather than letting the
+        // second replace, skip, or rename itself beside the first after the first was decoded.
+        // Until 2026-08-22 `--overwrite` made that a silent replacement.
+        foreach (var collision in TranscriptWriter.FindOutputCollisions(jobs))
+        {
+            var first = collision[0];
+            var directory = first.OutputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(first.InputPath)) ?? ".";
+            context.WriteError(
+                $"{string.Join(" and ", collision.Select(j => j.InputPath))} would all be written as " +
+                $"{Path.GetFileNameWithoutExtension(first.InputPath) + first.StemSuffix}.<format> in {directory}, and only " +
+                "one of them would survive it. Give them different names, run them separately, or give each its own " +
+                "--out directory.");
+            return ExitCodes.UsageError;
+        }
+
         var requestedBackend = EngineFactory.ParseBackend(parsed.Value("backend"));
 
         await using var engine = EngineFactory.Create(context, new EngineRequest
@@ -406,7 +422,7 @@ internal static class TranscribeCommand
     /// that the wording is checkable without a model on disk, which is all CI has.
     /// </summary>
     internal static string? DescribeBackendFallback(
-        ComputeBackend requested, ComputeBackend loaded, bool wasNamed)
+        ComputeBackend requested, ComputeBackend? loaded, bool wasNamed)
     {
         if (loaded == requested)
         {
@@ -419,11 +435,21 @@ internal static class TranscribeCommand
             ? $"{Name(requested)} was requested"
             : $"{Name(requested)} was chosen automatically, because this build carries its binaries,";
 
+        if (loaded is null)
+        {
+            // Not a fallback — nothing is known either way. The library was found where its backend
+            // cannot be read off its path, and until 2026-08-22 the requested one was recorded in
+            // its place, which is how a flat CPU build became "vulkan" in a transcript's provenance.
+            return $"{how} but the native loader found its library in a directory with no backend name — a flat " +
+                   "layout, or the system search path — so which backend is running is not known and the " +
+                   "transcript records none.";
+        }
+
         var suggestion = requested == ComputeBackend.Cuda && loaded != ComputeBackend.Vulkan
             ? "  Vulkan is not tried after CUDA; pass --backend vulkan for the other GPU tier."
             : string.Empty;
 
-        return $"{how} but the native loader fell back to {Name(loaded)}.{suggestion}";
+        return $"{how} but the native loader fell back to {Name(loaded.Value)}.{suggestion}";
     }
 
     private static void WarnAboutThreads(CliContext context, ParsedCommandLine parsed, ITranscriptionEngine engine)

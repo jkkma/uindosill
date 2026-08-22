@@ -303,11 +303,74 @@ public static class TranscriptWriter
             }
 
             var content = formatter.Format(document, formatOptions);
-            await File.WriteAllTextAsync(path, content, TextOutput.Utf8NoBom, ct).ConfigureAwait(false);
+            await WriteAtomicallyAsync(path, content, ct).ConfigureAwait(false);
             written.Add(path);
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// Writes beside the final name and moves into place, so a write that stops — cancelled, or
+    /// the disk filling — leaves nothing under the final name.
+    /// </summary>
+    /// <remarks>
+    /// Until 2026-08-22 the content went straight to the final name with a cancellable write, and a
+    /// Ctrl-C mid-write left a truncated transcript that the Rename policy then treated as a finished
+    /// one and wrote the next run beside.
+    /// </remarks>
+    private static async Task WriteAtomicallyAsync(string path, string content, CancellationToken ct)
+    {
+        var staging = path + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(staging, content, TextOutput.Utf8NoBom, ct).ConfigureAwait(false);
+            File.Move(staging, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(staging);
+            }
+            catch (IOException)
+            {
+                // The staging file is the only thing left behind, and only when the disk or the
+                // directory is already refusing; the original failure is the one to report.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // As above.
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Groups of jobs that would write to the same stem in the same directory — two inputs of one
+    /// name in different folders under one output directory, or <c>a.wav</c> beside <c>a.mp3</c> —
+    /// so a caller can refuse before the second quietly replaces, skips, or is renamed beside the
+    /// first after the first was decoded.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<TranscriptionJob>> FindOutputCollisions(IEnumerable<TranscriptionJob> jobs)
+    {
+        ArgumentNullException.ThrowIfNull(jobs);
+
+        // Windows paths compare without case; elsewhere they do not. The comparison is over the
+        // destination, not the input, because that is where the collision happens.
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+        return jobs
+            .Where(job => job.Formats.Count > 0)
+            .GroupBy(
+                job => Path.Combine(
+                    Path.GetFullPath(job.OutputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(job.InputPath)) ?? "."),
+                    Path.GetFileNameWithoutExtension(job.InputPath) + job.StemSuffix),
+                comparer)
+            .Where(group => group.Count() > 1)
+            .Select(group => (IReadOnlyList<TranscriptionJob>)group.ToList())
+            .ToList();
     }
 
     internal static string? ResolvePath(string directory, string stem, string extension, OverwritePolicy policy)

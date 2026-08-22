@@ -372,7 +372,8 @@ public static class SubtitleCueBuilder
 
     private static void AppendProportionalCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)
     {
-        var chunks = SplitByCapacity(segment.Text, options.CapacityFor(segment.Speaker));
+        var duration = segment.Duration > TimeSpan.Zero ? segment.Duration : options.MinCueDuration;
+        var chunks = SplitByCapacityAndTime(segment.Text, options.CapacityFor(segment.Speaker), duration, options.MaxCueDuration);
         if (chunks.Count == 0)
         {
             return;
@@ -385,7 +386,6 @@ public static class SubtitleCueBuilder
         }
 
         var cursor = segment.Start;
-        var duration = segment.Duration > TimeSpan.Zero ? segment.Duration : options.MinCueDuration;
 
         for (var i = 0; i < chunks.Count; i++)
         {
@@ -409,6 +409,51 @@ public static class SubtitleCueBuilder
 
             cursor += slice;
         }
+    }
+
+    /// <summary>
+    /// Splits by character capacity, then tightens the capacity until no chunk's share of the
+    /// segment's duration is past the cap. Time on this path is proportional to characters, so a
+    /// chunk's duration is its length over the total times the segment's, and the cap bounds the
+    /// length; a word is the unit, so one longer than the bound stands alone and runs over, which
+    /// is the concession the word-timed path makes to a single very long word too.
+    /// </summary>
+    /// <remarks>
+    /// Until 2026-08-22 this path split by characters only, so every cue of a segment that arrived
+    /// without word timings — which is every cue of a translated subtitle — spanned as much of the
+    /// segment as its text did: a 26 s cue out of a 30 s segment, against a documented 7 s cap that
+    /// only the word-timed path enforced.
+    /// </remarks>
+    private static List<string> SplitByCapacityAndTime(string text, int capacity, TimeSpan duration, TimeSpan maxCue)
+    {
+        var chunks = SplitByCapacity(text, capacity);
+        if (duration <= maxCue)
+        {
+            return chunks;
+        }
+
+        while (capacity > 1)
+        {
+            var total = chunks.Sum(c => c.Length);
+            if (total == 0)
+            {
+                return chunks;
+            }
+
+            var longest = chunks.Max(c => c.Length);
+            if ((long)(duration.Ticks * (longest / (double)total)) <= maxCue.Ticks)
+            {
+                return chunks;
+            }
+
+            // The length the cap allows, and strictly less than before so the loop cannot stall on a
+            // single word longer than any capacity.
+            var bound = (int)Math.Floor(total * (maxCue.Ticks / (double)duration.Ticks));
+            capacity = Math.Min(capacity - 1, Math.Max(1, Math.Min(bound, longest - 1)));
+            chunks = SplitByCapacity(text, capacity);
+        }
+
+        return chunks;
     }
 
     private static List<string> SplitByCapacity(string text, int capacity)
