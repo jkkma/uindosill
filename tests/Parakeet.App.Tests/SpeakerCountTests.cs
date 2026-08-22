@@ -100,16 +100,17 @@ public class SpeakerCountTests
     {
         var (viewModel, _) = Create(OverSegmenting);
 
-        // Blank is the whole design, not an unset default. The fold this drives would merge two
-        // genuinely different speakers on one of the eighteen AMI development meetings, so it fires
-        // only when somebody says they know the number.
+        // Blank by default rather than defaulting to two: the number has to come from the user for
+        // the fold to mean anything, since a guessed count would merge two genuinely different
+        // speakers on one of the eighteen AMI development meetings. But blank no longer runs — the
+        // hint says the field is required the moment the opt-in makes it live.
         Assert.Null(viewModel.SpeakerCount);
         Assert.False(viewModel.CanSetSpeakerCount);
         Assert.Null(viewModel.SpeakerCountHint);
 
         viewModel.LabelSpeakers = true;
         Assert.True(viewModel.CanSetSpeakerCount);
-        Assert.Contains("Leave this blank", viewModel.SpeakerCountHint, StringComparison.Ordinal);
+        Assert.Contains("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
 
         // And it says the count will be honoured afterwards rather than by the model, because those
         // are different facts and only one of them is what happens.
@@ -118,11 +119,12 @@ public class SpeakerCountTests
     }
 
     [Fact]
-    public async Task WithoutACountTheLabellerOverSegmentsAndNothingRepairsIt()
+    public async Task WithoutACountTheBatchRefusesToStart()
     {
-        // The state of the window before this change, and the reason the count had to reach it: the
-        // labeller invents four voices, the transcript gets four names, and there is no sentence
-        // anywhere saying which of "four people" and "one person heard twice" happened.
+        // The estimate this refusal replaces invents four voices on a drifted recording, the
+        // transcript gets four names, and no sentence anywhere says which of "four people" and
+        // "one person heard twice" happened. So the window does not take a blank at all: the count
+        // is required the moment the opt-in is on — no bound involved, this labeller has none set.
         var (viewModel, directory) = Create(OverSegmenting);
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
@@ -130,8 +132,9 @@ public class SpeakerCountTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
-        Assert.Equal(4, SpeakersIn(Path.Combine(directory, "a.rttm")));
+        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
+        Assert.Contains("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Set 'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -263,9 +266,10 @@ public class SpeakerCountTests
     [Fact]
     public async Task PastTheBoundTheBatchStopsAndAsksForACount()
     {
-        // Blank is "let the model estimate", and past the bound estimating is the one thing this
-        // model is measured to get wrong — it over-segments one host into two labels, silently, on a
-        // recording somebody is about to spend half an hour transcribing. So the batch stops.
+        // Blank refuses everywhere now, but past the bound the refusal earns a sharper sentence:
+        // this is the recording where estimating is measured to go wrong — one host over-segmented
+        // into two labels, silently, on a file somebody is about to spend half an hour on — so the
+        // message names the file rather than reciting the rule.
         var (viewModel, directory) = Create(OverSegmenting with { ReliableUpTo = TimeSpan.FromSeconds(4) });
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
@@ -279,7 +283,7 @@ public class SpeakerCountTests
 
         // The hint beside the field says the same thing at the same moment, rather than letting
         // Start be the first place anybody hears it.
-        Assert.Contains("this one needs a count", viewModel.SpeakerCountHint, StringComparison.Ordinal);
+        Assert.Contains("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
 
         // Two ways out, and both are decisions rather than guesses. Turning the opt-in off runs —
         // dropping RTTM with it, since speaker turns are that opt-in's output and the window already
@@ -307,10 +311,12 @@ public class SpeakerCountTests
     }
 
     [Fact]
-    public async Task InsideTheBoundABlankCountStillRuns()
+    public async Task InsideTheBoundABlankCountIsStillRefused()
     {
-        // The guard is about the bound, not about the opt-in: a short recording is where estimating
-        // is established to work, and forcing a number there would make somebody guess for nothing.
+        // The guard is about the opt-in, not the bound. Inside the bound the estimate is measured
+        // correct, and the count is required anyway, because a wrong estimate is silent wherever it
+        // happens and the person pressing Start knows the number. What the bound still changes is
+        // the sentence: a short queue gets the rule, not a file named as past the evidence.
         var (viewModel, directory) = Create(OverSegmenting with { ReliableUpTo = TimeSpan.FromMinutes(30) });
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
@@ -318,8 +324,16 @@ public class SpeakerCountTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
+        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
+        Assert.Contains("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("is longer than", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // Giving the number is the way through, exactly as it is past the bound.
+        viewModel.SpeakerCount = 2;
+        await viewModel.StartCommand.ExecuteAsync(null);
+
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
-        Assert.Equal(4, SpeakersIn(Path.Combine(directory, "a.rttm")));
+        Assert.Equal(2, SpeakersIn(Path.Combine(directory, "a.rttm")));
     }
 
     [Fact]

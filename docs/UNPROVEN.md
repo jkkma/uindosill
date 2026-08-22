@@ -1148,8 +1148,11 @@ Both ways out of the window's refusal are decisions rather than guesses, and **t
 deliberately not defaulted to two**: the fold merges whichever pair collides least whether or not
 the evidence supports it, so a guessed count does not estimate the answer, it forces one — two
 people under one name with no margin behind the merge, which is worse than the over-segmentation it
-was reaching for. Inside the bound a blank count still runs and the model still estimates, because
-that is the range where estimating is measured to work.
+was reaching for. Inside the bound the estimate is measured to work, and **since 2026-08-22 the window
+refuses a blank count there too** (`docs/PHASES.md`, *Settled 2026-08-22*) — not because the estimate
+fails inside the bound but because when it fails anywhere it fails silently, and a transcript made
+with a count and one made without cannot be told apart afterwards. The command line is where the
+estimate still runs, and it is where every figure on this page was taken.
 
 **None of that changes what is known.** The refusal is a user-interface decision about when to ask a
 question, not evidence about the labels: a count given past the bound is still unpriced, there is

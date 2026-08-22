@@ -336,11 +336,12 @@
                          the checkbox is right above it and ticking it brings this to life. It is a
                          detail of the opt-in, not a setting of its own.
 
-                         Blank means estimate, which is why the placeholder says so and why there is no
-                         default of two. The fold this drives is wrong to apply unasked: on one of
-                         the eighteen AMI development meetings the two genuinely different speakers
-                         who collide least never overlap at all, so an automatic rule merges two real
-                         people there. -->
+                         Blank does not run — the placeholder says required and Start refuses until
+                         a number is here — but there is still no default of two, because the count
+                         has to come from the user for the fold to mean anything. The fold this
+                         drives is wrong to apply unasked: on one of the eighteen AMI development
+                         meetings the two genuinely different speakers who collide least never
+                         overlap at all, so a guessed default merges two real people there. -->
                     <StackPanel Orientation="Horizontal" Spacing="8"
                                 IsVisible="{Binding CanSetSpeakerCount}">
                       <TextBlock Text="How many speakers" Classes="secondary" VerticalAlignment="Center" />
@@ -349,7 +350,7 @@
                            headless render would not have caught and the opened window did. -->
                       <NumericUpDown Value="{Binding SpeakerCount}" Minimum="1" Maximum="99"
                                      Increment="1" Width="170" FormatString="0"
-                                     PlaceholderText="estimate" />
+                                     PlaceholderText="required" />
                     </StackPanel>
 
                     <TextBlock Text="{Binding SpeakerCountHint}" Classes="meta" TextWrapping="Wrap"

@@ -1175,6 +1175,31 @@ count given past the bound is still unpriced, and the four-speaker cap is still 
 it the fold has nothing to fold, which is why a count over the cap is reported as unreachable rather
 than accepted.
 
+### Settled 2026-08-22 — the window requires the count whenever labelling is on
+
+**The past-the-bound rule above is now the rule everywhere in the window: `Label speakers` does not
+run without `How many speakers`.** Inside the bound the estimate is still measured correct, and that
+is not what decided this. What decided it is what the estimate's failure looks like from the outside:
+a drifted host arrives as a plausible extra speaker, the transcript carries four names, and nothing in
+the output — not the JSON, not the RTTM — says which of "four people" and "one person heard twice"
+happened. A transcript made with a count and one made without are indistinguishable afterwards, and
+the person pressing Start trivially knew the number. So the window asks every time, the field's
+placeholder says *required* rather than *estimate*, and a file past the bound still gets the sentence
+that names it, because "this recording is where the estimate is measured to go wrong" is more
+actionable than the rule alone.
+
+**Still blank rather than defaulting to two.** The number has to come from the user for the fold to
+mean anything — a guessed default would merge two genuinely different speakers in `IS1008a` and stamp
+the merge with a margin. Required and defaulted are different things, and only the first is honest.
+
+**The command line keeps the estimate, and the asymmetry above widens rather than closes.** `--speakers`
+without `--speaker-count` still warns and runs: it is scripted, it is what every diarisation
+measurement in `docs/UNPROVEN.md` is taken through, and a refusal there would break both. The window
+is the surface with somebody in front of it.
+
+**What this does not touch.** No measurement moved and no engine changed. The estimate is as good or
+as bad as it was; the window simply stops accepting it in place of an answer it can ask for.
+
 ### Published 2026-08-20 — the weights, and the licence check that had to come first
 
 **The nine files are on Hugging Face, and the Apache-2.0 §4 conditions were discharged before they
