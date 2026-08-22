@@ -41,6 +41,14 @@ jobs:
       - name: The documented test counts must match the suite
         run: python3 scripts/check-test-counts.py --no-run
 
+      # The states that script guards against each need a working copy in one specific shape — a
+      # retired project's gitignored leftovers, a results file older than its assembly — and CI's
+      # workspace is clean, so the step above exercises neither. This builds both in a temporary
+      # directory. It needs no toolchain and takes under a second; a guard nobody tests is the
+      # thing this repository keeps rediscovering.
+      - name: The count script's own rules must hold
+        run: python3 scripts/check-test-counts.py --self-check
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
