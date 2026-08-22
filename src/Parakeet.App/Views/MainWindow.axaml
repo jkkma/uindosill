@@ -47,6 +47,13 @@
       render, because there is no window frame there to draw, and found only by photographing the
       built application. The roles also mean the platform handles dragging and
       double-click-to-maximise, rather than a PointerPressed handler calling BeginMoveDrag.
+
+      The cost of that arrangement: inside the TitleBar element every press is a drag unless the
+      control under the pointer carries a role of its own. The window buttons have native ones
+      (MinimizeButton, MaximizeButton, CloseButton); anything else interactive placed in the
+      headerbar — the tab switcher — has to be marked ElementRole="User", Avalonia's carve-out
+      for "this receives input even inside chrome". Without it the control renders, hovers and
+      never clicks, and a headless test cannot tell: there is no platform hit-test in it.
   -->
 
   <Window.Resources>
@@ -89,8 +96,17 @@
           <TextBlock Text="local transcription" Classes="meta" VerticalAlignment="Center" />
         </StackPanel>
 
-        <!-- The switcher. Licences last, because it is the one tab nobody opens twice. -->
+        <!-- The switcher. Licences last, because it is the one tab nobody opens twice.
+
+             ElementRole="User" because this sits inside the TitleBar element, and inside that
+             element the platform answers every press as "start dragging the window" unless the
+             control under the pointer says otherwise. The pills carry no native role of their own
+             — the window buttons do, which is why they clicked and these did not — so they are
+             marked as the interactive carve-out Avalonia provides for exactly this: input reaches
+             them instead of being taken for a move. A headless render cannot show the difference;
+             only a pointer on the built window can. -->
         <Border Grid.Column="1" Classes="switcher"
+                WindowDecorationProperties.ElementRole="User"
                 HorizontalAlignment="Center" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="2">
             <RadioButton Name="TabTranscribe" Classes="segment" GroupName="Switcher" Content="Transcribe"
