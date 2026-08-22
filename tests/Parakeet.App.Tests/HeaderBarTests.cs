@@ -1,6 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Parakeet.App.Views;
 
 namespace Parakeet.App.Tests;
@@ -76,5 +79,53 @@ public class HeaderBarTests
 
         var right = topLeft!.Value.X + close.Bounds.Width;
         Assert.Equal(header!.Bounds.Width, right, precision: 3);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("TabTranscribe")]
+    [InlineData("TabModels")]
+    [InlineData("TabUpdates")]
+    [InlineData("TabLicences")]
+    public void APressOnATabPillReachesThePillRatherThanDraggingTheWindow(string name)
+    {
+        // The headerbar is the TitleBar role, so inside it every press is a window move unless the
+        // control under the pointer says otherwise — which is what the platform asks the chrome
+        // hit-test here. The window buttons carry native roles and always answered for themselves;
+        // the pills carried none, walked up to the bar, and dragged the window instead of switching
+        // tabs. A render cannot show that, and a headless pointer press would not either, because
+        // the swallowing happens in the platform before the press exists. This asks the question
+        // the platform asks.
+        var window = new MainWindow { DataContext = WindowTests.NewViewModel(out _) };
+        window.Show();
+        window.UpdateLayout();
+
+        var header = window.FindControl<Border>("HeaderBar");
+        var pill = window.FindControl<RadioButton>(name);
+        Assert.NotNull(header);
+        Assert.NotNull(pill);
+        Assert.Equal(WindowDecorationsElementRole.TitleBar, WindowDecorationProperties.GetElementRole(header!));
+
+        // The platform's resolver is internal to Avalonia, so this walks the way it walks: up from
+        // the control under the pointer to the first element carrying a role, which is the one that
+        // answers. For a pill that has to be the User carve-out, met before the bar's TitleBar.
+        Assert.Equal(WindowDecorationsElementRole.User, FirstRoleAbove(pill!));
+
+        // And the pill is inside the bar: the carve-out is the switcher, not a hole in the headerbar.
+        Assert.True(pill!.GetVisualAncestors().Contains(header!), "the pill is not inside the headerbar");
+    }
+
+    /// <summary>The role that answers a press on <paramref name="visual"/>: its own, or the nearest ancestor's.</summary>
+    private static WindowDecorationsElementRole FirstRoleAbove(Visual visual)
+    {
+        for (Visual? current = visual; current is not null; current = current.GetVisualParent())
+        {
+            var role = WindowDecorationProperties.GetElementRole(current);
+            if (role != WindowDecorationsElementRole.None)
+            {
+                return role;
+            }
+        }
+
+        return WindowDecorationsElementRole.None;
     }
 }
