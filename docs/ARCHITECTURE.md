@@ -211,11 +211,16 @@ a few thousand numbers. Nothing streams bytes over this channel on purpose.
 **stdout belongs to the protocol and to nothing else.** `torch`, `librosa` and `numba` all print to
 stdout given the right provocation, and a single stray line of theirs lands in the middle of a JSON
 stream and desynchronises the host for the rest of the run. `protocol.claim_stdout` therefore takes
-a duplicate of the real handle for the channel and points `sys.stdout` at stderr — before any model
-library is imported, because importing is itself enough to make some of them print. The host holds
-the other end up: it keeps the last 200 lines of the child's stderr so that a death has a traceback
-attached rather than being reported as "it died", and a line on stdout that does not parse as JSON
-is recorded there and skipped rather than ending a run.
+a duplicate of the real handle for the channel and points file descriptor 1 itself at stderr, not
+only `sys.stdout` — so an `os.write`, a C extension's `printf` through the interpreter's C runtime
+and a child process the sidecar spawns all land on stderr too — before any model library is
+imported, because importing is itself enough to make some of them print. The host holds the other
+end up: it keeps the last 200 lines of the child's stderr so that a death has a traceback attached
+rather than being reported as "it died", and a line on stdout that is not a protocol message — not
+JSON, JSON that is not an object, an object with no integer id, a progress report with a count that
+is not an integer — is recorded there and skipped rather than ending a run. A reply it can
+correlate is read field by field, each only when it has the type the protocol gives it, so a
+mistyped field in one message is that message's problem and not the reader's.
 
 **The audio crosses as a file.** The host drains the source, resamples to 16 kHz mono, writes a WAV
 into the temporary directory, hands over the path, and deletes it in a `finally`. A pipe carrying

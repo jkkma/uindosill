@@ -90,6 +90,17 @@ def check(engine: Any) -> dict[str, Any]:
             "tolerance": TOLERANCE,
         }
 
+    if not np.isfinite(actual).all():
+        # Before the subtraction, because a NaN anywhere makes `max` NaN, and a verdict whose
+        # difference is NaN is one the channel refuses to send — the host would get an error
+        # about the reply rather than a failure it can describe.
+        return {
+            "available": True,
+            "passed": False,
+            "reason": f"{int((~np.isfinite(actual)).sum())} of {actual.size} probabilities are not finite",
+            "tolerance": TOLERANCE,
+        }
+
     difference = np.abs(expected - actual)
     max_abs = float(difference.max())
     flips = float(((expected > 0.5) != (actual > 0.5)).mean() * 100)

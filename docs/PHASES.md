@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 817 tests, no weights, no display, no network — **815 passed and 2 skipped**, and
+**Status:** met. 821 tests, no weights, no display, no network — **819 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -1711,6 +1711,54 @@ runs its list through it straight after validation — so the rttm guard, the wo
 `TranslatorFactory`, the jobs and the writer all read one spelling. Nine tests: the registry's
 resolution and its refusal of a spelling that names nothing, four spellings against the word-timed
 refusal, two against the turns guard, and five spellings of two formats writing two files.
+
+### Fixed 2026-08-22 — the reader died on a line it could have skipped, and descriptor 1 still led to the pipe
+
+**Five defects at the process boundary, from the same review as the two entries above: two that
+cost a run to one line, one that cost a load its reply, and two latent.** The host's reader caught
+only `JsonException` around the parse. A line on stdout that was JSON but not an object — a bare
+`0`, an array — threw `InvalidOperationException` from the `id` lookup, and a message whose `id`,
+`completed`, `total`, `kind` or `message` had the wrong type threw from `GetInt32` or `GetString`;
+the catch named neither, so the reader's loop ended, every pending request failed with "output
+ended" and every later one was refused, for the rest of the run, over one line the contract in
+`ARCHITECTURE.md` says is "recorded and skipped". On the other side `claim_stdout` replaced
+`sys.stdout` and left file descriptor 1 where it was, so `os.write(1, …)`, `sys.__stdout__`, a C
+extension's `printf` and any child process the sidecar spawned wrote into the protocol pipe —
+measured on the bundled interpreter: every one of them did — and a write without a newline glued
+onto the next reply, which the host then dropped as unreadable, leaving that request waiting. A
+parity reply carrying `NaN` — a provider producing non-finite probabilities — went out as `NaN`,
+which is not JSON, so the host dropped it and the load waited on a reply that had been sent.
+`StandardInputEncoding` was never named, so the child's stdin took the console's input code page
+and worked only because the request writer escapes non-ASCII. And a cancellation at the write gate
+left the request's id registered with nothing to answer it, while the newline travelled in a
+second write of its own, so a cancellation between the two left a request on the pipe with no
+terminator.
+
+**The envelope is the id, and everything inside it is read only when it has its type.** `Dispatch`
+treats a non-object root as the stray line it is, an `id` that is not an integer as no id, a
+progress report with a count that is not an integer as a line to record and skip rather than
+report as zero, and an error's `kind`, `message` and `traceback` as missing when they are not
+strings — and throws on nothing, so the reader outlives any one message. `claim_stdout` now
+`dup2`s stderr over descriptor 1 after duplicating the pipe for the channel, so every route to
+stdout other than the channel's own descriptor lands on stderr; measured again on the bundled
+interpreter, the pipe carried the protocol lines and nothing else, and the shipped entry point
+driven by hand answered a handshake, two errors, a non-JSON request and a shutdown with stdout
+holding exactly those five replies. `Channel.send` refuses a non-finite number (`allow_nan=False`)
+and answers the same id with an error that says so, and the diariser's parity check tests its
+probabilities for finiteness before it subtracts, so the host gets `passed: false` with a reason
+rather than an error about the reply. The host names UTF-8 for stdin as it already did for both
+outputs, writes a request and its newline in one call, registers the cancellation before the write
+and removes the id on any failure to reach the child.
+
+Four tests hold the reader: a bare number, an array, a string, a non-integer id and a non-string
+type on stdout ahead of the handshake with the next request still answered; a progress report
+whose count is a string skipped with the result still arriving; an error with a numeric kind and
+an array for a message failing its own request and not the channel; and a request cancelled before
+the write surfacing as a cancellation with the channel still usable. The Python half has no test
+the suite can run — CI has no interpreter, and the suite stays that way — so it was driven by hand
+on the bundled CPython 3.12: the descriptor probe before and after the change, the channel with
+`NaN` and `Infinity` in a reply, and the diariser check against an engine returning non-finite
+probabilities. The suite is 821.
 
 ## The honest summary
 
