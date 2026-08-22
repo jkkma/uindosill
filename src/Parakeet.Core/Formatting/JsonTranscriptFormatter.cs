@@ -123,6 +123,14 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 {
                     writer.WriteString("translationBackend", translationBackend.ToString().ToLowerInvariant());
                 }
+
+                // And the search over the graph — beam, length cap, penalty, early stopping — because
+                // the graphs are pinned and the search is not, and a transcript that names the
+                // checkpoint has named half of what produced its English.
+                if (document.TranslationDecode is { } translationDecode)
+                {
+                    writer.WriteString("translationDecode", translationDecode);
+                }
             }
 
             writer.WriteString("text", document.Text);

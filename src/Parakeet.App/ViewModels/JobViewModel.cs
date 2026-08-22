@@ -47,6 +47,15 @@ public sealed partial class JobViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasTranslation))]
     private string _translatedTranscript = string.Empty;
 
+    /// <summary>
+    /// Serialises a progress report against completion. On the UI thread the two cannot interleave
+    /// — <c>Progress&lt;T&gt;</c> posts through the synchronisation context — but a host without one
+    /// delivers the report on a pool thread, and a report that read "not finished" before
+    /// <see cref="Complete"/> ran and wrote its status after it left a done row saying
+    /// "Transcribing 00:00:03" under a state of Completed. Seen in the test host, 2026-08-22.
+    /// </summary>
+    private readonly object _gate = new();
+
     public JobViewModel(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -121,6 +130,14 @@ public sealed partial class JobViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(progress);
 
+        lock (_gate)
+        {
+            ApplyCore(progress);
+        }
+    }
+
+    private void ApplyCore(TranscriptionProgress progress)
+    {
         // Progress<T> posts through the synchronisation context, so a report raised just before
         // the job finished can arrive just after it. Without this guard that late report puts a
         // completed job back into "Running" and it stays there — the file is transcribed, the
@@ -182,6 +199,14 @@ public sealed partial class JobViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(result);
 
+        lock (_gate)
+        {
+            CompleteCore(result, source);
+        }
+    }
+
+    private void CompleteCore(JobResult result, TranscriptDocument? source)
+    {
         State = result.State;
         IsIndeterminate = false;
         Progress = 100;
@@ -219,13 +244,19 @@ public sealed partial class JobViewModel : ObservableObject
             // the translated half stays empty, which is what HasTranslation reads.
             var spoken = source ?? document;
 
+            // One chip map, built from the spoken document and used for both panes. Built per pane
+            // over each pane's non-empty segments, as it was until 2026-08-22, the two could
+            // disagree: a speaker whose first segment came back empty from the translator appeared
+            // later in the English pane's walk and took a different chip there.
+            var chips = ChipMap(spoken);
+
             Transcript = Render(spoken);
-            Relines(spoken, Lines);
+            Relines(spoken, chips, Lines);
 
             if (source is not null)
             {
                 TranslatedTranscript = Render(document);
-                Relines(document, TranslatedLines);
+                Relines(document, chips, TranslatedLines);
             }
         }
     }
@@ -258,28 +289,48 @@ public sealed partial class JobViewModel : ObservableObject
     /// </remarks>
     private static void Relines(
         TranscriptDocument document,
+        Dictionary<string, int> chips,
         System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> target)
     {
         target.Clear();
-
-        var chips = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var segment in document.Segments.Where(s => !s.IsEmpty))
         {
             var speaker = segment.Speaker;
             var chip = -1;
 
-            if (speaker is not null)
+            if (speaker is not null && !chips.TryGetValue(speaker, out chip))
             {
-                if (!chips.TryGetValue(speaker, out chip))
-                {
-                    chip = chips.Count % 4;
-                    chips[speaker] = chip;
-                }
+                // Not in the spoken document at all — which the translation contract forbids, since
+                // a translator may not change who said a segment — so a backstop rather than a path:
+                // the next chip, recorded so the next line of the same speaker agrees with this one.
+                chip = chips.Count % 4;
+                chips[speaker] = chip;
             }
 
             target.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip));
         }
+    }
+
+    /// <summary>
+    /// Each speaker's chip, in the order they are first heard in <paramref name="document"/> —
+    /// over every segment, empty ones included, so that the map is a property of the recording
+    /// and not of which segments happen to carry text.
+    /// </summary>
+    internal static Dictionary<string, int> ChipMap(TranscriptDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var chips = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var speaker in document.Segments.Select(s => s.Speaker).OfType<string>())
+        {
+            if (!chips.ContainsKey(speaker))
+            {
+                chips[speaker] = chips.Count % 4;
+            }
+        }
+
+        return chips;
     }
 
     internal static string Render(TranscriptDocument document)

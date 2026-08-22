@@ -112,6 +112,25 @@ public sealed class TranslateVerbTests
     }
 
     [Fact]
+    public async Task ADestinationThatIsAlsoAnInputIsRefusedBeforeItIsOverwritten()
+    {
+        // `translate a.txt a.en.txt`: the second input is the first one's output name, so it was
+        // overwritten with the first file's English before it was read — silently, until
+        // 2026-08-22, because only a second destination was checked against and never an input.
+        using var harness = new Harness();
+        var first = harness.Write("a.txt", "Hola.");
+        var second = harness.Write("a.en.txt", "Adiós.");
+
+        var exit = await harness.RunAsync("translate", "--fake", first, second);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains("also an input", error, StringComparison.Ordinal);
+        Assert.Contains(second, error, StringComparison.Ordinal);
+        Assert.Equal("Adiós.", File.ReadAllText(second).Trim());
+    }
+
+    [Fact]
     public async Task TheOutputIsNamedForTheInputAndCanBeRenamedAndRedirected()
     {
         using var harness = new Harness();
@@ -194,6 +213,11 @@ public sealed class TranslateVerbTests
         Assert.Contains("not a complete translation checkpoint", error, StringComparison.Ordinal);
         Assert.Contains("encoder_model.onnx", error, StringComparison.Ordinal);
         Assert.Contains("source.spm", error, StringComparison.Ordinal);
+
+        // The sidecar's list is the authority and it names eight files; until 2026-08-22 the host
+        // named seven, without generation_config.json, and a checkpoint missing only that loaded
+        // here and was refused there.
+        Assert.Contains("generation_config.json", error, StringComparison.Ordinal);
 
         // The file that IS there is not in the list. Checked against vocab.json rather than
         // config.json, whose name is a substring of tokenizer_config.json — which is missing, so

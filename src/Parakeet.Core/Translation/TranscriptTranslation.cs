@@ -82,6 +82,10 @@ public static class TranscriptTranslation
             // its own provider inside the sidecar, and the capabilities of the loaded engine are
             // where that answer exists.
             TranslationBackend = capabilities.Backend,
+
+            // And the search, for the reason the capability gives: the graphs are pinned and the
+            // search is not, and until 2026-08-22 no transcript carried it.
+            TranslationDecode = capabilities.DecodeDescription,
         };
     }
 

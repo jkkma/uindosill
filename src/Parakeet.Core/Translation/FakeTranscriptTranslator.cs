@@ -40,6 +40,12 @@ public sealed record FakeTranslatorOptions
     /// tokens and says so; what it exercises is the refusal path, not the count.
     /// </summary>
     public int? MaxSourceTokens { get; init; }
+
+    /// <summary>
+    /// What the fake says its search is, so the provenance path that carries the real translator's
+    /// decode description into a transcript is exercised with no weights. Null to say nothing.
+    /// </summary>
+    public string? DecodeDescription { get; init; } = "canned, beam 1";
 }
 
 /// <summary>
@@ -77,6 +83,7 @@ public sealed class FakeTranscriptTranslator : ITranscriptTranslator
             EngineName = "fake",
             ModelId = "fake-translator",
             Backend = _options.Backend,
+            DecodeDescription = _options.DecodeDescription,
 
             // The token the recommended family reads. The fake carries the real one so that
             // everything built on top of it — the marking, the assertions, the CLI — is exercised

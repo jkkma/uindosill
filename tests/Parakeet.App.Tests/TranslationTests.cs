@@ -58,6 +58,46 @@ public class TranslationTests
     }
 
     [Fact]
+    public void TheChipMapIsBuiltOnceFromTheSpokenDocumentSoBothPanesAgree()
+    {
+        // A speaker whose first segment came back empty from the translator took a later chip in
+        // the English pane until 2026-08-22, because each pane walked its own non-empty segments
+        // and built its own map. One map, from the spoken document, over every segment.
+        var spoken = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hola", Speaker = "A" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(1), End = TimeSpan.FromSeconds(2), Text = "buenas", Speaker = "B" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(2), End = TimeSpan.FromSeconds(3), Text = "gracias", Speaker = "A" },
+            ],
+        };
+        var translated = spoken with
+        {
+            TranslatedTo = "en",
+            Segments =
+            [
+                spoken.Segments[0] with { Text = string.Empty },
+                spoken.Segments[1] with { Text = "good day" },
+                spoken.Segments[2] with { Text = "thanks" },
+            ],
+        };
+
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(
+            new JobResult { Job = new TranscriptionJob { InputPath = "/tmp/a.wav" }, State = JobState.Completed, Document = translated },
+            source: spoken);
+
+        var spokenChips = job.Lines.DistinctBy(l => l.Speaker).ToDictionary(l => l.Speaker!, l => l.Chip);
+        var englishChips = job.TranslatedLines.DistinctBy(l => l.Speaker).ToDictionary(l => l.Speaker!, l => l.Chip);
+
+        Assert.Equal(0, spokenChips["A"]);
+        Assert.Equal(1, spokenChips["B"]);
+        Assert.Equal(spokenChips["A"], englishChips["A"]);
+        Assert.Equal(spokenChips["B"], englishChips["B"]);
+    }
+
+    [Fact]
     public async Task TheEnglishOptInIsOffByDefaultAndProducesATranslationBesideTheTranscript()
     {
         var (viewModel, directory) = Create();

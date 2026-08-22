@@ -99,6 +99,19 @@ public sealed record TranslatorCapabilities
     public bool RequiresSourceLanguage { get; init; }
 
     /// <summary>
+    /// The search that produced the English, as one phrase — beam width, length cap, length
+    /// penalty, early stopping — when the translator can say. Null when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// Provenance beside <see cref="ModelId"/> and <see cref="Backend"/>, because the graphs are
+    /// pinned and the search over them is not: beam width alone moved this project's own measured
+    /// output, so a transcript that records which checkpoint ran has recorded half of what produced
+    /// its English. Until 2026-08-22 the sidecar reported this and only the <c>translate</c> verb's
+    /// stderr ever showed it; no transcript carried it.
+    /// </remarks>
+    public string? DecodeDescription { get; init; }
+
+    /// <summary>
     /// True when a translated segment still carries per-word timings. False on everything this
     /// product can ship, and false is a real answer rather than a placeholder.
     /// </summary>

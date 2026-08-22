@@ -109,6 +109,14 @@ public sealed record TranscriptDocument
     /// </summary>
     public ComputeBackend? TranslationBackend { get; init; }
 
+    /// <summary>
+    /// The search that produced the English — beam width, length cap, length penalty, early
+    /// stopping — as the translator described it, when it did. The graphs are pinned and the
+    /// search over them is not, so a transcript that names the checkpoint and the provider has
+    /// named half of what produced its English.
+    /// </summary>
+    public string? TranslationDecode { get; init; }
+
     /// <summary>True when a translation pass ran.</summary>
     public bool IsTranslated => TranslatedTo is not null;
 

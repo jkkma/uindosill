@@ -108,6 +108,11 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Translation backend", translationBackend.ToString().ToLowerInvariant()));
             }
 
+            if (document.TranslationDecode is { } translationDecode)
+            {
+                rows.Add(("Translation decode", translationDecode));
+            }
+
             if (rows.Count > 0)
             {
                 builder.Append("| Field | Value |").Append(nl);

@@ -116,6 +116,9 @@ public class TranslationTests
         Assert.Equal("fake-translator", translated.TranslationModelId);
         Assert.Equal(ComputeBackend.WebGpu, translated.TranslationBackend);
 
+        // And the search, which until 2026-08-22 the sidecar reported and no transcript carried.
+        Assert.Equal("canned, beam 1", translated.TranslationDecode);
+
         // The ASR provenance is not overwritten by the translator's: both models are on the page.
         Assert.Equal("tdt-0.6b-v3-f16", translated.ModelId);
     }

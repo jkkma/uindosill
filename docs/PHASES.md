@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 865 tests, no weights, no display, no network — **863 passed and 2 skipped**, and
+**Status:** met. 868 tests, no weights, no display, no network — **866 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (105 of the project's 163 CLI
+**Status:** usable, tested end to end against the canned engine (106 of the project's 164 CLI
 tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -1927,6 +1927,39 @@ Six tests: the zero-length word in crosstalk; the fold's second merge at 7 s; th
 and the decode description under a comma-decimal culture; the `diarise` summary line likewise
 (green in CI either way, red on a comma-decimal machine before the fix); and the float32 writer
 round-tripping a length that is neither small nor a block multiple. The suite is 865.
+
+### Fixed 2026-08-22 — translation: a required file the host did not name, a decode no transcript carried, chips that could disagree between panes, and an input the verb overwrote before reading it
+
+**Four small defects in the translation path, from the same review, and one race the suite kept
+tripping over.** The host's list of required checkpoint files had seven entries where the
+sidecar's — the authority, since it is the one that loads them — has eight: without
+`generation_config.json` the decode loads and silently loses its `bad_words_ids`, and a checkpoint
+missing only that file passed the host's check to be refused by the sidecar. The decode the sidecar
+reports — beam width, length cap, length penalty, early stopping — reached the `translate` verb's
+stderr and nothing else, so no transcript carried the search that produced its English, where the
+graphs are pinned and the search is not. The window built each pane's speaker-chip map over that
+pane's non-empty segments, so a speaker whose first segment came back empty from the translator
+took a different chip in the English pane. And `translate a.txt a.en.txt` wrote the first file's
+English to the second input's name before reading it, because only a second destination was checked
+against and never an input. Beside those, a row's status could read "Transcribing 00:00:03" under a
+state of Completed: a progress report delivered on a pool thread — which only a host without a
+synchronisation context does, and the test host is one — read "not finished" before `Complete` ran
+and wrote its status after it, and the suite lost a run to it three times in a day.
+
+**The host's list is the sidecar's; the decode is provenance; the chips come from one map; the
+input is refused; the row is gated.** `TranslatorCapabilities.DecodeDescription` carries the
+sidecar's phrase, the driver writes it as `TranscriptDocument.TranslationDecode`, and the JSON's
+`translationDecode` and the Markdown's "Translation decode" row print it beside the model and the
+backend. `JobViewModel.ChipMap` is built once, from the spoken document over every segment, and
+both panes read it. The verb refuses a destination that is also an input, by name, before anything
+is written. `JobViewModel.Apply` and `Complete` serialise on one gate, so a late report cannot land
+inside a completion.
+
+Three new tests — the two formatters writing the decode, the chip map agreeing across panes when a
+segment comes back empty, and the verb refusing an input-as-destination through the real entry
+point — and two existing ones extended: the required-file message now naming
+`generation_config.json`, and the driver's provenance assertion carrying the fake's decode
+description. The suite is 868.
 
 ## The honest summary
 
