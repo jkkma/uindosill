@@ -488,17 +488,18 @@ internal static class TranscribeCommand
                 context.WriteError($"WARNING: {job.InputPath}: {longRun}");
             }
 
-            var merges = new List<string>();
             document = await SpeakerLabelling.LabelAsync(
-                document, labeller, second, speakerOptions, progress, merges, ct).ConfigureAwait(false);
+                document, labeller, second, speakerOptions, progress, ct).ConfigureAwait(false);
             speakerWarning = SpeakerLabelling.DescribeLimit(labeller, document);
 
             // A merge the user's own --speaker-count asked for is still a merge, and the seconds
             // beside each one are its evidence: near zero is one voice that drifted onto a second
-            // label, a large number is two people the count has just put under one name.
-            foreach (var merge in merges)
+            // label, a large number is two people the count has just put under one name. Read off
+            // the document, which is also where the saved transcript's copy comes from, so the line
+            // printed here and the record archived beside it cannot disagree.
+            foreach (var merge in document.SpeakerFolds)
             {
-                context.WriteError($"{job.InputPath}: merged {merge}.");
+                context.WriteError($"{job.InputPath}: merged {merge.Describe()}.");
             }
         }
 

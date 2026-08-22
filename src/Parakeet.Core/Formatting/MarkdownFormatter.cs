@@ -75,6 +75,21 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Speaker backend", speakerBackend.ToString().ToLowerInvariant()));
             }
 
+            // The count a human supplied, recorded even when the model had already satisfied it:
+            // an archived transcript that folded nothing still had its labels constrained, and a
+            // row that only appeared when a merge happened would hide exactly that case.
+            if (document.RequestedSpeakerCount is { } requestedSpeakers)
+            {
+                rows.Add(("Speaker count requested", requestedSpeakers.ToString(CultureInfo.InvariantCulture)));
+            }
+
+            // And which labels it joined, with the evidence for each. The same sentence the command
+            // line and the window print, built in the one place that builds it.
+            if (document.SpeakerFolds.Count > 0)
+            {
+                rows.Add(("Speaker folds", string.Join("; ", document.SpeakerFolds.Select(f => f.Describe()))));
+            }
+
             // And which model wrote the English, when this is not what the engine heard. A reader
             // holding a translation without knowing it is reading a second model's opinion of a
             // first model's output, which is a different thing to judge.

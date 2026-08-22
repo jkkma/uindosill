@@ -49,6 +49,35 @@ public sealed record TranscriptDocument
     /// </summary>
     public ComputeBackend? SpeakerBackend { get; init; }
 
+    /// <summary>
+    /// The speaker count the caller asked for, when one was asked for at all. Null means the
+    /// labeller's own estimate was taken as it came.
+    /// </summary>
+    /// <remarks>
+    /// Recorded whether or not it changed anything, which is the whole of its value: a run made
+    /// with <c>--speaker-count 2</c> that the model had already satisfied folds nothing, and
+    /// without this field it is byte-for-byte indistinguishable from a run where no count was
+    /// given. Those are different transcripts to judge — one had its label set constrained to a
+    /// number a human supplied, the other did not — and <see cref="SpeakerFolds"/> alone cannot
+    /// tell them apart, because it is empty in both.
+    /// </remarks>
+    public int? RequestedSpeakerCount { get; init; }
+
+    /// <summary>
+    /// The merges <see cref="RequestedSpeakerCount"/> forced, in the order they were made, or empty
+    /// when it forced none. The labeller's own labels on both sides, before display renaming.
+    /// </summary>
+    /// <remarks>
+    /// Provenance in the same sense as <see cref="SpeakerBackend"/>, and for a sharper reason than
+    /// either model id: a fold does not merely say what produced these labels, it is an edit made
+    /// to them after the model was done. Two labels the diariser kept apart were joined because a
+    /// number was supplied, and each merge carries the evidence it was made on — near-zero overlap
+    /// is one voice that drifted onto a second label, a large overlap with little margin is two
+    /// people the count has just put under one name. A reader who cannot see that cannot tell a
+    /// repaired transcript from an unedited one.
+    /// </remarks>
+    public IReadOnlyList<Diarisation.SpeakerFold> SpeakerFolds { get; init; } = [];
+
     /// <summary>True when speaker labelling ran, whether or not it found anyone.</summary>
     public bool HasSpeakers => SpeakerModelId is not null || SpeakerTurns.Count > 0;
 

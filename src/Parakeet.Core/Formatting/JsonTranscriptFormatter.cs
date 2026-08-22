@@ -60,6 +60,51 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                     writer.WriteString("speakerBackend", speakerBackend.ToString().ToLowerInvariant());
                 }
 
+                // What the caller asked for, beside what produced it — and present even when it
+                // changed nothing, because that is the case it exists for. A run made with
+                // --speaker-count 2 that the model had already satisfied merges nothing, and
+                // without this it archives byte-for-byte identical to a run given no count at all.
+                if (document.RequestedSpeakerCount is { } requestedSpeakers)
+                {
+                    writer.WriteNumber("requestedSpeakerCount", requestedSpeakers);
+                }
+
+                // And what honouring it cost, which is an edit made to the model's output rather
+                // than a fact about what produced it: two labels the diariser kept apart, joined
+                // because a number was supplied. Each merge carries the evidence it was made on —
+                // "overlapSec" near zero is one voice that drifted onto a second label, while a
+                // large one whose "runnerUpSec" is barely larger is two people the count has just
+                // put under one name. Both labels are the labeller's own cluster ids, as they were
+                // before display renaming: "from" names something that no longer exists in
+                // "speakerTurns" below, its turns having been moved under "into".
+                if (document.SpeakerFolds.Count > 0)
+                {
+                    writer.WriteStartArray("speakerFolds");
+                    foreach (var fold in document.SpeakerFolds)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("from", fold.Dropped);
+                        writer.WriteString("into", fold.Kept);
+                        writer.WriteNumber("overlapSec", Round(fold.OverlapSeconds, 3));
+
+                        // Explicitly null rather than absent when the merged pair was the only pair
+                        // there was: "there was nothing to compare it with" is a different answer
+                        // to a reader than a key they have to guess the meaning of missing.
+                        if (fold.RunnerUpSeconds is { } runnerUp)
+                        {
+                            writer.WriteNumber("runnerUpSec", Round(runnerUp, 3));
+                        }
+                        else
+                        {
+                            writer.WriteNull("runnerUpSec");
+                        }
+
+                        writer.WriteEndObject();
+                    }
+
+                    writer.WriteEndArray();
+                }
+
                 // Likewise present only when a translation pass ran. "text" and every segment below
                 // are the English in that case, and these two fields are the only thing that says so.
                 if (document.TranslatedTo is { } target)
