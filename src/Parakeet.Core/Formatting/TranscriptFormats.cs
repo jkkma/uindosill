@@ -53,4 +53,35 @@ public static class TranscriptFormats
             ? formatter
             : throw new ArgumentException(
                 $"Unknown transcript format '{id}'. Known formats: {string.Join(", ", Ids)}.", nameof(id));
+
+    /// <summary>
+    /// The ids in <paramref name="ids"/> as this registry spells them — aliases resolved, a
+    /// leading dot and case dropped — with a spelling that names a format already named left out,
+    /// in first-seen order. Throws, as <see cref="Get"/> does, on a spelling that names nothing.
+    /// </summary>
+    /// <remarks>
+    /// A list of formats is read in more than one place — a guard that refuses a format under an
+    /// option, a guard that refuses it without one, the writer that resolves each id to a file —
+    /// and <see cref="TryGet"/> accepts several spellings for each. Until 2026-08-22 only the
+    /// writer resolved them, so a guard comparing the typed spelling against a canonical id let
+    /// <c>words</c> past a refusal written for <c>vtt-words</c> and <c>.rttm</c> past one written
+    /// for <c>rttm</c>, and <c>vtt,webvtt</c> wrote one file twice under two names. One pass
+    /// through here, once, and every reader sees the same list.
+    /// </remarks>
+    public static IReadOnlyList<string> Canonical(IEnumerable<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var canonical = new List<string>();
+        foreach (var id in ids)
+        {
+            var spelled = Get(id).Id;
+            if (!canonical.Contains(spelled, StringComparer.Ordinal))
+            {
+                canonical.Add(spelled);
+            }
+        }
+
+        return canonical;
+    }
 }
