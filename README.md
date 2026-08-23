@@ -91,15 +91,18 @@ nothing has packaged one.
   word-timed subtitle format is refused rather than written against times that no longer fit the
   words. What is measured and what is not is in
   [UNPROVEN.md](docs/UNPROVEN.md); the decision is in [PHASES.md](docs/PHASES.md).
-- **Where speech is, is v1's third opt-in, and it is new on 2026-08-23.** A recording is cut into
+- **Where speech is, is v1's third switch, and it is new on 2026-08-23.** A recording is cut into
   pieces for the recogniser by a loudness gate, which hears pauses in conversation and cannot hear
   them under music: a documentary with a bed under the narration came out in thirty-second blocks
-  holding nine sentences each. `--vad neural` — a checkbox in the app — cuts on Silero VAD instead,
-  a 2.2 MiB MIT graph run on ONNX Runtime in process on the CPU, which listens for speech rather
-  than for quiet. Measured on that one documentary: 285 segments became 342, the longest fell from
-  29.4 s to 21.7 s and segments of twenty seconds or more from ten to one; what it costs and what
-  the one measurement does not cover are in [UNPROVEN.md](docs/UNPROVEN.md). The gate is still the
-  default, because every segment figure this repository has recorded is the gate's.
+  holding nine sentences each. Silero VAD — a 2.2 MiB MIT graph run on ONNX Runtime in process on
+  the CPU, which listens for speech rather than for quiet — cuts on the pauses instead. **In the
+  app it is on by default** whenever its model is installed, a checkbox beside the fixed-windows
+  one; **on the command line it is `--vad neural`**, and there the gate stays the default, because
+  every segment figure this repository has recorded came through the command line and is the
+  gate's. Measured on that one documentary: 285 segments became 342, the longest fell from 29.4 s
+  to 21.7 s and segments of twenty seconds or more from ten to one; on a ten-minute podcast it cut
+  longer rather than shorter. What it costs and what the two measurements do not cover are in
+  [UNPROVEN.md](docs/UNPROVEN.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. **The asking is not built and the panel says so** — it is drawn,
   disabled, and covered by a work-in-progress notice, because there is no language model in this
@@ -170,7 +173,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1093 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1094 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

@@ -119,7 +119,9 @@ them are shapes. Counted by walking every subgraph with the `onnx` package on 20
 `licences/silero-vad-LICENSE.txt` and `docs/LICENSING.md` has the reading. **What the model is for,
 what it costs and what it has been measured on** are in `docs/PHASES.md` and `docs/UNPROVEN.md`
 under 2026-08-23; the short form is that it cuts a recording at pauses the energy gate cannot hear
-under music, at a cost of a few percent of the pass, and that it was measured on one documentary.
+under music, at a cost of a few percent of the pass, and that it was measured on one documentary and
+one podcast. The app ticks it by default whenever it is installed; the command line asks for it with
+`--vad neural` and keeps the gate as its default.
 
 ### Pins recorded for v3, deliberately unreachable
 

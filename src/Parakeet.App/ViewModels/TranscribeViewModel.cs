@@ -125,12 +125,27 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private bool _useFixedWindows;
 
     /// <summary>
-    /// The third opt-in: cut the audio on a neural speech detector rather than the loudness gate.
-    /// Off by default, like the other two, and for the reason the gate is still the default — every
-    /// segment-count figure this project has recorded is the gate's.
+    /// Cut the audio on a neural speech detector rather than the loudness gate. <b>On by default</b>
+    /// — the maintainer's call, later on 2026-08-23, on the documentary that raised it — and unlike
+    /// the two sidecar opt-ins, which stay off: a detector that hears pauses under music is what a
+    /// person with a recording wants, and the command line, where every recorded segment figure
+    /// comes from, keeps the gate as its default so nothing measured moves. The box follows the
+    /// model: <see cref="RefreshSpeechDetectionAvailability"/> unticks it when the model is not
+    /// there and ticks it when the model arrives, unless the user has answered the box themselves.
     /// </summary>
     [ObservableProperty]
-    private bool _useNeuralSpeechDetection;
+    private bool _useNeuralSpeechDetection = true;
+
+    /// <summary>
+    /// The user's own answer to the detection box, or null while it is still the default. Kept
+    /// apart from the property because this window also writes the property when the model comes
+    /// or goes, and a choice the user made should survive that: untick it, remove the model from
+    /// the Models tab, install it again, and it comes back unticked. Set from the property's change
+    /// hook, so the window's own writes are fenced off by <see cref="_settingSpeechDetection"/>.
+    /// </summary>
+    private bool? _speechDetectionChoice;
+
+    private bool _settingSpeechDetection;
 
     [ObservableProperty]
     private double _maxSegmentSeconds = 30;
@@ -366,18 +381,34 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// <summary>
     /// Re-asks whether a speech detector is available and brings the checkbox and its hint into
     /// line — the third of these, called from the same places as the other two and for the reason
-    /// spelled out on <see cref="RefreshSpeakerAvailability"/>. Turns the opt-in off when the model
-    /// goes away, so a batch cannot start with the box ticked and nothing behind it.
+    /// spelled out on <see cref="RefreshSpeakerAvailability"/>. The box follows the model: off when
+    /// it is not there, so a batch cannot start with the box ticked and nothing behind it; on when
+    /// it is, because that is the default — unless the user has answered the box themselves, in
+    /// which case their answer is restored rather than the default.
     /// </summary>
     public void RefreshSpeechDetectionAvailability()
     {
-        if (!_engines.SupportsNeuralSpeechDetection && UseNeuralSpeechDetection)
+        _settingSpeechDetection = true;
+        try
         {
-            UseNeuralSpeechDetection = false;
+            UseNeuralSpeechDetection = _engines.SupportsNeuralSpeechDetection && (_speechDetectionChoice ?? true);
+        }
+        finally
+        {
+            _settingSpeechDetection = false;
         }
 
         OnPropertyChanged(nameof(CanUseNeuralSpeechDetection));
         OnPropertyChanged(nameof(SpeechDetectionHint));
+    }
+
+    // A write that did not come from RefreshSpeechDetectionAvailability is the user's answer.
+    partial void OnUseNeuralSpeechDetectionChanged(bool value)
+    {
+        if (!_settingSpeechDetection)
+        {
+            _speechDetectionChoice = value;
+        }
     }
 
     // The hint reads the fixed-windows box, so it moves when that box does.

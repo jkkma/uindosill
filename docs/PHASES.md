@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1093 tests, no weights, no display, no network — **1089 passed and 4 skipped**, and
+**Status:** met. 1094 tests, no weights, no display, no network — **1090 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.** `CLAUDE.md`'s second
+**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1093 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1094 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
+**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2880,7 +2880,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
+**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2936,7 +2936,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
+**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -2995,7 +2995,20 @@ and the podcast result says they may be wrong for conversation. Not a provider c
 only, one thread, by decision. And not the subtitle files, which still break cues by character
 count; the cue builder was not touched.
 
-**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.** Two of the four are
+**Later the same day — on by default in the app.** The maintainer's call, on the documentary's
+table: the window ticks *Neural speech detection* by default whenever its model is installed,
+unticks it when the model is not there (a ticked box with nothing behind it is the inert setting the
+window refuses to draw), and ticks it again when the model arrives — unless the user has answered
+the box themselves, in which case their answer comes back rather than the default. **The command
+line is unchanged**: `--vad` still defaults to `energy` and `--vad neural` asks for the detector,
+and that is what keeps every recorded figure standing — the harnesses run through the CLI, and a
+default that moved there would move `measure-transcribe.ps1`'s segment counts without a word in the
+run report. So the detector is the default for a person with a recording and the gate is the
+default for a measurement; the podcast table above is why the second half of that is still true,
+and "opt-in" in the paragraphs above describes the command line from here on. Nothing was
+re-measured, because nothing measurable moved.
+
+**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
