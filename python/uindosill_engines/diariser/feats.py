@@ -32,6 +32,11 @@ HIGHFREQ = SAMPLE_RATE / 2
 N_WINDOW_SIZE = int(WINDOW_SIZE * SAMPLE_RATE)      # 400
 N_WINDOW_STRIDE = int(WINDOW_STRIDE * SAMPLE_RATE)  # 160
 
+#: Frames per STFT block — about 82 s of audio, 17 MB of complex spectrum — chosen for memory and
+#: nothing else: the block boundary is invisible to the result, because every frame sees only its
+#: own n_fft samples.
+STFT_BLOCK_FRAMES = 8192
+
 
 class MelFeaturizer:
     def __init__(self):
@@ -61,28 +66,48 @@ class MelFeaturizer:
         # preemphasis
         x = torch.cat((x[:, 0].unsqueeze(1), x[:, 1:] - PREEMPH * x[:, :-1]), dim=1)
 
-        spec = torch.stft(
-            x, n_fft=N_FFT, hop_length=N_WINDOW_STRIDE, win_length=N_WINDOW_SIZE,
-            center=True, window=self.window, return_complex=True, pad_mode="constant",
-        )
-        spec = torch.view_as_real(spec)
-        mag = torch.sqrt(spec.pow(2).sum(-1))          # guard=0: use_grads is False
-        power = mag.pow(MAG_POWER)
-        mel = torch.matmul(self.fb, power)
-        mel = torch.log(mel + LOG_ZERO_GUARD)
+        # The STFT in hop-aligned blocks rather than over the whole file at once. Whole-file, the
+        # complex spectrum (257 bins x 2 x 4 bytes per 10 ms frame) and the intermediates behind
+        # `pow`, `sum`, `sqrt`, `pow` and the filterbank matmul are all alive together — measured
+        # 2026-08-22 on the bundled torch, 60 min of audio peaked 2,337 MB above the working set it
+        # started from, about 665 kB per second of audio, where the mel itself is 50 kB/s. Each block
+        # here sees exactly the samples its frames would have seen under `center=True` — the signal
+        # zero-padded by n_fft/2 at each end, as `pad_mode="constant"` pads it, and a frame at every
+        # hop — so the transform is the same one frame by frame, and it is held to the whole-file
+        # result bit for bit before it is trusted (PHASES, 2026-08-22).
+        half = N_FFT // 2
+        padded = torch.nn.functional.pad(x, (half, half), mode="constant", value=0.0)
+        frames = 1 + (padded.shape[1] - N_FFT) // N_WINDOW_STRIDE   # == 1 + n_samples // hop
+        rows = frames
+        if pad_to_multiple and PAD_TO > 0 and frames % PAD_TO != 0:
+            rows = frames + (PAD_TO - frames % PAD_TO)
+
+        # Written straight into the (frames, mels) layout the caller wants, with the multiple-of-16
+        # padding rows allocated here and left at zero, so the result is handed over without a
+        # transposed copy of itself; and the pre-emphasised signal goes once it has been padded.
+        out = torch.zeros((rows, N_MELS), dtype=torch.float32)
+        del x
+        for start in range(0, frames, STFT_BLOCK_FRAMES):
+            stop = min(frames, start + STFT_BLOCK_FRAMES)
+            first_sample = start * N_WINDOW_STRIDE
+            last_sample = (stop - 1) * N_WINDOW_STRIDE + N_FFT
+            spec = torch.stft(
+                padded[:, first_sample:last_sample], n_fft=N_FFT, hop_length=N_WINDOW_STRIDE,
+                win_length=N_WINDOW_SIZE, center=False, window=self.window, return_complex=True,
+            )
+            spec = torch.view_as_real(spec)
+            mag = torch.sqrt(spec.pow(2).sum(-1))          # guard=0: use_grads is False
+            power = mag.pow(MAG_POWER)
+            block = torch.matmul(self.fb, power)
+            out[start:stop] = torch.log(block[0] + LOG_ZERO_GUARD).transpose(0, 1)
 
         # normalize: "NA" -> normalize_batch returns x unchanged.  Nothing here on purpose.
 
-        # mask frames at or beyond seq_len to pad_value 0
-        t = mel.shape[-1]
-        if valid < t:
-            mel[:, :, valid:] = 0.0
+        # mask frames at or beyond seq_len to pad_value 0; the rows past `frames` are the
+        # multiple-of-16 padding and were never written.
+        if valid < frames:
+            out[valid:frames] = 0.0
         else:
-            valid = t
+            valid = frames
 
-        if pad_to_multiple and PAD_TO > 0:
-            rem = mel.shape[-1] % PAD_TO
-            if rem != 0:
-                mel = torch.nn.functional.pad(mel, (0, PAD_TO - rem), value=0.0)
-
-        return mel[0].transpose(0, 1).contiguous().numpy(), int(valid)
+        return out.numpy(), int(valid)

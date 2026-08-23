@@ -1282,6 +1282,46 @@ machines*) larger rather than smaller, there now being a second process to accou
 Runtime memory arena lever the entry above records as never pulled is still never pulled, and is now
 a Python-side option rather than a C# one.
 
+### The chunk loop lost one or two frames on 7.3 % of durations, and the 16.33 % describes that loop — found 2026-08-22
+
+**What was wrong.** The sidecar's loop trimmed the graph's 381-frame embedding output to the
+pre-encode length of the chunk's *valid* frames — the `elen` the graph reports — where NeMo's
+`streaming_update_async` takes a chunk's capacity (`max_chunk_len`) from the tensor's physical
+width and clamps the valid length to it. The two differ on every file: the featurizer pads the mel
+to a multiple of 16 and the STFT is one frame longer than the valid count, so the last piece is
+wider than its valid part, and on the first chunk of a short file too. Verified on the installed
+graph on the CPU: `elen` for chunk lengths 2720, 2736, 2888, 2904, 3040 and 3048 is 340, 342, 361,
+363, 380 and 381 — exactly ⌊(n − 1)/2⌋ + 1 applied three times — and `run_mel` on a 2736-frame
+piece with 2720 valid returned **338 rows where 340 are due**; a 600.0 s file returned **7,498
+rows where 7,500 are due**, its last chunk's rows concatenated 160 ms early. Over every duration
+from 1 s to 2 h at 0.1 s steps, 7.3 % lose one or two frames; the committed chunk plan's 600 s
+case is one of them.
+
+**What was done.** The loop trims to the pre-encode length of the piece's physical width
+(`pre_encode_len`, the same arithmetic, checked against `elen` on the graph) and keeps the valid
+length as `chunk_lengths`; the progress step is counted before the context-only break, so the bar
+reaches n of n. Re-run on the graph: 340 of 340 and 7,500 of 7,500. The committed parity fixture's
+geometry has no padding to trim — 6,096 valid of 6,096 — so its reference is unchanged, and the
+check passes with a maximum difference of 0.0 before and after; it did not and could not see this.
+
+**What is owed.** `engine.py` had not changed since the spike, so **the 16.3324 % AMI figure (and
+every row of the provider table above) describes the pre-fix loop**. The effect can only be at the
+frames that were dropped and the ones that shifted — a few per file — and on AMI test's 16
+meetings it is not expected to move the third decimal, but that is an expectation and not a
+measurement. **The AMI re-score is owed to the desktop, which holds the material; this laptop
+does not.** Until it is done, the 16.33 % stands as the figure for the loop that produced it, and
+a re-score is the only thing that moves it.
+
+**Beside it, the featurizer's peak working set — measured for the first time the same day.** The
+architecture note said "about 51 kB per second of audio" for the mel and that nothing had profiled
+the peak. Whole-file, on the bundled torch, thirty minutes of real 16 kHz audio peaked **1,317 MB
+above the resting working set — about 730 kB per second**; the complex spectrum and the
+intermediates behind `pow`, `sum`, `sqrt`, `pow` and the filterbank matmul are all alive together.
+The STFT now runs in hop-aligned blocks and the mel is written into its final layout: **bit-identical
+to the whole-file result on those thirty minutes** (`numpy.array_equal`, 180,016 × 128), and
+**551 MB above resting at peak — about 306 kB per second**, the remainder being the samples
+themselves and the 88 MB mel. Bit-identical means the 16.33 % is untouched by this part.
+
 ### The handoff WAV was 16-bit PCM, and on decoded input that moved the answer — measured 2026-08-22
 
 **The one place the sidecar path differed from the reference path was the file between them.** The
