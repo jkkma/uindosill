@@ -1,7 +1,5 @@
-using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Parakeet.App.Services;
-using Parakeet.Core.Licensing;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp.Interop;
@@ -128,10 +126,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // _settings rather than the parameter: both view models write the same file, and handing
         // one a null it resolves for itself would let the two disagree about which file that is
         // the moment anything overrides the path.
+        var appUpdater = updater ?? new NotInstalledUpdater();
+
         Updates = new UpdatesViewModel(
-            updater ?? new NotInstalledUpdater(),
+            appUpdater,
             _settings,
             shutdown: ShutdownAsync);
+
+        // Everything the About window says, built here because this is the only place that knows
+        // all three of the version, the model directory and the settings file. It is handed the
+        // values rather than the objects: the About window is opened by a Settings-tab button and
+        // has no business reaching the queue, the session or the updater through its DataContext.
+        About = new AboutViewModel(
+            appUpdater.CurrentVersion,
+            modelStore.RootDirectory,
+            _settings.Path);
     }
 
     public TranscribeViewModel Transcribe { get; }
@@ -146,6 +155,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The launch check, the notice it produces, and the setting that switches it off.</summary>
     public UpdatesViewModel Updates { get; }
+
+    /// <summary>
+    /// What the About window shows. Not a tab: the Licences page retired into that window on
+    /// 2026-08-23, and it is opened from the Settings tab rather than reached along the switcher.
+    /// </summary>
+    public AboutViewModel About { get; }
 
     /// <summary>The one loaded model, shared by the Models tab that controls it and the
     /// Transcribe tab that uses it.</summary>
@@ -220,52 +235,5 @@ public sealed partial class MainWindowViewModel : ObservableObject
         "CUDA is used automatically when this build has it, and needs its own runtime files. " +
         "CPU always works and is the fallback. Whichever you pick is remembered.";
 
-    /// <summary>
-    /// The full notice package, shown in the application because the licence requires it to be
-    /// present where the material is used, not only in a file in the source repository.
-    /// </summary>
-    public string LicenceText
-    {
-        get
-        {
-            var lines = new List<string>();
-
-            foreach (var attribution in Attributions.ById.Values)
-            {
-                lines.Add(attribution.ToPlainText(Environment.NewLine));
-            }
-
-            lines.Add("Restrictions that come with these weights:");
-            lines.AddRange(Attributions.WeightUsageRestrictions.Select(r => "  - " + r));
-            lines.Add(string.Empty);
-            lines.Add("Third-party components:");
-
-            foreach (var component in Attributions.Components)
-            {
-                lines.Add($"  {component.Component} — {component.License} — {component.Uri}");
-
-                // The notes carry the qualifying text — which builds ship a component, and on what
-                // terms. This panel used to drop them while `uindosill notice` printed them, so the
-                // two surfaces disagreed about a licence notice. They are rendered in both now.
-                if (component.Notes is { Length: > 0 } notes)
-                {
-                    lines.Add($"    {notes}");
-                }
-            }
-
-            return string.Join(Environment.NewLine, lines);
-        }
-    }
-
-    public string EnvironmentSummary =>
-        $"{RuntimeInformation.FrameworkDescription} on {RuntimeInformation.OSDescription} " +
-        $"({RuntimeInformation.ProcessArchitecture}), {Environment.ProcessorCount} logical processors";
-
-    /// <summary>
-    /// Stated plainly in the window rather than buried: the ABI takes no thread count, so a
-    /// thread control here would be a slider connected to nothing.
-    /// </summary>
-    public string ThreadingNote =>
-        $"Decode threads are chosen by the engine. The parakeet.cpp ABI takes no thread count, so this build " +
-        $"cannot cap them at the recommended {DecodeThreadPlanner.MaxRecommended}.";
 }
+

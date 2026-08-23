@@ -1,0 +1,243 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Parakeet.App.ViewModels"
+        xmlns:views="using:Parakeet.App.Views"
+        x:Class="Parakeet.App.Views.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Title="About Uindosill"
+        Width="660" Height="620"
+        MinWidth="520" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource GroundBrush}"
+        Foreground="{DynamicResource InkBrush}"
+        FontFamily="{DynamicResource SansFamily}"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="BorderOnly">
+
+  <!--
+    The About window, which is where the Licences tab went on 2026-08-23. It had been the fifth
+    page of a five-page application and it is the one page nobody opens twice; a tab strip is for
+    places you go, and a notice package is a thing you look up.
+
+    Everything structural here is the main window's, deliberately and not by copy-paste habit:
+    the same 46px headerbar with no OS title bar, the same square corner asked of DWM in
+    OnOpened, the same 1px edge inside the window because a frameless window has none of its own,
+    and the same pill switcher over a headless TabControl. A dialog drawn in the platform's chrome
+    beside a window drawn in this design's would read as another program's.
+
+    Three things it does not take from the main window:
+
+    · Only a close button. Minimise and maximise are the shapes of a window you work in; this one
+      is opened, read and dismissed. The role is still the native CloseButton, so the platform
+      draws the hover and answers the press.
+
+    · A Close button at the foot as well. The glyph in the corner is the window's; the button is
+      the dialog's, and a dialog with no obvious way out is one people drag off the screen.
+
+    · Modal, and owned. It is opened with ShowDialog from the Settings tab — see
+      MainWindow.OnShowAbout — so there is never a second copy of it, and it is always in front of
+      the window that opened it rather than lost behind it.
+  -->
+
+  <Window.Resources>
+    <views:IndexMatchConverter x:Key="IndexMatch" />
+  </Window.Resources>
+
+  <Border BorderBrush="{DynamicResource WindowEdgeBrush}"
+          BorderThickness="1"
+          Background="{DynamicResource GroundBrush}">
+    <DockPanel>
+
+      <!-- ══ Headerbar ═══════════════════════════════════════════════════════════════════════
+           The main window's, less two buttons. ElementRole="TitleBar" is what makes dragging and
+           double-click-to-maximise the platform's job rather than a PointerPressed handler's. -->
+      <Border DockPanel.Dock="Top"
+              Name="HeaderBar"
+              WindowDecorationProperties.ElementRole="TitleBar"
+              Height="46"
+              Background="{DynamicResource GroundBrush}"
+              BorderBrush="{DynamicResource RuleSeenBrush}"
+              BorderThickness="0,0,0,1"
+              Padding="14,0,0,0">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Text="About Uindosill" FontSize="13" FontWeight="Bold"
+                     LetterSpacing="-0.156" VerticalAlignment="Center" />
+
+          <Button Grid.Column="1" Name="WindowClose"
+                  WindowDecorationProperties.ElementRole="CloseButton"
+                  Classes="window close" ToolTip.Tip="Close">
+            <Path StrokeThickness="1.3"
+                  StrokeLineCap="Round" Data="M0 0l10.5 10.5M10.5 0l-10.5 10.5" Stretch="None" />
+          </Button>
+        </Grid>
+      </Border>
+
+      <!-- ══ The dismissal ═══════════════════════════════════════════════════════════════════
+           Docked before the pages so it keeps its strip at the foot of the window whatever the
+           pane above does — the Licences pane scrolls, and a button declared after it would be
+           pushed off the bottom by a notice package that is thousands of lines long. -->
+      <Border DockPanel.Dock="Bottom"
+              BorderBrush="{DynamicResource RuleSeenBrush}"
+              BorderThickness="0,1,0,0"
+              Padding="26,13">
+        <Button Name="Dismiss" Classes="primary" Content="Close"
+                HorizontalAlignment="Right" />
+      </Border>
+
+      <!-- ══ Identity ════════════════════════════════════════════════════════════════════════
+           The mark at 46px rather than the headerbar's 22, because this is the one place in the
+           product where the application introduces itself rather than labels itself. Matcha-100
+           ground and matcha-700 strokes, the same badge the headerbar carries. -->
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="15" Margin="26,22,26,0">
+        <Border Width="46" Height="46" Background="{DynamicResource Matcha100Brush}"
+                VerticalAlignment="Top">
+          <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
+                StrokeLineCap="Round"
+                Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                Width="27" Height="27" Stretch="Uniform"
+                HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock Text="Uindosill" FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.33" />
+          <TextBlock Text="{Binding Tagline}" Classes="secondary" FontSize="12.5" />
+          <!-- The version in the monospace this design reserves for text you copy rather than
+               read. It is the first thing a bug report asks for. -->
+          <SelectableTextBlock Name="Version" Text="{Binding Version, StringFormat='Version {0}'}"
+                               Classes="mono meta" FontSize="10.5" Margin="0,3,0,0" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- ══ The switcher ════════════════════════════════════════════════════════════════════
+           The headerbar's pills, drawn the same way and placed differently: left-aligned over the
+           panes they switch, because the window's own switcher is centred in its headerbar and a
+           second centred row here would read as a peer of that rather than as this window's. Same
+           arrangement as the Transcribe tab's transcript/English switcher.
+
+           No ElementRole needed. These are not inside the TitleBar element, so no press here is
+           taken for a window move. -->
+      <Border DockPanel.Dock="Top" Classes="switcher" Name="AboutSwitcher"
+              HorizontalAlignment="Left" Margin="26,18,26,0">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <RadioButton Name="PaneAbout" Classes="segment" GroupName="AboutPane" Content="About"
+                       IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+          <RadioButton Name="PaneLicences" Classes="segment" GroupName="AboutPane" Content="Licences"
+                       IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+          <RadioButton Name="PaneSystem" Classes="segment" GroupName="AboutPane" Content="System"
+                       IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=2}" />
+        </StackPanel>
+      </Border>
+
+      <TabControl Name="Panes" Classes="headless" SelectedIndex="{Binding SelectedTab}"
+                  Margin="26,15,26,18">
+
+        <!-- ══ About ═════════════════════════════════════════════════════════════════════════ -->
+        <TabItem Header="About">
+          <ScrollViewer>
+            <StackPanel Spacing="13" HorizontalAlignment="Left" MaxWidth="560">
+              <TextBlock Name="Summary" Text="{Binding Summary}" TextWrapping="Wrap"
+                         Classes="secondary" FontSize="12.5" LineHeight="20.5" />
+
+              <!-- The network promise, on the tinted strip this design uses for a statement that
+                   is the point of the panel rather than one line among several. It is the same
+                   promise the Updates tab makes, and it is repeated here because this is where a
+                   person comes to find out what a program does on their network. -->
+              <Border Classes="tinted" Padding="14,12">
+                <TextBlock Name="NetworkNote" Text="{Binding NetworkNote}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Matcha700Brush}"
+                           FontSize="12" LineHeight="19.8" />
+              </Border>
+
+              <TextBlock TextWrapping="Wrap" Classes="fine meta" LineHeight="17"
+                         Text="Uindosill is free software. The terms it is offered under, and every notice that comes with the models and the components it is built from, are on the Licences pane." />
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <!-- ══ Licences ══════════════════════════════════════════════════════════════════════
+             What was the main window's fifth tab until 2026-08-23. Unchanged in substance: the
+             same notice, from the same one builder in AboutViewModel, in the same monospace on
+             the same sunken ground. -->
+        <TabItem Header="Licences">
+          <DockPanel>
+            <!-- HorizontalAlignment matters here: a stretched TextBlock with a MaxWidth centres
+                 its own box in the leftover space, so the paragraph sat in the middle of the page
+                 under a left-aligned heading. -->
+            <TextBlock DockPanel.Dock="Top" Name="LicenceNotice" Text="{Binding LicenceNotice}"
+                       Classes="secondary" TextWrapping="Wrap" MaxWidth="560"
+                       HorizontalAlignment="Left" LineHeight="20" Margin="0,0,0,13" />
+
+            <Border Background="{DynamicResource SunkenBrush}"
+                    BorderBrush="{DynamicResource RuleSeenBrush}"
+                    BorderThickness="1" Padding="16,14">
+              <ScrollViewer>
+                <SelectableTextBlock Name="LicenceText" Text="{Binding LicenceText}"
+                                     TextWrapping="Wrap"
+                                     Classes="mono" FontSize="11" LineHeight="19.25"
+                                     Foreground="{DynamicResource InkSecondaryBrush}" />
+              </ScrollViewer>
+            </Border>
+          </DockPanel>
+        </TabItem>
+
+        <!-- ══ System ════════════════════════════════════════════════════════════════════════
+             The five facts a bug report asks for, in one place, selectable, with a button that
+             puts all five on the clipboard. The environment line and the threading note used to
+             sit under the licence text, where nobody looking for them would think to go. -->
+        <TabItem Header="System">
+          <ScrollViewer>
+            <StackPanel Spacing="15" HorizontalAlignment="Left" MaxWidth="560">
+
+              <Border Classes="panel" Padding="15,13">
+                <StackPanel Spacing="12">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="VERSION" Classes="section" />
+                    <SelectableTextBlock Text="{Binding Version}" Classes="mono" FontSize="11.5" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="RUNTIME" Classes="section" />
+                    <SelectableTextBlock Name="EnvironmentSummary" Text="{Binding EnvironmentSummary}"
+                                         Classes="mono" FontSize="11.5" TextWrapping="Wrap" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="DECODE THREADS" Classes="section" />
+                    <TextBlock Name="ThreadingNote" Text="{Binding ThreadingNote}"
+                               Classes="secondary" FontSize="11.5" TextWrapping="Wrap"
+                               LineHeight="18.5" />
+                  </StackPanel>
+
+                  <!-- Both paths, because an update replaces the application's own files and
+                       neither of these, and somebody clearing space or reporting a fault needs to
+                       know which folder is which. -->
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="MODELS" Classes="section" />
+                    <SelectableTextBlock Name="ModelDirectory" Text="{Binding ModelDirectory}"
+                                         Classes="mono" FontSize="11" TextWrapping="Wrap" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="SETTINGS" Classes="section" />
+                    <SelectableTextBlock Name="SettingsPath" Text="{Binding SettingsPath}"
+                                         Classes="mono" FontSize="11" TextWrapping="Wrap" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Name="CopySystemReport" Classes="onPage" Content="Copy these details"
+                        ToolTip.Tip="Puts all five lines on the clipboard, for pasting into a bug report" />
+                <TextBlock Name="CopyNotice" Text="Copied." Classes="meta"
+                           VerticalAlignment="Center" IsVisible="False" />
+              </StackPanel>
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+      </TabControl>
+    </DockPanel>
+  </Border>
+</Window>

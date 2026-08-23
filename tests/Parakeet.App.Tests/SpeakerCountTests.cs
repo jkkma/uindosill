@@ -135,7 +135,12 @@ public class SpeakerCountTests
 
         Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
         Assert.Contains("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("Set 'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // And where that field is, which stopped being obvious when the opt-in moved to the Settings
+        // tab on 2026-08-23: this message is read on the Transcribe tab, so naming the control
+        // without naming the page is a repair nobody can act on from where they are standing.
+        Assert.Contains("Settings tab", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -322,7 +327,12 @@ public class SpeakerCountTests
 
         Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
         Assert.Contains("a.wav is longer than", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("Set 'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // And where that field is, which stopped being obvious when the opt-in moved to the Settings
+        // tab on 2026-08-23: this message is read on the Transcribe tab, so naming the control
+        // without naming the page is a repair nobody can act on from where they are standing.
+        Assert.Contains("Settings tab", viewModel.StatusMessage, StringComparison.Ordinal);
 
         // The hint beside the field says the same thing at the same moment, rather than letting
         // Start be the first place anybody hears it.

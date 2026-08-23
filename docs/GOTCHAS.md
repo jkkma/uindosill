@@ -589,3 +589,35 @@ $codes = @(if ($Languages) { $Languages -split ',' } else { Get-ChildItem ... })
 Slicing has the same edge: `$rows[0..($n - 1)]` is an array for `$n` above one and a scalar for
 `$n` of one. The failure arrives with no line number from the caller's point of view and names a
 property nobody wrote, which is why it is worth recognising on sight rather than debugging.
+
+## 31. `FindControl` answers for a tab that is not showing; `GetVisualDescendants` does not
+
+Avalonia's `TabControl` realises only the selected tab into the **visual** tree. The obvious
+conclusion — that a control on another page cannot be found — is wrong, and both halves of that
+matter.
+
+The markup tree is built in full when the XAML loads, so every `Name` in the file is registered in
+the window's single name scope. `FindControl` reads that scope. Measured on 2026-08-23, with the
+window on tab 0 and the button on tab 2:
+
+```
+ctor-scope=found  after-show=found  inVisualTree=False  visualCheckboxes=0
+```
+
+So `this.FindControl<Button>("BrowseOutput")` in `MainWindow`'s constructor finds a button that
+lives on the Export page, and `browse.Click += …` on it works — which is why moving controls to new
+tabs did not silently unwire them, and why this file wires every handler by name rather than naming
+handlers in the markup.
+
+The trap is the other direction, and it is a testing one:
+
+- `Assert.NotNull(window.FindControl<T>("X"))` passes for a control on a page nobody can reach, and
+  for a control the window never draws. It proves the markup declares it, not that a user can see it.
+- `Assert.Null(window.FindControl<T>("X"))` is not a test that a control left a page. It only passes
+  once the control is deleted from the file, so a control **duplicated** onto a second tab — two
+  boxes bound to one setting — passes it either way.
+
+Ask the visual tree for anything about what is drawn: select the tab, `UpdateLayout()`, then
+`GetVisualDescendants()`. `OptionTabTests.TheTranscribeTabKeptNoneOfItAndSaysWhereItWent` is the
+case that found this, and `WindowTests.MainWindowBuildsWithAllTabs` is the one that stays honest by
+counting `TabControl.Items` instead of looking anything up by name.

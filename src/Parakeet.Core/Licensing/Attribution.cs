@@ -413,7 +413,7 @@ public static class Attributions
         // NVIDIA Open Model License §2.3 incorporates the Trustworthy AI terms by reference, and
         // their clause (b) names biometric processing specifically — which is what telling voices
         // apart is, under several jurisdictions' definitions. It is listed with the others rather
-        // than left in the Agreement because this list is what the CLI and the Licences tab render.
+        // than left in the Agreement because this list is what the CLI and the About window render.
         "NVIDIA Open Model License §2.3 requires use consistent with NVIDIA's Trustworthy AI terms, which " +
         "forbid use in violation of applicable law — naming illegal surveillance and the illegal collection " +
         "or processing of biometric information without the subject's consent where consent is required. " +

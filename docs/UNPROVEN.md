@@ -2561,7 +2561,7 @@ The ASR's own `SupportsDecodeCancellation` is a different thing and is unchanged
 `cublas64_12.dll`, `cublasLt64_12.dll` and `cudart64_12.dll` are NVIDIA proprietary binaries under
 the CUDA Toolkit EULA, not MIT. `NOTICE.md`, `docs/LICENSING.md` and
 `src/Parakeet.Core/Licensing/Attribution.cs` between them listed five MIT components and no NVIDIA
-entry, and `Attributions.Components` is what `uindosill notice` and the app's Licences tab render —
+entry, and `Attributions.Components` is what `uindosill notice` and the app's About window render —
 so the gap reached the shipped product.
 
 **Closed 2026-08-15.** The EULA was read at https://docs.nvidia.com/cuda/eula/index.html: §2.6
@@ -4343,7 +4343,7 @@ values is do-not-round. So square is something the window can ask for, where 12 
 this design is cheaper to build than the one it replaced rather than dearer.
 
 **What is now measured.** `DwmSetWindowAttribute` with `DWMWA_WINDOW_CORNER_PREFERENCE` returns
-`S_OK` from `Services/WindowCorner.cs`, called on `OnOpened` once the window has a handle, and
+`S_OK` from `Services/WindowFrame.cs`, called on `OnOpened` once the window has a handle, and
 `DwmGetWindowAttribute` reads the preference back as `DWMWCP_DONOTROUND` — so it reaches an
 Avalonia window with an extended client area and is retained rather than silently ignored. The
 corner **draws square**, confirmed by looking at the running window. Per-monitor DPI is not a

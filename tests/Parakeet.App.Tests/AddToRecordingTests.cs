@@ -197,7 +197,16 @@ public class AddToRecordingTests
     {
         // Bound rather than present: a Button whose Command is null renders, hovers and does
         // nothing, which is the exact shape this window keeps finding.
-        var window = new MainWindow { DataContext = WindowTests.NewViewModel(out _) };
+        //
+        // On the Export tab since 2026-08-23, and the tab is selected first so that the button
+        // this asserts on is one the window has actually drawn. FindControl would find it either
+        // way — the name scope holds every page whether or not it is realised (gotcha 31) — and
+        // that is the weaker test: a Command bound on an object nobody can see is not the thing
+        // this file exists to check.
+        var viewModel = WindowTests.NewViewModel(out _);
+        viewModel.SelectedTab = 2;
+
+        var window = new MainWindow { DataContext = viewModel };
         window.Show();
         window.UpdateLayout();
 

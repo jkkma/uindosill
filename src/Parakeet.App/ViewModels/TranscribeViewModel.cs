@@ -1149,13 +1149,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
         var formats = Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
         if (formats.Count == 0)
         {
-            StatusMessage = "Choose at least one output format.";
+            StatusMessage = "Choose at least one output format, on the Export tab.";
             return;
         }
 
         if (!LabelSpeakers && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.Ordinal))
         {
-            StatusMessage = "RTTM speaker turns need 'Label speakers' on: without it there are no turns to write.";
+            StatusMessage = "RTTM speaker turns need 'Label speakers' on, over on the Settings tab: without "
+                + "it there are no turns to write.";
             return;
         }
 
@@ -1167,8 +1168,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             StatusMessage =
                 $"'{TranscriptFormats.WordTimedVtt.DisplayName}' times every word, and translation does not carry "
-                + "word timings. Drop that format, or turn the English version off and get the word timings of "
-                + "what was actually said.";
+                + "word timings. Drop that format on the Export tab, or turn the English version off on Settings "
+                + "and get the word timings of what was actually said.";
             return;
         }
 
@@ -1221,10 +1222,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             StatusMessage = LongestPastTheBound() is { } risky
                 ? $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
-                    + "labels have been established, and past that it tends to hear one person as two. Set "
-                    + "'How many speakers', or turn 'Label speakers' off and take the transcript without names."
-                : "'Label speakers' needs to know how many. Set 'How many speakers', or turn it off and take "
-                    + "the transcript without names.";
+                    + "labels have been established, and past that it tends to hear one person as two. On the "
+                    + "Settings tab: set 'How many speakers', or turn 'Label speakers' off and take the transcript "
+                    + "without names."
+                : "'Label speakers' needs to know how many. On the Settings tab, set 'How many speakers', or turn "
+                    + "it off and take the transcript without names.";
             return;
         }
 
