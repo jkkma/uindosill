@@ -349,12 +349,9 @@ public static class SpeakerLabelling
         }
 
         var who = limits.Name;
-        return $"this recording is {length.TotalMinutes:F0} minutes and {who}'s speaker labels have only been "
-            + $"established up to {bound.TotalMinutes:F0} minutes. Past that they are not known to be wrong so "
-            + "much as not known to be right: on this project's own podcast material the speaker count came out "
-            + "correct at every length up to that and wrong on every recording over two hours, where it reported "
-            + "four speakers whether there were two or seven. Treat the speaker labels on a recording this long "
-            + "as a guess; the words are unaffected.";
+        return $"this recording is {length.TotalMinutes:F0} minutes and {who}'s speaker labels are only reliable "
+            + $"up to {bound.TotalMinutes:F0} minutes. On a recording this long it can report the wrong number "
+            + "of speakers, so treat the names as a guess; the words are unaffected.";
     }
 
     /// <summary>
@@ -449,16 +446,16 @@ public static class SpeakerLabelling
         string.Create(
             System.Globalization.CultureInfo.InvariantCulture,
             $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
-            $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels are " +
-            $"this machine's own result and no diarisation error rate published by this project describes them.");
+            $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels " +
+            $"may differ from what another computer would produce for the same recording.");
 
     /// <summary>
     /// What a failed parity check means when the sidecar gave a reason rather than a magnitude —
     /// a shape that does not match the reference's, probabilities that are not finite.
     /// </summary>
     public static string DescribeParityFailure(string reason) =>
-        $"WARNING: this machine's diariser does not reproduce the reference: {reason}. The speaker labels are " +
-        "this machine's own result and no diarisation error rate published by this project describes them.";
+        $"WARNING: this machine's diariser does not reproduce the reference: {reason}. The speaker labels " +
+        "may differ from what another computer would produce for the same recording.";
 
     /// <summary>
     /// What it means that the parity check could not be run at all: not that the labels are wrong,
@@ -471,6 +468,5 @@ public static class SpeakerLabelling
     /// </remarks>
     public static string DescribeParityNotRun(string reason) =>
         $"WARNING: the check that compares this machine's diariser against the reference could not be run: {reason}. " +
-        "The speaker labels are unverified — not known to be wrong, and not known to be the ones any diarisation " +
-        "error rate published by this project describes.";
+        "The speaker labels are unverified.";
 }

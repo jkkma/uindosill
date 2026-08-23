@@ -1207,12 +1207,12 @@ public class SpeakerLabellingPipelineTests
         Assert.Null(SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromMinutes(32)));
         Assert.Null(SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromHours(1)));
 
-        // Past it, and the sentence has to be about evidence rather than about a defect: the labels
-        // are not known to be wrong, they are not known to be right, and those are different claims.
+        // Past it, the sentence warns without alarming: the labels are a guess, and the words are
+        // untouched by whatever the labels do.
         var warning = SpeakerLabelling.DescribeDurationRisk(capped, TimeSpan.FromMinutes(175));
         Assert.NotNull(warning);
         Assert.Contains("175 minutes", warning, StringComparison.Ordinal);
-        Assert.Contains("not known to be wrong so much as not known to be right", warning, StringComparison.Ordinal);
+        Assert.Contains("treat the names as a guess", warning, StringComparison.Ordinal);
         Assert.Contains("the words are unaffected", warning, StringComparison.Ordinal);
 
         // No bound measured, or no duration known, is silence rather than a guess.

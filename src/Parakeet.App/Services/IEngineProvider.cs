@@ -306,7 +306,7 @@ public sealed class EngineProvider : IEngineProvider
         // The result describes its own three failing shapes — including the check that could not
         // run, which used to be reported as nothing — and this adds what the English is.
         var parity = sidecar.Parity?.Describe() is { } finding
-            ? finding + " The English above is this machine's own result and no figure published by this project describes it."
+            ? finding + " The English shown may differ from what another computer would produce for the same recording."
             : null;
 
         return Join(fellBack, parity);

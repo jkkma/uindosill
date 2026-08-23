@@ -207,14 +207,13 @@ public class OptionTabTests
         Assert.DoesNotContain("BrowseOutput", drawn);
         Assert.DoesNotContain("SegmentationNote", drawn);
 
+        // The forwarding line is gone too: it addressed somebody who knew the pre-split layout,
+        // and the tab strip already names where everything lives.
+        Assert.DoesNotContain("OptionsMoved", drawn);
+
         // What it kept besides the passes: the queue and the transcript, which is the work.
         Drawn<Border>(window, "DropZone");
         Drawn<TextBox>(window, "LinkBox");
-
-        var moved = Drawn<TextBlock>(window, "OptionsMoved");
-        Assert.True(moved.IsVisible);
-        Assert.Contains("Export tab", moved.Text, StringComparison.Ordinal);
-        Assert.Contains("Settings", moved.Text, StringComparison.Ordinal);
     }
 
     /// <summary>
