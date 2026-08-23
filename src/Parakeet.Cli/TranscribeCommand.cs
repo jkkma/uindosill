@@ -59,7 +59,12 @@ internal static class TranscribeCommand
             _ => OverwritePolicy.Rename,
         };
 
-        var options = BuildOptions(parsed);
+        // The speech detector, resolved before the ASR engine for the reason the diariser is below:
+        // "download the speech-detection model" is the answer to --vad neural, and it should arrive
+        // before 1.34 GiB of weights load rather than after. One detector for the whole command —
+        // every file opens its own stream on it — disposed with the command.
+        using var speechDetector = SpeechDetectorFactory.Create(context, parsed);
+        var options = BuildOptions(parsed) with { SpeechDetector = speechDetector };
         var quiet = parsed.HasFlag("quiet");
         var speakerOptions = BuildSpeakerOptions(parsed);
         var translationOptions = BuildTranslationOptions(parsed);
@@ -686,6 +691,19 @@ internal static class TranscribeCommand
             || (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport is not { UnsegmentedAudibleIsMaterial: true } report)
         {
             return null;
+        }
+
+        // The gate and a detector fail in different directions, and the sentence says which ran: the
+        // gate misses quiet speech under noise, while a detector that is working keeps music and
+        // ambience out on purpose — so on a recording with a bed the count is usually the bed, not
+        // a loss, and telling somebody to decode everything would be telling them to decode the music.
+        if (!string.Equals(report.SpeechDetector, StreamingSegmenter.EnergyGateName, StringComparison.Ordinal))
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS was " +
+                $"judged not to be speech by {report.SpeechDetector} and was not decoded — music, ambience, or speech it " +
+                $"missed. Re-run with --vad energy or --no-vad to decode it.");
         }
 
         return string.Create(

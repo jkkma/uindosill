@@ -53,9 +53,12 @@ internal static class ModelsCommand
             }
 
             // Only said when it is not the obvious thing: every entry transcribes unless it says otherwise.
+            // The enum's own name reads as a word for two of the three ("diarisation model",
+            // "translation model") and not for the third, which would print "voiceactivity".
             if (model.Task != ModelTask.Transcription)
             {
-                marks.Add($"{model.Task.ToString().ToLowerInvariant()} model — not selectable for transcribe");
+                var task = model.Task == ModelTask.VoiceActivity ? "speech-detection" : model.Task.ToString().ToLowerInvariant();
+                marks.Add($"{task} model — not selectable for transcribe");
             }
 
             if (!model.Verified)

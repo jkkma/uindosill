@@ -284,10 +284,13 @@ As everywhere else here: **no lawyer has read any of this.**
 
 ## ONNX Runtime is MIT, and carries 69 licences that are not
 
-**It is no longer a .NET package.** Until 2026-08-21 the diariser ran `onnxruntime.dll` from
+**It ships twice.** Until 2026-08-21 the diariser ran `onnxruntime.dll` from
 `Microsoft.ML.OnnxRuntime` 1.29.0; it now runs the Python `onnxruntime-webgpu` **1.27.0** wheel
-inside the bundled interpreter, and so does the translator. Nothing in `Uindosill.slnx` references
-ONNX Runtime any more — the two projects that did are in `attic/`. Either way the package is MIT,
+inside the bundled interpreter, and so does the translator. Between that day and 2026-08-23 nothing
+in `Uindosill.slnx` referenced ONNX Runtime — the two projects that did are in `attic/` — and since
+2026-08-23 one project does again: `Parakeet.Engine.SileroVad`, which runs the speech-detection
+graph in process on the .NET package, 1.29.0, beside the managed assemblies. Two binaries in two
+processes, one obligation each. Either way the package is MIT,
 *Copyright (c) Microsoft Corporation*, and MIT requires the copyright notice **and the permission
 text** to travel with the binary, not the licence name.
 
@@ -307,6 +310,37 @@ direction to be wrong in and is still not the shipped binary's own notice.
 That file is **redistributed verbatim** rather than summarised into the component table. Summarising
 it would mean transcribing dozens of licences by hand, and getting one wrong is the same breach as
 omitting it.
+
+## The speech-detection graph is MIT (Silero), and the first MIT model here
+
+`silero-vad-v5.1.2` — `silero_vad.onnx`, 2,327,524 bytes — is the model behind the neural
+speech-detection opt-in added 2026-08-23, installed by URL from `snakers4/silero-vad` at commit
+`6478567951ae5c9979ad7b234185b5515f4be7a1` (tag v5.1.2) and pinned by SHA-256. Its `LICENSE` at that
+commit is the MIT License, *Copyright (c) 2020-present Silero Team*, fetched the same day and
+shipped byte for byte as `licences/silero-vad-LICENSE.txt`.
+
+**What MIT asks is narrower than CC BY's seven elements and wider than a licence name:** "the above
+copyright notice and this permission notice shall be included in all copies or substantial portions
+of the Software." So two things travel with the graph — the copyright line and the permission text —
+and both do: `Licences.targets` copies the file into every build output, `package-windows.ps1`
+refuses a publish without it, and `Attributions.ById["silero-vad"]` is an `MitAttribution`, a record
+that cannot be constructed without the copyright line and the path to the text. `uindosill notice`
+and the Licences tab render it with the other three.
+
+**The graph is unmodified and is not hosted here.** It is installed from upstream's own repository
+at a pinned commit, which is the arrangement the diariser and the translation weights already use;
+what this project adds is the C# that drives it, which is this project's own MIT code.
+
+**It runs on a second copy of ONNX Runtime — the .NET one.** See the section above: since 2026-08-23
+`Microsoft.ML.OnnxRuntime` 1.29.0 is a live reference again (`Parakeet.Engine.SileroVad`), beside
+the `onnxruntime-webgpu` 1.27.0 wheel inside the bundled Python. The committed
+`licences/onnxruntime-LICENSE.txt` and `ThirdPartyNotices.txt` are that .NET package's own, so for
+this copy they are exactly the right files; the reconciliation against the wheel's notices is still
+the open item it was.
+
+**What is not claimed.** No lawyer has read this either. Upstream's repository root was read at the
+pinned commit for a NOTICE file and carries none, so there is nothing under that heading to
+reproduce; the MIT text is the whole of the obligation as far as it was read.
 
 ## The bundled Python is fifty more redistributions, and none of them is discharged
 
@@ -418,8 +452,9 @@ As everywhere else here: **no lawyer has read any of this.**
 `Parakeet.Engine.Sortformer` and `Parakeet.Engine.Marian` — the C# diariser and translator — left
 `src/` on 2026-08-21 for an unbuilt `attic/`. They are not in `Uindosill.slnx`, nothing references
 them, and **nothing ships them**, which is the whole of what changed: they are still files in a
-public repository under this project's MIT licence, and the two `PackageReference`s to
-`Microsoft.ML.OnnxRuntime` in their project files are the last ones in the tree.
+public repository under this project's MIT licence. Their two `PackageReference`s to
+`Microsoft.ML.OnnxRuntime` were the last ones in the tree until 2026-08-23, when
+`Parakeet.Engine.SileroVad` took a live one for the speech-detection graph — the section above.
 
 The weights sections above are untouched by the move, and that is the point worth stating. The same
 CC BY 4.0, NVIDIA Open Model License and Apache-2.0 material is used for the same purpose against
@@ -527,8 +562,10 @@ never happens here.
 ## Deliberately not used: TEN-VAD
 
 Its modified Apache-2.0 carries an Agora non-compete clause. Voice activity detection here is a plain
-energy gate written for this project. If you ever reach for an off-the-shelf VAD, read its licence
-first — this is a category where the popular choice has a rider on it.
+energy gate written for this project and, since 2026-08-23 and as an opt-in, Silero VAD — which is
+MIT and has its own section above; its licence was read before the graph was. If you ever reach for
+an off-the-shelf VAD, read its licence first — this is a category where the popular choice has a
+rider on it.
 
 ## Language claims are a licensing-adjacent honesty problem
 

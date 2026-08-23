@@ -398,6 +398,23 @@
                                  Increment="5" Width="110" FormatString="0 's'" />
                 </StackPanel>
 
+                <!-- The third opt-in, drawn on the speaker one's terms: a DockPanel so the hint wraps,
+                     the box disabled with the reason beside it rather than hidden, and the reason
+                     is one a person can act on from the Models tab. Beneath the fixed-windows row
+                     because the two are about the same cut, and the hint says so when fixed
+                     windows are on. -->
+                <DockPanel LastChildFill="True" Name="SpeechDetectionRow">
+                  <CheckBox DockPanel.Dock="Left"
+                            Content="Neural speech detection"
+                            Margin="0,0,9,0"
+                            VerticalAlignment="Center"
+                            IsChecked="{Binding UseNeuralSpeechDetection}"
+                            IsEnabled="{Binding CanUseNeuralSpeechDetection}" />
+                  <TextBlock Text="{Binding SpeechDetectionHint}" Classes="meta" TextWrapping="Wrap"
+                             VerticalAlignment="Center"
+                             IsVisible="{Binding SpeechDetectionHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </DockPanel>
+
                 <!-- There is no spoken-language picker here, and that is a decision rather than an
                      omission. parakeet.cpp's ABI does take a target language, but the tdt
                      checkpoints this catalogue ships are not prompt-conditioned and never read it:

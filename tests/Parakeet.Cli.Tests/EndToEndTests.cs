@@ -281,6 +281,64 @@ public class EndToEndTests
     }
 
     [Fact]
+    public async Task NeuralDetectionWithoutTheModelIsRefusedWithTheDownloadCommand()
+    {
+        // The answer to --vad neural on a machine without the graph is the command that fetches it,
+        // before a byte of audio is read — and before the ASR weights would have been looked for.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--vad", "neural", path);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains("silero-vad-v5.1.2", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("models download", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.ChangeExtension(path, ".txt")));
+    }
+
+    [Fact]
+    public async Task AnUnknownDetectorNameIsRefusedByName()
+    {
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--vad", "whisper", path);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains("energy or neural", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("'whisper'", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NeuralDetectionAndFixedWindowsContradictEachOtherAndAreRefusedTogether()
+    {
+        // Refused rather than ranked: a transcript's provenance would otherwise depend on knowing
+        // which of two contradicting flags this build let win.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--no-vad", "--vad", "neural", path);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains("contradict", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheEnergyGateIsTheDefaultDetectorAndCanBeNamed()
+    {
+        // --vad energy spells the default out, the way --vk-disable-bf16 does: the same run, the same
+        // transcript, and no model looked for.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--vad", "energy", path);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.True(File.Exists(Path.ChangeExtension(path, ".txt")));
+        Assert.DoesNotContain("Speech detection:", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ModelsListShowsTheDirectory()
     {
         using var harness = new Harness();

@@ -29,6 +29,13 @@ public enum ModelTask
     /// diariser — it reads text and returns text, and has no idea what audio is.
     /// </summary>
     Translation = 2,
+
+    /// <summary>
+    /// Where speech is: what the neural speech-detection opt-in loads in place of the energy gate.
+    /// Never an ASR model — it writes no words — and never a diariser: it says when somebody is
+    /// speaking and nothing about who. Added 2026-08-23 with the Silero VAD entry.
+    /// </summary>
+    VoiceActivity = 3,
 }
 
 /// <summary>

@@ -80,7 +80,12 @@ public abstract class SegmentingTranscriptionEngine : ITranscriptionEngine
         await LoadAsync(ct).ConfigureAwait(false);
 
         var vad = options.VoiceActivity with { MaxSegmentLength = options.MaxSegmentLength };
-        var segmenter = new StreamingSegmenter(audio.SampleRate, vad);
+
+        // One detector stream per recording, at the recording's own rate, closed with it: the
+        // detector keeps context and state across windows, and two files sharing one stream would
+        // have the second's first second judged in the light of the first's last.
+        using var detectorStream = options.SpeechDetector?.Open(audio.SampleRate);
+        var segmenter = new StreamingSegmenter(audio.SampleRate, vad, detectorStream);
 
         var completed = new List<AudioSegment>();
         var batch = new List<AudioSegment>(BatchSize);

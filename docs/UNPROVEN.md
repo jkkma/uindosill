@@ -4193,6 +4193,91 @@ punctuation.
   count, so there is nothing to cut it by that is not a guess; that is a decision, not a gap, and it
   is recorded here because a reader of the English will meet the old shape there.
 
+## The neural speech detector — measured on one documentary and one podcast, 2026-08-23
+
+`--vad neural` cuts the audio on Silero VAD v5 (ONNX Runtime 1.29.0, CPU, one thread, in process) in
+place of the energy gate; `docs/PHASES.md` § *Built 2026-08-23 — a neural speech detector* has what
+and why. Everything here is **one machine** (the RTX 5080 desktop), **two files**, one day, and the
+gate is still the default, so no figure earlier in this document moves.
+
+**On the documentary that raised it** — NDR's *Hinter den Kulissen von Hamburgs Kantinen & Co.*,
+28:49, fetched from its link; `tdt-0.6b-v3-f16` on Vulkan; both runs on the same m4a:
+
+| | energy gate | Silero VAD |
+|---|---|---|
+| segments | 285 | 342 |
+| mean / median / longest | 5.4 / 3.5 / **29.4 s** | 3.8 / 3.0 / **21.7 s** |
+| segments ≥ 10 s / ≥ 20 s / ≥ 28 s | 34 / 10 / 2 | 17 / 1 / 0 |
+| audio decoded (segmented) | 1,529.9 s | 1,309.0 s |
+| words decoded | 3,436 | 3,387 (−1.4 %) |
+| real-time factor (whole pass) | 0.0109 | 0.0126 |
+| decode seconds / processing seconds | 14.8 / 18.9 | 9.9 / 21.7 |
+
+416.8 s of audio above −55 dBFS was judged not speech and not decoded — the bed, on the reading of
+the first ten segments, which now begin "Die Erbsenkresse." / "damit es einfach geiler aussieht." /
+"Moin Moin. Eine Langkolle zum Mitnehmen, bitte." where the gate's second segment had been 29 s and
+nine sentences. The decoded text is **not the same text**: a bag-of-words comparison finds 211 word
+tokens in the gate's transcript that are not in the detector's and 164 the other way, and among the
+gate-only tokens are *yeah* (7), *so* (6), *you* (6), *thank* (5) — English filler the recogniser
+wrote over stretches the detector did not decode, which reads as hallucination over music, and is
+not proven to be. Other differences are the recogniser decoding different segment boundaries
+("Erbstegressel" / "Erbsenkresse", "Gemüsekurry" / "Gemüsecurry"). **No reference transcript was
+scored**, so −1.4 % is a word count and not an error rate, and which of the two transcripts is the
+more correct is not established.
+
+**On the ten-minute podcast the speed figures come from** — `csb384-8438.m4a`, 600 s, the cut that
+stands in for `chunk.m4a` — the detector is slower and, on conversation, cuts *longer*:
+
+| | energy gate | Silero VAD |
+|---|---|---|
+| Vulkan RTF, two runs each | 0.0103, 0.0102 | 0.0148, 0.0146 |
+| Vulkan processing / decode seconds | 6.2 / 4.6 | 8.9 / 4.9 |
+| CPU RTF, one run each | 0.0823 | 0.0902 |
+| CPU processing / decode seconds | 49.4 / 47.5 | 54.1 / 49.9 |
+| segments | 113 | 78 |
+| mean / median / longest | 5.1 / 3.9 / 29.9 s | 7.4 / 4.6 / 30.0 s |
+| segments ≥ 10 s / ≥ 20 s | 11 / 1 | 23 / 7 |
+| words decoded (Vulkan) | 1,632 | 1,621 |
+
+Text byte-identical between the two Vulkan runs of each mode, so the figures are of the method and
+not of a run. **The detector costs about 2.7 s per 600 s of audio here — RTF ≈ 0.0045 of its own**,
+serialised with the read and the decode on one CPU thread, which is 44 % of a Vulkan pass and 9.5 %
+of a CPU one; on the documentary it looked cheaper only because less audio reached the decoder.
+**And it holds speech open across the short pauses the gate cuts at**: 78 segments where the gate
+made 113, seven of them twenty seconds or more where the gate made one. That is the upstream
+thresholds — speech opens at 0.5, closes below 0.35, `neg_threshold = threshold − 0.15` in
+`utils_vad.py` at the pinned commit — applied under this segmenter's 420 ms silence rule, and
+nothing here tuned them. Why the gate is still the default is this table.
+
+**What the rule was checked against.** The graph's inputs and outputs were read off the file with
+`onnxruntime` 1.27.0 before a line of C# was written — `input [None, None]`, `state [2, None, 128]`,
+`sr []`; `output [None, 1]`, `stateN` — and against upstream's wrapper at the pinned commit (window
+512, context 64, state `(2, batch, 128)`); a silent window scores 0.012 and a window of white noise
+at 0.3 peak scores 0.113 there, and the same shapes in C# score silence below 0.1 at 16, 44.1 and 48
+kHz (the two env-gated tests, run against the graph on this machine and green). The model was
+installed through `ModelInstaller` from the pinned URL and accepted against the pin, and `doctor`
+reports it loading.
+
+**What none of it establishes:**
+
+- **Whether the detector's transcript is more or less correct than the gate's.** Word counts moved
+  by 1.4 % and 0.7 %; nothing scored either against a reference, on either file.
+- **Whether the thresholds are right for anything but the upstream demo.** 0.5 / 0.35 were not tuned
+  here, and the podcast says they merge pauses the gate cuts at; `SpeechProbability` and
+  `SilenceProbability` are options, and no value of them has been measured against another.
+- **Anything about a provider.** CPU, one thread, by decision; no GPU provider was loaded for this
+  graph and none is offered. The `onnxruntime` that scored the sanity windows above is the Python
+  1.27.0 wheel, not the .NET 1.29.0 that ships — the shapes agree; the probabilities were not
+  compared to the last digit.
+- **Two files, one language each, one machine.** No other genre, no other rate than the two files'
+  own (the 44.1/48 kHz figures are synthetic silence through the resampler), no laptop.
+- **That the detector never drops speech.** The documentary's 416.8 s of undecoded audible material
+  is read as the bed from ten segments; nobody listened to it. The CLI says the figure on every run,
+  with the remedy, rather than hiding it.
+- **The segment cap is still there, and the podcast's detector run reached it** (longest 30.0 s)
+  where the documentary's did not (21.7 s); the forced cut still lands at the quietest frame. A
+  detector changes what is speech, not what happens when speech runs thirty seconds without a pause.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository

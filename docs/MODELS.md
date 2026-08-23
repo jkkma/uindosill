@@ -31,8 +31,9 @@ conventional guesses — are confirmed by the same listing.
 | `tdt-0.6b-v3-f16` | 1,441,046,400 | `8ba47343…fc5abb22` |
 | `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
+| `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
 
-**Three entries, and all three are unquantised.** The catalogue offered f16 plus four quantisations
+**Four entries, and all four are unquantised.** The catalogue offered f16 plus four quantisations
 of it until 2026-08-20, when the four were withdrawn — a product decision recorded in
 `docs/PHASES.md`, not a quality finding. Their digests are kept here because a pin that was once
 shipped is worth not re-deriving, and because the measurements below are about these exact files:
@@ -81,6 +82,44 @@ value, so what was scored is what the entry installs.
 **`quantisation` says `fp32`, and the Hub's own tag is wrong.** The listing carries
 `base_model:quantized:…`, but 473 of the file's 474 MB are float32 parameters — 118.3 M of them,
 counted by opening the graph. The tag looks auto-derived; the field records what is in the file.
+
+### The speech-detection entry is MIT, from GitHub, and pinned against the bytes it serves
+
+`silero-vad-v5.1.2` is the fourth row above and the first that is neither from Hugging Face nor
+under a licence with a notice package of its own design. It carries `"task": "voice-activity"`, the
+fourth task word, which keeps it out of every ASR path the way the other two discriminators do —
+and, like them, the word shipped in the same commit as the code that reads it, so no build can list
+this entry as anything but what it is.
+
+**It is 2,327,524 bytes, and it is downloaded, not embedded.** Two megabytes would fit in the
+assembly; it is a catalogue entry anyway because every weight this product ships is — pinned by
+digest, installed under the user's data root, removable from the Models tab, attributed through the
+same `Attribution.ById` every other entry goes through. One mechanism, not one mechanism and a
+special case.
+
+**The URL pins a commit, not a tag and not `main`.**
+`raw.githubusercontent.com/snakers4/silero-vad/`
+`6478567951ae5c9979ad7b234185b5515f4be7a1/src/silero_vad/data/silero_vad.onnx` — the commit tag
+v5.1.2 resolves to, read from the GitHub API on 2026-08-23. A tag can be moved and `main` will move;
+a commit serves the same bytes or nothing.
+
+**`"verified": true` here means something slightly different from the Hugging Face rows.** Those
+were checked against an LFS listing, where the `oid` is the file's SHA-256. GitHub publishes no
+digest for a file in a repository, so this pin was taken the only way it could be: the file was
+fetched from that URL on 2026-08-23, hashed (`2623a295…5bdd788f`), and the entry was then installed
+*through `ModelInstaller` itself* from that URL, which fetched the same bytes and accepted them
+against the pin. That is a check against what the URL serves rather than against a listing — which
+is what a pin is for — and it is one fetch on one day.
+
+**`quantisation` says `fp32`, counted rather than assumed.** The graph's weights are 36 float32
+tensors — 545,601 parameters — held as constants inside its subgraphs; the 309 int64 tensors beside
+them are shapes. Counted by walking every subgraph with the `onnx` package on 2026-08-23.
+
+**The licence is MIT**, `Copyright (c) 2020-present Silero Team`; the permission text ships as
+`licences/silero-vad-LICENSE.txt` and `docs/LICENSING.md` has the reading. **What the model is for,
+what it costs and what it has been measured on** are in `docs/PHASES.md` and `docs/UNPROVEN.md`
+under 2026-08-23; the short form is that it cuts a recording at pauses the energy gate cannot hear
+under music, at a cost of a few percent of the pass, and that it was measured on one documentary.
 
 ### Pins recorded for v3, deliberately unreachable
 

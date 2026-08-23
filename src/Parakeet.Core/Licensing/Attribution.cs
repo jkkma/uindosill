@@ -247,6 +247,11 @@ public static class Attributions
     /// <summary>Where the NVIDIA Open Model License copy lives, relative to the repository root.</summary>
     public const string OpenModelLicencePath = "licences/NVIDIA-Open-Model-License-2025-10-24.txt";
 
+    public const string SileroVad = "silero-vad";
+
+    /// <summary>Where the Silero VAD MIT notice lives, relative to the repository root and the build output.</summary>
+    public const string SileroVadLicencePath = "licences/silero-vad-LICENSE.txt";
+
     private static readonly Dictionary<string, IModelAttribution> ByIdMap = new(StringComparer.OrdinalIgnoreCase)
     {
         [ParakeetTdt06BV3] = new CcByAttribution
@@ -351,6 +356,25 @@ public static class Attributions
             WarrantyDisclaimerNotice =
                 "The work is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
                 + "either express or implied (section 7 of the License).",
+        },
+
+        // The speech-detection graph, and the first MIT entry — the fourth licence shape here. MIT
+        // asks for the copyright line and the permission text to travel with the material, so the
+        // LICENSE file ships at SileroVadLicencePath and this names it. The graph is installed by URL
+        // from the upstream repository at a pinned commit and is not modified; the one thing this
+        // project adds is the C# that drives it, which is its own.
+        [SileroVad] = new MitAttribution
+        {
+            Title = "Silero VAD v5 (voice activity detection model, silero_vad.onnx)",
+            Creator = "Silero Team",
+            CopyrightNotice = "Copyright (c) 2020-present Silero Team",
+            LicencePath = SileroVadLicencePath,
+            LicenceUri = new Uri("https://opensource.org/license/mit"),
+            MaterialUri = new Uri("https://github.com/snakers4/silero-vad"),
+            ModificationNotice =
+                "Unmodified: the ONNX graph is installed by URL from the upstream repository at commit "
+                + "6478567951ae5c9979ad7b234185b5515f4be7a1 (tag v5.1.2) and driven as published. Uindosill "
+                + "hosts no copy of it.",
         },
     };
 
@@ -519,24 +543,27 @@ public static class Attributions
                 "Copyright (c) Velopack Ltd. All rights reserved. Shipped in the desktop application "
                 + "only; the command-line tool carries none of it.",
         },
-        // Ships with any build that carries the speaker or English opt-in — and since 2026-08-21 it
-        // arrives as the `onnxruntime-webgpu` wheel inside the bundled Python rather than as a NuGet
-        // package beside the managed assemblies, because both graphs run in that interpreter now. The
-        // obligation did not move with the binary: it is MIT and it statically links dozens of
-        // third-party components with their own notices — Intel MKL, protobuf, Eigen, oneDNN, abseil,
-        // XNNPACK and the rest — whose ThirdPartyNotices.txt is shipped verbatim rather than
-        // summarised into a row here, because summarising it would mean inventing a licence for each.
+        // Ships twice, and one row says so rather than two rows saying half each. Since 2026-08-21
+        // it arrives as the `onnxruntime-webgpu` wheel inside the bundled Python, where the diariser
+        // and the translator run; since 2026-08-23 it is a NuGet package beside the managed
+        // assemblies again, where the speech-detection graph runs in process. The obligation is the
+        // same for both copies: it is MIT and it statically links dozens of third-party components
+        // with their own notices — Intel MKL, protobuf, Eigen, oneDNN, abseil, XNNPACK and the rest —
+        // whose ThirdPartyNotices.txt is shipped verbatim rather than summarised into a row here,
+        // because summarising it would mean inventing a licence for each.
         new ComponentLicence
         {
-            Component = "ONNX Runtime (onnxruntime-webgpu 1.27.0, inside the bundled Python)",
+            Component = "ONNX Runtime (Microsoft.ML.OnnxRuntime 1.29.0 beside the .NET assemblies, for speech detection; " +
+                        "onnxruntime-webgpu 1.27.0 inside the bundled Python, for the diariser and the translator)",
             License = "MIT",
             Uri = new Uri("https://github.com/microsoft/onnxruntime"),
             Notes =
-                "Copyright (c) Microsoft Corporation. Runs the speaker diarisation and translation " +
-                "models. Bundles many third-party components under their own licences; ONNX Runtime's " +
-                "ThirdPartyNotices.txt is redistributed verbatim rather than summarised here. The copy " +
-                "in licences/ is the 1.29.0 .NET package's; reconciling it against the 1.27.0 wheel's " +
-                "own is an open item in docs/LICENSING.md.",
+                "Copyright (c) Microsoft Corporation. Runs the speech-detection model in process and the " +
+                "speaker diarisation and translation models in the bundled Python. Bundles many third-party " +
+                "components under their own licences; ONNX Runtime's ThirdPartyNotices.txt is redistributed " +
+                "verbatim rather than summarised here. The copy in licences/ is the 1.29.0 .NET package's, " +
+                "which is the in-process copy's own; reconciling it against the 1.27.0 wheel's is an open " +
+                "item in docs/LICENSING.md.",
         },
         // The interpreter and its packages, as one row rather than fifty-one. That is a decision and
         // not a shortcut: enumerating them is owed, docs/LICENSING.md records the enumeration as far
