@@ -528,7 +528,7 @@
                                   Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
                                   Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
                                   Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
-                            <TextBlock Text="{Binding Speaker}" />
+                            <TextBlock Text="{Binding Voice.Name}" />
                           </Border>
                           <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
                                                TextWrapping="Wrap" LineHeight="20.3" />
@@ -874,67 +874,30 @@
 
           <GridSplitter Grid.Column="1" Background="Transparent" />
 
-          <!-- ── The recording, and its words ───────────────────────────────────────────────── -->
-          <DockPanel Grid.Column="2" Margin="0,0,14,0">
+          <!-- ── The recording, and its words ───────────────────────────────────
+               A Grid rather than a DockPanel, because one edge in this column is draggable and a
+               DockPanel has no edges: it says where a child goes by the order it was declared in,
+               which is not a property a splitter can move.
 
-            <!-- The transport. Docked to the bottom of this column rather than floating over the
-                 transcript, because it belongs to the recording rather than to the reading. -->
-            <Border DockPanel.Dock="Bottom" Name="Transport" Classes="tinted taro"
-                    Padding="13,11" Margin="0,11,0,0">
-              <StackPanel Spacing="8">
-                <Grid ColumnDefinitions="Auto,13,*,Auto">
+               Three rows, and only the first ever changes size. The transport is in the reading
+               row rather than in the picture's, which is what makes the drag mean one thing — a
+               splitter moves the two rows either side of it and nothing else, so anything sharing
+               the picture's row would be resized along with it, and anything given a row of its
+               own in between would cap how far the drag could go. Docked to the top of the reading
+               row it is still directly under the picture, and it is never resized. -->
+          <Grid Grid.Column="2" Name="MediaColumn" Margin="0,0,14,0">
+            <Grid.RowDefinitions>
+              <!-- Pixels rather than Auto, because the splitter writes pixels here and a row that
+                   starts in the unit it will end in does not jump on the first drag. Swapped for
+                   Auto the moment there is no picture — see ShowPictureRow in MainWindow.axaml.cs,
+                   which is also why this is not a binding: a RowDefinition is an AvaloniaObject
+                   rather than a StyledElement, so it has no DataContext to bind against. -->
+              <RowDefinition Height="260" MinHeight="120" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" MinHeight="140" />
+            </Grid.RowDefinitions>
 
-                  <!-- One of the shapes that is genuinely a circle. Two glyphs rather than one
-                       that changes: a filled triangle and two bars, each visible on its own half
-                       of the state, so neither is drawn by a converter nobody can test. -->
-                  <Button Grid.Column="0" Name="PlayPause" Classes="transport"
-                          Command="{Binding PlayPauseCommand}"
-                          ToolTip.Tip="{Binding PlayPauseLabel}">
-                    <Panel Width="14" Height="15">
-                      <!-- Nudged right by two: a triangle centred on its bounding box reads as
-                           sitting left of centre inside a circle. -->
-                      <Path Data="M0,0 L13,7.5 L0,15 Z" Stretch="None" Margin="3,0,0,0"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                            IsVisible="{Binding !IsPlaying}" />
-                      <Path Data="M0,0 H4 V15 H0 Z M8,0 H12 V15 H8 Z" Stretch="None"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                            IsVisible="{Binding IsPlaying}" />
-                    </Panel>
-                  </Button>
-
-                  <!-- The bar, and a transparent strip over it that takes the pointer. The strip
-                       is what makes the bar seekable: it knows its own width, so a press at an x
-                       is a fraction of the recording, which is a question no binding can answer.
-                       18px tall over a 6px bar, so the target is a comfortable one. -->
-                  <Panel Grid.Column="2" VerticalAlignment="Center">
-                    <ProgressBar Classes="seek" Minimum="0"
-                                 Maximum="{Binding DurationSeconds}"
-                                 Value="{Binding PositionSeconds}" />
-                    <Border Name="SeekStrip" Background="Transparent" Height="18" Cursor="Hand" />
-                  </Panel>
-
-                  <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5"
-                              VerticalAlignment="Center" Margin="13,0,0,0">
-                    <TextBlock Text="{Binding PositionLabel}" FontWeight="SemiBold"
-                               Foreground="{DynamicResource Taro700Brush}" />
-                    <TextBlock Text="/" Classes="meta" />
-                    <TextBlock Text="{Binding DurationLabel}" Classes="meta" />
-                  </StackPanel>
-                </Grid>
-
-                <TextBlock Text="{Binding SelectedRecording.DisplayName}" Classes="meta"
-                           TextTrimming="CharacterEllipsis"
-                           IsVisible="{Binding SelectedRecording, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                <!-- Why the transport is dead, when it is. A file this build cannot sound is still
-                     a file whose transcript is worth reading, so the tab carries on around it. -->
-                <TextBlock Name="PlaybackNotice" Text="{Binding PlaybackNotice}"
-                           Classes="fine warning"
-                           IsVisible="{Binding PlaybackNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-              </StackPanel>
-            </Border>
-
-            <!-- ── The picture ────────────────────────────────────────────────────────────────
+            <!-- ── The picture ────────────────────────────────────────────
                  Only when the open recording has one and the build can draw one: a video pane
                  over an audio file is dead glass, so the pane exists exactly when frames do.
 
@@ -945,96 +908,269 @@
 
                  Black, and a literal rather than a token: this is the one surface in the window
                  whose ground is the convention of every video player rather than this design's —
-                 letterbox bars in Sunken grey would read as a layout bug, not a choice. -->
-            <Border DockPanel.Dock="Top" Name="VideoPane" Height="260" Margin="0,0,0,10"
+                 letterbox bars in Sunken grey would read as a layout bug, not a choice.
+
+                 No height of its own any more: the row owns it, or a drag would move the row while
+                 the pane stayed 260 and the handle would visibly do nothing. -->
+            <Border Grid.Row="0" Name="VideoPane"
                     Background="Black" IsVisible="{Binding HasVideo}">
               <Image Name="VideoSurface" Stretch="Uniform" />
             </Border>
 
-            <!-- Why there is no picture, when one might be expected and the build cannot draw
-                 one. Absent entirely for audio files: no picture is not a limitation there. -->
-            <TextBlock DockPanel.Dock="Top" Name="VideoNotice" Classes="fine warning" Margin="0,0,0,8"
-                       Text="{Binding VideoNotice}"
-                       IsVisible="{Binding VideoNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <!-- ── The edge that moves ───────────────────────────────────────
+                 Drag it and the picture grows or shrinks; the transcript takes back whatever the
+                 picture gives up. Direction and behaviour are both named rather than left to
+                 resolve: Auto would land on the right answer here by accident, from this strip
+                 being wider than it is tall, and a layout that is correct by fallback is one edit
+                 away from being wrong.
 
-            <!-- ── Find a word ────────────────────────────────────────────────────────────────
-                 The reason anyone opens a three-hour transcript is usually one word. This runs on
-                 v1's own data and needs no model, which is why it is here rather than waiting for
-                 the panel on the right: it is useful before anything can be asked.
+                 Gone for an audio recording, along with the row it would move — a handle that
+                 does nothing is worse than no handle. Its own row stays declared and measures
+                 zero around a collapsed child, so no row index shifts.
 
-                 It does not seek. Finding a word and hearing it are two intentions — somebody
-                 scanning for every mention of a name does not want the audio jumping under them
-                 on each press of Enter — so a hit is scrolled to and marked, and clicking it is
-                 what plays it. -->
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10"
-                  IsEnabled="{Binding HasTranscript}">
-              <TextBox Grid.Column="0" Name="SearchBox" Text="{Binding SearchTerm}"
-                       PlaceholderText="Find a word — Enter for the next one" />
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
-                          Margin="9,0,0,0" VerticalAlignment="Center">
-                <TextBlock Name="SearchSummary" Text="{Binding SearchSummary}" Classes="meta"
-                           MinWidth="62" TextAlignment="Right" VerticalAlignment="Center" />
-                <Button Name="PreviousMatch" Content="Previous" ToolTip.Tip="The hit before this one"
-                        Command="{Binding PreviousMatchCommand}" />
-                <Button Name="NextMatch" Content="Next" ToolTip.Tip="The next hit — or press Enter"
-                        Command="{Binding NextMatchCommand}" />
-              </StackPanel>
-            </Grid>
+                 It has to stay a direct child of this Grid: a splitter reads its own Grid.Row off
+                 itself, so one nested a panel deeper would read row 0 and move the wrong pair. -->
+            <GridSplitter Grid.Row="1" Name="MediaSplitter" Classes="handle"
+                          ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                          IsVisible="{Binding HasVideo}"
+                          ToolTip.Tip="Drag to resize the picture" />
 
-            <Border Classes="panel">
-              <Panel>
-                <ScrollViewer Name="CueScroll" IsVisible="{Binding HasTranscript}" Padding="7,9">
-                  <ItemsControl Name="Cues" ItemsSource="{Binding Lines}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:TranscriptLineViewModel">
-                        <!-- A Button, so the keyboard reaches every cue and the seek is a command
-                             like everything else in this window. Its template draws no chrome —
-                             see Button.cue — so what a reader sees is a paragraph that lights up
-                             under the pointer and stays lit while it is the one being played. -->
-                        <Button Classes="cue" Classes.playing="{Binding IsActive}"
-                                Classes.found="{Binding IsCurrentMatch}"
-                                Command="{Binding $parent[ItemsControl].((vm:AskViewModel)DataContext).SeekToLineCommand}"
-                                CommandParameter="{Binding}">
-                          <Grid ColumnDefinitions="54,Auto,*">
-                            <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
-                                       FontSize="11.5" FontWeight="SemiBold"
-                                       VerticalAlignment="Top" Margin="0,2,0,0"
-                                       Foreground="{DynamicResource Taro700Brush}" />
-                            <Border Grid.Column="1" Margin="0,0,9,0"
-                                    IsVisible="{Binding HasSpeaker}"
-                                    Classes="speaker"
-                                    Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
-                                    Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
-                                    Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
-                                    Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
-                              <TextBlock Text="{Binding Speaker}" />
-                            </Border>
-                            <!-- Inlines rather than Text, which is what lets one word inside a
-                                 paragraph carry a ground of its own — the term that was searched
-                                 for, and the word being said right now. Bound to Marked, which is
-                                 all three as one value, because a converter takes one thing and
-                                 because only the line it happened to raises a change for it: a
-                                 keystroke redraws the handful that matched, and a word advancing
-                                 redraws the one line being played, rather than the transcript. -->
-                            <TextBlock Grid.Column="2" Name="CueWords"
-                                       Inlines="{Binding Marked, Converter={StaticResource Highlight}}"
-                                       TextWrapping="Wrap" LineHeight="20.3" />
-                          </Grid>
-                        </Button>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </ScrollViewer>
+            <!-- ── The reading ────────────────────────────────────────────
+                 Everything that is not the picture, in one row, so the drag above can reach none
+                 of it but the space it all shares. A DockPanel, because what the order expresses
+                 here is a stack rather than a set of sizes.
 
-                <TextBlock Name="TranscriptNotice" Text="{Binding TranscriptNotice}"
-                           IsVisible="{Binding !HasTranscript}"
-                           Classes="secondary" TextWrapping="Wrap" MaxWidth="380"
-                           LineHeight="20" Margin="26"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           TextAlignment="Center" />
-              </Panel>
-            </Border>
-          </DockPanel>
+                 The transcript is the last child on purpose. LastChildFill is on and that Border
+                 carries no Dock, so it fills because it is last; declare anything after it and it
+                 collapses to a strip while the newcomer takes the column. -->
+            <DockPanel Grid.Row="2">
+
+              <!-- Why there is no picture, when one might be expected and the build cannot draw
+                   one. Absent entirely for audio files: no picture is not a limitation there.
+
+                   In this row rather than in the picture's, because it stands in for the picture
+                   and is drawn exactly when the picture cannot be: VideoNotice is non-null only
+                   where the player cannot draw video at all, which is where HasVideo is false and
+                   the row above has already collapsed. So this is the top of the column whenever
+                   it is on screen. -->
+              <TextBlock DockPanel.Dock="Top" Name="VideoNotice" Classes="fine warning"
+                         Margin="0,0,0,11"
+                         Text="{Binding VideoNotice}"
+                         IsVisible="{Binding VideoNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+              <!-- The transport. Under the picture and above the words, because it belongs to the
+                   recording rather than to the reading: the controls that move a recording stay
+                   with the recording rather than travelling down the column past a transcript
+                   somebody is scrolling. It was docked to the bottom until 2026-08-23, which put
+                   the controls below the words they move. -->
+              <Border DockPanel.Dock="Top" Name="Transport" Classes="tinted taro"
+                      Padding="13,11" Margin="0,0,0,11">
+                <StackPanel Spacing="8">
+                  <Grid ColumnDefinitions="Auto,13,*,Auto">
+
+                    <!-- One of the shapes that is genuinely a circle. Two glyphs rather than one
+                         that changes: a filled triangle and two bars, each visible on its own half
+                         of the state, so neither is drawn by a converter nobody can test. -->
+                    <Button Grid.Column="0" Name="PlayPause" Classes="transport"
+                            Command="{Binding PlayPauseCommand}"
+                            ToolTip.Tip="{Binding PlayPauseLabel}">
+                      <Panel Width="14" Height="15">
+                        <!-- Nudged right by two: a triangle centred on its bounding box reads as
+                             sitting left of centre inside a circle. -->
+                        <Path Data="M0,0 L13,7.5 L0,15 Z" Stretch="None" Margin="3,0,0,0"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              IsVisible="{Binding !IsPlaying}" />
+                        <Path Data="M0,0 H4 V15 H0 Z M8,0 H12 V15 H8 Z" Stretch="None"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              IsVisible="{Binding IsPlaying}" />
+                      </Panel>
+                    </Button>
+
+                    <!-- The bar, and a transparent strip over it that takes the pointer. The strip
+                         is what makes the bar seekable: it knows its own width, so a press at an x
+                         is a fraction of the recording, which is a question no binding can answer.
+                         18px tall over a 6px bar, so the target is a comfortable one. -->
+                    <Panel Grid.Column="2" VerticalAlignment="Center">
+                      <ProgressBar Classes="seek" Minimum="0"
+                                   Maximum="{Binding DurationSeconds}"
+                                   Value="{Binding PositionSeconds}" />
+
+                      <!-- The handle the design asks for, and the one the bar shipped without. The
+                           comment on ProgressBar.seek used to say it could not be positioned without
+                           a measured width, which was true of a binding and never true of the strip
+                           below: that control already knows how wide it is, and already turns an x
+                           into a fraction of the recording. So the same arithmetic runs backwards —
+                           see PlacePuck in MainWindow.axaml.cs — and the handle is placed from the
+                           width the strip was actually given rather than from one nobody measured.
+
+                           Left-aligned with a left margin rather than centred with an offset, so its
+                           travel is the strip's width less its own: at the end of a recording it sits
+                           inside the bar rather than half past it. -->
+                      <Border Name="SeekPuck" Classes="puck" IsVisible="{Binding CanPlay}" />
+
+                      <Border Name="SeekStrip" Background="Transparent" Height="18" Cursor="Hand" />
+                    </Panel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5"
+                                VerticalAlignment="Center" Margin="13,0,0,0">
+                      <TextBlock Text="{Binding PositionLabel}" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource Taro700Brush}" />
+                      <TextBlock Text="/" Classes="meta" />
+                      <TextBlock Text="{Binding DurationLabel}" Classes="meta" />
+                    </StackPanel>
+                  </Grid>
+
+                  <TextBlock Text="{Binding SelectedRecording.DisplayName}" Classes="meta"
+                             TextTrimming="CharacterEllipsis"
+                             IsVisible="{Binding SelectedRecording, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                  <!-- Why the transport is dead, when it is. A file this build cannot sound is still
+                       a file whose transcript is worth reading, so the tab carries on around it. -->
+                  <TextBlock Name="PlaybackNotice" Text="{Binding PlaybackNotice}"
+                             Classes="fine warning"
+                             IsVisible="{Binding PlaybackNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+              </Border>
+
+              <!-- ── Who is speaking ────────────────────────────────────────
+                   The diariser numbers voices; it cannot name them, and it never will — a name is
+                   a fact about the world rather than about the audio. So the reader supplies it,
+                   and the chips through the whole transcript follow, in both this tab and the
+                   Transcribe tab's panes, because every cue of one speaker points at the one
+                   object this strip edits.
+
+                   Fields rather than a chip that turns into a field when clicked. The second is
+                   the more elegant interaction and the worse one here: nothing would say the names
+                   could be changed at all, and the whole difficulty with this feature is that
+                   nobody thinks to look for it. Four boxes that obviously take typing say it
+                   without a word of instruction.
+
+                   Matcha, inside a tab that is otherwise entirely taro. That looks like a mistake
+                   and is the written rule: speaker labelling is a v1 feature, and taro would make
+                   it read as a v2 one. See Border.speaker in Theme/Controls.axaml.
+
+                   Absent entirely on a transcript nobody labelled, which is most of them: the
+                   labelling pass is opt-in. -->
+              <ItemsControl DockPanel.Dock="Top" Name="Voices" ItemsSource="{Binding Speakers}"
+                            IsVisible="{Binding HasSpeakers}" Margin="0,0,0,11">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel ItemSpacing="7" LineSpacing="7" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SpeakerViewModel">
+                    <Border Classes="speaker"
+                            Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                            Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
+                            Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
+                            Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}"
+                            ToolTip.Tip="{Binding Label}">
+                      <!-- LostFocus, so the transcript is not redrawn on every keystroke of a name
+                           being typed. Enter commits by moving focus off the box — see WireVoices
+                           in MainWindow.axaml.cs — because a field that only commits when you click
+                           somewhere else is a field people think did not work. -->
+                      <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                               PlaceholderText="{Binding Label}"
+                               MinWidth="72" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- What a name here is, and is not, said only once one has been given. -->
+              <TextBlock DockPanel.Dock="Top" Name="RenameNotice" Classes="fine meta"
+                         Margin="0,0,0,11" Text="{Binding RenameNotice}"
+                         IsVisible="{Binding RenameNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+              <!-- ── Find a word ────────────────────────────────────────────
+                   The reason anyone opens a three-hour transcript is usually one word. This runs
+                   on v1's own data and needs no model, which is why it is here rather than waiting
+                   for the panel on the right: it is useful before anything can be asked.
+
+                   It does not seek. Finding a word and hearing it are two intentions — somebody
+                   scanning for every mention of a name does not want the audio jumping under them
+                   on each press of Enter — so a hit is scrolled to and marked, and clicking it is
+                   what plays it.
+
+                   At the foot of the words rather than above them, so the column reads top to
+                   bottom as the recording, the controls that move it, its words, and the box that
+                   searches them. Docked Bottom but still declared before the transcript, because
+                   the transcript has to stay the last child. -->
+              <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,11,0,0"
+                    IsEnabled="{Binding HasTranscript}">
+                <TextBox Grid.Column="0" Name="SearchBox" Text="{Binding SearchTerm}"
+                         PlaceholderText="Find a word — Enter for the next one" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
+                            Margin="9,0,0,0" VerticalAlignment="Center">
+                  <TextBlock Name="SearchSummary" Text="{Binding SearchSummary}" Classes="meta"
+                             MinWidth="62" TextAlignment="Right" VerticalAlignment="Center" />
+                  <Button Name="PreviousMatch" Content="Previous" ToolTip.Tip="The hit before this one"
+                          Command="{Binding PreviousMatchCommand}" />
+                  <Button Name="NextMatch" Content="Next" ToolTip.Tip="The next hit — or press Enter"
+                          Command="{Binding NextMatchCommand}" />
+                </StackPanel>
+              </Grid>
+
+              <Border Classes="panel">
+                <Panel>
+                  <ScrollViewer Name="CueScroll" IsVisible="{Binding HasTranscript}" Padding="7,9">
+                    <ItemsControl Name="Cues" ItemsSource="{Binding Lines}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TranscriptLineViewModel">
+                          <!-- A Button, so the keyboard reaches every cue and the seek is a command
+                               like everything else in this window. Its template draws no chrome —
+                               see Button.cue — so what a reader sees is a paragraph that lights up
+                               under the pointer and stays lit while it is the one being played. -->
+                          <Button Classes="cue" Classes.playing="{Binding IsActive}"
+                                  Classes.found="{Binding IsCurrentMatch}"
+                                  Command="{Binding $parent[ItemsControl].((vm:AskViewModel)DataContext).SeekToLineCommand}"
+                                  CommandParameter="{Binding}">
+                            <!-- A cue is as tall as its words, which is not what a Button is by
+                                 default in this window — see Button.cue in Theme/Controls.axaml for
+                                 the height that had to be given back, and for the two defects that
+                                 were the same defect. -->
+                            <Grid ColumnDefinitions="54,Auto,*">
+                              <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
+                                         FontSize="11.5" FontWeight="SemiBold"
+                                         VerticalAlignment="Top" Margin="0,2,0,0"
+                                         Foreground="{DynamicResource Taro700Brush}" />
+                              <Border Grid.Column="1" Margin="0,0,9,0"
+                                      IsVisible="{Binding HasSpeaker}"
+                                      Classes="speaker"
+                                      Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                                      Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
+                                      Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
+                                      Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
+                                <TextBlock Text="{Binding Voice.Name}" />
+                              </Border>
+                              <!-- Inlines rather than Text, which is what lets one word inside a
+                                   paragraph carry a ground of its own — the term that was searched
+                                   for, and the word being said right now. Bound to Marked, which is
+                                   all three as one value, because a converter takes one thing and
+                                   because only the line it happened to raises a change for it: a
+                                   keystroke redraws the handful that matched, and a word advancing
+                                   redraws the one line being played, rather than the transcript. -->
+                              <TextBlock Grid.Column="2" Name="CueWords"
+                                         Inlines="{Binding Marked, Converter={StaticResource Highlight}}"
+                                         TextWrapping="Wrap" LineHeight="20.3" />
+                            </Grid>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+
+                  <TextBlock Name="TranscriptNotice" Text="{Binding TranscriptNotice}"
+                             IsVisible="{Binding !HasTranscript}"
+                             Classes="secondary" TextWrapping="Wrap" MaxWidth="380"
+                             LineHeight="20" Margin="26"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             TextAlignment="Center" />
+                </Panel>
+              </Border>
+            </DockPanel>
+          </Grid>
 
           <!-- ── The chat panel, drawn and not built ────────────────────────────────────────── -->
           <Border Grid.Column="3" Classes="panel">

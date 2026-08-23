@@ -95,23 +95,40 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
     private bool _isCurrentMatch;
 
     public TranscriptLineViewModel(
-        string? speaker,
+        SpeakerViewModel? voice,
         string text,
-        int chip,
         TimeSpan start,
         TimeSpan end,
         IReadOnlyList<TranscriptWord>? words = null)
     {
-        Speaker = speaker;
+        Voice = voice;
         Text = text;
-        Chip = chip;
         Start = start;
         End = end;
         _spans = Locate(text, words);
     }
 
-    /// <summary>The speaker's name, or null on a transcript that was never labelled.</summary>
-    public string? Speaker { get; }
+    /// <summary>
+    /// The voice this segment belongs to, or null on a transcript that was never labelled.
+    /// </summary>
+    /// <remarks>
+    /// A reference rather than a copy of the name and the colour, and that is the whole of what
+    /// makes a speaker renameable. Every line of one speaker points at one
+    /// <see cref="SpeakerViewModel"/>, so the chip binds through it — <c>{Binding Voice.Name}</c> —
+    /// and a rename raises one notification that exactly those lines are listening to. Copied onto
+    /// each line instead, a rename would mean walking fifteen hundred rows to change four facts,
+    /// and the copies could drift apart.
+    /// </remarks>
+    public SpeakerViewModel? Voice { get; }
+
+    /// <summary>The speaker's name as the window shows it, or null on an unlabelled transcript.</summary>
+    /// <remarks>
+    /// Reads through <see cref="Voice"/> rather than holding a string, so it follows a rename. It
+    /// raises nothing of its own: a binding that needs to follow the name binds
+    /// <c>Voice.Name</c>, and one bound to this would draw once and never again. What it is for is
+    /// the tests and the exporters, which read it once.
+    /// </remarks>
+    public string? Speaker => Voice?.Name;
 
     public string Text { get; }
 
@@ -183,9 +200,9 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
     /// index is assigned in order of first appearance in the transcript, which is also the order
     /// the diariser numbers speakers in.
     /// </remarks>
-    public int Chip { get; }
+    public int Chip => Voice?.Chip ?? -1;
 
-    public bool HasSpeaker => Speaker is not null;
+    public bool HasSpeaker => Voice is not null;
 
     /// <summary>Whether <paramref name="position"/> falls inside this segment.</summary>
     /// <remarks>

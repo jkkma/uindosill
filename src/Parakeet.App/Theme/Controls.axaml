@@ -447,6 +447,33 @@
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
+  <!-- A speaker's name, where it can be typed over. The base TextBox style is a 30px box with a
+       hairline and 10px of side padding, which inside a 6px pill would be a box in a box; all three
+       have to be named to be undone, because a style rule only overrides what it names.
+
+       The chip keeps its own padding and its own colours, and the field inherits the ink from the
+       chip class it is sitting in — so a renamed speaker is still visibly the same speaker. The
+       caret has to be set beside each foreground: it does not follow it, and a matcha caret on a
+       matcha ground is a field that looks like it is not focused. -->
+  <Style Selector="Border.speaker TextBox">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.speaker TextBox:focus">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.speaker TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
   <!-- Two fills, then two outlines: four speakers told apart without leaving the matcha family or
        borrowing taro, which belongs to v2 and would make labelling look like a v2 feature. The set
        is closed at four because that is the diariser's ceiling, not a setting, so there is
@@ -543,19 +570,58 @@
        decision: Fluent's slider is themed through template parts whose names are its own, and
        this file's opening note is about exactly that failure — a selector that matches nothing
        loads without complaint and changes nothing. A bar plus a transparent strip that takes the
-       pointer is two things whose behaviour is visible from here. What it costs is the design's
-       circular seek handle, which cannot be positioned without a measured width; the bar is
-       click-and-drag without one. -->
+       pointer is two things whose behaviour is visible from here.
+
+       That arrangement was once thought to cost the design's circular seek handle, "which cannot
+       be positioned without a measured width". The premise was wrong rather than the conclusion:
+       no *binding* can measure a width, but the transparent strip has been measuring one since the
+       day it was written — that is how a press at an x becomes a fraction of the recording. The
+       handle below runs the same arithmetic in the other direction. -->
   <Style Selector="ProgressBar.seek">
     <Setter Property="Height" Value="6" />
     <Setter Property="Foreground" Value="{DynamicResource Taro600Brush}" />
     <Setter Property="Background" Value="{DynamicResource ProgressTrackBrush}" />
   </Style>
 
+  <!-- The handle on that bar. One of the shapes that is genuinely a circle, so a radius of half
+       its size rather than the design's 0px corner: this is a control you drag, and the whole of
+       the affordance is that it does not look like the square surfaces around it.
+
+       Its ground is the window's rather than taro, with a taro edge, so it reads as a bead sitting
+       on the bar at any position — over the played part, over the unplayed part, or on the seam
+       between them, which is exactly where it spends its whole life. A solid taro puck vanishes
+       into the played bar behind it. -->
+  <Style Selector="Border.puck">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+    <Setter Property="CornerRadius" Value="6.5" />
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro600Brush}" />
+    <Setter Property="BorderThickness" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
   <!-- One segment of the transcript, in the tab where a segment is a place in the recording
        rather than a paragraph. A Button rather than a Border with a pointer handler, so the
        keyboard reaches it and the seek is a command like every other action in this window. -->
   <Style Selector="Button.cue">
+    <!-- NaN and a zeroed minimum, for the same reason Button.window above says it in full: the base
+         Button style sets Height="30" for a button standing in a row of controls, and each rule
+         overrides only the properties it names. A cue is not that kind of button — it is a
+         paragraph, and its height is however many lines the words take at the width the window
+         happens to be.
+
+         Left at 30 it was the defect this tab shipped with. Thirty less twelve of padding is
+         eighteen, and eighteen was handed down to both halves of the cue: the words were laid out
+         against it and TextWrapping="Wrap" kept the one line that fitted and dropped the rest, so a
+         paragraph arrived cut off mid-sentence; and the speaker chip's label got 18 - 3 - 3 = 12 for
+         text that lays out at 14.64, which sliced the bottom off every name. One height, two defects
+         that looked unrelated. Measured before and after — see the three tests named on the cue's
+         Grid in MainWindow.axaml. -->
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="0" />
     <Setter Property="Padding" Value="5,6,8,6" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -602,6 +668,48 @@
        is underneath reads as present-but-not-yet rather than as switched off. -->
   <Style Selector="Border.wip">
     <Setter Property="Background" Value="#D1F7F3FE" />
+  </Style>
+
+  <!-- ── The edge that moves ─────────────────────────────────────────────────────────────────
+       The splitter between the picture and the transcript on the Ask tab. Fluent's own theme for
+       one is a minimum size and a bare Border with nothing named inside it, so a selector reaching
+       into that template would match nothing and — per this file's opening note — say so by
+       staying silent. The template is replaced rather than adjusted.
+
+       What it draws is the hairline this design already puts between surfaces, with a short grip
+       lying on it. A rule on its own reads as an edge; an edge that can be moved has to say so
+       before anyone tries. Ten units tall over a one-unit line, so the target is a comfortable one.
+
+       No Cursor set here: the control chooses its own from its resize direction.
+
+       Taro because this edge belongs to the Ask tab, which is the generation rule this window
+       runs on — and Taro200 at rest with Taro400 on hover are both fills rather than text, which
+       is all Taro400 is legal for.
+
+       Only the splitter that carries this class. The three bare ones elsewhere in the window are
+       deliberately left invisible: they separate columns that were already sized, and nothing has
+       asked for those to move. -->
+  <Style Selector="GridSplitter.handle">
+    <Setter Property="Height" Value="10" />
+    <!-- Transparent rather than left unset. A null Background is not hit-testable, which is why
+         every splitter in this window already names one. -->
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Ground" Background="{TemplateBinding Background}">
+          <Panel>
+            <Border Name="Rule" Height="1" VerticalAlignment="Center"
+                    Background="{DynamicResource RuleSeenBrush}" />
+            <Border Name="Grip" Width="34" Height="3"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource Taro200Brush}" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="GridSplitter.handle:pointerover /template/ Border#Grip">
+    <Setter Property="Background" Value="{DynamicResource Taro400Brush}" />
   </Style>
 
   <!-- ── Separator ───────────────────────────────────────────────────────────────────────── -->

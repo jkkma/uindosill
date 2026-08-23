@@ -1198,7 +1198,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 }
 
                 vm.Lines.Add(new TranscriptLineViewModel(
-                    speaker: null, segment.Text.Trim(), chip: -1, segment.Start, segment.End, segment.Words));
+                    voice: null, segment.Text.Trim(), segment.Start, segment.End, segment.Words));
             }
 
             if (ReferenceEquals(SelectedJob, vm))

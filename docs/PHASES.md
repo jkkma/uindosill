@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 962 tests, no weights, no display, no network — **960 passed and 2 skipped**, and
+**Status:** met. 981 tests, no weights, no display, no network — **979 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -404,6 +404,9 @@ talking; and the things that are genuinely circles rather than rounded rectangle
 buttons, the transport's play button, and its seek handle. The rule that came out of it is shorter
 than the list: **rectangles are square, circles stay circles, and a corner survives only where it
 carries meaning.**
+
+**That list was discharged on 2026-08-23**, when the seek handle — its last unbuilt item — was
+drawn.
 
 **The window buttons left that list on 2026-08-20**, at the maintainer's direction and after seeing
 them on a real screen. They are a bare glyph now — a dash, the two overlapping squares of the
@@ -2134,6 +2137,13 @@ the bar is click-and-drag without one. And the cue's left edge is always drawn a
 transparent, because a border that appears when a line becomes the current search hit moves the
 words 3 px sideways, and stepping through hits would jog every line it touched.
 
+**The handle arrived on 2026-08-23, and the sentence above was wrong about why it could not.** The
+premise was the error, not the conclusion: no binding can measure a width, but the transparent strip
+has been measuring one since the day this tab shipped — that is how a press at an x becomes a
+fraction of the recording — and the handle is the same arithmetic run backwards from the position.
+What the `ProgressBar` still costs, and what the handle does not buy back, is **seeking from the
+keyboard**: a `Slider` would have arrow keys, and this has none.
+
 **What the suite cannot reach, and what was done about it.** `SystemAudioPlayer` needs a Windows
 audio endpoint, which neither CI nor a headless run has. Everything the tab does — open, play, seek
 from a cue, follow the position, find a word, stop at the end — is exercised against
@@ -2656,6 +2666,94 @@ Neither has been attempted.
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision, and no release has been published |
 | translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU — **retired to `attic/` on 2026-08-21**; the decode is `transformers.generate` itself again, in a bundled Python, at the same settings, defaulting to WebGPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. **The weights were published to Hugging Face on 2026-08-20 and the entry is verified against the nine LFS oids the repository publishes**, with the Apache-2.0 §4(c) and §4(d) checks done before the upload rather than after — no NOTICE file upstream, no copyright line anywhere, and four attribution notices retained. The first real multi-file install ran the same day: staged, hashed, 9 of 9 verified, and the graphs then loaded out of that assembled directory. **The cascade penalty is measured** — Spanish −2.95 and German −4.34 chrF++ against ASR word error rates of 6.12% and 9.93% — recorded and deliberately not gated. **The window's half landed 2026-08-20**: an "English version" opt-in drawn as the twin of the speaker one — its own tinted strip, off by default, disabled with a reason while the entry is not installed — and a Transcript/English pill switcher over the transcript pane, drawn only for a row that has both. The window keeps the transcript as the engine wrote it beside the English rather than replacing it, which is what the switcher switches between; outputs take the same `.en` infix the command line gives them, and `vtt-words` is refused under the opt-in there too. **No spoken-language picker was added, and that is the second time the answer has come out that way** — the translator is many-to-one and never told its source, and the ASR's hint is inert on this catalogue (`docs/UNPROVEN.md` § *The language hint*), so a control for it would change nothing. Outstanding: **the human adequacy check**, which is what keeps the gate unpassed; a real-time factor for a translation pass over real audio; and an interrupted install, which nothing has exercised. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app, then **retired to `attic/` on 2026-08-21** when the engine moved into a bundled Python: what ships now is the Python the reference was taken from, so the figure the product carries is **16.3324%** on the CPU and 16.3319% on WebGPU, and the 0.0044 divergence between the CLI and the window closed with it. **Measured 2026-08-20 on whole podcasts and it does not transfer**: all four episodes returned four labels whether there were 2, 3, 5 or 7 speakers — the cap explains the last two and over-segmentation explains the first two — and a duration ladder over one episode puts the count right to 50 minutes and wrong from an hour, against AMI meetings averaging about half an hour. AMI dev re-scored the same day is 8.62% at collar 0.25 with 0.94% confusion and 4-of-4 speaker agreement on all eighteen, so this is a long-recording limit rather than a bad model. Nothing was re-tuned; the product now warns before the run, past an hour and on a count above the cap. No DER exists for any podcast and the cap is still unpriced |
+
+### Fixed 2026-08-23 — one pinned button height was cutting every cue in half and shaving every speaker label, and the Ask tab was rebuilt around the recording
+
+Running the built application again found the transcript arriving cut off mid-sentence and the
+speaker chips sliced along the bottom, and reported them as two defects. They were one, and it was
+not where either of them looked.
+
+**The cause is a single inherited setter.** `Style Selector="Button"` sets `Height="30"` — right for
+a button standing in a row of controls, and a rule overrides only what it names, so `Button.cue`
+inherited it. A cue is not that kind of button; it is a paragraph. Thirty units less the cue
+template's six of padding top and bottom leaves **eighteen**, and eighteen was handed down to both
+halves of the cue:
+
+- **The words** are set on a 20.3 line and wrap. Measured against a maximum height of eighteen, the
+  text layout kept the one line that fitted and discarded every line after it — so a 221-character
+  segment rendered as one line, broken at whatever the window's width happened to be and silently
+  missing the rest. `TextLayout.TextLines.Count` was **1 at every width from 820 to 1400**. It is
+  now 2 at 1400 and 12 at 820 on an unlabelled transcript, and it reflows both ways. (With a
+  speaker chip beside it the same segment takes 50 lines at 820, because the chip is `Auto` and the
+  two fixed columns either side of this one are not; that is arithmetic rather than a defect, and
+  `docs/UNPROVEN.md` says nobody has looked at it.)
+- **The speaker chip's label** lays out at **14.64** in Instrument Sans at 12px, inside three units
+  of padding above and below. Eighteen less six is **twelve**. The label was arranged 12.00 tall
+  around text needing 14.64, so roughly 2.1 units of every descender was cut off — which reads as
+  shaved letters inside an intact pill, and is why it was reported as a chip defect rather than a
+  text one.
+
+The fix is `Height="NaN"` and `MinHeight="0"` on `Button.cue`, with the same reasoning `Button.window`
+had already written down for the same trap in the same file. Both figures above are measured, before
+and after, through the headless window; three tests fail without the fix and pass with it, and the
+one that matters asserts the *cue* is as tall as its content — the other two pass over a tab that is
+still drawn wrong, because an overflowing child is arranged at its desired height while every cue
+draws over the next.
+
+**A wrong first answer is recorded here because it is the more useful half.** The first fix was
+`RowDefinitions="Auto"` on the cue's Grid, which made the words wrap and the chip fit and was
+measured doing so. It is not the cause and it is not a defence: with the height still pinned at 30,
+declaring the row `Auto` leaves both defects in place, and it was removed once that was measured
+rather than kept as belt and braces. A comment saying an attribute is load-bearing when it is not is
+worse than no comment.
+
+**The column was rebuilt at the maintainer's direction the same day.** It reads top to bottom as the
+picture, the controls that move it, its words, and the box that searches them — the transport was
+docked to the *bottom*, below the words it moves, and the find box sat above them. It is a row
+`Grid` rather than a `DockPanel` now, because one of its edges is draggable and a `DockPanel` has no
+edges: it says where a child goes by declaration order, which is not a property a splitter can act
+on. **The transport is in the reading row rather than the picture's, and that is a constraint rather
+than a preference** — a splitter moves the two rows either side of it and nothing else, so anything
+sharing the picture's row would be resized with it, and anything given a row of its own in between
+would cap the drag.
+
+**The picture is resizable from the transcript's top edge**, which is the first splitter in this
+window anybody was meant to notice: a hairline with a short grip on it, taro because the edge belongs
+to the Ask tab, ten units tall over a one-unit line. It and its row are both absent for an audio
+recording — a handle that does nothing is worse than no handle — and the height a reader drags to
+survives a podcast opened in between. **The three older splitters in this window are still invisible
+and deliberately out of scope**: they separate columns nothing has asked to move.
+
+**The seek bar has the handle the design asked for, and the reason it did not have one was wrong
+rather than the conclusion.** The record said it "cannot be positioned without a measured width".
+No *binding* can measure a width — but the transparent strip over the bar has been measuring one
+since the tab shipped, which is how a press at an x becomes a fraction of the recording. The handle
+is that arithmetic run backwards. It is inset by its own width rather than centred on the playhead,
+so it sits inside the track at both ends; what that costs is recorded in `docs/UNPROVEN.md`.
+
+**Speaker labels can be renamed, which `PHASES.md` promised on 2026-08-19 and nothing had ever
+built.** Nothing in the repository renamed a speaker before today: `SpeakerTurns.RenameByFirstAppearance`
+maps cluster ids to `Speaker 1`, `Speaker 2`, and there was no path from a human-typed string to a
+label. A strip of fields at the top of the reading row edits one `SpeakerViewModel` per voice, and
+every cue of that speaker points at it — so a rename raises one notification rather than fifteen
+hundred, and the same objects serve both panes of a translated transcript, which is the arrangement
+that stopped the two panes disagreeing about colours on 2026-08-22 doing the same job for names.
+**Only the editable half of that promise landed. "Swappable" is still open**, and it is ambiguous
+between swapping two names — trivial under this model — and reassigning which speaker a chip *is*
+across a transcript, which is a correction to the diariser's output and a different feature.
+
+**The chips stay matcha inside a tab that is otherwise entirely taro**, which looks like a mistake
+and is the written rule: speaker labelling is a v1 feature, and taro would make it read as a v2 one.
+
+**A name here is for reading and reaches nothing else** — not the transcript files already written,
+not a restart, not a second run over the same audio. The window says so, once somebody has actually
+renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
+there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
+
+**981 tests, no weights, no display, no network — 979 passed and 2 skipped.** `CLAUDE.md`'s second
+count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `981 tests` so the guard now
+covers it.
 
 ### The dictation seam
 
