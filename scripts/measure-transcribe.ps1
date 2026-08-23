@@ -481,8 +481,15 @@ try {
     Write-Host ''
     Write-Host '── transcript ──────────────────────────────────' -ForegroundColor Green
     Write-Host ("audio duration : {0:N1} s" -f $document.audioDurationSec)
-    Write-Host ("decode time    : {0:N1} s" -f $document.processingSec)
-    Write-Host ("real-time factor: {0:N4}" -f $document.realTimeFactor)
+    # processingSec is the whole pass — container decode, resampling and segmentation inside it,
+    # serialised with the model — and every published real-time factor is computed from it. The
+    # model's own share is decodeSec, which a transcript written since 2026-08-22 also carries.
+    Write-Host ("pipeline time  : {0:N1} s  (read, segment and decode, serialised)" -f $document.processingSec)
+    Write-Host ("real-time factor: {0:N4}  (whole pass)" -f $document.realTimeFactor)
+    if ($null -ne $document.decodeSec) {
+        Write-Host ("decode time    : {0:N1} s  (the model alone)" -f $document.decodeSec)
+        Write-Host ("decode RTF     : {0:N4}" -f $document.decodeRealTimeFactor)
+    }
     Write-Host ("model          : {0} ({1}) on {2}" -f $document.model, $document.quantisation, $document.backend)
     Write-Host ''
     Write-Host ("segments       : {0}" -f $segments.Count)

@@ -23,8 +23,22 @@ public sealed record TranscriptDocument
 
     public string? Language { get; init; }
 
-    /// <summary>Wall-clock time spent decoding, excluding model load.</summary>
+    /// <summary>
+    /// Wall-clock time of the whole transcription pass, excluding model load: from the first block
+    /// read to the last segment out, with the container decode, the mixdown, the resampling and
+    /// the segmentation inside it, serialised with the model. It is what <see cref="RealTimeFactor"/>
+    /// and every published real-time factor are computed from. It is not the model's own time —
+    /// that is <see cref="DecodeTime"/>, and until 2026-08-22 this one was the figure every
+    /// document called "decode time".
+    /// </summary>
     public TimeSpan? ProcessingTime { get; init; }
+
+    /// <summary>
+    /// Time spent inside the model's decode calls alone, summed over the pass, when the engine
+    /// measured it. The difference from <see cref="ProcessingTime"/> is the read and the
+    /// segmentation — a rounding error against a CPU decode and a material share of a fast GPU one.
+    /// </summary>
+    public TimeSpan? DecodeTime { get; init; }
 
     /// <summary>
     /// The speaker turns a labeller produced for this audio, in file time, or empty when speaker
@@ -127,6 +141,16 @@ public sealed record TranscriptDocument
     public double? RealTimeFactor =>
         ProcessingTime is { } processing && AudioDuration is { Ticks: > 0 } audio
             ? processing.Ticks / (double)audio.Ticks
+            : null;
+
+    /// <summary>
+    /// <see cref="DecodeTime"/> over the audio's duration — the model's own real-time factor,
+    /// beside <see cref="RealTimeFactor"/>, which is the whole pass's and the one the published
+    /// figures are.
+    /// </summary>
+    public double? DecodeRealTimeFactor =>
+        DecodeTime is { } decode && AudioDuration is { Ticks: > 0 } audio
+            ? decode.Ticks / (double)audio.Ticks
             : null;
 
     public static TranscriptDocument Empty { get; } = new() { Segments = [] };

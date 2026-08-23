@@ -40,6 +40,10 @@ public static class TranscriptionRunner
             Backend = capabilities.Backend,
             Language = options.Language,
             ProcessingTime = stopwatch.Elapsed,
+
+            // The model's own share, from an engine that measures it; the wall figure above is the
+            // whole pass and is what every published real-time factor is.
+            DecodeTime = (engine as SegmentingTranscriptionEngine)?.LastDecodeDuration,
         };
     }
 }

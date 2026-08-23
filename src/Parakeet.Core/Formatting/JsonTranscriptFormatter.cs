@@ -44,6 +44,16 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                     writer.WriteNumber("realTimeFactor", Round(rtf, 4));
                 }
 
+                // The model's own share of processingSec, when the engine measured it: the read and
+                // the segmentation are inside the wall figure and not inside this one. Absent from a
+                // document that predates it or an engine that does not time itself.
+                WriteSecondsOrNull(writer, "decodeSec", document.DecodeTime);
+
+                if (document.DecodeRealTimeFactor is { } decodeRtf)
+                {
+                    writer.WriteNumber("decodeRealTimeFactor", Round(decodeRtf, 4));
+                }
+
                 // Present only when a labeller ran, like every speaker field below: a transcript made
                 // without the opt-in serialises exactly as it did before the field existed.
                 if (document.SpeakerModelId is { } speakerModel)

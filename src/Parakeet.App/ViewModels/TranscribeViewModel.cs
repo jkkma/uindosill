@@ -1026,6 +1026,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             ModelId = engine.Capabilities.ModelId,
             Backend = engine.Capabilities.Backend,
             ProcessingTime = DateTimeOffset.UtcNow - started,
+            DecodeTime = (engine as SegmentingTranscriptionEngine)?.LastDecodeDuration,
         };
 
         // Either opt-in pass can fail where the transcript did not, and when one does the transcript

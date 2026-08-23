@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 868 tests, no weights, no display, no network — **866 passed and 2 skipped**, and
+**Status:** met. 871 tests, no weights, no display, no network — **869 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -1960,6 +1960,32 @@ segment comes back empty, and the verb refusing an input-as-destination through 
 point — and two existing ones extended: the required-file message now naming
 `generation_config.json`, and the driver's provenance assertion carrying the fake's decode
 description. The suite is 868.
+
+### Fixed 2026-08-22 — the number every document called "decode time" was the whole pass, and now the model's own time travels beside it
+
+**One defect, in a measured number.** `TranscriptionRunner`'s stopwatch wraps `TranscribeAsync` end
+to end, and inside that stretch the container is decoded through Media Foundation, the audio mixed
+down and resampled, and the segmenter run — block by block, serialised with the model, because the
+read of a block and the decode of the batch before it never overlap. `TranscriptDocument.ProcessingTime`
+called that "wall-clock time spent decoding", `UNPROVEN.md`'s tables called it "decode time", and
+`measure-transcribe.ps1` printed it under that label. With the canned engine, which decodes nothing,
+a 600 s AAC file costs 1.77 s of it on this laptop: nothing against 49 s of CPU decode, and most of
+the desktop's 3.86 s on CUDA.
+
+**Two figures now, each saying what it contains.** `processingSec` keeps its meaning — the whole
+pass, and what every published real-time factor is — so nothing already recorded stops being
+comparable; `SegmentingTranscriptionEngine` times its decode calls alone and the document carries
+that as `DecodeTime`, written as `decodeSec` and `decodeRealTimeFactor` in the JSON and as a
+"Decode real-time factor" row in the Markdown, null or absent when an engine does not time itself.
+The harness prints both under honest labels; the README says what its RTFs contain. Re-timed on this
+laptop the same day on `sample.m4a`: CPU 77.3 s pipeline against 74.78 s decode (3.3 % outside the
+model), Vulkan 24.78 s against 23.14 s (6.6 %). **The desktop's CUDA figure is owed a re-timing with
+the read separated**, and `UNPROVEN.md` says so where the figure is.
+
+Three tests: a source slow to read and an engine that decodes in no time, so the wall figure carries
+the read and the decode figure does not; an engine slow to decode, so the decode figure is most of
+the pass; and both formatters writing the new figure beside the old, with the old unchanged.
+The suite is 871.
 
 ## The honest summary
 

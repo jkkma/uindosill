@@ -51,6 +51,21 @@ public abstract class SegmentingTranscriptionEngine : ITranscriptionEngine
     /// <summary>Report from the most recent <see cref="TranscribeAsync"/> call, if any.</summary>
     public SegmentationReport? LastSegmentationReport { get; private set; }
 
+    /// <summary>
+    /// Time spent inside <see cref="DecodeAsync"/> over the most recent <see cref="TranscribeAsync"/>
+    /// call, summed across its batches — the model's own share of the pass, as distinct from the
+    /// wall-clock figure a caller takes around the whole of it.
+    /// </summary>
+    /// <remarks>
+    /// The two differ, and on a fast backend they differ materially: the container decode, the
+    /// mixdown, the resampling and the segmentation all run inside <c>TranscribeAsync</c>, before
+    /// each batch and serialised with it, and none of them is the model. A 600 s AAC file through
+    /// Media Foundation costs about 1.8 s of read alone on a laptop, which is a rounding error
+    /// against 85 s of CPU decode and most of a 3.9 s CUDA one. Until 2026-08-22 only the wall
+    /// figure existed and every document called it "decode time".
+    /// </remarks>
+    public TimeSpan? LastDecodeDuration { get; private set; }
+
     public async IAsyncEnumerable<TranscriptSegment> TranscribeAsync(
         IAudioSource audio,
         TranscriptionOptions options,
@@ -60,6 +75,7 @@ public abstract class SegmentingTranscriptionEngine : ITranscriptionEngine
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
+        LastDecodeDuration = TimeSpan.Zero;
 
         await LoadAsync(ct).ConfigureAwait(false);
 
@@ -142,7 +158,13 @@ public abstract class SegmentingTranscriptionEngine : ITranscriptionEngine
         ct.ThrowIfCancellationRequested();
 
         var snapshot = batch.ToArray();
+
+        // Timed here, around the model and nothing else, so the document can say how much of the
+        // pass was the model's: the read, the resampling and the segmentation happen between these
+        // calls, not inside them.
+        var decodeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         var decoded = await DecodeAsync(snapshot, options, ct).ConfigureAwait(false);
+        LastDecodeDuration = (LastDecodeDuration ?? TimeSpan.Zero) + System.Diagnostics.Stopwatch.GetElapsedTime(decodeStarted);
 
         if (decoded.Count != snapshot.Length)
         {
