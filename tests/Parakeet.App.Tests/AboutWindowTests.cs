@@ -121,6 +121,14 @@ public class AboutWindowTests
         // A spot check that it is the real package rather than a placeholder that happens to match.
         Assert.Contains("NVIDIA Corporation", text.Text, StringComparison.Ordinal);
         Assert.Contains("creativecommons.org/licenses/by/4.0", text.Text, StringComparison.Ordinal);
+
+        // Selecting that text has to leave it readable. Fluent's selection brush is the accent
+        // unless overridden, and Matcha600 under dark ink was found by eye on 2026-08-23; the
+        // token override in Tokens.axaml resolves it to Matcha200, and this asserts the brush the
+        // control actually resolved — an override on a mistyped or wrongly-typed key loads
+        // without complaint and changes nothing.
+        var selection = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(text.SelectionBrush);
+        Assert.Equal(Avalonia.Media.Color.Parse("#CDE3B5"), selection.Color);
     }
 
     /// <summary>
