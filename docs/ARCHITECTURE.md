@@ -398,8 +398,10 @@ measurement.
   the valid length to it, and the two differ on every file because the featurizer pads to a
   multiple of 16 and the STFT is one frame longer than the valid count. One or two frames were lost
   on 7.3 % of durations — a 600 s file came out 7,498 frames where 7,500 are due — and the last
-  chunk's rows landed 160 ms early. The 16.33 % AMI figure was produced by that loop, and
-  `docs/UNPROVEN.md` says what the fix owes it.
+  chunk's rows landed 160 ms early. The 16.33 % AMI figure was produced by that loop and re-scored
+  on the fixed one on 2026-08-22 — unchanged to four decimals on every provider, because none of the
+  sixteen test durations is among the 7.3 %; `docs/UNPROVEN.md` has the run and what it does not
+  show.
 
 ## Output
 

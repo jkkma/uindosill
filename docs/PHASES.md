@@ -2019,9 +2019,15 @@ counted before the break: 340 of 340 and 7,500 of 7,500 on the graph, and the co
 fixture unchanged, because its geometry has no padding to trim. The STFT runs in hop-aligned blocks
 of 8,192 frames, each seeing exactly the samples its frames would have seen, and the mel is written
 straight into its final layout: bit-identical to the whole-file result on thirty minutes of real
-audio, at 551 MB above resting. **The AMI re-score the fix owes is owed to the desktop**, which
-holds the material; `docs/UNPROVEN.md` says the 16.33 % describes the pre-fix loop until then, and
-`ARCHITECTURE.md` says what the loop trims and what the featurizer costs. The suite cannot run the
+audio, at 551 MB above resting. **The AMI re-score the fix owed was taken on the desktop the same
+evening: 16.3324 % on the CPU, unchanged to four decimals, and every other row of the provider
+table with it** — webgpu 16.3319 %, cuda 16.1021 %, cpu on the 1.24.4 build 16.3347 %, DirectML
+unfused 16.3319 % — through `uindosill diarise` per meeting and `measure-der.ps1`, with the
+2026-08-21 RTTMs byte-identical where they survive. Unchanged by arithmetic rather than by chance:
+none of the 16 test durations is one of the 7.3 %, so the fixed loop produces the same rows on
+them, and the re-score therefore does not measure the fix where it bites. `docs/UNPROVEN.md`
+carries the table, the per-file check and that caveat, and `ARCHITECTURE.md` says what the loop
+trims and what the featurizer costs. The suite cannot run the
 Python, so all of it was driven by hand on the bundled interpreter and the real graph, before and
 after, and the numbers above are those runs.
 

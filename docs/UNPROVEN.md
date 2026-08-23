@@ -1305,7 +1305,7 @@ machines*) larger rather than smaller, there now being a second process to accou
 Runtime memory arena lever the entry above records as never pulled is still never pulled, and is now
 a Python-side option rather than a C# one.
 
-### The chunk loop lost one or two frames on 7.3 % of durations, and the 16.33 % describes that loop — found 2026-08-22
+### The chunk loop lost one or two frames on 7.3 % of durations — found 2026-08-22; AMI test re-scored on the fixed loop the same day: 16.3324 %, unchanged to four decimals, and the arithmetic says why
 
 **What was wrong.** The sidecar's loop trimmed the graph's 381-frame embedding output to the
 pre-encode length of the chunk's *valid* frames — the `elen` the graph reports — where NeMo's
@@ -1327,13 +1327,44 @@ reaches n of n. Re-run on the graph: 340 of 340 and 7,500 of 7,500. The committe
 geometry has no padding to trim — 6,096 valid of 6,096 — so its reference is unchanged, and the
 check passes with a maximum difference of 0.0 before and after; it did not and could not see this.
 
-**What is owed.** `engine.py` had not changed since the spike, so **the 16.3324 % AMI figure (and
-every row of the provider table above) describes the pre-fix loop**. The effect can only be at the
-frames that were dropped and the ones that shifted — a few per file — and on AMI test's 16
-meetings it is not expected to move the third decimal, but that is an expectation and not a
-measurement. **The AMI re-score is owed to the desktop, which holds the material; this laptop
-does not.** Until it is done, the 16.33 % stands as the figure for the loop that produced it, and
-a re-score is the only thing that moves it.
+**What was owed, and is now measured — re-scored on the desktop 2026-08-22.** `engine.py` had not
+changed since the spike, so until that evening the 16.3324 % AMI figure and every row of the
+provider table above described the pre-fix loop. The same evening all five arms were re-run on the
+fixed loop through the product path — `uindosill diarise --threads 12 --backend <provider> --id
+<meeting>` per meeting, one process each, scored by `scripts/measure-der.ps1` against the pyannote
+`only_words` test references over the 16 meetings — on the same machine, the same graph and the same
+ONNX Runtime builds as the table: 1.27.0 for cpu and webgpu, 1.29.0 for cuda, 1.24.4 for the two
+DirectML-build arms, dml at `ORT_DISABLE_ALL` behind `--backend-unverified`. Collar 0 with overlap,
+pooled:
+
+| provider | ONNX Runtime | published | re-scored 2026-08-22 | collar 0.25 / overlap regions / speaker error |
+|---|---|---:|---:|---|
+| cpu | 1.27.0 | 16.3324 % | **16.3324 %** | 13.5964 % / 26.7926 % / 0.0625 |
+| webgpu | 1.27.0 | 16.3319 % | **16.3319 %** | 13.5950 % / 26.7945 % / 0.0625 |
+| cuda | 1.29.0 | 16.1021 % | **16.1021 %** | 13.3701 % / 26.9722 % / 0.0625 |
+| cpu | 1.24.4 | 16.3347 % | **16.3347 %** | 13.5983 % / 26.7962 % / 0.0625 |
+| directml, `ORT_DISABLE_ALL` | 1.24.4 | 16.3319 % | **16.3319 %** | 13.5950 % / 26.7945 % / 0.0625 |
+
+**Unchanged to four decimals on every arm, and per meeting too.** On the three arms whose
+2026-08-21 hypotheses are still on disk — cpu 1.27.0, webgpu, cuda — every per-meeting collar-0
+figure agrees to four decimals and all 48 RTTMs are byte-identical to that day's; the DirectML arm's
+16 RTTMs are byte-identical to WebGPU's, and the two CPU builds agree on 13 of 16 files, which is the
+0.0023 points an ONNX Runtime version is worth. **And that is what the arithmetic predicts rather
+than luck.** Which durations lose rows is decided by the chunk plan alone: the loss sits in the piece
+whose right context reaches into the multiple-of-16 padding, and every row after it lands early. Re-running that plan on the 16 test meetings' exact sample counts —
+it reproduces the 338 / 340, the 7,498 / 7,500 and the 7.3 % above (5,280 of 71,991 durations from
+1 s to 2 h at 0.1 s) — shows **none of the sixteen is one of the 7.3 %**: the pre-fix loop delivered
+every row due on all sixteen, and the fixed loop adds one trailing padding row on nine of them that
+the final truncation removes. So the 16.33 % describes the fixed loop because the fixed loop produces
+the same output on these files, **and the re-score therefore says nothing about what the fix does
+where it bites** — that remains the per-file arithmetic above: one or two rows, 80–160 ms, on 7.3 %
+of durations. One bound on that is recorded rather than left to be found: of the 18 AMI *dev*
+meetings one, IS1008b, is a losing duration (one row), so the dev-tuned post-processing grid was
+chosen on probabilities one frame short on one meeting; it was not re-tuned, and that it would not
+move is an expectation. The per-file realtime the sidecar itself reports, for the record: 68–73x on
+cpu 1.27.0, 72x on cpu 1.24.4, 608–639x on webgpu, 867–982x on cuda, 507–545x on DirectML unfused.
+The runs are `runs/der/20260822-22*-sortformer-sidecar-*` with their hypotheses in
+`runs/der/hyp-*`, on the desktop and in the Drive's `runs-desktop` folder.
 
 **Beside it, the featurizer's peak working set — measured for the first time the same day.** The
 architecture note said "about 51 kB per second of audio" for the mel and that nothing had profiled
@@ -1494,6 +1525,10 @@ its own CPU arm, which is not the same number:
 | cpu | 1.24.4 | 16.3347% | — | 71.5x |
 | directml, ONNX Runtime's defaults | 1.24.4 | **53.1522%** | **+36.8175** | 945.6x |
 | directml, `ORT_DISABLE_ALL` | 1.24.4 | 16.3319% | −0.0028 | 619.0x |
+
+**Every row was re-scored on 2026-08-22 on the fixed chunk loop and is unchanged to four decimals** —
+§ *The chunk loop lost one or two frames on 7.3 % of durations* below has the run, and the arithmetic
+that says why none of the sixteen meetings could have moved.
 
 **Two CPU numbers, both correct, and mixing them is the trap.** 16.3324% is the CPU on 1.27.0 and
 16.3347% on 1.24.4 — 0.0023 points apart, which is what an ONNX Runtime version is worth on this
