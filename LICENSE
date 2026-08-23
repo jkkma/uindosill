@@ -1,3 +1,30 @@
+UINDOSILL LICENSING
+===================
+
+Two licences apply to this project, and which one governs a copy depends on
+whether that copy carries the video player.
+
+    The source code in this repository is MIT-licensed (part A below).
+
+    A BUILD THAT VENDORS libmpv IS DISTRIBUTED UNDER THE GNU GENERAL PUBLIC
+    LICENSE, VERSION 2 OR LATER (part B below), because libmpv and the FFmpeg
+    libraries linked into it are GPL, and the GPL governs the combined work.
+
+A build that has not vendored libmpv contains no GPL component and is MIT
+throughout. Whether a given copy did is visible in its Licences tab, which
+lists libmpv only when it is present. The full text of the GPL, version 2, is
+in licences/GPL-2.0.txt. See docs/LICENSING.md for what each obliges, and
+licences/mpv-WRITTEN-OFFER.txt for where the corresponding source lives.
+
+The model weights are covered by neither. They are separately licensed by their
+authors (CC BY 4.0, the NVIDIA Open Model License, and Apache-2.0), they are
+downloaded by the user rather than distributed with the application, and their
+notices are in NOTICE.md.
+
+
+PART A — THE UINDOSILL SOURCE CODE
+==================================
+
 MIT License
 
 Copyright (c) Uindosill contributors
@@ -19,3 +46,28 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+PART B — A DISTRIBUTION THAT INCLUDES libmpv
+============================================
+
+Copyright (c) Uindosill contributors
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc., 51 Franklin
+Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+The full text is in licences/GPL-2.0.txt.
+
+Because the Uindosill source is also available under the MIT licence (part A),
+a recipient of a GPL build may take that source under either set of terms. What
+may not be separated from the GPL is the combination with libmpv.

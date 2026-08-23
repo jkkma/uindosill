@@ -19,7 +19,7 @@ public class TranslationTests
     private static (TranscribeViewModel ViewModel, string Directory) Create()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
-        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
         main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor })
@@ -318,7 +318,7 @@ public class TranslationTests
         // its own model: one call for both would light a checkbox whose model is still missing.
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
         var store = new LocalModelStore(directory);
-        var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
         var translator = Assert.Single(
             main.Models.Models, m => m.Descriptor.Task == ModelTask.Translation);
 
@@ -348,7 +348,7 @@ public class TranslationTests
     public void TheWindowCarriesTheOptInAndASwitcherThatIsHiddenUntilThereIsEnglish()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
-        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         var window = new MainWindow { DataContext = main };
         window.Show();
         window.UpdateLayout();
@@ -374,7 +374,7 @@ public class TranslationTests
     public async Task TheSwitcherIsDrawnOnceARowHasEnglishAndItsPillsChangeThePane()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
-        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
 

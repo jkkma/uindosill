@@ -232,6 +232,98 @@ file, against 700 MB of download and one vendor's hardware; Vulkan runs on NVIDI
 Intel with a driver the user already has. CUDA earns its place as an opt-in for people who
 transcribe hours at a time, which is exactly where it sits.
 
+## libmpv — the video player, and the licence that comes with it
+
+The Ask tab plays video through **libmpv**, the client library of the mpv media player, vendored the
+same way parakeet.cpp is: pinned to a release, verified by digest, unpacked by a script. What is
+different is that this one changes the licence of everything that ships with it, so read the second
+half of this section before adding it to a build.
+
+```
+native/
+  win-x64/
+    mpv/   libmpv-2.dll  GPL-2.0.txt  mpv-Copyright.txt  mpv-WRITTEN-OFFER.txt
+```
+
+```bash
+pwsh scripts/vendor-mpv.ps1        # about 31 MB down, 114 MB on disk
+```
+
+**The pin, as of 2026-08-23.** shinchiro/mpv-winbuild-cmake publishes dated releases and names the
+mpv commit in the asset:
+
+| | |
+|---|---|
+| Release | `20260814` |
+| Asset | `mpv-dev-x86_64-20260814-git-7b8915bc1d.7z` |
+| Bytes | 31,181,976 |
+| SHA-256 | `0af22b28e920620036d3ae08fd9283156dc9af0420bf4df84b0e02282094599c` |
+| `libmpv-2.dll` bytes | 119,757,824 |
+| `libmpv-2.dll` SHA-256 | `f709c7ca8b183bec76b8158bf0c45c53018c63366750729352612f228ff7bdea` |
+| mpv client API | 2.5 |
+
+`vendor-mpv.ps1` fails if either digest above stops appearing in this file, the same guard
+`vendor-natives.ps1` carries and for the same reason.
+
+**Why this build and not another.** It is the only Windows libmpv published as a single statically
+linked DLL with no sibling dependencies — the parakeet CUDA drop's three companions are exactly the
+kind of thing that makes a loader path fragile, and this has none. The `-v3` variant in the same
+release targets the x86-64-v3 microarchitecture (AVX2 and friends); **this project takes the plain
+one**, for the reason the instruction-set section below gives: a v3 baseline can execute AVX2 from a
+static initialiser and kill the process at load on an older CPU, uncatchably, presenting as "the app
+won't launch".
+
+**The `.7z` needs 7z on PATH**, which the parakeet `.zip` archives did not. That is upstream's
+choice of container, not a preference here.
+
+**Only `libmpv-2.dll` is unpacked.** The archive also carries `include/mpv/*.h` and an import
+library; the headers were read to write `Services/Mpv/MpvNative.cs` and the build has no use for
+either. The interop is hand-written against them rather than taken from a binding package, for the
+reason `Parakeet.Engine.ParakeetCpp` gives: a package's idea of the ABI has to be reconciled with
+the binary actually pinned.
+
+**How it is found.** `Services/Mpv/MpvNativeLibrary` searches `UINDOSILL_MPV_NATIVE_DIR` if set,
+then `<app>/native/win-x64/mpv`, then `<app>/native/mpv`, then `<app>`; the file names tried are
+`libmpv-2.dll` and `mpv-2.dll`. Both are ABI major 2, so accepting either costs nothing. Paths are
+rooted before use, for the reason the parakeet loader roots its own.
+
+**Video is a property of the build, not a setting.** `MediaPlayers.ForThisBuild()` asks whether the
+library is on disk: present, and the Ask tab plays picture and sound through mpv; absent, and it
+plays sound through Media Foundation and WASAPI and says on the tab that a video's picture is not
+being drawn. There is no switch, nothing downloads it, and a missing library is never an exception
+out of a `DllImport`.
+
+### It makes the whole distribution GPLv2+
+
+**This is the part that is not like the other natives.** parakeet.cpp is MIT; ONNX Runtime is MIT;
+libmpv is **GPL version 2 or later**, and this build links FFmpeg-GPL and other GPL libraries.
+Distributing it inside an application makes the combined work a GPL distribution.
+
+**The decision to accept that was taken on 2026-08-23 and it changed the project's licence.**
+Uindosill's own source stays MIT — that is its own file's terms and nothing here revokes them — but
+**a build that vendors libmpv is distributed under GPLv2+**, and the repository's `LICENSE`,
+`NOTICE.md` and `docs/LICENSING.md` say so. `docs/PHASES.md` § *Decided 2026-08-23* records why that
+was preferred to the alternatives.
+
+**What the script enforces, because a licence breach fails silently.** Three notices are copied from
+`licences/` into `native/win-x64/mpv/` beside the DLL, and the run fails if any is missing:
+
+- `GPL-2.0.txt` — the licence text itself. GPLv2 §1 requires it to travel with the binary.
+- `mpv-Copyright.txt` — mpv's own licensing summary, at the pinned commit.
+- `mpv-WRITTEN-OFFER.txt` — where the corresponding source is, with the exact revisions, plus the
+  three-year written offer GPLv2 §3(b) describes.
+
+The upstream archive contains **no licence text at all**, which is why these come from this
+repository rather than from the download. `build/NativeAssets.targets` was widened to copy
+`native/**/*.txt` so they reach the build output the way the parakeet `LICENSE` does.
+
+**An LGPL libmpv would avoid all of this and does not exist as a prebuilt.** mpv can be built with
+`-Dgpl=false` against an LGPL FFmpeg, which produces an LGPL libmpv that could be shipped beside MIT
+code. No such Windows binary is published — checked 2026-08-23 across shinchiro's releases and the
+SourceForge mpv-player-windows builds, neither of which offers one — so taking that route means
+building and maintaining a toolchain rather than pinning a file. That was weighed and declined; see
+the PHASES entry. If one ever appears, this is the section to change.
+
 ## Check the instruction-set baseline of everything you vendor
 
 This is not optional diligence. A native compiled with an `/arch:AVX2` baseline can execute BMI2 or

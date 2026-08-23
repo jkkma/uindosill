@@ -1,8 +1,12 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
 
 namespace Parakeet.App.Views;
@@ -24,6 +28,15 @@ public partial class MainWindow : Window
     /// <summary>The Ask view model this window is currently listening to, so it can stop.</summary>
     private ViewModels.AskViewModel? _watching;
 
+    /// <summary>The player whose frames the video surface is copying, held so it can be unhooked.</summary>
+    private IMediaPlayer? _watchedPlayer;
+
+    /// <summary>The bitmap the video surface draws, recreated when the frame size changes.</summary>
+    private WriteableBitmap? _videoBitmap;
+
+    /// <summary>Whether a blit is already posted, so a burst of frames coalesces into one.</summary>
+    private int _blitPending;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -44,6 +57,7 @@ public partial class MainWindow : Window
         WireHeaderBar();
         WireSeekStrip();
         WireSearchBox();
+        WireVideoPane();
 
         // The clock the Ask tab draws from, and it is here rather than in the view model on
         // purpose: a view model that starts a dispatcher timer needs a dispatcher to exist before
@@ -215,20 +229,115 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         // Both halves, because a window whose data context is replaced must not keep answering
-        // property changes from the one it no longer shows.
+        // property changes — or copying frames — from the one it no longer shows.
         if (_watching is not null)
         {
             _watching.PropertyChanged -= OnAskChanged;
             _watching = null;
         }
 
+        if (_watchedPlayer is not null)
+        {
+            _watchedPlayer.FrameReady -= OnFrameReady;
+            _watchedPlayer = null;
+        }
+
         if (DataContext is MainWindowViewModel viewModel)
         {
             _watching = viewModel.Ask;
             _watching.PropertyChanged += OnAskChanged;
+
+            _watchedPlayer = viewModel.Ask.Player;
+            _watchedPlayer.FrameReady += OnFrameReady;
         }
 
         base.OnDataContextChanged(e);
+    }
+
+    /// <summary>
+    /// Tells the player how large the pane it is filling actually is, in device pixels, so frames
+    /// are rendered at the size they will be shown rather than at the file's own.
+    /// </summary>
+    /// <remarks>
+    /// From here rather than from the view model because only a laid-out control knows its size —
+    /// the same reason the seek strip's fraction is computed here. The scaling multiplier matters:
+    /// on a 250% display a 500-unit pane is 1250 device pixels, and frames rendered at 500 would
+    /// be upscaled back by the compositor, soft.
+    /// </remarks>
+    private void WireVideoPane()
+    {
+        if (this.FindControl<Border>("VideoPane") is not { } pane)
+        {
+            return;
+        }
+
+        pane.SizeChanged += (_, e) =>
+        {
+            var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+            _watchedPlayer?.SetVideoOutputSize(
+                (int)(e.NewSize.Width * scaling),
+                (int)(e.NewSize.Height * scaling));
+        };
+    }
+
+    /// <summary>
+    /// The player's frame announcement, on the decoder's thread. One blit is posted and further
+    /// announcements coalesce into it: the UI thread draws the newest frame there is, and a burst
+    /// of frames during a seek becomes one paint rather than a queue of stale ones.
+    /// </summary>
+    private void OnFrameReady()
+    {
+        if (Interlocked.Exchange(ref _blitPending, 1) == 0)
+        {
+            Dispatcher.UIThread.Post(BlitFrame, DispatcherPriority.Render);
+        }
+    }
+
+    /// <summary>
+    /// Copies the newest frame into the surface's bitmap and invalidates it. UI thread only.
+    /// </summary>
+    private void BlitFrame()
+    {
+        Interlocked.Exchange(ref _blitPending, 0);
+
+        if (_watchedPlayer is not { } player || this.FindControl<Image>("VideoSurface") is not { } surface)
+        {
+            return;
+        }
+
+        var (width, height) = player.FrameSize;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        if (_videoBitmap is null
+            || _videoBitmap.PixelSize.Width != width
+            || _videoBitmap.PixelSize.Height != height)
+        {
+            // Bgra8888 opaque, which is exactly the layout TryCopyFrame writes — see the alpha
+            // note there. 96 DPI because the bitmap is stretched to the pane by the Image, so its
+            // own DPI never decides anything.
+            _videoBitmap = new WriteableBitmap(
+                new PixelSize(width, height), new Vector(96, 96), PixelFormats.Bgra8888, AlphaFormat.Opaque);
+        }
+
+        using (var framebuffer = _videoBitmap.Lock())
+        {
+            if (!player.TryCopyFrame(framebuffer.Address, framebuffer.RowBytes, width, height))
+            {
+                // The frame changed size between the announcement and this copy; the next
+                // announcement finds the bitmap re-created at the new size.
+                return;
+            }
+        }
+
+        if (!ReferenceEquals(surface.Source, _videoBitmap))
+        {
+            surface.Source = _videoBitmap;
+        }
+
+        surface.InvalidateVisual();
     }
 
     /// <summary>

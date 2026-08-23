@@ -41,11 +41,12 @@ namespace Parakeet.App.ViewModels;
 /// </remarks>
 public sealed partial class AskViewModel : ObservableObject, IDisposable
 {
-    private readonly IAudioPlayer _player;
+    private readonly IMediaPlayer _player;
 
     /// <summary>What the last <see cref="Tick"/> drew, so an unchanged one costs nothing.</summary>
     private TimeSpan _drawnPosition = TimeSpan.MinValue;
     private bool _drawnIsPlaying;
+    private bool _drawnHasVideo;
 
     private TranscriptLineViewModel? _activeLine;
     private bool _disposed;
@@ -73,7 +74,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string? _playbackNotice;
 
-    public AskViewModel(ObservableCollection<JobViewModel> recordings, IAudioPlayer player)
+    public AskViewModel(ObservableCollection<JobViewModel> recordings, IMediaPlayer player)
     {
         ArgumentNullException.ThrowIfNull(recordings);
         ArgumentNullException.ThrowIfNull(player);
@@ -245,6 +246,33 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// <summary>Whether there is something open that can be played.</summary>
     public bool CanPlay => _player.Path is not null;
 
+    /// <summary>
+    /// The player itself, for the one thing a binding cannot carry: the window's video surface
+    /// subscribes to <see cref="IMediaPlayer.FrameReady"/> and copies frames straight out of it,
+    /// because a bitmap redrawn thirty times a second has no business round-tripping through
+    /// property notifications. Everything else on this tab still goes through the properties.
+    /// </summary>
+    public IMediaPlayer Player => _player;
+
+    /// <summary>Whether the open recording has a picture the build is drawing.</summary>
+    public bool HasVideo => _player.HasVideo;
+
+    /// <summary>
+    /// Why there is no picture when one might be expected, or null. Only for a build without a
+    /// video player and a file whose container usually carries one: an audio file gets no notice,
+    /// because the absence of a picture is not a limitation there.
+    /// </summary>
+    public string? VideoNotice =>
+        _player.CanDrawVideo || SelectedRecording is not { } job || !LooksLikeVideo(job.Path)
+            ? null
+            : "This build has no video player, so if this recording has a picture, only its sound "
+              + "plays. Vendoring libmpv adds the picture — see docs/NATIVE-BINARIES.md.";
+
+    private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mov", ".wmv", ".asf", ".mkv", ".webm", ".avi"];
+
+    private static bool LooksLikeVideo(string path) =>
+        VideoExtensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
     public bool IsPlaying => _player.IsPlaying;
 
     public double PositionSeconds => _player.Position.TotalSeconds;
@@ -351,7 +379,9 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </summary>
     public void Tick()
     {
-        if (_player.Position == _drawnPosition && _player.IsPlaying == _drawnIsPlaying)
+        if (_player.Position == _drawnPosition
+            && _player.IsPlaying == _drawnIsPlaying
+            && _player.HasVideo == _drawnHasVideo)
         {
             return;
         }
@@ -412,7 +442,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
                 _player.Close();
             }
         }
-        catch (AudioPlaybackException ex)
+        catch (PlaybackException ex)
         {
             // The transcript is still worth showing; only the transport is lost. So the reason goes
             // where the transport is and the rest of the tab carries on.
@@ -425,6 +455,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(Lines));
         OnPropertyChanged(nameof(HasTranscript));
         OnPropertyChanged(nameof(TranscriptNotice));
+        OnPropertyChanged(nameof(VideoNotice));
 
         // The term survives the change of recording and is run against the new transcript. Somebody
         // looking for a name across a session's worth of files is doing exactly that, and clearing
@@ -470,10 +501,12 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     {
         _drawnPosition = _player.Position;
         _drawnIsPlaying = _player.IsPlaying;
+        _drawnHasVideo = _player.HasVideo;
 
         UpdateActiveLine(_drawnPosition);
 
         OnPropertyChanged(nameof(CanPlay));
+        OnPropertyChanged(nameof(HasVideo));
         OnPropertyChanged(nameof(IsPlaying));
         OnPropertyChanged(nameof(PlayPauseLabel));
         OnPropertyChanged(nameof(PositionSeconds));

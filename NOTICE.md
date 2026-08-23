@@ -1,8 +1,10 @@
 # Notices
 
-`LICENSE` covers the Uindosill source code only. It does not cover the model weights, nor the
-parakeet.cpp native binaries and the other third-party components below, each of which carries its
-own terms. Those terms are what this file is.
+`LICENSE` covers the Uindosill source code, and records the one thing that is not simply MIT: **a
+build that vendors libmpv is distributed under GPLv2-or-later**, because that binary and the FFmpeg
+libraries inside it are GPL. A build without it contains no GPL component. Neither licence covers
+the model weights, the parakeet.cpp native binaries or the other third-party components below, each
+of which carries its own terms. Those terms are what this file is.
 
 The same text is shown inside the application — the **Licences** tab, and `uindosill notice`. Both
 render it from `src/Parakeet.Core/Licensing/Attribution.cs`, so there is exactly one copy and it

@@ -1,0 +1,80 @@
+CORRESPONDING SOURCE FOR THE GPL COMPONENTS OF UINDOSILL
+========================================================
+
+This application is distributed under the GNU General Public License, version 2
+or later. The full text of version 2 is in GPL-2.0.txt beside this file.
+
+It contains a binary of libmpv (the client library of the mpv media player),
+which is GPLv2-or-later, and which itself statically links FFmpeg and other
+libraries, some of them GPL. That binary is the reason this application as a
+whole is distributed under the GPL rather than under the MIT licence its own
+source code carries. See docs/LICENSING.md in the source repository.
+
+
+WHERE THE SOURCE IS
+-------------------
+
+GPLv2 section 3(a) is satisfied by making the complete corresponding source of
+every GPL component available from the same places the binaries come from. All
+of it is public, and all of it is pinned to an exact revision:
+
+  Uindosill itself
+      https://github.com/jkkma/uindosill
+      The revision is recorded in the application's own version; every release
+      is tagged. The source code of this application is MIT-licensed on its own
+      terms, and is distributed here as part of a GPL whole.
+
+  libmpv, and the recipe that produced the exact binary shipped
+      https://github.com/shinchiro/mpv-winbuild-cmake
+      release tag: 20260814
+      asset:       mpv-dev-x86_64-20260814-git-7b8915bc1d.7z
+      SHA-256:     0af22b28e920620036d3ae08fd9283156dc9af0420bf4df84b0e02282094599c
+
+      That repository is the build system: it records the exact upstream commit
+      of mpv, of FFmpeg and of every other library linked into libmpv-2.dll, and
+      it is what a recipient needs in order to rebuild the identical binary.
+
+  mpv
+      https://github.com/mpv-player/mpv
+      commit: 7b8915bc1d (named in the asset file name above)
+      Its own licensing summary is in mpv-Copyright.txt beside this file.
+
+  FFmpeg and the other linked libraries
+      Their upstream repositories and revisions are pinned by the build system
+      named above. FFmpeg's own source is at https://git.ffmpeg.org/ffmpeg.git
+      and https://github.com/FFmpeg/FFmpeg.
+
+
+WRITTEN OFFER
+-------------
+
+In addition, and for at least three years from the date you received this
+binary, the distributor will give any third party a complete machine-readable
+copy of the corresponding source code for the GPL components above, on a medium
+customarily used for software interchange, for no more than the cost of
+physically performing the distribution. Request it by opening an issue at
+https://github.com/jkkma/uindosill/issues.
+
+
+WHAT IS NOT GPL
+---------------
+
+Not everything in this application is GPL, and the GPL does not claim it.
+
+  · The transcription, diarisation and translation model weights are separately
+    licensed (CC BY 4.0, the NVIDIA Open Model License, and Apache-2.0). They are
+    data this application reads, not works derived from it, and they are not
+    distributed inside the application — they are downloaded separately, by the
+    user, from the model provider. Their notices are rendered in the
+    application's Licences tab and by `uindosill notice`.
+
+  · parakeet.cpp, ONNX Runtime, Avalonia, NAudio, CommunityToolkit.Mvvm, Velopack
+    and the bundled CPython and its packages carry their own permissive licences,
+    which are compatible with the GPL and are listed in the same place.
+
+  · Instrument Sans and Chivo Mono are under the SIL Open Font Licence 1.1, whose
+    texts ship beside this file.
+
+A build of this application that has not vendored libmpv contains no GPL
+component and is MIT throughout. Whether a given copy did is visible in its
+Licences tab, which lists libmpv only when it is present.

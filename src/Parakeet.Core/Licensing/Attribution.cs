@@ -428,7 +428,19 @@ public static class Attributions
             Component = "NAudio",
             License = "MIT",
             Uri = new Uri("https://github.com/naudio/NAudio"),
-            Notes = "Windows media decoding only.",
+            Notes = "Windows media decoding and audio-only playback.",
+        },
+        new ComponentLicence
+        {
+            Component = "libmpv (mpv media player), and the FFmpeg and other libraries linked into it",
+            License = "GPL-2.0-or-later — copyleft, and the reason a build carrying it is distributed under the GPL",
+            Uri = new Uri("https://github.com/mpv-player/mpv"),
+            Notes =
+                "Shipped only by builds that vendor the video player; a build without it draws no picture and " +
+                "contains no GPL component. Uindosill's own source is MIT, but a distribution including this " +
+                "binary is GPLv2-or-later as a whole. The licence text, mpv's copyright summary and the written " +
+                "offer naming where the corresponding source lives travel beside the binary — see " +
+                "licences/mpv-WRITTEN-OFFER.txt and docs/LICENSING.md.",
         },
         new ComponentLicence
         {

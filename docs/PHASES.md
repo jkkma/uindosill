@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 909 tests, no weights, no display, no network — **907 passed and 2 skipped**, and
+**Status:** met. 913 tests, no weights, no display, no network — **911 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2161,6 +2161,93 @@ where the two drift the tests describe the fake.
 What is still not established — that a person has heard the sound, a natural end-of-stream, a seek
 audited by ear, and playback beside a running transcription — is in `docs/UNPROVEN.md` § *Playing a
 recording* with what would settle each. Suite green at 909.
+
+### Decided 2026-08-23 — video plays through libmpv, and the project relicenses to make it possible
+
+**A dropped video now plays its picture as well as its sound, and the price was the project's
+licence.** The Ask tab had a transport from the day before and it played audio; a video file played
+its sound track and showed nothing. This closes that, and the decision worth recording is not the
+player — it is what shipping the player costs.
+
+**Three routes were compared and the choice is not the obvious one.**
+
+*Media Foundation* was the free option and was rejected on capability rather than on effort. It is
+already in the process, it adds no binary and no licence, and it plays exactly what this application
+already transcribes — which is also its ceiling: HEVC, VP9 and AV1 need Store codecs the user may
+not have, and it hands over a decoder rather than a player, so keeping picture on the audio clock,
+seeking both together and knowing where the end is would all have been written here. `IMFMediaEngine`
+would have supplied some of that with a D3D11 frame readback nobody in this repository has written
+before.
+
+*libmpv* is a finished player behind a C API of a dozen calls. It decodes whatever FFmpeg decodes,
+which is everything a user is likely to drop; synchronisation, exact seeking and end-of-file are its
+problem rather than ours; and the software render API hands out RGB frames that go straight into an
+Avalonia bitmap with no GPU interop at all. What it costs is a 114 MB binary and a copyleft licence.
+
+*Doing nothing* was the third, and it was live until the moment the licence question was answered:
+a dropped video already transcribes and its audio already plays, so no user is blocked.
+
+**libmpv won, and then the licence question decided the shape of everything else.** The prebuilt
+Windows libmpv is **GPLv2-or-later** — it links FFmpeg-GPL and other GPL libraries — so putting it
+in the installer makes the combined distribution GPL. Three ways out were on the table: build an
+LGPL libmpv (`-Dgpl=false` against an LGPL FFmpeg), ship no video, or relicense. **The maintainer
+chose to relicense**, and that is a decision about the whole project rather than about a tab.
+
+The LGPL route was declined for a reason worth writing down: **no prebuilt LGPL libmpv for Windows
+exists.** Checked 2026-08-23 against shinchiro's releases and the SourceForge mpv-player-windows
+builds — neither publishes one, and neither says anything about licensing at all. Taking that route
+means owning a cross-compilation toolchain and maintaining it, which is a standing commitment
+against a one-line pin. If such a binary ever appears the GPL obligation goes away.
+
+**What relicensing actually meant.** `LICENSE` now states two: the source stays MIT on its own
+terms, and **a build that vendors libmpv is distributed under GPLv2-or-later**. Those are not in
+tension — a recipient of a GPL build may take the Uindosill source under either — and the thing that
+cannot be separated from the GPL is the combination. A build without libmpv contains no GPL
+component and is MIT throughout, which is a real case rather than a hypothetical: the Licences tab
+lists libmpv only when it is present, so a reader can tell which kind of copy they hold by looking.
+`docs/LICENSING.md` has the full reading, including the "or later" — Apache-2.0 components are
+compatible with GPLv3 and not GPLv2, so the combination resolves at v3 where one is present.
+
+**Three notices ship beside the binary and the vendoring script refuses to finish without them** —
+the GPL text, mpv's own copyright summary at the pinned commit, and a written offer naming the exact
+revision of everything GPL in the distribution. The upstream archive carries no licence text at all,
+so all three come from `licences/` in this repository. That refusal is the same guard the
+parakeet.cpp `LICENSE` check has, for the same reason: a missing notice is a breach that fails
+silently.
+
+**The engineering, briefly, because two decisions in it look like accidents.**
+
+*The render path is the software one*, which mpv's own header calls "very slow ... single-threaded".
+That is its judgement against full-rate high-resolution video on the GL path, and the case here is a
+260-pixel-tall pane. `SetVideoOutputSize` tells the player how big the pane actually is, in device
+pixels, so frames are rendered at the size they are shown rather than at the file's own — a 4K
+recording in a 600-pixel pane is otherwise sixteen times the pixels for nothing. Measured before
+being believed: **75 frames in 2.5 s of 30 fps source, rendered to 462×260** — the full rate, with
+no drops.
+
+*Seeking is `absolute+exact`, not `absolute`.* mpv's default lands on a keyframe, which on a
+long-GOP file is whole seconds from the cue that was clicked — and a citation that plays the wrong
+sentence is this feature failing at the only thing it is for. Exact seeking decodes forward from the
+keyframe and costs milliseconds. Measured: a seek to 6.00 s landed at 6.00 s.
+
+**`IAudioPlayer` became `IMediaPlayer`**, gaining `CanDrawVideo`, `HasVideo`, `FrameReady`,
+`TryCopyFrame` and `SetVideoOutputSize`. Frames do not travel through property notifications —
+they arrive at the decoder's rate on the decoder's thread, and thirty a second is not what bindings
+are for — so the window subscribes to the player directly and blits into a `WriteableBitmap`, with
+a coalescing flag so a burst during a seek becomes one paint rather than a queue of stale ones.
+Everything else on the tab still goes through the properties it always did.
+
+**Which player a build gets is decided by what is on disk**, the way the transcription backends are:
+`MediaPlayers.ForThisBuild()` returns the mpv player when the library is vendored and the Media
+Foundation one otherwise. A build without it plays a video's sound and says on the tab that it is
+not drawing the picture — a stated limitation rather than a blank rectangle.
+
+**Driven against real files, because nothing in CI can be.** On the laptop: a 12 s H.264/AAC mp4
+(picture at full rate, frame copied out with 106,455 of 120,120 pixels non-black and alpha opaque,
+a mis-sized destination refused), a 2:55:23 mp3 through the same player (no video track reported —
+`audio-display=no` keeps cover art from becoming one — exact seek, wrap at the end), and the same
+mp4 forced onto the audio-only player (sound plays, `HasVideo` false). Suite 913, still nothing
+touching either real player. `docs/UNPROVEN.md` § *Playing a recording* says what that leaves open.
 
 ## The honest summary
 

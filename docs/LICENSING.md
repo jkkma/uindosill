@@ -1,6 +1,6 @@
 # Licensing obligations
 
-The code is MIT. The weights are not, and their obligations are the ones worth reading twice.
+The code is MIT — **except that a build carrying the video player is distributed under the GPL**, which is the first section below. The weights are neither, and their obligations are the ones worth reading twice.
 
 **Three model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
 seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
@@ -18,6 +18,66 @@ the first release, because it turns fifty third-party wheels and a CPython from 
 *depends on* into things it *redistributes*. That is a different obligation and it is
 not discharged; the section below is the record of what will be owed, not a claim that anything has
 been done about it.
+
+## The video player is GPL, and it takes the distribution with it
+
+**Decided 2026-08-23, and it is the only licence decision here that changes what `LICENSE` says.**
+The Ask tab plays video through libmpv, which is GPLv2-or-later and links FFmpeg-GPL and other GPL
+libraries. Putting that binary in the same distribution as this application makes the combined work
+a GPL distribution. The alternatives were weighed — see `docs/PHASES.md` § *Decided 2026-08-23* —
+and this one was taken deliberately.
+
+**What changed, precisely.** The source code in this repository is still MIT and nothing revokes
+that; a recipient of a GPL build may take the Uindosill source under either set of terms. What
+cannot be separated from the GPL is the *combination* with libmpv. So:
+
+- `LICENSE` states both, and which governs which kind of copy.
+- A build that has **not** vendored libmpv contains no GPL component and is MIT throughout. This is
+  not a theoretical case: `MediaPlayers.ForThisBuild()` picks the audio-only player when the library
+  is absent, and the Licences tab lists libmpv only when it is present, so a reader can tell which
+  kind of copy they have by looking.
+- The GPL notices travel with the binary rather than with the repository.
+
+**Three files ship beside `libmpv-2.dll`, and `scripts/vendor-mpv.ps1` refuses to finish without
+them.** That refusal is the point: a missing licence notice is a breach that fails silently, which
+is the same reasoning that put the parakeet.cpp `LICENSE` check in `vendor-natives.ps1`.
+
+1. **`GPL-2.0.txt`** — the licence text. GPLv2 §1 requires it to accompany the binary.
+2. **`mpv-Copyright.txt`** — mpv's own licensing summary at the pinned commit, which is what
+   distinguishes the GPL-only parts from the LGPL-able ones and says that "None of the cases listed
+   above affect the final binary if it's built as LGPL. Linked libraries still can affect the final
+   license (for example if FFmpeg was built as GPL)" — which, in this build, it was.
+3. **`mpv-WRITTEN-OFFER.txt`** — how §3 is satisfied. It names the exact revisions of everything
+   GPL in the distribution: the shinchiro build recipe (release `20260814`, asset digest recorded),
+   mpv commit `7b8915bc1d`, and FFmpeg's upstream. All of it is public and reachable from the same
+   place as the binaries, which is §3(a); the three-year written offer of §3(b) is there as well,
+   because belt and braces costs a paragraph.
+
+**The upstream archive carries no licence text at all** — only `libmpv-2.dll` and the headers — so
+all three come from this repository's `licences/` directory. `build/NativeAssets.targets` copies
+`native/**/*.txt` into the build output for exactly this reason, alongside the `LICENSE` glob that
+carries parakeet.cpp's.
+
+**What is not GPL, and the GPL does not claim it.** The model weights are separately licensed
+(CC BY 4.0, the NVIDIA Open Model License, Apache-2.0), they are data this application reads rather
+than works derived from it, and they are downloaded by the user from the model provider rather than
+distributed inside the application. The permissive components — parakeet.cpp, ONNX Runtime,
+Avalonia, NAudio, CommunityToolkit.Mvvm, Velopack, the bundled CPython and its wheels — are all
+GPL-compatible, which was checked rather than assumed: MIT, BSD and Apache-2.0 are compatible with
+GPLv2-or-later (Apache-2.0 with GPLv3 but not GPLv2, which is why the licence is "or later" rather
+than "version 2" — the combination resolves at GPLv3 where an Apache component is present).
+
+**Two things about this are not settled, and are marked rather than tidied away.**
+
+- **Nobody with a professional opinion has read any of it.** The reasoning above is a careful
+  reading of GPLv2 by the people writing the code, which is the same standing as every other
+  licence reading in this file, and it is worth saying plainly rather than implying otherwise.
+- **An LGPL libmpv would avoid the question entirely and does not exist as a prebuilt binary.**
+  mpv builds LGPL with `-Dgpl=false` against an LGPL FFmpeg; no Windows binary of that shape is
+  published (checked 2026-08-23 against shinchiro's releases and the SourceForge mpv-player-windows
+  builds). Producing one means owning a cross-compilation toolchain, which is a larger commitment
+  than pinning a file. If one appears, the GPL obligation goes away and this section shrinks to a
+  paragraph.
 
 ## The transcription weights are CC BY 4.0 (NVIDIA)
 

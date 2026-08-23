@@ -200,7 +200,7 @@ public class WindowTests
         // Closing path, not on the view model method it calls.
         var provider = new FakeEngineProvider();
         var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
-        var viewModel = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        var viewModel = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         await viewModel.Session.LoadAsync(new EngineSelection { Model = viewModel.Models.SelectedDescriptor });
 
         var window = new MainWindow { DataContext = viewModel };
@@ -226,7 +226,7 @@ public class WindowTests
     internal static MainWindowViewModel NewViewModel(out string directory)
     {
         directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
-        return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
     }
 
     private static MainWindowViewModel NewViewModel(IAppUpdater updater)
@@ -237,7 +237,7 @@ public class WindowTests
             new LocalModelStore(directory),
             ModelCatalog.Default,
             updater,
-            new AppSettingsStore(Path.Combine(directory, "settings.json")));
+            new AppSettingsStore(Path.Combine(directory, "settings.json")), player: new FakeMediaPlayer());
     }
 
     /// <summary>
@@ -363,7 +363,7 @@ public class ShutdownTests
         // decode recreate it, and the exit abort would come back.
         var provider = new OrderRecordingProvider();
         var directory = Directory.CreateTempSubdirectory("uindosill-shutdown").FullName;
-        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         provider.IsBatchRunning = () => main.Transcribe.IsRunning;
         main.Transcribe.OutputDirectory = directory;
         main.Transcribe.UseFixedWindows = true;
@@ -402,7 +402,7 @@ public class TranscribeViewModelTests
     private static (TranscribeViewModel ViewModel, string Directory) Create()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
-        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
         // Start refuses without a loaded model, so these tests load one the way the window does.
@@ -487,7 +487,7 @@ public class TranscribeViewModelTests
             PerSegmentDelay = TimeSpan.FromMilliseconds(100),
         });
 
-        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         var viewModel = main.Transcribe;
         viewModel.OutputDirectory = directory;
         viewModel.UseFixedWindows = true;
@@ -532,7 +532,7 @@ public class TranscribeViewModelTests
         // session silently decided the backend — the choice this tab now makes explicit.
         var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
         var main = new MainWindowViewModel(
-            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         main.Transcribe.AddFiles([WriteWav(directory, "a.wav")]);
 
@@ -733,7 +733,7 @@ public class TranscribeViewModelTests
         // The loaded engine is what runs, not whichever row is highlighted; a selection the engine
         // provider will not build must not be reported as "no model is installed".
         var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
-        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
         main.Models.Selected = null;   // nothing highlighted: the session still holds the engine
@@ -858,7 +858,7 @@ public class TranscribeViewModelTests
         // hint tells the user to go and do.
         var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
         var store = new LocalModelStore(directory);
-        var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default);
+        var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
         // By task, not by "not transcription": there are two non-ASR entries now, and the one this
         // wires up is the diariser.
         var diariser = Assert.Single(
