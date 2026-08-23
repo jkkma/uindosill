@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 871 tests, no weights, no display, no network — **869 passed and 2 skipped**, and
+**Status:** met. 874 tests, no weights, no display, no network — **872 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2014,6 +2014,30 @@ holds the material; `docs/UNPROVEN.md` says the 16.33 % describes the pre-fix lo
 `ARCHITECTURE.md` says what the loop trims and what the featurizer costs. The suite cannot run the
 Python, so all of it was driven by hand on the bundled interpreter and the real graph, before and
 after, and the numbers above are those runs.
+
+### Fixed 2026-08-22 — a host that died left the sidecar and its staged file behind, and a cancel-then-close paid five seconds for nothing
+
+**Three gaps in the sidecar's lifetime, from the same review, none of them on a path a finished
+run takes.** A host that ended without reaching `DisposeAsync` — killed from Task Manager, crashed,
+stopped in a debugger — left the child running with its weights resident, reading a stdin nobody
+would write to again, and the WAV staged for the file it was labelling beside it, which nothing
+ever swept. And a close after a cancellation paid the full five-second shutdown grace every time:
+the child was mid-way through the label nobody wanted any more and could not read the shutdown
+line until it finished, so the graceful ask bought nothing and the kill came after the wait.
+
+**The operating system holds the child, the sweep takes the file, and a busy child is killed
+rather than asked.** On Windows every sidecar is put in a job object with kill-on-close, which the
+OS closes when this process ends however it ends; `PythonSidecar.InKillOnCloseJob` says whether
+that happened, and says false off Windows rather than pretending. `SidecarSpeakerLabeller` sweeps
+`uindosill-diarise-*.wav` files older than an hour from the temporary directory once per process,
+before the first load — old enough that no live run can own them. And the sidecar counts requests
+cancelled after they reached the child and not yet answered; a dispose with one outstanding kills
+at once.
+
+Three tests: a dispose after a cancel in flight finishing in under three seconds against a child
+scripted to sleep twenty; the child in the kill-on-close job on Windows and said not to be
+elsewhere; and the sweep taking the stale staged file and leaving the fresh one and the stranger.
+The suite is 874.
 
 ## The honest summary
 

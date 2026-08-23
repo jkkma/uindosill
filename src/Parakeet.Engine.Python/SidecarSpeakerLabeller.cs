@@ -231,6 +231,11 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         }
 
         await _loadGate.WaitAsync(ct).ConfigureAwait(false);
+
+        // Once, before the first file: whatever an earlier run left staged and never deleted —
+        // a host that died mid-label, until 2026-08-22 the only way a staged file outlived its
+        // run — is swept here, and only files old enough that no live run can still own them.
+        SweepStaleStagedFiles();
         try
         {
             if (_capabilities is not null)
@@ -456,6 +461,62 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         {
             // A temp file that outlives the run is untidy, not a failure worth surfacing.
         }
+    }
+
+    /// <summary>The age past which a staged file cannot belong to a live run and is swept.</summary>
+    internal static readonly TimeSpan StaleStagedFileAge = TimeSpan.FromHours(1);
+
+    private static int _staleSweepDone;
+
+    /// <summary>
+    /// Deletes staged WAVs left behind by a run that never reached its <c>finally</c> — a host
+    /// killed mid-label — once per process. Only files older than <see cref="StaleStagedFileAge"/>
+    /// go: a concurrent instance may own a younger one, and a staged file is written and read
+    /// within minutes.
+    /// </summary>
+    internal static int SweepStaleStagedFiles(TimeSpan? olderThan = null, string? directory = null)
+    {
+        if (directory is null && Interlocked.Exchange(ref _staleSweepDone, 1) == 1)
+        {
+            return 0;
+        }
+
+        var age = olderThan ?? StaleStagedFileAge;
+        var cutoff = DateTime.UtcNow - age;
+        var swept = 0;
+
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(directory ?? Path.GetTempPath(), "uindosill-diarise-*.wav"))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(path) < cutoff)
+                    {
+                        File.Delete(path);
+                        swept++;
+                    }
+                }
+                catch (IOException)
+                {
+                    // In use, or gone already: either way not this run's to remove.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // As above.
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // The temp directory itself is unreadable; nothing to sweep.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // As above.
+        }
+
+        return swept;
     }
 
     /// <summary>

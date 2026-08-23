@@ -496,6 +496,37 @@ public sealed class SidecarEngineTests
         Assert.Equal("beam 6, at most 512 new tokens, length penalty 0.65, early stopping on", translator.DecodeDescription);
     }
 
+    [Fact]
+    public void StaleStagedFilesAreSweptAndFreshOnesAreLeftAlone()
+    {
+        // A host killed mid-label never reaches the finally that deletes its staged WAV; until
+        // 2026-08-22 nothing swept such a file, ever. The sweep takes only files too old to belong
+        // to a live run, so a concurrent instance's staging is not touched.
+        var directory = Directory.CreateTempSubdirectory("uindosill-stale").FullName;
+        try
+        {
+            var stale = Path.Combine(directory, "uindosill-diarise-old.wav");
+            var fresh = Path.Combine(directory, "uindosill-diarise-new.wav");
+            var other = Path.Combine(directory, "somebody-elses.wav");
+            File.WriteAllBytes(stale, [0]);
+            File.WriteAllBytes(fresh, [0]);
+            File.WriteAllBytes(other, [0]);
+            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - TimeSpan.FromHours(3));
+            File.SetLastWriteTimeUtc(other, DateTime.UtcNow - TimeSpan.FromHours(3));
+
+            var swept = SidecarSpeakerLabeller.SweepStaleStagedFiles(TimeSpan.FromHours(1), directory);
+
+            Assert.Equal(1, swept);
+            Assert.False(File.Exists(stale));
+            Assert.True(File.Exists(fresh));
+            Assert.True(File.Exists(other));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static TranscriptSegment Segment(string text) => new()
     {
         Text = text,
