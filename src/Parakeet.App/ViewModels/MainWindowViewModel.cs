@@ -49,7 +49,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             () => new EngineSelection
             {
                 Backend = Backend,
-                Model = Models.SelectedDescriptor,
+
+                // The highlighted row only when it is one that can transcribe, and the catalogue's
+                // recommendation otherwise. The Models list holds the diariser and the translator
+                // too, and highlighting one of those to read its licence used to make this
+                // selection name a model Start cannot run — which mattered the moment Start began
+                // loading for itself rather than refusing.
+                Model = Models.SelectedDescriptor is { Task: ModelTask.Transcription } chosen
+                    ? chosen
+                    : modelCatalog.Recommended,
             },
             Session,
             fetcher,
@@ -84,10 +92,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         foreach (var model in Models.Models)
         {
             var task = model.Descriptor.Task;
-            if (task is not (ModelTask.Diarisation or ModelTask.Translation))
-            {
-                continue;
-            }
 
             model.PropertyChanged += (_, e) =>
             {
@@ -96,13 +100,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     return;
                 }
 
-                if (task == ModelTask.Diarisation)
+                switch (task)
                 {
-                    Transcribe.RefreshSpeakerAvailability();
-                }
-                else
-                {
-                    Transcribe.RefreshTranslationAvailability();
+                    case ModelTask.Diarisation:
+                        Transcribe.RefreshSpeakerAvailability();
+                        break;
+                    case ModelTask.Translation:
+                        Transcribe.RefreshTranslationAvailability();
+                        break;
+
+                    // The transcription entry joined this on 2026-08-23, when Start began loading
+                    // for itself: whether Start is live now depends on weights being on disk, so
+                    // downloading them has to light the button and removing them has to darken it.
+                    default:
+                        Transcribe.RefreshModelAvailability();
+                        break;
                 }
             };
         }
@@ -176,6 +188,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     partial void OnBackendChanged(ComputeBackend value) =>
         _settings.Update(current => current with { Backend = value });
+
+    /// <summary>
+    /// Re-reads the model directory whenever the Models tab is opened.
+    /// </summary>
+    /// <remarks>
+    /// The tab answers questions about files on a disk that this application is not the only writer
+    /// of — another copy of it, an older version's leftovers, Explorer — and it used to answer them
+    /// from a reading taken when the window opened and never taken again. Opening the tab is the
+    /// moment a person is about to trust what it says, so it is the moment to look.
+    /// </remarks>
+    partial void OnSelectedTabChanged(int value)
+    {
+        if (value == ModelsTabIndex)
+        {
+            Models.Refresh();
+        }
+    }
+
+    /// <summary>Where the Models page sits in the TabControl. The switcher's order is its own.</summary>
+    private const int ModelsTabIndex = 1;
 
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];

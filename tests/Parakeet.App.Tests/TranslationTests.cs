@@ -98,6 +98,66 @@ public class TranslationTests
     }
 
     [Fact]
+    public void TheRowNamesTheBackendBehindEachPassSeparately()
+    {
+        // Neither pass said which backend produced it. DescribeBackend speaks only for CUDA and
+        // DirectML, and DescribeTranslator only when parity has a finding or auto fell back — so a
+        // run on the provider that agrees, which is the ordinary case, reported nothing. The two
+        // lines are separate because the two passes are: either runs without the other.
+        var spoken = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hola", Speaker = "A" }],
+            SpeakerModelId = "sortformer-4spk-v2.1",
+            SpeakerBackend = ComputeBackend.WebGpu,
+        };
+
+        var translated = spoken with
+        {
+            TranslatedTo = "en",
+            Segments = [spoken.Segments[0] with { Text = "hello" }],
+            TranslationModelId = "opus-mt-tc-bible-big-mul-en-fp32",
+            TranslationBackend = ComputeBackend.WebGpu,
+        };
+
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(
+            new JobResult { Job = new TranscriptionJob { InputPath = "/tmp/a.wav" }, State = JobState.Completed, Document = translated },
+            source: spoken);
+
+        Assert.Equal("Speakers: sortformer-4spk-v2.1 on webgpu", job.SpeakerProvenance);
+        Assert.Equal("English: opus-mt-tc-bible-big-mul-en-fp32 on webgpu", job.TranslationProvenance);
+
+        // Running the file again clears both, so a row cannot describe a run that is no longer
+        // happening — the rule Reset already held for the transcript and the outputs.
+        job.Reset();
+
+        Assert.Null(job.SpeakerProvenance);
+        Assert.Null(job.TranslationProvenance);
+    }
+
+    [Fact]
+    public void APassThatDidNotRunClaimsNoBackend()
+    {
+        // A transcription-only run: no labels, no English, so neither line is drawn. Absent rather
+        // than "none", which would be a row reporting on work nobody asked for.
+        var document = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hello" }],
+        };
+
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+            Document = document,
+        });
+
+        Assert.Null(job.SpeakerProvenance);
+        Assert.Null(job.TranslationProvenance);
+    }
+
+    [Fact]
     public async Task TheEnglishOptInIsOffByDefaultAndProducesATranslationBesideTheTranscript()
     {
         var (viewModel, directory) = Create();

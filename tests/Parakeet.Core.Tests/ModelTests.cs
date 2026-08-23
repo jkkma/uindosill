@@ -370,6 +370,62 @@ public class LocalModelStoreTests
 
         Assert.True(installed.IsSideloaded);
     }
+
+    [Fact]
+    public void SideloadedFilesCanBeRemoved()
+    {
+        // Listing them without being able to delete them is where this stood until 2026-08-23:
+        // `uindosill models` reported several gigabytes under a heading of their own and neither
+        // surface could do anything about them, because there is no descriptor to pass Remove.
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "withdrawn-quantisation.gguf");
+        File.WriteAllText(path, "not really a model");
+
+        var store = new LocalModelStore(temp.Path);
+
+        Assert.True(store.RemoveSideloaded("withdrawn-quantisation.gguf", ModelCatalog.Default));
+        Assert.False(File.Exists(path));
+
+        // Gone already is not an error, it is the same answer Remove gives.
+        Assert.False(store.RemoveSideloaded("withdrawn-quantisation.gguf", ModelCatalog.Default));
+    }
+
+    [Theory]
+    // A catalogue entry is that entry's to remove, through its descriptor — otherwise the two
+    // removal paths could come to disagree about what an entry consists of.
+    [InlineData("tdt-0.6b-v3-f16.gguf")]
+    // Not weights at all. A stray file beside the models is not this method's to delete.
+    [InlineData("notes.txt")]
+    // Anything carrying a separator is refused rather than normalised, because this deletes.
+    [InlineData("../outside.gguf")]
+    [InlineData("nested/inside.gguf")]
+    public void RemoveSideloadedRefusesWhatIsNotItsToDelete(string name)
+    {
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+
+        // The catalogue-claimed name is written so the refusal is about the claim rather than
+        // about the file being absent.
+        var claimed = Path.Combine(temp.Path, "tdt-0.6b-v3-f16.gguf");
+        File.WriteAllText(claimed, "weights");
+
+        Assert.False(store.RemoveSideloaded(name, ModelCatalog.Default));
+        Assert.True(File.Exists(claimed));
+    }
+}
+
+public class ByteSizeTests
+{
+    [Theory]
+    [InlineData(0, "0 B")]
+    [InlineData(1023, "1023 B")]
+    [InlineData(1024, "1 KiB")]
+    [InlineData(1441046400, "1.34 GiB")]
+    public void SizesReadTheWayTheCommandLinePrintsThem(long value, string expected) =>
+        // One implementation for both surfaces: the same file reported as 1.34 GiB by
+        // `uindosill models` and as something else by the Models tab is a disagreement a user has
+        // to resolve by guessing which one is lying.
+        Assert.Equal(expected, ByteSize.Describe(value));
 }
 
 public class ModelInstallerTests

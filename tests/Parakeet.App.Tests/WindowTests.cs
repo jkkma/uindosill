@@ -526,41 +526,252 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public async Task StartRefusesUntilAModelIsLoaded()
+    public async Task StartLoadsTheModelItselfAndRefusesOnlyWhenNoneIsInstalled()
     {
-        // Start used to load whatever was selected on its way past, which meant the first run of a
-        // session silently decided the backend — the choice this tab now makes explicit.
+        // Start refused with "open the Models tab and press Load" until 2026-08-23, which is a
+        // second button for a decision already made by pressing this one. It loads for itself now.
+        // What it deliberately does NOT do is load at launch: a load fixes the compute backend for
+        // the rest of the process, so it waits for somebody to actually ask for work.
         var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var engines = new FakeEngineProvider { ModelAvailable = false };
         var main = new MainWindowViewModel(
-            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+            engines, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         main.Transcribe.AddFiles([WriteWav(directory, "a.wav")]);
 
+        // Nothing on disk is the one state that still refuses, and it names the thing to do.
         Assert.False(main.Transcribe.IsModelLoaded);
         Assert.False(main.Transcribe.CanStart);
-        Assert.Contains("No model is loaded", main.Transcribe.StartHint, StringComparison.Ordinal);
+        Assert.Contains("No model is installed", main.Transcribe.StartHint, StringComparison.Ordinal);
 
         await main.Transcribe.StartCommand.ExecuteAsync(null);
 
-        Assert.Contains("No model is loaded", main.Transcribe.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("No model is installed", main.Transcribe.StatusMessage, StringComparison.Ordinal);
         Assert.All(main.Transcribe.Jobs, job => Assert.Equal(JobState.Pending, job.State));
         Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
 
-        // Loading turns the button on, and the hint off.
-        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+        // Weights arriving turn the button on without anything being loaded.
+        engines.ModelAvailable = true;
+        main.Transcribe.RefreshModelAvailability();
 
-        Assert.True(main.Transcribe.IsModelLoaded);
+        Assert.False(main.Transcribe.IsModelLoaded);
         Assert.True(main.Transcribe.CanStart);
         Assert.Null(main.Transcribe.StartHint);
 
+        // And Start does the loading on its way past.
         await main.Transcribe.StartCommand.ExecuteAsync(null);
-        Assert.Equal(JobState.Completed, main.Transcribe.Jobs[0].State);
 
-        // Unloading takes it away again, without the queue being touched.
+        Assert.True(main.Transcribe.IsModelLoaded);
+        Assert.Equal(JobState.Completed, main.Transcribe.Jobs[0].State);
+        Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
+
+        // Unloading does not take the button away any more: the weights are still on disk, so the
+        // next Start loads them again rather than being dead until somebody visits the other tab.
         await main.Session.UnloadAsync();
 
-        Assert.False(main.Transcribe.CanStart);
+        Assert.False(main.Transcribe.IsModelLoaded);
         Assert.Single(main.Transcribe.Jobs);
+    }
+
+    [Fact]
+    public async Task TheTranscriptPaneFillsWhileTheFileIsStillDecoding()
+    {
+        // The pane draws JobViewModel.Lines, and until 2026-08-23 that collection was filled in one
+        // go by Complete(). The streamed text went into LiveTranscript, which no view has ever bound
+        // — `git log -S LiveTranscript -- '*.axaml'` finds nothing in any commit — so a file being
+        // transcribed showed a progress bar and nothing to read, for as long as the decode took.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var provider = new FakeEngineProvider(new FakeEngineOptions
+        {
+            PerSegmentDelay = TimeSpan.FromMilliseconds(100),
+        });
+
+        var main = new MainWindowViewModel(
+            provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+        var viewModel = main.Transcribe;
+        viewModel.OutputDirectory = directory;
+        viewModel.UseFixedWindows = true;
+        viewModel.MaxSegmentSeconds = 5;
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        viewModel.AddFiles([WriteTone(directory, "long.wav", seconds: 60)]);
+        var job = viewModel.Jobs[0];
+
+        var batch = viewModel.StartCommand.ExecuteAsync(null);
+
+        // Rows have to appear before the batch ends, so the state is sampled at the moment they do
+        // rather than asserted afterwards — by then the run has finished either way.
+        var sawRowsWhileRunning = false;
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (job.Lines.Count > 0)
+            {
+                sawRowsWhileRunning = viewModel.IsRunning;
+                break;
+            }
+
+            if (!viewModel.IsRunning)
+            {
+                break;
+            }
+
+            await Task.Delay(25);
+        }
+
+        Assert.True(sawRowsWhileRunning, "the transcript pane had no rows while the file was decoding");
+
+        await batch;
+
+        // And Complete() still rebuilds them, so the finished transcript is the one on screen.
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.NotEmpty(job.Lines);
+    }
+
+    [Fact]
+    public void ASecondPassClearsTheBarTheDecodeLeftFull()
+    {
+        // The decode ends at 100%. Speaker labelling then reads and resamples the whole file again
+        // before its own first report arrives — minutes on a long recording — and the row used to
+        // keep the full bar under the new status for all of it, which is the shape of a hang and
+        // was mistaken for one.
+        var job = new JobViewModel("a.wav");
+        job.Apply(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.Decoding,
+            Processed = TimeSpan.FromMinutes(10),
+            Total = TimeSpan.FromMinutes(10),
+        });
+
+        Assert.Equal(100, job.Progress);
+        Assert.False(job.IsIndeterminate);
+
+        job.BeginPass("Labelling speakers");
+
+        Assert.Equal("Labelling speakers", job.Status);
+        Assert.Equal(0, job.Progress);
+        Assert.True(job.IsIndeterminate);
+
+        // The staging half names itself, so the two pieces of work under one stage are told apart.
+        job.Apply(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.LabellingSpeakers,
+            Detail = "Labelling speakers — reading the audio again",
+            Processed = TimeSpan.FromMinutes(5),
+            Total = TimeSpan.FromMinutes(10),
+        });
+
+        Assert.Equal("Labelling speakers — reading the audio again", job.Status);
+        Assert.Equal(50, job.Progress);
+        Assert.False(job.IsIndeterminate);
+
+        // And the sidecar's own reports fall back to the stage's name.
+        job.Apply(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.LabellingSpeakers,
+            Processed = TimeSpan.FromMinutes(2),
+            Total = TimeSpan.FromMinutes(10),
+        });
+
+        Assert.Equal("Labelling speakers", job.Status);
+        Assert.Equal(20, job.Progress);
+    }
+
+    [Fact]
+    public void TheModelsTabShowsAndRemovesWeightsTheCatalogueDoesNotClaim()
+    {
+        // Four quantisations were withdrawn from the catalogue on 2026-08-20 and stayed on disk.
+        // This tab names the model directory at the top of itself and then described only part of
+        // its contents, so it sat beside gigabytes it would neither show nor remove.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        File.WriteAllText(Path.Combine(directory, "tdt-0.6b-v3-q8_0.gguf"), "withdrawn weights");
+
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        Assert.True(main.Models.HasSideloaded);
+        var file = Assert.Single(main.Models.Sideloaded);
+        Assert.Equal("tdt-0.6b-v3-q8_0.gguf", file.FileName);
+        Assert.Contains("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
+
+        // The uninstall notice measures the folder rather than repeating a sentence typed once.
+        Assert.Contains("comes to", main.Models.KeptOnUninstallNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("the three of them", main.Models.KeptOnUninstallNotice, StringComparison.Ordinal);
+
+        main.Models.SelectedSideloaded = file;
+        Assert.True(main.Models.CanRemoveSideloaded);
+
+        main.Models.RemoveSideloadedCommand.Execute(null);
+
+        Assert.False(File.Exists(Path.Combine(directory, "tdt-0.6b-v3-q8_0.gguf")));
+        Assert.False(main.Models.HasSideloaded);
+        Assert.Empty(main.Models.Sideloaded);
+    }
+
+    [Fact]
+    public void LoadSaysWhyItIsDarkOnAModelItCannotLoad()
+    {
+        // The LOADED MODEL panel is the window's one ASR engine, and it used to be drawn inside the
+        // per-entry detail pane — so selecting Speaker labelling put a Backend picker and a dead
+        // Load button underneath it, reading as that model's backend. It is neither: the diariser
+        // picks its own provider inside the sidecar, and CanLoad has always required a
+        // transcription entry. The panel moved out of the pane, and the button now says so.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        var diariser = main.Models.Models.First(m => m.Descriptor.Task == ModelTask.Diarisation);
+        main.Models.Selected = diariser;
+
+        Assert.False(main.Models.CanLoad);
+        var hint = main.Models.LoadHint;
+        Assert.NotNull(hint);
+        Assert.Contains("turns speech into text", hint, StringComparison.Ordinal);
+        Assert.Contains("'Label speakers'", hint, StringComparison.Ordinal);
+
+        // The translation entry gets its own opt-in named rather than the diariser's.
+        main.Models.Selected = main.Models.Models.First(m => m.Descriptor.Task == ModelTask.Translation);
+        Assert.Contains("'English version'", main.Models.LoadHint, StringComparison.Ordinal);
+
+        // And a transcription entry that is simply not downloaded says that instead.
+        main.Models.Selected = main.Models.Models.First(m => m.IsTranscriptionModel);
+        Assert.Equal("Download it first.", main.Models.LoadHint);
+    }
+
+    [Fact]
+    public void TheLoadedSummaryNoLongerTellsPeopleToPressLoadFirst()
+    {
+        // Start loads the model itself as of 2026-08-23, so "Choose a model and press Load before
+        // transcribing" was describing a refusal that no longer happens.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        Assert.False(main.Models.IsLoaded);
+        Assert.DoesNotContain("press Load before transcribing", main.Models.LoadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Transcribing loads it", main.Models.LoadedSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpeningTheModelsTabRereadsTheFolder()
+    {
+        // Every fact on the tab was established once, at construction, and Refresh() existed with
+        // nothing calling it — so weights arriving from anywhere but this window's own Download
+        // button stayed invisible until a restart.
+        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        Assert.False(main.Models.HasSideloaded);
+
+        // Something else puts a file there: another copy of the application, or an older version.
+        File.WriteAllText(Path.Combine(directory, "left-behind.gguf"), "weights");
+
+        Assert.False(main.Models.HasSideloaded);
+
+        main.SelectedTab = 1;
+
+        Assert.True(main.Models.HasSideloaded);
+        Assert.Equal("left-behind.gguf", Assert.Single(main.Models.Sideloaded).FileName);
     }
 
     [Fact]

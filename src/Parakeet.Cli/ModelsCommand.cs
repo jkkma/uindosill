@@ -297,18 +297,12 @@ internal static class ModelsCommand
         context.Error.Write(line.PadRight(78));
     }
 
-    internal static string Bytes(long value)
-    {
-        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
-        double size = value;
-        var unit = 0;
-
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-
-        return string.Create(CultureInfo.InvariantCulture, $"{size:0.##} {units[unit]}");
-    }
+    /// <summary>
+    /// The shared formatter, kept as a name this file's many call sites already use.
+    /// </summary>
+    /// <remarks>
+    /// The implementation moved to <see cref="ByteSize"/> on 2026-08-23, when the Models tab needed
+    /// the same sizes: two copies of it would have been two answers to one question.
+    /// </remarks>
+    internal static string Bytes(long value) => ByteSize.Describe(value);
 }

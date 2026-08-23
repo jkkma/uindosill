@@ -31,10 +31,45 @@ public interface IModelStore
     IReadOnlyList<InstalledModel> ListInstalled();
 
     /// <summary>
+    /// The same, against a catalogue the caller names rather than the shipped one.
+    /// </summary>
+    /// <remarks>
+    /// Which catalogue is asked decides which files count as sideloaded, so a caller that was
+    /// handed a catalogue has to be able to pass the same one here. Without it the window would
+    /// list what is installed according to one catalogue while every other answer on the tab came
+    /// from another.
+    /// </remarks>
+    IReadOnlyList<InstalledModel> ListInstalled(ModelCatalog catalog);
+
+    /// <summary>
     /// Deletes the file, or the whole directory for a multi-file entry. Returns false when there
     /// was nothing to delete.
     /// </summary>
     bool Remove(ModelDescriptor model);
+
+    /// <summary>
+    /// Deletes a weights file in the store root that no catalogue entry claims. Returns false when
+    /// there was nothing to delete, and refuses anything that is not a bare file name directly in
+    /// the root or that a catalogue entry does claim.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sideloaded files are real and are not reachable through <see cref="Remove(ModelDescriptor)"/>,
+    /// because there is no descriptor to pass it. Four quantisations withdrawn from the catalogue on
+    /// 2026-08-20 are the case that makes this necessary: they were installed by an earlier build,
+    /// they still occupy about 3 GiB, and until this existed the only surface that would admit they
+    /// were there was <c>uindosill models</c>, which could list them and not delete them either.
+    /// </para>
+    /// <para>
+    /// A catalogue-claimed name is refused rather than accepted as a shortcut, so that the two
+    /// removal paths cannot come to disagree about what an entry consists of: a multi-file entry is
+    /// a directory and its removal is the descriptor's business.
+    /// </para>
+    /// </remarks>
+    bool RemoveSideloaded(string fileName);
+
+    /// <summary>The same, against a catalogue the caller names. See <see cref="ListInstalled(ModelCatalog)"/>.</summary>
+    bool RemoveSideloaded(string fileName, ModelCatalog catalog);
 }
 
 /// <summary>
@@ -176,6 +211,54 @@ public sealed class LocalModelStore : IModelStore
             return true;
         }
 
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        File.Delete(path);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool RemoveSideloaded(string fileName) => RemoveSideloaded(fileName, ModelCatalog.Default);
+
+    /// <summary>
+    /// As <see cref="RemoveSideloaded(string)"/>, against a catalogue the caller names.
+    /// </summary>
+    /// <remarks>
+    /// The overload exists so a test can establish what "no entry claims this" means without
+    /// depending on the shipped catalogue, which is a list that changes.
+    /// </remarks>
+    public bool RemoveSideloaded(string fileName, ModelCatalog catalog)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentNullException.ThrowIfNull(catalog);
+
+        // A bare name and nothing else. Anything carrying a separator — a relative walk out of the
+        // root, an absolute path elsewhere on the disk — is refused rather than normalised, because
+        // this method deletes and the only safe reading of an unexpected shape is "not mine".
+        if (!string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Only the two shapes the store enumerates. A stray .txt beside the weights is not this
+        // method's to delete, and neither is a `.part` staging directory.
+        if (!ModelExtensions.Any(extension =>
+                fileName.EndsWith(extension.TrimStart('*'), StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        // Claimed by an entry means it is that entry's to remove, through its descriptor.
+        if (catalog.Models.Any(model =>
+                string.Equals(model.StorageName, fileName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var path = Path.Combine(RootDirectory, fileName);
         if (!File.Exists(path))
         {
             return false;
