@@ -222,10 +222,33 @@ file, same model, one run each, with the new field: **CPU `processingSec` 77.3 s
 against `decodeSec` 74.78 s (0.1246), 2.5 s and 3.3 % outside the model; Vulkan 24.78 s (0.0413)
 against 23.14 s (0.0386), 1.65 s and 6.6 % outside it.** (That CPU run is 9 % faster than the 85.0 s
 in the second-machine table below — one run against one, on a laptop, and nothing here says which
-of the two is the typical one.) **What is owed is the desktop: CUDA's 3.86 s re-timed with the
-read separated**, which this laptop cannot do. Until then the CUDA RTF in this file and in the
-README describes the pipeline, and the model's own share of it is unknown — smaller, by whatever
-the desktop's Media Foundation decode of that file costs.
+of the two is the typical one.) **Re-timed on the desktop 2026-08-22 with the read separated** —
+the machine in the table above, same driver 610.88, same v0.5.0 natives, Windows *High performance*,
+`tdt-0.6b-v3-f16`, one fresh process per run, nothing else running — but **not on `chunk.m4a`, which
+no longer exists** (see the Audio row): on `csb384-8438.m4a`, the 600.0 s cut of the same episode the
+bf16 experiment below was run on, written down there with its ffmpeg line. One warm-up run each on
+CUDA and Vulkan (3.834 s / 2.524 s and 6.448 s / 4.924 s, discarded), then CUDA and Vulkan
+alternated five times each, then the CPU three times:
+
+| `csb384-8438.m4a`, 600.0 s | CPU | Vulkan | CUDA |
+|---|---|---|---|
+| `processingSec` — the whole pass | 47.18 s | 6.90 s | **3.95 s** |
+| `decodeSec` — the model's decode calls alone | 45.41 s | 5.29 s | **2.59 s** |
+| Outside the model | 1.77 s (3.8 %) | 1.61 s (23.3 %) | **1.36 s (34.4 %)** |
+| Real-time factor, pipeline / model | 0.0786 / 0.0757 | 0.0115 / 0.0088 | **0.0066 / 0.0043** |
+| Runs, and range across them, pipeline / model | 3 — 1.9 % / 1.5 % | 5 — 4.6 % / 3.5 % | 5 — 10.8 % / 10.4 % |
+
+Range is (max − min) / mean as in the table above; every run exited 0, and every run produced 113
+segments — 1,637 words on the CPU and CUDA, 1,632 on Vulkan, a difference not investigated here. **So
+on this file about a third of the CUDA pass and a quarter of the Vulkan pass is the read — the
+container decode, mixdown, resampling and segmentation — and the model itself runs at RTF 0.0043 on
+CUDA, 0.0088 on Vulkan and 0.0757 on the CPU.** The 1.36–1.77 s outside the model is the same order
+as the 1.77 s the canned engine measured for the read alone on the second machine. What the table
+above's **3.86 s** contains cannot be split after the fact, because its file is gone, and it is not
+replaced: the 3.95 s here is a different cut of the same episode, and that the two land within 2.5 %
+of each other is noted rather than relied on. Everywhere else in this file and in the README a
+"decode time" or an RTF is still the pipeline figure, and this table is the only place any of them
+has been split.
 
 The Vulkan column was measured with bf16 enabled (`bf16: 1` in the device banner), which was the
 product's configuration until 2026-08-16. The default is now to disable bf16 before loading — the

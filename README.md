@@ -14,8 +14,11 @@ nothing has packaged one.
 > words at any segment join. Every RTF here is the whole pass — the container decode, the
 > resampling and the segmentation run inside the timed stretch, serialised with the model — which
 > is a rounding error against a CPU decode and a material share of a fast GPU one; since 2026-08-22
-> the transcript also carries the model's own decode time beside it, and `docs/UNPROVEN.md` says
-> what each figure contains and which have been re-timed. Three hours has been run end to end on CPU. The Vulkan figure is
+> the transcript also carries the model's own decode time beside it; re-timed on the desktop
+> 2026-08-22 with the read separated (on a different 600 s cut of the same episode), the model is
+> about two thirds of the CUDA pass — 2.59 s of 3.95 s, RTF 0.0043 against 0.0066 — three quarters
+> of the Vulkan pass and 96 % of the CPU one, and `docs/UNPROVEN.md` says what each figure contains
+> and which have been re-timed. Three hours has been run end to end on CPU. The Vulkan figure is
 > steady-state: the *first* Vulkan run on a fresh machine takes 14 s rather than 6.6 s, because the
 > driver is compiling shaders inside the number that looks like decode time. A second machine — a
 > Ryzen AI 9 365 laptop with an integrated Radeon 880M — has since been measured: **RTF 0.14 on
