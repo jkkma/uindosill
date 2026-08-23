@@ -4,91 +4,24 @@ using Parakeet.Audio;
 
 namespace Parakeet.App.Services;
 
-/// <summary>Thrown when a file cannot be played, carrying the reason a person can act on.</summary>
-public sealed class AudioPlaybackException : Exception
-{
-    public AudioPlaybackException(string message)
-        : base(message)
-    {
-    }
-
-    public AudioPlaybackException(string message, Exception innerException)
-        : base(message, innerException)
-    {
-    }
-
-    public AudioPlaybackException()
-    {
-    }
-}
-
 /// <summary>
-/// Plays one file at a time, with a position that can be read and moved.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The application had no playback at all before the Ask tab: <c>Parakeet.Audio</c> decodes for
-/// transcription and never sounds anything, and <c>scripts/preview-words-vtt.html</c> reads a
-/// player's clock without ever setting it. So this is new surface rather than a wrapper over
-/// something, and it is deliberately the smallest surface that a transcript-you-can-click needs —
-/// open, play, pause, seek, and a position to read. No volume, no rate, no playlist.
-/// </para>
-/// <para>
-/// There is no clock in here and no event that fires as the position moves. The caller reads
-/// <see cref="Position"/> when it wants to draw, which keeps every thread question on the caller's
-/// side of the interface and makes the whole thing testable by advancing a fake by hand.
-/// </para>
-/// </remarks>
-public interface IAudioPlayer : IDisposable
-{
-    /// <summary>The file that is open, or null when none is.</summary>
-    string? Path { get; }
-
-    /// <summary>How long the open recording is, or zero when nothing is open.</summary>
-    TimeSpan Duration { get; }
-
-    /// <summary>Where in the recording playback has reached.</summary>
-    TimeSpan Position { get; }
-
-    /// <summary>Whether sound is coming out right now.</summary>
-    bool IsPlaying { get; }
-
-    /// <summary>
-    /// Opens <paramref name="path"/>, replacing whatever was open, stopped and at zero.
-    /// </summary>
-    /// <exception cref="AudioPlaybackException">
-    /// The file cannot be played here, and the message says why — an unreadable container, no
-    /// output device, or a platform with no audio stack this build can reach.
-    /// </exception>
-    void Open(string path);
-
-    /// <summary>Closes whatever is open. Doing it twice is not an error.</summary>
-    void Close();
-
-    /// <summary>Starts, or resumes. From the end of the recording, starts again from the top.</summary>
-    void Play();
-
-    /// <summary>Stops without moving the position.</summary>
-    void Pause();
-
-    /// <summary>Moves the position, clamped to the recording, without changing whether it is playing.</summary>
-    void Seek(TimeSpan position);
-}
-
-/// <summary>
-/// The real one: Media Foundation or the managed WAVE reader for the file, WASAPI for the device.
+/// Sound alone: Media Foundation or the managed WAVE reader for the file, WASAPI for the device.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Both halves are already in this application's dependency graph — <c>NAudio.Wasapi</c> and
 /// <c>NAudio.Core</c> arrive through <c>Parakeet.Audio</c>, which uses the first of them to decode
-/// for transcription — so playback costs no new package and no second native stack.
+/// for transcription — so playback costs no new package and no second native stack. This is what
+/// every build has; a build that has also vendored libmpv gets <c>MpvMediaPlayer</c> instead, which
+/// draws the picture too.
 /// </para>
 /// <para>
 /// Which reader opens a file follows <c>AudioSources.Open</c> rather than being decided again here:
 /// WAVE goes to the managed reader on every platform because it handles RF64 and odd bit depths
 /// predictably, and everything else needs Media Foundation and therefore Windows. Sniffed from the
-/// magic bytes, not the extension, for the same reason that method does it.
+/// magic bytes, not the extension, for the same reason that method does it. A video container opens
+/// the same way and plays its sound track; <see cref="HasVideo"/> is false because the picture is
+/// not decoded, not because it is not there.
 /// </para>
 /// <para>
 /// The platform check is at run time rather than compiled away, which is the lesson
@@ -98,11 +31,12 @@ public interface IAudioPlayer : IDisposable
 /// <para>
 /// <b>Nothing in the suite exercises this class.</b> It needs a Windows audio endpoint, which CI
 /// has not got and a headless run has not got either, so the tests drive
-/// <see cref="FakeAudioPlayer"/> and this is covered by running the application. See
-/// <c>docs/UNPROVEN.md</c>.
+/// <see cref="FakeMediaPlayer"/> and this is covered by driving it against real files on a real
+/// machine — see <c>docs/UNPROVEN.md</c> § <i>Playing a recording</i>, which also records the two
+/// defects that run found in <see cref="Play"/>.
 /// </para>
 /// </remarks>
-public sealed class SystemAudioPlayer : IAudioPlayer
+public sealed class SystemAudioPlayer : IMediaPlayer
 {
     /// <summary>
     /// The shared-mode buffer, in milliseconds. Large enough that a stall in the UI thread cannot
@@ -131,6 +65,25 @@ public sealed class SystemAudioPlayer : IAudioPlayer
 
     public bool IsPlaying => _output?.PlaybackState == PlaybackState.Playing;
 
+    public bool CanDrawVideo => false;
+
+    public bool HasVideo => false;
+
+    public (int Width, int Height) FrameSize => (0, 0);
+
+    /// <summary>Never raised: nothing here draws.</summary>
+    public event Action? FrameReady
+    {
+        add { }
+        remove { }
+    }
+
+    public void SetVideoOutputSize(int width, int height)
+    {
+    }
+
+    public bool TryCopyFrame(IntPtr destination, int destinationRowBytes, int destinationWidth, int destinationHeight) => false;
+
     public void Open(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -140,7 +93,7 @@ public sealed class SystemAudioPlayer : IAudioPlayer
 
         if (!File.Exists(path))
         {
-            throw new AudioPlaybackException($"'{System.IO.Path.GetFileName(path)}' is no longer where it was.");
+            throw new PlaybackException($"'{System.IO.Path.GetFileName(path)}' is no longer where it was.");
         }
 
         _reader = OpenReader(path);
@@ -265,7 +218,7 @@ public sealed class SystemAudioPlayer : IAudioPlayer
         }
         catch (IOException ex)
         {
-            throw new AudioPlaybackException($"Could not read '{name}': {ex.Message}", ex);
+            throw new PlaybackException($"Could not read '{name}': {ex.Message}", ex);
         }
 
         try
@@ -290,16 +243,16 @@ public sealed class SystemAudioPlayer : IAudioPlayer
 
             if (!OperatingSystem.IsWindows())
             {
-                throw new AudioPlaybackException(
+                throw new PlaybackException(
                     $"'{name}' needs Media Foundation to decode, which exists only on Windows. " +
                     "WAVE files play on any platform this build runs on.");
             }
 
             return new MediaFoundationReader(path);
         }
-        catch (Exception ex) when (ex is not AudioPlaybackException and (IOException or FormatException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.COMException))
+        catch (Exception ex) when (ex is not PlaybackException and (IOException or FormatException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.COMException))
         {
-            throw new AudioPlaybackException(
+            throw new PlaybackException(
                 $"Could not play '{name}' ({detection.Container}). This machine has no decoder for it. " +
                 $"Underlying error: {ex.Message}",
                 ex);
@@ -310,7 +263,7 @@ public sealed class SystemAudioPlayer : IAudioPlayer
     {
         if (!OperatingSystem.IsWindows())
         {
-            throw new AudioPlaybackException(
+            throw new PlaybackException(
                 "This build plays sound through WASAPI, which exists only on Windows. " +
                 "The transcript is readable here; the recording is not playable.");
         }
@@ -327,108 +280,10 @@ public sealed class SystemAudioPlayer : IAudioPlayer
         {
             output?.Dispose();
 
-            throw new AudioPlaybackException(
+            throw new PlaybackException(
                 "Windows would not open an audio output device. " +
                 $"Underlying error: {ex.Message}",
                 ex);
         }
     }
-}
-
-/// <summary>
-/// A player with a clock and no sound, whose position moves only when it is told to.
-/// </summary>
-/// <remarks>
-/// What the tests drive, for the reason <see cref="SystemAudioPlayer"/> gives: WASAPI needs an
-/// output device, and neither CI nor a headless run has one. Everything the window does with a
-/// player — open, play, seek from a transcript cue, follow the position, stop at the end — is
-/// exercised through this, so what is untested is the device rather than the behaviour.
-/// </remarks>
-public sealed class FakeAudioPlayer : IAudioPlayer
-{
-    /// <summary>How long anything it opens turns out to be.</summary>
-    public TimeSpan DurationToReport { get; set; } = TimeSpan.FromMinutes(10);
-
-    /// <summary>
-    /// When set, <see cref="Open"/> refuses with this message instead of opening — which is how a
-    /// test drives the window's unplayable-file path without needing an unplayable file.
-    /// </summary>
-    public string? RefuseWith { get; set; }
-
-    public string? Path { get; private set; }
-
-    public TimeSpan Duration { get; private set; }
-
-    public TimeSpan Position { get; private set; }
-
-    public bool IsPlaying { get; private set; }
-
-    /// <summary>How many times a file has been opened, so a test can see a re-open it did not want.</summary>
-    public int Opens { get; private set; }
-
-    public void Open(string path)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        if (RefuseWith is { Length: > 0 } reason)
-        {
-            Close();
-            throw new AudioPlaybackException(reason);
-        }
-
-        Opens++;
-        Path = path;
-        Duration = DurationToReport;
-        Position = TimeSpan.Zero;
-        IsPlaying = false;
-    }
-
-    public void Close()
-    {
-        Path = null;
-        Duration = TimeSpan.Zero;
-        Position = TimeSpan.Zero;
-        IsPlaying = false;
-    }
-
-    public void Play()
-    {
-        if (Path is null)
-        {
-            return;
-        }
-
-        if (Position >= Duration)
-        {
-            Position = TimeSpan.Zero;
-        }
-
-        IsPlaying = true;
-    }
-
-    public void Pause() => IsPlaying = false;
-
-    public void Seek(TimeSpan position) =>
-        Position = position < TimeSpan.Zero ? TimeSpan.Zero
-            : position > Duration ? Duration
-            : position;
-
-    /// <summary>Moves the clock on, as a real device's render thread would. Stops at the end.</summary>
-    public void Advance(TimeSpan elapsed)
-    {
-        if (!IsPlaying)
-        {
-            return;
-        }
-
-        Position += elapsed;
-
-        if (Position >= Duration)
-        {
-            Position = Duration;
-            IsPlaying = false;
-        }
-    }
-
-    public void Dispose() => Close();
 }

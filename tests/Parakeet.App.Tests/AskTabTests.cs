@@ -7,6 +7,8 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
@@ -22,7 +24,7 @@ namespace Parakeet.App.Tests;
 /// not built.
 /// </summary>
 /// <remarks>
-/// Everything here runs against <see cref="FakeAudioPlayer"/>, whose clock moves only when it is
+/// Everything here runs against <see cref="FakeMediaPlayer"/>, whose clock moves only when it is
 /// told to. That is not a convenience — WASAPI needs a Windows output endpoint and neither CI nor
 /// a headless run has one — and it is also what makes these deterministic: a test that waited for
 /// a real device to play ten seconds of audio would take ten seconds and still be a race.
@@ -404,10 +406,10 @@ public class AskTabTests
     public void ATimeIsWrittenTheSameWayOnACueAndOnTheClockBesideIt(int seconds, string expected) =>
         Assert.Equal(expected, Timecode.Format(TimeSpan.FromSeconds(seconds)));
 
-    private static (AskViewModel Ask, ObservableCollection<JobViewModel> Jobs, FakeAudioPlayer Player) Create()
+    private static (AskViewModel Ask, ObservableCollection<JobViewModel> Jobs, FakeMediaPlayer Player) Create()
     {
         var jobs = new ObservableCollection<JobViewModel>();
-        var player = new FakeAudioPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
+        var player = new FakeMediaPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
         return (new AskViewModel(jobs, player), jobs, player);
     }
 
@@ -754,11 +756,116 @@ public class AskTabWindowTests
         }
     }
 
-    /// <summary>The window, on the Ask tab, with one recording in the queue.</summary>
-    private static (MainWindow Window, MainWindowViewModel ViewModel, FakeAudioPlayer Player) Open(
-        JobViewModel? recording = null)
+
+    // ── The picture ───────────────────────────────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void TheVideoPaneIsDrawnOnlyForARecordingThatHasAPicture()
     {
-        var player = new FakeAudioPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
+        // A video pane over an audio file is dead glass. It exists exactly when frames do, which
+        // is what the binding on HasVideo says and what this holds it to.
+        var (window, viewModel, player) = Open();
+
+        var pane = window.FindControl<Border>("VideoPane");
+        Assert.NotNull(pane);
+        Assert.False(pane!.IsVisible);
+
+        // The same player, now reporting a picture on the next file it opens.
+        player.VideoToReport = (640, 360);
+        viewModel.Transcribe.Jobs.Add(AskTabTests.Transcribed("/tmp/clip.mp4"));
+        viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[1];
+        window.UpdateLayout();
+
+        Assert.True(viewModel.Ask.HasVideo);
+        Assert.True(pane.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void AFrameReachesTheSurfaceAsABitmapOfItsOwnSize()
+    {
+        // The one path in this tab that is not a binding: frames arrive on the decoder's thread and
+        // are blitted into a WriteableBitmap by the code-behind. What is asserted is the end of
+        // that path — a bitmap on the Image, sized to the frame, with the copy having been made.
+        var player = new FakeMediaPlayer
+        {
+            DurationToReport = TimeSpan.FromMinutes(2),
+            VideoToReport = (320, 180),
+        };
+
+        var (window, _, _) = Open(AskTabTests.Transcribed("/tmp/clip.mp4"), player);
+
+        var surface = window.FindControl<Image>("VideoSurface");
+        Assert.NotNull(surface);
+        Assert.Null(surface!.Source);
+
+        player.RaiseFrame();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var bitmap = Assert.IsType<WriteableBitmap>(surface.Source);
+        Assert.Equal(new PixelSize(320, 180), bitmap.PixelSize);
+        Assert.Equal(1, player.FramesCopied);
+    }
+
+    [AvaloniaFact]
+    public void ThePaneTellsThePlayerHowLargeItIsSoFramesAreNotRenderedTwiceTheSizeTheyAreShown()
+    {
+        // Rendering at the file's own size and letting the compositor shrink it is sixteen times
+        // the pixels for nothing on a 4K recording in a 600-pixel pane. Only a laid-out control
+        // knows the size, which is why this is wired in the code-behind and asserted here.
+        var player = new FakeMediaPlayer
+        {
+            DurationToReport = TimeSpan.FromMinutes(2),
+            VideoToReport = (1920, 1080),
+        };
+
+        var (window, _, _) = Open(AskTabTests.Transcribed("/tmp/clip.mp4"), player);
+        window.UpdateLayout();
+
+        Assert.NotNull(player.RequestedOutputSize);
+        Assert.True(player.RequestedOutputSize!.Value.Width > 0);
+        Assert.True(player.RequestedOutputSize.Value.Height > 0);
+    }
+
+    [AvaloniaFact]
+    public void AnAudioOnlyBuildSaysSoOnAVideoFileAndSaysNothingOnAnAudioOne()
+    {
+        // The graceful half of "video is a property of the build": a build with no libmpv still
+        // plays a video's sound, and the tab says why there is no picture rather than leaving a
+        // blank where one should be. On an audio file there is nothing to explain, and a notice
+        // there would be noise.
+        var player = new FakeMediaPlayer
+        {
+            DurationToReport = TimeSpan.FromMinutes(2),
+            CanDrawVideo = false,
+        };
+
+        var (window, viewModel, _) = Open(AskTabTests.Transcribed("/tmp/clip.mp4"), player);
+
+        var notice = window.FindControl<TextBlock>("VideoNotice");
+        Assert.NotNull(notice);
+        Assert.True(notice!.IsVisible);
+        Assert.Contains("no video player", notice.Text, StringComparison.Ordinal);
+
+        // The sound still plays: the transport is live, and the pane is simply absent.
+        Assert.True(viewModel.Ask.CanPlay);
+        Assert.False(viewModel.Ask.HasVideo);
+        Assert.False(window.FindControl<Border>("VideoPane")!.IsVisible);
+
+        viewModel.Transcribe.Jobs.Add(AskTabTests.Transcribed("/tmp/talk.mp3"));
+        viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[1];
+        window.UpdateLayout();
+
+        Assert.Null(viewModel.Ask.VideoNotice);
+        Assert.False(notice.IsVisible);
+    }
+
+    /// <summary>The window, on the Ask tab, with one recording in the queue.</summary>
+    private static (MainWindow Window, MainWindowViewModel ViewModel, FakeMediaPlayer Player) Open(
+        JobViewModel? recording = null,
+        FakeMediaPlayer? withPlayer = null)
+    {
+        var player = withPlayer ?? new FakeMediaPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
         var directory = Directory.CreateTempSubdirectory("uindosill-ask").FullName;
         var viewModel = new MainWindowViewModel(
             new FakeEngineProvider(),

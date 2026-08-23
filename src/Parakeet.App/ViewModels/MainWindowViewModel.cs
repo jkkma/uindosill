@@ -25,7 +25,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IAppUpdater? updater = null,
         AppSettingsStore? settings = null,
         Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null,
-        IAudioPlayer? player = null)
+        IMediaPlayer? player = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
@@ -55,7 +55,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // the Transcribe tab is filling, so a transcript that finishes while this tab is open
         // fills in where it stands. Two collections would need reconciling, and getting that
         // wrong shows a transcript beside the wrong recording.
-        Ask = new AskViewModel(Transcribe.Jobs, player ?? new SystemAudioPlayer());
+        Ask = new AskViewModel(Transcribe.Jobs, player ?? MediaPlayers.ForThisBuild());
 
         // Load and unload have to be shut off for the duration of a batch: the running jobs hold
         // the engine an unload would dispose out from under them.

@@ -19,6 +19,13 @@
     directory. It travels beside the binary it covers — one per backend directory, so a drop that
     vendors only some backends still ships exactly the notices it needs.
 
+    The *.txt glob is libmpv's, and it carries a heavier obligation than the LICENSE above.
+    libmpv is GPLv2+, so its licence text, mpv's own copyright summary and the written offer naming
+    where the corresponding source lives all have to reach a recipient — GPLv2 §1 and §3. They are
+    written beside the DLL by scripts/vendor-mpv.ps1, which refuses to finish without them, and this
+    glob is what carries them from there into the build output. A build with no libmpv vendored
+    matches none of them and ships no GPL notice, which is correct: it contains no GPL component.
+
     This only holds if the LICENSE is on disk in the first place. Unpacking just parakeet.dll out
     of the archive puts the breach back and nothing here can detect it; docs/NATIVE-BINARIES.md
     says so where the unpacking is described.
@@ -27,7 +34,8 @@
     <None Include="$(MSBuildThisFileDirectory)../native/**/*.dll;
                    $(MSBuildThisFileDirectory)../native/**/*.so;
                    $(MSBuildThisFileDirectory)../native/**/*.dylib;
-                   $(MSBuildThisFileDirectory)../native/**/LICENSE"
+                   $(MSBuildThisFileDirectory)../native/**/LICENSE;
+                   $(MSBuildThisFileDirectory)../native/**/*.txt"
           Link="native/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           Visible="false" />

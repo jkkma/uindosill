@@ -820,6 +820,29 @@
               </StackPanel>
             </Border>
 
+            <!-- ── The picture ────────────────────────────────────────────────────────────────
+                 Only when the open recording has one and the build can draw one: a video pane
+                 over an audio file is dead glass, so the pane exists exactly when frames do.
+
+                 The Image's bitmap is filled from the code-behind rather than bound: frames
+                 arrive at the decoder's rate on the decoder's thread, and thirty property
+                 notifications a second is not what bindings are for. See BlitFrame in
+                 MainWindow.axaml.cs.
+
+                 Black, and a literal rather than a token: this is the one surface in the window
+                 whose ground is the convention of every video player rather than this design's —
+                 letterbox bars in Sunken grey would read as a layout bug, not a choice. -->
+            <Border DockPanel.Dock="Top" Name="VideoPane" Height="260" Margin="0,0,0,10"
+                    Background="Black" IsVisible="{Binding HasVideo}">
+              <Image Name="VideoSurface" Stretch="Uniform" />
+            </Border>
+
+            <!-- Why there is no picture, when one might be expected and the build cannot draw
+                 one. Absent entirely for audio files: no picture is not a limitation there. -->
+            <TextBlock DockPanel.Dock="Top" Name="VideoNotice" Classes="fine warning" Margin="0,0,0,8"
+                       Text="{Binding VideoNotice}"
+                       IsVisible="{Binding VideoNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
             <!-- ── Find a word ────────────────────────────────────────────────────────────────
                  The reason anyone opens a three-hour transcript is usually one word. This runs on
                  v1's own data and needs no model, which is why it is here rather than waiting for

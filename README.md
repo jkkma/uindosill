@@ -1,6 +1,6 @@
 # Uindosill
 
-A Windows desktop app that transcribes audio and video files **locally** with NVIDIA Parakeet.
+A Windows desktop app that transcribes audio and video files **locally** with NVIDIA Parakeet, and plays them back beside their transcript.
 Drop files in, get text out — plain text, SRT, VTT, word-timed VTT for karaoke-style highlighting,
 JSON with timestamps, Markdown. No cloud, no account, and **no Python you have to install** — the
 two opt-ins below run in an interpreter that ships inside the application. That bundle does not
@@ -91,12 +91,16 @@ nothing has packaged one.
   2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
   cues you click to jump to that moment, the line being spoken lights up as it goes, and a find box
   marks every mention of a word and steps between them with Enter. All of that runs on times v1
-  already writes. The playback path needs a Windows audio device, so **nothing in the suite runs
-  it** and it was driven by hand instead — an m4a, an mp3 and a WAVE file on one laptop, where the
-  endpoint opens, the clock runs at real time, and seeks land where the transcript says. That found
-  two defects in the play button, both fixed. **Nobody has yet written down that they heard it**,
-  which is a different claim; [UNPROVEN.md](docs/UNPROVEN.md) keeps the two apart. The open
-  decisions are in [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
+  already writes. **A video plays its picture too, as of 2026-08-23**, through a vendored libmpv —
+  which is why a build carrying it is GPL rather than MIT; see the licence section below. A build
+  without it plays a video's sound and says on the tab that it is not drawing the picture.
+  Playback needs a Windows audio device and, for video, the vendored library, so **nothing in the
+  suite runs either player** and both were driven by hand instead — an m4a, an mp3, a WAVE file and
+  an H.264 mp4 on one laptop, where the device opens, the clock runs at real time, seeks land where
+  the transcript says, and 30 fps video renders at the full rate. That found two defects in the play
+  button, both fixed. **Nobody has yet written down that they heard or watched it**, which is a
+  different claim; [UNPROVEN.md](docs/UNPROVEN.md) keeps the two apart. The open decisions are in
+  [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
 - **v3 is push-to-talk dictation.** Not built, not architected out —
   [V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
 
@@ -149,7 +153,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 909 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 913 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -339,18 +343,26 @@ The ten notes live in [`docs/`](docs/); the last two rows are at the repository 
 | [GOTCHAS.md](docs/GOTCHAS.md) | The silent failures, and where each one is handled in this codebase. |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The seams, the contracts, and why segmentation is not optional. |
 | [ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md) | Why parakeet.cpp, and not the alternatives that looked obvious. |
-| [NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring a pinned parakeet.cpp release: the script, the layout, the digests. |
+| [NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring the pinned natives — parakeet.cpp and libmpv: the scripts, the layout, the digests, and the licence libmpv brings. |
 | [MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
 | [LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution", and the CUDA EULA reading. |
 | [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
 | [V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
-| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, six MIT components, the CUDA runtime. |
+| [NOTICE.md](NOTICE.md) | The third-party notices as shipped: the CC BY weights, the MIT components, GPL libmpv, the CUDA runtime. |
 | [CLAUDE.md](CLAUDE.md) | Working agreement for an agent session: budget, how to build, the one rule. |
 
 ## Licence
 
-This project is MIT — see [LICENSE](LICENSE).
+**Two licences, and which one governs a copy depends on whether it carries the video player.** The
+source code in this repository is MIT. **A build that vendors libmpv — the video player behind the
+Ask tab — is distributed under GPLv2-or-later**, because libmpv and the FFmpeg libraries linked
+into it are GPL and the GPL governs the combined work. A build without it contains no GPL component
+and is MIT throughout; the Licences tab lists libmpv only when it is there. That was decided on
+2026-08-23 in preference to shipping no video or maintaining an LGPL mpv build of our own — see
+[PHASES.md](docs/PHASES.md) — and the obligations it creates, including where the corresponding
+source lives, are in [LICENSE](LICENSE), [licences/mpv-WRITTEN-OFFER.txt](licences/mpv-WRITTEN-OFFER.txt)
+and [LICENSING.md](docs/LICENSING.md).
 
 The **model weights are not**. They are CC BY 4.0 from NVIDIA, which permits commercial
 redistribution and bundling but attaches a seven-element notice requirement, forbids DRM on the

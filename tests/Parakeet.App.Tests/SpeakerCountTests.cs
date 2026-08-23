@@ -39,7 +39,7 @@ public class SpeakerCountTests
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-spk").FullName;
         var main = new MainWindowViewModel(
-            new FakeEngineProvider(speakers: speakers), new LocalModelStore(directory), ModelCatalog.Default);
+            new FakeEngineProvider(speakers: speakers), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
         main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor })

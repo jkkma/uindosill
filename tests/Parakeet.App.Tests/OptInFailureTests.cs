@@ -28,7 +28,7 @@ public class OptInFailureTests
         var main = new MainWindowViewModel(
             new FakeEngineProvider(speakers: speakers, translator: translator),
             new LocalModelStore(directory),
-            ModelCatalog.Default);
+            ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
         main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor })
