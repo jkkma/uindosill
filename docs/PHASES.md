@@ -1982,6 +1982,16 @@ laptop the same day on `sample.m4a`: CPU 77.3 s pipeline against 74.78 s decode 
 model), Vulkan 24.78 s against 23.14 s (6.6 %). **The desktop's CUDA figure is owed a re-timing with
 the read separated**, and `UNPROVEN.md` says so where the figure is.
 
+**Re-timed on the desktop 2026-08-22.** Not on `chunk.m4a`, which no longer exists, but on
+`csb384-8438.m4a` — the 600.0 s cut of the same episode the bf16 experiment on that machine used —
+`tdt-0.6b-v3-f16`, one fresh process per run, a warm-up each on CUDA and Vulkan, then CUDA and Vulkan
+alternated five times and the CPU three: **CUDA 3.95 s pipeline against 2.59 s in the model, 34.4 %
+outside it (RTF 0.0066 / 0.0043); Vulkan 6.90 s against 5.29 s, 23.3 % (0.0115 / 0.0088); CPU
+47.18 s against 45.41 s, 3.8 % (0.0786 / 0.0757)** — ranges across runs 10.8, 4.6 and 1.9 % on the
+pipeline figure. So on a fast GPU about a third of the number every document called decode time was
+the read. The split is in `UNPROVEN.md` under the desktop table, beside the 3.86 s it could not
+split after the fact; the laptop's figures above stay as they are.
+
 Three tests: a source slow to read and an engine that decodes in no time, so the wall figure carries
 the read and the decode figure does not; an engine slow to decode, so the decode figure is most of
 the pass; and both formatters writing the new figure beside the old, with the old unchanged.
