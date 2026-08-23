@@ -3123,6 +3123,15 @@ torch's abort handler as a native process abort — not an exception the sidecar
 back from. The sentence was true and incomplete: binding would be faster if it ran. The docstring
 now says both halves, and binding stays off everywhere.
 
+**The shipping path was then driven by hand the same day**: the built application, launched with
+`UINDOSILL_PYTHON` on the CUDA venv, translated a real recording with the provenance line reading
+**"on cuda"** — which is stamped from the provider that initialised, not the one asked for — and the
+maintainer's one-line verdict was "it says on cuda, and its fast". That is the last link between the
+probe numbers and the product: app → sidecar → `auto` → CUDA, end to end. The same session runs the
+diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's own order does not
+include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
+recorded rather than resolved.
+
 **1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
