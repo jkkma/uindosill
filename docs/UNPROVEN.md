@@ -3599,6 +3599,77 @@ same shape as the dropped `--self-contained` flag the brief warns about, arrived
 opposite direction. The settings now live in `Directory.Build.targets`, which is imported after the
 project body, and the comment there records how to check.
 
+## Playing a recording — built 2026-08-22, driven against a real device the same day
+
+The Ask tab plays the file it is showing, through **`SystemAudioPlayer` in
+`src/Parakeet.App/Services/IAudioPlayer.cs`**. **Nothing in the suite runs a line of it**, and that
+is structural rather than an oversight: it ends at WASAPI, which needs a Windows audio endpoint, and
+CI has none. Every test drives `FakeAudioPlayer`, a clock with no sound that moves only when it is
+told to.
+
+So it was driven by hand instead, on the laptop (Ryzen AI 9 365, Radeon 880M, Windows 11), through a
+scratch program outside the repository, against three files chosen to cover both reader branches —
+`sample.m4a` (10:00.0036) and `two-hosts.mp3` (2:55:23.376) through Media Foundation, and an 8 s
+16 kHz mono WAVE tone through the managed reader.
+
+**What that established.** On all three: the device opens; `IsPlaying` goes true; the clock advances
+at real time — 25 samples 100 ms apart returned 0.30 s to 2.88 s, so the render thread is pulling
+buffers at the rate a device consuming audio would; pause stops the clock and holds it across
+400 ms; a seek to 60 s lands on 60.00 s exactly and resumes from there; a seek *while playing* — the
+path that pauses the render around the move — lands and carries on; a seek past the end clamps to
+the duration; and play at the end starts the recording over. Nothing threw, and `Close` returned
+cleanly each time.
+
+**It found two defects, and neither was visible from the suite.** Both are in `Play`, both fixed the
+same day, and both are the same shape: the fake player was more forgiving than the real one, so the
+tests were green over them.
+
+- **Play at the end only wrapped when the device had stopped by itself.** The wrap was inside the
+  branch that creates an output, which is reached after a recording runs out — so the common path
+  looked right. Drag the bar to the end or pause there and the device is *paused* rather than
+  stopped: play resumed a reader with nothing left to read, made no sound, and left the button
+  looking broken. The wrap is now on every play.
+- **The at-the-end test was a coin toss at the boundary.** A seek to the end lands on a frame
+  boundary rather than on the duration, and which side of it that falls on depends on the container:
+  measured, the mp3 and the WAVE landed exactly on the duration and the m4a landed **0.006 ms**
+  short, so `CurrentTime >= TotalTime` wrapped two of the three. It now allows one millisecond —
+  48 frames at 48 kHz, inaudible, and 160 times the largest gap seen.
+
+**What is still not established**, and the list is shorter than it was:
+
+- **That the sound is audible.** The clock advancing at real time says the endpoint accepted the
+  stream and consumed it at the rate audio is consumed; it does not say anything came out of a
+  speaker at a level a person heard, on the device they expected, undistorted. Nobody has written
+  down that they heard it.
+- **Whether a seek is heard as a click.** `Seek` pauses the render, moves the reader and resumes, so
+  that a move cannot land between the render thread's read of the position and its read of the
+  bytes. Whether that is audible, and whether it is needed at all, is untested — the alternative is
+  to trust the reader's own deferred reposition, which is a claim about NAudio's internals nobody
+  here has read.
+- **Playing to the natural end.** Every run above was cut short deliberately; no file has been left
+  to run out, so the path where WASAPI stops itself and the next play rebuilds the device has been
+  reasoned about rather than watched. On a 3 h file that is a 3 h test.
+- **A recording playing while another file is being transcribed.** Both readers open with
+  `FileShare.Read`, so neither should take the file from the other, and the cost of a decode running
+  beside a transcription pass is unmeasured. Playing *the file currently being transcribed* is
+  reachable from the tab and has not been tried.
+- **Whether 200 ms of shared-mode latency is the right figure.** Chosen to be comfortably larger
+  than a UI stall and smaller than a seek that feels late. Nothing was measured to pick it.
+- **The 100 ms transport tick**, which scans the transcript for the line holding the current
+  position on every tick that finds something moved. On a three-hour transcript that is 1,488
+  comparisons ten times a second; it is a linear scan and no profile has been taken of it.
+- **Every container other than the three above**, and any machine other than this laptop.
+
+**What would settle the first of those:** play something in the built application with the volume
+up and write down that it was heard. That is the whole check, and until it is done no release note
+may say the tab plays audio — only that it drives an audio device.
+
+**One thing here is measured rather than unproven.** The taro ramp's agreement with matcha — every
+step within 0.0014 of lightness and 0.0010 of chroma, and 7.48:1 and 5.24:1 on white for taro-700
+and taro-600 — was computed from the shipped hex values by the same conversion used on the matcha
+ramp, and the round trip reproduces the design sheet's own coordinates. See `docs/PHASES.md`
+§ *Built 2026-08-22 — the Ask tab*.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository

@@ -2,13 +2,27 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Parakeet.App.ViewModels;
 
 namespace Parakeet.App.Views;
 
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// How often the Ask tab's transport is re-read. Ten times a second: fast enough that the
+    /// highlight lands on the line being spoken rather than trailing it, slow enough that a
+    /// three-hour transcript is not searched sixty times a second for no visible gain.
+    /// </summary>
+    private static readonly TimeSpan TransportRefresh = TimeSpan.FromMilliseconds(100);
+
+    private readonly DispatcherTimer _transport;
+
     private bool _shutdownRequested;
+    private bool _seeking;
+
+    /// <summary>The Ask view model this window is currently listening to, so it can stop.</summary>
+    private ViewModels.AskViewModel? _watching;
 
     public MainWindow()
     {
@@ -28,6 +42,15 @@ public partial class MainWindow : Window
         }
 
         WireHeaderBar();
+        WireSeekStrip();
+        WireSearchBox();
+
+        // The clock the Ask tab draws from, and it is here rather than in the view model on
+        // purpose: a view model that starts a dispatcher timer needs a dispatcher to exist before
+        // it is constructed, which is a requirement no test should have to satisfy. The view model
+        // exposes a Tick it does nothing in unless something moved, and this is what calls it.
+        _transport = new DispatcherTimer(DispatcherPriority.Background) { Interval = TransportRefresh };
+        _transport.Tick += (_, _) => (DataContext as MainWindowViewModel)?.Ask.Tick();
     }
 
     /// <summary>
@@ -64,6 +87,151 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Makes the seek bar seekable: a press anywhere along it, and a drag along it, is a position
+    /// in the recording.
+    /// </summary>
+    /// <remarks>
+    /// It is here rather than in a binding because the answer needs a width. A press arrives as an
+    /// x inside a control, and only the control knows how wide it is; turning that into a time is
+    /// arithmetic the view model cannot do and should not be handed the pixels for. So the strip
+    /// reports a fraction and the view model turns it into a seek.
+    ///
+    /// Pointer capture is what makes the drag work: without it the pointer leaving the 18px strip
+    /// mid-drag ends the gesture, which for a scrub along a bar is most of the time.
+    /// </remarks>
+    private void WireSeekStrip()
+    {
+        if (this.FindControl<Border>("SeekStrip") is not { } strip)
+        {
+            return;
+        }
+
+        strip.PointerPressed += (_, e) =>
+        {
+            _seeking = true;
+            e.Pointer.Capture(strip);
+            SeekTo(strip, e.GetPosition(strip).X);
+        };
+
+        strip.PointerMoved += (_, e) =>
+        {
+            if (_seeking)
+            {
+                SeekTo(strip, e.GetPosition(strip).X);
+            }
+        };
+
+        strip.PointerReleased += (_, e) =>
+        {
+            _seeking = false;
+            e.Pointer.Capture(null);
+        };
+
+        // A capture lost to something else — another window taking the pointer, the control going
+        // away — has to end the drag too, or the next move over the strip resumes a scrub nobody
+        // started.
+        strip.PointerCaptureLost += (_, _) => _seeking = false;
+    }
+
+    private void SeekTo(Border strip, double x)
+    {
+        if (DataContext is not MainWindowViewModel viewModel || strip.Bounds.Width <= 0)
+        {
+            return;
+        }
+
+        viewModel.Ask.SeekToFraction(x / strip.Bounds.Width);
+    }
+
+    /// <summary>
+    /// Enter in the find box steps to the next hit. Shift+Enter steps back, which is what every
+    /// find bar does and what nobody thinks to look for a button for.
+    /// </summary>
+    /// <remarks>
+    /// Marked handled, or the key press carries on to the default button and to whatever else in
+    /// the window would answer for Enter.
+    /// </remarks>
+    private void WireSearchBox()
+    {
+        if (this.FindControl<TextBox>("SearchBox") is not { } box)
+        {
+            return;
+        }
+
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter || DataContext is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
+
+            var back = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            var command = back ? viewModel.Ask.PreviousMatchCommand : viewModel.Ask.NextMatchCommand;
+
+            if (command.CanExecute(null))
+            {
+                command.Execute(null);
+            }
+
+            e.Handled = true;
+        };
+    }
+
+    /// <summary>
+    /// Follows the search to the hit it is standing on, bringing that row into view.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Scrolling is the one thing in this feature a view model cannot do: the row it wants exists
+    /// only as a container the list has realised, and only the list knows about that. So the view
+    /// model publishes an index and this turns it into a container.
+    /// </para>
+    /// <para>
+    /// Posted rather than done here, because the index changes at the moment the term does, and the
+    /// container for a row the search has just found may not have been created yet. By the time the
+    /// post runs the layout pass has been through.
+    /// </para>
+    /// </remarks>
+    private void OnAskChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ViewModels.AskViewModel.CurrentMatchLineIndex)
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var index = viewModel.Ask.CurrentMatchLineIndex;
+
+        if (index < 0 || this.FindControl<ItemsControl>("Cues") is not { } cues)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => (cues.ContainerFromIndex(index) as Control)?.BringIntoView(),
+            DispatcherPriority.Background);
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        // Both halves, because a window whose data context is replaced must not keep answering
+        // property changes from the one it no longer shows.
+        if (_watching is not null)
+        {
+            _watching.PropertyChanged -= OnAskChanged;
+            _watching = null;
+        }
+
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            _watching = viewModel.Ask;
+            _watching.PropertyChanged += OnAskChanged;
+        }
+
+        base.OnDataContextChanged(e);
+    }
+
+    /// <summary>
     /// The launch check, started once the window exists so its answer has somewhere to appear.
     /// </summary>
     /// <remarks>
@@ -93,10 +261,22 @@ public partial class MainWindow : Window
             Services.WindowFrame.GiveShadow(handle.Handle);
         }
 
+        // Running for as long as the window is open, rather than only while the Ask tab is
+        // showing: a recording keeps playing when somebody switches to Transcribe, and a transport
+        // whose clock stops while the sound carries on is worse than no clock. A tick that finds
+        // nothing moved raises nothing, so the cost of it on the other four tabs is a comparison.
+        _transport.Start();
+
         if (DataContext is MainWindowViewModel viewModel)
         {
             _ = viewModel.Updates.CheckOnLaunchAsync();
         }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _transport.Stop();
+        base.OnClosed(e);
     }
 
     /// <summary>

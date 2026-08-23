@@ -308,7 +308,7 @@ public sealed partial class JobViewModel : ObservableObject
                 chips[speaker] = chip;
             }
 
-            target.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip));
+            target.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip, segment.Start, segment.End));
         }
     }
 

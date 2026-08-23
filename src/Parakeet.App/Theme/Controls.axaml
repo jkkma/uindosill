@@ -418,8 +418,8 @@
 
   <!-- Solid: what is in memory. Outlined: what a model does rather than what state it is in.
        The outline is what keeps speaker labelling inside the matcha family — it was #6B4E9C,
-       which is taro's neighbourhood, and would read as a v2 feature the moment an Ask tab
-       exists. -->
+       which is taro's neighbourhood, and now that an Ask tab exists would read as a v2
+       feature. -->
   <Style Selector="Border.badge.solid">
     <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
   </Style>
@@ -479,6 +479,129 @@
   </Style>
   <Style Selector="Border.speaker.chip3 TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+
+  <!-- ══ v2, and everything below this line is taro ═══════════════════════════════════════════
+       The Ask tab's surfaces. They are separated from the styles above by colour alone — the
+       geometry rules are the same ones — because that is the rule the design runs on: a surface's
+       colour says which product generation it belongs to. Nothing above may use these, and
+       nothing here may reach for matcha. -->
+
+  <Style Selector="Border.tinted.taro">
+    <Setter Property="Background" Value="{DynamicResource Taro50Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro200Brush}" />
+  </Style>
+
+  <!-- The suggestion chips: the third of the four shapes that keeps a corner, and it keeps it for
+       the same reason the switcher pills do — a pill reads as tappable. Every one of them is
+       disabled today, because there is nothing behind them to ask. -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="11,5" />
+  </Style>
+  <Style Selector="Border.chip TextBlock">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+
+  <!-- The transport's play button, which is one of the things in this design that is genuinely a
+       circle rather than a rounded rectangle. A template of its own rather than a CornerRadius on
+       the standard button, because the standard button's hairline edge has no place on it. -->
+  <Style Selector="Button.transport">
+    <Setter Property="Width" Value="38" />
+    <Setter Property="Height" Value="38" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Ground" Background="{DynamicResource Taro600Brush}" CornerRadius="999">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.transport:pointerover /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+  <Style Selector="Button.transport:disabled /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource DisabledEdgeBrush}" />
+  </Style>
+  <Style Selector="Button.transport Path">
+    <Setter Property="Fill" Value="{DynamicResource GroundBrush}" />
+  </Style>
+  <Style Selector="Button.transport:disabled Path">
+    <Setter Property="Fill" Value="{DynamicResource DisabledTextBrush}" />
+  </Style>
+
+  <!-- The played part of the recording. A ProgressBar rather than a Slider, and that is a
+       decision: Fluent's slider is themed through template parts whose names are its own, and
+       this file's opening note is about exactly that failure — a selector that matches nothing
+       loads without complaint and changes nothing. A bar plus a transparent strip that takes the
+       pointer is two things whose behaviour is visible from here. What it costs is the design's
+       circular seek handle, which cannot be positioned without a measured width; the bar is
+       click-and-drag without one. -->
+  <Style Selector="ProgressBar.seek">
+    <Setter Property="Height" Value="6" />
+    <Setter Property="Foreground" Value="{DynamicResource Taro600Brush}" />
+    <Setter Property="Background" Value="{DynamicResource ProgressTrackBrush}" />
+  </Style>
+
+  <!-- One segment of the transcript, in the tab where a segment is a place in the recording
+       rather than a paragraph. A Button rather than a Border with a pointer handler, so the
+       keyboard reaches it and the seek is a command like every other action in this window. -->
+  <Style Selector="Button.cue">
+    <Setter Property="Padding" Value="5,6,8,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <!-- The 3px left edge is always there and usually invisible. Drawn transparent rather than
+             added when a line becomes the current search hit, because a border that appears moves
+             the words 3px to the right, and stepping through hits would jog every line it touched. -->
+        <Border Name="Ground" Background="Transparent"
+                BorderBrush="Transparent" BorderThickness="3,0,0,0"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Stretch" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.cue:pointerover /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource Taro50Brush}" />
+  </Style>
+  <Style Selector="Button.cue.playing /template/ Border#Ground">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+  </Style>
+
+  <!-- The hit the search is standing on. An edge rather than a second ground, because the ground
+       is already spoken for by playback and the two states are independent — the line being played
+       can also be the line being looked at, and one of them would otherwise have to lose. -->
+  <Style Selector="Button.cue.found /template/ Border#Ground">
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro600Brush}" />
+  </Style>
+
+  <!-- The same badge as the two above, in v2's colours. Solid rather than outlined, because what
+       it says is a state — this is not finished — rather than a capability. -->
+  <Style Selector="Border.badge.taro">
+    <Setter Property="Background" Value="{DynamicResource Taro600Brush}" />
+  </Style>
+  <Style Selector="Border.badge.taro TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource GroundBrush}" />
+  </Style>
+
+  <!-- The scrim over the chat panel. Not a grey wash: it is the panel's own ground at 82%, so what
+       is underneath reads as present-but-not-yet rather than as switched off. -->
+  <Style Selector="Border.wip">
+    <Setter Property="Background" Value="#D1F7F3FE" />
   </Style>
 
   <!-- ── Separator ───────────────────────────────────────────────────────────────────────── -->

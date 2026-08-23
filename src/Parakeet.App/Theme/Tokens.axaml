@@ -13,10 +13,11 @@
      chroma identical at every step to within 0.001 — rotated in hue alone, which is what lets a
      taro panel sit beside a matcha one without either shouting.
 
-     Taro is deliberately *not* defined here. Nothing in v1 may draw it, and a brush that exists is
-     a brush something will eventually use; when the Ask tab is built it brings its own ramp. This
-     is also why speaker labelling is matcha despite having been purple: it is a v1 feature, and
-     #6B4E9C would read as v2 the moment an Ask tab exists.
+     Taro arrived with the Ask tab on 2026-08-22, which is the condition this file used to state
+     for admitting it: nothing in v1 may draw it, and a brush that exists is a brush something will
+     eventually use, so it waited until there was a v2 surface to put it on. The Ask tab is the
+     only thing that draws it. This is also why speaker labelling is matcha despite having been
+     purple: it is a v1 feature, and #6B4E9C would read as v2 now that an Ask tab exists.
 
   2. #F0D983 is pinned to exactly one job — the word being spoken in the word-by-word view — and
      that view is not built yet. It is defined here because it is part of the system, and it is
@@ -53,6 +54,44 @@
   <SolidColorBrush x:Key="Matcha400Brush" Color="{StaticResource Matcha400}" />
   <SolidColorBrush x:Key="Matcha600Brush" Color="{StaticResource Matcha600}" />
   <SolidColorBrush x:Key="Matcha700Brush" Color="{StaticResource Matcha700}" />
+
+  <!-- ── The taro ramp ───────────────────────────────────────────────────────────────────────
+       v2's accent, and the same six points as matcha above with the hue rotated to 304. The
+       lightness and chroma are not re-picked here: each value was produced by reading the shipped
+       matcha hex back out to oklch and re-rendering it at the new hue, so the two ramps agree at
+       every step by construction rather than by eye.
+
+       What that round trip reports, matcha first and taro second, at each step:
+
+         50   L 0.9693 C 0.0154  ->  L 0.9704 C 0.0151
+         100  L 0.9364 C 0.0355  ->  L 0.9372 C 0.0350
+         200  L 0.8877 C 0.0657  ->  L 0.8877 C 0.0654
+         400  L 0.7608 C 0.1008  ->  L 0.7600 C 0.1018
+         600  L 0.5408 C 0.0911  ->  L 0.5403 C 0.0910
+         700  L 0.4580 C 0.0813  ->  L 0.4566 C 0.0816
+
+       — every pair inside 0.0014 of lightness and 0.0010 of chroma, which is the "identical to
+       within 0.001" the design claims, and the residue is 8-bit sRGB rounding rather than a
+       different colour. Matcha's own hue is 126.8 to 128.6 across the ramp for the same reason
+       (hue is least stable where chroma is lowest), so the rotation is 175.4 to 177.2 rather than
+       one figure, which is why the design says "roughly 175-180" instead of naming one.
+
+       Contrast on white, computed rather than estimated: taro-700 is 7.48:1 and taro-600 is
+       5.24:1, so both are legal as body text; taro-400 is 2.22:1 and is an edge or a fill only.
+       Matcha's are 7.00:1 and 4.90:1 at the same steps. -->
+  <Color x:Key="Taro50">#F7F3FE</Color>
+  <Color x:Key="Taro100">#EFE5FE</Color>
+  <Color x:Key="Taro200">#E3D0FE</Color>
+  <Color x:Key="Taro400">#BFA1E6</Color>
+  <Color x:Key="Taro600">#7A619A</Color>
+  <Color x:Key="Taro700">#614B7C</Color>
+
+  <SolidColorBrush x:Key="Taro50Brush" Color="{StaticResource Taro50}" />
+  <SolidColorBrush x:Key="Taro100Brush" Color="{StaticResource Taro100}" />
+  <SolidColorBrush x:Key="Taro200Brush" Color="{StaticResource Taro200}" />
+  <SolidColorBrush x:Key="Taro400Brush" Color="{StaticResource Taro400}" />
+  <SolidColorBrush x:Key="Taro600Brush" Color="{StaticResource Taro600}" />
+  <SolidColorBrush x:Key="Taro700Brush" Color="{StaticResource Taro700}" />
 
   <!-- ── Ground and ink ──────────────────────────────────────────────────────────────────────
        The neutrals carry a trace of the matcha hue (chroma 0.004–0.025 at hue ~126°) so white

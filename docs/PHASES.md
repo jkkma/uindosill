@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 874 tests, no weights, no display, no network — **872 passed and 2 skipped**, and
+**Status:** met. 909 tests, no weights, no display, no network — **907 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -378,7 +378,7 @@ the sheet says so rather than claiming a precision the hex values do not have.
 The rule this buys is worth more than the colours: **a surface's colour says which generation it
 belongs to.** Which is why speaker labelling — a v1 feature — cannot keep the purple `SPEAKERS`
 badge it has today (`#6B4E9C`, in taro's neighbourhood); it would read as a v2 feature the moment
-an Ask tab exists. It becomes an outlined matcha badge, which still separates it from the solid
+an Ask tab exists — as one now does. It becomes an outlined matcha badge, which still separates it from the solid
 `LOADED` badge beside it.
 
 **Type.** Instrument Sans throughout, monospace only for text you copy — paths, extensions, hex,
@@ -2068,6 +2068,99 @@ CUDA does not. So `auto` is WebGPU where it builds and otherwise the CPU — the
 the CPU's speed — and CUDA is reachable by name, with the two warnings a named provider gets. The
 resolver's docstring and both `--speaker-backend` help strings say so; `docs/UNPROVEN.md` and the
 entry above on the float handoff, which already said CUDA was out, now describe the code.
+
+### Built 2026-08-22 — the Ask tab, playing before asking
+
+**v2's tab exists, two thirds of it works, and the third that does not says so.** The Ask tab
+carries a recording with a transport, its transcript beside it as cues you click to jump there, a
+find box, and a chat panel that is drawn, disabled and covered by a notice. Nothing in it is a
+language model, and that ordering is the one `docs/V2-ASK-THE-TRANSCRIPT.md` asks for: *"a
+transcript you can click to hear is useful before any model is involved."*
+
+**This application had no audio playback at all before it.** `Parakeet.Audio` decodes for
+transcription and sounds nothing; `scripts/preview-words-vtt.html` reads a player's clock and never
+assigns to it. So the transport is new surface rather than a wrapper — `Services/IAudioPlayer.cs`,
+opening a file through the same reader `AudioSources.Open` chooses (the managed WAVE reader, or
+Media Foundation on Windows, sniffed from the magic bytes rather than the extension) and playing it
+through WASAPI. **It costs no new package**: `NAudio.Wasapi` and `NAudio.Core` are already in the
+graph through `Parakeet.Audio`, which uses the first of them to decode.
+
+**Taro arrived with it**, which is the condition `Theme/Tokens.axaml` had been stating since the
+design landed: nothing in v1 may draw it, and a brush that exists is a brush something will
+eventually use, so the ramp waited for a v2 surface to sit on. It was not picked. Each of the six
+values was produced by reading the shipped matcha hex back out to oklch and re-rendering it at hue
+304, so the two ramps agree at every step by construction — **every pair within 0.0014 of lightness
+and 0.0010 of chroma**, which is the "identical to within 0.001" the design claims, with 8-bit sRGB
+rounding as the residue. Matcha's own hue runs 126.8 to 128.6 across its ramp because hue is least
+stable where chroma is lowest, so the rotation is **175.4° to 177.2°** rather than one figure —
+which is why the design says "roughly 175–180" and this does too. Contrast on white was computed,
+not estimated: **taro-700 is 7.48:1 and taro-600 is 5.24:1**, so both are legal as body text, and
+taro-400 at 2.22:1 is an edge or a fill only.
+
+**The window never writes a timestamp of its own.** Every time on the tab comes off a
+`TranscriptSegment` unchanged — the rule that document sets for the model's citations, kept early
+in the place where it is cheapest, and `TranscriptLineViewModel` now carries `Start` and `End` so
+there is nothing to compute.
+
+**The queue is shared with the Transcribe tab rather than copied.** The same `JobViewModel` rows
+appear on both, so a transcript that finishes while this tab is open fills in where it stands, and
+a file is playable the moment it is dropped — before it has been transcribed at all. Two
+collections would have needed reconciling, and the failure mode of getting that wrong is a
+transcript shown beside the wrong recording.
+
+**Finding a word is v1 data too, so it is here.** The find box marks every line carrying the term,
+Enter steps through the hits and Shift+Enter steps back, and the counter says which of how many.
+**It does not seek**, which is a decision rather than an omission: somebody scanning a three-hour
+transcript for every mention of a name does not want the audio jumping under them on each press of
+Enter, so a hit is scrolled to and marked, and clicking it is what plays it. The term is written
+only onto the lines that carry it — a search that marked every line would rebuild every paragraph
+in the transcript on every keystroke, fifteen hundred of them on a three-hour recording, all but a
+handful re-rendering to exactly what they already said.
+
+**The chat panel is a deliberate exception to this window's own rule**, and the exception is
+narrow. The rule is that no control ships wired to nothing; the reason for the rule is that nothing
+here may fail silently. A panel that says in so many words that it is not built is the opposite of
+a silent failure — what would breach the rule is a live-looking text box that swallows a question.
+So the panel is drawn in the shape the feature will take, every control in it disabled, under the
+panel's own ground at 82% carrying the notice. Three assertions hold it to that: nothing in it can
+be operated, the notice is over it, and the notice says what is missing.
+
+**Two things in the drawing are worth recording because both look like accidents.** The seek bar is
+a `ProgressBar` with a transparent strip over it rather than a `Slider` — Fluent's slider is themed
+through template parts whose names are its own, and this repository has already shipped a resource
+override on a key that did not exist, which loads without complaint and changes nothing. What that
+costs is the design's circular seek handle, which cannot be positioned without a measured width;
+the bar is click-and-drag without one. And the cue's left edge is always drawn and usually
+transparent, because a border that appears when a line becomes the current search hit moves the
+words 3 px sideways, and stepping through hits would jog every line it touched.
+
+**What the suite cannot reach, and what was done about it.** `SystemAudioPlayer` needs a Windows
+audio endpoint, which neither CI nor a headless run has. Everything the tab does — open, play, seek
+from a cue, follow the position, find a word, stop at the end — is exercised against
+`FakeAudioPlayer`, whose clock moves only when it is told to, so what the suite leaves untested is
+the device rather than the behaviour. **So the device was driven by hand the same day**, on the
+laptop, against three files covering both reader branches: an m4a and an mp3 through Media
+Foundation and a WAVE tone through the managed reader. On all three the endpoint opens, the clock
+advances at real time, pause holds it, a seek lands exactly and resumes, a seek while playing lands
+and carries on, and play at the end starts the recording over.
+
+**That run found two defects, and both were in the same method.** Play at the end **only wrapped
+when the device had stopped by itself** — the wrap sat inside the branch that creates an output,
+which is reached after a recording runs out, so the common path looked right; drag the bar to the
+end or pause there and the device is *paused* rather than stopped, and play resumed a reader with
+nothing left to read. And the at-the-end test was **a coin toss at the boundary**: a seek to the end
+lands on a frame boundary rather than on the duration, and the mp3 and the WAVE landed exactly on it
+where the m4a landed **0.006 ms** short, so `>=` wrapped two of the three. The wrap is now on every
+play and allows one millisecond — 48 frames at 48 kHz, inaudible, 160 times the largest gap seen.
+
+Both were invisible from the suite for the same reason, and it is the reason worth keeping: **the
+fake player was more forgiving than the real one.** It wrapped on every play and clamped exactly, so
+the tests were green over a real player that did neither. A fake is a description of a contract, and
+where the two drift the tests describe the fake.
+
+What is still not established — that a person has heard the sound, a natural end-of-stream, a seek
+audited by ear, and playback beside a running transcription — is in `docs/UNPROVEN.md` § *Playing a
+recording* with what would settle each. Suite green at 909.
 
 ## The honest summary
 

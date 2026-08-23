@@ -1,6 +1,6 @@
 # v2 — asking questions about a transcript
 
-Nothing here is built. This is the decision register: what v2 is for, the one property that makes
+The asking is not built. This is the decision register: what v2 is for, the one property that makes
 it harder than v1, and the questions that have to be answered before any code is written. Where a
 question has evidence behind it the evidence is here; where it does not, it says so.
 
@@ -39,12 +39,16 @@ rubric behind it, but it is a concrete thing to look at on day one rather than a
 Half of it does. `vtt-words` carries the timestamps and `scripts/preview-words-vtt.html` already
 highlights the current word as audio plays, so mapping a time to a place in the text is solved.
 
-**Seeking is not.** That page only reads `player.currentTime`; it never assigns to it, so nothing
-in this repository turns a click into a jump. `Parakeet.App` has no audio playback at all — no
-player, no transport, no seek — and `Parakeet.Audio`'s Media Foundation reader decodes for
-transcription rather than playing anything. So the citation being *correct* is nearly free here,
-and the citation being *clickable* is new surface. Worth sequencing first: a transcript you can
-click to hear is useful before any language model is involved.
+**Seeking was not, and it is now.** That page only reads `player.currentTime`; it never assigns to
+it, so nothing in this repository turned a click into a jump — and when this was written
+`Parakeet.App` had no audio playback at all, no player, no transport and no seek, with
+`Parakeet.Audio`'s Media Foundation reader decoding for transcription rather than sounding
+anything. **That is what shipped on 2026-08-22**, taking this section's own advice: the Ask tab
+plays a recording, draws its transcript as cues that seek it, follows the playhead through them,
+and searches them — all on times v1 already writes, and with no model anywhere near it. The
+citation being *correct* was always nearly free here; the citation being *clickable* was the new
+surface, and it exists. `docs/PHASES.md` § *Built 2026-08-22 — the Ask tab* records what it cost
+and `docs/UNPROVEN.md` § *Playing a recording* records what nothing has heard.
 
 ### The model never writes a timestamp
 

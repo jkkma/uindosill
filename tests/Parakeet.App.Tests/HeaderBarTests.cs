@@ -83,6 +83,7 @@ public class HeaderBarTests
 
     [AvaloniaTheory]
     [InlineData("TabTranscribe")]
+    [InlineData("TabAsk")]
     [InlineData("TabModels")]
     [InlineData("TabUpdates")]
     [InlineData("TabLicences")]
