@@ -63,6 +63,21 @@ public partial class MainWindow : Window
     /// <inheritdoc cref="_seekStrip" />
     private Border? _seekPuck;
 
+    /// <summary>
+    /// Whether the picture row is currently shown, or null before the question has been asked.
+    /// </summary>
+    /// <remarks>
+    /// The reason <see cref="ShowPictureRow"/> is not simply an assignment. AskViewModel.Redraw
+    /// raises <c>HasVideo</c> on every tick that moved the clock — ten times a second while a
+    /// recording plays — and it says the same thing every time. Acting on each one wrote the row's
+    /// height back ten times a second, which is invisible while paused and, mid-drag, stamps the
+    /// splitter back to where it was before the gesture started.
+    /// </remarks>
+    private bool? _pictureRowShown;
+
+    /// <summary>Whether the reader has hold of the splitter right now.</summary>
+    private bool _resizingPicture;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -429,13 +444,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        pane.SizeChanged += (_, e) =>
+        // Not while the splitter is being dragged. Every layout pass of a drag is a new size, and
+        // telling the player about each one makes it reallocate its render target sixty times a
+        // second underneath a recording that is playing. The size is published once, on release.
+        pane.SizeChanged += (_, _) =>
         {
-            var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-            _watchedPlayer?.SetVideoOutputSize(
-                (int)(e.NewSize.Width * scaling),
-                (int)(e.NewSize.Height * scaling));
+            if (!_resizingPicture)
+            {
+                PublishVideoSize();
+            }
         };
+    }
+
+    /// <summary>Tells the player how large the pane it is filling actually is, in device pixels.</summary>
+    private void PublishVideoSize()
+    {
+        if (this.FindControl<Border>("VideoPane") is not { } pane || pane.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+
+        _watchedPlayer?.SetVideoOutputSize(
+            (int)(pane.Bounds.Width * scaling),
+            (int)(pane.Bounds.Height * scaling));
     }
 
     /// <summary>
@@ -498,7 +531,17 @@ public partial class MainWindow : Window
         }
 
         _pictureHeight = column.RowDefinitions[0].Height;
-        splitter.DragCompleted += (_, _) => _pictureHeight = column.RowDefinitions[0].Height;
+
+        splitter.DragStarted += (_, _) => _resizingPicture = true;
+
+        splitter.DragCompleted += (_, _) =>
+        {
+            _resizingPicture = false;
+            _pictureHeight = column.RowDefinitions[0].Height;
+
+            // The one size that matters is the one they let go on. See WireVideoPane.
+            PublishVideoSize();
+        };
     }
 
     /// <summary>Gives the picture a row of its own, or takes the row away entirely.</summary>
@@ -522,6 +565,15 @@ public partial class MainWindow : Window
         {
             return;
         }
+
+
+        // Asked far more often than it changes, and the answer is a write. See _pictureRowShown.
+        if (_pictureRowShown == hasVideo)
+        {
+            return;
+        }
+
+        _pictureRowShown = hasVideo;
 
         var row = column.RowDefinitions[0];
 

@@ -3791,6 +3791,16 @@ fails the one that scrolls away.
   builder's no-word path is reachable, and has never been observed*, which is the same gap seen
   from the subtitle side.
 
+- **The English pane on the Ask tab has not been read against a real translated recording.** Every
+  test of it drives a fixture whose "translation" is two hand-written English segments. That the
+  pane switches, searches, highlights by line and marks no word is asserted headlessly; that reading
+  along in English while a Spanish recording plays is a thing anybody wants, and that the line-level
+  highlight is enough to follow without the word mark, are judgements nobody has made.
+- **The splitter fix is verified against a simulated drag, not a hand on a mouse.** The test presses,
+  moves in six steps with the clock ticking between them, and releases. Whether the drag now *feels*
+  smooth while a video plays — and whether publishing the picture size only on release makes the
+  video visibly stretch during the gesture, which it may — has not been looked at.
+
 ## Putting a transcript back inside a recording — built 2026-08-23
 
 `docs/PHASES.md` has what the feature is and every container rule it follows, each one measured

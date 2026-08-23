@@ -1113,6 +1113,40 @@
                          Margin="0,0,0,11" Text="{Binding RenameNotice}"
                          IsVisible="{Binding RenameNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
+              <!-- ── Transcript or English ───────────────────────────────────
+                   The same pill switcher the Transcribe tab has, for the same reason and drawn the
+                   same way — but it earns its place twice over here, because the two panes are not
+                   equivalent on this tab. The transcript marks the word being said; the English
+                   cannot, and never will, because translating loses which word was said when. So
+                   this is not "the same thing in another language": it is a choice between reading
+                   along with the voice and reading what was meant.
+
+                   Absent for a recording nobody translated, which is most of them.
+
+                   The tab shows the English first when a translation arrives, because asking for
+                   one and then having to go and find it is the wrong way round — and it snaps only
+                   once, so a reader who comes back to the transcript stays there. -->
+              <Border DockPanel.Dock="Top" Classes="switcher" Name="AskPaneSwitcher"
+                      HorizontalAlignment="Left" Margin="0,0,0,11"
+                      IsVisible="{Binding CanShowTranslation}">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Name="AskPaneTranscript" Classes="segment" GroupName="AskPane"
+                               Content="Transcript"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+                  <RadioButton Name="AskPaneEnglish" Classes="segment" GroupName="AskPane"
+                               Content="English"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+                </StackPanel>
+              </Border>
+
+              <!-- Why no word lights up on this pane. Said rather than left to be noticed: a mark
+                   that works on one pane and not the other is indistinguishable from a broken one
+                   until somebody explains which. -->
+              <TextBlock DockPanel.Dock="Top" Name="TranslationPaneNotice" Classes="fine meta"
+                         Margin="0,0,0,11"
+                         Text="{Binding TranslationPaneNotice}"
+                         IsVisible="{Binding TranslationPaneNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
               <!-- ── Find a word ────────────────────────────────────────────
                    The reason anyone opens a three-hour transcript is usually one word. This runs
                    on v1's own data and needs no model, which is why it is here rather than waiting

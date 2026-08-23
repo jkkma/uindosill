@@ -1480,6 +1480,54 @@ public class AskTabWindowTests
     }
 
     [AvaloniaFact]
+    public void TheClockDoesNotStampTheDraggedHeightBackWhileARecordingPlays()
+    {
+        // The defect: AskViewModel.Redraw raises HasVideo on every tick that moved the clock — ten
+        // times a second while playing — saying the same thing each time. Acting on each one wrote
+        // the row's height back, which is invisible while paused and, mid-drag, snapped the
+        // splitter to where it was before the gesture. Reported as "it stutters and rolls back".
+        var (window, viewModel, player) = OpenWithPicture();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+
+        var before = column.RowDefinitions[0].Height;
+
+        // Playing, which is what turns the clock into a stream of HasVideo notifications.
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+
+        // And the clock ticking *during* the gesture, which is the whole of the defect: the height
+        // is only remembered when the drag completes, so a tick mid-drag wrote back the height from
+        // before it started. A test that ticks after the drag finishes passes either way.
+        var from = splitter.TranslatePoint(
+            new Point(splitter.Bounds.Width / 2, splitter.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(from, MouseButton.Left);
+
+        for (var step = 1; step <= 6; step++)
+        {
+            window.MouseMove(from + new Vector(0, step * 10));
+            window.UpdateLayout();
+
+            player.Seek(TimeSpan.FromSeconds(step));
+            viewModel.Ask.Tick();
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+
+            Assert.True(
+                column.RowDefinitions[0].Height.Value >= before.Value,
+                $"the clock pulled the row back to {column.RowDefinitions[0].Height} on move {step}");
+        }
+
+        window.MouseUp(from + new Vector(0, 60), MouseButton.Left);
+        window.UpdateLayout();
+
+        Assert.True(
+            column.RowDefinitions[0].Height.Value > before.Value,
+            "the picture did not keep the size it was dragged to");
+    }
+
+    [AvaloniaFact]
     public void ThePictureRowAndItsHandleAreBothGoneOnARecordingWithNoPicture()
     {
         // An audio file must pay nothing for a picture it does not have: no black band at the top

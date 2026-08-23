@@ -95,9 +95,83 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public bool HasRecordings => Recordings.Count > 0;
 
     /// <summary>The transcript of the selected recording, or null when none is selected.</summary>
-    public ObservableCollection<TranscriptLineViewModel>? Lines => SelectedRecording?.Lines;
+    /// <summary>
+    /// The lines the tab is showing: the transcript as it was said, or its English translation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything on this tab reads the transcript through here — the highlight that follows the
+    /// playhead, the find box, the cue a click seeks from — so switching the pane switches all of
+    /// them at once and none of them needed to know about translation.
+    /// </para>
+    /// <para>
+    /// <b>The English pane marks no words, and that is the translator's doing rather than an
+    /// omission here.</b> A translated segment carries its start and end but no word times:
+    /// <c>SidecarTranscriptTranslator</c> writes an empty word list because translating loses which
+    /// word was said when, and a word's position in an English sentence is not a fact about the
+    /// Spanish audio. So the English cues seek and highlight by line, and the word mark simply has
+    /// nothing to find — which is why the switcher exists rather than the English replacing the
+    /// transcript.
+    /// </para>
+    /// <para>
+    /// Falls back to the spoken lines for a recording with no translation, so an index left over
+    /// from a row that had one cannot strand anybody on an empty pane.
+    /// </para>
+    /// </remarks>
+    public ObservableCollection<TranscriptLineViewModel>? Lines =>
+        SelectedRecording is not { } job ? null
+        : TranscriptPane == 1 && job.HasTranslation ? job.TranslatedLines
+        : job.Lines;
+
+    /// <summary>Whether there is an English version of the open recording to switch to.</summary>
+    public bool CanShowTranslation => SelectedRecording?.HasTranslation ?? false;
+
+    /// <summary>Whether the pane being read is the English one.</summary>
+    public bool IsShowingTranslation => TranscriptPane == 1 && CanShowTranslation;
+
+    /// <summary>
+    /// Why no word lights up while the English is being read, or null on the spoken transcript.
+    /// </summary>
+    /// <remarks>
+    /// Said rather than left to be noticed: the mark works on one pane and not the other, and a
+    /// feature that silently stops is indistinguishable from a broken one.
+    /// </remarks>
+    public string? TranslationPaneNotice =>
+        IsShowingTranslation
+            ? "The English follows the recording line by line. Individual words are not marked here "
+              + "— translating loses which word was said when — so switch to Transcript for that."
+            : null;
 
     public bool HasTranscript => Lines is { Count: > 0 };
+
+    /// <summary>Which pane is being read: 0 the transcript, 1 its English version.</summary>
+    /// <remarks>
+    /// On this tab rather than on the row, for the reason the Transcribe tab gives for the same
+    /// choice: moving down the queue keeps the pane a person picked instead of snapping back to the
+    /// source on every selection.
+    /// </remarks>
+    [ObservableProperty]
+    private int _transcriptPane;
+
+    partial void OnTranscriptPaneChanged(int value)
+    {
+        // The whole tab reads the transcript through Lines, so everything derived from it moves.
+        OnPropertyChanged(nameof(Lines));
+        OnPropertyChanged(nameof(HasTranscript));
+        OnPropertyChanged(nameof(TranscriptNotice));
+        OnPropertyChanged(nameof(IsShowingTranslation));
+        OnPropertyChanged(nameof(TranslationPaneNotice));
+
+        // The line being played is a line of the pane that was showing. Dropped and found again by
+        // position rather than by index: the two panes share the segment times, so the same moment
+        // is the same place in both, and an index would be right only while neither pane had
+        // dropped an empty segment.
+        SetActiveLine(null);
+        Redraw();
+
+        // And the hits, which are matches in the text of one pane and mean nothing in the other's.
+        Research();
+    }
 
     /// <summary>The voices in the open recording, or null where it was never labelled.</summary>
     /// <remarks>
@@ -437,6 +511,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (SelectedRecording is { } job)
         {
             job.Lines.CollectionChanged -= OnLinesChanged;
+            job.TranslatedLines.CollectionChanged -= OnLinesChanged;
+            job.PropertyChanged -= OnRecordingChanged;
 
             // And the voices, which is the subscription that would actually outlive this: a
             // JobViewModel belongs to the Transcribe tab and goes on existing after this one is
@@ -463,6 +539,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (oldValue is not null)
         {
             oldValue.Lines.CollectionChanged -= OnLinesChanged;
+            oldValue.TranslatedLines.CollectionChanged -= OnLinesChanged;
+            oldValue.PropertyChanged -= OnRecordingChanged;
             oldValue.Speakers.CollectionChanged -= OnSpeakersChanged;
             Unwatch(oldValue.Speakers);
         }
@@ -470,6 +548,11 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (newValue is not null)
         {
             newValue.Lines.CollectionChanged += OnLinesChanged;
+
+            // Both collections, because the English arrives long after the transcript did and on a
+            // row this tab may already be showing.
+            newValue.TranslatedLines.CollectionChanged += OnLinesChanged;
+            newValue.PropertyChanged += OnRecordingChanged;
             newValue.Speakers.CollectionChanged += OnSpeakersChanged;
             Watch(newValue.Speakers);
         }
@@ -506,6 +589,9 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasTranscript));
         OnPropertyChanged(nameof(TranscriptNotice));
         OnPropertyChanged(nameof(VideoNotice));
+        OnPropertyChanged(nameof(CanShowTranslation));
+        OnPropertyChanged(nameof(IsShowingTranslation));
+        OnPropertyChanged(nameof(TranslationPaneNotice));
         OnPropertyChanged(nameof(Speakers));
         OnPropertyChanged(nameof(HasSpeakers));
         OnPropertyChanged(nameof(RenameNotice));
@@ -514,6 +600,41 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         // looking for a name across a session's worth of files is doing exactly that, and clearing
         // the box for them would mean typing it again for every file.
         Research();
+    }
+
+    /// <summary>
+    /// The open recording changed something about itself — which, for this tab, means a translation
+    /// arrived for a row somebody is already reading.
+    /// </summary>
+    /// <remarks>
+    /// The pane snaps to the English the first time one appears, because asking for a translation
+    /// and then having to find where it went is the wrong way round. It snaps once: a reader who
+    /// switches back to the transcript stays there, and this only fires again when another
+    /// recording gains a translation of its own.
+    /// </remarks>
+    private void OnRecordingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(JobViewModel.HasTranslation)
+            && e.PropertyName != nameof(JobViewModel.TranslatedTranscript))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(CanShowTranslation));
+
+        if (CanShowTranslation && TranscriptPane == 0)
+        {
+            // Assigning raises OnTranscriptPaneChanged, which moves the lines, the highlight and
+            // the search with it.
+            TranscriptPane = 1;
+        }
+        else
+        {
+            OnPropertyChanged(nameof(Lines));
+            OnPropertyChanged(nameof(HasTranscript));
+            OnPropertyChanged(nameof(IsShowingTranslation));
+            OnPropertyChanged(nameof(TranslationPaneNotice));
+        }
     }
 
     /// <summary>
