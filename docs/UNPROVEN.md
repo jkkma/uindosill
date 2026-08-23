@@ -3872,6 +3872,14 @@ them. That every switcher pill selects the `TabItem` whose header it names. That
 the wordmark and the window buttons at 1080 and at `MinWidth`, from the pills' own arranged
 positions — the 4px overlap at the old 820 was found that way, not by eye.
 
+**Later the same day the two extra passes moved back to the Transcribe tab** — translation first,
+speakers last, the English box renamed 'Translate to English'; `docs/PHASES.md` has the reasoning —
+and the assertions moved with them: the Transcribe tab now draws exactly those two checkboxes, with
+their order pinned from drawn geometry, and the Settings page keeps the cut and the way to About.
+The rearranged Transcribe tab, unlike the pages this entry opened with, **was looked at on a
+screen**: the built application was launched on the laptop and the window captured, which retires
+none of the judgement gaps below for the two reading pages and the About window.
+
 **What is not.**
 
 - **The two pages and the window have not been looked at.** `docs/PHASES.md` says both pages are

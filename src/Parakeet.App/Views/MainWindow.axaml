@@ -334,22 +334,6 @@
                          Classes="fine warning" Margin="0,8,0,0"
                          IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-              <!-- Past where the diariser's labels have been established, drawn here as well as
-                   beside the count on Settings — the same property, bound twice, so there is still
-                   one copy of the fact.
-
-                   It is here because of where the reader is when it matters. The property's whole
-                   requirement is to be in front of the person who can still act on it, before the
-                   twenty minutes are spent, and after the opt-in moved to Settings that stopped
-                   being true of a queue: somebody ticks the box and sets a count on Settings, comes
-                   back, drops a two-hour interview and presses Start, and the sentence saying those
-                   names are past the evidence was drawn on a page they had already left. It is a
-                   fact about the queue, so it belongs where the queue is. -->
-              <TextBlock DockPanel.Dock="Bottom" Name="QueueDurationWarning"
-                         Text="{Binding SpeakerDurationWarning}" TextWrapping="Wrap"
-                         Classes="fine warning" Margin="0,8,0,0"
-                         IsVisible="{Binding SpeakerDurationWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
               <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:JobViewModel">
@@ -399,19 +383,127 @@
 
             <!-- ── The transcript ─────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="2">
-              <!-- Where the rest of this column went, on 2026-08-23. Everything that used to
-                   stack above the transcript — the formats, the folder, the button that puts the
-                   transcript inside the recording, the two opt-ins, the way the audio is cut — is
-                   on the Export and Settings tabs now, and this line is the forwarding address. A
-                   control that moves without one is a control the person who used it every day
-                   cannot find, which is the same failure as a control that silently does nothing.
+              <!-- Where the rest of this column went, on 2026-08-23. The formats, the folder,
+                   the button that puts the transcript inside the recording and the way the audio
+                   is cut are on the Export and Settings tabs, and this line is the forwarding
+                   address. A control that moves without one is a control the person who used it
+                   every day cannot find, which is the same failure as a control that silently
+                   does nothing.
 
-                   Every control named here is named: a forwarding address that lists four of the
-                   five things that left is worse than none, because the reader concludes the fifth
-                   was removed. -->
+                   Every control that left is named: a forwarding address that lists some of what
+                   went is worse than none, because the reader concludes the rest was removed. -->
               <TextBlock DockPanel.Dock="Top" Name="OptionsMoved" Classes="fine meta"
                          Margin="0,0,0,11"
-                         Text="Output formats, where files are written, and adding the transcript to the recording are on the Export tab. How the audio is cut, speaker labels and the English version are on Settings." />
+                         Text="Output formats, where files are written, and adding the transcript to the recording are on the Export tab. How the audio is cut is on Settings." />
+
+              <!-- ── The two extra passes ─────────────────────────────────────────────────────
+                   Beside the queue rather than on Settings with the cut controls, since later on
+                   2026-08-23: the cut and the formats are machinery, set once and left alone, but
+                   these two decide what pressing Start produces for the queue on this page, and a
+                   per-run decision belongs on the page where the run is launched. Both are off by
+                   default and both cost time, so neither happens unless it is asked for here.
+
+                   Translation first and speakers last, so the strip that grows when ticked — the
+                   count field and up to two sentences appear under the speaker box — moves only
+                   the transcript below it and never the other opt-in. -->
+              <StackPanel DockPanel.Dock="Top" Spacing="7" Margin="0,0,0,11">
+
+                <!-- The English opt-in, drawn as the twin of the speaker one below: its own
+                     tinted strip, off by default, disabled with a reason rather than hidden while
+                     its model is not installed.
+
+                     Matcha, because translating is a v1 feature. There is no language picker
+                     beside it and that is a finding rather than an omission — the checkpoint is
+                     many-to-one, told the target and never the source, so there is nothing for a
+                     picker to say. The direction is fixed: into English, never out of it. -->
+                <Border Classes="tinted" Padding="10,8">
+                  <DockPanel LastChildFill="True">
+                    <CheckBox DockPanel.Dock="Left"
+                              Name="TranslateToEnglish"
+                              Content="Translate to English"
+                              FontWeight="SemiBold"
+                              Margin="0,0,9,0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding TranslateToEnglish}"
+                              IsEnabled="{Binding CanTranslate}" />
+                    <TextBlock Text="{Binding TranslationHint}" Classes="meta" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding TranslationHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </DockPanel>
+                </Border>
+
+                <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while
+                     no labeller is in the build — a control that silently does nothing is the
+                     failure this application refuses to ship.
+
+                     Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
+                     strip so the opt-in reads as a decision rather than another checkbox. -->
+                <Border Classes="tinted" Padding="10,8">
+                  <!-- The outer panel stacks vertically, which is what makes the wrapping below
+                       work: a StackPanel measures its children with infinite size along the axis
+                       it stacks on, so only the horizontal ones break TextWrapping. -->
+                  <StackPanel Spacing="7">
+                    <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures its children
+                         with infinite width on the stacking axis, so TextWrapping on the hint
+                         never engaged and the reason the opt-in was disabled ran off the right
+                         edge — "…it is a 453 MiB dow". The hint is the whole point of disabling
+                         rather than hiding the control, so it has to be readable. -->
+                    <DockPanel LastChildFill="True">
+                      <CheckBox DockPanel.Dock="Left"
+                                Name="LabelSpeakers"
+                                Content="Label speakers"
+                                FontWeight="SemiBold"
+                                Margin="0,0,9,0"
+                                VerticalAlignment="Center"
+                                IsChecked="{Binding LabelSpeakers}"
+                                IsEnabled="{Binding CanLabelSpeakers}" />
+                      <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </DockPanel>
+
+                    <!-- The speaker count, and the only repair this product has for a recording
+                         longer than the diariser's labels are established on. Hidden rather than
+                         disabled while the opt-in is off, which is the one place this window
+                         departs from its own convention and does so deliberately: a disabled
+                         control is shown when the user cannot reach the thing it needs, and here
+                         they can — the checkbox is right above it and ticking it brings this to
+                         life. It is a detail of the opt-in, not a setting of its own.
+
+                         Blank does not run — the placeholder says required and Start refuses until
+                         a number is here — but there is still no default of two, because the count
+                         has to come from the user for the fold to mean anything. The fold this
+                         drives is wrong to apply unasked: on one of the eighteen AMI development
+                         meetings the two genuinely different speakers who collide least never
+                         overlap at all, so a guessed default merges two real people there. -->
+                    <StackPanel Orientation="Horizontal" Spacing="8"
+                                IsVisible="{Binding CanSetSpeakerCount}">
+                      <TextBlock Text="How many speakers" Classes="secondary" VerticalAlignment="Center" />
+                      <!-- Wide enough for the placeholder, which is the longest thing this field
+                           ever shows. At 128 the spin buttons ate it and it read "estimat", which
+                           a headless render would not have caught and the opened window did. -->
+                      <NumericUpDown Value="{Binding SpeakerCount}" Minimum="1" Maximum="99"
+                                     Increment="1" Width="170" FormatString="0"
+                                     PlaceholderText="required" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding SpeakerCountHint}" Classes="meta" TextWrapping="Wrap"
+                               IsVisible="{Binding SpeakerCountHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                    <!-- Past where the evidence stops, said before the batch rather than beside
+                         the finished transcript, on the same screen as the queue and the Start
+                         button it is a warning about. The command line has fired this since the
+                         bound was measured. -->
+                    <!-- No MaxWidth: it wraps to the strip like the hint above it, and a paragraph
+                         that broke at a different measure from the one directly over it reads as a
+                         different column rather than as the next thing to know. -->
+                    <TextBlock Name="DurationWarning"
+                               Text="{Binding SpeakerDurationWarning}" Classes="warning"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding SpeakerDurationWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
 
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
                          Classes="meta" FontSize="11.5" Margin="0,10,0,0" />
@@ -1274,9 +1366,10 @@
            control on this page is v1. See Theme/Tokens.axaml.
 
            What is deliberately NOT here: the backend picker, which stays on the Models tab beside
-           the Load button it governs, and the launch update check, which stays on Updates beside
-           the sentence explaining it. Both are settings; both are more use next to the thing they
-           change than in a drawer with everything else. -->
+           the Load button it governs; the launch update check, which stays on Updates beside the
+           sentence explaining it; and the two extra passes, which are on the Transcribe tab
+           beside the queue they run over. All are settings; all are more use next to the thing
+           they change than in a drawer with everything else. -->
       <TabItem Header="Settings">
         <ScrollViewer Margin="26,22" DataContext="{Binding Transcribe}"
                       x:DataType="vm:TranscribeViewModel">
@@ -1285,7 +1378,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="How a recording is cut up before it is decoded, and the two extra passes v1 can run over it. Both passes are off by default and both cost time, so neither happens unless it is asked for here." />
+                       Text="How a recording is cut up before it is decoded. The two extra passes — speaker labels and the English translation — are on the Transcribe tab, beside the queue they run over." />
 
             <!-- ── How the audio is cut ────────────────────────────────────────────────────── -->
             <StackPanel Spacing="9">
@@ -1327,108 +1420,6 @@
                          Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
             </StackPanel>
 
-            <!-- ── The two extra passes ────────────────────────────────────────────────────── -->
-            <StackPanel Spacing="9">
-              <TextBlock Text="EXTRA PASSES" Classes="section" />
-
-              <!-- The speaker opt-in. Off by default; disabled with a reason, not hidden, while no
-                   labeller is in the build — a control that silently does nothing is the failure
-                   this application refuses to ship.
-
-                   Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
-                   strip so the opt-in reads as a decision rather than a fourth checkbox. -->
-              <Border Classes="tinted" Padding="10,8">
-                <!-- The outer panel stacks vertically, which is what makes the wrapping below
-                     work: a StackPanel measures its children with infinite size along the axis it
-                     stacks on, so only the horizontal ones break TextWrapping. -->
-                <StackPanel Spacing="7">
-                  <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures its children
-                       with infinite width on the stacking axis, so TextWrapping on the hint never
-                       engaged and the reason the opt-in was disabled ran off the right edge —
-                       "…it is a 453 MiB dow". The hint is the whole point of disabling rather than
-                       hiding the control, so it has to be readable. -->
-                  <DockPanel LastChildFill="True">
-                    <CheckBox DockPanel.Dock="Left"
-                              Name="LabelSpeakers"
-                              Content="Label speakers"
-                              FontWeight="SemiBold"
-                              Margin="0,0,9,0"
-                              VerticalAlignment="Center"
-                              IsChecked="{Binding LabelSpeakers}"
-                              IsEnabled="{Binding CanLabelSpeakers}" />
-                    <TextBlock Text="{Binding SpeakerHint}" Classes="meta" TextWrapping="Wrap"
-                               VerticalAlignment="Center"
-                               IsVisible="{Binding SpeakerHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  </DockPanel>
-
-                  <!-- The speaker count, and the only repair this product has for a recording
-                       longer than the diariser's labels are established on. Hidden rather than
-                       disabled while the opt-in is off, which is the one place this window departs
-                       from its own convention and does so deliberately: a disabled control is
-                       shown when the user cannot reach the thing it needs, and here they can —
-                       the checkbox is right above it and ticking it brings this to life. It is a
-                       detail of the opt-in, not a setting of its own.
-
-                       Blank does not run — the placeholder says required and Start refuses until
-                       a number is here — but there is still no default of two, because the count
-                       has to come from the user for the fold to mean anything. The fold this
-                       drives is wrong to apply unasked: on one of the eighteen AMI development
-                       meetings the two genuinely different speakers who collide least never
-                       overlap at all, so a guessed default merges two real people there. -->
-                  <StackPanel Orientation="Horizontal" Spacing="8"
-                              IsVisible="{Binding CanSetSpeakerCount}">
-                    <TextBlock Text="How many speakers" Classes="secondary" VerticalAlignment="Center" />
-                    <!-- Wide enough for the placeholder, which is the longest thing this field
-                         ever shows. At 128 the spin buttons ate it and it read "estimat", which a
-                         headless render would not have caught and the opened window did. -->
-                    <NumericUpDown Value="{Binding SpeakerCount}" Minimum="1" Maximum="99"
-                                   Increment="1" Width="170" FormatString="0"
-                                   PlaceholderText="required" />
-                  </StackPanel>
-
-                  <TextBlock Text="{Binding SpeakerCountHint}" Classes="meta" TextWrapping="Wrap"
-                             IsVisible="{Binding SpeakerCountHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                  <!-- Past where the evidence stops, said before the batch rather than beside the
-                       finished transcript. The command line has fired this since the bound was
-                       measured; the window reported only the cap, and a cap is an afterwards
-                       sentence about what happened rather than a warning about what is not known
-                       to work. -->
-                  <!-- No MaxWidth: it wraps to the strip like the hint above it, and a paragraph
-                       that broke at a different measure from the one directly over it reads as a
-                       different column rather than as the next thing to know. -->
-                  <TextBlock Text="{Binding SpeakerDurationWarning}" Classes="warning"
-                             TextWrapping="Wrap"
-                             IsVisible="{Binding SpeakerDurationWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                </StackPanel>
-              </Border>
-
-              <!-- The English opt-in, the second of v1's two, and drawn as the twin of the first:
-                   its own tinted strip, off by default, disabled with a reason rather than hidden
-                   while its model is not installed.
-
-                   Matcha like the one above, because translating is a v1 feature too. There is
-                   no language picker beside it and that is a finding rather than an omission —
-                   the checkpoint is many-to-one, told the target and never the source, so there
-                   is nothing for a picker to say. The direction is fixed: into English, never
-                   out of it. -->
-              <Border Classes="tinted" Padding="10,8">
-                <DockPanel LastChildFill="True">
-                  <CheckBox DockPanel.Dock="Left"
-                            Name="TranslateToEnglish"
-                            Content="English version"
-                            FontWeight="SemiBold"
-                            Margin="0,0,9,0"
-                            VerticalAlignment="Center"
-                            IsChecked="{Binding TranslateToEnglish}"
-                            IsEnabled="{Binding CanTranslate}" />
-                  <TextBlock Text="{Binding TranslationHint}" Classes="meta" TextWrapping="Wrap"
-                             VerticalAlignment="Center"
-                             IsVisible="{Binding TranslationHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                </DockPanel>
-              </Border>
-            </StackPanel>
-
             <!-- There is no spoken-language picker on this page, and that is a decision rather than
                  an omission. parakeet.cpp's ABI does take a target language, but the tdt
                  checkpoints this catalogue ships are not prompt-conditioned and never read it:
@@ -1439,8 +1430,9 @@
                  disabled is still a control nobody can use. It comes back when a checkpoint that
                  reads the hint does.
 
-                 It would not have been a translation control either way: the translator above is
-                 many-to-one, told the target and never the source. -->
+                 It would not have been a translation control either way: the translator behind
+                 the Transcribe tab's opt-in is many-to-one, told the target and never the
+                 source. -->
 
             <Separator />
 

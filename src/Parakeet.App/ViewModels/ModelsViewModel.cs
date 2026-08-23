@@ -353,17 +353,19 @@ public sealed partial class ModelsViewModel : ObservableObject
             if (!model.IsTranscriptionModel)
             {
                 // Named per task rather than "not a transcription model", which describes what it
-                // is not and leaves the reader to work out what it is for.
+                // is not and leaves the reader to work out what it is for. The place is named with
+                // the control, because the two passes and the speech detector live on different
+                // tabs and a control named without its page is a repair nobody can act on.
                 var used = model.Descriptor.Task switch
                 {
-                    ModelTask.Diarisation => "'Label speakers'",
-                    ModelTask.Translation => "'English version'",
-                    ModelTask.VoiceActivity => "'Neural speech detection'",
+                    ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
+                    ModelTask.Translation => "'Translate to English' on the Transcribe tab",
+                    ModelTask.VoiceActivity => "'Neural speech detection' on the Settings tab",
                     _ => "its own opt-in",
                 };
 
                 return $"This panel loads the model that turns speech into text. {model.DisplayName} does "
-                       + $"something else — it runs from {used} on the Settings tab, alongside the recogniser, "
+                       + $"something else — it runs from {used}, alongside the recogniser, "
                        + "and is never loaded here.";
             }
 
