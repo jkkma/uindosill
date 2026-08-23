@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 981 tests, no weights, no display, no network — **979 passed and 2 skipped**, and
+**Status:** met. 1020 tests, no weights, no display, no network — **1018 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2750,10 +2750,93 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**981 tests, no weights, no display, no network — 979 passed and 2 skipped.** `CLAUDE.md`'s second
+**1020 tests, no weights, no display, no network — 1018 passed and 2 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `981 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1020 tests` so the guard now
 covers it.
+
+### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
+
+The half of this product that is for somebody who does not want files. Transcribe a recording, press
+one button, and the recording is beside its original with the words inside it as a subtitle track
+any player will show. The sidecar `.srt` is still written; this is for the person who was never
+going to open it.
+
+**Which container it goes into is decided by which format was ticked, and every rule was measured
+against FFmpeg 9.0.1 rather than read off a specification** — because two of the answers are the
+opposite of what the specifications suggest:
+
+- **MP4 cannot hold WebVTT at all.** Not "loses the styling": the muxer refuses the stream —
+  *"Could not find tag for codec webvtt in stream, codec not currently supported in container"*. Its
+  only subtitle codec is `mov_text`, 3GPP timed text, which is plain text.
+- **So word-level timing always forces Matroska.** Converting a word-timed cue to `mov_text` strips
+  every inline timestamp: **60 in, 0 out**. Copied into Matroska with `-c:s copy`, all 60 survive and
+  come back byte for byte.
+- **SubRip through `mov_text` is exact** for what this product writes — 19 lines in, the same 19
+  back — so an SRT keeps the file an MP4, which is the container that plays everywhere.
+- **An MP3 cannot hold subtitles** — *"Only audio streams and pictures are allowed in MP3"* — but its
+  audio copies into an MP4 unchanged, **samples bit-identical**, at the cost of a couple of kilobytes
+  of container. So a podcast becomes an MP4 rather than being re-encoded to AAC to get an `.m4a`,
+  which is what "convert it to something that can hold a track" would otherwise have meant: `.m4a`
+  goes through ffmpeg's iPod muxer, which refuses MP3 audio the general MP4 muxer accepts.
+- **ASF is the exception that shapes the fallback.** A `.wma` refuses to copy into MP4 and copies
+  into Matroska happily, so Windows Media takes the Matroska route whatever was asked for. The rule
+  the whole thing runs on is: **never re-encode; if MP4 cannot hold it, use Matroska.**
+
+Cover art survives either route, which matters because a podcast's cover is a video stream and
+mapping only the audio would quietly throw it away.
+
+**mkvmerge was measured against ffmpeg for this and rejected, and the reason is backwards.**
+MKVToolNix writes WebVTT under `S_TEXT/WEBVTT`, the identifier Matroska actually specifies; FFmpeg
+writes `D_WEBVTT/SUBTITLES`, the older WebM one. FFmpeg's demuxer reads its own and not the specified
+one — it reports the track's codec as `none` and refuses to decode it, while carrying a perfectly
+good WebVTT decoder. This application plays through libmpv, which *is* FFmpeg, so a file muxed by the
+more correct tool is a file whose subtitles our own Ask tab cannot show. mkvmerge also cannot write
+MP4 at all. SubRip is unaffected — both write `S_TEXT/UTF8` — so the split is specific to the one
+format the word-level timing rides on.
+
+**The transcript is rendered at the moment it is muxed, not taken off disk, and that is what closes
+the rename gap from earlier the same day.** `TranscriptWriter.WriteAsync` runs before
+`JobViewModel.Complete`, so the sidecars carry the diariser's labels and always will; nothing
+retained the document, so there was no object a rename could be re-exported from. `JobViewModel` now
+keeps the spoken document and `Named()` applies the reader's names to a copy of it — the engine's own
+labels are never edited, so what is on screen and what is on disk still agree about where they came
+from. A speaker somebody named reaches the file that goes into the recording.
+
+**ffmpeg is vendored, reversing a decision taken earlier the same day, and the earlier reasoning was
+not wrong.** "No ffmpeg is vendored" was checked rather than assumed: yt-dlp's DASH m4a warning does
+not apply here, and both readers open one. That is still true. What changed is that a remux has no
+other implementation.
+
+**It is the LGPL build and not the GPL one, which is a licence decision.** Putting a transcript
+inside a recording copies streams and encodes nothing, so nothing needs a GPL-only encoder — the
+three subtitle codecs and the two muxers are all core FFmpeg. BtbN's GPL build ships **GPLv3**, which
+this project has no reason to take on; the LGPL build is **LGPLv3**, 30 MB smaller, and was driven
+over all eight input-and-format routes before it was kept. It is a separate program this application
+spawns rather than a library it links, so unlike libmpv it does not reach this application's terms.
+
+**It is not vendored beside yt-dlp, and that took a deliberate act rather than nothing.** yt-dlp
+looks for ffmpeg beside its own executable before it looks at `PATH` — measured: the same binary
+reports `exe versions: none` alone in a directory and `ffmpeg n9.0.1` with ffmpeg next to it, on an
+identical `PATH`. The first drop put it in `tools/` and gave yt-dlp a muxer with no code change at
+all. It lives in `native/win-x64/ffmpeg/` instead, `BundledTools` searches two directory lists, and a
+test fails if the two ever end up together.
+
+**yt-dlp is then given it anyway, by name on the command line, and what that changes was measured.**
+Big Buck Bunny (Blender Foundation, CC-BY) — the same 9:56 the original DASH check used — downloaded
+twice with this application's own arguments. Without ffmpeg: `ftyp iso6`, `major_brand: dash`,
+fragment boxes present, 9,655,276 bytes, and the warning. With it: `[FixupM4a] Correcting container`,
+`ftyp isom mp41`, no fragment boxes, 9,648,639 bytes, no warning. **The audio samples are
+bit-identical and `AudioSources.Open` returns the same 26,306,560 samples and the same
+00:09:56.5206292 either way.** So the fixup buys this application nothing, exactly as the original
+check found — and it buys the person who opens the downloaded file in something else a container that
+is not the one yt-dlp warns about. That is why it is on, and `--ffmpeg-location` is how, so it is a
+wiring decision rather than an accident of where a file was put.
+
+**What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
+models.
+
+**1020 tests, no weights, no display, no network — 1018 passed and 2 skipped.**
 
 ### The dictation seam
 

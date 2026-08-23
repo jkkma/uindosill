@@ -3791,6 +3791,50 @@ fails the one that scrolls away.
   builder's no-word path is reachable, and has never been observed*, which is the same gap seen
   from the subtitle side.
 
+## Putting a transcript back inside a recording — built 2026-08-23
+
+`docs/PHASES.md` has what the feature is and every container rule it follows, each one measured
+against FFmpeg 9.0.1 rather than reasoned about. What belongs here is the gap between what was
+measured and what would be needed to claim it works.
+
+**What is measured.** The container rules are pure logic with 19 tests over them, and the argument
+list they produce was driven against the vendored binary over eight input-and-format routes — video
+and audio, SRT and both WebVTTs, and the ASF fallback — all exiting 0, with the word-level routes
+returning 60 of 60 inline timestamps and the others none. A renamed speaker reaching the rendered
+transcript is tested end to end. The yt-dlp comparison is a real download of a real video, decoded
+through this application's own reader.
+
+**What none of that establishes:**
+
+- **Nothing has been muxed from the window by a person.** The button, the format choice and every
+  sentence it shows are tested against a fake muxer; the real one is tested by driving it directly.
+  The two halves have never been run as one, and screen capture is unavailable in this session by
+  standing rule, so nobody has watched a file appear.
+- **No output has been opened in another player.** The whole argument for the feature is that a file
+  with the words inside it plays anywhere. What is checked is that FFmpeg reads back what FFmpeg
+  wrote, and that the codec identifiers are the ones FFmpeg maps. Whether VLC, Windows' Movies & TV,
+  QuickTime or a phone shows these subtitle tracks — and whether any of them renders word-level
+  WebVTT cues at all rather than ignoring the inline timestamps — is unchecked. **The word-by-word
+  timing may well be invisible everywhere except this application**, which would make the Matroska
+  route's whole justification theoretical.
+- **Nothing has been muxed at a real size.** Every measurement above is on a 60-second clip or a
+  9.6 MB podcast. A remux rewrites the entire file: a three-hour video is gigabytes of copying, and
+  what that costs in time, what it does to a disk that is nearly full, and whether the staged write
+  and rename behave under that load are all unmeasured. There is no progress reporting inside the
+  mux at all — the window says "Adding the transcript to the recording" and then nothing until it
+  finishes.
+- **A cancel mid-mux has never been exercised.** The code kills the child, deletes the staging file
+  and leaves the original alone, and none of that has been run.
+- **The 23 ms cue drift on an MP3 into Matroska is recorded and not explained.** A cue that starts at
+  00:00:37.250 comes back at 00:00:37.273. It does not happen on the video route, so it is presumed
+  to be MP3 encoder delay against Matroska's timecode scale; it has not been chased, and whether it
+  accumulates over three hours is unknown.
+- **The remux yt-dlp now performs is unmeasured on a long download.** Seconds on a 9.6 MB file;
+  nothing has been timed on a three-hour one, and it is now on the path of every link fetch.
+- **`FfmpegSubtitleMuxer` has no test at all**, by construction: it needs the vendored binary and
+  real media. What it does was driven by hand on 2026-08-23. Its error path — reporting ffmpeg's last
+  stderr line rather than a wall of text — has been exercised only through the fake.
+
 ## The Ask tab rebuilt 2026-08-23 — measured headlessly, not looked at
 
 The cue height defect, the column's new order, the draggable picture edge, the seek handle and the

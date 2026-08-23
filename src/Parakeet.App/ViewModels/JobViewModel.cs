@@ -170,6 +170,47 @@ public sealed partial class JobViewModel : ObservableObject
     public System.Collections.ObjectModel.ObservableCollection<SpeakerViewModel> Speakers { get; } = [];
 
     /// <summary>
+    /// The transcript as the engine wrote it, kept so that it can be rendered again later.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing retained this until 2026-08-23, and the reason it has to now is the reason a rename
+    /// used to reach nothing: <c>TranscriptWriter.WriteAsync</c> runs before <see cref="Complete"/>,
+    /// so by the time a reader can name a speaker the only copy of the document had been rendered
+    /// to strings and dropped. Adding a transcript to a media file re-renders it at that moment,
+    /// with whatever names are on the voices by then, which is what makes the names reach a file at
+    /// all.
+    /// </para>
+    /// <para>
+    /// The spoken one rather than the translated one, for the same reason the chip map is built
+    /// from the spoken one: the labels are its fact. What is muxed is what was said.
+    /// </para>
+    /// <para>
+    /// It costs memory — a three-hour transcript is its segments and every word's timing, a few
+    /// megabytes — and that is the price of the feature rather than an oversight. It is dropped by
+    /// <see cref="Reset"/> along with everything else the last run produced.
+    /// </para>
+    /// </remarks>
+    public TranscriptDocument? Document { get; private set; }
+
+    /// <summary>Whether there is a transcript to put back inside the recording.</summary>
+    public bool CanExport => Document is not null;
+
+    /// <summary>
+    /// The retained transcript with the reader's names on it, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Built at the moment it is asked for rather than kept alongside, so it cannot go stale
+    /// against a name typed a second ago. Where nobody has renamed anything this is the retained
+    /// document itself — <c>WithSpeakerNames</c> returns its argument when the map changes nothing.
+    /// </remarks>
+    public TranscriptDocument? Named() =>
+        Document?.WithSpeakerNames(
+            Speakers
+                .Where(voice => voice.IsRenamed)
+                .ToDictionary(voice => voice.Label, voice => voice.Name, StringComparer.Ordinal));
+
+    /// <summary>
     /// Whether this row has an English transcript to switch to. What the pane switcher's
     /// visibility hangs on: a run that did not translate gets no switcher rather than a dead
     /// second pill.
@@ -285,6 +326,8 @@ public sealed partial class JobViewModel : ObservableObject
         TranslatedLines.Clear();
         Speakers.Clear();
         OutputFiles.Clear();
+        Document = null;
+        OnPropertyChanged(nameof(CanExport));
     }
 
     /// <summary>
@@ -375,6 +418,9 @@ public sealed partial class JobViewModel : ObservableObject
             TranslationProvenance = document.TranslationBackend is { } translationBackend
                 ? $"English: {document.TranslationModelId ?? "unnamed model"} on {translationBackend.ToString().ToLowerInvariant()}"
                 : null;
+
+            Document = spoken;
+            OnPropertyChanged(nameof(CanExport));
 
             Transcript = Render(spoken);
             Relines(spoken, chips, Lines);

@@ -51,6 +51,18 @@ if (-not $ArchiveDirectory) { $ArchiveDirectory = Join-Path $NativeRoot 'archive
 $ytDlpVersion = '2026.08.19'
 $denoVersion  = 'v2.9.5'
 
+# BtbN publishes a dated autobuild per day; the tag is the pin, and the asset inside it names the
+# FFmpeg release branch rather than a master snapshot. n9.0.1 is deliberate: it is the version every
+# container rule in `Parakeet.Core.Muxing.SubtitleMux` was measured against.
+#
+# **LGPL and not the GPL build beside it, and that is a licence decision rather than a preference.**
+# Adding a transcript to a media file copies streams and encodes nothing, so nothing here needs a
+# GPL-only encoder — the three subtitle codecs and the two muxers involved are all core FFmpeg. The
+# GPL build ships GPLv3, which this project has no reason to take on; the LGPL one is LGPLv3, 30 MB
+# smaller, and was driven over all eight input-and-format routes before it was kept.
+$ffmpegBuild   = 'autobuild-2026-08-22-12-58'
+$ffmpegVersion = 'n9.0.1-6-g9d4ca21220'
+
 $tools = @(
     [PSCustomObject]@{
         Name       = 'yt-dlp.exe'
@@ -73,6 +85,24 @@ $tools = @(
         FileLength = 97408288
         FileSha256 = '98F8C2A2D470E4CCB04C935C86FF8050817D877762AEC5EAEEB9E409CCB3B9FD'
         Notice     = 'deno-LICENSE.txt'
+    },
+    [PSCustomObject]@{
+        Name       = 'ffmpeg.exe'
+        Url        = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$ffmpegBuild/ffmpeg-$ffmpegVersion-win64-lgpl-9.0.zip"
+        Download   = "ffmpeg-$ffmpegVersion-win64-lgpl-9.0.zip"
+        Archive    = $true
+        # Nested, unlike Deno's flat zip: this one holds ffmpeg-<version>/bin/ffmpeg.exe, so the
+        # extraction has to recurse. `7z e` flattens whatever it finds, which is what we want here.
+        Nested     = $true
+        Length     = 147007729
+        Sha256     = '20F84639FAE87181BB1C9899C34CE05CD3C0B533C68D3FF34206A2615DA94F30'
+        FileLength = 114400768
+        FileSha256 = '8A5CE69FBB74B4C9E0E24C214E3DEF0E1847A05051A8E1C6D10B1D4A35BD6A65'
+        Notice     = 'ffmpeg-LICENSE.txt'
+        # Its own directory, and not for tidiness. yt-dlp looks for ffmpeg beside its own executable
+        # before it looks at PATH — measured 2026-08-23 — so putting the muxer in tools/ would
+        # silently change what a download produces. Nothing needs yt-dlp to have one.
+        Directory  = 'ffmpeg'
     }
 )
 
@@ -86,16 +116,19 @@ function Get-Sha256([string] $Path) {
     (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToUpperInvariant()
 }
 
-Write-Heading "yt-dlp $ytDlpVersion and Deno $denoVersion"
+Write-Heading "yt-dlp $ytDlpVersion, Deno $denoVersion and ffmpeg $ffmpegVersion"
 
 $null = New-Item -ItemType Directory -Force -Path $ArchiveDirectory
-$target = Join-Path (Join-Path $NativeRoot 'win-x64') 'tools'
-$null = New-Item -ItemType Directory -Force -Path $target
 
 $licenceSource = Join-Path $repoRoot 'licences'
 
 foreach ($tool in $tools) {
     $downloadPath = Join-Path $ArchiveDirectory $tool.Download
+
+    # Per tool, because ffmpeg deliberately does not live beside yt-dlp — see its pin above.
+    $leaf = if ($tool.PSObject.Properties.Name -contains 'Directory') { $tool.Directory } else { 'tools' }
+    $target = Join-Path (Join-Path $NativeRoot 'win-x64') $leaf
+    $null = New-Item -ItemType Directory -Force -Path $target
 
     # ── 1. Find or fetch ───────────────────────────────────────────────────────────────────────
     if (-not (Test-Path $downloadPath)) {
@@ -141,7 +174,12 @@ foreach ($tool in $tools) {
             throw "7z is not on PATH and $($tool.Download) is an archive. Install it (scoop install 7zip) and run again."
         }
 
-        & 7z e -y -o"$target" $downloadPath $tool.Name | Out-Null
+        $sevenZipArguments = @('e', '-y', "-o$target", $downloadPath, $tool.Name)
+        if (($tool.PSObject.Properties.Name -contains 'Nested') -and $tool.Nested) {
+            $sevenZipArguments += '-r'
+        }
+
+        & 7z @sevenZipArguments | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "7z exited $LASTEXITCODE extracting $($tool.Name)."
         }

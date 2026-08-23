@@ -450,6 +450,19 @@ public static class Attributions
         },
         new ComponentLicence
         {
+            Component = "FFmpeg (the ffmpeg command-line tool)",
+            License = "LGPL-3.0-or-later",
+            Uri = new Uri("https://ffmpeg.org"),
+            Notes =
+                "Shipped only by builds that vendor the muxer. Run as a separate process to put a transcript " +
+                "inside a recording as a subtitle track, which copies every stream and encodes nothing — so " +
+                "the LGPL build is enough and the GPL one, which would be GPLv3, is deliberately not used. A " +
+                "separate program rather than a linked library, so unlike libmpv it does not reach this " +
+                "application's own terms. Its licence text travels beside the binary; see " +
+                "docs/NATIVE-BINARIES.md for the pin and why it is not vendored beside yt-dlp.",
+        },
+        new ComponentLicence
+        {
             Component = "libmpv (mpv media player), and the FFmpeg and other libraries linked into it",
             License = "GPL-2.0-or-later — copyleft, and the reason a build carrying it is distributed under the GPL",
             Uri = new Uri("https://github.com/mpv-player/mpv"),
