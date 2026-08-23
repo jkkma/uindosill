@@ -3,9 +3,11 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Parakeet.Audio;
 using Parakeet.Core.Models;
+using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.ParakeetCpp.Interop;
 using Parakeet.Engine.Python;
+using Parakeet.Engine.SileroVad;
 
 namespace Parakeet.Cli;
 
@@ -73,6 +75,35 @@ internal static class DoctorCommand
             // unavailable and everything else works, which is what this command exists to report.
             context.WriteLine("  not available, so --translate and speaker labelling are not either:");
             context.WriteLine($"  {whyNot}");
+        }
+
+        context.WriteLine();
+        context.WriteLine("Speech detection (--vad neural runs it in this process, on the CPU)");
+
+        // In process rather than in a child, unlike the backends below: ONNX Runtime loading a
+        // two-megabyte graph has no static initialiser that can take the process down, and what
+        // this answers — is the model there, does the runtime open it — is the pair of facts the
+        // window's checkbox is disabled over when either is missing.
+        var detectionEntry = context.Catalog.VoiceActivityModels.FirstOrDefault();
+        if (detectionEntry is null)
+        {
+            context.WriteLine("  no speech-detection entry in the catalogue");
+        }
+        else if (context.Store.PathFor(detectionEntry) is var detectionPath && !File.Exists(detectionPath))
+        {
+            context.WriteLine($"  {detectionEntry.Id,-24} not installed — uindosill models download {detectionEntry.Id}");
+        }
+        else
+        {
+            try
+            {
+                using var detector = new SileroSpeechDetector(detectionPath);
+                context.WriteLine($"  {detectionEntry.Id,-24} ok — {detector.Name}");
+            }
+            catch (SpeechDetectorException exception)
+            {
+                context.WriteLine($"  {detectionEntry.Id,-24} installed but will not load: {exception.Message}");
+            }
         }
 
         context.WriteLine();

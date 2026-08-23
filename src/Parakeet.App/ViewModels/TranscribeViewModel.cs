@@ -124,6 +124,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [ObservableProperty]
     private bool _useFixedWindows;
 
+    /// <summary>
+    /// The third opt-in: cut the audio on a neural speech detector rather than the loudness gate.
+    /// Off by default, like the other two, and for the reason the gate is still the default — every
+    /// segment-count figure this project has recorded is the gate's.
+    /// </summary>
+    [ObservableProperty]
+    private bool _useNeuralSpeechDetection;
+
     [ObservableProperty]
     private double _maxSegmentSeconds = 30;
 
@@ -252,6 +260,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         RefreshSpeakerAvailability();
         RefreshTranslationAvailability();
+        RefreshSpeechDetectionAvailability();
     }
 
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
@@ -335,6 +344,44 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// the provider can tell which one applies.
     /// </summary>
     public string? SpeakerHint => CanLabelSpeakers ? null : _engines.DescribeUnavailable(ModelTask.Diarisation);
+
+    /// <summary>
+    /// Whether the checkbox for the neural speech-detection opt-in does anything, on the same terms
+    /// as the speaker one: disabled with <see cref="SpeechDetectionHint"/> beside it when it would
+    /// silently do nothing.
+    /// </summary>
+    public bool CanUseNeuralSpeechDetection => _engines.SupportsNeuralSpeechDetection;
+
+    /// <summary>
+    /// Why the detection opt-in is off or inert, or null when it is live. Two cases: the model is
+    /// not installed, which the provider says; or fixed windows are on, which this window knows —
+    /// a detector decides nothing under fixed windows, and a ticked box that changes nothing is the
+    /// silently-inert setting this window refuses to draw.
+    /// </summary>
+    public string? SpeechDetectionHint =>
+        !CanUseNeuralSpeechDetection ? _engines.DescribeUnavailable(ModelTask.VoiceActivity)
+        : UseFixedWindows ? "Fixed windows are on, so no detector runs — untick that to cut on speech."
+        : null;
+
+    /// <summary>
+    /// Re-asks whether a speech detector is available and brings the checkbox and its hint into
+    /// line — the third of these, called from the same places as the other two and for the reason
+    /// spelled out on <see cref="RefreshSpeakerAvailability"/>. Turns the opt-in off when the model
+    /// goes away, so a batch cannot start with the box ticked and nothing behind it.
+    /// </summary>
+    public void RefreshSpeechDetectionAvailability()
+    {
+        if (!_engines.SupportsNeuralSpeechDetection && UseNeuralSpeechDetection)
+        {
+            UseNeuralSpeechDetection = false;
+        }
+
+        OnPropertyChanged(nameof(CanUseNeuralSpeechDetection));
+        OnPropertyChanged(nameof(SpeechDetectionHint));
+    }
+
+    // The hint reads the fixed-windows box, so it moves when that box does.
+    partial void OnUseFixedWindowsChanged(bool value) => OnPropertyChanged(nameof(SpeechDetectionHint));
 
     /// <summary>
     /// Whether the speaker-count field is live. Only with the opt-in on: a count with nothing to
@@ -1177,7 +1224,35 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 engine = owned;
             }
 
-            var options = BuildOptions();
+            // The speech detector for the whole batch, on the labeller's terms below: created only
+            // when the opt-in is on and the provider has one to give, disposed with the batch. Fixed
+            // windows make a detector decide nothing, so none is loaded under them. A graph on disk
+            // that will not load is a sentence here rather than a silent fall-back to the gate — a
+            // transcript cut by the gate when the box said detector would be provenance nobody could
+            // read off it.
+            ISpeechDetector? speechDetector = null;
+            if (UseNeuralSpeechDetection && !UseFixedWindows)
+            {
+                if (!_engines.SupportsNeuralSpeechDetection)
+                {
+                    StatusMessage = "The speech detection model is no longer installed. Download it again from the Models tab.";
+                    RefreshSpeechDetectionAvailability();
+                    return;
+                }
+
+                try
+                {
+                    speechDetector = _engines.CreateSpeechDetector();
+                }
+                catch (SpeechDetectorException exception)
+                {
+                    StatusMessage = exception.Message;
+                    return;
+                }
+            }
+
+            using var detectorLifetime = speechDetector;
+            var options = BuildOptions() with { SpeechDetector = speechDetector };
 
             // One labeller for the whole batch, created only when the opt-in is on and the
             // provider has one to give; disposed with the batch.

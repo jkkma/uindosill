@@ -69,6 +69,20 @@ public sealed record TranscriptionOptions
     public VoiceActivityOptions VoiceActivity { get; init; } = VoiceActivityOptions.Default;
 
     /// <summary>
+    /// A speech detector to cut on in place of the energy gate, or null for the gate. The loaded
+    /// model, owned by the caller and shared across a batch; the engine opens one stream on it per
+    /// recording, at the recording's own rate, and closes that stream with the recording.
+    /// </summary>
+    /// <remarks>
+    /// An object on an options record is unusual here and is the honest shape: the detector is a
+    /// resource with a lifetime, not a value, and threading it through the options is what lets
+    /// <see cref="SegmentingTranscriptionEngine"/> — which knows nothing about ONNX Runtime — hand
+    /// it to the segmenter without a second seam. <see cref="VoiceActivityOptions.SpeechProbability"/>
+    /// and its sibling are the thresholds it is read against.
+    /// </remarks>
+    public Segmentation.ISpeechDetector? SpeechDetector { get; init; }
+
+    /// <summary>
     /// Diagnostics only. Leave null. See <see cref="BeamSearchOptions"/> for why.
     /// </summary>
     public BeamSearchOptions? BeamSearch { get; init; }

@@ -72,6 +72,7 @@
     <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
     <ProjectReference Include="../Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
     <ProjectReference Include="../Parakeet.Engine.Python/Parakeet.Engine.Python.csproj" />
+    <ProjectReference Include="../Parakeet.Engine.SileroVad/Parakeet.Engine.SileroVad.csproj" />
   </ItemGroup>
 
   <ItemGroup>

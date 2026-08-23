@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Engine.SileroVad</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One project owns one model's interop, as Parakeet.Engine.ParakeetCpp owns parakeet.cpp's and
+    Parakeet.Engine.Python owns the sidecar process. What this one owns is the Silero VAD graph
+    on ONNX Runtime: Parakeet.Core declares ISpeechDetector and knows nothing about ONNX Runtime,
+    the 576-sample window or the LSTM state, and a build target in Core fails if a NuGet reference
+    ever appears there.
+
+    ONNX Runtime is back in the .NET graph with this project — it left on 2026-08-21 when the
+    diariser and the translator moved into the bundled Python. It is back for a model two
+    megabytes large that has to score every frame inside the streaming segmenter, in process, on
+    the CPU: a round trip to the sidecar per 32 ms window, or a whole-file pre-pass before the
+    decode could start, would cost more than the model does. Directory.Packages.props says why
+    1.29.0 and what not to call on OrtValue.
+
+    Parakeet.Audio is referenced for Resampler: the segmenter runs at the recording's own rate and
+    parakeet.cpp resamples inside the native library, so this is the one place on the
+    transcription path that needs 16 kHz and has to make it for itself.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+    <ProjectReference Include="../Parakeet.Audio/Parakeet.Audio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Engine.SileroVad.Tests" />
+  </ItemGroup>
+
+</Project>

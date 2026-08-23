@@ -134,6 +134,16 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "vad",
+                TakesValue = true,
+                ValueName = "detector",
+                Help = "Which detector finds the speech to cut at: energy (the default, a loudness gate) or neural — " +
+                       "Silero VAD on ONNX Runtime, in process on the CPU, which hears pauses under music the gate cannot. " +
+                       "neural needs the speech-detection model: uindosill models download silero-vad-v5.1.2 (2.2 MiB). " +
+                       "Contradicts --no-vad.",
+            },
+            new OptionSpec
+            {
                 Name = "overwrite",
                 Help = "Overwrite existing output files instead of writing 'name (2).srt'.",
             },

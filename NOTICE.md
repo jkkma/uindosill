@@ -118,6 +118,32 @@ The attribution notices it **does** carry are retained, per §4(c):
   No 101070350. We are also grateful for the generous computational resources and IT infrastructure
   provided by CSC -- IT Center for Science, Finland, and the EuroHPC supercomputer LUMI."
 
+## Speech-detection weights — MIT
+
+**Silero VAD v5 (voice activity detection model, `silero_vad.onnx`)**
+
+- **Creator:** Silero Team
+- **Copyright:** Copyright (c) 2020-present Silero Team
+- **Licence:** MIT License — the permission notice and disclaimer ship with this application at
+  `licences/silero-vad-LICENSE.txt`, which is the upstream `LICENSE` file byte for byte (SHA-256
+  `2e63e9a3…e925520b`, fetched 2026-08-23 from commit `6478567951ae5c9979ad7b234185b5515f4be7a1`,
+  tag v5.1.2).
+- **Source:** https://github.com/snakers4/silero-vad
+- **Modifications:** Unmodified. The ONNX graph is installed by URL from the upstream repository at
+  that commit and driven as published; Uindosill hosts no copy of it, and what this project adds is
+  the C# that feeds it (`src/Parakeet.Engine.SileroVad/`), which is this project's own.
+
+MIT asks for less than CC BY's seven elements and more than a licence name: the copyright notice and
+the permission text travel with the material. `Licences.targets` copies the file into every build
+output, `scripts/package-windows.ps1` refuses to pack a publish without it, and
+`Licensing/Attribution.cs` carries the entry as `MitAttribution`, the fourth licence shape there — a
+record that cannot be constructed without the copyright line and the path to the permission text.
+
+The graph runs on ONNX Runtime **in this process**, not in the bundled Python: since 2026-08-23
+`Microsoft.ML.OnnxRuntime` 1.29.0 is beside the .NET assemblies again, and the runtime's own MIT
+notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — see the table below and
+`docs/LICENSING.md`.
+
 ## Third-party components
 
 | Component | Licence | Source |
@@ -130,7 +156,7 @@ The attribution notices it **does** carry are retained, per §4(c):
 | Instrument Sans (typeface; desktop application only) | OFL-1.1 — Copyright 2022 The Instrument Sans Project Authors; `licences/InstrumentSans-OFL.txt` travels with it | https://github.com/Instrument/instrument-sans |
 | Chivo Mono (typeface; desktop application only) | OFL-1.1 — Copyright 2019 The Chivo Project Authors; `licences/ChivoMono-OFL.txt` travels with it | https://github.com/Omnibus-Type/Chivo |
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
-| ONNX Runtime (`onnxruntime-webgpu` 1.27.0, in the bundled Python; runs the speaker diarisation model and the translator) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; the wheel ships its own `ThirdPartyNotices.txt`, and `licences/onnxruntime-ThirdPartyNotices.txt` carries the 1.29.0 package's 69 blocks verbatim | https://github.com/microsoft/onnxruntime |
+| ONNX Runtime (`Microsoft.ML.OnnxRuntime` 1.29.0 beside the .NET assemblies, running the speech-detection graph in process; and `onnxruntime-webgpu` 1.27.0 in the bundled Python, running the speaker diarisation model and the translator) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; `licences/onnxruntime-LICENSE.txt` and `licences/onnxruntime-ThirdPartyNotices.txt` are the 1.29.0 package's own (69 blocks, verbatim), which is the in-process copy's notice exactly; the wheel ships its own `ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
 | CPython (embeddable 3.12.10; the interpreter the diariser and the translator run in) | PSF License Agreement Version 2, plus the Microsoft Distributable Code conditions its Windows binary build adds | https://www.python.org/ |
 | The bundled Python packages (pinned in `python/requirements-bundle.txt`) | Mostly MIT, BSD and Apache-2.0 — but `soxr` is LGPL-2.1-or-later and `soundfile`'s wheel carries LGPL-2.1 `libsndfile`. Read package by package in `docs/LICENSING.md`; **not yet assembled into a notice package** | https://pypi.org/ |
@@ -202,4 +228,6 @@ The model weights are a separate question with a separate answer — Streaming S
 
 **TEN-VAD.** Its modified Apache-2.0 carries an Agora non-compete clause. Voice activity detection
 here is a plain energy gate written for this project
-(`src/Parakeet.Core/Segmentation/StreamingSegmenter.cs`).
+(`src/Parakeet.Core/Segmentation/StreamingSegmenter.cs`) by default and, as an opt-in since
+2026-08-23, Silero VAD — which is MIT and has its own section above. TEN-VAD was not the model
+considered for that opt-in and is still not used.

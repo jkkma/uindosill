@@ -232,12 +232,12 @@ public class ModelCatalogTests
     }
 
     [Fact]
-    public void TheDiariserAndTheTranslatorAreTheOnlyEntriesThatDoNotTranscribe()
+    public void TheDiariserTheTranslatorAndTheSpeechDetectorAreTheOnlyEntriesThatDoNotTranscribe()
     {
-        // The manifest carries exactly one diarisation entry and one translation entry, and every
-        // other entry is an ASR model. Both halves are asserted: an entry that lost its `task` field
-        // would surface as a transcription model and be offered to `transcribe`, which is the
-        // failure the discriminator exists to prevent.
+        // The manifest carries exactly one diarisation entry, one translation entry and one
+        // speech-detection entry, and every other entry is an ASR model. Both halves are asserted:
+        // an entry that lost its `task` field would surface as a transcription model and be offered
+        // to `transcribe`, which is the failure the discriminator exists to prevent.
         var catalog = ModelCatalog.Default;
 
         var diariser = Assert.Single(catalog.DiarisationModels);
@@ -245,16 +245,25 @@ public class ModelCatalogTests
         Assert.False(diariser.Recommended);
 
         // And one translation entry, added 2026-08-20 once there was a decode loop to read it.
-        // Neither may be Recommended: that property picks the default ASR model, and a model that
-        // cannot transcribe becoming the default is the failure the discriminator exists to stop.
+        // None of these may be Recommended: that property picks the default ASR model, and a model
+        // that cannot transcribe becoming the default is the failure the discriminator exists to stop.
         var translator = Assert.Single(catalog.TranslationModels);
         Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", translator.Id);
         Assert.False(translator.Recommended);
 
+        // And one speech-detection entry, added 2026-08-23 with the detector seam that reads it.
+        var detector = Assert.Single(catalog.VoiceActivityModels);
+        Assert.Equal("silero-vad-v5.1.2", detector.Id);
+        Assert.False(detector.Recommended);
+        Assert.Equal("MIT", detector.License);
+        Assert.True(detector.IsFullyPinned);
+        Assert.True(detector.Verified);
+
         Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
         Assert.Equal(
             catalog.Models.Count,
-            catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count + catalog.TranslationModels.Count);
+            catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count
+            + catalog.TranslationModels.Count + catalog.VoiceActivityModels.Count);
     }
 
     [Fact]
@@ -318,7 +327,28 @@ public class ModelCatalogTests
 
         var ex = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
         Assert.Contains(
-            "known tasks are transcription, diarisation and translation", ex.Message, StringComparison.Ordinal);
+            "known tasks are transcription, diarisation, translation and voice-activity", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AVoiceActivityEntryIsKeptOutOfEveryOtherList()
+    {
+        // The fourth task word, added 2026-08-23. The same contract as the other two: parsed by
+        // name, listed under its own task, never an ASR model, never a diariser, never the default.
+        var json = """
+            {"models":[
+            {"id":"asr","family":"p","displayName":"A","quantisation":"f16","fileName":"a.gguf","url":"https://e.com/a","license":"L","attributionId":"x","recommended":true},
+            {"id":"vad","task":"voice-activity","family":"silero","displayName":"V","quantisation":"fp32","fileName":"v.onnx","url":"https://e.com/v","license":"MIT","attributionId":"x","recommended":true}]}
+            """;
+
+        var catalog = ModelCatalog.Parse(json);
+
+        Assert.Equal(["vad"], catalog.VoiceActivityModels.Select(m => m.Id));
+        Assert.Equal(ModelTask.VoiceActivity, catalog.Get("vad").Task);
+        Assert.Equal("asr", catalog.Recommended?.Id);
+        Assert.DoesNotContain(catalog.TranscriptionModels, m => m.Id == "vad");
+        Assert.DoesNotContain(catalog.DiarisationModels, m => m.Id == "vad");
+        Assert.DoesNotContain(catalog.TranslationModels, m => m.Id == "vad");
     }
 }
 

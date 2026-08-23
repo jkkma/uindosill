@@ -35,6 +35,14 @@ public sealed class AudioSegment
 /// <summary>What segmentation actually did, so a bad threshold is visible instead of silent.</summary>
 public sealed record SegmentationReport
 {
+    /// <summary>
+    /// What decided where speech was: <see cref="StreamingSegmenter.EnergyGateName"/>, or the
+    /// <see cref="ISpeechDetector.Name"/> of the detector that replaced it. A segment boundary is a
+    /// fact about whichever of the two cut it, and a report that did not say which would be quoting
+    /// a figure without its method.
+    /// </summary>
+    public string SpeechDetector { get; init; } = StreamingSegmenter.EnergyGateName;
+
     public int SegmentCount { get; init; }
 
     /// <summary>Audio seen by the segmenter.</summary>

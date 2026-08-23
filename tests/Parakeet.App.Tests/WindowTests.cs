@@ -326,6 +326,10 @@ public class ShutdownTests
 
         public Parakeet.Core.Translation.ITranscriptTranslator? CreateTranslator() => _inner.CreateTranslator();
 
+        public bool SupportsNeuralSpeechDetection => _inner.SupportsNeuralSpeechDetection;
+
+        public Parakeet.Core.Segmentation.ISpeechDetector? CreateSpeechDetector() => _inner.CreateSpeechDetector();
+
         public void ReleaseBackend()
         {
             ReleaseCount++;
@@ -1024,6 +1028,82 @@ public class TranscribeViewModelTests
         Assert.False(viewModel.CanLabelSpeakers);
         Assert.Contains("not installed", viewModel.SpeakerHint, StringComparison.Ordinal);
         Assert.Contains("Models tab", viewModel.SpeakerHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutTheSpeechDetectionModelTheOptInIsDisabledWithAReasonAUserCanActOn()
+    {
+        // The third opt-in on the first two's terms — and with one reason rather than two, because
+        // the detector runs in this process: a missing Python is not its problem and a hint that
+        // mentioned one would send somebody to repair a thing that is not broken.
+        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => false), () => new EngineSelection());
+
+        Assert.False(viewModel.CanUseNeuralSpeechDetection);
+        Assert.Contains("not installed", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
+        Assert.Contains("Models tab", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("Python", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstallingTheSpeechDetectionModelIsWhatTurnsTheOptInOnAndFixedWindowsAreSaidToMakeItInert()
+    {
+        // A file of the right name is enough here: nothing loads it until Start, and what is under
+        // test is the wiring between the store and the checkbox — and the one case where the box is
+        // live but inert, which the hint names instead of leaving a ticked box that changes nothing.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vad").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.VoiceActivityModels);
+
+        var before = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
+        Assert.False(before.CanUseNeuralSpeechDetection);
+
+        File.WriteAllText(store.PathFor(model), "not really a graph");
+
+        var after = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
+        Assert.True(after.CanUseNeuralSpeechDetection);
+        Assert.Null(after.SpeechDetectionHint);
+
+        after.UseFixedWindows = true;
+        Assert.Contains("Fixed windows are on", after.SpeechDetectionHint, StringComparison.Ordinal);
+
+        after.UseFixedWindows = false;
+        Assert.Null(after.SpeechDetectionHint);
+    }
+
+    [Fact]
+    public async Task TickingNeuralDetectionHandsTheEngineOneDetectorForTheBatchAndAStreamPerFile()
+    {
+        // The window's half of the detector contract: one detector per batch, created only when the
+        // box is ticked and fixed windows are off, disposed with the batch — and the engine opens a
+        // stream on it per file, at the file's rate, and closes each.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var provider = new FakeEngineProvider();
+        var main = new MainWindowViewModel(
+            provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+        var viewModel = main.Transcribe;
+        viewModel.OutputDirectory = directory;
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        viewModel.AddFiles([WriteWav(directory, "a.wav"), WriteWav(directory, "b.wav")]);
+
+        // Ticked under fixed windows: no detector is loaded, because none would decide anything.
+        viewModel.UseNeuralSpeechDetection = true;
+        viewModel.UseFixedWindows = true;
+        viewModel.MaxSegmentSeconds = 5;
+        await viewModel.StartCommand.ExecuteAsync(null);
+        Assert.Null(provider.LastSpeechDetector);
+
+        // Ticked with detection on: one detector, two streams, both closed, the detector disposed
+        // with the batch.
+        viewModel.UseFixedWindows = false;
+        await viewModel.RunAgainCommand.ExecuteAsync(null);
+
+        var detector = provider.LastSpeechDetector;
+        Assert.NotNull(detector);
+        Assert.Equal(2, detector.Opened);
+        Assert.Equal(2, detector.Closed);
+        Assert.True(detector.Disposed);
+        Assert.All(viewModel.Jobs, job => Assert.Equal(JobState.Completed, job.State));
     }
 
     [Fact]

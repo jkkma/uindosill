@@ -60,12 +60,35 @@ public sealed class StreamingSegmenter
     private long _unsegmentedAudibleFrames;
     private bool _lastEmitReachedBufferEnd;
 
-    public StreamingSegmenter(int sampleRate, VoiceActivityOptions? options = null)
+    /// <summary>The speech detector in place of the gate, or null for the gate.</summary>
+    private readonly ISpeechDetectorStream? _detector;
+
+    /// <summary>The detector's decision with hysteresis applied: open at one threshold, closed below another.</summary>
+    private bool _detectorSpeaking;
+
+    /// <summary>What the report names when no detector was given.</summary>
+    public const string EnergyGateName = "energy gate";
+
+    /// <summary>
+    /// A segmenter over <paramref name="sampleRate"/> audio, cutting on the energy gate — or on
+    /// <paramref name="detector"/> where one is given, which is a stream already opened at this rate.
+    /// </summary>
+    /// <remarks>
+    /// The detector replaces the gate's <i>decision</i> and nothing else: the minimum durations, the
+    /// padding, the cap and the forced cut at the quietest frame are the segmenter's whatever says
+    /// where speech is, and the gate still runs underneath for the report — the peak, the floor and
+    /// the audible material nothing decoded are facts about the audio rather than about the
+    /// detector. With <see cref="VoiceActivityOptions.Enabled"/> false the detector is ignored along
+    /// with the gate: fixed windows are the escape hatch for material no detector handles, and a
+    /// detector that says "never speech" must not turn them into "never decode".
+    /// </remarks>
+    public StreamingSegmenter(int sampleRate, VoiceActivityOptions? options = null, ISpeechDetectorStream? detector = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(sampleRate, 1);
         _options = options ?? VoiceActivityOptions.Default;
         _options.Validate();
         _sampleRate = sampleRate;
+        _detector = detector;
 
         _frameSamples = Math.Max(1, (int)Math.Round(_options.FrameLength.TotalSeconds * sampleRate));
         _partialFrame = new float[_frameSamples];
@@ -186,6 +209,7 @@ public sealed class StreamingSegmenter
 
     public SegmentationReport CreateReport() => new()
     {
+        SpeechDetector = _detector?.Name ?? EnergyGateName,
         SegmentCount = _nextIndex,
         TotalAudio = AudioMath.SamplesToTime(_totalSamples, _sampleRate),
         SegmentedAudio = AudioMath.SamplesToTime(_segmentedSamples, _sampleRate),
@@ -224,9 +248,30 @@ public sealed class StreamingSegmenter
         // The gate runs even in fixed-window mode so the report still describes the audio
         // honestly — the mode changes what is decoded, not what was measured.
         var aboveThreshold = UpdateGate(db);
-        var isSpeech = !_options.Enabled || aboveThreshold;
 
-        if (aboveThreshold)
+        // The detector's answer, with hysteresis: open at one threshold, closed only below a lower
+        // one, and a probability between them leaves the state where it was. Asked every frame even
+        // when fixed windows will ignore it, so the model's own context and state run over the
+        // whole recording rather than over whatever frames happened to be consulted.
+        if (_detector is not null)
+        {
+            var probability = _detector.Push(frame);
+            if (probability >= _options.SpeechProbability)
+            {
+                _detectorSpeaking = true;
+            }
+            else if (probability < _options.SilenceProbability)
+            {
+                _detectorSpeaking = false;
+            }
+        }
+
+        var detected = _detector is null ? aboveThreshold : _detectorSpeaking;
+        var isSpeech = !_options.Enabled || detected;
+
+        // What the report calls speech is whatever decided the cut: the gate's frames when the gate
+        // cut, the detector's when the detector did.
+        if (detected)
         {
             _speechFrames++;
         }

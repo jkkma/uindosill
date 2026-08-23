@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1073 tests, no weights, no display, no network — **1071 passed and 2 skipped**, and
+**Status:** met. 1093 tests, no weights, no display, no network — **1089 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (106 of the project's 164 CLI
+**Status:** usable, tested end to end against the canned engine (106 of the project's 168 CLI
 tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.** `CLAUDE.md`'s second
+**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1073 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1093 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
+**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2880,7 +2880,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
+**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2936,7 +2936,68 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
+**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.**
+
+### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
+
+**Asked for in so many words**, hours after the entry above named it as the fix not on the road: the
+energy gate that cuts a recording into decodable pieces reads loudness, and on a broadcast
+documentary with a bed under the narration loudness never drops, so segments run to the
+thirty-second cap holding nine sentences each while the recogniser's own word timings show the
+pauses inside them. The sentence splitter made those *read* as sentences; this cuts them as
+sentences, and it is the first change to what the segmenter hears since the gate was written.
+
+**What was built.** `ISpeechDetector` in Core — a loaded model with a `Name`, handing out one
+`ISpeechDetectorStream` per recording, fed samples in order and answering the latest speech
+probability — and `StreamingSegmenter` takes a stream in place of its gate: the detector replaces
+the *decision* and nothing else, with hysteresis read off two options (`SpeechProbability` 0.5,
+`SilenceProbability` 0.35 — upstream's own pair, read at the pinned commit rather than chosen),
+while the minimum durations, the padding, the cap, the forced cut at the quietest frame and the
+gate's own report of peak, floor and audible material run as they always did. Fixed windows ignore
+the detector, because they are the escape hatch for material no detector handles. The shipping
+detector is **Silero VAD v5 on ONNX Runtime**, in `Parakeet.Engine.SileroVad`: the graph's contract
+— 64 samples of context plus 512 new ones at 16 kHz in, a `[2,1,128]` state through, a probability
+out — read from upstream's `utils_vad.py` at the pinned commit and held by the constructor, which
+refuses a graph without those names; one CPU thread, in process, and each stream carries a
+`Resampler` to 16 kHz because the segmenter runs at the recording's own rate and this is the one
+place on the transcription path that ever needed the model's. `FakeSpeechDetector` is the scripted
+stand-in the suite drives. The model is a catalogue entry, `silero-vad-v5.1.2` — 2.2 MiB, MIT,
+`task: voice-activity` (the fourth task word, shipped with the code that reads it), pinned to a
+commit and a digest and installed by `ModelInstaller` like every other weight — with an
+`MitAttribution`, the fourth licence shape, whose permission text ships as
+`licences/silero-vad-LICENSE.txt`. `--vad energy|neural` on the command line, a checkbox beside the
+fixed-windows box in the app, a line in `doctor`, and the segmentation report names what cut the
+audio.
+
+**ONNX Runtime is a .NET package again**, for this and nothing else: the choice was in process on
+the CPU against the sidecar, and for a two-megabyte model that must score every 32 ms window inside
+the streaming segmenter, a round trip per window or a whole-file pre-pass before the decode could
+start would cost more than the model does. Two copies ship — the wheel in the Python, the package
+beside the assemblies — and `docs/LICENSING.md` carries the obligation for both.
+
+**Measured, on this machine, and the measurement cuts both ways.** On the documentary that raised it
+(NDR, 28:49, Vulkan): 285 segments became **342**, the longest **29.4 s → 21.7 s**, segments of
+twenty seconds or more **10 → 1**, ten or more 34 → 17, at **RTF 0.0109 → 0.0126**; 416.8 s of
+audible material — the bed — was judged not speech and not decoded, and the decoded words fell by
+1.4 % (3,436 → 3,387), among them the *yeah / so / thank you* the recogniser had been writing over
+music. On the ten-minute podcast the speed figures come from (`csb384-8438.m4a`) the detector is
+**slower and cuts longer**: Vulkan RTF 0.0102 → 0.0147 (twice each, text byte-identical across
+runs), CPU 0.0823 → 0.0902, and **113 segments became 78**, mean 5.1 s → 7.4 s, twenty seconds or
+more 1 → 7 — Silero holds speech open across the short pauses the gate cuts at, and the upstream
+thresholds were not tuned against it. Words 1,632 → 1,621. So the detector is the right tool under a
+bed and not obviously the right tool for clean conversation, which is why it is an opt-in, the gate
+stays the default, and every segment figure already recorded stands. `docs/UNPROVEN.md` has the
+tables and what none of them establish.
+
+**What this is not.** Not a word-error measurement — no reference transcript was scored, and the 1.4
+% and 0.7 % are word counts, not accuracy. Not tuned — the two thresholds are upstream's defaults
+and the podcast result says they may be wrong for conversation. Not a provider comparison — CPU
+only, one thread, by decision. And not the subtitle files, which still break cues by character
+count; the cue builder was not touched.
+
+**1093 tests, no weights, no display, no network — 1089 passed and 4 skipped.** Two of the four are
+the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
+machine they pass.
 
 ### The dictation seam
 

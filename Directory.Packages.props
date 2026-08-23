@@ -32,18 +32,21 @@
     <PackageVersion Include="NAudio.Wasapi" Version="2.3.0" />
     <PackageVersion Include="NAudio.Core" Version="2.3.0" />
 
-    <!-- **No project in Uindosill.slnx references this any more.** Both graphs moved into the
-         bundled Python on 2026-08-21, so ONNX Runtime arrives as a wheel rather than a NuGet
-         package; what still reads this line is `attic/Parakeet.Engine.Sortformer` and
-         `attic/Parakeet.Engine.Marian`, which are unbuilt. It is kept rather than deleted so that
-         adding one of them back to the solution to read it does not also mean reconstructing a pin.
+    <!-- **One project in Uindosill.slnx references this: Parakeet.Engine.SileroVad**, since
+         2026-08-23, for the speech-detection graph that runs in process on the CPU. Between
+         2026-08-21 and then nothing did — both sidecar graphs had moved into the bundled Python,
+         where ONNX Runtime arrives as the onnxruntime-webgpu 1.27.0 wheel, and the pin was kept
+         only so that `attic/Parakeet.Engine.Sortformer` and `attic/Parakeet.Engine.Marian` could
+         be added back to read without reconstructing it. The two copies are separate binaries in
+         separate processes; docs/LICENSING.md carries the obligation for both.
 
-         Speaker diarisation. Microsoft.ML.OnnxRuntime carries only natives and pulls
-         Microsoft.ML.OnnxRuntime.Managed for the C# API, so one reference gets both. 1.29.0 is
-         built from the same source commit (2e2543f) as the Python onnxruntime 1.29 the diarisation
-         spike measured on, so the graph this runs is the graph that was scored, not a later one.
-         It is a single package carrying natives for every RID — win-x64 among them — which is why
-         `dotnet publish -r win-x64` still cross-builds from Linux CI.
+         Microsoft.ML.OnnxRuntime carries only natives and pulls Microsoft.ML.OnnxRuntime.Managed
+         for the C# API, so one reference gets both. 1.29.0 is built from the same source commit
+         (2e2543f) as the Python onnxruntime 1.29 the diarisation spike measured on; for the Silero
+         graph no provider or version has been measured against another, and the detector runs
+         the CPU provider only. It is a single package carrying natives for every RID — win-x64
+         and linux-x64 among them — which is why `dotnet publish -r win-x64` still cross-builds
+         from Linux CI and the Linux test run can load it.
 
          MIT, plus a 343 KB ThirdPartyNotices.txt covering 69 bundled components; both ship, see
          docs/LICENSING.md. Do not call OrtValue's System.Numerics.Tensors members: that package

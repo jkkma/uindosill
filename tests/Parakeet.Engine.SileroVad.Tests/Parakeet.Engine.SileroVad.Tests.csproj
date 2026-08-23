@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Parakeet.Engine.SileroVad/Parakeet.Engine.SileroVad.csproj" />
+  </ItemGroup>
+
+</Project>

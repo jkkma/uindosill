@@ -108,6 +108,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     case ModelTask.Translation:
                         Transcribe.RefreshTranslationAvailability();
                         break;
+                    case ModelTask.VoiceActivity:
+                        Transcribe.RefreshSpeechDetectionAvailability();
+                        break;
 
                     // The transcription entry joined this on 2026-08-23, when Start began loading
                     // for itself: whether Start is live now depends on weights being on disk, so

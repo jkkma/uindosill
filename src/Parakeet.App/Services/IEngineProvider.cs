@@ -1,10 +1,12 @@
 using Parakeet.Core.Diarisation;
 using Parakeet.Core.Models;
+using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
 using Parakeet.Engine.Python;
+using Parakeet.Engine.SileroVad;
 
 namespace Parakeet.App.Services;
 
@@ -113,6 +115,22 @@ public interface IEngineProvider
 
     /// <summary>The translator behind the English opt-in, or null when <see cref="SupportsTranslation"/> is false.</summary>
     ITranscriptTranslator? CreateTranslator();
+
+    /// <summary>
+    /// True when this provider can hand out a neural speech detector for the segmenter. Shown the
+    /// same way the other two opt-ins are: a checkbox disabled with a reason rather than hidden.
+    /// One reason only — the model is a download — because the detector runs in this process and
+    /// needs no interpreter.
+    /// </summary>
+    bool SupportsNeuralSpeechDetection { get; }
+
+    /// <summary>
+    /// The detector behind the speech-detection opt-in, loaded, or null when
+    /// <see cref="SupportsNeuralSpeechDetection"/> is false. Throws <see cref="SpeechDetectorException"/>
+    /// when the model is on disk and will not load, which is a sentence for the status line rather
+    /// than a silent fall-back to the gate.
+    /// </summary>
+    ISpeechDetector? CreateSpeechDetector();
 
     /// <summary>
     /// Frees whatever the engine technology keeps alive for the whole process, once every engine
@@ -227,6 +245,22 @@ public sealed class EngineProvider : IEngineProvider
             ? model
             : null;
 
+    /// <summary>
+    /// True when the speech-detection graph is installed. One question only, unlike the two
+    /// sidecar opt-ins: the detector runs in this process on ONNX Runtime, so there is no
+    /// interpreter to be missing.
+    /// </summary>
+    public bool SupportsNeuralSpeechDetection => VoiceActivityModel is not null;
+
+    private ModelDescriptor? VoiceActivityModel =>
+        ModelCatalog.Default.VoiceActivityModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
+            ? model
+            : null;
+
+    /// <inheritdoc />
+    public ISpeechDetector? CreateSpeechDetector() =>
+        VoiceActivityModel is { } model ? new SileroSpeechDetector(_store.PathFor(model)) : null;
+
     public ISpeakerLabeller? CreateSpeakerLabeller()
     {
         if (DiarisationModel is not { } model || !HasBundledPython)
@@ -296,6 +330,9 @@ public sealed class EngineProvider : IEngineProvider
             ModelTask.Translation => (TranslationModel is not null,
                 "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
                 + "it is a 1.34 GiB download and reads 25 languages into English only."),
+            ModelTask.VoiceActivity => (VoiceActivityModel is not null,
+                "Neural speech detection needs its own model, which is not installed yet. Install it from the Models "
+                + "tab; it is a 2.2 MiB download and hears pauses under music that the loudness gate cannot."),
             // Not every task runs in the sidecar — transcription is parakeet.cpp — so an unhandled
             // one returns nothing rather than falling through to a sentence about a Python it does
             // not use, which would tell somebody to reinstall over a feature that is working.
@@ -313,7 +350,10 @@ public sealed class EngineProvider : IEngineProvider
             return missingModel;
         }
 
-        if (!HasBundledPython)
+        // The interpreter is the second question for the two sidecar opt-ins and for nothing else:
+        // the speech detector runs in this process, so a missing Python is not its problem and a
+        // sentence about one would send somebody to repair a thing that is not broken.
+        if (task is ModelTask.Diarisation or ModelTask.Translation && !HasBundledPython)
         {
             // Not a download, and not something the Models tab can fix. The resolver's own reason
             // leads, because it names what was actually looked for — the two bundle directories,
@@ -483,6 +523,19 @@ public sealed class FakeEngineProvider : IEngineProvider
     public bool SupportsTranslation => true;
 
     public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator(_translator);
+
+    /// <summary>
+    /// The canned detector, so the speech-detection opt-in runs end to end here with no graph in
+    /// CI. Its loudness rule behaves like the gate, so a ticked box changes nothing about what the
+    /// fake pipeline produces — what a test reads is <see cref="LastSpeechDetector"/>, which says
+    /// whether the window handed the engine a detector at all and what the engine did with it.
+    /// </summary>
+    public bool SupportsNeuralSpeechDetection => true;
+
+    /// <summary>The detector the last <see cref="CreateSpeechDetector"/> returned, or null before any.</summary>
+    public FakeSpeechDetector? LastSpeechDetector { get; private set; }
+
+    public ISpeechDetector? CreateSpeechDetector() => LastSpeechDetector = new FakeSpeechDetector();
 
     public void ReleaseBackend() => ReleaseCount++;
 }

@@ -80,6 +80,7 @@ public sealed partial class ModelViewModel : ObservableObject
     {
         ModelTask.Diarisation => "SPEAKERS",
         ModelTask.Translation => "ENGLISH",
+        ModelTask.VoiceActivity => "SPEECH",
         _ => string.Empty,
     };
 
@@ -353,13 +354,17 @@ public sealed partial class ModelsViewModel : ObservableObject
             {
                 // Named per task rather than "not a transcription model", which describes what it
                 // is not and leaves the reader to work out what it is for.
-                var used = model.Descriptor.Task == ModelTask.Diarisation
-                    ? "'Label speakers'"
-                    : "'English version'";
+                var used = model.Descriptor.Task switch
+                {
+                    ModelTask.Diarisation => "'Label speakers'",
+                    ModelTask.Translation => "'English version'",
+                    ModelTask.VoiceActivity => "'Neural speech detection'",
+                    _ => "its own opt-in",
+                };
 
                 return $"This panel loads the model that turns speech into text. {model.DisplayName} does "
-                       + $"something else — it runs from {used} on the Transcribe tab, on a backend it "
-                       + "chooses itself, and is never loaded here.";
+                       + $"something else — it runs from {used} on the Transcribe tab, alongside the recogniser, "
+                       + "and is never loaded here.";
             }
 
             return model.IsInstalled ? null : "Download it first.";

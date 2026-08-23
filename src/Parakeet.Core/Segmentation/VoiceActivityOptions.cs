@@ -50,6 +50,23 @@ public sealed record VoiceActivityOptions
     /// </remarks>
     public float AbsoluteSpeechDb { get; init; } = -35f;
 
+    /// <summary>
+    /// With a speech detector in place of the energy gate: the probability at or above which a
+    /// frame opens speech. Silero's own default, and the one the upstream iterator uses.
+    /// </summary>
+    /// <remarks>
+    /// The two thresholds are hysteresis, not a single line: speech opens here and closes only
+    /// below <see cref="SilenceProbability"/>, and a probability between the two leaves the state
+    /// where it was — so a model that wavers around the middle of a sentence does not chatter the
+    /// segmenter open and shut. The gap of 0.15 is upstream's (<c>neg_threshold = threshold − 0.15</c>
+    /// in <c>utils_vad.py</c>), read at the pinned commit rather than chosen here. Ignored, with the
+    /// rest of the detection, when <see cref="Enabled"/> is false.
+    /// </remarks>
+    public float SpeechProbability { get; init; } = 0.5f;
+
+    /// <summary>With a speech detector: the probability below which open speech closes. See <see cref="SpeechProbability"/>.</summary>
+    public float SilenceProbability { get; init; } = 0.35f;
+
     /// <summary>Speech must persist this long before a segment opens (rejects clicks).</summary>
     public TimeSpan MinSpeechDuration { get; init; } = TimeSpan.FromMilliseconds(150);
 
@@ -126,6 +143,20 @@ public sealed record VoiceActivityOptions
                 nameof(AbsoluteSpeechDb),
                 AbsoluteSpeechDb,
                 "The definitely-speech level must sit above the nothing-below-here level.");
+        }
+
+        if (SpeechProbability is <= 0f or > 1f || SilenceProbability is < 0f or > 1f)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(SpeechProbability), SpeechProbability, "Detector thresholds must be probabilities in (0, 1].");
+        }
+
+        if (SilenceProbability > SpeechProbability)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(SilenceProbability),
+                SilenceProbability,
+                "The closing threshold must not sit above the opening one: speech that closes above where it opens can never be open.");
         }
     }
 }

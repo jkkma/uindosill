@@ -342,21 +342,23 @@ foreach ($channel in $Channels) {
     foreach ($required in @(
         'licences/NVIDIA-Open-Model-License-2025-10-24.txt',
         'licences/onnxruntime-LICENSE.txt',
-        'licences/onnxruntime-ThirdPartyNotices.txt')) {
+        'licences/onnxruntime-ThirdPartyNotices.txt',
+        'licences/silero-vad-LICENSE.txt')) {
         $path = Join-Path $publishDir $required
         if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
             throw "$required is missing or empty in the publish. The diarisation weights are under the NVIDIA " +
                   "Open Model License, whose section 3.1 wants a copy of the Agreement rather than a link, and " +
                   "'uindosill notice' prints the path to that copy — so a publish without it prints a promise it " +
-                  "does not keep. ONNX Runtime is MIT and still redistributed, inside the Python bundle rather than " +
-                  "beside the .NET assemblies since 2026-08-21, so its notices are still owed. See docs/LICENSING.md."
+                  "does not keep. ONNX Runtime is MIT and redistributed twice — inside the Python bundle since " +
+                  "2026-08-21 and beside the .NET assemblies again since 2026-08-23 for speech detection — and the " +
+                  "Silero VAD graph is MIT with a notice of its own, so all of these are owed. See docs/LICENSING.md."
         }
     }
 
-    # ONNX Runtime is no longer a .NET dependency: since 2026-08-21 both graphs run in the bundled
-    # Python, so the DLL itself now arrives inside `python/Lib/site-packages/onnxruntime` rather than
-    # beside the managed assemblies. Its notices still come from `licences/` and are still asserted
-    # above — what moved is the binary, not the obligation.
+    # ONNX Runtime ships twice since 2026-08-23: the bundled Python carries the onnxruntime-webgpu
+    # wheel for the diariser and the translator, and `onnxruntime.dll` is beside the managed
+    # assemblies again for the speech-detection graph, which runs in process. Both copies' notices
+    # come from `licences/` and are asserted above — one obligation, two binaries.
     #
     # **The committed notices are 1.29.0's and the bundle ships onnxruntime-webgpu 1.27.0.** Two
     # versions, one ThirdPartyNotices.txt; docs/LICENSING.md is where that is reconciled or recorded
