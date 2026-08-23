@@ -189,8 +189,9 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "name",
                 Help = "Execution provider for the diariser: cpu, cuda, webgpu or dml. Default: webgpu where " +
-                       "it loads, then cuda, then cpu — webgpu first because it is the one that reproduces " +
-                       "the published figure rather than the one that is fastest. This changes the speaker " +
+                       "it loads, then cpu — the one that reproduces the published figure, then the reference " +
+                       "itself. cuda is never chosen automatically: it fails the parity fixture and its figure " +
+                       "is its own, so it has to be named here. This changes the speaker " +
                        "labels, not only the speed — measured on AMI test, cpu scores 16.3324% DER, webgpu " +
                        "16.3319% and cuda 16.1021%, and a figure from one provider does not describe " +
                        "another. dml is refused unless --speaker-backend-unverified is given: at ONNX " +
@@ -345,8 +346,9 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "name",
                 Help = "Execution provider: cpu, cuda, webgpu or dml. Default: webgpu where it loads, then " +
-                       "cuda, then cpu — the one that reproduces the published figure ahead of the one that " +
-                       "is fastest. This changes the speaker turns, not only the speed — on AMI test cpu " +
+                       "cpu — the one that reproduces the published figure, then the reference itself; cuda " +
+                       "is never chosen automatically and has to be named, because it fails the parity fixture " +
+                       "and its figure is its own. This changes the speaker turns, not only the speed — on AMI test cpu " +
                        "scores 16.3324% DER, webgpu 16.3319% and cuda 16.1021% — so a scoring run must say " +
                        "which one produced it. dml needs --backend-unverified; at ONNX Runtime's defaults " +
                        "it scores 53.15% while looking healthy.",

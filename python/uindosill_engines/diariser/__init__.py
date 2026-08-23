@@ -24,9 +24,11 @@ MAX_SPEAKERS = 4
 #: a fixed onset: right at 10, 30, 40 and 50 minutes across two episodes, then wrong past an hour.
 RELIABLE_UP_TO_SECONDS = 50 * 60
 
-#: What `auto` will settle on, best first — and the list the `providers` op reports as usable, so
-#: that what the host is told it may pick and what `auto` actually picks cannot drift apart.
-AUTO_ORDER = ["webgpu", "cuda"]
+#: What `auto` will settle on, best first, before the CPU. WebGPU and nothing else: it is the one
+#: provider that reproduces the published figure, and the `providers` op reports what this resolves
+#: to, so what the host is told `auto` picks and what it picks cannot drift apart. CUDA is not in
+#: it — decided 2026-08-22 — because it does not reproduce the figure; it is reachable by name.
+AUTO_ORDER = ["webgpu"]
 
 #: What `threads: 0` means for this engine — and not "let ONNX Runtime choose", which is what the
 #: translator's 0 means. Every CPU figure in this project was measured with 12, so 12 is the number
@@ -49,19 +51,17 @@ def resolve_auto() -> list[str]:
     Predicting instead of trying would leave both opt-ins dead on a VM or an RDP session, with the
     CPU path — the reference path — unreachable.
 
-    **Measured is not the same as passing, and CUDA is the case that makes the difference.** It is
-    second in this list and it *fails* the parity fixture — 8.143e-04 against a threshold of 1e-4 —
-    so on a machine with CUDA and no WebGPU, `auto` selects a provider whose answer is not the one
-    the published figure describes. That is deliberate rather than an oversight: the alternative is
-    70x realtime where 971x was available, the failure is reported rather than silent (the host warns
-    on the backend and again on the parity result), and a diarisation is an opt-in a user chose. It
-    is written down here because "auto" reads like "safe" and on that machine it is not.
-
-    WebGPU before CUDA, and not because it is faster — it is not. Measured 2026-08-21 on AMI test:
-    WebGPU 16.3319% DER against the CPU's 16.3324%, a difference of 0.0005 points, while CUDA moves
-    the number to 16.1021%. A provider that reproduces the CPU's answer lets one published figure
-    describe every machine; one that does not means the figure describes whoever measured it. CUDA
-    buys 1.6x over WebGPU and costs that.
+    **Measured is not the same as passing, and CUDA is the case that makes the difference.** It
+    *fails* the parity fixture — 8.143e-04 against a threshold of 1e-4 — and measured 2026-08-21 on
+    AMI test it moves the number: WebGPU 16.3319% DER against the CPU's 16.3324%, a difference of
+    0.0005 points, while CUDA lands at 16.1021%. A provider that reproduces the CPU's answer lets one
+    published figure describe every machine; one that does not means the figure describes whoever
+    measured it. So CUDA is **not** in this list — decided 2026-08-22, after it had been second in
+    it: on a machine with CUDA and no working WebGPU, `auto` now settles on the CPU, the reference
+    path, at the CPU's speed, rather than on a provider whose answer is its own. CUDA is reachable
+    by name (`--speaker-backend cuda`), and a run that names it is warned on the backend and again on
+    the parity result. Until that day the code kept CUDA second and three documents said it was
+    out; the documents were right about what this project's rule requires.
 
     It is also the only provider here that is correct at ONNX Runtime's *default* optimisation level
     — DirectML is catastrophically wrong there — and it needs no CUDA or cuDNN libraries, which is

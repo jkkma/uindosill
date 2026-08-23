@@ -2039,6 +2039,20 @@ scripted to sleep twenty; the child in the kill-on-close job on Windows and said
 elsewhere; and the sweep taking the stale staged file and leaving the fresh one and the stranger.
 The suite is 874.
 
+### Decided 2026-08-22 — CUDA is out of the diariser's `auto`
+
+**The code kept CUDA second in `auto` and three newer sentences said it was out; the sentences
+were right about what this project's rule requires, and the code now agrees.** `AUTO_ORDER` was
+`["webgpu", "cuda"]`, with a docstring defending it: CUDA is tried only after WebGPU fails to build,
+a run that lands there is warned twice, and 70× realtime where 971× was available is a cost. But
+CUDA fails the parity fixture at 8.143e-04 against 1e-4 and moves AMI test to 16.1021 % where the
+published 16.3324 % is the CPU's and WebGPU's, and `auto` is the setting that reads as "safe": the
+rule this project runs on is that what it picks unasked reproduces the figure it publishes, and
+CUDA does not. So `auto` is WebGPU where it builds and otherwise the CPU — the reference path, at
+the CPU's speed — and CUDA is reachable by name, with the two warnings a named provider gets. The
+resolver's docstring and both `--speaker-backend` help strings say so; `docs/UNPROVEN.md` and the
+entry above on the float handoff, which already said CUDA was out, now describe the code.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |
