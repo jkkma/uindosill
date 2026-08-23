@@ -314,8 +314,8 @@ omitting it.
 ## The speech-detection graph is MIT (Silero), and the first MIT model here
 
 `silero-vad-v5.1.2` — `silero_vad.onnx`, 2,327,524 bytes — is the model behind the neural speech
-detection added 2026-08-23 (`--vad neural` on the command line; on by default in the app once the
-model is installed), installed by URL from `snakers4/silero-vad` at commit
+detection added 2026-08-23 (the default in the app and on the command line whenever the model is
+installed; `--vad energy` asks for the gate), installed by URL from `snakers4/silero-vad` at commit
 `6478567951ae5c9979ad7b234185b5515f4be7a1` (tag v5.1.2) and pinned by SHA-256. Its `LICENSE` at that
 commit is the MIT License, *Copyright (c) 2020-present Silero Team*, fetched the same day and
 shipped byte for byte as `licences/silero-vad-LICENSE.txt`.
@@ -563,8 +563,8 @@ never happens here.
 ## Deliberately not used: TEN-VAD
 
 Its modified Apache-2.0 carries an Agora non-compete clause. Voice activity detection here is a plain
-energy gate written for this project and, since 2026-08-23 — on request on the command line, by
-default in the app once its model is installed — Silero VAD, which is
+energy gate written for this project and, since 2026-08-23, Silero VAD — the default on both routes
+whenever its model is installed — which is
 MIT and has its own section above; its licence was read before the graph was. If you ever reach for
 an off-the-shelf VAD, read its licence first — this is a category where the popular choice has a
 rider on it.

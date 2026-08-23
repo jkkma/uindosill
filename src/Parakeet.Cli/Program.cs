@@ -3,6 +3,7 @@ using System.Text;
 using Parakeet.Audio;
 using Parakeet.Cli;
 using Parakeet.Core.Models;
+using Parakeet.Core.Segmentation;
 using Parakeet.Core.Translation;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
@@ -105,6 +106,7 @@ namespace Parakeet.Cli
                                           or PythonSidecarException
                                           or PythonEngineException
                                           or SegmentTooLongException
+                                          or SpeechDetectorException
                                           or FileNotFoundException
                                           or DirectoryNotFoundException
                                           or IOException

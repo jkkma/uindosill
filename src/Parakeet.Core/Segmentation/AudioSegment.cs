@@ -36,8 +36,9 @@ public sealed class AudioSegment
 public sealed record SegmentationReport
 {
     /// <summary>
-    /// What decided where speech was: <see cref="StreamingSegmenter.EnergyGateName"/>, or the
-    /// <see cref="ISpeechDetector.Name"/> of the detector that replaced it. A segment boundary is a
+    /// What decided where speech was: <see cref="StreamingSegmenter.EnergyGateName"/>, the
+    /// <see cref="ISpeechDetector.Name"/> of the detector that replaced it, or
+    /// <see cref="StreamingSegmenter.FixedWindowsName"/> when nothing did. A segment boundary is a
     /// fact about whichever of the two cut it, and a report that did not say which would be quoting
     /// a figure without its method.
     /// </summary>

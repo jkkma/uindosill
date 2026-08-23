@@ -137,10 +137,11 @@ internal static class Commands
                 Name = "vad",
                 TakesValue = true,
                 ValueName = "detector",
-                Help = "Which detector finds the speech to cut at: energy (the default, a loudness gate) or neural — " +
-                       "Silero VAD on ONNX Runtime, in process on the CPU, which hears pauses under music the gate cannot. " +
-                       "neural needs the speech-detection model: uindosill models download silero-vad-v5.1.2 (2.2 MiB). " +
-                       "Contradicts --no-vad.",
+                Help = "Which detector finds the speech to cut at: neural — Silero VAD on ONNX Runtime, in process on the " +
+                       "CPU, which hears pauses under music the gate cannot, and the default whenever its model is installed " +
+                       "(uindosill models download silero-vad-v5.1.2, 2.2 MiB) — or energy, a loudness gate, which is what " +
+                       "runs when the model is not installed. Every run names its detector on stderr. Every figure in " +
+                       "docs/UNPROVEN.md measured before 2026-08-23 is the gate's. neural contradicts --no-vad.",
             },
             new OptionSpec
             {

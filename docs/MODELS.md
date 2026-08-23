@@ -120,8 +120,8 @@ them are shapes. Counted by walking every subgraph with the `onnx` package on 20
 what it costs and what it has been measured on** are in `docs/PHASES.md` and `docs/UNPROVEN.md`
 under 2026-08-23; the short form is that it cuts a recording at pauses the energy gate cannot hear
 under music, at a cost of a few percent of the pass, and that it was measured on one documentary and
-one podcast. The app ticks it by default whenever it is installed; the command line asks for it with
-`--vad neural` and keeps the gate as its default.
+one podcast. Installed, it is the default in the app and on the command line alike; `--vad energy`
+asks for the gate, and a transcript's JSON names what cut it (`speechDetector`).
 
 ### Pins recorded for v3, deliberately unreachable
 

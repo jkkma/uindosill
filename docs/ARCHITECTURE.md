@@ -151,13 +151,21 @@ it did. `SegmentationReport` distinguishes "this track is digitally silent" from
 but the detector found no speech in it", and the CLI and the UI say which. An empty transcript with
 no explanation is the single most common way a local transcription tool wastes somebody's afternoon.
 
-The detector itself is a plain adaptive energy gate with hysteresis. TEN-VAD is deliberately not used
-(Agora non-compete clause in its modified Apache-2.0). Its one non-obvious property is a hard ceiling
-on the adaptive threshold — see `docs/UNPROVEN.md` for the failure that put it there.
+Two detectors can say where speech is. The energy gate — a plain adaptive gate with hysteresis,
+this project's own — always runs, because the report's facts about the audio (peak, floor, what was
+audible and not decoded) are its. Since 2026-08-23 **Silero VAD on ONNX Runtime**
+(`Parakeet.Engine.SileroVad`: 2.2 MiB, MIT, in process on one CPU thread, behind `ISpeechDetector`
+in Core) makes the speech *decision* instead whenever its model is installed, which is the default
+on both routes — `--vad energy` asks for the gate. The detector replaces the decision and nothing
+else: the two rules above, the padding, the cap and the forced cut are the segmenter's under
+either, and the report and the transcript's JSON (`speechDetector`) name which one cut the audio.
+TEN-VAD is deliberately not used (Agora non-compete clause in its modified Apache-2.0). The gate's
+one non-obvious property is a hard ceiling on the adaptive threshold — see `docs/UNPROVEN.md` for the
+failure that put it there.
 
-Fixed-window mode (`--no-vad`) is the escape hatch for material the energy gate mishandles. It is the
+Fixed-window mode (`--no-vad`) is the escape hatch for material neither detector handles. It is the
 same code path with every frame treated as speech, so segments grow to the cap and are cut at the
-quietest nearby frame: one implementation, not two.
+quietest nearby frame: one implementation, not two, and no detector is loaded under it.
 
 ## The interop layer
 

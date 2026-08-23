@@ -4197,11 +4197,14 @@ punctuation.
 
 `--vad neural` cuts the audio on Silero VAD v5 (ONNX Runtime 1.29.0, CPU, one thread, in process) in
 place of the energy gate; `docs/PHASES.md` § *Built 2026-08-23 — a neural speech detector* has what
-and why. Everything here is **one machine** (the RTX 5080 desktop), **two files**, one day; the
-gate is still the command-line default and every harness runs through the command line, so no
-figure earlier in this document moves. The app ticks the detector by default when its model is
-installed, since later the same day — that changes what a person's transcript is cut by, not what
-any harness measured.
+and why. Everything here is **one machine** (the RTX 5080 desktop), **two files**, one day. **Since
+later the same day the detector is the default on both routes whenever its model is installed** —
+the app's checkbox and `--vad` alike — so every figure earlier in this document is the gate's and
+stands as a record, and a default run of any harness is no longer a re-run of one: pass `-Vad
+energy` (`--vad energy`) to reproduce a figure, and read `speechDetector` in the run's JSON to know
+which detector you got. The JSON did not carry that field before this day; a transcript without it
+was cut by the gate or, under `--no-vad`, by fixed windows, and the flags that made it are the only
+record.
 
 **On the documentary that raised it** — NDR's *Hinter den Kulissen von Hamburgs Kantinen & Co.*,
 28:49, fetched from its link; `tdt-0.6b-v3-f16` on Vulkan; both runs on the same m4a:
@@ -4250,9 +4253,10 @@ of a CPU one; on the documentary it looked cheaper only because less audio reach
 made 113, seven of them twenty seconds or more where the gate made one. That is the upstream
 thresholds — speech opens at 0.5, closes below 0.35, `neg_threshold = threshold − 0.15` in
 `utils_vad.py` at the pinned commit — applied under this segmenter's 420 ms silence rule, and
-nothing here tuned them. Why the gate is still the command-line default is this table; the app's
-default went the other way the same day, on the maintainer's call and the documentary's table, and
-`docs/PHASES.md` has that.
+nothing here tuned them. This table is the case against the detector as a default for conversation,
+and it was made the default anyway — both routes, the same day, on the maintainer's call and the
+documentary's table; `docs/PHASES.md` has the decision. The longer cuts are a tuning question
+(`SpeechProbability`, `SilenceProbability`) that nothing here has measured.
 
 **What the rule was checked against.** The graph's inputs and outputs were read off the file with
 `onnxruntime` 1.27.0 before a line of C# was written — `input [None, None]`, `state [2, None, 128]`,

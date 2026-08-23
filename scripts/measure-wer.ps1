@@ -49,6 +49,12 @@ param(
     [ValidateSet('cpu', 'vulkan', 'cuda')]
     [string] $Backend = 'cuda',
 
+    # Which detector cuts the audio (energy | neural). Unset leaves it to the CLI, which since
+    # 2026-08-23 is neural whenever its model is installed. Every WER recorded before that day is the
+    # gate's — pass -Vad energy to reproduce one. Named per file in the summary as speechDetector.
+    [ValidateSet('energy', 'neural')]
+    [string] $Vad,
+
     # Catalogue ids, in the order they run. The default is the whole ladder, f16 first, so the
     # reference model's own row is there before anything is judged against it.
     [string[]] $Models = @('tdt-0.6b-v3-f16', 'tdt-0.6b-v3-q8_0', 'tdt-0.6b-v3-q6_k', 'tdt-0.6b-v3-q5_k', 'tdt-0.6b-v3-q4_k'),
@@ -217,7 +223,7 @@ try {
         Write-Host ''
         Write-Host ("── {0} on {1} ─────────────────────────────" -f $model, $Backend) -ForegroundColor Green
 
-        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $mediaPaths
+        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $(if ($Vad) { @('--vad', $Vad) } else { @() }) + $mediaPaths
         $watch = [Diagnostics.Stopwatch]::StartNew()
         # Not redirected: a CUDA process whose streams are captured has hung on abort here before
         # (gotcha 19). Its own progress is suppressed with --quiet; the summary lines still print.
@@ -249,6 +255,9 @@ try {
                 audioSeconds     = if ($document.PSObject.Properties.Name -contains 'audioDurationSec') { [double] $document.audioDurationSec } else { $null }
                 processingSeconds = if ($document.PSObject.Properties.Name -contains 'processingSec') { [double] $document.processingSec } else { $null }
                 realTimeFactor   = if ($document.PSObject.Properties.Name -contains 'realTimeFactor') { [double] $document.realTimeFactor } else { $null }
+                # What cut the file, from the transcript itself; null on one written before the
+                # field existed, which means the gate (every WER before 2026-08-23 was the gate's).
+                speechDetector   = if ($document.PSObject.Properties.Name -contains 'speechDetector') { [string] $document.speechDetector } else { $null }
                 segments         = @($document.segments).Count
                 words            = (@($document.segments) | ForEach-Object { @($_.words).Count } | Measure-Object -Sum).Sum
             }

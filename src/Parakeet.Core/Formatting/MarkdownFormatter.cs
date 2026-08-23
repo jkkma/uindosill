@@ -51,6 +51,12 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Backend", backend.ToString().ToLowerInvariant()));
             }
 
+            // The same row the JSON carries as speechDetector, present on the same terms.
+            if (document.SpeechDetector is { } speechDetector)
+            {
+                rows.Add(("Speech detection", speechDetector));
+            }
+
             if (document.Language is { } language)
             {
                 rows.Add(("Language", language));
