@@ -208,4 +208,13 @@
   <SolidColorBrush x:Key="TextControlBorderBrush" Color="#DCDFD6" />
   <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{StaticResource Matcha600}" />
 
+  <!-- Text selection, in every TextBox and SelectableTextBlock. Fluent paints it with the accent,
+       and this design's accent is Matcha600 — dark enough that selected ink disappeared into it,
+       found by selecting licence text in the About window. 200 is a highlight rather than a fill:
+       the ink stays legible on it, and it is a step the tinted panels do not use as a ground, so
+       a selection does not read as a panel. AboutWindowTests asserts the brush lands on the
+       control, because an override on a mistyped key loads without complaint and changes
+       nothing. -->
+  <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource Matcha200}" />
+
 </ResourceDictionary>
