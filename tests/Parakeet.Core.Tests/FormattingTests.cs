@@ -166,11 +166,12 @@ public class SubtitleCueBuilderTests
     [Fact]
     public void GenuinelyShortSegmentsAreLeftAlone()
     {
-        // "Mm-hmm." is a real utterance, not a leftover, and must keep its own cue.
+        // "Mm-hmm." is a real utterance, not a leftover, and must keep its own cue — written, like
+        // every cue since 2026-08-23, without its sentence-final stop (TrailingStopTests has the rule).
         var cues = SubtitleCueBuilder.Build([Segment(0, 1, "Mm-hmm."), Segment(2, 3, "Um")]);
 
         Assert.Equal(2, cues.Count);
-        Assert.Equal("Mm-hmm.", cues[0].Text);
+        Assert.Equal("Mm-hmm", cues[0].Text);
         Assert.Equal("Um", cues[1].Text);
     }
 

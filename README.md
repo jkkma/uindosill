@@ -78,8 +78,9 @@ nothing has packaged one.
   `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
   a checkbox beside the speaker one, and the English arrives *beside* the transcript rather than
   instead of it — a switcher over the transcript pane shows either, with the same speakers on both
-  sides; the transcript is read by the sentence and the English by the segment, since a translation
-  carries no word times to cut it by.
+  sides; both are read by the sentence — the translator is given the sentences the transcript's word
+  timings cut it into, so the English has the same lines at the same times — and only the word mark
+  stays on the transcript side, since a translation carries no word times.
   **The gate it was written against is not passed**, and that is a statement about a criterion
   nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
   languages and Slovak misses by 0.74, and the human adequacy check has been declined. Those scores
@@ -111,7 +112,8 @@ nothing has packaged one.
   2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
   cues you click to jump to that moment — one per sentence where the engine's word times can tell
   the sentences apart, so a thirty-second segment reads as the sentences it holds rather than as one
-  block — the line being spoken lights up as it goes, and a find box marks every mention of a word
+  block, and drawn without the sentence's closing full stop, as a subtitle is and as the SRT and VTT
+  files are written — the line being spoken lights up as it goes, and a find box marks every mention of a word
   and steps between them with Enter. All of that runs on times v1 already writes. **A video plays its picture too, as of 2026-08-23**, through a vendored libmpv —
   which is why a build carrying it is GPL rather than MIT; see the licence section below. A build
   without it plays a video's sound and says on the tab that it is not drawing the picture.
@@ -174,7 +176,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1097 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1116 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

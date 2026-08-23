@@ -7,18 +7,46 @@ namespace Parakeet.Core.Translation;
 /// translator to the contract on the way through.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The checks below are the reason this is a driver rather than a loop each caller writes. A
 /// translator that returns the wrong number of segments, moves one in time, or hands back the
 /// source's word timings under new text produces a file that looks entirely correct and is not —
 /// the same class of failure <c>SegmentingTranscriptionEngine</c> refuses a mismatched batch for.
 /// Every one of them is caught here, once, in front of every caller.
+/// </para>
+/// <para>
+/// <b>The unit of translation is the sentence, since 2026-08-23.</b> Until that day the translator
+/// was given the recogniser's segments, and on audio cut at the thirty-second cap a segment held
+/// nine sentences, so the English came back as one string per segment with no word timings and
+/// nothing to cut it by — the Ask tab read the transcript by the sentence and the English by the
+/// segment, and a documentary's three German lines at 02:43, 02:48 and 02:53 were one English line
+/// at 02:43. Now the source is split with <see cref="SentenceSplitter"/> first — the same cut the
+/// transcript's lines are made with, on the word timings the model reported — and the translator
+/// sees one request per sentence. Each English segment keeps its sentence's start and end, its
+/// source index and its speaker, and the checks below hold per sentence exactly as they held per
+/// segment. A segment the splitter leaves whole — one sentence, no words, words that do not
+/// reproduce the text — is translated as before. <see cref="Units"/> is that split, exposed so a
+/// caller that compares the source against the English compares the units that were actually
+/// paired. What it costs and what it has not been measured on is in <c>docs/UNPROVEN.md</c>.
+/// </para>
 /// </remarks>
 public static class TranscriptTranslation
 {
     /// <summary>
-    /// Translates <paramref name="document"/>'s segments and returns a document carrying the
-    /// English text, the target language and the translator's model id as provenance. The source
-    /// document is unchanged; the caller keeps it if it wants both.
+    /// The segments the translator is given for <paramref name="document"/>: its segments cut into
+    /// sentences where their word timings allow, in order. The English returned by
+    /// <see cref="TranslateAsync"/> pairs with these by index, not with the document's own segments.
+    /// </summary>
+    public static IReadOnlyList<TranscriptSegment> Units(TranscriptDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return SentenceSplitter.Split(document.Segments);
+    }
+
+    /// <summary>
+    /// Translates <paramref name="document"/> a sentence at a time and returns a document carrying
+    /// the English text, the target language and the translator's model id as provenance. The
+    /// source document is unchanged; the caller keeps it if it wants both.
     /// </summary>
     public static async Task<TranscriptDocument> TranslateAsync(
         TranscriptDocument document,
@@ -46,7 +74,7 @@ public static class TranscriptTranslation
                 "can run this pass.");
         }
 
-        var source = document.Segments;
+        var source = Units(document);
         var translated = new List<TranscriptSegment>(source.Count);
 
         await foreach (var segment in translator

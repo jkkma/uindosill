@@ -161,7 +161,53 @@ public static class SubtitleCueBuilder
             }
         }
 
-        return Tidy(cues, options);
+        return StripTrailingStops(Tidy(cues, options));
+    }
+
+    /// <summary>
+    /// Takes the sentence-final full stop off the end of every cue — the last line, and the last
+    /// word of <see cref="SubtitleCue.LineWords"/> with it, so the word-timed VTT writes the same
+    /// text the plain one does. Asked for on 2026-08-23; <see cref="TrailingStop"/> has the rule.
+    /// On the finished cue and never on the segment, because the segment's text is what the word
+    /// times were located in; a stop inside a cue, between two sentences, stays.
+    /// </summary>
+    private static IReadOnlyList<SubtitleCue> StripTrailingStops(IReadOnlyList<SubtitleCue> cues)
+    {
+        var result = new List<SubtitleCue>(cues.Count);
+
+        foreach (var cue in cues)
+        {
+            if (cue.Lines.Count == 0)
+            {
+                result.Add(cue);
+                continue;
+            }
+
+            var lastLine = cue.Lines[^1];
+            var stripped = TrailingStop.Strip(lastLine);
+            if (ReferenceEquals(stripped, lastLine))
+            {
+                result.Add(cue);
+                continue;
+            }
+
+            var lines = new List<string>(cue.Lines);
+            lines[^1] = stripped;
+
+            var lineWords = cue.LineWords;
+            if (lineWords.Count > 0 && lineWords[^1].Count > 0)
+            {
+                var lastWords = new List<TranscriptWord>(lineWords[^1]);
+                lastWords[^1] = TrailingStop.Strip(lastWords[^1]);
+                var all = new List<IReadOnlyList<TranscriptWord>>(lineWords);
+                all[^1] = lastWords;
+                lineWords = all;
+            }
+
+            result.Add(cue with { Lines = lines, LineWords = lineWords });
+        }
+
+        return result;
     }
 
     private static void AppendWordTimedCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)

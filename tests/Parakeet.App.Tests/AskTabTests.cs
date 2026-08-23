@@ -412,7 +412,8 @@ public class AskTabTests
         jobs.Add(Sentences());
 
         var lines = ask.Lines!;
-        Assert.Equal(["Erst eins.", "Dann zwei.", "Und drei"], lines.Select(l => l.Text));
+        // Drawn without the sentence-final stop, as a subtitle is (TranscriptLineTests has the rule).
+        Assert.Equal(["Erst eins", "Dann zwei", "Und drei"], lines.Select(l => l.Text));
 
         // Times come off the words, never invented: the first cue keeps the segment's start, the
         // last keeps its end, and the one between starts where its first word does.
@@ -434,12 +435,14 @@ public class AskTabTests
     }
 
     [Fact]
-    public void TheEnglishPaneStaysOneLinePerSegmentBecauseATranslationHasNoWordTimes()
+    public void TheEnglishPaneDrawsTheTranslatedSegmentsAsTheyComeAndNeverCutsThemItself()
     {
-        // A language and its translation do not hold the same number of sentences, and a translated
-        // segment carries no word times to cut by, so the English is left whole rather than timed
-        // by a guess — and the notice under the pills says so, beside the word mark it already
-        // explains.
+        // A translated segment carries no word times to cut by, so the window draws the English
+        // segments as the translation pass made them — one line each — rather than timing a cut by
+        // a guess. The pass makes them sentences now (TranscriptTranslation splits the source first),
+        // which is why a hand-built one-segment translation still comes out as one line here: the
+        // window does not split, the pass does. The notice under the pills names the word mark as
+        // the thing that does not follow across.
         var (ask, jobs, _) = Create();
         var job = new JobViewModel("/tmp/a.wav");
         job.Complete(
@@ -464,7 +467,8 @@ public class AskTabTests
 
         ask.TranscriptPane = 1;
         Assert.Single(ask.Lines!);
-        Assert.Contains("a segment at a time", ask.TranslationPaneNotice, StringComparison.Ordinal);
+        Assert.Contains("a sentence at a time", ask.TranslationPaneNotice, StringComparison.Ordinal);
+        Assert.Contains("not marked", ask.TranslationPaneNotice, StringComparison.Ordinal);
     }
 
     [Fact]

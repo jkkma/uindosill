@@ -434,6 +434,14 @@ timestamps strictly inside the cue and strictly increasing — is therefore enfo
 `WordTimedVttFormatter`, which drops a tag it cannot place legally rather than inventing one that
 fits. SRT has no equivalent construct and does not get one.
 
+Every cue is written without its sentence-final full stop — the last line, and the last word of
+`LineWords` with it, so `vtt-words` says what the plain files say — because a subtitle closes with
+the cut, not with a stop; asked for on 2026-08-23, and `TrailingStop` holds the rule: only `.`,
+never `?`, `!` or an ellipsis, and a closing quote or bracket after the stop stays. The window draws
+its lines the same way. The transcript formats — TXT, JSON, Markdown — keep the text as the model
+wrote it, and so does the document, which is what the sentence splitter and the word times are
+computed from.
+
 `TranscriptDocument` carries provenance — model, quantisation, backend, real-time factor — into the
 JSON and Markdown output. Quantisation quality on this engine is unmeasured, so a transcript that
 cannot say which weights produced it is not a result anybody can act on later.
