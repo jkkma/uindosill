@@ -367,7 +367,14 @@ measurement.
   own `model_config.yaml` rather than off a model card. **It no longer streams.** The C# one
   produced features a chunk at a time; this computes the whole file's mel up front, which is 128
   float32 every 10 ms — about 51 kB per second of audio, so hundreds of megabytes on a long
-  recording. That is arithmetic: nothing has profiled the sidecar's peak working set.
+  recording. **Its peak is now profiled, and it was not the mel.** Measured 2026-08-22 on the
+  bundled torch, whole-file, the complex spectrum and the intermediates behind it peaked at about
+  730 kB per second of audio — 1,317 MB above the resting working set for thirty minutes. Since
+  that day the STFT runs in hop-aligned blocks of 8,192 frames, each seeing exactly the samples its
+  frames would have seen, and the mel is written straight into its final layout: bit-identical to
+  the whole-file result on thirty minutes of real audio, and about 306 kB per second of audio at
+  peak (551 MB on the same thirty minutes), the rest being the samples themselves. The figures are
+  in `docs/UNPROVEN.md` beside the 16.33 % they do not move.
 - **The Arrival-Order Speaker Cache** is what makes speaker 2 the same person at minute thirty as at
   minute one. The graph takes the cache and the FIFO as inputs and returns embeddings; it does not
   update them. Eviction is not first-in-first-out — frames are scored by how confidently exactly one
@@ -377,10 +384,17 @@ measurement.
   alternative is on record: the C# port of it scored 16.3368% on AMI test against the reference's
   16.3324%, 0.0044 points for a port that was done carefully.
 - **The chunk loop** slices the mel spectrogram with asymmetric first and last chunks, trims the
-  graph's fixed 381-frame output back to the length it reports, and applies the prediction mask the
-  export omits. This one is still this project's code, because it is the part NVIDIA ships as a
-  training loop rather than as anything callable — but it is the spike's own loop rather than a
-  second reading of it.
+  graph's fixed 381-frame output back to the pre-encode length of the piece's *physical* width, and
+  applies the prediction mask the export omits. This one is still this project's code, because it is
+  the part NVIDIA ships as a training loop rather than as anything callable — but it is the spike's
+  own loop rather than a second reading of it. **The trim is the one place the spike's loop was
+  wrong, found 2026-08-22:** it trimmed to the valid length the graph reports, where NeMo's
+  `streaming_update_async` takes the chunk's capacity from the tensor's physical width and clamps
+  the valid length to it, and the two differ on every file because the featurizer pads to a
+  multiple of 16 and the STFT is one frame longer than the valid count. One or two frames were lost
+  on 7.3 % of durations — a 600 s file came out 7,498 frames where 7,500 are due — and the last
+  chunk's rows landed 160 ms early. The 16.33 % AMI figure was produced by that loop, and
+  `docs/UNPROVEN.md` says what the fix owes it.
 
 ## Output
 

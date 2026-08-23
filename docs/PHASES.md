@@ -1987,6 +1987,34 @@ the read and the decode figure does not; an engine slow to decode, so the decode
 the pass; and both formatters writing the new figure beside the old, with the old unchanged.
 The suite is 871.
 
+### Fixed 2026-08-22 — the diariser's chunk loop trimmed to the wrong width and lost frames, and its featurizer's peak was never the mel
+
+**Two defects in the sidecar's numerics, from the same review — the first in the loop the 16.33 %
+was produced by.** The loop trimmed the graph's 381-frame embedding output to the pre-encode length
+of the chunk's *valid* frames, the `elen` the graph reports, where NeMo's `streaming_update_async`
+takes a chunk's capacity from the tensor's physical width and clamps the valid length to it. The two
+differ on every file, because the featurizer pads the mel to a multiple of 16 and the STFT is one
+frame longer than the valid count: verified on the installed graph, a 2736-frame piece with 2720
+valid came back as 338 rows where 340 are due, and a 600.0 s file as 7,498 rows where 7,500 are
+due, its last chunk's rows concatenated 160 ms early — one or two frames lost on 7.3 % of durations.
+The context-only last chunk also broke out of the loop before the progress step, so the bar stopped
+at n − 1 of n. And the featurizer's peak working set, which nothing had profiled, was about 730 kB
+per second of audio where the mel is 51: thirty minutes peaked 1,317 MB above resting, the complex
+spectrum and every intermediate behind it alive together.
+
+**The loop trims to the physical width; the featurizer works in blocks; the figure is marked.**
+`pre_encode_len` — ⌊(n − 1)/2⌋ + 1 three times, checked against `elen` on the graph for every
+length the loop produces — gives the trim, the valid length stays as `chunk_lengths`, and the step is
+counted before the break: 340 of 340 and 7,500 of 7,500 on the graph, and the committed parity
+fixture unchanged, because its geometry has no padding to trim. The STFT runs in hop-aligned blocks
+of 8,192 frames, each seeing exactly the samples its frames would have seen, and the mel is written
+straight into its final layout: bit-identical to the whole-file result on thirty minutes of real
+audio, at 551 MB above resting. **The AMI re-score the fix owes is owed to the desktop**, which
+holds the material; `docs/UNPROVEN.md` says the 16.33 % describes the pre-fix loop until then, and
+`ARCHITECTURE.md` says what the loop trims and what the featurizer costs. The suite cannot run the
+Python, so all of it was driven by hand on the bundled interpreter and the real graph, before and
+after, and the numbers above are those runs.
+
 ## The honest summary
 
 | Phase | Planned exit criterion | Met? |

@@ -8,8 +8,11 @@ of it.  What is written here is only the loop around it.
 
 Three things a host must do that the graph does not:
   * chunk the mel exactly as streaming_feat_loader does (asymmetric first and last chunks),
-  * trim the fixed 381-frame embedding output back to chunk_pre_encode_lengths, because
-    streaming_update_async derives max_chunk_len from the tensor's physical width,
+  * trim the fixed 381-frame embedding output back to the pre-encode length of the piece's
+    *physical* width — padding included, which is not the valid length the graph reports as
+    `elen` — because streaming_update_async derives max_chunk_len from the tensor's physical
+    width and clamps the valid chunk_lengths to it (trimmed to `elen` until 2026-08-22, which
+    lost one or two frames on 7.3% of durations),
   * apply_mask_to_preds -- forward_for_export omits it, and the packed predictions past the
     total valid length are otherwise fed into the cache as real frames.
 """
@@ -37,6 +40,22 @@ RIGHT_CTX = 40
 MEL_FRAMES = 3048         # (LEFT_CTX + CHUNK_LEN + RIGHT_CTX) * SUBSAMPLING
 EMB_DIM = 512
 FRAME_SEC = SUBSAMPLING * 0.01   # 80 ms per prediction frame
+
+
+def pre_encode_len(mel_frames: int) -> int:
+    """Encoder frames the pre-encoder produces from `mel_frames` of mel: three stride-2
+    convolutions, each `floor((n - 1) / 2) + 1`.
+
+    This is the graph's own `elen` — checked against it on the CPU, 2026-08-22, for the chunk
+    lengths the loop actually produces: 2720 → 340, 2736 → 342, 2888 → 361, 2904 → 363,
+    3040 → 380, 3048 → 381, all equal. Written here as arithmetic rather than read back from the
+    graph because the loop needs it for the *physical* width of a piece, which the graph is never
+    asked about: `elen` answers for the valid length only.
+    """
+    n = mel_frames
+    for _ in range(3):
+        n = (n - 1) // 2 + 1
+    return n
 
 
 def build_modules():
@@ -171,13 +190,25 @@ class SortformerEngine:
             lc_enc = round(left_offset / SUBSAMPLING)
             rc_enc = math.ceil(right_offset / SUBSAMPLING)
             n_emb = int(elen[0])
+            step += 1
+            if progress:
+                # Counted before the break below, so a last chunk that is context only still
+                # brings the bar to n of n rather than leaving it at n-1.
+                progress(step, n_steps)
             if n_emb - lc_enc - rc_enc <= 0:
                 break   # nothing but context left; NeMo's loop cannot reach here either
 
-            # Trim to the physical width NeMo would have had: streaming_update_async takes
-            # max_chunk_len from chunk.shape[1], so a fixed 381 would over-count by one on
-            # the first chunk and by more on the last.
-            chunk_embs = torch.from_numpy(embs[:, :n_emb].copy())
+            # Trim to the physical width NeMo would have had — the pre-encode length of the whole
+            # piece, padding included — and not to the valid length the graph reports in `elen`.
+            # streaming_update_async takes max_chunk_len from chunk.shape[1] and clamps the valid
+            # chunk_lengths to it, so the physical width decides how many frames a chunk can
+            # contribute and the valid length how many of them are real. The two differ on every
+            # file, because the featurizer pads to a multiple of 16 and the STFT is one frame
+            # longer than the valid count: trimmed to `elen` until 2026-08-22, the loop lost one or
+            # two frames on 7.3% of durations — a 600 s file came out 7,498 frames where 7,500 are
+            # due, and the last chunk's rows were concatenated 160 ms early.
+            n_phys = pre_encode_len(width)
+            chunk_embs = torch.from_numpy(embs[:, :n_phys].copy())
             preds_t = torch.from_numpy(preds.copy())
 
             # forward_for_export skips apply_mask_to_preds; do it here.
@@ -193,9 +224,6 @@ class SortformerEngine:
                 rc=rc_enc,
             )
             total.append(chunk_preds[0].numpy().copy())
-            step += 1
-            if progress:
-                progress(step, n_steps)
 
         out = np.concatenate(total, axis=0) if total else np.zeros((0, N_SPK), np.float32)
         return out[: math.ceil(valid_frames / SUBSAMPLING)]
