@@ -10,6 +10,7 @@ using Parakeet.Core.Diarisation;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
+using Parakeet.Core.Muxing;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
@@ -53,6 +54,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private readonly Func<EngineSelection> _selection;
     private readonly ModelSession? _session;
     private readonly Parakeet.App.Services.Tools.IMediaUrlFetcher _fetcher;
+    private readonly Parakeet.App.Services.Tools.ISubtitleMuxer _muxer;
+    private string? _addToRecordingResult;
     private readonly string _downloadRoot;
     private CancellationTokenSource? _cancellation;
 
@@ -62,7 +65,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StartHint))]
     [NotifyPropertyChangedFor(nameof(DropHint))]
     [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
+    [NotifyPropertyChangedFor(nameof(CanAddToRecording))]
+    [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
     [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddToRecordingCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -87,7 +93,27 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VisibleLines))]
     [NotifyPropertyChangedFor(nameof(CanShowTranslation))]
+    [NotifyPropertyChangedFor(nameof(CanAddToRecording))]
+    [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
+    [NotifyCanExecuteChangedFor(nameof(AddToRecordingCommand))]
     private JobViewModel? _selectedJob;
+
+    /// <summary>A tick under Output formats can change what would go inside the recording.</summary>
+    private void OnFormatChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(ExportableFormat));
+        OnPropertyChanged(nameof(CanAddToRecording));
+        OnPropertyChanged(nameof(AddToRecordingNotice));
+        AddToRecordingCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedJobChanged(JobViewModel? value)
+    {
+        // The result of the last one belonged to the row it ran on. Left standing under a different
+        // recording it reads as a claim about this one.
+        _addToRecordingResult = null;
+        OnPropertyChanged(nameof(AddToRecordingNotice));
+    }
 
     [ObservableProperty]
     private string _liveTranscript = string.Empty;
@@ -171,7 +197,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
         Func<EngineSelection> selection,
         ModelSession? session = null,
         Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
-        string? downloadRoot = null)
+        string? downloadRoot = null,
+        Parakeet.App.Services.Tools.ISubtitleMuxer? muxer = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
         ArgumentNullException.ThrowIfNull(selection);
@@ -180,6 +207,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         _selection = selection;
         _session = session;
         _fetcher = fetcher ?? new Parakeet.App.Services.Tools.YtDlpMediaUrlFetcher();
+        _muxer = muxer ?? new Parakeet.App.Services.Tools.FfmpegSubtitleMuxer();
 
         // Under the user's temp directory rather than beside the application: these are working
         // copies of somebody else's media, they can be large, and nothing downstream keeps them.
@@ -198,6 +226,30 @@ public sealed partial class TranscribeViewModel : ObservableObject
         Formats = [.. TranscriptFormats.All
             .Where(f => f.Id != TranscriptFormats.Rttm.Id)
             .Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
+
+        // Which format goes inside the recording is read off these ticks, so the button beside them
+        // has to hear one change. RTTM comes and goes with the diariser, so the collection is
+        // followed as well as its current contents.
+        Formats.CollectionChanged += (_, e) =>
+        {
+            foreach (var format in e.NewItems?.OfType<OutputFormatViewModel>() ?? [])
+            {
+                format.PropertyChanged += OnFormatChanged;
+            }
+
+            foreach (var format in e.OldItems?.OfType<OutputFormatViewModel>() ?? [])
+            {
+                format.PropertyChanged -= OnFormatChanged;
+            }
+
+            OnFormatChanged(null, new System.ComponentModel.PropertyChangedEventArgs(null));
+        };
+
+        foreach (var format in Formats)
+        {
+            format.PropertyChanged += OnFormatChanged;
+        }
+
         RefreshSpeakerAvailability();
         RefreshTranslationAvailability();
     }
@@ -460,6 +512,153 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// whether the pane switcher is drawn at all.
     /// </summary>
     public bool CanShowTranslation => SelectedJob?.HasTranslation ?? false;
+
+    /// <summary>
+    /// Which format would go inside the recording, or null when none of the selected ones can.
+    /// </summary>
+    /// <remarks>
+    /// Read off the formats already chosen rather than asked for again — somebody who ticked
+    /// "WebVTT (words)" has said what they want their transcript to be, and asking a second time at
+    /// the moment they press a button is asking them to say it twice.
+    ///
+    /// Richest first, then cheapest container. A word-timed WebVTT carries everything a plain one
+    /// does and the word times as well, so where it is selected it is the one worth putting in —
+    /// even though it is also the one that forces Matroska, which is why
+    /// <see cref="AddToRecordingNotice"/> says so before anything is written. Between a plain
+    /// WebVTT and an SRT there is nothing to choose on content, so the tie goes to SRT: it keeps
+    /// the file an MP4, and a plain WebVTT would force Matroska for no gain at all.
+    /// </remarks>
+    public string? ExportableFormat =>
+        new[] { "vtt-words", "srt", "vtt" }
+            .FirstOrDefault(id => Formats.Any(f => f.IsSelected && f.Id == id));
+
+    /// <summary>Whether the transcript of the open recording can be put inside it.</summary>
+    public bool CanAddToRecording =>
+        !IsRunning
+        && SelectedJob is { CanExport: true } job
+        && !job.IsFromUrl
+        && ExportableFormat is not null
+        && _muxer.IsAvailable
+        && SubtitleMux.TryPlan(job.Path, ExportableFormat, out _, out _);
+
+    /// <summary>
+    /// What pressing it will do, or why it cannot be pressed. Never null while a row is selected:
+    /// a disabled control with no reason beside it is the defect this window keeps finding.
+    /// </summary>
+    public string? AddToRecordingNotice
+    {
+        get
+        {
+            if (_addToRecordingResult is { } result)
+            {
+                return result;
+            }
+
+            if (SelectedJob is not { } job)
+            {
+                return null;
+            }
+
+            if (_muxer.DescribeUnavailable() is { } unavailable)
+            {
+                return unavailable;
+            }
+
+            if (!job.CanExport)
+            {
+                return "Transcribe this recording first.";
+            }
+
+            if (job.IsFromUrl)
+            {
+                return "This one came from a link, so the recording here is the audio that was "
+                    + "downloaded. Its transcript sits beside it as a file.";
+            }
+
+            if (ExportableFormat is not { } format)
+            {
+                return "Tick SRT or WebVTT under Output formats — those are the two a recording can "
+                    + "carry.";
+            }
+
+            if (!SubtitleMux.TryPlan(job.Path, format, out var plan, out var refusal))
+            {
+                return refusal;
+            }
+
+            var name = Path.GetFileName(plan.OutputPath);
+
+            return plan.Note is { } note
+                ? $"Writes {name}. {note}"
+                : $"Writes {name} beside the original, which is left alone.";
+        }
+    }
+
+    /// <summary>
+    /// Puts the transcript inside the recording, as a subtitle track, in a new file beside it.
+    /// </summary>
+    /// <remarks>
+    /// The transcript is rendered here rather than taken off disk, which is what makes a speaker
+    /// somebody renamed reach the file: the sidecars were written before the window had a chance to
+    /// show anyone a name. See <c>JobViewModel.Named</c>.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanAddToRecording))]
+    private async Task AddToRecordingAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedJob is not { } job
+            || ExportableFormat is not { } formatId
+            || job.Named() is not { } document
+            || !SubtitleMux.TryPlan(job.Path, formatId, out var plan, out _))
+        {
+            return;
+        }
+
+        _addToRecordingResult = null;
+        OnPropertyChanged(nameof(AddToRecordingNotice));
+
+        // Beside the transcript the run already wrote, and thrown away afterwards: what belongs to
+        // the user is the media file, and a second copy of a transcript they already have is litter.
+        var scratch = Path.Combine(
+            Path.GetTempPath(), "uindosill-mux-" + Guid.NewGuid().ToString("N")[..12]
+                + TranscriptFormats.Get(formatId).FileExtension);
+
+        try
+        {
+            await File.WriteAllTextAsync(
+                scratch, TranscriptFormats.Get(formatId).Format(document, null), cancellationToken)
+                .ConfigureAwait(true);
+
+            var written = await _muxer
+                .MuxAsync(plan, scratch, null, cancellationToken)
+                .ConfigureAwait(true);
+
+            job.OutputFiles.Add(written);
+            _addToRecordingResult = $"Added the transcript to {Path.GetFileName(written)}.";
+        }
+        catch (OperationCanceledException)
+        {
+            _addToRecordingResult = null;
+        }
+        catch (Exception ex) when (ex is Parakeet.App.Services.Tools.SubtitleMuxException or IOException)
+        {
+            _addToRecordingResult = ex.Message;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(scratch))
+                {
+                    File.Delete(scratch);
+                }
+            }
+            catch (IOException)
+            {
+            }
+
+            OnPropertyChanged(nameof(AddToRecordingNotice));
+        }
+    }
 
     /// <summary>
     /// The lines the transcript area draws: the English ones when the switcher is on them and the

@@ -324,33 +324,74 @@ SourceForge mpv-player-windows builds, neither of which offers one — so taking
 building and maintaining a toolchain rather than pinning a file. That was weighed and declined; see
 the PHASES entry. If one ever appears, this is the section to change.
 
-## yt-dlp and Deno — taking a link instead of a file
+## yt-dlp, Deno and ffmpeg — taking a link, and putting a transcript back in a file
 
 Paste a link and the application downloads its audio track, transcribes it like any other file, and
 — on the Ask tab — streams the picture back from the same link rather than keeping a copy of it.
-Two binaries do that, vendored the same way the others are.
+Hand it a finished transcript and it can put that back inside the recording as a subtitle track.
+Three binaries do those two jobs, vendored the same way the others are.
 
 ```
 native/
   win-x64/
-    tools/  yt-dlp.exe  deno.exe  yt-dlp-LICENSE.txt  deno-LICENSE.txt
+    tools/   yt-dlp.exe  deno.exe  yt-dlp-LICENSE.txt  deno-LICENSE.txt
+    ffmpeg/  ffmpeg.exe  ffmpeg-LICENSE.txt
 ```
 
+**ffmpeg is in a directory of its own, and that is load-bearing rather than tidy.** yt-dlp looks for
+ffmpeg beside its own executable before it looks at `PATH`. Measured 2026-08-23: the same yt-dlp
+binary reports `exe versions: none` alone in a directory and `exe versions: ffmpeg n9.0.1` with
+ffmpeg next to it, on an identical `PATH`. So dropping the muxer into `tools/` silently changes what
+a download produces — and retires the check below that says both of this application's readers open
+what yt-dlp writes today. Nothing here needs yt-dlp to have a muxer: the one thing that does is
+`FfmpegSubtitleMuxer`, which runs it by absolute path. `BundledTools` therefore searches two
+different directory lists, `UINDOSILL_FFMPEG_DIR` overrides the muxer's independently of
+`UINDOSILL_TOOLS_DIR`, and `BundledToolsTests.TheMuxerIsNotVendoredBesideYtDlp` fails if the two
+ever end up together.
+
+**yt-dlp is given the muxer anyway — by name, on the command line.** Keeping the binaries apart is
+not about withholding it; it is about the difference between a wiring decision and an accident of
+file placement. `MediaUrlFetcher` passes `--ffmpeg-location <absolute path>`, so a download that has
+a muxer says so, and one that does not is a build that vendored no ffmpeg rather than a build whose
+files moved. mpv spawns its own yt-dlp for streaming and is not given one, which costs nothing: no
+file is written on that path.
+
 ```bash
-pwsh scripts/vendor-tools.ps1     # about 60 MB down, about 115 MB on disk
+pwsh scripts/vendor-tools.ps1     # about 207 MB down, about 230 MB on disk
 ```
+
+**The three are independent.** A drop with ffmpeg and no yt-dlp adds transcripts to files and cannot
+open links; the reverse does the opposite. `BundledTools` asks about each separately rather than
+through one "the tools are present" flag, so a half-drop disables the half it affects and says so.
 
 **The pins, as of 2026-08-23.**
 
-| | yt-dlp | Deno |
-|---|---|---|
-| Release | `2026.08.19` | `v2.9.5` |
-| Asset | `yt-dlp.exe` | `deno-x86_64-pc-windows-msvc.zip` |
-| Download bytes | 17,840,399 | 42,691,248 |
-| Download SHA-256 | `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a` | `171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a` |
-| Installed bytes | 17,840,399 | 97,408,288 |
-| Installed SHA-256 | (the same file) | `98f8c2a2d470e4ccb04c935c86ff8050817d877762aec5eaeeb9e409ccb3b9fd` |
-| Licence | Unlicense (public domain) | MIT |
+| | yt-dlp | Deno | ffmpeg |
+|---|---|---|---|
+| Release | `2026.08.19` | `v2.9.5` | `autobuild-2026-08-22-12-58` |
+| Asset | `yt-dlp.exe` | `deno-x86_64-pc-windows-msvc.zip` | `ffmpeg-n9.0.1-6-g9d4ca21220-win64-lgpl-9.0.zip` |
+| Download bytes | 17,840,399 | 42,691,248 | 147,007,729 |
+| Download SHA-256 | `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a` | `171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a` | `20f84639fae87181bb1c9899c34ce05cd3c0b533c68d3ff34206a2615da94f30` |
+| Installed bytes | 17,840,399 | 97,408,288 | 114,400,768 |
+| Installed SHA-256 | (the same file) | `98f8c2a2d470e4ccb04c935c86ff8050817d877762aec5eaeeb9e409ccb3b9fd` | `8a5ce69fbb74b4c9e0e24c214e3def0e1847a05051a8e1c6d10b1d4a35bd6a65` |
+| Licence | Unlicense (public domain) | MIT | **LGPL-3.0** |
+
+**ffmpeg is the LGPL build and not the GPL one beside it, and that is a licence decision rather than
+a preference.** Putting a transcript inside a recording copies every stream and encodes nothing, so
+none of it needs a GPL-only encoder: the three subtitle codecs involved — `mov_text`, `subrip` and
+`webvtt` — and the two muxers — `mp4` and `matroska` — are all core FFmpeg. BtbN's GPL build ships
+**GPLv3**, which this project has no reason to take on; the LGPL build is **LGPLv3**, 30 MB smaller,
+and was driven over all eight input-and-format routes before it was kept. It is a separate program
+this application spawns, not a library it links, so it travels as an aggregate under its own licence.
+
+**The version is the one the rules were measured against.** Every container decision in
+`Parakeet.Core.Muxing.SubtitleMux` — and there are several that a specification would get wrong — was
+measured against FFmpeg 9.0.1, and `n9.0.1-6` is that release branch rather than a master snapshot.
+Bumping this pin means re-running those measurements, not just the digests.
+
+**Its zip is nested where Deno's is flat**: `ffmpeg-<version>/bin/ffmpeg.exe` rather than a file at
+the root, which is why the pin carries `Nested` and the extraction recurses. Without that, `7z e`
+matches nothing, reports success, and the run fails at the read-back with the file simply absent.
 
 Both digests were compared against upstream's own published sums when the pins were taken:
 yt-dlp's `SHA2-256SUMS` and Deno's `.sha256sum` beside each asset. The script checks against the
@@ -385,14 +426,53 @@ Both of this application's readers were tested against one on 2026-08-23 — Med
 9:56 duration**. So the warning does not apply here, and roughly 100 MB of ffmpeg stays out of the
 installer. If a future container needs remuxing this is the decision to revisit.
 
-**Neither changes the licence.** Unlicense and MIT are both permissive, so unlike libmpv these two
-do not make the distribution copyleft. Their notices still travel: `vendor-tools.ps1` writes them
+**That decision was revisited later on 2026-08-23 and half-reversed.** ffmpeg is vendored now — not
+for yt-dlp, whose DASH m4a still needs nothing, but because putting a transcript back inside a
+recording is a remux and there is no other way to do one. The paragraph above stands as the record
+of why it was not there: the reasoning was right and the requirement changed.
+
+**What a download produces did change, and it was measured on the same video the same day.** Big
+Buck Bunny (Blender Foundation, CC-BY) — the 9:56 the paragraph above is about — downloaded twice
+with this application's own arguments:
+
+| | without ffmpeg | with ffmpeg |
+|---|---|---|
+| Container | `ftyp iso6`, `major_brand: dash`, `mvex`/`trex` present — fragmented | `ftyp isom mp41`, no `mvex` — plain MP4 |
+| Bytes | 9,655,276 | 9,648,639 (−6,637, the fragment index) |
+| yt-dlp says | *"writing DASH m4a. Only some players support this container"* | `[FixupM4a] Correcting container` |
+| Audio samples | 105,226,240 bytes decoded | **bit-identical** |
+| `AudioSources.Open` | 44,100 Hz, 00:09:56.5206292, 26,306,560 samples | **identical** |
+
+So the fixup buys *this application* nothing, exactly as the paragraph above found — and it buys the
+person who opens the downloaded file in something else a container that is not the one yt-dlp warns
+about. That is why it is on. The cost is one remux pass over the downloaded audio, which is seconds
+on a podcast-sized file and has not been measured on a long one.
+
+**The first drop got this wrong by accident**, which is worth recording because nothing announced it:
+putting ffmpeg.exe into `tools/` gave yt-dlp a muxer with no code change at all, because it searches
+its own directory before `PATH`. The separation above plus `--ffmpeg-location` is what turns that
+into a decision.
+
+**mkvmerge was measured against ffmpeg for this job on 2026-08-23 and rejected**, which is worth
+recording because the result is backwards. MKVToolNix writes WebVTT under `S_TEXT/WEBVTT`, the
+identifier Matroska actually specifies; FFmpeg writes `D_WEBVTT/SUBTITLES`, the older WebM one.
+FFmpeg's demuxer reads its own and not the specified one — it reports the track's codec as `none`
+and refuses to decode it, while carrying a perfectly good WebVTT decoder. This application plays
+through libmpv, which *is* FFmpeg, so a file muxed by the more correct tool is a file whose subtitles
+our own Ask tab cannot show. mkvmerge also cannot write MP4 at all. SubRip is unaffected — both
+write `S_TEXT/UTF8` — so the split is specific to WebVTT, which is exactly the format the word-level
+timing rides on.
+
+**None of the three makes the application copyleft.** Unlicense and MIT are permissive; ffmpeg is
+LGPLv3 and is spawned as a separate program rather than linked, so unlike libmpv it does not reach
+the application's own terms. Their notices still travel: `vendor-tools.ps1` writes them
 beside the binaries and refuses to finish without them, and `build/NativeAssets.targets` carries
 `native/**/*.txt` and `native/**/*.exe` into the output.
 
-**What this adds to an installer.** About 115 MB, on top of libmpv's 114 MB. Nothing has been
-packaged with either yet, and what the two together do to the channel size and to Velopack's deltas
-is unmeasured — see `docs/UNPROVEN.md`.
+**What this adds to an installer.** About 230 MB, on top of libmpv's 114 MB — ffmpeg alone is
+114 MB of it, which is the single largest thing this product vendors after the models. Nothing has
+been packaged with any of them yet, and what they do together to the channel size and to Velopack's
+deltas is unmeasured — see `docs/UNPROVEN.md`.
 
 **A note on what users do with it.** yt-dlp downloads what its user asks it to. Whether a particular
 download is permitted by a particular site's terms, or by copyright where the user lives, is the

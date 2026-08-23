@@ -139,6 +139,57 @@ public class AskTabTests
     }
 
     [Fact]
+    public void ARenamedSpeakerReachesAFileRenderedAfterwards()
+    {
+        // The gap this whole retention exists to close. TranscriptWriter runs before Complete, so
+        // the sidecar files on disk carry the diariser's labels and always will; what a rename can
+        // reach is a render taken afterwards, from the document the job now keeps.
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments =
+                [
+                    new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(2), Speaker = "Speaker 1", Text = "hello there" },
+                    new TranscriptSegment { Start = TimeSpan.FromSeconds(2), End = TimeSpan.FromSeconds(4), Speaker = "Speaker 2", Text = "hello back" },
+                ],
+            },
+        });
+
+        Assert.True(job.CanExport);
+
+        job.Speakers[0].Name = "Ada";
+
+        var srt = Parakeet.Core.Formatting.TranscriptFormats.Srt.Format(job.Named()!, null);
+
+        Assert.Contains("Ada: hello there", srt, StringComparison.Ordinal);
+        Assert.Contains("Speaker 2: hello back", srt, StringComparison.Ordinal);
+        Assert.DoesNotContain("Speaker 1", srt, StringComparison.Ordinal);
+
+        // And the transcript the engine wrote is untouched, so the files already on disk and what
+        // is on screen still agree about where the names came from.
+        Assert.Equal("Speaker 1", job.Document!.Segments[0].Speaker);
+    }
+
+    [Fact]
+    public void AJobWithNoTranscriptHasNothingToPutBackInTheRecording()
+    {
+        var job = new JobViewModel("/tmp/a.wav");
+        Assert.False(job.CanExport);
+        Assert.Null(job.Named());
+
+        Fill(job);
+        Assert.True(job.CanExport);
+
+        job.Reset();
+        Assert.False(job.CanExport);
+        Assert.Null(job.Named());
+    }
+
+    [Fact]
     public void ASecondRunStartsTheNamesOverRatherThanCarryingThemAcross()
     {
         // Deliberate. A second pass over the same audio need not give "Speaker 1" to the same

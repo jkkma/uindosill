@@ -70,8 +70,17 @@ public interface IMediaUrlFetcher
 /// decode on a stock Windows install — so a "best audio" download would produce a file this
 /// application then refuses. Asking for m4a first gets AAC, which Media Foundation reads. When
 /// ffmpeg is absent yt-dlp writes a DASH m4a and warns that "only some players support this
-/// container"; both readers here were checked against one on 2026-08-23 and both open it, which is
-/// why no ffmpeg is vendored. See `docs/UNPROVEN.md`.
+/// container"; both readers here were checked against one on 2026-08-23 and both open it, so the
+/// warning did not apply and no ffmpeg was vendored for it.
+/// </para>
+/// <para>
+/// <b>One is vendored now, for the muxer, and this hands it the location deliberately.</b> Measured
+/// on the same video the same day: without it yt-dlp writes `ftyp iso6` with a `dash` brand and
+/// fragment boxes; with it, `[FixupM4a] Correcting container` and a plain `isom` MP4, 6,637 bytes
+/// smaller, with the audio samples bit-identical and this application's own reader returning the
+/// same 26,306,560 samples either way. So the fixup buys nothing here — and it buys the person who
+/// opens the downloaded file in something else a container that is not the one yt-dlp warns about,
+/// which is the whole reason it is on. See `docs/UNPROVEN.md`.
 /// </para>
 /// <para>
 /// <b>Arguments go through <see cref="ProcessStartInfo.ArgumentList"/>, never a joined string.</b>
@@ -134,6 +143,14 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
             CreateNoWindow = true,
         };
 
+        // Named explicitly rather than found. yt-dlp searches its own directory before PATH, so a
+        // muxer dropped beside it would be picked up by accident — measured 2026-08-23, and the
+        // reason ffmpeg is vendored to a directory of its own. Passing the location says the
+        // opposite: this download is meant to have one, and which one.
+        var muxer = BundledTools.FfmpegPath is { } ffmpeg
+            ? new[] { "--ffmpeg-location", ffmpeg }
+            : [];
+
         foreach (var argument in new[]
         {
             // Deno by absolute path rather than left to PATH: this process spawns yt-dlp directly,
@@ -162,8 +179,7 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
 
             // 80 bytes of title keeps a long one inside MAX_PATH once the directory above is added.
             "-o", "%(title).80B.%(ext)s",
-            url.Trim(),
-        })
+        }.Concat(muxer).Append(url.Trim()))
         {
             start.ArgumentList.Add(argument);
         }
