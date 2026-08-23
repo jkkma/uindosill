@@ -99,6 +99,32 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
 
     public bool HasTranscript => Lines is { Count: > 0 };
 
+    /// <summary>The voices in the open recording, or null where it was never labelled.</summary>
+    /// <remarks>
+    /// The recording's own objects rather than copies, which is what lets a name typed on the strip
+    /// reach every cue of that speaker — and the Transcribe tab's rows for the same file — without
+    /// this class forwarding anything.
+    /// </remarks>
+    public System.Collections.ObjectModel.ObservableCollection<SpeakerViewModel>? Speakers =>
+        SelectedRecording?.Speakers;
+
+    /// <summary>Whether there is anything to rename.</summary>
+    public bool HasSpeakers => Speakers is { Count: > 0 };
+
+    /// <summary>
+    /// What a name typed on this strip does and does not do, said once somebody has typed one.
+    /// </summary>
+    /// <remarks>
+    /// Null until a name actually differs from its label. A standing caveat over a feature nobody
+    /// has used yet is noise, and a reader who has just renamed a speaker is the one person for
+    /// whom it is not: they are about to close the window and expect to find the name again.
+    /// </remarks>
+    public string? RenameNotice =>
+        Speakers is { } voices && voices.Any(v => v.IsRenamed)
+            ? "Names are for reading here. The transcript files already written keep the diariser's "
+              + "own labels, and a new run starts over."
+            : null;
+
     /// <summary>
     /// What stands in for the transcript when there is not one, and null when there is. Two
     /// different nothings, said differently: no recording chosen, and one chosen that has not been
@@ -411,6 +437,13 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (SelectedRecording is { } job)
         {
             job.Lines.CollectionChanged -= OnLinesChanged;
+
+            // And the voices, which is the subscription that would actually outlive this: a
+            // JobViewModel belongs to the Transcribe tab and goes on existing after this one is
+            // disposed, so a handler left on one of its speakers is a disposed tab still being
+            // told about renames.
+            job.Speakers.CollectionChanged -= OnSpeakersChanged;
+            Unwatch(job.Speakers);
         }
 
         _player.Dispose();
@@ -430,11 +463,15 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (oldValue is not null)
         {
             oldValue.Lines.CollectionChanged -= OnLinesChanged;
+            oldValue.Speakers.CollectionChanged -= OnSpeakersChanged;
+            Unwatch(oldValue.Speakers);
         }
 
         if (newValue is not null)
         {
             newValue.Lines.CollectionChanged += OnLinesChanged;
+            newValue.Speakers.CollectionChanged += OnSpeakersChanged;
+            Watch(newValue.Speakers);
         }
 
         PlaybackNotice = null;
@@ -469,11 +506,70 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasTranscript));
         OnPropertyChanged(nameof(TranscriptNotice));
         OnPropertyChanged(nameof(VideoNotice));
+        OnPropertyChanged(nameof(Speakers));
+        OnPropertyChanged(nameof(HasSpeakers));
+        OnPropertyChanged(nameof(RenameNotice));
 
         // The term survives the change of recording and is run against the new transcript. Somebody
         // looking for a name across a session's worth of files is doing exactly that, and clearing
         // the box for them would mean typing it again for every file.
         Research();
+    }
+
+    /// <summary>
+    /// The strip is filled by the labelling pass, which finishes long after the recording was
+    /// selected — so the voices arrive on a collection this tab is already showing.
+    /// </summary>
+    private void OnSpeakersChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (sender is System.Collections.ObjectModel.ObservableCollection<SpeakerViewModel> voices)
+        {
+            Unwatch(e.OldItems?.OfType<SpeakerViewModel>());
+            Watch(e.NewItems?.OfType<SpeakerViewModel>());
+
+            // Clear() reports neither, so the whole collection is re-read rather than trusted to
+            // have told us what left it.
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                Watch(voices);
+            }
+        }
+
+        OnPropertyChanged(nameof(HasSpeakers));
+        OnPropertyChanged(nameof(RenameNotice));
+    }
+
+    /// <summary>
+    /// Follows each voice, so that a rename raises the one thing on this class that depends on it.
+    /// </summary>
+    /// <remarks>
+    /// Four subscriptions at most — four is the diariser's architectural ceiling — which is why
+    /// this is a subscription per voice rather than anything cleverer. The chips themselves need
+    /// none of it: they bind through <c>Voice.Name</c> and hear the voice directly.
+    /// </remarks>
+    private void Watch(IEnumerable<SpeakerViewModel>? voices)
+    {
+        foreach (var voice in voices ?? [])
+        {
+            voice.PropertyChanged -= OnVoiceChanged;
+            voice.PropertyChanged += OnVoiceChanged;
+        }
+    }
+
+    private void Unwatch(IEnumerable<SpeakerViewModel>? voices)
+    {
+        foreach (var voice in voices ?? [])
+        {
+            voice.PropertyChanged -= OnVoiceChanged;
+        }
+    }
+
+    private void OnVoiceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SpeakerViewModel.IsRenamed))
+        {
+            OnPropertyChanged(nameof(RenameNotice));
+        }
     }
 
     private void OnRecordingsChanged(object? sender, NotifyCollectionChangedEventArgs e)

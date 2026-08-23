@@ -3791,6 +3791,62 @@ fails the one that scrolls away.
   builder's no-word path is reachable, and has never been observed*, which is the same gap seen
   from the subtitle side.
 
+## The Ask tab rebuilt 2026-08-23 — measured headlessly, not looked at
+
+The cue height defect, the column's new order, the draggable picture edge, the seek handle and the
+editable speaker names all landed together; `docs/PHASES.md` has what each one is. What belongs here
+is the same gap as the section below it — every figure quoted is measured, and **nothing in it has
+been seen on a screen**, because screen capture is unavailable in this session by standing rule.
+
+**What is measured.** The cue defect and its fix are both measured through the headless window
+rather than argued: one line at every window width from 820 to 1400 before, two at 1400 and twelve
+at 820 after, reflowing both ways; a speaker label arranged 12.00 tall around text that lays out at
+14.64 before, 15.00 after. The two hypotheses were crossed against each other in a probe — the
+timestamp beside the words, and the surrounding `ScrollViewer`, are both irrelevant; the pinned
+`Height="30"` on the base `Button` style is the whole of it. Three tests fail without the fix.
+
+**What none of that establishes:**
+
+- **That anybody has read a wrapped cue.** A transcript that has always drawn one line per segment
+  now draws as many as it needs, which changes the density of the whole pane and every scroll extent
+  in it. Whether a fifty-line cue at the window's minimum width is something a person can read, and
+  whether the line the playhead is on can still be found among them, are judgements nobody has made
+  against the built application. **At 820 units the words column measures 28 units wide** — the
+  recordings list and the chat panel are fixed at 228 and 330 — and a 221-character segment lays out
+  on **fifty lines** there. That is arithmetic, not a defect report; nobody has looked at it, and
+  whether the fixed columns should yield at that width has not been decided.
+- **That the splitter has ever been dragged by a person.** It is driven in a test through one
+  pointer press, move and release, and the picture grows and the transcript gives up exactly what
+  the picture takes. Whether the grip is findable, whether the video's aspect at an extreme split
+  looks like a bug, and whether the reading row's 140-unit floor is the right one, are all unlooked
+  at. The floor and the picture's 120-unit minimum are **chosen, not derived**; what is checked is
+  only that the three rows still add up inside the smallest window this application allows.
+- **The seek handle's convention is unchecked.** It is inset by its own width rather than centred on
+  the playhead, so at 0% and 100% it disagrees with the bar's fill edge, and with where a press
+  lands, by up to its own radius. Both conventions are defensible and the design sheet has not been
+  read — it is on the Drive, not in this repository. Its diameter here is 13; the only other
+  diameter recorded anywhere for it is 10.
+- **`PlacePuck` writes a `Margin`, which invalidates the transport's measure ten times a second
+  while a recording plays.** Bounded — `AskViewModel.Tick` raises nothing when the clock, the play
+  state and the picture are all unchanged, so a paused transport costs nothing — and never profiled.
+  A `Canvas.Left` would invalidate arrange only. Recorded rather than acted on.
+- **That a rename is something anybody finds.** The strip is four fields that obviously take typing,
+  which was chosen over a chip that becomes a field when clicked precisely because the second says
+  nothing about being editable. That reasoning has not been tested on a person.
+- **A renamed speaker reaches nothing outside the window, and this is the sharpest edge on the
+  feature.** `TranscriptWriter.WriteAsync` runs *before* `JobViewModel.Complete`, and the job does
+  not retain the `TranscriptDocument` — it renders the transcript and the line collections and drops
+  it. So there is no object in the window a rename could be re-exported from, and going further
+  needs document retention, a re-export command, and a decision about `OverwritePolicy`, whose
+  default would write `a (2).srt` rather than replacing `a.srt`. A name is also **not** carried
+  across a re-run, deliberately: a second pass need not give `Speaker 1` to the same person. The
+  window says all of this in a notice, and **whether a notice is enough — against somebody who names
+  four voices, closes the window and expects to find them again — is the open question**, not a
+  settled trade.
+- **That the two panes of a translated transcript really do rename together on screen.** They share
+  one voice object per speaker and a test asserts both panes' lines report the new name, but the
+  Transcribe tab's chips have not been watched changing while the Ask tab's strip is typed into.
+
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
 Four things the maintainer found by running the built application were fixed the same day: the

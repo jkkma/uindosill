@@ -78,6 +78,14 @@ the model cites, so a retrieved segment is citable by construction; and decision
 
 ### Not in v2: who said it
 
+**The pipeline gained a notion of a speaker after this was written, and the rule below survives
+it — stronger rather than weaker.** As of 2026-08-23, `TranscriptSegment.Speaker` and
+`TranscriptWord.Speaker` exist and are filled by the opt-in diarisation pass, and the Ask tab lets a
+reader type a name over the diariser's label. Neither changes the rule at the end of this section:
+a label is the diariser's guess and a name is a reader's guess on top of it, so a model that names a
+speaker the transcript does not carry is inventing at one further remove than before. The paragraph
+below is kept as the record of what was true when it was checked.
+
 **Speaker attribution is a non-goal for v2.** The pipeline has no notion of a speaker:
 `TranscriptSegment` carries `Start`, `End`, `Text` and `Words`, and nothing under `src/` produces
 or stores a speaker label (checked 2026-08-15). The catalogue in `models.json` is transcription and

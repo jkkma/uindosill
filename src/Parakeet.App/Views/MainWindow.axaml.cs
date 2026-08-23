@@ -20,6 +20,14 @@ public partial class MainWindow : Window
     /// </summary>
     private static readonly TimeSpan TransportRefresh = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>
+    /// The smallest the picture is allowed to be dragged to. The splitter reads the row's MinHeight,
+    /// so this is the floor the drag stops at as well as the floor the layout enforces — and it is
+    /// set from here rather than left in the XAML because the row's minimum has to be lifted and
+    /// dropped as the picture comes and goes.
+    /// </summary>
+    private const double PictureFloor = 120;
+
     private readonly DispatcherTimer _transport;
 
     private bool _shutdownRequested;
@@ -40,6 +48,20 @@ public partial class MainWindow : Window
 
     /// <summary>Whether a blit is already posted, so a burst of frames coalesces into one.</summary>
     private int _blitPending;
+
+    /// <summary>
+    /// The height the picture row had when it was last shown, so a reader who sizes the picture,
+    /// opens an audio file and comes back finds the size they chose rather than the default.
+    /// Seeded from the XAML, so the number lives in exactly one place.
+    /// </summary>
+    private GridLength _pictureHeight;
+
+    /// <summary>The seek bar's pointer strip and its handle, held so the clock does not look them
+    /// up by name ten times a second.</summary>
+    private Border? _seekStrip;
+
+    /// <inheritdoc cref="_seekStrip" />
+    private Border? _seekPuck;
 
     public MainWindow()
     {
@@ -62,6 +84,8 @@ public partial class MainWindow : Window
         WireSeekStrip();
         WireSearchBox();
         WireVideoPane();
+        WireMediaSplitter();
+        WireVoices();
 
         // The clock the Ask tab draws from, and it is here rather than in the view model on
         // purpose: a view model that starts a dispatcher timer needs a dispatcher to exist before
@@ -124,6 +148,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Held rather than looked up again. PlacePuck runs on every clock tick — ten times a second
+        // while a recording plays — and a name lookup per call, twice, is work for nothing.
+        _seekStrip = strip;
+        _seekPuck = this.FindControl<Border>("SeekPuck");
+
         strip.PointerPressed += (_, e) =>
         {
             _seeking = true;
@@ -149,6 +178,53 @@ public partial class MainWindow : Window
         // away — has to end the drag too, or the next move over the strip resumes a scrub nobody
         // started.
         strip.PointerCaptureLost += (_, _) => _seeking = false;
+
+        // The handle moves with the bar as well as with the clock. Without this a window resized
+        // mid-recording leaves the puck at the pixel it was at, which is now a different time.
+        strip.SizeChanged += (_, _) => PlacePuck();
+
+        PlacePuck();
+    }
+
+    /// <summary>
+    /// Puts the seek handle where the playhead is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The inverse of <see cref="SeekTo"/>, and deliberately the same arithmetic: that turns an x
+    /// on the strip into a fraction of the recording, and this turns a fraction of the recording
+    /// back into an x. Both read the width off the strip, because it is the only thing that knows
+    /// one — which is why this is here rather than in a binding.
+    /// </para>
+    /// <para>
+    /// The travel is the strip's width less the puck's own, and the offset is a left margin on a
+    /// left-aligned control. Centring it on the fraction instead would hang half the handle past
+    /// each end of the bar, so a recording at its start and a recording at its end would both draw
+    /// a puck sticking out of the track.
+    /// </para>
+    /// </remarks>
+    private void PlacePuck()
+    {
+        if (DataContext is not MainWindowViewModel viewModel
+            || _seekStrip is not { } strip
+            || _seekPuck is not { } puck)
+        {
+            return;
+        }
+
+        var travel = strip.Bounds.Width - puck.Width;
+
+        if (travel <= 0 || double.IsNaN(puck.Width))
+        {
+            return;
+        }
+
+        var duration = viewModel.Ask.DurationSeconds;
+        var fraction = duration > 0
+            ? Math.Clamp(viewModel.Ask.PositionSeconds / duration, 0, 1)
+            : 0;
+
+        puck.Margin = new Thickness(fraction * travel, 0, 0, 0);
     }
 
     private void SeekTo(Border strip, double x)
@@ -225,6 +301,16 @@ public partial class MainWindow : Window
         else if (e.PropertyName == nameof(ViewModels.AskViewModel.ActiveLineIndex))
         {
             Follow(viewModel.Ask.ActiveLineIndex);
+        }
+        else if (e.PropertyName == nameof(ViewModels.AskViewModel.HasVideo))
+        {
+            ShowPictureRow(viewModel.Ask.HasVideo);
+        }
+        else if (e.PropertyName == nameof(ViewModels.AskViewModel.PositionSeconds))
+        {
+            // Raised by AskViewModel.Redraw, which is the one place the clock is read — so the
+            // handle moves on a tick, on a seek and on a change of recording, and on nothing else.
+            PlacePuck();
         }
     }
 
@@ -319,6 +405,10 @@ public partial class MainWindow : Window
             _watchedPlayer.FrameReady += OnFrameReady;
         }
 
+        // The state nothing raises. A window whose first recording already has a picture has to
+        // open with the row for one, and OnAskChanged only ever hears about a change.
+        ShowPictureRow(DataContext is MainWindowViewModel current && current.Ask.HasVideo);
+
         base.OnDataContextChanged(e);
     }
 
@@ -346,6 +436,97 @@ public partial class MainWindow : Window
                 (int)(e.NewSize.Width * scaling),
                 (int)(e.NewSize.Height * scaling));
         };
+    }
+
+    /// <summary>
+    /// Enter commits a speaker's new name, by taking the focus off the field that holds it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name is bound on LostFocus rather than on every keystroke, because the binding reaches
+    /// every cue of that speaker and redrawing a transcript per character typed is work for
+    /// nothing. The cost of that choice is that a field only commits when you click somewhere
+    /// else, which is a field people believe did not work — so Enter does the clicking-away.
+    /// </para>
+    /// <para>
+    /// Handled on the strip rather than on each field: the boxes are made by a template, so there
+    /// is no per-box place to hook, and the key press bubbles here anyway. Marked handled, or it
+    /// carries on to whatever else in this window answers for Enter.
+    /// </para>
+    /// </remarks>
+    private void WireVoices()
+    {
+        if (this.FindControl<ItemsControl>("Voices") is not { } strip)
+        {
+            return;
+        }
+
+        // An ItemsControl does not take focus by default, and a Focus() that fails is a rename that
+        // silently does not commit — the exact shape of defect this window keeps finding.
+        strip.Focusable = true;
+
+        strip.AddHandler(
+            KeyDownEvent,
+            (object? _, KeyEventArgs e) =>
+            {
+                if (e.Key != Key.Enter || e.Source is not TextBox)
+                {
+                    return;
+                }
+
+                // Focus goes to the strip rather than nowhere. Clearing it outright leaves the
+                // window with no focused element, and the next Tab starts over from the top.
+                strip.Focus();
+                e.Handled = true;
+            },
+            RoutingStrategies.Bubble);
+    }
+
+    /// <summary>Remembers whatever height the reader drags the picture to.</summary>
+    /// <remarks>
+    /// The picture row starts as a pixel length and the splitter writes pixel lengths back into it,
+    /// because a row that is not a star is resized by being given a number. So the row's height is
+    /// always a number, and reading it back when the drag finishes is the whole of remembering what
+    /// was chosen — there is nothing to convert and nothing to infer.
+    /// </remarks>
+    private void WireMediaSplitter()
+    {
+        if (this.FindControl<Grid>("MediaColumn") is not { } column
+            || this.FindControl<GridSplitter>("MediaSplitter") is not { } splitter)
+        {
+            return;
+        }
+
+        _pictureHeight = column.RowDefinitions[0].Height;
+        splitter.DragCompleted += (_, _) => _pictureHeight = column.RowDefinitions[0].Height;
+    }
+
+    /// <summary>Gives the picture a row of its own, or takes the row away entirely.</summary>
+    /// <remarks>
+    /// <para>
+    /// Not a binding, and not from any dislike of bindings: a <see cref="RowDefinition"/> derives
+    /// from AvaloniaObject rather than StyledElement, so it has no DataContext to bind against —
+    /// and a binding that did resolve would be overwritten by the splitter's own local value on the
+    /// first drag, then silently overwrite it back on the next notification. One assignment on a
+    /// property change is the version that cannot fight itself.
+    /// </para>
+    /// <para>
+    /// Auto rather than zero when there is no picture, so the row measures its only child — which
+    /// is collapsed — and comes out at nothing. No black band, and with the handle hidden beside
+    /// it, nothing to drag one back out by.
+    /// </para>
+    /// </remarks>
+    private void ShowPictureRow(bool hasVideo)
+    {
+        if (this.FindControl<Grid>("MediaColumn") is not { } column)
+        {
+            return;
+        }
+
+        var row = column.RowDefinitions[0];
+
+        row.Height = hasVideo ? _pictureHeight : GridLength.Auto;
+        row.MinHeight = hasVideo ? PictureFloor : 0;
     }
 
     /// <summary>

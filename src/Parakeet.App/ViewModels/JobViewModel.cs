@@ -159,6 +159,17 @@ public sealed partial class JobViewModel : ObservableObject
     public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> TranslatedLines { get; } = [];
 
     /// <summary>
+    /// The voices in this recording, in the order they are first heard — which is the order their
+    /// colours were assigned in, and the order the diariser numbers them in.
+    /// </summary>
+    /// <remarks>
+    /// The same objects the lines of both panes point at, so a name typed here reaches every cue
+    /// of that speaker in both panes at once. Empty on a transcript that was never labelled, which
+    /// is what the window reads to decide whether to offer any of this at all.
+    /// </remarks>
+    public System.Collections.ObjectModel.ObservableCollection<SpeakerViewModel> Speakers { get; } = [];
+
+    /// <summary>
     /// Whether this row has an English transcript to switch to. What the pane switcher's
     /// visibility hangs on: a run that did not translate gets no switcher rather than a dead
     /// second pill.
@@ -272,6 +283,7 @@ public sealed partial class JobViewModel : ObservableObject
         TranslatedTranscript = string.Empty;
         Lines.Clear();
         TranslatedLines.Clear();
+        Speakers.Clear();
         OutputFiles.Clear();
     }
 
@@ -338,7 +350,16 @@ public sealed partial class JobViewModel : ObservableObject
             // over each pane's non-empty segments, as it was until 2026-08-22, the two could
             // disagree: a speaker whose first segment came back empty from the translator appeared
             // later in the English pane's walk and took a different chip there.
-            var chips = ChipMap(spoken);
+            var chips = Voices(spoken);
+
+            // Rebuilt rather than merged. A second run over the same audio need not give "Speaker 1"
+            // to the same person, so carrying a name across would be this window asserting an
+            // identity it cannot check.
+            Speakers.Clear();
+            foreach (var voice in chips.Values)
+            {
+                Speakers.Add(voice);
+            }
 
             // Read off the spoken document rather than the result's. Both carry it — translation
             // derives from the labelled document and may not change who said a segment — but the
@@ -394,23 +415,22 @@ public sealed partial class JobViewModel : ObservableObject
     /// </remarks>
     private static void Relines(
         TranscriptDocument document,
-        Dictionary<string, int> chips,
+        Dictionary<string, SpeakerViewModel> chips,
         System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> target)
     {
         target.Clear();
 
         foreach (var segment in document.Segments.Where(s => !s.IsEmpty))
         {
-            var speaker = segment.Speaker;
-            var chip = -1;
+            SpeakerViewModel? voice = null;
 
-            if (speaker is not null && !chips.TryGetValue(speaker, out chip))
+            if (segment.Speaker is { } speaker && !chips.TryGetValue(speaker, out voice))
             {
                 // Not in the spoken document at all — which the translation contract forbids, since
                 // a translator may not change who said a segment — so a backstop rather than a path:
                 // the next chip, recorded so the next line of the same speaker agrees with this one.
-                chip = chips.Count % 4;
-                chips[speaker] = chip;
+                voice = new SpeakerViewModel(speaker, chips.Count % 4);
+                chips[speaker] = voice;
             }
 
             // The words come across too, and they are what the Ask tab marks the spoken one from.
@@ -418,7 +438,7 @@ public sealed partial class JobViewModel : ObservableObject
             // list, because translating loses the timing of individual words — so the English pane
             // gets segment times and no word times, which is exactly what it is entitled to.
             target.Add(new TranscriptLineViewModel(
-                speaker, segment.Text.Trim(), chip, segment.Start, segment.End, segment.Words));
+                voice, segment.Text.Trim(), segment.Start, segment.End, segment.Words));
         }
     }
 
@@ -427,20 +447,20 @@ public sealed partial class JobViewModel : ObservableObject
     /// over every segment, empty ones included, so that the map is a property of the recording
     /// and not of which segments happen to carry text.
     /// </summary>
-    internal static Dictionary<string, int> ChipMap(TranscriptDocument document)
+    internal static Dictionary<string, SpeakerViewModel> Voices(TranscriptDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var chips = new Dictionary<string, int>(StringComparer.Ordinal);
+        var voices = new Dictionary<string, SpeakerViewModel>(StringComparer.Ordinal);
         foreach (var speaker in document.Segments.Select(s => s.Speaker).OfType<string>())
         {
-            if (!chips.ContainsKey(speaker))
+            if (!voices.ContainsKey(speaker))
             {
-                chips[speaker] = chips.Count % 4;
+                voices[speaker] = new SpeakerViewModel(speaker, voices.Count % 4);
             }
         }
 
-        return chips;
+        return voices;
     }
 
     internal static string Render(TranscriptDocument document)

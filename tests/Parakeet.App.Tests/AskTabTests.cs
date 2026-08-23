@@ -58,6 +58,113 @@ public class AskTabTests
     }
 
     [Fact]
+    public void DisposingTheTabStopsItListeningToTheVoicesOfARecordingItNoLongerShows()
+    {
+        // A JobViewModel belongs to the Transcribe tab and outlives this one, so a handler left on
+        // one of its speakers is a disposed tab still being told about renames — and the Ask tab's
+        // own Dispose already exists precisely because this window has that shape.
+        var (ask, jobs, _) = Create();
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Speaker = "Speaker 1", Text = "one" }],
+            },
+        });
+
+        jobs.Add(job);
+        Assert.True(ask.HasSpeakers);
+
+        var raised = 0;
+        ask.PropertyChanged += (_, _) => raised++;
+
+        ask.Dispose();
+        raised = 0;
+
+        // Renaming after the tab is gone must reach nothing on it.
+        job.Speakers[0].Name = "Ada";
+        job.Speakers.Clear();
+
+        Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public void ANameIsTrimmedAndAnEmptyOnePutsTheDiarisersLabelBack()
+    {
+        var voice = new SpeakerViewModel("Speaker 1", chip: 0);
+
+        Assert.Equal("Speaker 1", voice.Name);
+        Assert.False(voice.IsRenamed);
+
+        // A name pasted out of a document arrives with whitespace on it more often than not, and a
+        // chip reading " Ada " is a defect nobody would think to report.
+        voice.Name = "  Ada  ";
+        Assert.Equal("Ada", voice.Name);
+        Assert.True(voice.IsRenamed);
+
+        // An emptied field is somebody undoing a rename rather than asking for a nameless speaker.
+        voice.Name = "   ";
+        Assert.Equal("Speaker 1", voice.Name);
+        Assert.False(voice.IsRenamed);
+    }
+
+    [Fact]
+    public void ARenameReachesBothPanesOfATranslatedTranscriptAtOnce()
+    {
+        // One voice object per speaker, built from the spoken document and handed to both panes —
+        // which is the same arrangement that stopped the two panes disagreeing about colours on
+        // 2026-08-22, doing the same job for names.
+        var spoken = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hola", Speaker = "A" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(1), End = TimeSpan.FromSeconds(2), Text = "gracias", Speaker = "B" },
+            ],
+        };
+
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(
+            new JobResult { Job = new TranscriptionJob { InputPath = "/tmp/a.wav" }, State = JobState.Completed, Document = spoken with { TranslatedTo = "en" } },
+            source: spoken);
+
+        job.Speakers[0].Name = "Ada";
+
+        Assert.Equal("Ada", job.Lines[0].Speaker);
+        Assert.Equal("Ada", job.TranslatedLines[0].Speaker);
+        Assert.Equal("B", job.Lines[1].Speaker);
+    }
+
+    [Fact]
+    public void ASecondRunStartsTheNamesOverRatherThanCarryingThemAcross()
+    {
+        // Deliberate. A second pass over the same audio need not give "Speaker 1" to the same
+        // person, so restoring the name would be this window asserting an identity it cannot check.
+        var job = new JobViewModel("/tmp/a.wav");
+        Fill(job);
+        Assert.Empty(job.Speakers);
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Speaker = "Speaker 1", Text = "one" }],
+            },
+        });
+
+        job.Speakers[0].Name = "Ada";
+        Assert.Equal("Ada", job.Lines[0].Speaker);
+
+        job.Reset();
+        Assert.Empty(job.Speakers);
+    }
+
+    [Fact]
     public void ClearingTheQueueClosesWhateverThisTabHadOpen()
     {
         var (ask, jobs, player) = Create();
@@ -1124,6 +1231,523 @@ public class AskTabWindowTests
         window.UpdateLayout();
 
         Assert.True(box.IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void RenamingASpeakerRedrawsEveryCueOfThatVoiceAndNoOthers()
+    {
+        // The whole guard on this feature, and the reason it has to be a window test: the chip is
+        // bound to Voice.Name rather than to the line's own Speaker, and the difference between the
+        // two is invisible from the view model. Bound to Speaker — which raises nothing — every
+        // chip in the tab draws once and never again, which compiles and looks right.
+        var (window, viewModel, _) = Open(Labelled());
+
+        Assert.True(viewModel.Ask.HasSpeakers);
+        var voices = viewModel.Ask.Speakers!;
+        Assert.Equal(2, voices.Count);
+        Assert.Equal(["Speaker 1", "Speaker 2"], voices.Select(v => v.Label));
+
+        voices[0].Name = "Ada";
+        window.UpdateLayout();
+
+        var drawn = window.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("cue"))
+            .Select(b => b.GetVisualDescendants().OfType<Border>()
+                .First(x => x.Classes.Contains("speaker"))
+                .GetVisualDescendants().OfType<TextBlock>().First().Text)
+            .ToList();
+
+        // Three cues: two of the first speaker, one of the second. Only the first speaker's moved.
+        Assert.Equal(["Ada", "Speaker 2", "Ada"], drawn);
+    }
+
+    [AvaloniaFact]
+    public void TheStripOffersOneFieldPerVoiceAndIsAbsentOnAnUnlabelledTranscript()
+    {
+        // The labelling pass is opt-in, so most transcripts have no speakers at all. A strip of
+        // empty boxes over one of those is a control wired to nothing, which this window does not
+        // ship.
+        var (window, viewModel, _) = Open();
+
+        var strip = window.FindControl<ItemsControl>("Voices")!;
+        Assert.False(viewModel.Ask.HasSpeakers);
+        Assert.False(strip.IsVisible);
+
+        viewModel.Transcribe.Jobs.Add(Labelled());
+        viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[1];
+        window.UpdateLayout();
+
+        Assert.True(strip.IsVisible);
+
+        var fields = strip.GetVisualDescendants().OfType<TextBox>().ToList();
+        Assert.Equal(2, fields.Count);
+        Assert.Equal(["Speaker 1", "Speaker 2"], fields.Select(f => f.Text));
+    }
+
+    [AvaloniaFact]
+    public void EnterCommitsANameRatherThanLeavingItInTheBox()
+    {
+        // The name is bound on LostFocus, because a binding that fired per keystroke would redraw
+        // every cue of that speaker on every character. The cost of that choice is a field that
+        // only commits when you click somewhere else, which people read as a field that did not
+        // work — so Enter does the clicking-away, and this is what says it still does.
+        var (window, viewModel, _) = Open(Labelled());
+
+        var voice = viewModel.Ask.Speakers![0];
+        var box = window.FindControl<ItemsControl>("Voices")!
+            .GetVisualDescendants().OfType<TextBox>().First();
+
+        box.Focus();
+        box.Text = "Ada";
+        window.UpdateLayout();
+
+        // Still uncommitted: that is the LostFocus binding doing its job, and the premise of the
+        // rest of this test.
+        Assert.Equal("Speaker 1", voice.Name);
+
+        window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+        window.UpdateLayout();
+
+        Assert.Equal("Ada", voice.Name);
+        Assert.True(voice.IsRenamed);
+    }
+
+    [AvaloniaFact]
+    public void TheNoticeAboutNamesArrivesOnlyOnceANameHasBeenGiven()
+    {
+        var (window, viewModel, _) = Open(Labelled());
+
+        var notice = window.FindControl<TextBlock>("RenameNotice")!;
+        Assert.False(notice.IsVisible);
+
+        viewModel.Ask.Speakers![0].Name = "Ada";
+        window.UpdateLayout();
+
+        Assert.True(notice.IsVisible);
+        Assert.Contains("keep the diariser's own labels", notice.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>Three segments over two speakers, which is what it takes to see a rename land on
+    /// one voice and not the other.</summary>
+    private static JobViewModel Labelled()
+    {
+        var job = new JobViewModel("/tmp/labelled.wav");
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/labelled.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments =
+                [
+                    new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Speaker = "Speaker 1", Text = "one" },
+                    new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Speaker = "Speaker 2", Text = "two" },
+                    new TranscriptSegment { Start = TimeSpan.FromSeconds(20), End = TimeSpan.FromSeconds(30), Speaker = "Speaker 1", Text = "three" },
+                ],
+            },
+        });
+
+        return job;
+    }
+
+    [AvaloniaFact]
+    public void TheColumnReadsAsThePictureItsControlsItsWordsAndThenTheFindBox()
+    {
+        // The order the maintainer asked for on 2026-08-23, and the order the column had to be
+        // rebuilt as a row Grid to express. Asserted as geometry rather than as declaration order,
+        // because declaration order is exactly what stopped meaning position when the DockPanel
+        // went: a child in the wrong row still appears in the right place in the file.
+        var (window, _, _) = OpenWithPicture();
+
+        var pane = window.FindControl<Border>("VideoPane")!;
+        var transport = window.FindControl<Border>("Transport")!;
+        var search = window.FindControl<TextBox>("SearchBox")!;
+        var words = window.FindControl<ScrollViewer>("CueScroll")!;
+
+        double Top(Control c) => c.TranslatePoint(default, window)!.Value.Y;
+
+        Assert.True(Top(pane) < Top(transport), "the picture should sit above the transport");
+        Assert.True(Top(transport) < Top(words), "the transport should sit above the words");
+        Assert.True(Top(words) < Top(search), "the find box should sit below the words");
+    }
+
+    [AvaloniaFact]
+    public void TheWordsTakeWhateverTheRestOfTheColumnLeavesThem()
+    {
+        // The single most breakable line in that rebuild. The transcript fills because it is the
+        // last child of a DockPanel with LastChildFill on and no Dock of its own; declare anything
+        // after it and it silently becomes a left-docked strip of its desired width while the
+        // newcomer takes the column. Nothing else in this file would notice.
+        var (window, _, _) = OpenWithPicture();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var panel = window.FindControl<ScrollViewer>("CueScroll")!
+            .GetVisualAncestors().OfType<Border>().First(b => b.Classes.Contains("panel"));
+
+        Assert.True(
+            panel.Bounds.Width >= column.Bounds.Width - 1,
+            $"the words are {panel.Bounds.Width:F0} wide in a {column.Bounds.Width:F0} column — "
+            + "the transcript is no longer the fill child");
+
+        // And they take the height too: everything else in the row is Auto, so the words get the
+        // remainder. A transcript shorter than the transport is the same defect on the other axis.
+        Assert.True(
+            panel.Bounds.Height > window.FindControl<Border>("Transport")!.Bounds.Height,
+            "the words did not take the leftover height");
+    }
+
+    [AvaloniaFact]
+    public void DraggingTheEdgeGivesThePictureTheRoomTheTranscriptGivesUp()
+    {
+        // The feature: drag the top edge of the transcript and the picture grows. Driven through
+        // the control's own drag events rather than by writing the row, because the whole thing
+        // under test is the wiring between the two.
+        var (window, _, _) = OpenWithPicture();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+        var pane = window.FindControl<Border>("VideoPane")!;
+
+        Assert.True(splitter.IsVisible, "a recording with a picture draws no handle to size it by");
+
+        var picture = pane.Bounds.Height;
+        var words = window.FindControl<ScrollViewer>("CueScroll")!.Bounds.Height;
+
+        Drag(window, splitter, 60);
+
+        Assert.True(
+            pane.Bounds.Height > picture,
+            $"the picture was {picture:F0} and is {pane.Bounds.Height:F0} after dragging down");
+        Assert.True(
+            window.FindControl<ScrollViewer>("CueScroll")!.Bounds.Height < words,
+            "the words did not give up the room the picture took");
+
+        // And back the other way, so the edge is an edge rather than a ratchet.
+        Drag(window, splitter, -60);
+        Assert.Equal(picture, pane.Bounds.Height, 0);
+    }
+
+    [AvaloniaFact]
+    public void ThePictureRowAndItsHandleAreBothGoneOnARecordingWithNoPicture()
+    {
+        // An audio file must pay nothing for a picture it does not have: no black band at the top
+        // of the column, and no handle to drag one out by.
+        var (window, _, _) = Open();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+
+        Assert.False(window.FindControl<Border>("VideoPane")!.IsVisible);
+        Assert.False(splitter.IsVisible);
+        Assert.Equal(0, column.RowDefinitions[0].ActualHeight, 1);
+        Assert.Equal(0, column.RowDefinitions[1].ActualHeight, 1);
+    }
+
+    [AvaloniaFact]
+    public void ThePictureKeepsTheSizeItWasDraggedToAcrossARecordingWithoutOne()
+    {
+        // Sizing the picture is a choice, and a choice this window throws away the moment somebody
+        // opens a podcast is one they have to make again every time.
+        var (window, viewModel, player) = OpenWithPicture();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+
+        Drag(window, splitter, 60);
+        var chosen = column.RowDefinitions[0].Height;
+        Assert.True(chosen.Value > 260, "the drag did not change the row it was supposed to");
+
+        // An audio file in between, which collapses the row entirely. The fake reports a picture
+        // for whatever it is given, so what makes this one audio is taking the frames away.
+        viewModel.Transcribe.Jobs.Add(AskTabTests.Transcribed("/tmp/talk.mp3"));
+        player.VideoToReport = null;
+        viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[1];
+        window.UpdateLayout();
+
+        Assert.False(viewModel.Ask.HasVideo);
+        Assert.Equal(0, column.RowDefinitions[0].ActualHeight, 1);
+
+        player.VideoToReport = (320, 180);
+        viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[0];
+        window.UpdateLayout();
+
+        Assert.Equal(chosen, column.RowDefinitions[0].Height);
+    }
+
+    [AvaloniaFact]
+    public void TheColumnStillFitsAtTheWindowsSmallestSize()
+    {
+        // A star row with a MinHeight can over-allocate where a DockPanel's fill child simply
+        // shrank, so the three rows have to add up inside the smallest window this application
+        // allows — 820 x 520, off MinWidth and MinHeight on the Window itself.
+        var (window, _, _) = OpenWithPicture();
+
+        window.Width = 820;
+        window.Height = 520;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var column = window.FindControl<Grid>("MediaColumn")!;
+        var rows = column.RowDefinitions.Sum(r => r.ActualHeight);
+
+        Assert.True(
+            rows <= column.Bounds.Height + 1,
+            $"the rows want {rows:F0} in a column {column.Bounds.Height:F0} tall");
+
+        // And every part of it is still on screen rather than pushed out of the bottom.
+        foreach (var name in new[] { "Transport", "VideoPane" })
+        {
+            var control = window.FindControl<Border>(name)!;
+            Assert.True(control.Bounds.Height > 0, $"{name} was squeezed to nothing");
+        }
+
+        Assert.True(window.FindControl<ScrollViewer>("CueScroll")!.Bounds.Height > 0,
+            "the transcript was squeezed to nothing");
+        Assert.True(window.FindControl<TextBox>("SearchBox")!.Bounds.Height > 0,
+            "the find box was squeezed to nothing");
+    }
+
+    /// <summary>Drags the media splitter <paramref name="by"/> units down, or up when negative.</summary>
+    private static void Drag(MainWindow window, GridSplitter splitter, double by)
+    {
+        var from = splitter.TranslatePoint(
+            new Point(splitter.Bounds.Width / 2, splitter.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(from, MouseButton.Left);
+        window.MouseMove(from + new Vector(0, by));
+        window.MouseUp(from + new Vector(0, by), MouseButton.Left);
+        window.UpdateLayout();
+    }
+
+    /// <summary>A recording the fake player reports a picture for.</summary>
+    private static (MainWindow Window, MainWindowViewModel ViewModel, FakeMediaPlayer Player) OpenWithPicture() =>
+        Open(WithPicture(), new FakeMediaPlayer
+        {
+            DurationToReport = TimeSpan.FromMinutes(2),
+            VideoToReport = (320, 180),
+        });
+
+    private static JobViewModel WithPicture() => AskTabTests.Transcribed("/tmp/clip.mp4");
+
+    [AvaloniaFact]
+    public void TheSeekHandleSitsWhereThePlayheadIsAndMovesWithIt()
+    {
+        // The bar shipped without a handle, on the reasoning that one "cannot be positioned without
+        // a measured width". The strip has been measuring one all along — this asserts the handle
+        // is placed from it, at the two ends and in the middle, rather than merely existing.
+        var (window, viewModel, player) = Open();
+
+        var strip = window.FindControl<Border>("SeekStrip")!;
+        var puck = window.FindControl<Border>("SeekPuck")!;
+
+        Assert.True(puck.IsVisible, "a playable recording draws no seek handle");
+
+        var travel = strip.Bounds.Width - puck.Width;
+        Assert.True(travel > 0, "the strip was laid out with no room for a handle");
+
+        // At the start, flush with the left end of the bar rather than hanging off it.
+        Assert.Equal(0, puck.Margin.Left, 1);
+
+        viewModel.Ask.SeekToFraction(0.5);
+        window.UpdateLayout();
+        Assert.Equal(travel / 2, puck.Margin.Left, 1);
+
+        // At the end, inside the track rather than half past it — which is what a handle centred on
+        // the fraction would do, and the reason the travel is the width less the handle's own.
+        viewModel.Ask.SeekToFraction(1);
+        window.UpdateLayout();
+        Assert.Equal(travel, puck.Margin.Left, 1);
+        Assert.True(
+            puck.Margin.Left + puck.Width <= strip.Bounds.Width + 0.5,
+            "the handle hangs past the end of the bar");
+
+        // And it follows the clock rather than only a seek: this is the path a playing recording
+        // takes, through Redraw raising PositionSeconds.
+        player.Seek(TimeSpan.FromSeconds(30));
+        viewModel.Ask.Tick();
+        window.UpdateLayout();
+        Assert.Equal(travel * 0.25, puck.Margin.Left, 1);
+    }
+
+    [AvaloniaFact]
+    public void TheSeekHandleFollowsTheBarWhenTheWindowIsResized()
+    {
+        // Placed in pixels, so a bar that changes width leaves the handle at a pixel that is now a
+        // different time. It is re-placed on the strip's own SizeChanged, which is what this holds.
+        var (window, viewModel, _) = Open();
+
+        viewModel.Ask.SeekToFraction(0.5);
+        window.UpdateLayout();
+
+        var strip = window.FindControl<Border>("SeekStrip")!;
+        var puck = window.FindControl<Border>("SeekPuck")!;
+        var before = puck.Margin.Left;
+
+        window.Width = 1400;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.True(strip.Bounds.Width > 0);
+        Assert.NotEqual(before, puck.Margin.Left);
+        Assert.Equal((strip.Bounds.Width - puck.Width) / 2, puck.Margin.Left, 1);
+    }
+
+    [AvaloniaFact]
+    public void ACueDrawsEveryLineOfItsSegmentRatherThanTheFirst()
+    {
+        // The defect this pins shipped, and looked like a resize bug: every cue in this tab drew
+        // exactly one line and threw away the rest of its segment, so a paragraph arrived cut off
+        // mid-sentence at whatever width the window happened to be.
+        //
+        // The cause was the cue template's Grid having no RowDefinitions. A Grid with none gets one
+        // implicit `*` row; inside a Button's ContentPresenter that star resolves to a finite
+        // height, the words are measured against it, and TextWrapping="Wrap" keeps the line that
+        // fits and discards the others. Measured, not reasoned: with the row declared Auto the same
+        // text lays out on several lines and reflows both ways as the window is resized.
+        var (window, _, _) = Open(Wordy());
+
+        var words = Words(window);
+
+        Assert.True(
+            words.TextLayout.TextLines.Count > 1,
+            $"the cue drew {words.TextLayout.TextLines.Count} line(s) of a paragraph that cannot fit on one");
+
+        // Not merely laid out on several lines — given the room to draw them. A block whose layout
+        // has four lines inside an eighteen-pixel box is the same defect wearing a passing test.
+        Assert.True(
+            words.Bounds.Height >= words.TextLayout.Height - 0.5,
+            $"the words were laid out {words.TextLayout.Height:F1} tall and arranged {words.Bounds.Height:F1} tall");
+
+        // And the cue around them is as tall as what it holds. This is the assertion that matters:
+        // the two above passed over a tab that still drew wrong, because the words wrapped to five
+        // lines inside a button the base style pins at thirty pixels, and the extra four lines were
+        // clipped rather than dropped — the same defect one layer out, and invisible to a test that
+        // only ever asked the TextBlock.
+        var cue = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("cue"));
+
+        Assert.True(
+            cue.Bounds.Height >= words.Bounds.Height,
+            $"the cue is {cue.Bounds.Height:F1} tall around {words.Bounds.Height:F1} of words");
+    }
+
+    [AvaloniaFact]
+    public void TheCueReflowsWhenTheWindowIsResizedRatherThanKeepingItsOldLineBreaks()
+    {
+        // The half of the same defect a single-width test cannot see. Narrowing the window has to
+        // cost more lines and widening it fewer, and going back to a width already visited has to
+        // land on the same layout as the first time — a text layout cached against a stale
+        // constraint passes the test above and still swallows the right-hand side of every line.
+        var (window, _, _) = Open(Wordy());
+
+        var wide = LineCount(window, 1400);
+        var narrow = LineCount(window, 900);
+        var wideAgain = LineCount(window, 1400);
+
+        Assert.True(narrow > wide, $"narrowing the window did not cost lines: {wide} then {narrow}");
+        Assert.Equal(wide, wideAgain);
+    }
+
+    /// <summary>
+    /// The cue's line count once the window has actually settled at <paramref name="width"/>. Two
+    /// passes with the dispatcher drained between them, because a headless window takes its new
+    /// size on the pass after the one that was asked for it, and reading after a single pass
+    /// measures the width the window used to be.
+    /// </summary>
+    private static int LineCount(MainWindow window, double width)
+    {
+        window.Width = width;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        return Words(window).TextLayout.TextLines.Count;
+    }
+
+    /// <summary>The words of the first cue, which is where a wrapping defect shows first.</summary>
+    private static TextBlock Words(MainWindow window) =>
+        window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Classes.Contains("cue"))
+            .GetVisualDescendants().OfType<TextBlock>()
+            .First(t => t.Name == "CueWords");
+
+    [AvaloniaFact]
+    public void TheSpeakerChipIsTallEnoughForTheLabelInsideIt()
+    {
+        // The same implicit-star-row defect, seen from the other side of the cue: the chip was
+        // arranged eighteen pixels tall around a label whose own text lays out at 14.64, inside
+        // three pixels of padding top and bottom. The bottom of every speaker's name was sliced.
+        var (window, _, _) = Open(Wordy());
+
+        // The chip inside a cue, specifically. The tab draws speaker chips in two places — beside
+        // every cue, and once each on the strip that renames them — and the strip's carry a TextBox
+        // rather than a label, so an unscoped search finds the wrong one and reads a hidden
+        // placeholder's zero height.
+        var cue = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("cue"));
+        var chip = cue.GetVisualDescendants().OfType<Border>()
+            .First(b => b.Classes.Contains("speaker"));
+        var label = chip.GetVisualDescendants().OfType<TextBlock>().First();
+
+        Assert.True(chip.Bounds.Height > 0, "the speaker chip was not laid out at all");
+
+        // The label first, because that is where the slice was visible.
+        Assert.True(
+            label.Bounds.Height >= label.TextLayout.Height - 0.5,
+            $"the label lays out {label.TextLayout.Height:F2} tall and was arranged {label.Bounds.Height:F2} tall");
+
+        // Then the chip around it, padding included, so a fix that grew the label and left the box
+        // alone does not pass.
+        var needed = label.TextLayout.Height + chip.Padding.Top + chip.Padding.Bottom;
+
+        Assert.True(
+            chip.Bounds.Height >= needed - 0.5,
+            $"the chip needs {needed:F2} for its label and padding and was arranged {chip.Bounds.Height:F2} tall");
+    }
+
+    /// <summary>
+    /// Two segments whose text is far too long for one line, each with a speaker — which is what it
+    /// takes to see either of the two defects above. The fixtures the rest of this class uses say
+    /// "one", "two" and "three" and carry no speaker, so they wrap onto one line correctly and draw
+    /// no chip at all.
+    /// </summary>
+    private static JobViewModel Wordy()
+    {
+        const string text =
+            "Um it feels to me like Street Fighter VI is they finally consolidated all of their "
+            + "information and that is why it feels like it takes generations of like releases to "
+            + "have finally got there in the end of it all.";
+
+        var job = new JobViewModel("/tmp/wordy.wav");
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/wordy.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments =
+                [
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.Zero,
+                        End = TimeSpan.FromSeconds(10),
+                        Speaker = "Speaker 1",
+                        Text = text,
+                    },
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.FromSeconds(10),
+                        End = TimeSpan.FromSeconds(20),
+                        Speaker = "Speaker 2",
+                        Text = text,
+                    },
+                ],
+            },
+        });
+
+        return job;
     }
 
     [AvaloniaFact]
