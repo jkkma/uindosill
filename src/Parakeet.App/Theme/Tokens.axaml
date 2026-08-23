@@ -19,9 +19,11 @@
      only thing that draws it. This is also why speaker labelling is matcha despite having been
      purple: it is a v1 feature, and #6B4E9C would read as v2 now that an Ask tab exists.
 
-  2. #F0D983 is pinned to exactly one job — the word being spoken in the word-by-word view — and
-     that view is not built yet. It is defined here because it is part of the system, and it is
-     the one place a third hue is admitted. Anywhere else and the system has drifted.
+  2. #F0D983 is pinned to exactly one job — the word being spoken — and it is the one place a
+     third hue is admitted. Anywhere else and the system has drifted. It was written down for the
+     word-by-word view, which is still not built; the Ask tab's transcript draws the same mark on
+     the same data from 2026-08-23, and that is the same job on a different surface rather than a
+     second use.
 
   ── The two accent keys that are Colors rather than Brushes ────────────────────────────────────
 
@@ -162,7 +164,8 @@
 
   <!-- Pinned to the word being spoken and to nothing else. oklch(0.887 0.11 95) — the same
        lightness as matcha-200, carrying the extra chroma a yellow needs to read as yellow there.
-       Ink on it measures 10.9:1. Unused until the word-by-word view exists. -->
+       Ink on it measures 10.9:1. Drawn by HighlightConverter, on the one word being said inside
+       the Ask tab's transcript; the word-by-word view will draw it on the same rule. -->
   <SolidColorBrush x:Key="SpokenWordBrush" Color="#F0D983" />
 
   <!-- ── Type ────────────────────────────────────────────────────────────────────────────────

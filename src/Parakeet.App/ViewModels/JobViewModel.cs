@@ -413,7 +413,12 @@ public sealed partial class JobViewModel : ObservableObject
                 chips[speaker] = chip;
             }
 
-            target.Add(new TranscriptLineViewModel(speaker, segment.Text.Trim(), chip, segment.Start, segment.End));
+            // The words come across too, and they are what the Ask tab marks the spoken one from.
+            // A translated document carries none — `SidecarTranscriptTranslator` writes an empty
+            // list, because translating loses the timing of individual words — so the English pane
+            // gets segment times and no word times, which is exactly what it is entitled to.
+            target.Add(new TranscriptLineViewModel(
+                speaker, segment.Text.Trim(), chip, segment.Start, segment.End, segment.Words));
         }
     }
 

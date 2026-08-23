@@ -69,4 +69,109 @@ public sealed class HandoffWavTests
             directory.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public async Task TheStagedWavIsWhatOneUnbrokenPassOfTheResamplerProduces()
+    {
+        // Since 2026-08-23 the decode and the resample run at the same time — a producer reading
+        // blocks and a consumer resampling them, over a bounded queue — because run one after the
+        // other they took 32.85 s on a 157-minute file against 19.76 s for the slower half alone.
+        // The resampler therefore now sees its input copied, from another thread, arriving in a
+        // different rhythm. None of that is allowed to move a sample: it is a filter carrying
+        // history across block boundaries, so a pipeline that reordered or re-split its input would
+        // produce a file that is entirely plausible and quietly wrong.
+        //
+        // 44.1 kHz on purpose. At 16 kHz the resampler takes its identity path and copies samples
+        // through, which would assert nothing about resampling at all — and 44.1 is the rate the
+        // recording that prompted the change actually is, tabulated into 160 phases.
+        const int SourceRate = 44_100;
+
+        var samples = new float[SourceRate * 3];
+        for (var i = 0; i < samples.Length; i++)
+        {
+            // Two tones and a slow envelope: something with content above the 8 kHz output Nyquist,
+            // so the filter is doing work a plain decimation would get wrong.
+            var t = i / (float)SourceRate;
+            samples[i] = (MathF.Sin(2 * MathF.PI * 440 * t) * 0.4f
+                          + MathF.Sin(2 * MathF.PI * 11_000 * t) * 0.25f)
+                         * (0.6f + 0.4f * MathF.Sin(2 * MathF.PI * 0.7f * t));
+        }
+
+        var directory = Directory.CreateTempSubdirectory("uindosill-staging");
+        var source = Path.Combine(directory.FullName, "source.wav");
+        WavWriter.WriteFloat32File(source, samples, SourceRate);
+
+        string? handoff = null;
+        try
+        {
+            await using (var audio = WavAudioSource.Open(source))
+            {
+                handoff = await SidecarSpeakerLabeller.WriteResampledWavAsync(audio, CancellationToken.None);
+            }
+
+            await using var written = WavAudioSource.Open(handoff);
+            Assert.Equal(16_000, written.SampleRate);
+
+            var staged = new List<float>();
+            await foreach (var block in written.ReadAsync())
+            {
+                staged.AddRange(block.ToArray());
+            }
+
+            // The reference: one resampler, one thread, the whole recording in a single call. That
+            // this is a fair comparison against a block-fed one is itself pinned, by
+            // ResamplerTests.ChunkedInputProducesTheSameSamplesAsTheWholeFile.
+            var reference = new List<float>();
+            var resampler = new Parakeet.Audio.Resampler(SourceRate, 16_000);
+            resampler.Process(samples, reference);
+            resampler.Complete(reference);
+
+            Assert.Equal(reference.Count, staged.Count);
+            Assert.Equal(reference, staged);
+        }
+        finally
+        {
+            if (handoff is not null && File.Exists(handoff))
+            {
+                File.Delete(handoff);
+            }
+
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ACancelledStagingStopsBothHalvesRatherThanLeavingOneRunning()
+    {
+        // The two halves are joined by a bounded queue, which is the one structure here that can
+        // hang rather than fail: a producer parked on a full queue waits for a consumer, and a
+        // consumer parked on an empty one waits for a producer. Cancellation has to reach both.
+        const int SourceRate = 44_100;
+
+        var samples = new float[SourceRate * 20];
+        for (var i = 0; i < samples.Length; i++)
+        {
+            samples[i] = MathF.Sin(2 * MathF.PI * 440 * i / SourceRate) * 0.3f;
+        }
+
+        var directory = Directory.CreateTempSubdirectory("uindosill-staging-cancel");
+        var source = Path.Combine(directory.FullName, "source.wav");
+        WavWriter.WriteFloat32File(source, samples, SourceRate);
+
+        try
+        {
+            using var cancelled = new CancellationTokenSource();
+            await cancelled.CancelAsync();
+
+            await using var audio = WavAudioSource.Open(source);
+
+            // Raised rather than hung, and within the test's own patience rather than the runner's.
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => SidecarSpeakerLabeller.WriteResampledWavAsync(audio, cancelled.Token).WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
 }
