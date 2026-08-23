@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1020 tests, no weights, no display, no network — **1018 passed and 2 skipped**, and
+**Status:** met. 1027 tests, no weights, no display, no network — **1025 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1020 tests, no weights, no display, no network — 1018 passed and 2 skipped.** `CLAUDE.md`'s second
+**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1020 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1027 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,51 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1020 tests, no weights, no display, no network — 1018 passed and 2 skipped.**
+**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.**
+
+### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
+
+Two things found by running the built application, one asked for and one reported.
+
+**The Ask tab shows the translation, with a pill switcher back to the transcript.** Asking for an
+English version on the Transcribe tab and then having nowhere to read it against the recording was
+the wrong way round. The tab now switches to the English the moment one arrives on the open row, and
+switches back on a pill; a reader who goes back to the transcript stays there, and another
+recording gaining a translation later does not drag them off it.
+
+**It cost almost nothing to build, and that is the interesting part.** Everything on that tab — the
+highlight that follows the playhead, the find box, the cue a click seeks from — already read the
+transcript through one property. Making that property answer with whichever pane is showing moved
+all of them at once, and none of them had to learn what a translation is.
+
+**The two panes are not equivalent, which is why this is a switcher and not a replacement.** A
+translated segment carries its start and end and no word times: `SidecarTranscriptTranslator` writes
+an empty word list, because translating loses which word was said when, and a word's position in an
+English sentence is not a fact about the Spanish audio. So the English seeks and highlights by line
+and marks no word, and the transcript is the pane that follows a voice. The tab says so in a line
+under the pills rather than leaving a reader to notice a mark that quietly stopped — a feature that
+works on one pane and not the other is indistinguishable from a broken one until something names
+which.
+
+**And the splitter added earlier the same day was fighting the clock.** Reported as: easy to resize
+the transcript while the video is paused, stutters and rolls back to its original position while it
+plays. That asymmetry is the whole diagnosis. `AskViewModel.Redraw` raises `HasVideo` on every tick
+that moved the clock — ten times a second while a recording plays — and says the same thing every
+time. The window treated each as news and wrote the picture row's height back; that height is only
+remembered when a drag *completes*, so mid-gesture it was the height from before the drag started.
+Ten stamps a second against a moving mouse. Paused there are no ticks, so there is no fight.
+
+The fix is that `ShowPictureRow` only writes when the state actually changes, and the picture's size
+is no longer published to the player on every layout pass of a drag — that is a render-target
+reallocation per frame underneath a playing video — but once, on release.
+
+**The first test written for it passed without the fix**, which is worth recording because it is the
+failure mode a regression test is supposed to make impossible: it ticked the clock *after* the drag
+completed, when the remembered height is already the right one. Ticking between mouse-moves is what
+reproduces it, and removing the guard now fails with "the picture did not keep the size it was
+dragged to".
+
+**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.**
 
 ### The dictation seam
 
