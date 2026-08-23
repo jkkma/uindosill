@@ -44,6 +44,12 @@ nothing has packaged one.
 
 ## What it does
 
+- **A link works like a file.** Paste one and the audio track is downloaded and queued for
+  transcription; on the Ask tab the picture streams back from the same link rather than being kept
+  on disk, so a three-hour video costs a few megabytes instead of a few gigabytes. Two pinned
+  binaries do it — yt-dlp and the Deno runtime it needs for YouTube — both permissively licensed,
+  and a build without them says so instead of offering a dead box. One link has been tried;
+  [UNPROVEN.md](docs/UNPROVEN.md) says what that does and does not cover.
 - **v1 is file transcription, with optional speaker labels.** No global hotkeys, no text injection,
   no overlay HUD, no microphone capture. **Who spoke when is an opt-in**, off by default: turn it on
   and every format gains `Speaker 1:`, and `rttm` becomes available. It costs a second read of the
@@ -153,7 +159,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 913 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 923 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

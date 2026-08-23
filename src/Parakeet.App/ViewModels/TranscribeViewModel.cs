@@ -52,6 +52,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private readonly IEngineProvider _engines;
     private readonly Func<EngineSelection> _selection;
     private readonly ModelSession? _session;
+    private readonly Parakeet.App.Services.Tools.IMediaUrlFetcher _fetcher;
+    private readonly string _downloadRoot;
     private CancellationTokenSource? _cancellation;
 
     [ObservableProperty]
@@ -59,10 +61,28 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanRunAgain))]
     [NotifyPropertyChangedFor(nameof(StartHint))]
     [NotifyPropertyChangedFor(nameof(DropHint))]
+    [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
+    [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
     private string? _outputDirectory;
+
+    /// <summary>The link in the box, as it is typed or pasted.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
+    [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
+    private string? _url;
+
+    /// <summary>Whether a fetch is in flight, which is what shuts the box while it runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
+    [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
+    private bool _isFetchingUrl;
+
+    /// <summary>What the fetch is doing, or why it failed. Null when there is nothing to say.</summary>
+    [ObservableProperty]
+    private string? _urlStatus;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VisibleLines))]
@@ -147,7 +167,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private int _transcriptPane;
 
     public TranscribeViewModel(
-        IEngineProvider engines, Func<EngineSelection> selection, ModelSession? session = null)
+        IEngineProvider engines,
+        Func<EngineSelection> selection,
+        ModelSession? session = null,
+        Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
+        string? downloadRoot = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
         ArgumentNullException.ThrowIfNull(selection);
@@ -155,6 +179,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
         _engines = engines;
         _selection = selection;
         _session = session;
+        _fetcher = fetcher ?? new Parakeet.App.Services.Tools.YtDlpMediaUrlFetcher();
+
+        // Under the user's temp directory rather than beside the application: these are working
+        // copies of somebody else's media, they can be large, and nothing downstream keeps them.
+        _downloadRoot = downloadRoot ?? Path.Combine(Path.GetTempPath(), "Uindosill", "links");
 
         if (_session is not null)
         {
@@ -557,6 +586,93 @@ public sealed partial class TranscribeViewModel : ObservableObject
         StatusMessage = rejected.Count == 0
             ? added == 0 ? "Those files are already in the queue." : $"Added {added} file{(added == 1 ? string.Empty : "s")}."
             : string.Join("; ", rejected);
+    }
+
+    // ── Adding a link ─────────────────────────────────────────────────────────────────────────
+    //
+    // Paste a link and the audio track is downloaded and queued like a file. Audio alone, because
+    // the transcript is made from sound: a three-hour video costs a few megabytes here rather than
+    // a few gigabytes, and the Ask tab streams the picture from the link on demand instead of
+    // keeping a copy of it.
+
+    /// <summary>Whether this build can fetch links at all.</summary>
+    public bool CanAddUrl => _fetcher.IsAvailable;
+
+    /// <summary>Why it cannot, or null when it can.</summary>
+    public string? UrlHint => _fetcher.DescribeUnavailable();
+
+    /// <summary>Whether the button is live: something pasted, not already fetching, not running.</summary>
+    public bool CanFetchUrl =>
+        CanAddUrl && !IsFetchingUrl && !IsRunning && !string.IsNullOrWhiteSpace(Url);
+
+    /// <summary>
+    /// Fetches the pasted link's audio and queues it.
+    /// </summary>
+    /// <remarks>
+    /// The row is added only once the download has finished. A row that appeared first and filled
+    /// in afterwards would be a queue entry whose file does not exist yet, and every other thing
+    /// that reads the queue — the duration probe, the Ask tab's player, Start — would have to learn
+    /// about a state that exists for no other row.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanFetchUrl))]
+    private async Task FetchUrlAsync(CancellationToken cancellationToken)
+    {
+        var url = Url?.Trim();
+
+        if (string.IsNullOrEmpty(url))
+        {
+            return;
+        }
+
+        IsFetchingUrl = true;
+        UrlStatus = "Reading the link";
+
+        try
+        {
+            Directory.CreateDirectory(_downloadRoot);
+
+            var progress = new Progress<Parakeet.App.Services.Tools.UrlFetchProgress>(report =>
+            {
+                UrlStatus = report.Fraction is { } fraction
+                    ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                        $"{report.Stage} — {fraction * 100:F0}%")
+                    : report.Stage;
+            });
+
+            var fetched = await _fetcher
+                .FetchAudioAsync(url, _downloadRoot, progress, cancellationToken)
+                .ConfigureAwait(true);
+
+            if (Jobs.Any(j => string.Equals(j.SourceUrl, fetched.SourceUrl, StringComparison.OrdinalIgnoreCase)))
+            {
+                UrlStatus = "That link is already in the queue.";
+                return;
+            }
+
+            Jobs.Add(new JobViewModel(fetched.Path)
+            {
+                Duration = ProbeDuration(fetched.Path),
+                SourceUrl = fetched.SourceUrl,
+                DisplayName = fetched.Title,
+            });
+
+            Url = string.Empty;
+            UrlStatus = null;
+            StatusMessage = $"Added “{fetched.Title}” from the link.";
+            RefreshQueueState();
+        }
+        catch (OperationCanceledException)
+        {
+            UrlStatus = "Cancelled.";
+        }
+        catch (Parakeet.App.Services.Tools.MediaFetchException ex)
+        {
+            UrlStatus = ex.Message;
+        }
+        finally
+        {
+            IsFetchingUrl = false;
+        }
     }
 
     /// <summary>

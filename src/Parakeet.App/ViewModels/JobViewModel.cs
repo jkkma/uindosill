@@ -61,11 +61,32 @@ public sealed partial class JobViewModel : ObservableObject
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Path = path;
         FileName = System.IO.Path.GetFileName(path);
+        DisplayName = FileName;
     }
 
     public string Path { get; }
 
     public string FileName { get; }
+
+    /// <summary>
+    /// The link this row was fetched from, or null for a file somebody dropped in.
+    /// </summary>
+    /// <remarks>
+    /// Kept because the audio on disk is only half of what a link gives you: the Ask tab streams
+    /// the picture from here rather than downloading it, so a three-hour video costs a few
+    /// megabytes of audio and nothing else. It is also what the row shows instead of a temporary
+    /// file name nobody chose.
+    /// </remarks>
+    public string? SourceUrl { get; init; }
+
+    /// <summary>Whether this row came from a link rather than from a file.</summary>
+    public bool IsFromUrl => SourceUrl is not null;
+
+    /// <summary>
+    /// What the queue calls this row: the title the site gave it for a link, the file name
+    /// otherwise.
+    /// </summary>
+    public string DisplayName { get; init; } = string.Empty;
 
     /// <summary>
     /// How long the recording is, read from its header when it was queued, or null when that could

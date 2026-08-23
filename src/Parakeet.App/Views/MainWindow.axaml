@@ -192,7 +192,7 @@
 
       <!-- ══ Transcribe ════════════════════════════════════════════════════════════════════════ -->
       <TabItem Header="Transcribe">
-        <Grid RowDefinitions="Auto,*,Auto" Margin="16" DataContext="{Binding Transcribe}"
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="16" DataContext="{Binding Transcribe}"
               x:DataType="vm:TranscribeViewModel">
 
           <!-- Shut while a batch runs, because the queue behind it is. A zone that keeps taking
@@ -226,7 +226,42 @@
             </Panel>
           </Border>
 
-          <Grid Grid.Row="1" ColumnDefinitions="344,14,*">
+          <!-- ── Or paste a link ──────────────────────────────────────────────────────────────
+               Beside dropping a file rather than instead of it, and deliberately the same row
+               height and the same tinted family: a link is another way to get a recording into the
+               queue, not a different feature. The audio track is what is downloaded — the
+               transcript is made from sound — and the Ask tab streams the picture from the link
+               when it wants one, so nothing here keeps a copy of a video.
+
+               Shut while a batch runs, for the same reason the drop zone above is. -->
+          <Border Grid.Row="1" Name="LinkRow" Classes="tinted" Padding="11,9" Margin="0,0,0,12"
+                  VerticalAlignment="Bottom">
+            <StackPanel Spacing="7">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="Or a link" Classes="secondary"
+                           VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBox Grid.Column="1" Name="LinkBox" Text="{Binding Url}"
+                         IsEnabled="{Binding CanAddUrl}"
+                         PlaceholderText="Paste a video or podcast link — the audio is downloaded and transcribed" />
+                <Button Grid.Column="2" Name="FetchLink" Classes="primary" Content="Fetch"
+                        Margin="8,0,0,0"
+                        Command="{Binding FetchUrlCommand}"
+                        IsEnabled="{Binding CanFetchUrl}" />
+              </Grid>
+
+              <!-- What the fetch is doing, or why it failed. One line, and absent when there is
+                   nothing to say rather than a permanent empty row. -->
+              <TextBlock Name="LinkStatus" Text="{Binding UrlStatus}" Classes="fine"
+                         Foreground="{DynamicResource Matcha700Brush}"
+                         IsVisible="{Binding UrlStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+              <!-- Why the box is dead, when it is: this build vendored no downloader. -->
+              <TextBlock Name="LinkHint" Text="{Binding UrlHint}" Classes="fine warning"
+                         IsVisible="{Binding UrlHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+          </Border>
+
+          <Grid Grid.Row="2" ColumnDefinitions="344,14,*">
 
             <!-- ── The queue ──────────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="0">
@@ -255,7 +290,7 @@
                   <DataTemplate x:DataType="vm:JobViewModel">
                     <StackPanel Spacing="5">
                       <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding FileName}" Classes="emphasis"
+                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Classes="emphasis"
                                    TextTrimming="CharacterEllipsis" />
                         <TextBlock Grid.Column="1" Text="{Binding ProgressLabel}" Classes="meta"
                                    Margin="7,0,0,0" VerticalAlignment="Center"
@@ -488,7 +523,7 @@
             </DockPanel>
           </Grid>
 
-          <TextBlock Grid.Row="2" Margin="0,12,0,0" Classes="fine meta"
+          <TextBlock Grid.Row="3" Margin="0,12,0,0" Classes="fine meta"
                      Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
         </Grid>
       </TabItem>
@@ -749,7 +784,7 @@
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:JobViewModel">
                   <StackPanel Spacing="3">
-                    <TextBlock Text="{Binding FileName}" Classes="emphasis"
+                    <TextBlock Text="{Binding DisplayName}" Classes="emphasis"
                                TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding Status}" Classes="meta" />
                   </StackPanel>
@@ -808,7 +843,7 @@
                   </StackPanel>
                 </Grid>
 
-                <TextBlock Text="{Binding SelectedRecording.FileName}" Classes="meta"
+                <TextBlock Text="{Binding SelectedRecording.DisplayName}" Classes="meta"
                            TextTrimming="CharacterEllipsis"
                            IsVisible="{Binding SelectedRecording, Converter={x:Static ObjectConverters.IsNotNull}}" />
 

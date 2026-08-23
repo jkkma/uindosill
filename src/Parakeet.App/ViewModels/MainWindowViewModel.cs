@@ -25,7 +25,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IAppUpdater? updater = null,
         AppSettingsStore? settings = null,
         Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null,
-        IMediaPlayer? player = null)
+        IMediaPlayer? player = null,
+        Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
+        string? downloadRoot = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
@@ -49,7 +51,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Backend = Backend,
                 Model = Models.SelectedDescriptor,
             },
-            Session);
+            Session,
+            fetcher,
+            downloadRoot);
 
         // The queue is handed over rather than copied: the Ask tab plays and reads the same rows
         // the Transcribe tab is filling, so a transcript that finishes while this tab is open
