@@ -473,6 +473,49 @@ public sealed class PythonSidecarTests
         Assert.False(sidecar.IsFaulted);
     }
 
+    [Fact]
+    public async Task DisposingWithACancelledRequestStillInFlightKillsAtOnceRatherThanWaiting()
+    {
+        // The child is mid-way through work nobody wants and cannot read the shutdown line until
+        // it finishes, so asking nicely costs the full five seconds for nothing. Until 2026-08-22
+        // every cancel-then-close paid them. The announced progress is the child saying it has
+        // the request in hand, which is what makes "cancelled in flight" a fact rather than a race.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly(
+            new
+            {
+                op = "slow",
+                announce = new[] { """{"id":{id},"type":"progress","completed":1,"total":99}""" },
+                delayMilliseconds = 20_000,
+                emit = new[] { """{"id":{id},"type":"result"}""" },
+            }));
+        using var staged = fake;
+
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancel = new CancellationTokenSource();
+        var slow = sidecar.SendAsync("slow", _ => { }, new SynchronousProgress(received), cancel.Token);
+        await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => slow);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await sidecar.DisposeAsync();
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"dispose took {stopwatch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task TheChildIsInAKillOnCloseJobOnWindowsAndSaysSoElsewhere()
+    {
+        // A host that dies without reaching DisposeAsync leaves a child holding a gigabyte of
+        // weights behind a closed pipe; on Windows the job object is what takes it along. Off
+        // Windows nothing does, and the property says so rather than pretending.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly());
+        using var staged = fake;
+        await using var child = sidecar;
+
+        Assert.Equal(OperatingSystem.IsWindows(), sidecar.InKillOnCloseJob);
+    }
+
     /// <summary>Records on whatever thread reports, so the ordering above is testable.</summary>
     private sealed class SynchronousProgress : IProgress<(int Completed, int Total)>
     {

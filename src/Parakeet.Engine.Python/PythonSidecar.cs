@@ -99,7 +99,22 @@ public sealed class PythonSidecar : IAsyncDisposable
         public required TaskCompletionSource<JsonElement> Completion { get; init; }
 
         public IProgress<(int Completed, int Total)>? Progress { get; init; }
+
+        /// <summary>
+        /// Cancelled by its caller after it reached the child, and not yet answered: the child is
+        /// working on something nobody wants.
+        /// </summary>
+        public volatile bool Abandoned;
     }
+
+    /// <summary>How many requests are <see cref="Pending.Abandoned"/> right now.</summary>
+    private int _abandoned;
+
+    /// <summary>
+    /// True when the child was put in a job the operating system kills when this process ends,
+    /// however it ends. False off Windows, or when the job could not be created or joined.
+    /// </summary>
+    public bool InKillOnCloseJob { get; private set; }
 
     /// <summary>Starts the interpreter and completes the handshake. Idempotent.</summary>
     /// <remarks>
@@ -153,6 +168,11 @@ public sealed class PythonSidecar : IAsyncDisposable
         {
             throw new PythonSidecarException($"Could not start {_runtime.Interpreter}: {exc.Message}", exc);
         }
+
+        // In the operating system's hands as well as this class's: a host that dies without
+        // reaching DisposeAsync — killed from Task Manager, crashed, stopped in a debugger — takes
+        // the child with it instead of leaving a gigabyte of weights resident behind a closed pipe.
+        InKillOnCloseJob = KillOnCloseJob.TryAssign(_process);
 
         _reader = Task.Run(ReadLoopAsync, CancellationToken.None);
         _errorReader = Task.Run(ReadErrorLoopAsync, CancellationToken.None);
@@ -272,7 +292,24 @@ public sealed class PythonSidecar : IAsyncDisposable
             throw;
         }
 
-        return await pending.Completion.Task.ConfigureAwait(false);
+        try
+        {
+            return await pending.Completion.Task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The request reached the child and the caller has stopped waiting. The entry stays, so
+            // the late reply is consumed and discarded rather than read as some other request's —
+            // and it is counted, because a child still working on something nobody wants is a child
+            // a disposal should kill at once rather than wait five seconds for.
+            if (_pending.ContainsKey(id) && !pending.Abandoned)
+            {
+                pending.Abandoned = true;
+                Interlocked.Increment(ref _abandoned);
+            }
+
+            throw;
+        }
     }
 
     private async Task ReadLoopAsync()
@@ -372,6 +409,13 @@ public sealed class PythonSidecar : IAsyncDisposable
             if (!_pending.TryRemove(id, out var pending))
             {
                 return;
+            }
+
+            if (pending.Abandoned)
+            {
+                // The late reply to a request its caller stopped waiting for: consumed, discarded by
+                // the cancelled completion below, and no longer a reason to kill the child at dispose.
+                Interlocked.Decrement(ref _abandoned);
             }
 
             if (type == "error")
@@ -477,25 +521,26 @@ public sealed class PythonSidecar : IAsyncDisposable
         }
 
         // Ask first: a clean shutdown lets Python release the graph and flush anything it is
-        // holding. Killing works too, and is what happens if it does not answer promptly.
-        try
+        // holding. Killing works too, and is what happens if it does not answer promptly — or at
+        // once, when a request was cancelled in flight and never answered: the child is mid-way
+        // through work nobody wants and cannot read the shutdown line until it finishes, so the
+        // five seconds would be paid in full for nothing. Until 2026-08-22 every cancel-then-close
+        // paid them.
+        if (Volatile.Read(ref _abandoned) > 0)
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await SendShutdownAsync(timeout.Token).ConfigureAwait(false);
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            TryKill();
         }
-        catch
+        else
         {
             try
             {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await SendShutdownAsync(timeout.Token).ConfigureAwait(false);
+                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
             }
             catch
             {
-                // Already gone.
+                TryKill();
             }
         }
 

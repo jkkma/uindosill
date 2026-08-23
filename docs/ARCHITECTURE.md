@@ -196,9 +196,14 @@ The diariser and the translator do not run in this process. Each is a child inte
 **One child per engine, and not one per file.** The diariser's graph is 453 MiB and the translator's
 1.34 GiB, so a batch that reloaded them per file would spend more of itself loading than working.
 The child is started lazily — nothing spawns until a model is actually wanted — and stopped on
-dispose. The two engines *could* share one — the constructor takes a sidecar — but neither the
-command line nor the window passes one, so a run with both opt-ins on has two children and two sets
-of resident weights.
+dispose: asked to shut down and given five seconds, then killed, or killed at once when a request
+was cancelled in flight and never answered, since a child mid-way through work nobody wants cannot
+read the shutdown line until it finishes. On Windows it is also in a job object the operating
+system kills when this process ends however it ends, so a host that never reaches dispose does not
+leave a gigabyte of weights resident behind a closed pipe; and the staged WAVs such a death leaves
+behind are swept, once per process, before the first load. The two engines *could* share one — the
+constructor takes a sidecar — but neither the command line nor the window passes one, so a run with
+both opt-ins on has two children and two sets of resident weights.
 
 **It is `python -m uindosill_engines`, and the interpreter is the bundled one.** Deliberately not
 whatever `python` resolves to on PATH — picking that up is how a working install turns into a
