@@ -168,12 +168,11 @@ public class TranslationTests
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectPlainTextOnly(viewModel);
 
-        // Off: one transcript, nothing to switch to, and the output keeps its plain name.
+        // Off: one transcript, nothing to switch to.
         await viewModel.StartCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.False(viewModel.Jobs[0].HasTranslation);
         Assert.False(viewModel.CanShowTranslation);
-        Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
 
         // On, through 'Run again': the row is finished, and turning an opt-in on and asking for the
         // same file back is exactly what that button is for.
@@ -193,25 +192,29 @@ public class TranslationTests
     }
 
     [Fact]
-    public async Task ATranslatedRunWritesItsOwnFilesRatherThanOverTheTranscriptionRuns()
+    public async Task ATranslatedExportWritesTheEnglishBesideTheSpokenFilesNeverOverThem()
     {
         // SubRip has no comment syntax, so SRT cannot carry the marker in-band and is covered by
-        // its name instead. The infix is also what keeps a translated run from destroying the
-        // output of the plain one when both are asked for the same recording.
+        // its name instead: exporting a translated row writes the spoken files under the plain
+        // stem and the English beside them under the .en one, and the infix is what keeps the
+        // second from destroying the first.
         var (viewModel, directory) = Create();
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectPlainTextOnly(viewModel);
 
         await viewModel.StartCommand.ExecuteAsync(null);
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         var plain = Path.Combine(directory, "a.txt");
         Assert.True(File.Exists(plain));
         var beforeTranslating = await File.ReadAllTextAsync(plain);
 
         viewModel.TranslateToEnglish = true;
         await viewModel.RunAgainCommand.ExecuteAsync(null);
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
 
         var english = Path.Combine(directory, "a.en.txt");
-        Assert.True(File.Exists(english), "the translated run wrote no .en file");
+        Assert.True(File.Exists(english), "the translated export wrote no .en file");
         Assert.Contains("[en]", await File.ReadAllTextAsync(english), StringComparison.Ordinal);
 
         // Untouched, rather than overwritten with English under its old name.
@@ -220,11 +223,12 @@ public class TranslationTests
     }
 
     [Fact]
-    public async Task TheWordTimedFormatIsRefusedUnderTheOptInRatherThanWrittenAgainstTheWrongWords()
+    public async Task TheWordTimedFormatIsWrittenForTheSpokenTranscriptOnlyNeverAgainstTheWrongWords()
     {
         // Translation carries no word timings: the English words are not the words that were
-        // spoken and nothing aligns them. A file written anyway would highlight the wrong word at
-        // every moment and look entirely correct doing it, so the run is refused before it starts.
+        // spoken and nothing aligns them. An English file written anyway would highlight the
+        // wrong word at every moment and look entirely correct doing it, so the export writes the
+        // word-timed file for the spoken transcript only and says so.
         var (viewModel, directory) = Create();
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
 
@@ -235,15 +239,14 @@ public class TranslationTests
 
         viewModel.TranslateToEnglish = true;
         await viewModel.StartCommand.ExecuteAsync(null);
-
-        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
-        Assert.Contains("word timings", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(directory, "a.en.vtt")));
-
-        // The same format is fine the moment the opt-in is off: what is refused is the pair.
-        viewModel.TranslateToEnglish = false;
-        await viewModel.StartCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
+
+        Assert.True(File.Exists(Path.Combine(directory, "a.words.vtt")));
+        Assert.False(File.Exists(Path.Combine(directory, "a.en.words.vtt")));
+        Assert.Contains("word timings", viewModel.ExportNotice, StringComparison.Ordinal);
     }
 
     [Fact]

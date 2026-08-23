@@ -320,7 +320,7 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This window's rule, stated at every checkbox on the Settings and Export tabs, is that a
+    /// This window's rule, stated at every opt-in checkbox in it, is that a
     /// disabled control says why — because one that quietly does nothing is worse than one that explains
     /// itself. These two buttons were the exception, and the case that made it visible is a
     /// diarisation entry: the panel is the transcription engine's, so selecting Speaker labelling

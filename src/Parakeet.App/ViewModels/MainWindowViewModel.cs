@@ -67,6 +67,37 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // wrong shows a transcript beside the wrong recording.
         Ask = new AskViewModel(Transcribe.Jobs, player ?? MediaPlayers.ForThisBuild());
 
+        // The output folder outlives the run — chosen once, restored at every launch — but only
+        // while the directory is really there: the folder people choose is often a removable
+        // drive, and a restored path with nothing behind it would aim every export at a location
+        // that cannot take one. Missing means the box goes blank AND the file forgets it, so the
+        // stale choice cannot come back by itself a week later.
+        if (_settings.Load().OutputDirectory is { Length: > 0 } savedOutput)
+        {
+            if (Directory.Exists(savedOutput))
+            {
+                Transcribe.OutputDirectory = savedOutput;
+            }
+            else
+            {
+                _settings.Update(current => current with { OutputDirectory = null });
+            }
+        }
+
+        // Saved as it changes rather than at exit, because this application has a documented way
+        // of dying abruptly (gotcha 19) and a setting saved on close is lost exactly then.
+        Transcribe.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TranscribeViewModel.OutputDirectory))
+            {
+                var chosen = Transcribe.OutputDirectory;
+                _settings.Update(current => current with
+                {
+                    OutputDirectory = string.IsNullOrWhiteSpace(chosen) ? null : chosen,
+                });
+            }
+        };
+
         // Load and unload have to be shut off for the duration of a batch: the running jobs hold
         // the engine an unload would dispose out from under them.
         Transcribe.PropertyChanged += (_, e) =>

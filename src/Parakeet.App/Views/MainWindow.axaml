@@ -163,13 +163,13 @@
           <StackPanel Orientation="Horizontal" Spacing="2">
             <RadioButton Name="TabTranscribe" Classes="segment" GroupName="Switcher" Content="Transcribe"
                          IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
-            <!-- Ask sits next to Transcribe because it acts on what Transcribe produces. -->
-            <RadioButton Name="TabAsk" Classes="segment" GroupName="Switcher" Content="Ask"
-                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=4}" />
-            <!-- Export and Settings next, because between them they hold everything the Transcribe
-                 tab used to carry down its right-hand side: what a run writes, and how it runs. -->
+            <!-- Export sits next to Transcribe because transcribing writes nothing: the files
+                 come from Export's button, so the two pages are one workflow read left to
+                 right — transcribe, then export. -->
             <RadioButton Name="TabExport" Classes="segment" GroupName="Switcher" Content="Export"
                          IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=2}" />
+            <RadioButton Name="TabAsk" Classes="segment" GroupName="Switcher" Content="Ask"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=4}" />
             <RadioButton Name="TabSettings" Classes="segment" GroupName="Switcher" Content="Settings"
                          IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=5}" />
             <RadioButton Name="TabModels" Classes="segment" GroupName="Switcher" Content="Models"
@@ -385,10 +385,11 @@
             <DockPanel Grid.Column="2">
               <!-- ── The two extra passes ─────────────────────────────────────────────────────
                    Beside the queue rather than on Settings with the cut controls, since later on
-                   2026-08-23: the cut and the formats are machinery, set once and left alone, but
-                   these two decide what pressing Start produces for the queue on this page, and a
-                   per-run decision belongs on the page where the run is launched. Both are off by
-                   default and both cost time, so neither happens unless it is asked for here.
+                   2026-08-23: these two decide what a run produces for the queue on this page,
+                   and a per-run decision belongs on the page where the run is launched. Both are
+                   off by default and both cost time, so neither happens unless it is asked for
+                   here. A run writes no files — the Export tab's button does, from the format
+                   ticks beside it — so the passes are the whole of what Start needs asked.
 
                    Translation first and speakers last, so the strip that grows when ticked — the
                    count field and up to two sentences appear under the speaker box — moves only
@@ -530,7 +531,10 @@
                    Bound to VisibleLines rather than to SelectedJob.Lines, because which of the two
                    collections that is depends on the switcher above. -->
               <Border Classes="panel" Padding="15,13">
-                <ScrollViewer>
+                <!-- Named for the code-behind: while a batch runs, new lines keep the view at the
+                     end so the newest words are the visible ones — unless the reader has scrolled
+                     up, in which case their position is theirs. See FollowTranscript. -->
+                <ScrollViewer Name="TranscriptScroll">
                   <ItemsControl ItemsSource="{Binding VisibleLines}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TranscriptLineViewModel">
@@ -773,18 +777,17 @@
       </TabItem>
 
       <!-- ══ Export ════════════════════════════════════════════════════════════════════════════
-           What a run writes and where it puts it, moved off the Transcribe tab on 2026-08-23 with
-           the Settings page below. Index 2 in the TabControl, which is where Licences was until it
-           retired into the About window the same day — taking the freed slot is what keeps Models,
-           Updates and Ask at the indices everything already found them at.
+           The one place files come from, since later on 2026-08-23: a run fills the transcript
+           on screen and writes nothing, and this page's Export button writes the ticked formats
+           for the recording selected in the queue — which is why the ticks, the folder, the
+           button and the way into the recording are all one page. Index 2 in the TabControl,
+           which is where Licences was until it retired into the About window the same day —
+           taking the freed slot is what keeps Models, Updates and Ask at the indices everything
+           already found them at.
 
            Drawn as a reading page rather than a workbench one: one column, 26,22 margins, a title
-           at the top, no splitter. Everything on it is a form field, and the three-column shape the
-           Transcribe, Models and Ask tabs use is for surfaces you work inside.
-
-           The order is what, where, and instead-of: the ticks decide what a transcript is, the
-           folder decides where it lands, and the button at the foot is for somebody who wanted no
-           files at all. -->
+           at the top, no splitter. Everything on it is a form field, and the three-column shape
+           the Transcribe, Models and Ask tabs use is for surfaces you work inside. -->
       <TabItem Header="Export">
         <ScrollViewer Margin="26,22" DataContext="{Binding Transcribe}"
                       x:DataType="vm:TranscribeViewModel">
@@ -796,7 +799,7 @@
                  under a left-aligned heading. -->
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="What a finished transcript is written as, and where it goes. These choices apply to every file in the queue." />
+                       Text="Transcribing writes no files by itself. Tick the formats, choose where they go, and press Export to write them for the recording selected in the queue." />
 
             <StackPanel Spacing="9">
               <TextBlock Text="OUTPUT FORMATS" Classes="section" />
@@ -818,7 +821,10 @@
             <StackPanel Spacing="9">
               <TextBlock Text="WHERE THEY GO" Classes="section" />
               <!-- Blank means beside the original, which is what the placeholder says rather than
-                   leaving an empty box to be read as an error. -->
+                   leaving an empty box to be read as an error. The choice outlives the
+                   application: MainWindowViewModel saves it as it changes and restores it at
+                   launch while the directory still exists — a missing one, an unplugged drive,
+                   goes back to blank rather than aiming every export at nowhere. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Output folder" Classes="secondary" Width="88"
                            VerticalAlignment="Center" />
@@ -832,6 +838,19 @@
                      controls whether or not they are drawn. See the header comment. -->
                 <Button Content="Browse…" Name="BrowseOutput" />
               </StackPanel>
+
+              <!-- The button the page exists for. The notice underneath is never empty while a
+                   choice is missing: it says which recording the files would be for, why the
+                   button is dark, or what the last press wrote — a disabled control with no
+                   reason beside it is the shape of every interface defect this window has
+                   shipped. -->
+              <Button Name="ExportFiles" Classes="primary" Content="Export"
+                      HorizontalAlignment="Left" Margin="0,4,0,0"
+                      Command="{Binding ExportFilesCommand}" />
+
+              <TextBlock Name="ExportNotice" Classes="fine meta" MaxWidth="560"
+                         HorizontalAlignment="Left" TextWrapping="Wrap"
+                         Text="{Binding ExportNotice}" />
             </StackPanel>
 
             <Separator />
@@ -841,10 +860,11 @@
                  recording is beside its original with the words inside it, as a subtitle track
                  that any player will show.
 
-                 On this page and not beside the transcript, because which format goes in is read
-                 off the ticks at the top of it — somebody who chose "WebVTT (words)" has already
-                 said what they want their transcript to be, and asking again at the moment they
-                 press a button is asking them to say it twice.
+                 Which format goes in is read off the Output formats ticks on the Transcribe tab —
+                 somebody who chose "WebVTT (words)" has already said what they want their
+                 transcript to be, and asking again at the moment they press a button is asking
+                 them to say it twice. The notice below names that page when no tickable format is
+                 on.
 
                  The line underneath is not decoration. It says the name of the file that will be
                  written before it is written, says what the container costs when it costs

@@ -648,7 +648,7 @@ public class TranscribeViewModelTests
 
         Assert.True(main.Transcribe.IsModelLoaded);
         Assert.Equal(JobState.Completed, main.Transcribe.Jobs[0].State);
-        Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
+        Assert.NotEmpty(main.Transcribe.Jobs[0].Transcript);
 
         // Unloading does not take the button away any more: the weights are still on disk, so the
         // next Start loads them again rather than being dead until somebody visits the other tab.
@@ -921,7 +921,7 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public async Task RunningTheQueueProducesTranscriptsAndFiles()
+    public async Task RunningTheQueueFillsTranscriptsAndExportWritesTheFiles()
     {
         var (viewModel, directory) = Create();
         viewModel.AddFiles([WriteWav(directory, "a.wav"), WriteWav(directory, "b.wav")]);
@@ -930,9 +930,21 @@ public class TranscribeViewModelTests
 
         Assert.All(viewModel.Jobs, job => Assert.Equal(JobState.Completed, job.State));
         Assert.All(viewModel.Jobs, job => Assert.NotEmpty(job.Transcript));
+        Assert.False(viewModel.IsRunning);
+
+        // The run wrote nothing: files are the Export button's business, for the selected row.
+        Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
+
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        Assert.True(viewModel.CanExportFiles);
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
+
         Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
         Assert.True(File.Exists(Path.Combine(directory, "a.srt")));
-        Assert.False(viewModel.IsRunning);
+        Assert.Contains("Wrote 2 files", viewModel.ExportNotice, StringComparison.Ordinal);
+
+        // And only for it: the other row's files wait for their own press.
+        Assert.False(File.Exists(Path.Combine(directory, "b.txt")));
     }
 
     [Fact]
@@ -955,7 +967,6 @@ public class TranscribeViewModelTests
 
         var transcript = viewModel.Jobs[0].Transcript;
         Assert.NotEmpty(transcript);
-        Assert.True(File.Exists(Path.Combine(directory, "good.txt")));
 
         // Repair the unreadable one and add a third file: the two that have work to do run, and
         // the one that is done is not touched.
@@ -964,14 +975,11 @@ public class TranscribeViewModelTests
         await viewModel.StartCommand.ExecuteAsync(null);
 
         Assert.All(viewModel.Jobs, job => Assert.Equal(JobState.Completed, job.State));
-        Assert.True(File.Exists(Path.Combine(directory, "broken.txt")));
-        Assert.True(File.Exists(Path.Combine(directory, "late.txt")));
+        Assert.All(viewModel.Jobs, job => Assert.NotEmpty(job.Transcript));
 
-        // The finished row kept everything a finished row has, and nothing was written for it a
-        // second time — 'good (2).txt' is what re-running it would have left behind.
+        // The finished row kept everything a finished row has, untouched by the second batch.
         Assert.Equal(transcript, viewModel.Jobs[0].Transcript);
-        Assert.Equal("Done — 2 files", viewModel.Jobs[0].Status);
-        Assert.False(File.Exists(Path.Combine(directory, "good (2).txt")));
+        Assert.Equal("Done", viewModel.Jobs[0].Status);
 
         // And the count is of what ran, with what was skipped said rather than left to be guessed
         // at from a queue of three reporting two.
@@ -997,19 +1005,17 @@ public class TranscribeViewModelTests
         Assert.True(viewModel.CanRunAgain);
         Assert.Contains("'Run again'", viewModel.StartHint, StringComparison.Ordinal);
 
-        // Pressing Start anyway — the command runs even when its button is off — writes nothing
+        // Pressing Start anyway — the command runs even when its button is off — runs nothing
         // and says so instead of quietly re-transcribing.
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        Assert.False(File.Exists(Path.Combine(directory, "a (2).txt")));
         Assert.Contains("transcribed already", viewModel.StatusMessage, StringComparison.Ordinal);
 
-        // 'Run again' puts the row back to waiting and runs it, which is when the second copy is
-        // written — asked for, this time.
+        // 'Run again' puts the row back to waiting and runs it — asked for, this time.
         await viewModel.RunAgainCommand.ExecuteAsync(null);
 
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
-        Assert.True(File.Exists(Path.Combine(directory, "a (2).txt")));
+        Assert.NotEmpty(viewModel.Jobs[0].Transcript);
         Assert.Equal("Finished 1 file.", viewModel.StatusMessage);
     }
 
@@ -1026,7 +1032,7 @@ public class TranscribeViewModelTests
         Assert.Equal(JobState.Failed, viewModel.Jobs[0].State);
         Assert.NotNull(viewModel.Jobs[0].Error);
         Assert.Equal(JobState.Completed, viewModel.Jobs[1].State);
-        Assert.True(File.Exists(Path.Combine(directory, "good.txt")));
+        Assert.NotEmpty(viewModel.Jobs[1].Transcript);
     }
 
     [Fact]
@@ -1043,22 +1049,23 @@ public class TranscribeViewModelTests
             format.IsSelected = format.Id is "txt" or "rttm";
         }
 
-        // RTTM without the opt-in is refused rather than written empty, and nothing runs.
-        await viewModel.StartCommand.ExecuteAsync(null);
-        Assert.Contains("need 'Label speakers' on", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
-
-        // Off, without asking for RTTM: nothing about speakers anywhere.
-        viewModel.Formats.First(f => f.Id == "rttm").IsSelected = false;
+        // Off: nothing about speakers anywhere — and exporting with RTTM ticked skips it with the
+        // reason beside the button, rather than refusing the run up front or writing an empty
+        // file. The finished document answers what Start could only predict.
         await viewModel.StartCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.DoesNotContain("Speaker", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
 
-        // On: the window's transcript and the files carry the names. Through 'Run again', because
-        // the row is finished and Start runs only what has not been run — turning the opt-in on
-        // and asking for the same file back is exactly what that button is for. The count comes
-        // with it, because the opt-in no longer runs without one.
-        viewModel.Formats.First(f => f.Id == "rttm").IsSelected = true;
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
+        Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
+        Assert.False(File.Exists(Path.Combine(directory, "a.rttm")));
+        Assert.Contains("no RTTM", viewModel.ExportNotice, StringComparison.Ordinal);
+
+        // On: the window's transcript and the exported files carry the names. Through 'Run
+        // again', because the row is finished and Start runs only what has not been run — turning
+        // the opt-in on and asking for the same file back is exactly what that button is for. The
+        // count comes with it, because the opt-in no longer runs without one.
         viewModel.LabelSpeakers = true;
         viewModel.SpeakerCount = 2;
         Assert.False(viewModel.CanStart);
@@ -1067,6 +1074,8 @@ public class TranscribeViewModelTests
         await viewModel.RunAgainCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.Contains("Speaker 1: ", viewModel.Jobs[0].Transcript, StringComparison.Ordinal);
+
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Contains("Speaker 1: ", await File.ReadAllTextAsync(Path.Combine(directory, "a (2).txt")), StringComparison.Ordinal);
         Assert.StartsWith("SPEAKER a 1 0.000", await File.ReadAllTextAsync(Path.Combine(directory, "a.rttm")), StringComparison.Ordinal);
     }
@@ -1352,8 +1361,11 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public async Task SelectingNoFormatIsRefusedBeforeAnythingRuns()
+    public async Task SelectingNoFormatStopsExportRatherThanTheRun()
     {
+        // Formats are the Export button's question now, so a bare queue runs fine — the
+        // transcript on screen needs no format — and it is Export that goes dark, with the
+        // reason beside it.
         var (viewModel, directory) = Create();
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
 
@@ -1364,8 +1376,16 @@ public class TranscribeViewModelTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        Assert.Contains("at least one output format", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.All(viewModel.Jobs, job => Assert.Equal(JobState.Pending, job.State));
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.NotEmpty(viewModel.Jobs[0].Transcript);
+
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        Assert.False(viewModel.CanExportFiles);
+        Assert.Contains("at least one format", viewModel.ExportNotice, StringComparison.Ordinal);
+
+        // The command guards itself too — a live keyboard shortcut is a button of its own.
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
+        Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
     }
 
     [Fact]

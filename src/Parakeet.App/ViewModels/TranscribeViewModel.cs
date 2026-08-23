@@ -67,11 +67,15 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
     [NotifyPropertyChangedFor(nameof(CanAddToRecording))]
     [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
+    [NotifyPropertyChangedFor(nameof(CanExportFiles))]
+    [NotifyPropertyChangedFor(nameof(ExportNotice))]
     [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
     [NotifyCanExecuteChangedFor(nameof(AddToRecordingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportFilesCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExportNotice))]
     private string? _outputDirectory;
 
     /// <summary>The link in the box, as it is typed or pasted.</summary>
@@ -95,24 +99,32 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanShowTranslation))]
     [NotifyPropertyChangedFor(nameof(CanAddToRecording))]
     [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
+    [NotifyPropertyChangedFor(nameof(CanExportFiles))]
+    [NotifyPropertyChangedFor(nameof(ExportNotice))]
     [NotifyCanExecuteChangedFor(nameof(AddToRecordingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportFilesCommand))]
     private JobViewModel? _selectedJob;
 
-    /// <summary>A tick under Output formats can change what would go inside the recording.</summary>
+    /// <summary>A tick under Output formats changes what Export writes and what would go inside the recording.</summary>
     private void OnFormatChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(ExportableFormat));
         OnPropertyChanged(nameof(CanAddToRecording));
         OnPropertyChanged(nameof(AddToRecordingNotice));
+        OnPropertyChanged(nameof(CanExportFiles));
+        OnPropertyChanged(nameof(ExportNotice));
         AddToRecordingCommand.NotifyCanExecuteChanged();
+        ExportFilesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedJobChanged(JobViewModel? value)
     {
-        // The result of the last one belonged to the row it ran on. Left standing under a different
-        // recording it reads as a claim about this one.
+        // The results of the last presses belonged to the row they ran on. Left standing under a
+        // different recording they read as claims about this one.
         _addToRecordingResult = null;
+        _exportResult = null;
         OnPropertyChanged(nameof(AddToRecordingNotice));
+        OnPropertyChanged(nameof(ExportNotice));
     }
 
     [ObservableProperty]
@@ -661,8 +673,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (ExportableFormat is not { } format)
             {
-                return "Tick SRT or WebVTT under Output formats — those are the two a recording can "
-                    + "carry.";
+                return "Tick SRT or WebVTT under Output formats, on the Transcribe tab — those are the two a "
+                    + "recording can carry.";
             }
 
             if (!SubtitleMux.TryPlan(job.Path, format, out var plan, out var refusal))
@@ -741,6 +753,151 @@ public sealed partial class TranscribeViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(AddToRecordingNotice));
+        }
+    }
+
+    /// <summary>What the last press of Export did, cleared when the selection moves on.</summary>
+    private string? _exportResult;
+
+    /// <summary>Whether Export is live: a finished recording is selected and a format is ticked.</summary>
+    public bool CanExportFiles =>
+        !IsRunning
+        && SelectedJob is { CanExport: true }
+        && Formats.Any(f => f.IsSelected);
+
+    /// <summary>
+    /// What pressing Export will do, why it cannot be pressed, or what it just did. Never null:
+    /// a disabled control with no reason beside it is the defect this window keeps finding.
+    /// </summary>
+    public string ExportNotice
+    {
+        get
+        {
+            if (_exportResult is { } result)
+            {
+                return result;
+            }
+
+            if (SelectedJob is not { } job)
+            {
+                return "Choose a recording in the queue on the Transcribe tab; this writes the files of "
+                    + "whichever one is highlighted there.";
+            }
+
+            if (!job.CanExport)
+            {
+                return "Transcribe this recording first.";
+            }
+
+            var ticked = Formats.Count(f => f.IsSelected);
+            if (ticked == 0)
+            {
+                return "Tick at least one format above.";
+            }
+
+            var where = string.IsNullOrWhiteSpace(OutputDirectory)
+                ? "beside the recording"
+                : $"in {OutputDirectory}";
+            var english = job.TranslatedDocument is not null
+                ? $", and the English beside them as {TranslatedInfix} files"
+                : string.Empty;
+
+            return $"Writes {job.DisplayName}'s transcript as {ticked} file{(ticked == 1 ? string.Empty : "s")} {where}{english}.";
+        }
+    }
+
+    /// <summary>
+    /// Writes the ticked formats for the selected recording — the spoken transcript under its
+    /// current speaker names, and the English beside it when the run translated.
+    /// </summary>
+    /// <remarks>
+    /// Transcribing writes nothing since later on 2026-08-23; this button is the one place files
+    /// come from. The refusals Start used to make are skips with reasons here, because the
+    /// finished document answers what Start could only predict: a turns-only format over a
+    /// transcript with no turns writes nothing and says why, and the English gets no word-timed
+    /// file because translation carries no word timings — the English words are not the words
+    /// that were spoken and nothing aligns them.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanExportFiles))]
+    private async Task ExportFilesAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedJob is not { } job || job.Named() is not { } document)
+        {
+            return;
+        }
+
+        // The command guards itself as well as its CanExecute, because ExecuteAsync runs from a
+        // shortcut or a test whether or not the button is lit.
+        var ticked = Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
+        if (ticked.Count == 0)
+        {
+            return;
+        }
+
+        _exportResult = null;
+        OnPropertyChanged(nameof(ExportNotice));
+
+        var outputDirectory = string.IsNullOrWhiteSpace(OutputDirectory) ? null : OutputDirectory;
+
+        try
+        {
+            var written = new List<string>();
+            var skipped = new List<string>();
+
+            var spokenFormats = ticked;
+            if (ticked.Contains(TranscriptFormats.Rttm.Id, StringComparer.Ordinal)
+                && document.SpeakerTurns is not { Count: > 0 })
+            {
+                spokenFormats = ticked.Where(id => id != TranscriptFormats.Rttm.Id).ToList();
+                skipped.Add("no RTTM, because this transcript has no speaker turns and the file would be empty");
+            }
+
+            written.AddRange(await TranscriptWriter.WriteAsync(document, new TranscriptionJob
+            {
+                InputPath = job.Path,
+                Formats = spokenFormats,
+                OutputDirectory = outputDirectory,
+            }, ct: cancellationToken).ConfigureAwait(true));
+
+            if (job.NamedTranslation() is { } english)
+            {
+                // No second RTTM either: the turns are the spoken document's fact and that file
+                // is already written above.
+                var englishFormats = ticked
+                    .Where(id => id != TranscriptFormats.WordTimedVtt.Id && id != TranscriptFormats.Rttm.Id)
+                    .ToList();
+
+                if (ticked.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.Ordinal))
+                {
+                    skipped.Add("no word-timed English, because translation does not carry word timings — that file describes the spoken transcript only");
+                }
+
+                written.AddRange(await TranscriptWriter.WriteAsync(english, new TranscriptionJob
+                {
+                    InputPath = job.Path,
+                    Formats = englishFormats,
+                    OutputDirectory = outputDirectory,
+                    StemSuffix = TranslatedInfix,
+                }, ct: cancellationToken).ConfigureAwait(true));
+            }
+
+            job.OutputFiles.AddRange(written);
+
+            var where = outputDirectory is null ? "beside the recording" : $"in {outputDirectory}";
+            _exportResult = $"Wrote {written.Count} file{(written.Count == 1 ? string.Empty : "s")} {where}"
+                + (skipped.Count > 0 ? $" — {string.Join("; ", skipped)}." : ".");
+        }
+        catch (OperationCanceledException)
+        {
+            _exportResult = null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _exportResult = ex.Message;
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(ExportNotice));
         }
     }
 
@@ -1152,36 +1309,15 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
-        var formats = Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
-        if (formats.Count == 0)
-        {
-            StatusMessage = "Choose at least one output format, on the Export tab.";
-            return;
-        }
+        // No format questions at Start, and no files either — since later on 2026-08-23 a run
+        // fills the transcript on screen and nothing else, and the Export tab's button is what
+        // writes files, from the ticks beside it, for the recording selected in the queue. The
+        // refusals that used to stand here — a turns-only format with no speaker opt-in, a
+        // word-timed format over a translation — moved with the writing, into the export path
+        // that can now see the finished document instead of predicting it.
 
-        if (!LabelSpeakers && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.Ordinal))
-        {
-            StatusMessage = "RTTM speaker turns need 'Label speakers' on, above the transcript: without "
-                + "it there are no turns to write.";
-            return;
-        }
-
-        // Refused rather than degraded, which is the command line's rule too. Translation carries
-        // no word timings — the English words are not the words that were spoken and nothing
-        // aligns them — so a word-timed file written under this opt-in would highlight the wrong
-        // word at every moment, and look entirely correct while doing it.
-        if (TranslateToEnglish && formats.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.Ordinal))
-        {
-            StatusMessage =
-                $"'{TranscriptFormats.WordTimedVtt.DisplayName}' times every word, and translation does not carry "
-                + "word timings. Drop that format on the Export tab, or turn 'Translate to English' off "
-                + "and get the word timings of what was actually said.";
-            return;
-        }
-
-        // The same question the speaker opt-in asks, for the same reason: the Models tab can
-        // remove the translation entry while this window is open, and a ticked box with nothing
-        // behind it would write the source transcript into files named .en.
+        // The Models tab can remove the translation entry while this window is open, and a ticked
+        // box with nothing behind it would run a batch that quietly delivers no English.
         if (TranslateToEnglish && !_engines.SupportsTranslation)
         {
             RefreshTranslationAvailability();
@@ -1192,7 +1328,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // The diariser is a file on disk and can go away between opening the window and pressing
         // Start — the Models tab will remove it, since only the *loaded* transcription engine is
         // protected there. Asked again here rather than trusted from construction, because the
-        // alternative is a transcript with no names and a zero-byte .rttm reported as "Finished".
+        // alternative is a transcript that was asked for names and comes back without them.
         if (LabelSpeakers && !_engines.SupportsSpeakerLabelling)
         {
             RefreshSpeakerAvailability();
@@ -1348,17 +1484,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
             var pending = Jobs.Where(vm => vm.State != JobState.Completed).ToList();
             var alreadyDone = Jobs.Count - pending.Count;
 
+            // Empty formats is the writer's documented "in memory only": a run produces the
+            // transcript on screen and nothing on disk, and the Export tab's button does the
+            // writing afterwards from the finished row.
             var jobs = pending.Select(vm => new TranscriptionJob
             {
                 InputPath = vm.Path,
-                Formats = formats,
-                OutputDirectory = string.IsNullOrWhiteSpace(OutputDirectory) ? null : OutputDirectory,
-
-                // What makes a translated run's output its own. SubRip has no comment syntax, so
-                // SRT cannot carry the marker in-band and is covered by its name instead — and the
-                // infix is also what stops a translated run overwriting the transcription run's
-                // files when both are asked for the same recording.
-                StemSuffix = translator is null ? string.Empty : TranslatedInfix,
+                Formats = [],
             }).ToList();
 
             foreach (var vm in pending)

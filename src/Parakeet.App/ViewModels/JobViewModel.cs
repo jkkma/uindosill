@@ -196,6 +196,12 @@ public sealed partial class JobViewModel : ObservableObject
     /// </remarks>
     public TranscriptDocument? Document { get; private set; }
 
+    /// <summary>
+    /// The English document, kept when the run translated so the Export button can write English
+    /// files after the fact; null when it did not. Dropped by <see cref="Reset"/> with the rest.
+    /// </summary>
+    public TranscriptDocument? TranslatedDocument { get; private set; }
+
     /// <summary>Whether there is a transcript to put back inside the recording.</summary>
     public bool CanExport => Document is not null;
 
@@ -208,10 +214,16 @@ public sealed partial class JobViewModel : ObservableObject
     /// document itself — <c>WithSpeakerNames</c> returns its argument when the map changes nothing.
     /// </remarks>
     public TranscriptDocument? Named() =>
-        Document?.WithSpeakerNames(
-            Speakers
-                .Where(voice => voice.IsRenamed)
-                .ToDictionary(voice => voice.Label, voice => voice.Name, StringComparer.Ordinal));
+        Document?.WithSpeakerNames(RenamedVoices());
+
+    /// <summary>The English document under the same names, or null when the run did not translate.</summary>
+    public TranscriptDocument? NamedTranslation() =>
+        TranslatedDocument?.WithSpeakerNames(RenamedVoices());
+
+    private Dictionary<string, string> RenamedVoices() =>
+        Speakers
+            .Where(voice => voice.IsRenamed)
+            .ToDictionary(voice => voice.Label, voice => voice.Name, StringComparer.Ordinal);
 
     /// <summary>
     /// Whether this row has an English transcript to switch to. What the pane switcher's
@@ -330,6 +342,7 @@ public sealed partial class JobViewModel : ObservableObject
         Speakers.Clear();
         OutputFiles.Clear();
         Document = null;
+        TranslatedDocument = null;
         OnPropertyChanged(nameof(CanExport));
     }
 
@@ -423,6 +436,7 @@ public sealed partial class JobViewModel : ObservableObject
                 : null;
 
             Document = spoken;
+            TranslatedDocument = source is not null ? document : null;
             OnPropertyChanged(nameof(CanExport));
 
             Transcript = Render(spoken);

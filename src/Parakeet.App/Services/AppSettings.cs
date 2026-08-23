@@ -27,6 +27,18 @@ public sealed record AppSettings
     /// </remarks>
     public ComputeBackend? Backend { get; init; }
 
+    /// <summary>
+    /// The output folder the user last chose, or null when they never have — blank in the box,
+    /// files beside each input.
+    /// </summary>
+    /// <remarks>
+    /// Restored at launch only when the directory still exists, and cleared from the file when it
+    /// does not: the folder a user picks is often a removable drive, and a stored path with no
+    /// drive behind it would point every export at a location that cannot take one. Missing means
+    /// choose again, not fail later.
+    /// </remarks>
+    public string? OutputDirectory { get; init; }
+
     public static AppSettings Default { get; } = new();
 }
 
@@ -78,6 +90,7 @@ public sealed class AppSettingsStore
             {
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
                 Backend = ReadBackend(root),
+                OutputDirectory = ReadString(root, "outputDirectory"),
             };
         }
 #pragma warning disable CA1031 // Any unreadable file means "as shipped", never a failure to start.
@@ -132,6 +145,13 @@ public sealed class AppSettingsStore
                 values["backend"] = backend.ToString().ToLowerInvariant();
             }
 
+            // Omitted when blank for the same reason as the backend: "never chosen" and "cleared"
+            // are one shape.
+            if (settings.OutputDirectory is { Length: > 0 } outputDirectory)
+            {
+                values["outputDirectory"] = outputDirectory;
+            }
+
             var json = JsonSerializer.Serialize(values);
 
             // Written beside the target and moved into place, rather than over it.
@@ -177,6 +197,14 @@ public sealed class AppSettingsStore
             _ => null,
         };
     }
+
+    private static string? ReadString(JsonElement root, string name) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && value.GetString() is { Length: > 0 } read
+            ? read
+            : null;
 
     private static bool ReadBool(JsonElement root, string name, bool fallback) =>
         root.ValueKind == JsonValueKind.Object

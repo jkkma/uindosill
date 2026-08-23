@@ -114,15 +114,20 @@ public class OptInFailureTests
         Assert.Equal(JobState.Completed, row.State);
 
         // The row reads as done and as missing something, in the same breath; the warning line
-        // carries the reason. The transcript is on disk; the turns-only format is not, because
-        // there are no turns for it to carry.
+        // carries the reason. Exporting writes the transcript and skips the turns-only format,
+        // because the finished document has no turns for it to carry — the export path answers
+        // from the document what Start could only have predicted.
         Assert.Contains("Done", row.Status, StringComparison.Ordinal);
         Assert.Contains("without speaker labels", row.Status, StringComparison.Ordinal);
         Assert.Contains("Speaker labelling failed for this file", row.Warning, StringComparison.Ordinal);
         Assert.Contains("configured to fail on every file", row.Warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("Speaker", row.Transcript, StringComparison.Ordinal);
+
+        viewModel.SelectedJob = row;
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
         Assert.False(File.Exists(Path.Combine(directory, "a.rttm")));
-        Assert.DoesNotContain("Speaker", row.Transcript, StringComparison.Ordinal);
+        Assert.Contains("no RTTM", viewModel.ExportNotice, StringComparison.Ordinal);
 
         // And the summary does not let "Finished" stand for "finished with speakers".
         Assert.Contains("written without speaker labels", viewModel.StatusMessage, StringComparison.Ordinal);
@@ -144,7 +149,10 @@ public class OptInFailureTests
         Assert.Contains("Translation failed for this file", row.Warning, StringComparison.Ordinal);
 
         // Under the plain name — the .en one promises English — and with one pane, not two of the
-        // same text.
+        // same text. The row kept no English document, so exporting writes the spoken transcript
+        // and nothing named .en.
+        viewModel.SelectedJob = row;
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
         Assert.False(File.Exists(Path.Combine(directory, "a.en.txt")));
         Assert.False(row.HasTranslation);
