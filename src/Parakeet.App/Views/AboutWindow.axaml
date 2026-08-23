@@ -91,16 +91,31 @@
 
       <!-- ══ Identity ════════════════════════════════════════════════════════════════════════
            The mark at 46px rather than the headerbar's 22, because this is the one place in the
-           product where the application introduces itself rather than labels itself. Matcha-100
-           ground and matcha-700 strokes, the same badge the headerbar carries. -->
+           product where the application introduces itself rather than labels itself. The same
+           badge the headerbar carries, half matcha and half taro since 2026-08-23 — see the
+           comment there for the seam and the clipped second glyph. -->
       <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="15" Margin="26,22,26,0">
-        <Border Width="46" Height="46" Background="{DynamicResource Matcha100Brush}"
-                VerticalAlignment="Top">
-          <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
-                StrokeLineCap="Round"
-                Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
-                Width="27" Height="27" Stretch="Uniform"
-                HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Border Width="46" Height="46" VerticalAlignment="Top">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+              <GradientStop Offset="0.5" Color="{StaticResource Matcha100}" />
+              <GradientStop Offset="0.5" Color="{StaticResource Taro100}" />
+            </LinearGradientBrush>
+          </Border.Background>
+          <Panel>
+            <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
+                  StrokeLineCap="Round"
+                  Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                  Width="27" Height="27" Stretch="Uniform"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Panel Clip="M23,0 L46,0 L46,46 L23,46 Z">
+              <Path Stroke="{DynamicResource Taro700Brush}" StrokeThickness="2.4"
+                    StrokeLineCap="Round"
+                    Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                    Width="27" Height="27" Stretch="Uniform"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Panel>
+          </Panel>
         </Border>
 
         <StackPanel Spacing="2" VerticalAlignment="Center">

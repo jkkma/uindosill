@@ -933,18 +933,19 @@ public class TranscribeViewModelTests
         Assert.False(viewModel.IsRunning);
 
         // The run wrote nothing: files are the Export button's business, for the selected row.
-        Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
+        Assert.False(File.Exists(Path.Combine(directory, "a.srt")));
 
         viewModel.SelectedJob = viewModel.Jobs[0];
         Assert.True(viewModel.CanExportFiles);
         await viewModel.ExportFilesCommand.ExecuteAsync(null);
 
-        Assert.True(File.Exists(Path.Combine(directory, "a.txt")));
+        // The default tick is SRT alone, so one press writes exactly one file and nothing else.
         Assert.True(File.Exists(Path.Combine(directory, "a.srt")));
-        Assert.Contains("Wrote 2 files", viewModel.ExportNotice, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(directory, "a.txt")));
+        Assert.Contains("Wrote 1 file", viewModel.ExportNotice, StringComparison.Ordinal);
 
         // And only for it: the other row's files wait for their own press.
-        Assert.False(File.Exists(Path.Combine(directory, "b.txt")));
+        Assert.False(File.Exists(Path.Combine(directory, "b.srt")));
     }
 
     [Fact]
@@ -1423,13 +1424,14 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public void DefaultFormatsAreTextAndSubtitles()
+    public void TheOnlyFormatTickedByDefaultIsSubtitles()
     {
+        // SRT alone since 2026-08-23 — it was txt and srt. One default tick makes the Export
+        // page's first press write one predictable file; anything more is asked for by ticking.
         var (viewModel, _) = Create();
         var selected = viewModel.Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
 
-        Assert.Contains("txt", selected);
-        Assert.Contains("srt", selected);
+        Assert.Equal(["srt"], selected);
     }
 }
 

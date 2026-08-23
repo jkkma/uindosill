@@ -260,7 +260,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         Formats = [.. TranscriptFormats.All
             .Where(f => f.Id != TranscriptFormats.Rttm.Id)
-            .Select(f => new OutputFormatViewModel(f, f.Id is "txt" or "srt"))];
+            .Select(f => new OutputFormatViewModel(f, f.Id is "srt"))];
 
         // Which format goes inside the recording is read off these ticks, so the button beside them
         // has to hear one change. RTTM comes and goes with the diariser, so the collection is

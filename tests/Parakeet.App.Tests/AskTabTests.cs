@@ -1636,16 +1636,19 @@ public class AskTabWindowTests
     [AvaloniaFact]
     public void ThePictureRowAndItsHandleAreBothGoneOnARecordingWithNoPicture()
     {
-        // An audio file must pay nothing for a picture it does not have: no black band at the top
-        // of the column, and no handle to drag one out by.
+        // An audio file must pay nothing for a picture it does not have: no black band above the
+        // transport, and no handle to drag one out by. The transport shares the picture's row
+        // since 2026-08-23, so the row does not measure zero any more — it measures the transport
+        // and nothing else, which is what "the picture is gone" means now.
         var (window, _, _) = Open();
 
         var column = window.FindControl<Grid>("MediaColumn")!;
         var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+        var transport = window.FindControl<Border>("Transport")!;
 
         Assert.False(window.FindControl<Border>("VideoPane")!.IsVisible);
         Assert.False(splitter.IsVisible);
-        Assert.Equal(0, column.RowDefinitions[0].ActualHeight, 1);
+        Assert.Equal(transport.Bounds.Height, column.RowDefinitions[0].ActualHeight, 1);
         Assert.Equal(0, column.RowDefinitions[1].ActualHeight, 1);
     }
 
@@ -1658,20 +1661,26 @@ public class AskTabWindowTests
 
         var column = window.FindControl<Grid>("MediaColumn")!;
         var splitter = window.FindControl<GridSplitter>("MediaSplitter")!;
+        var opened = column.RowDefinitions[0].ActualHeight;
 
         Drag(window, splitter, 60);
         var chosen = column.RowDefinitions[0].Height;
-        Assert.True(chosen.Value > 260, "the drag did not change the row it was supposed to");
+        Assert.True(
+            column.RowDefinitions[0].ActualHeight > opened + 30,
+            "the drag did not change the row it was supposed to");
 
-        // An audio file in between, which collapses the row entirely. The fake reports a picture
-        // for whatever it is given, so what makes this one audio is taking the frames away.
+        // An audio file in between, which shrinks the row to the transport alone. The fake
+        // reports a picture for whatever it is given, so what makes this one audio is taking the
+        // frames away.
         viewModel.Transcribe.Jobs.Add(AskTabTests.Transcribed("/tmp/talk.mp3"));
         player.VideoToReport = null;
         viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[1];
         window.UpdateLayout();
 
         Assert.False(viewModel.Ask.HasVideo);
-        Assert.Equal(0, column.RowDefinitions[0].ActualHeight, 1);
+        Assert.Equal(
+            window.FindControl<Border>("Transport")!.Bounds.Height,
+            column.RowDefinitions[0].ActualHeight, 1);
 
         player.VideoToReport = (320, 180);
         viewModel.Ask.SelectedRecording = viewModel.Transcribe.Jobs[0];
