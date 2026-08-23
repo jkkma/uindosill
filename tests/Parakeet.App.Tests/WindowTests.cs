@@ -1056,11 +1056,14 @@ public class TranscribeViewModelTests
 
         var before = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.False(before.CanUseNeuralSpeechDetection);
+        Assert.False(before.UseNeuralSpeechDetection);
 
         File.WriteAllText(store.PathFor(model), "not really a graph");
 
+        // Ticked, not merely enabled: on is the default whenever the model is there.
         var after = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.True(after.CanUseNeuralSpeechDetection);
+        Assert.True(after.UseNeuralSpeechDetection);
         Assert.Null(after.SpeechDetectionHint);
 
         after.UseFixedWindows = true;
@@ -1068,6 +1071,45 @@ public class TranscribeViewModelTests
 
         after.UseFixedWindows = false;
         Assert.Null(after.SpeechDetectionHint);
+    }
+
+    [Fact]
+    public void TheDetectorIsOnByDefaultWhenItsModelIsThereAndAnAnswerAgainstItSurvivesTheModelComingAndGoing()
+    {
+        // The box follows the model — off with nothing behind it, on the moment the model arrives
+        // from the Models tab — because on is the default; and an answer the user gave is theirs:
+        // untick it, remove the model, install it again, and it comes back unticked rather than
+        // reset to the default. The same in the other direction, because the answer is a choice
+        // and not a ratchet.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vad").FullName;
+        var store = new LocalModelStore(directory);
+        var model = Assert.Single(ModelCatalog.Default.VoiceActivityModels);
+        var path = store.PathFor(model);
+
+        var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
+        Assert.False(viewModel.UseNeuralSpeechDetection);
+
+        File.WriteAllText(path, "not really a graph");
+        viewModel.RefreshSpeechDetectionAvailability();
+        Assert.True(viewModel.UseNeuralSpeechDetection);
+
+        viewModel.UseNeuralSpeechDetection = false;
+        File.Delete(path);
+        viewModel.RefreshSpeechDetectionAvailability();
+        Assert.False(viewModel.UseNeuralSpeechDetection);
+
+        File.WriteAllText(path, "not really a graph");
+        viewModel.RefreshSpeechDetectionAvailability();
+        Assert.False(viewModel.UseNeuralSpeechDetection);
+
+        viewModel.UseNeuralSpeechDetection = true;
+        File.Delete(path);
+        viewModel.RefreshSpeechDetectionAvailability();
+        Assert.False(viewModel.UseNeuralSpeechDetection);
+
+        File.WriteAllText(path, "not really a graph");
+        viewModel.RefreshSpeechDetectionAvailability();
+        Assert.True(viewModel.UseNeuralSpeechDetection);
     }
 
     [Fact]

@@ -125,7 +125,7 @@ public interface IEngineProvider
     bool SupportsNeuralSpeechDetection { get; }
 
     /// <summary>
-    /// The detector behind the speech-detection opt-in, loaded, or null when
+    /// The detector behind the speech-detection box, loaded, or null when
     /// <see cref="SupportsNeuralSpeechDetection"/> is false. Throws <see cref="SpeechDetectorException"/>
     /// when the model is on disk and will not load, which is a sentence for the status line rather
     /// than a silent fall-back to the gate.
@@ -525,10 +525,12 @@ public sealed class FakeEngineProvider : IEngineProvider
     public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator(_translator);
 
     /// <summary>
-    /// The canned detector, so the speech-detection opt-in runs end to end here with no graph in
-    /// CI. Its loudness rule behaves like the gate, so a ticked box changes nothing about what the
-    /// fake pipeline produces — what a test reads is <see cref="LastSpeechDetector"/>, which says
-    /// whether the window handed the engine a detector at all and what the engine did with it.
+    /// The canned detector, so the speech-detection box runs end to end here with no graph in CI
+    /// — and, since the box is ticked by default, so that every batch in the suite runs the way a
+    /// user's does, with a detector handed to the engine. Its loudness rule behaves like the gate,
+    /// so the box changes nothing about what the fake pipeline produces — what a test reads is
+    /// <see cref="LastSpeechDetector"/>, which says whether the window handed the engine a
+    /// detector at all and what the engine did with it.
     /// </summary>
     public bool SupportsNeuralSpeechDetection => true;
 
