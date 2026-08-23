@@ -618,6 +618,12 @@ The trap is the other direction, and it is a testing one:
   boxes bound to one setting — passes it either way.
 
 Ask the visual tree for anything about what is drawn: select the tab, `UpdateLayout()`, then
-`GetVisualDescendants()`. `OptionTabTests.TheTranscribeTabKeptNoneOfItAndSaysWhereItWent` is the
-case that found this, and `WindowTests.MainWindowBuildsWithAllTabs` is the one that stays honest by
-counting `TabControl.Items` instead of looking anything up by name.
+`GetVisualDescendants()`. `OptionTabTests` and `AboutWindowTests` both carry a `Drawn<T>(window,
+name)` helper that does exactly that and fails when the count is not one, and every assertion in
+either file about *which page* something is on goes through it.
+`OptionTabTests.TheTranscribeTabKeptNoneOfItAndSaysWhereItWent` is the case that found this.
+
+`FindControl` is still the right tool for a control the window always draws — the headerbar's
+buttons, `MainWindowBuildsWithAllTabs` reaching the `TabControl` itself — because there is no page
+for it to be wrong about. The rule is about the claim, not the API: use it to get hold of something,
+never to prove where something is.

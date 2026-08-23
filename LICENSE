@@ -11,8 +11,9 @@ whether that copy carries the video player.
     libraries linked into it are GPL, and the GPL governs the combined work.
 
 A build that has not vendored libmpv contains no GPL component and is MIT
-throughout. Whether a given copy did is visible in its Licences tab, which
-lists libmpv only when it is present. The full text of the GPL, version 2, is
+throughout. Whether a given copy did is visible in the application's About
+window — Settings, then About Uindosill, then the Licences pane — which lists
+libmpv only when it is present. The full text of the GPL, version 2, is
 in licences/GPL-2.0.txt. See docs/LICENSING.md for what each obliges, and
 licences/mpv-WRITTEN-OFFER.txt for where the corresponding source lives.
 

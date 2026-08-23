@@ -3,6 +3,10 @@ using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using Parakeet.App.ViewModels;
 using Parakeet.App.Views;
+using Parakeet.App.Services;
+using Parakeet.Audio;
+using Parakeet.Core.Diarisation;
+using Parakeet.Core.Models;
 
 namespace Parakeet.App.Tests;
 
@@ -19,9 +23,13 @@ namespace Parakeet.App.Tests;
 /// carries, and the Transcribe tab is asserted for what it no longer does.
 /// </para>
 /// <para>
-/// Every lookup here is preceded by selecting the page it is on. A <c>TabControl</c> realises only
-/// the selected tab's content, so a lookup on the wrong page answers null — loudly here, because
-/// the assertion catches it, and silently in the code-behind, which is gotcha 31.
+/// Every test here selects the page it is about before looking at anything, and that is for the
+/// write-through assertions, which walk the visual tree and therefore see only what is drawn. It is
+/// NOT what makes <c>FindControl</c> work: <c>FindControl</c> reads the window's one name scope,
+/// which holds every page whether or not it is realised, so it answers for a control on any tab
+/// (gotcha 31). Anything here that claims a control is on a particular page therefore asks the
+/// visual tree; a <c>FindControl</c> result proves only that the markup declares the control
+/// somewhere.
 /// </para>
 /// </remarks>
 public class OptionTabTests
@@ -39,6 +47,25 @@ public class OptionTabTests
         window.Show();
         window.UpdateLayout();
         return window;
+    }
+
+    /// <summary>
+    /// A named control the window is currently DRAWING, or a failure naming it.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of this file. <c>FindControl</c> would return the same object with any tab
+    /// selected — it reads the name scope, which holds every page (gotcha 31) — so it can say a
+    /// control exists but never that it is on this page. Moving a control into the wrong TabItem is
+    /// one line's difference in a 1400-line file, and it is exactly what these tests are for.
+    /// </remarks>
+    private static T Drawn<T>(MainWindow window, string name) where T : Control
+    {
+        var found = window.GetVisualDescendants().OfType<T>()
+            .Where(c => c.Name == name)
+            .ToList();
+
+        Assert.True(found.Count == 1, $"expected one drawn {typeof(T).Name} named '{name}', found {found.Count}");
+        return found[0];
     }
 
     [AvaloniaFact]
@@ -68,14 +95,19 @@ public class OptionTabTests
         folder.Text = @"C:\somewhere";
         Assert.Equal(@"C:\somewhere", viewModel.Transcribe.OutputDirectory);
 
-        Assert.NotNull(window.FindControl<Button>("BrowseOutput"));
+        Drawn<Button>(window, "BrowseOutput");
 
         // Bound rather than present: a Button whose Command is null renders, hovers and does
         // nothing.
-        var mux = window.FindControl<Button>("AddToRecording");
-        Assert.NotNull(mux);
-        Assert.NotNull(mux!.Command);
-        Assert.NotNull(window.FindControl<TextBlock>("AddToRecordingNotice"));
+        var mux = Drawn<Button>(window, "AddToRecording");
+        Assert.NotNull(mux.Command);
+
+        // And it says why it cannot be pressed, in the state this page opens in — nothing is
+        // selected in a queue that is on another tab, which used to explain itself when the button
+        // sat under the list.
+        var notice = Drawn<TextBlock>(window, "AddToRecordingNotice");
+        Assert.True(notice.IsVisible);
+        Assert.Contains("Transcribe tab", notice.Text, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
@@ -83,15 +115,13 @@ public class OptionTabTests
     {
         var window = Open(Settings, out var viewModel);
 
-        var speakers = window.FindControl<CheckBox>("LabelSpeakers");
-        var english = window.FindControl<CheckBox>("TranslateToEnglish");
-        Assert.NotNull(speakers);
-        Assert.NotNull(english);
-        Assert.NotNull(window.FindControl<DockPanel>("SpeechDetectionRow"));
+        var speakers = Drawn<CheckBox>(window, "LabelSpeakers");
+        var english = Drawn<CheckBox>(window, "TranslateToEnglish");
+        Drawn<DockPanel>(window, "SpeechDetectionRow");
 
         // The segmentation note followed the cap it explains, rather than being left behind on a
         // page with no cap on it.
-        Assert.NotNull(window.FindControl<TextBlock>("SegmentationNote"));
+        Drawn<TextBlock>(window, "SegmentationNote");
 
         // The cut controls, found by their bindings rather than by their labels: a label match
         // passes on a control wired to nothing, which is the failure being guarded against.
@@ -108,14 +138,14 @@ public class OptionTabTests
         Assert.Equal(45, viewModel.Transcribe.MaxSegmentSeconds);
 
         // Both opt-ins write through too.
-        speakers!.IsChecked = true;
+        speakers.IsChecked = true;
         Assert.True(viewModel.Transcribe.LabelSpeakers);
 
-        english!.IsChecked = true;
+        english.IsChecked = true;
         Assert.True(viewModel.Transcribe.TranslateToEnglish);
 
         // And the way to the About window, which is the Licences tab's replacement.
-        Assert.NotNull(window.FindControl<Button>("ShowAbout"));
+        Drawn<Button>(window, "ShowAbout");
     }
 
     /// <summary>
@@ -158,13 +188,84 @@ public class OptionTabTests
         Assert.Empty(window.GetVisualDescendants().OfType<CheckBox>());
 
         // What it kept: the queue and the transcript, which is the work.
-        Assert.NotNull(window.FindControl<Border>("DropZone"));
-        Assert.NotNull(window.FindControl<TextBox>("LinkBox"));
+        Drawn<Border>(window, "DropZone");
+        Drawn<TextBox>(window, "LinkBox");
 
-        var moved = window.FindControl<TextBlock>("OptionsMoved");
-        Assert.NotNull(moved);
-        Assert.True(moved!.IsVisible);
+        var moved = Drawn<TextBlock>(window, "OptionsMoved");
+        Assert.True(moved.IsVisible);
         Assert.Contains("Export tab", moved.Text, StringComparison.Ordinal);
         Assert.Contains("Settings", moved.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The long-recording speaker warning is drawn beside the queue, not only beside the count on
+    /// Settings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A regression the split introduced and this pins shut. <c>SpeakerDurationWarning</c> exists to
+    /// be, in its own words, "in front of the person who can still act on it… before any of the
+    /// twenty minutes are spent". It used to be drawn in the Transcribe tab's options column, on the
+    /// same screen as the queue and Start. Moving the speaker opt-in to Settings took it along, and
+    /// the sequence that breaks is ordinary: tick the box and set a count on Settings, come back,
+    /// drop a two-hour interview, press Start. The warning is non-null the whole time and was drawn
+    /// on a page already left behind, so the transcript came back with names on it and nothing said
+    /// they were past where the evidence stops.
+    /// </para>
+    /// <para>
+    /// The Start guard does not cover it: <c>TranscribeViewModel</c> raises the bound sentence only
+    /// when the count is missing, so a queue with a count set starts silently.
+    /// </para>
+    /// </remarks>
+    [AvaloniaFact]
+    public void ARecordingPastTheEvidenceWarnsBesideTheQueueAndNotOnlyOnSettings()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-warn").FullName;
+        var viewModel = new MainWindowViewModel(
+            new FakeEngineProvider(speakers: new FakeSpeakerLabellerOptions
+            {
+                SpeakerCount = 4,
+                MaxSpeakers = 4,
+                SupportsFixedSpeakerCount = false,
+                ReliableUpTo = TimeSpan.FromMinutes(2),
+            }),
+            new LocalModelStore(directory),
+            ModelCatalog.Default,
+            player: new FakeMediaPlayer());
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        window.UpdateLayout();
+
+        // Nothing is decoded: the length comes off the header when the file was queued, which is
+        // what lets this be a warning about what is about to happen rather than a report on it.
+        viewModel.Transcribe.AddFiles([LongWav(directory)]);
+        viewModel.Transcribe.LabelSpeakers = true;
+
+        // The count is set, which is the case the Start guard stays quiet for.
+        viewModel.Transcribe.SpeakerCount = 3;
+        window.UpdateLayout();
+
+        Assert.NotNull(viewModel.Transcribe.SpeakerDurationWarning);
+        Assert.Null(viewModel.Transcribe.StartHint);
+
+        var warning = Drawn<TextBlock>(window, "QueueDurationWarning");
+        Assert.True(warning.IsVisible, "the queue's duration warning is not drawn on the Transcribe tab");
+        Assert.Equal(viewModel.Transcribe.SpeakerDurationWarning, warning.Text);
+
+        // And it goes quiet again with the opt-in, rather than standing over a run that will not
+        // label anything.
+        viewModel.Transcribe.LabelSpeakers = false;
+        window.UpdateLayout();
+
+        Assert.False(warning.IsVisible);
+    }
+
+    /// <summary>A file whose header says it is longer than the bound above, written cheaply.</summary>
+    private static string LongWav(string directory)
+    {
+        var path = Path.Combine(directory, "long.wav");
+        WavWriter.WriteFile(path, new float[8_000 * 400], 8_000);
+        return path;
     }
 }

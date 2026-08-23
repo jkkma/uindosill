@@ -132,7 +132,10 @@
           <TextBlock Text="local transcription" Classes="meta" VerticalAlignment="Center" />
         </StackPanel>
 
-        <!-- The switcher. Licences last, because it is the one tab nobody opens twice.
+        <!-- The switcher. Six pills since 2026-08-23; it opened with the line "Licences last,
+             because it is the one tab nobody opens twice", which stopped being true when that tab
+             retired into the About window — the reason it was last is the reason it is gone.
+             Reading order and TabControl order are two lists, and both are set out below.
 
              ElementRole="User" because this sits inside the TitleBar element, and inside that
              element the platform answers every press as "start dragging the window" unless the
@@ -331,6 +334,22 @@
                          Classes="fine warning" Margin="0,8,0,0"
                          IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
+              <!-- Past where the diariser's labels have been established, drawn here as well as
+                   beside the count on Settings — the same property, bound twice, so there is still
+                   one copy of the fact.
+
+                   It is here because of where the reader is when it matters. The property's whole
+                   requirement is to be in front of the person who can still act on it, before the
+                   twenty minutes are spent, and after the opt-in moved to Settings that stopped
+                   being true of a queue: somebody ticks the box and sets a count on Settings, comes
+                   back, drops a two-hour interview and presses Start, and the sentence saying those
+                   names are past the evidence was drawn on a page they had already left. It is a
+                   fact about the queue, so it belongs where the queue is. -->
+              <TextBlock DockPanel.Dock="Bottom" Name="QueueDurationWarning"
+                         Text="{Binding SpeakerDurationWarning}" TextWrapping="Wrap"
+                         Classes="fine warning" Margin="0,8,0,0"
+                         IsVisible="{Binding SpeakerDurationWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
               <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:JobViewModel">
@@ -381,15 +400,18 @@
             <!-- ── The transcript ─────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="2">
               <!-- Where the rest of this column went, on 2026-08-23. Everything that used to
-                   stack above the transcript — the formats, the folder, the two opt-ins, the way
-                   the audio is cut — is on the Export and Settings tabs now, and this line is the
-                   forwarding address. A control that moves without one is a control the person
-                   who used it every day cannot find, which is the same failure as a control that
-                   silently does nothing. It costs one 10.5px line and it is the only thing in this
-                   window that names another tab from a page that is not disabled. -->
+                   stack above the transcript — the formats, the folder, the button that puts the
+                   transcript inside the recording, the two opt-ins, the way the audio is cut — is
+                   on the Export and Settings tabs now, and this line is the forwarding address. A
+                   control that moves without one is a control the person who used it every day
+                   cannot find, which is the same failure as a control that silently does nothing.
+
+                   Every control named here is named: a forwarding address that lists four of the
+                   five things that left is worse than none, because the reader concludes the fifth
+                   was removed. -->
               <TextBlock DockPanel.Dock="Top" Name="OptionsMoved" Classes="fine meta"
                          Margin="0,0,0,11"
-                         Text="Output formats and where files are written are on the Export tab. How the audio is cut, speaker labels and the English version are on Settings." />
+                         Text="Output formats, where files are written, and adding the transcript to the recording are on the Export tab. How the audio is cut, speaker labels and the English version are on Settings." />
 
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
                          Classes="meta" FontSize="11.5" Margin="0,10,0,0" />

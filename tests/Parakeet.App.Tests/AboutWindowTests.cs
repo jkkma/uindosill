@@ -3,6 +3,7 @@ using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using Parakeet.App.ViewModels;
 using Parakeet.App.Views;
 
@@ -24,6 +25,12 @@ namespace Parakeet.App.Tests;
 /// and highlights and shows the wrong page. Three hand-written converter parameters, so they are
 /// checked the same way.
 /// </para>
+/// <para>
+/// Nothing here reaches a control through <c>FindControl</c>. It reads the window's name scope,
+/// which holds all three panes whether or not they are drawn (gotcha 31), so it cannot tell a
+/// control on the Licences pane from one on the System pane — which is the only thing these tests
+/// are trying to establish.
+/// </para>
 /// </remarks>
 public class AboutWindowTests
 {
@@ -37,6 +44,24 @@ public class AboutWindowTests
         window.Show();
         window.UpdateLayout();
         return window;
+    }
+
+    /// <summary>
+    /// A named control this window is currently DRAWING, or a failure naming it.
+    /// </summary>
+    /// <remarks>
+    /// <c>FindControl</c> would answer for a control on any of the three panes, because it reads
+    /// the name scope rather than the visual tree (gotcha 31). Every assertion below is about which
+    /// pane something is on, so none of them may use it.
+    /// </remarks>
+    private static T Drawn<T>(AboutWindow window, string name) where T : Control
+    {
+        var found = window.GetVisualDescendants().OfType<T>()
+            .Where(c => c.Name == name)
+            .ToList();
+
+        Assert.True(found.Count == 1, $"expected one drawn {typeof(T).Name} named '{name}', found {found.Count}");
+        return found[0];
     }
 
     [AvaloniaFact]
@@ -90,9 +115,8 @@ public class AboutWindowTests
         viewModel.SelectedTab = 1;
         window.UpdateLayout();
 
-        var text = window.FindControl<SelectableTextBlock>("LicenceText");
-        Assert.NotNull(text);
-        Assert.Equal(viewModel.LicenceText, text!.Text);
+        var text = Drawn<SelectableTextBlock>(window, "LicenceText");
+        Assert.Equal(viewModel.LicenceText, text.Text);
 
         // A spot check that it is the real package rather than a placeholder that happens to match.
         Assert.Contains("NVIDIA Corporation", text.Text, StringComparison.Ordinal);
@@ -118,10 +142,10 @@ public class AboutWindowTests
 
         var drawn = new[]
         {
-            window.FindControl<SelectableTextBlock>("EnvironmentSummary")?.Text,
-            window.FindControl<TextBlock>("ThreadingNote")?.Text,
-            window.FindControl<SelectableTextBlock>("ModelDirectory")?.Text,
-            window.FindControl<SelectableTextBlock>("SettingsPath")?.Text,
+            Drawn<SelectableTextBlock>(window, "EnvironmentSummary").Text,
+            Drawn<TextBlock>(window, "ThreadingNote").Text,
+            Drawn<SelectableTextBlock>(window, "ModelDirectory").Text,
+            Drawn<SelectableTextBlock>(window, "SettingsPath").Text,
         };
 
         Assert.All(drawn, line => Assert.False(string.IsNullOrWhiteSpace(line)));
@@ -132,13 +156,12 @@ public class AboutWindowTests
         // The version is on both panes, so it is checked against the report rather than by name.
         Assert.Contains(viewModel.Version, report, StringComparison.Ordinal);
 
-        Assert.NotNull(window.FindControl<Button>("CopySystemReport"));
+        Drawn<Button>(window, "CopySystemReport");
 
         // Not announced until it has happened. A confirmation that is on before the press says
         // nothing about the press.
-        var notice = window.FindControl<TextBlock>("CopyNotice");
-        Assert.NotNull(notice);
-        Assert.False(notice!.IsVisible);
+        var notice = Drawn<TextBlock>(window, "CopyNotice");
+        Assert.False(notice.IsVisible);
     }
 
     /// <summary>
@@ -157,21 +180,23 @@ public class AboutWindowTests
     {
         var window = Open(out _);
 
-        var header = window.FindControl<Border>("HeaderBar");
-        var close = window.FindControl<Button>("WindowClose");
-        Assert.NotNull(header);
-        Assert.NotNull(close);
+        var header = Drawn<Border>(window, "HeaderBar");
+        var close = Drawn<Button>(window, "WindowClose");
 
         Assert.Equal(
             WindowDecorationsElementRole.TitleBar,
-            WindowDecorationProperties.GetElementRole(header!));
+            WindowDecorationProperties.GetElementRole(header));
 
         Assert.Equal(
             WindowDecorationsElementRole.CloseButton,
-            WindowDecorationProperties.GetElementRole(close!));
+            WindowDecorationProperties.GetElementRole(close));
 
-        // And the second way out, at the foot of the dialog. A dialog whose only exit is a 46px
-        // glyph in a corner is one people drag off the screen instead of closing.
-        Assert.NotNull(window.FindControl<Button>("Dismiss"));
+        // The second and third ways out. A dialog whose only exit is a 46px glyph in a corner is
+        // one people drag off the screen instead of closing — and IsCancel is what routes Escape,
+        // which is the key a reader presses before looking for either button. ShowDialog disables
+        // the owner window, so a modal that ignores Escape looks like an application that has
+        // stopped responding.
+        var dismiss = Drawn<Button>(window, "Dismiss");
+        Assert.True(dismiss.IsCancel);
     }
 }

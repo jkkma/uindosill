@@ -6,7 +6,8 @@ libraries inside it are GPL. A build without it contains no GPL component. Neith
 the model weights, the parakeet.cpp native binaries or the other third-party components below, each
 of which carries its own terms. Those terms are what this file is.
 
-The same text is shown inside the application — the **Licences** tab, and `uindosill notice`. Both
+The same text is shown inside the application — the **Licences** pane of the About window, opened
+from the Settings tab, and `uindosill notice`. Both
 render it from `src/Parakeet.Core/Licensing/Attribution.cs`, so there is exactly one copy and it
 cannot drift.
 

@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1137 tests, no weights, no display, no network — **1133 passed and 4 skipped**, and
+**Status:** met. 1138 tests, no weights, no display, no network — **1134 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -344,7 +344,7 @@ resident and hit gotcha 19's `0xC0000409` abort from a direction the close handl
 test asserts the ordering.
 
 `Velopack` is MIT and now has its entry in `Attributions.Components`, with its copyright line, so
-`uindosill notice` and the Licences tab render it; the licence was read off the restored package's
+`uindosill notice` and the About window render it; the licence was read off the restored package's
 own `.nuspec` rather than the repository, because a package and its repository can disagree.
 
 **What this cost the network surface: nothing.** The documentation commits to disclosing exactly one
@@ -394,11 +394,12 @@ it off. Both faces are OFL and ship inside the installer.
 view-switcher centred, and circular window buttons at the right. Tab order is **Transcribe ·
 Models · Updates · Licences** — Licences last, because it is the one tab nobody opens twice.
 
-That order has since changed three times, and the reason Licences was last is the reason it is now
-gone: Ask joined on 2026-08-22, and on 2026-08-23 Export and Settings were split off the Transcribe
-tab while Licences retired into an About window opened from Settings. The order is now
+That order has since changed twice, and the reason Licences was last is the reason it is now gone:
+Ask joined on 2026-08-22, and on 2026-08-23 Export and Settings were split off the Transcribe tab
+while Licences retired into an About window opened from Settings. The order is now
 **Transcribe · Ask · Export · Settings · Models · Updates**, six pills — which is also what set
-`MinWidth`, because six of them measure 464px and the headerbar's fixed columns take 420 more.
+`MinWidth`: six of them measure 464px and the headerbar's two fixed 210 columns plus its 14px
+padding and the window's own 2px edge take 436 more, so 900, and 920 is that with room.
 
 **Corners are square, and the exceptions are the argument.** A 12px-rounded version was built first
 and put beside a square one on the same day; the square one won. Every rectangle is square — the
@@ -2219,7 +2220,7 @@ against a one-line pin. If such a binary ever appears the GPL obligation goes aw
 terms, and **a build that vendors libmpv is distributed under GPLv2-or-later**. Those are not in
 tension — a recipient of a GPL build may take the Uindosill source under either — and the thing that
 cannot be separated from the GPL is the combination. A build without libmpv contains no GPL
-component and is MIT throughout, which is a real case rather than a hypothetical: the Licences tab
+component and is MIT throughout, which is a real case rather than a hypothetical: the About window
 lists libmpv only when it is present, so a reader can tell which kind of copy they hold by looking.
 `docs/LICENSING.md` has the full reading, including the "or later" — Apache-2.0 components are
 compatible with GPLv3 and not GPLv2, so the combination resolves at v3 where one is present.
@@ -2756,9 +2757,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** `CLAUDE.md`'s second
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1137 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1138 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2842,7 +2843,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2886,7 +2887,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2943,7 +2944,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3033,7 +3034,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** Two of the four are
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3073,7 +3074,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3090,7 +3091,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3138,7 +3139,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** The C# suite does
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3166,14 +3167,37 @@ drawer with everything else.
 **The Transcribe tab says where its column went.** One 10.5px line above the transcript naming both
 tabs. A control that moves without a forwarding address is as hard to find as one that was deleted,
 and this window's standing rule is that nothing fails silently — a control nobody can locate is a
-quieter failure than a control that does nothing.
+quieter failure than a control that does nothing. Every one of the five things that left is named
+in it; a forwarding address listing four of five is worse than none, because the reader concludes
+the fifth was removed.
+
+**One thing the move broke, found in review and fixed before it shipped.** `SpeakerDurationWarning`
+is the sentence saying a queued recording is longer than the diariser's labels have been measured
+on, and its whole requirement is to be in front of somebody who can still act on it. It travelled to
+Settings with the opt-in it sits beside — and the sequence that breaks is the ordinary one: tick the
+box and set a count on Settings, come back, drop a two-hour interview, press Start. The warning is
+non-null the whole time and was drawn on a page already left behind. The Start guard does not cover
+it either, because that raises the bound sentence only when the count is *missing*. It is now bound
+twice, on Settings beside the count that repairs it and on Transcribe beside the queue it is a fact
+about — one property, two draws, and no reader ever sees both at once.
+
+**Four other things the same review found, all of them prose rather than code.** Three shipped
+documents — `LICENSE`, `licences/mpv-WRITTEN-OFFER.txt` and `NOTICE.md` — still told a reader to
+open a Licences tab to find out which of two licences governs their copy; the first two travel to
+users with the binary through `build/Licences.targets`. Two status messages still said to try
+"'fixed windows' below" from a tab that no longer has a checkbox on it. `AddToRecordingNotice`
+returned null with nothing selected, which explained itself while the button sat under the queue and
+is a dark button with no reason beside it now that the queue is a tab away. And the About window
+answered Escape by doing nothing, which — since `ShowDialog` disables the owner — looks like an
+application that has stopped responding.
 
 **The About window is the Licences page plus the two things that were hiding under it.** Three
 panes: *About* (what this program is, and the network promise the Updates tab also makes), *Licences*
 (the same notice package, from the same one builder, now in `AboutViewModel`), and *System* — the
 runtime line and the threading note, which had been sitting beneath the licence text where nobody
-looking for them would think to go, joined by the version and both folder paths and a button that
-puts all five on the clipboard. It wears the main window's chrome exactly: no OS title bar, the same
+looking for them would think to go, joined by the version, the models folder, the settings file —
+which is a file, and named as one, because the directory holding it is the models' parent — and a
+button that puts all five on the clipboard. It wears the main window's chrome exactly: no OS title bar, the same
 46px headerbar, the same square corner asked of DWM, the same pill switcher over a headless
 `TabControl`. Modal and owned, so there is never a second copy.
 
@@ -3206,11 +3230,15 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** Twenty-one new: the
-About window's panes and its chrome, both new pages asserted for controls that write through rather
-than merely draw, the Transcribe tab asserted for what it no longer carries, every switcher pill
-held against the page it names — six hand-written converter parameters that nothing else checked —
-and the headerbar measurement above.
+**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** Twenty-two new, and
+they add up: seven for the About window's three panes and its chrome, six holding every switcher
+pill against the page it names — six hand-written converter parameters that nothing else checked —
+two for the headerbar measurement above, two asserting each new page carries controls that write
+through rather than merely draw, one asserting the Transcribe tab carries none of them and says
+where they went, one for the retired Licences tab and the button that replaced it, one more case in
+the press-reaches-the-pill theory, one from splitting the English opt-in's test because the checkbox
+and the pane switcher it used to be asserted beside are no longer on the same page, and one holding
+the long-recording warning beside the queue — see below.
 
 ### The dictation seam
 
@@ -3267,7 +3295,7 @@ The next actions, in order:
    measured and where.
 3. ~~**Settle the CUDA drop's licensing**~~ — **done 2026-08-15.** The EULA was read against what
    this product actually ships, `Attributions.Components` carries the NVIDIA entry so both
-   `uindosill notice` and the Licences tab render it, and two tests hold it up. The reading, and
+   `uindosill notice` and the About window render it, and two tests hold it up. The reading, and
    the three things about it that remain unverified — no legal review, an EULA revision not
    contemporaneous with the CUDA 12.8 binaries, and an upstream redistribution this project did not
    perform — are in `docs/LICENSING.md` and `docs/UNPROVEN.md`. What is left is Phase 5 packaging

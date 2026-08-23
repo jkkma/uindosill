@@ -3856,6 +3856,54 @@ through this application's own reader.
   real media. What it does was driven by hand on 2026-08-23. Its error path — reporting ffmpeg's last
   stderr line rather than a wall of text — has been exercised only through the fake.
 
+## The Export and Settings tabs and the About window, 2026-08-23 — measured headlessly, not looked at
+
+The Transcribe tab's options column became two tabs and the Licences tab became a modal window;
+`docs/PHASES.md` has what moved where. Every figure quoted for it is measured through the headless
+host, and **nothing in it has been seen on a screen**, because screen capture is unavailable in this
+session by standing rule. Two new pages and a new window is the largest visual change since the Ask
+tab, and the same gap applies to it.
+
+**What is measured.** That each new page draws the controls it claims, by walking the visual tree
+rather than the name scope — `FindControl` answers for every page whether or not it is drawn, which
+is gotcha 31 and was itself measured (`ctor-scope=found after-show=found inVisualTree=False`). That
+each moved control still writes through to the view model. That the Transcribe tab draws none of
+them. That every switcher pill selects the `TabItem` whose header it names. That the six pills clear
+the wordmark and the window buttons at 1080 and at `MinWidth`, from the pills' own arranged
+positions — the 4px overlap at the old 820 was found that way, not by eye.
+
+**What is not.**
+
+- **The two pages and the window have not been looked at.** `docs/PHASES.md` says both pages are
+  drawn as reading pages and that the About window "wears the main window's chrome exactly". A
+  headless host has no compositor: what backs those sentences is that the same classes and the same
+  margins are in the markup, not a rendering. Whether the Settings page reads as one page or as four
+  stacked strips, and whether the About window's identity block is the right size beside its
+  switcher, are judgements nobody has made.
+- **The About window has never been opened.** `MainWindow.OnShowAbout` calls `ShowDialog`, and no
+  test presses the button or runs that handler. The button is wired by name in the constructor and
+  the lookup is null-tolerant, so renaming it in the markup yields a live-looking button that does
+  nothing — the failure this window's own comments say it refuses to ship. What is asserted is that
+  the button is drawn on the Settings page and that the window builds and binds when constructed
+  directly. **The only in-app route to the notice package now runs through that unexercised click**,
+  and `NOTICE.md`, `LICENSE` and `docs/LICENSING.md` all rest on the notice being present in the
+  application.
+- **Nothing has been copied to a clipboard.** `AboutWindow.OnCopySystemReport` builds a
+  `DataTransfer` and calls `IClipboard.SetDataAsync`; the test asserts the button is drawn and that
+  every line the System pane draws appears in `SystemReport`. The call itself, the Avalonia 12
+  ownership contract around the transfer, and the "Copied." confirmation becoming visible are
+  unexercised. All clipboard failures are swallowed by design, so a broken call is silent.
+- **Escape has not been pressed.** `IsCancel="True"` on the dialog's Close button is asserted as a
+  property, not as a keystroke; the headless host routes no accelerator here.
+- **The About window's square corner and shadow are unmeasured.** It makes the same two DWM calls
+  the main window makes on open, and nothing reads either answer. The main window's `S_OK` and
+  read-back were confirmed on Windows 11; a modal owned window has not been checked, and the corner
+  preference is not documented to be inherited.
+- **The window has not been dragged to 920.** `MinWidth` is enforced by the toolkit and the pill
+  geometry is measured at that width headlessly, but whether a 920-unit window is usable — whether
+  the Transcribe tab's 344px queue column and its transcript still read side by side there — has not
+  been looked at.
+
 ## The Ask tab rebuilt 2026-08-23 — measured headlessly, not looked at
 
 The cue height defect, the column's new order, the draggable picture edge, the seek handle and the
@@ -3880,12 +3928,22 @@ timestamp beside the words, and the surrounding `ScrollViewer`, are both irrelev
   recordings list and the chat panel are fixed at 228 and 330 — and a 221-character segment lays out
   on **fifty lines** there. That is arithmetic, not a defect report; nobody has looked at it, and
   whether the fixed columns should yield at that width has not been decided.
+
+  **That figure is superseded and has not been re-measured.** `MinWidth` went from 820 to 920 on
+  2026-08-23, when a sixth switcher pill stopped fitting in the headerbar, so 820 is a width the
+  window can no longer be dragged to and the fifty-line case is no longer reachable. The direction
+  is the safe one — the real worst case is now a hundred units wider than the one recorded — but the
+  sentence above measures a width the product does not have, which is the failure this file exists
+  to catch, so it stays marked rather than quietly re-derived. Re-measuring it needs a job with a
+  transcript loaded at the new minimum; that has not been done.
 - **That the splitter has ever been dragged by a person.** It is driven in a test through one
   pointer press, move and release, and the picture grows and the transcript gives up exactly what
   the picture takes. Whether the grip is findable, whether the video's aspect at an extreme split
   looks like a bug, and whether the reading row's 140-unit floor is the right one, are all unlooked
   at. The floor and the picture's 120-unit minimum are **chosen, not derived**; what is checked is
-  only that the three rows still add up inside the smallest window this application allows.
+  only that the three rows still add up inside the smallest window this application allows — which
+  that test now reads off `MinWidth` and `MinHeight` rather than repeating them, so raising either
+  cannot leave it checking a size the window has stopped having.
 - **The seek handle's convention is unchecked.** It is inset by its own width rather than centred on
   the playhead, so at 0% and 100% it disagrees with the bar's fill edge, and with where a press
   lands, by up to its own radius. Both conventions are defensible and the design sheet has not been
