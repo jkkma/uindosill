@@ -26,6 +26,12 @@
     glob is what carries them from there into the build output. A build with no libmpv vendored
     matches none of them and ships no GPL notice, which is correct: it contains no GPL component.
 
+    The *.exe glob is the vendored command-line tools — yt-dlp, and the Deno runtime it needs for
+    YouTube. They are executables this application spawns rather than libraries it loads, which is
+    why they are found by path rather than by the native loader; see Services/Tools/BundledTools.cs.
+    Both are permissively licensed (Unlicense and MIT) and their notices travel through the *.txt
+    glob above.
+
     This only holds if the LICENSE is on disk in the first place. Unpacking just parakeet.dll out
     of the archive puts the breach back and nothing here can detect it; docs/NATIVE-BINARIES.md
     says so where the unpacking is described.
@@ -35,7 +41,8 @@
                    $(MSBuildThisFileDirectory)../native/**/*.so;
                    $(MSBuildThisFileDirectory)../native/**/*.dylib;
                    $(MSBuildThisFileDirectory)../native/**/LICENSE;
-                   $(MSBuildThisFileDirectory)../native/**/*.txt"
+                   $(MSBuildThisFileDirectory)../native/**/*.txt;
+                   $(MSBuildThisFileDirectory)../native/**/*.exe"
           Link="native/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           Visible="false" />

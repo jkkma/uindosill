@@ -48,6 +48,9 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
     /// <summary>How long a load may take before Open stops waiting and calls it a failure.</summary>
     private static readonly TimeSpan OpenTimeout = TimeSpan.FromSeconds(20);
 
+    /// <summary>The same, for a link, which has a network round trip and a yt-dlp process in it.</summary>
+    private static readonly TimeSpan OpenUrlTimeout = TimeSpan.FromSeconds(90);
+
     /// <summary>The box frames are rendered into until the window says how big its pane is.</summary>
     private static readonly (int Width, int Height) DefaultOutputBox = (1280, 720);
 
@@ -121,6 +124,30 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
             SetOption("idle", "yes");
             SetOption("audio-display", "no");
             SetOption("pause", "yes");
+
+            // Streaming a link. mpv's ytdl_hook is built into the binary and gated on this option
+            // rather than on load-scripts, so the user's own scripts stay out (config=no,
+            // load-scripts=no above) while this one is admitted. It is pointed at the vendored
+            // yt-dlp by absolute path rather than left to find one on PATH, so a different copy
+            // installed on the machine cannot silently take over from the pinned one.
+            //
+            // Deno *is* left to PATH, because that is where yt-dlp looks for it and mpv spawns
+            // yt-dlp itself — see BundledTools.PrependToPath, which is what puts it there.
+            if (Tools.BundledTools.YtDlpPath is { } ytDlp)
+            {
+                Tools.BundledTools.PrependToPath();
+                SetOption("ytdl", "yes");
+
+                // The path is escaped because script-opts is a comma-separated key=value list and
+                // a Windows path contains neither a comma nor an equals sign — but may contain a
+                // percent, which is the escape character mpv uses for values needing one. The
+                // %n%string form gives a length-prefixed literal, which needs no escaping at all.
+                SetOption("script-opts", $"ytdl_hook-ytdl_path=%{ytDlp.Length}%{ytDlp}");
+            }
+            else
+            {
+                SetOption("ytdl", "no");
+            }
 
             var initialised = mpv_initialize(_handle);
             if (initialised < 0)
@@ -217,12 +244,29 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (!File.Exists(path))
+        // A link is handed straight to mpv, which resolves it through yt-dlp and streams it. That
+        // is the whole of video-from-a-link: the file on disk beside it is the audio the transcript
+        // was made from, and the picture never needs downloading.
+        var isUrl = Uri.TryCreate(path, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+        if (!isUrl && !File.Exists(path))
         {
             throw new PlaybackException($"'{System.IO.Path.GetFileName(path)}' is no longer where it was.");
         }
 
+        if (isUrl && !Tools.BundledTools.CanFetchUrls)
+        {
+            throw new PlaybackException(
+                Tools.BundledTools.DescribeUnavailable() ?? "This build cannot open links.");
+        }
+
         Close();
+
+        // Resolving a link is a network round trip through a Python process, which is a different
+        // order of wait from opening a file. Twenty seconds is generous for a file and tight for a
+        // slow connection, so a link gets its own bound.
+        var timeout = isUrl ? OpenUrlTimeout : OpenTimeout;
 
         _loaded.Reset();
         _loadError = null;
@@ -234,17 +278,16 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
         // with a duration, and every failure is an exception rather than a state to poll. The
         // wait is on the event thread's FILE_LOADED or END_FILE, and twenty seconds is not a
         // number any local file should meet.
-        if (!_loaded.Wait(OpenTimeout))
+        if (!_loaded.Wait(timeout))
         {
             Command("stop");
             throw new PlaybackException(
-                $"'{System.IO.Path.GetFileName(path)}' did not finish opening within {OpenTimeout.TotalSeconds:0} seconds.");
+                $"'{Describe(path)}' did not finish opening within {timeout.TotalSeconds:0} seconds.");
         }
 
         if (_loadError is { } reason)
         {
-            throw new PlaybackException(
-                $"Could not play '{System.IO.Path.GetFileName(path)}'. {reason}.");
+            throw new PlaybackException($"Could not play '{Describe(path)}'. {reason}.");
         }
 
         Path = path;
@@ -572,6 +615,12 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
             }
         }
     }
+
+    /// <summary>A file by its name and a link by its host, for a message somebody has to read.</summary>
+    private static string Describe(string path) =>
+        Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.Scheme.StartsWith("http", StringComparison.Ordinal)
+            ? uri.Host
+            : System.IO.Path.GetFileName(path);
 
     private static void FreeBuffer(ref FrameBuffer buffer)
     {

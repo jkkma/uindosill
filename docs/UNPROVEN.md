@@ -3674,6 +3674,44 @@ The same mp4 forced onto the audio-only player played its sound with `HasVideo` 
 - **The licence reading itself**, which is in `docs/LICENSING.md` and is a careful reading by the
   people writing the code rather than a professional opinion.
 
+### Fetching a link, added 2026-08-23
+
+`YtDlpMediaUrlFetcher` runs the vendored yt-dlp as a child process. **Nothing in the suite runs it**
+— it needs the tools and a live site — so the window's link path is tested against a fake that
+writes a real WAVE file, and the real one was driven by hand.
+
+**What that established**, on the laptop against a Creative Commons YouTube link (Big Buck Bunny,
+9:56): the tools are found; the link resolves with Deno wired in as the JS runtime; the audio comes
+down as a **9 MB m4a in 3.6 seconds**; the title comes back and is what the queue row shows; the
+downloaded file opens in `SystemAudioPlayer` at the correct duration; and progress arrives as 22
+reports from "Reading the link" through the download percentages. Separately, the same URL streamed
+through mpv with picture and seeked exactly.
+
+**What is unproven:**
+
+- **Any site but YouTube.** yt-dlp supports well over a thousand, and one has been tried. Sites with
+  no m4a at all will fall through the format selector to whatever is best, which may be a container
+  this pipeline then refuses — that path has not been walked.
+- **A link that needs credentials, a region check, or an age gate.** None has been tried, and the
+  error a person would see is unexamined.
+- **A long download.** Ten minutes of audio arrived in under four seconds. Cancellation mid-download
+  kills the process tree and deletes the directory; it has been reasoned about and not exercised
+  against a real transfer.
+- **The temporary directory's lifetime.** Downloads land under `%TEMP%/Uindosill/links` and nothing
+  deletes them afterwards. That is deliberate for now — the Ask tab plays the file after the run,
+  and a transcript's audio disappearing under it would be worse — but there is no sweep, so the
+  directory grows until the user or Windows clears it. It should get the same once-per-process
+  sweep the sidecar's staged files got.
+- **Whether `--no-playlist` covers every shape of playlist link.** It covers the `list=` parameter;
+  a channel or a mix URL has not been tried.
+- **What the tools do to an installer.** About 115 MB on top of libmpv's 114 MB, and no packaging
+  run has included either. The channel size, the Velopack delta and whether an antivirus objects to
+  a bundled yt-dlp are all unknown.
+
+**What is not this project's to establish.** yt-dlp downloads what its user asks it to; whether a
+given download is permitted by a site's terms or by local copyright is the user's responsibility,
+and nothing here checks it or could.
+
 **What is still not established** about the audio path, and the list is shorter than it was:
 
 - **That the sound is audible.** The clock advancing at real time says the endpoint accepted the

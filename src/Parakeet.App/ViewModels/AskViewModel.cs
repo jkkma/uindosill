@@ -263,7 +263,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// because the absence of a picture is not a limitation there.
     /// </summary>
     public string? VideoNotice =>
-        _player.CanDrawVideo || SelectedRecording is not { } job || !LooksLikeVideo(job.Path)
+        _player.CanDrawVideo || SelectedRecording is not { } job || !(job.IsFromUrl || LooksLikeVideo(job.Path))
             ? null
             : "This build has no video player, so if this recording has a picture, only its sound "
               + "plays. Vendoring libmpv adds the picture — see docs/NATIVE-BINARIES.md.";
@@ -435,7 +435,12 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         {
             if (newValue is { } job)
             {
-                _player.Open(job.Path);
+                // A row fetched from a link opens the link rather than the audio beside it, so the
+                // picture streams and the sound comes from the same place it was transcribed from.
+                // Only where the build can draw a picture: on an audio-only build the link would
+                // buy nothing and cost a network round trip on every selection.
+                var source = job.IsFromUrl && _player.CanDrawVideo ? job.SourceUrl! : job.Path;
+                _player.Open(source);
             }
             else
             {

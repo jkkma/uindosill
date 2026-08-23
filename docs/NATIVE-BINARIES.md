@@ -324,6 +324,81 @@ SourceForge mpv-player-windows builds, neither of which offers one — so taking
 building and maintaining a toolchain rather than pinning a file. That was weighed and declined; see
 the PHASES entry. If one ever appears, this is the section to change.
 
+## yt-dlp and Deno — taking a link instead of a file
+
+Paste a link and the application downloads its audio track, transcribes it like any other file, and
+— on the Ask tab — streams the picture back from the same link rather than keeping a copy of it.
+Two binaries do that, vendored the same way the others are.
+
+```
+native/
+  win-x64/
+    tools/  yt-dlp.exe  deno.exe  yt-dlp-LICENSE.txt  deno-LICENSE.txt
+```
+
+```bash
+pwsh scripts/vendor-tools.ps1     # about 60 MB down, about 115 MB on disk
+```
+
+**The pins, as of 2026-08-23.**
+
+| | yt-dlp | Deno |
+|---|---|---|
+| Release | `2026.08.19` | `v2.9.5` |
+| Asset | `yt-dlp.exe` | `deno-x86_64-pc-windows-msvc.zip` |
+| Download bytes | 17,840,399 | 42,691,248 |
+| Download SHA-256 | `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a` | `171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a` |
+| Installed bytes | 17,840,399 | 97,408,288 |
+| Installed SHA-256 | (the same file) | `98f8c2a2d470e4ccb04c935c86ff8050817d877762aec5eaeeb9e409ccb3b9fd` |
+| Licence | Unlicense (public domain) | MIT |
+
+Both digests were compared against upstream's own published sums when the pins were taken:
+yt-dlp's `SHA2-256SUMS` and Deno's `.sha256sum` beside each asset. The script checks against the
+pins here rather than against those files, because a digest fetched from the same place as the
+binary proves only that the two agree.
+
+**Deno is not an optional extra.** yt-dlp needs a JavaScript runtime to answer YouTube's signature
+challenge, and its documentation enables exactly one by default: *"Supported runtimes are (in order
+of priority, from highest to lowest): deno, node, quickjs, bun. Only `deno` is enabled by default."*
+Without it, YouTube extraction degrades or fails. A drop with yt-dlp and no Deno is a half-drop and
+`BundledTools.DescribeUnavailable()` names which half is missing rather than saying "unavailable".
+
+**How they are found, and how they find each other.** `Services/Tools/BundledTools` searches
+`UINDOSILL_TOOLS_DIR` if set, then `<app>/native/win-x64/tools`, then `<app>/native/tools`. This
+application spawns yt-dlp itself and passes `--js-runtimes deno:<absolute path>`, so that path is
+exact. **mpv** also spawns yt-dlp — that is how a link streams — and cannot be told about our
+layout, so `BundledTools.PrependToPath()` puts the tools directory at the front of *this process's*
+`PATH` (process-local; nothing is written to the machine or the user environment) and mpv is handed
+`ytdl_hook-ytdl_path` pointing at the pinned binary. Prepending rather than appending is deliberate:
+a different yt-dlp already installed on the machine must not silently take over from the pinned one.
+
+**Audio is downloaded as m4a on purpose, and it is a measured choice.** YouTube's "best audio" is
+usually Opus in WebM, which `AudioSources.SupportedExtensions` does not list and which Media
+Foundation cannot decode on a stock Windows install — so a best-audio download would produce a file
+this application then refuses. The selector is
+`bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio`, which gets AAC where the site has it.
+
+**No ffmpeg is vendored, and that was checked rather than assumed.** Without ffmpeg on `PATH`,
+yt-dlp writes what it calls a DASH m4a and warns that *"Only some players support this container"*.
+Both of this application's readers were tested against one on 2026-08-23 — Media Foundation through
+`SystemAudioPlayer` and libmpv through `MpvMediaPlayer` — and **both open it and report the correct
+9:56 duration**. So the warning does not apply here, and roughly 100 MB of ffmpeg stays out of the
+installer. If a future container needs remuxing this is the decision to revisit.
+
+**Neither changes the licence.** Unlicense and MIT are both permissive, so unlike libmpv these two
+do not make the distribution copyleft. Their notices still travel: `vendor-tools.ps1` writes them
+beside the binaries and refuses to finish without them, and `build/NativeAssets.targets` carries
+`native/**/*.txt` and `native/**/*.exe` into the output.
+
+**What this adds to an installer.** About 115 MB, on top of libmpv's 114 MB. Nothing has been
+packaged with either yet, and what the two together do to the channel size and to Velopack's deltas
+is unmeasured — see `docs/UNPROVEN.md`.
+
+**A note on what users do with it.** yt-dlp downloads what its user asks it to. Whether a particular
+download is permitted by a particular site's terms, or by copyright where the user lives, is the
+user's responsibility and not something this application checks or could. The feature exists because
+transcribing a recording you are entitled to is an ordinary thing to want.
+
 ## Check the instruction-set baseline of everything you vendor
 
 This is not optional diligence. A native compiled with an `/arch:AVX2` baseline can execute BMI2 or

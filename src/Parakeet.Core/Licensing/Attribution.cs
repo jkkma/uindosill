@@ -432,6 +432,24 @@ public static class Attributions
         },
         new ComponentLicence
         {
+            Component = "yt-dlp",
+            License = "Unlicense (public domain)",
+            Uri = new Uri("https://github.com/yt-dlp/yt-dlp"),
+            Notes =
+                "Shipped only by builds that vendor the link downloader. Run as a separate process to fetch " +
+                "the audio track of a link the user pastes, and by mpv to stream that link's picture.",
+        },
+        new ComponentLicence
+        {
+            Component = "Deno",
+            License = "MIT",
+            Uri = new Uri("https://github.com/denoland/deno"),
+            Notes =
+                "Shipped beside yt-dlp, which needs a JavaScript runtime for YouTube and enables only this " +
+                "one by default. Never runs anything of this application's; it is yt-dlp's dependency.",
+        },
+        new ComponentLicence
+        {
             Component = "libmpv (mpv media player), and the FFmpeg and other libraries linked into it",
             License = "GPL-2.0-or-later — copyleft, and the reason a build carrying it is distributed under the GPL",
             Uri = new Uri("https://github.com/mpv-player/mpv"),

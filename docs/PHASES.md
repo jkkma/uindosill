@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 913 tests, no weights, no display, no network — **911 passed and 2 skipped**, and
+**Status:** met. 923 tests, no weights, no display, no network — **921 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2248,6 +2248,73 @@ a mis-sized destination refused), a 2:55:23 mp3 through the same player (no vide
 `audio-display=no` keeps cover art from becoming one — exact seek, wrap at the end), and the same
 mp4 forced onto the audio-only player (sound plays, `HasVideo` false). Suite 913, still nothing
 touching either real player. `docs/UNPROVEN.md` § *Playing a recording* says what that leaves open.
+
+### Built 2026-08-23 — a link is a recording too, and the picture is streamed rather than kept
+
+**Paste a link and the audio is downloaded, transcribed like any file, and the picture streamed
+back from the same link when the Ask tab wants one.** Two pinned binaries do it — yt-dlp, and the
+Deno runtime yt-dlp needs — vendored the way the natives are and documented in
+`docs/NATIVE-BINARIES.md`.
+
+**Audio only, and that decides the shape of everything else.** A transcript is made from sound, so
+a link's audio track is what comes down: a three-hour video costs a few megabytes here rather than
+a few gigabytes, and the file left on disk is the same shape as one the user could have dropped in
+themselves. The picture is never downloaded at all — the Ask tab hands mpv the original link, which
+mpv resolves through the same yt-dlp and streams. So `JobViewModel` carries a `SourceUrl` beside
+its path, and the Ask tab opens one or the other: the link where the build can draw a picture, the
+downloaded audio where it cannot, since streaming would then buy nothing and cost a network round
+trip on every selection.
+
+**Deno is not an optional extra and that is upstream's decision, not a preference.** yt-dlp needs a
+JavaScript runtime to answer YouTube's signature challenge, and its documentation enables exactly
+one by default: *"Supported runtimes are (in order of priority, from highest to lowest): deno, node,
+quickjs, bun. Only `deno` is enabled by default."* A drop with yt-dlp and no Deno is a half-drop,
+and the window names which half is missing rather than saying "unavailable".
+
+**The format selector is a measured choice, not a default.** YouTube's best audio is usually Opus in
+WebM, which `AudioSources.SupportedExtensions` does not list and Media Foundation cannot decode on a
+stock Windows install — so a plain "best audio" download would produce a file this application then
+refuses. Asking for `bestaudio[ext=m4a]` first gets AAC.
+
+**No ffmpeg is vendored, and that was checked rather than assumed.** Without ffmpeg, yt-dlp writes
+what it calls a DASH m4a and warns that *"Only some players support this container"*. Both readers
+here were driven against one: Media Foundation and libmpv **both open it and report the same 9:56
+duration**. So roughly 100 MB stays out of the installer on the strength of a measurement rather
+than a hope.
+
+**Two things about the process boundary are deliberate.** Arguments go through
+`ProcessStartInfo.ArgumentList`, never a joined string — the URL comes from whatever was pasted, and
+the list form hands each argument to the child without a shell and without quoting rules to get
+wrong. And the scheme is checked before anything is spawned: yt-dlp will happily take a local path,
+and `http`/`https` only is what stops one getting there. A test drives three refusals through that
+gate.
+
+**How mpv and yt-dlp find each other, since neither can be told twice.** This application spawns
+yt-dlp itself and passes `--js-runtimes deno:<absolute path>`, so that is exact. mpv spawns yt-dlp
+*for* streaming and cannot be handed our layout, so `BundledTools.PrependToPath()` puts the tools
+directory at the front of this process's `PATH` — process-local, nothing written to the machine —
+and mpv is given `ytdl_hook-ytdl_path` pointing at the pinned binary. Prepended rather than
+appended, so a different yt-dlp already on the machine cannot silently take over from the pin.
+
+**`--no-playlist`, `--ignore-config`, `--no-plugin-dirs`.** A link with a `list=` parameter is one
+video to the person who pasted it; without the first flag it is however many the playlist holds. The
+other two keep the run from depending on, or writing to, whatever the user has set up for their own
+yt-dlp.
+
+**Neither binary changes the licence.** yt-dlp is Unlicense and Deno is MIT, so unlike libmpv these
+are permissive and the GPL question is untouched. Their notices still travel, and `vendor-tools.ps1`
+refuses to finish without them.
+
+**Driven against a live link, because nothing in CI can be.** Big Buck Bunny — Creative Commons, and
+a 9:56 recording — resolved and downloaded as a **9 MB m4a in 3.6 seconds**, came back with its
+title, and opened in `SystemAudioPlayer` at the correct duration. The same URL streamed through mpv
+with picture: 48 frames in 2.5 s after buffering, a full frame copied, a seek to 60.00 s exact. The
+suite drives a fake fetcher that writes a real WAVE file, so the window's whole link path — fetch,
+title, duplicate refusal, failure, the button's dead states, and which source the Ask tab opens — is
+tested without a network. Suite 923.
+
+**What this costs an installer is unmeasured and now substantial.** About 115 MB of tools on top of
+libmpv's 114 MB. No packaging run has included either; `docs/UNPROVEN.md` says so.
 
 ## The honest summary
 
