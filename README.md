@@ -165,10 +165,15 @@ When a release does arrive, three things are worth knowing before you download i
   itself from the same flavour: the channel is recorded at install time and the app never overrides
   it, which was read off an installed copy — but no release exists yet, so no update has ever been
   fetched from one.
-- **Your models are not in it, and not touched by it.** The application installs into
-  `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights live in `%LOCALAPPDATA%\Uindosill\models`.
-  Uninstalling deletes the first and leaves the second — that was measured against 4.3 GiB of
-  weights, and [UNPROVEN.md](docs/UNPROVEN.md) has the record, including what it does not prove.
+- **Your models are not in it, so updates cannot cost you a re-download.** The application
+  installs into `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights and settings live in
+  `%LOCALAPPDATA%\Uindosill`. That updates leave the second directory byte-identical was measured
+  against 4.3 GiB of weights, and [UNPROVEN.md](docs/UNPROVEN.md) has the record. Uninstalling
+  removes both: the app deletes its own data directory on the way out rather than leaving
+  gigabytes of weights orphaned. A models folder you redirected with `UINDOSILL_MODELS_DIR` stays
+  yours — but the standalone CLI shares the data directory, so uninstalling the desktop app takes
+  the CLI's models and downloaded Python bundle too, and downloading them again is the recovery.
+  No installer built since that cleanup was added has been run, which UNPROVEN.md also says.
 
 The application asks GitHub once, when it starts, whether a newer version exists. That is the only
 thing it does on the network without being asked: it shows a notice, downloads nothing until you
@@ -178,7 +183,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1138 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1144 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

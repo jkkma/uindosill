@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1138 tests, no weights, no display, no network — **1134 passed and 4 skipped**, and
+**Status:** met. 1144 tests, no weights, no display, no network — **1139 passed and 5 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2757,9 +2757,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** `CLAUDE.md`'s second
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1138 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1144 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2843,7 +2843,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2887,7 +2887,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2944,7 +2944,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3034,7 +3034,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** Two of the four are
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3074,7 +3074,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3091,7 +3091,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.**
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3139,7 +3139,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** The C# suite does
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3230,7 +3230,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** Twenty-two new, and
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3260,7 +3260,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** The
+page instead. **1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3295,9 +3295,64 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1138 tests, 1134 passed and 4 skipped, the count unchanged**: the file-writing
+assertion. **1144 tests, 1139 passed and 5 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
+
+### Built 2026-08-23 — the uninstall takes the data directory with it, on purpose
+
+**The ask: nothing left behind.** Uninstalling removed the application and left
+`%LOCALAPPDATA%\Uindosill` — weights, settings, the Python bundle, gigabytes of it — sitting on
+the disk with nothing installed to say what it was or how to remove it. That was the packaging
+design working exactly as measured (UNPROVEN.md, 2026-08-19): the data directory lives apart from
+the install root so Velopack's recursive uninstall delete cannot reach it, and until now nothing
+else reached it either.
+
+**The product now deletes its own data, which is a different thing from an installer deleting a
+directory that shares its name.** `Program.cs` registers Velopack's
+`OnBeforeUninstallFastCallback` — Windows-only by the library's own annotation, so the
+registration sits behind an `OperatingSystem.IsWindows()` guard for CA1416's sake — and
+`UninstallCleanup` does the delete inside the hook's 30-second budget. Each guard covers a real
+mistake rather than a hypothetical one: a root whose last segment is not `Uindosill` is refused
+whole, because a refactor or an override pointing the delete elsewhere should delete nothing; an
+install root nested inside the data root stops everything, because that delete would take the
+running uninstaller with it; a data root that is itself a reparse point is unlinked rather than
+followed, because the link is the product's and its target is not. The walk deletes entry by
+entry — `Directory.Delete(recursive: true)` stops at the first refusal, which would let one open
+`settings.json` strand the weights beside it — clears the read-only attribute unpacked archives
+leave on files, never recurses into a reparse point, and swallows every failure, because no file
+under that directory is worth failing an uninstall over. A models directory redirected with
+`UINDOSILL_MODELS_DIR` is not touched: the product removes the directory it named, not an
+arrangement the user made.
+
+**Six tests, two of them a platform pair.** The whole-tree delete with a read-only file inside
+and the install root untouched beside it; the refusal of a directory not named for the product;
+the refusal around a nested install root; a missing directory that must end still missing, since
+`UserDataPaths` resolves its special folder with `Create` and an uninstall must not end by
+planting a fresh empty directory; a locked file stranding only itself, Windows only because POSIX
+deletes open files without complaint; and a symbolic link unlinked without emptying its target,
+skipped on Windows where creating one takes developer mode. The last two skip on opposite
+platforms, like the Media Foundation pair in `Parakeet.Audio.Tests`, so the suite's skip count is
+the same number on every machine — which is what lets the documents CI checks quote it.
+
+**One consequence is accepted rather than accidental.** The data directory is shared with the
+CLI, which ships as a zip Velopack does not install and the uninstaller cannot see: someone who
+runs the standalone CLI and also installed the desktop application loses the CLI's models and its
+downloaded Python bundle when the application is uninstalled. Sparing the shared directory in
+case a CLI is watching would reopen the orphaned-gigabytes problem for every user to protect an
+arrangement only some have. The CLI itself keeps working and meets the emptied directory exactly
+as it meets a fresh machine, and the recovery is the same downloads that stocked it the first
+time. The gotcha, `docs/MODELS.md` and the README all say so.
+
+**The claims moved with the behaviour.** The README bullet that promised "uninstalling deletes
+the first and leaves the second" now promises the opposite for uninstall while keeping the
+measured update claim; gotcha 8 carries the design; and UNPROVEN.md records what nobody has seen:
+no installer has been packed since the hook was added, so no real `Update.exe --uninstall` has
+ever invoked it, and a cleanup that swallows everything by design would look exactly like success
+if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
+that is still owed.
+
+**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
 
 ### The dictation seam
 

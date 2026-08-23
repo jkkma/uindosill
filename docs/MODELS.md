@@ -7,6 +7,12 @@ folder redirection and roaming profiles keep working. `UINDOSILL_MODELS_DIR` ove
 Never the install directory: models there are destroyed by every update and uninstall, which turns
 each patch into a 670 MB re-download.
 
+Uninstalling the application removes `%LOCALAPPDATA%\Uindosill` whole — models, settings, the
+Python bundle — through a Velopack uninstall hook, so nothing is left behind to puzzle over. A
+directory you redirected with `UINDOSILL_MODELS_DIR` is yours and stays where it is. The CLI
+shares this directory, so uninstalling the desktop application removes the CLI's models and
+downloaded bundle too — the CLI zip keeps working, and downloading them again is the recovery.
+
 ```bash
 uindosill models list
 uindosill models path

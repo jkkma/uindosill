@@ -114,6 +114,25 @@ and an install/update/uninstall on a real desktop with every weight hashed befor
 (`docs/UNPROVEN.md`). Setting the id to `Uindosill` fails four of the five tests; that was checked by
 doing it, not assumed.
 
+**Uninstall does remove the data now — deliberately, which is a different thing.** Since 2026-08-23
+the application registers Velopack's before-uninstall hook, and `UninstallCleanup`
+(`src/Parakeet.App/Services/UninstallCleanup.cs`) deletes `%LOCALAPPDATA%\Uindosill` — models,
+settings, the Python bundle — so an uninstall does not leave gigabytes of weights orphaned. It
+deletes entry by entry so one locked file strands only itself, refuses a root whose last segment is
+not `Uindosill`, refuses when the install root is nested inside, and unlinks a reparse point rather
+than following it; a models directory redirected with `UINDOSILL_MODELS_DIR` is not touched. None of
+that retires the separation above: updates must still leave the weights alone, and the guards only
+exist because the delete is this product's code rather than the installer's `remove_dir_contents`.
+
+The directory is shared with the CLI, which ships as a zip Velopack knows nothing about — so
+uninstalling the desktop application takes the standalone CLI's models and its downloaded Python
+bundle with it. That is decided rather than overlooked: the uninstaller cannot see whether a CLI is
+still around, and sparing the shared directory to protect an arrangement only some users have would
+reopen the orphaned-gigabytes problem for all of them. The CLI itself keeps working; the recovery is
+the same downloads that stocked the directory the first time.
+
+The hook has not yet run on a real machine — `docs/UNPROVEN.md` carries that.
+
 ## 9. Pin `SelfContained` in the project, not the CI workflow
 
 On .NET 8+ a RuntimeIdentifier no longer implies self-contained, so a lost `--self-contained` flag

@@ -804,7 +804,9 @@ tell two prereleases apart.
 `%LOCALAPPDATA%\Uindosill\models` — the thing the whole packaging design turns on — is now an
 observation on a machine with 4.295 GiB at stake, not an argument from reading Velopack's source. So
 is the shape of the install, the fact that an update replaces `current\` while leaving the channel
-and the natives intact, and the fact that uninstall removes what it is supposed to.
+and the natives intact, and the fact that uninstall removes what it is supposed to. (The build
+observed here predates the uninstall cleanup hook — the next section — so "leaves the models" was
+the correct outcome for it. On a current build the intended outcome is different, and unobserved.)
 
 **What it does not.**
 
@@ -832,6 +834,28 @@ and the natives intact, and the fact that uninstall removes what it is supposed 
   full package, so the delta machinery works on this machine with vpk's bundled zstd. Whether
   `Update.exe` can apply that delta is untested — and it is exactly the thing velopack/velopack#1008
   reports broken for bsdiff deltas in this version line.
+
+### The uninstall cleanup hook has never run on a real machine — noted 2026-08-23
+
+Since 2026-08-23 the application registers Velopack's `OnBeforeUninstallFastCallback`, and
+`UninstallCleanup` deletes `%LOCALAPPDATA%\Uindosill` — models, settings, the Python bundle — when
+the product is uninstalled (`docs/GOTCHAS.md` gotcha 8 has the design). What is proven: the delete
+and each of its guards run against rebuilt directory trees in `UninstallCleanupTests`, including
+the real lock semantics on Windows and a real symbolic link elsewhere.
+
+What is not: no installer has been packed since the hook was added, so no `Update.exe --uninstall`
+has ever invoked it. Unobserved, specifically:
+
+- **That the hook fires at all from a real uninstall.** The callback chain runs inside the
+  installed stub under Velopack's 30-second fast-callback budget; nothing here has watched it do
+  so, or timed the delete against a real multi-gigabyte `models\` directory.
+- **What a hook failure looks like.** The cleanup swallows everything by design, so a machine
+  where it silently achieves nothing would show a completed uninstall and an intact data
+  directory — indistinguishable, from the uninstaller's exit code, from success.
+
+The proof is the 2026-08-19 procedure rerun on a current build: hash the weights, install, uninstall,
+and find `%LOCALAPPDATA%\Uindosill` gone rather than intact. Until someone does that, "uninstalling
+removes your models" is a claim about code paths, not about a machine.
 
 ### Velopack reaches the network exactly once, and that was checked twice
 
