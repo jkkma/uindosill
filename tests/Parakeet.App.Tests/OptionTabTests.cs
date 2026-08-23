@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
@@ -11,8 +12,9 @@ using Parakeet.Core.Models;
 namespace Parakeet.App.Tests;
 
 /// <summary>
-/// The Export and Settings tabs, which between them carry everything that used to stack down the
-/// right-hand side of the Transcribe tab.
+/// Which page carries which control, after the Transcribe tab's right-hand column was split up:
+/// the outputs on Export, the cut on Settings, and the two extra passes back beside the queue on
+/// Transcribe, where the run they change is launched.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -111,12 +113,10 @@ public class OptionTabTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsTabCarriesEveryOptionThatLeftTheTranscribeTab()
+    public void TheSettingsTabCarriesTheCutAndTheWayToAbout()
     {
         var window = Open(Settings, out var viewModel);
 
-        var speakers = Drawn<CheckBox>(window, "LabelSpeakers");
-        var english = Drawn<CheckBox>(window, "TranslateToEnglish");
         Drawn<DockPanel>(window, "SpeechDetectionRow");
 
         // The segmentation note followed the cap it explains, rather than being left behind on a
@@ -137,23 +137,27 @@ public class OptionTabTests
         cap.Value = 45;
         Assert.Equal(45, viewModel.Transcribe.MaxSegmentSeconds);
 
-        // Both opt-ins write through too.
-        speakers.IsChecked = true;
-        Assert.True(viewModel.Transcribe.LabelSpeakers);
+        // The two extra passes are NOT here — they went back to the Transcribe tab beside the
+        // queue they run over, and a copy surviving here would be two boxes for one setting.
+        var drawn = window.GetVisualDescendants().OfType<Control>()
+            .Select(c => c.Name)
+            .Where(n => n is not null)
+            .ToHashSet(StringComparer.Ordinal);
 
-        english.IsChecked = true;
-        Assert.True(viewModel.Transcribe.TranslateToEnglish);
+        Assert.DoesNotContain("LabelSpeakers", drawn);
+        Assert.DoesNotContain("TranslateToEnglish", drawn);
 
         // And the way to the About window, which is the Licences tab's replacement.
         Drawn<Button>(window, "ShowAbout");
     }
 
     /// <summary>
-    /// The Transcribe tab kept none of what moved, and says where it went.
+    /// The Transcribe tab carries the two extra passes — translation first, speakers last — and
+    /// says where everything else went.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The half of the move nothing else checks. A control duplicated rather than moved leaves two
+    /// The half of the moves nothing else checks. A control duplicated rather than moved leaves two
     /// boxes for one setting: both bind to the same property, so both work, and the second one is
     /// found months later by somebody who ticked the one that was scrolled off screen. The
     /// forwarding line is asserted with them, because a control that moves without one is as hard
@@ -162,32 +166,48 @@ public class OptionTabTests
     /// <para>
     /// Asked of the visual tree and not of <c>FindControl</c>, which cannot answer this question at
     /// all: <c>FindControl</c> reads the window's name scope, and the name scope holds every page's
-    /// controls whether or not the page is being drawn — so it finds the Settings tab's checkboxes
-    /// from here and every assertion below would fail on a correct window. Gotcha 31.
+    /// controls whether or not the page is being drawn — so it finds the Export and Settings tabs'
+    /// controls from here and every absence assertion below would fail on a correct window.
+    /// Gotcha 31.
     /// </para>
     /// </remarks>
     [AvaloniaFact]
-    public void TheTranscribeTabKeptNoneOfItAndSaysWhereItWent()
+    public void TheTranscribeTabCarriesTheTwoPassesAndSaysWhereTheRestWent()
     {
-        var window = Open(Transcribe, out _);
+        var window = Open(Transcribe, out var viewModel);
+
+        // The two opt-ins are drawn here, bound both ways rather than merely present.
+        var speakers = Drawn<CheckBox>(window, "LabelSpeakers");
+        var english = Drawn<CheckBox>(window, "TranslateToEnglish");
+
+        speakers.IsChecked = true;
+        Assert.True(viewModel.Transcribe.LabelSpeakers);
+
+        english.IsChecked = true;
+        Assert.True(viewModel.Transcribe.TranslateToEnglish);
+
+        // Translation above, speakers last — asked of the drawn geometry rather than the markup,
+        // because tree order is what an edit swaps by accident and geometry is what a reader sees.
+        var englishTop = english.TranslatePoint(default, window)!.Value.Y;
+        var speakersTop = speakers.TranslatePoint(default, window)!.Value.Y;
+        Assert.True(englishTop < speakersTop,
+            $"'Translate to English' (y={englishTop}) is drawn below 'Label speakers' (y={speakersTop})");
+
+        // And exactly those two ticks on the whole page: the formats went to Export and the cut to
+        // Settings, so a third checkbox here is a copy rather than a leftover.
+        Assert.Equal(2, window.GetVisualDescendants().OfType<CheckBox>().Count());
 
         var drawn = window.GetVisualDescendants().OfType<Control>()
             .Select(c => c.Name)
             .Where(n => n is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.DoesNotContain("LabelSpeakers", drawn);
-        Assert.DoesNotContain("TranslateToEnglish", drawn);
         Assert.DoesNotContain("SpeechDetectionRow", drawn);
         Assert.DoesNotContain("AddToRecording", drawn);
         Assert.DoesNotContain("BrowseOutput", drawn);
         Assert.DoesNotContain("SegmentationNote", drawn);
 
-        // Not one tick anywhere on the page: the formats went to Export and the four opt-ins to
-        // Settings, so a checkbox surviving here is a copy rather than a leftover.
-        Assert.Empty(window.GetVisualDescendants().OfType<CheckBox>());
-
-        // What it kept: the queue and the transcript, which is the work.
+        // What it kept besides the passes: the queue and the transcript, which is the work.
         Drawn<Border>(window, "DropZone");
         Drawn<TextBox>(window, "LinkBox");
 
@@ -198,19 +218,16 @@ public class OptionTabTests
     }
 
     /// <summary>
-    /// The long-recording speaker warning is drawn beside the queue, not only beside the count on
-    /// Settings.
+    /// The long-recording speaker warning is drawn on the Transcribe tab, on the same screen as
+    /// the queue and Start.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A regression the split introduced and this pins shut. <c>SpeakerDurationWarning</c> exists to
-    /// be, in its own words, "in front of the person who can still act on it… before any of the
-    /// twenty minutes are spent". It used to be drawn in the Transcribe tab's options column, on the
-    /// same screen as the queue and Start. Moving the speaker opt-in to Settings took it along, and
-    /// the sequence that breaks is ordinary: tick the box and set a count on Settings, come back,
-    /// drop a two-hour interview, press Start. The warning is non-null the whole time and was drawn
-    /// on a page already left behind, so the transcript came back with names on it and nothing said
-    /// they were past where the evidence stops.
+    /// <c>SpeakerDurationWarning</c> exists to be, in its own words, "in front of the person who
+    /// can still act on it… before any of the twenty minutes are spent" — and the person who can
+    /// still act is the one about to press Start. While the opt-in lived on Settings the warning
+    /// had to be drawn twice to reach them; with the opt-in back beside the queue one draw covers
+    /// it, and this pins that the one draw is on the page where Start is.
     /// </para>
     /// <para>
     /// The Start guard does not cover it: <c>TranscribeViewModel</c> raises the bound sentence only
@@ -218,7 +235,7 @@ public class OptionTabTests
     /// </para>
     /// </remarks>
     [AvaloniaFact]
-    public void ARecordingPastTheEvidenceWarnsBesideTheQueueAndNotOnlyOnSettings()
+    public void ARecordingPastTheEvidenceWarnsOnTheScreenWhereStartIs()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-warn").FullName;
         var viewModel = new MainWindowViewModel(
@@ -249,8 +266,8 @@ public class OptionTabTests
         Assert.NotNull(viewModel.Transcribe.SpeakerDurationWarning);
         Assert.Null(viewModel.Transcribe.StartHint);
 
-        var warning = Drawn<TextBlock>(window, "QueueDurationWarning");
-        Assert.True(warning.IsVisible, "the queue's duration warning is not drawn on the Transcribe tab");
+        var warning = Drawn<TextBlock>(window, "DurationWarning");
+        Assert.True(warning.IsVisible, "the duration warning is not drawn on the Transcribe tab");
         Assert.Equal(viewModel.Transcribe.SpeakerDurationWarning, warning.Text);
 
         // And it goes quiet again with the opt-in, rather than standing over a run that will not

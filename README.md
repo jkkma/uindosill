@@ -78,7 +78,7 @@ nothing has packaged one.
   DirectML on 0 of 32 while falling into a repetition loop, so DirectML is refused by name. The SentencePiece tokenizer and the beam search
   written for this project decoded it until 2026-08-21 and are now in `attic/`.
   `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
-  a checkbox on the Settings tab beside the speaker one, and the English arrives *beside* the transcript rather than
+  the 'Translate to English' checkbox on the Transcribe tab above the speaker one, and the English arrives *beside* the transcript rather than
   instead of it — a switcher over the transcript pane shows either, with the same speakers on both
   sides; both are read by the sentence — the translator is given the sentences the transcript's word
   timings cut it into, so the English has the same lines at the same times — and only the word mark

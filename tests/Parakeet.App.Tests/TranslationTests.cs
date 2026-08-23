@@ -405,22 +405,20 @@ public class TranslationTests
 
 
     /// <summary>
-    /// The opt-in, on the Settings tab it moved to on 2026-08-23.
+    /// The opt-in, back on the Transcribe tab since later on 2026-08-23.
     /// </summary>
     /// <remarks>
-    /// Two tests rather than the one this used to be. The checkbox is on Settings and the pane
-    /// switcher it used to be asserted beside is on Transcribe, and no single <c>SelectedTab</c>
-    /// draws both. It would still have passed as one test — <c>FindControl</c> reads the name
-    /// scope, which holds every page whether or not it is realised (gotcha 31) — and that is
-    /// exactly the reason to split it: half of it would have been asserting on a control the
-    /// window had not drawn, which is the weaker claim of the two this file makes.
+    /// Two tests rather than one, and still split even though the checkbox and the pane switcher
+    /// are on the same page again: this one is about the box writing through, the next about the
+    /// switcher earning its visibility, and a combined test that failed would leave the reader
+    /// working out which of the two claims fell over.
     /// </remarks>
     [AvaloniaFact]
-    public void TheSettingsTabCarriesTheEnglishOptIn()
+    public void TheTranscribeTabCarriesTheEnglishOptIn()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
-        main.SelectedTab = 5;
+        main.SelectedTab = 0;
 
         var window = new MainWindow { DataContext = main };
         window.Show();
@@ -438,7 +436,7 @@ public class TranslationTests
         Assert.True(optIn.IsChecked);
     }
 
-    /// <inheritdoc cref="TheSettingsTabCarriesTheEnglishOptIn" />
+    /// <inheritdoc cref="TheTranscribeTabCarriesTheEnglishOptIn" />
     [AvaloniaFact]
     public void TheSwitcherIsHiddenUntilThereIsEnglish()
     {

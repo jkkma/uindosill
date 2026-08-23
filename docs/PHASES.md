@@ -3240,6 +3240,31 @@ the press-reaches-the-pill theory, one from splitting the English opt-in's test 
 and the pane switcher it used to be asserted beside are no longer on the same page, and one holding
 the long-recording warning beside the queue — see below.
 
+### Built 2026-08-23, later the same day — the two extra passes return to the Transcribe tab
+
+The split above put the two opt-in passes on Settings with the cut; the maintainer moved them back
+the same day, and the line between the two pages is sharper for it: **Settings keeps what
+configures the machinery — the cut, the detector, the way to the About window — and the Transcribe
+tab carries what decides a run.** The two passes change what pressing Start produces for the queue
+beside them, and a per-run decision belongs on the page where the run is launched.
+
+Three details of the return. **Translation sits first and speakers last**, so the strip that grows
+when ticked — the count field and up to two sentences appear under the speaker box — moves only the
+transcript below it, never the other opt-in. **The English box now reads "Translate to English"** —
+the action it performs — rather than "English version", the artifact it produces; the Models tab's
+load hint quotes the new name. **The long-recording warning is bound once again**: the review fix
+above drew it twice because the opt-in and the queue were on different pages, and with the strip
+back beside the queue the duplicate came out rather than leaving two copies of one sentence on one
+screen.
+
+The forwarding line above the transcript now names only what is still elsewhere — the outputs on
+Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
+speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
+page instead. **1138 tests, no weights, no display, no network — 1134 passed and 4 skipped.** The
+count is unchanged: the page assertions moved with the controls rather than multiplying, the order
+of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
+write-through test came back from Settings with its page index.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

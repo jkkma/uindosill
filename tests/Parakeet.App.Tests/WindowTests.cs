@@ -876,7 +876,7 @@ public class TranscribeViewModelTests
 
         // The translation entry gets its own opt-in named rather than the diariser's.
         main.Models.Selected = main.Models.Models.First(m => m.Descriptor.Task == ModelTask.Translation);
-        Assert.Contains("'English version'", main.Models.LoadHint, StringComparison.Ordinal);
+        Assert.Contains("'Translate to English'", main.Models.LoadHint, StringComparison.Ordinal);
 
         // And a transcription entry that is simply not downloaded says that instead.
         main.Models.Selected = main.Models.Models.First(m => m.IsTranscriptionModel);
