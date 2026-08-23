@@ -25,6 +25,10 @@ public partial class MainWindow : Window
     private bool _shutdownRequested;
     private bool _seeking;
 
+    /// <summary>The line the playhead was last inside, so <see cref="Follow"/> can ask where
+    /// the reader was looking when it moved. -1 when nothing has been played.</summary>
+    private int _played = -1;
+
     /// <summary>The Ask view model this window is currently listening to, so it can stop.</summary>
     private ViewModels.AskViewModel? _watching;
 
@@ -192,7 +196,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Follows the search to the hit it is standing on, bringing that row into view.
+    /// Follows the search to the hit it is standing on, and the playhead to the line it is inside,
+    /// bringing that row into view.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -208,14 +213,67 @@ public partial class MainWindow : Window
     /// </remarks>
     private void OnAskChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ViewModels.AskViewModel.CurrentMatchLineIndex)
-            || DataContext is not MainWindowViewModel viewModel)
+        if (DataContext is not MainWindowViewModel viewModel)
         {
             return;
         }
 
-        var index = viewModel.Ask.CurrentMatchLineIndex;
+        if (e.PropertyName == nameof(ViewModels.AskViewModel.CurrentMatchLineIndex))
+        {
+            Scroll(viewModel.Ask.CurrentMatchLineIndex);
+        }
+        else if (e.PropertyName == nameof(ViewModels.AskViewModel.ActiveLineIndex))
+        {
+            Follow(viewModel.Ask.ActiveLineIndex);
+        }
+    }
 
+    /// <summary>
+    /// Keeps the line being played in view — but only while the reader is still watching the
+    /// played part of the transcript.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The rule is: follow while the line the playhead has just left is still on screen.</b> A
+    /// reader who has scrolled somewhere else is reading, and taking the page back off them every
+    /// few seconds would be this window arguing with them; a reader watching the played line is
+    /// watching it, and gets the next one brought to them. Nothing has to be reset, because
+    /// following resumes on its own the moment the played line is in view again — by scrolling
+    /// back to it, or by clicking a cue, which seeks there and is a request to be there.
+    /// </para>
+    /// <para>
+    /// The check is made before the scroll is posted rather than inside it, because by the time a
+    /// posted call runs the offset may already have moved and the question — where was the reader
+    /// looking when the line changed — can no longer be asked.
+    /// </para>
+    /// </remarks>
+    private void Follow(int index)
+    {
+        var left = _played;
+        _played = index;
+
+        if (index < 0
+            || this.FindControl<ItemsControl>("Cues") is not { } cues
+            || this.FindControl<ScrollViewer>("CueScroll") is not { } scroller)
+        {
+            return;
+        }
+
+        // Nothing was playing, so there is no reader to argue with: a recording that starts, or
+        // one that has just been chosen, brings its first line into view.
+        if (left >= 0
+            && cues.ContainerFromIndex(left) is Control previous
+            && !IsInView(scroller, previous))
+        {
+            return;
+        }
+
+        Scroll(index);
+    }
+
+    /// <summary>Brings the row at <paramref name="index"/> into view, once layout has been through.</summary>
+    private void Scroll(int index)
+    {
         if (index < 0 || this.FindControl<ItemsControl>("Cues") is not { } cues)
         {
             return;
@@ -226,6 +284,12 @@ public partial class MainWindow : Window
             DispatcherPriority.Background);
     }
 
+    /// <summary>Whether any part of <paramref name="control"/> is inside <paramref name="scroller"/>.</summary>
+    private static bool IsInView(ScrollViewer scroller, Control control) =>
+        control.TranslatePoint(default, scroller) is { } top
+        && top.Y + control.Bounds.Height > 0
+        && top.Y < scroller.Bounds.Height;
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         // Both halves, because a window whose data context is replaced must not keep answering
@@ -234,6 +298,10 @@ public partial class MainWindow : Window
         {
             _watching.PropertyChanged -= OnAskChanged;
             _watching = null;
+
+            // And the line it was following, which indexes a transcript this window no longer
+            // shows: kept, it would be compared against a row belonging to something else.
+            _played = -1;
         }
 
         if (_watchedPlayer is not null)

@@ -424,6 +424,24 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// ratio between them to combine them with, and inventing one would be a bar that lies about
     /// how far along it is instead of a bar that says nothing.
     /// </remarks>
+    /// <summary>
+    /// Blocks in flight between the decoder and the resampler. Eight, which at the reader's 16,384
+    /// samples a block is half a megabyte — enough that neither side waits on a jitter in the other,
+    /// small enough that the bound is not worth thinking about beside the 577 MB the output holds.
+    /// </summary>
+    private const int StagingQueueDepth = 8;
+
+    /// <summary>One decoded block on its way to the resampler, and the pooled array holding it.</summary>
+    /// <remarks>
+    /// The array is rented rather than allocated because there are 25,433 of them on a
+    /// two-and-a-half-hour file, and it is copied rather than passed because the reader hands out
+    /// <em>the same array every time</em> — <c>MediaFoundationAudioSource</c> fills one buffer and
+    /// yields a window onto it, which is correct for a consumer that finishes before it asks for
+    /// the next one and fatal for one that does not. The copy is 1.6 GB of memcpy across the whole
+    /// file, a fraction of a second, against the thirteen it buys back.
+    /// </remarks>
+    private readonly record struct StagedBlock(float[] Buffer, int Length);
+
     internal static async Task<string> WriteResampledWavAsync(
         IAudioSource audio,
         CancellationToken ct,
@@ -441,36 +459,109 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             : 0;
         var samples = new List<float>(expected);
 
-        // One report per whole percent, like the sidecar's own: the reader hands over a block every
-        // few milliseconds, and a report each time is thousands of cross-thread posts saying what
-        // the last one said.
-        var lastPercent = -1;
-
-        await foreach (var block in audio.ReadAsync(ct).ConfigureAwait(false))
-        {
-            resampler.Process(block.Span, samples);
-
-            if (progress is null || audio.Duration is not { Ticks: > 0 } whole)
+        // ── Decoding and resampling run at the same time, and that is the whole of this change ──
+        //
+        // Measured 2026-08-23 on the desktop over the 157-minute podcast: decoding it takes 19.76 s
+        // and resampling it 13.09 s, and run one after the other inside a single loop — a block
+        // read, then that block resampled, then the next block read — the stage took 32.85 s of one
+        // core. Neither half waits on the other's hardware and neither needs the other's result, so
+        // the second is simply the first's cost paid twice over. Overlapped, the stage is whichever
+        // half is slower rather than their sum, and on this machine that is the decode.
+        //
+        // A producer and a consumer over a bounded channel rather than a task per block: the
+        // resampler is a filter carrying history across block boundaries, so its blocks have to
+        // arrive in order and be processed by one thread. What is parallelised here is the *pair of
+        // stages*, not the work inside either.
+        var blocks = System.Threading.Channels.Channel.CreateBounded<StagedBlock>(
+            new System.Threading.Channels.BoundedChannelOptions(StagingQueueDepth)
             {
-                continue;
-            }
-
-            var read = TimeSpan.FromSeconds(samples.Count / (double)TargetSampleRate);
-            var percent = (int)(100 * Math.Clamp(read.Ticks / (double)whole.Ticks, 0d, 1d));
-            if (percent == lastPercent)
-            {
-                continue;
-            }
-
-            lastPercent = percent;
-            progress.Report(new TranscriptionProgress
-            {
-                Stage = TranscriptionStage.LabellingSpeakers,
-                Detail = "Labelling speakers — reading the audio again",
-                Processed = read,
-                Total = whole,
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.Wait,
             });
+
+        // Cancelled by the resampling side if it throws, so that a producer parked on a full queue
+        // is released rather than waiting for a consumer that is never coming back. Without it the
+        // failure mode of a fault in the resampler is a hang, which is worse than the fault.
+        using var stopped = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        var resampling = Task.Run(
+            async () =>
+            {
+                // One report per whole percent, like the sidecar's own: the reader hands over a
+                // block every few milliseconds, and a report each time is thousands of cross-thread
+                // posts saying what the last one said. Reported from this side rather than the
+                // reading side because it is this side that knows how much audio exists so far —
+                // and `samples` belongs to this thread alone until the task is awaited.
+                var lastPercent = -1;
+
+                try
+                {
+                    await foreach (var block in blocks.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+                    {
+                        try
+                        {
+                            resampler.Process(block.Buffer.AsSpan(0, block.Length), samples);
+                        }
+                        finally
+                        {
+                            System.Buffers.ArrayPool<float>.Shared.Return(block.Buffer);
+                        }
+
+                        if (progress is null || audio.Duration is not { Ticks: > 0 } whole)
+                        {
+                            continue;
+                        }
+
+                        var read = TimeSpan.FromSeconds(samples.Count / (double)TargetSampleRate);
+                        var percent = (int)(100 * Math.Clamp(read.Ticks / (double)whole.Ticks, 0d, 1d));
+                        if (percent == lastPercent)
+                        {
+                            continue;
+                        }
+
+                        lastPercent = percent;
+                        progress.Report(new TranscriptionProgress
+                        {
+                            Stage = TranscriptionStage.LabellingSpeakers,
+                            Detail = "Labelling speakers — reading the audio again",
+                            Processed = read,
+                            Total = whole,
+                        });
+                    }
+                }
+                catch
+                {
+                    stopped.Cancel();
+                    throw;
+                }
+            },
+            ct);
+
+        try
+        {
+            await foreach (var block in audio.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var buffer = System.Buffers.ArrayPool<float>.Shared.Rent(block.Length);
+                block.Span.CopyTo(buffer);
+                await blocks.Writer.WriteAsync(new StagedBlock(buffer, block.Length), stopped.Token)
+                    .ConfigureAwait(false);
+            }
         }
+        catch (OperationCanceledException) when (stopped.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // The resampler failed and cancelled us. Its exception is the one worth reporting, and
+            // awaiting the task below is what raises it; swallowing this one only avoids replacing
+            // a real fault with the cancellation it caused.
+        }
+        finally
+        {
+            blocks.Writer.Complete();
+        }
+
+        // Both halves are joined here, which is also what makes `samples` safe to read below: every
+        // write to it happened on the resampling task, and awaiting it is the fence.
+        await resampling.ConfigureAwait(false);
 
         resampler.Complete(samples);
 

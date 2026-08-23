@@ -144,6 +144,9 @@ public class AskTabTests
     [Fact]
     public void TheHighlightFollowsThePlayheadAndTouchesOnlyTheTwoLinesItHasTo()
     {
+        // On a transcript with no word timings, so that what is counted below is the line
+        // highlight alone. `Spoken()` is the fixture that carries words, and the mark inside a
+        // line is held to the same bound a few tests further down.
         var (ask, jobs, player) = Create();
         jobs.Add(Transcribed());
         ask.PlayPauseCommand.Execute(null);
@@ -169,6 +172,206 @@ public class AskTabTests
         Assert.True(ask.Lines[1].IsActive);
         Assert.False(ask.Lines[2].IsActive);
         Assert.Equal(2, changed);
+    }
+
+    [Fact]
+    public void TheWordBeingSaidIsMarkedInsideTheLineBeingPlayed()
+    {
+        // The mark the design pins the pastel yellow to, on v1's own data: the engine's word
+        // timings, which every transcription run already writes and `vtt-words` already exports.
+        var (ask, jobs, player) = Create();
+        jobs.Add(Spoken());
+        ask.PlayPauseCommand.Execute(null);
+
+        var first = ask.Lines![0];
+        Assert.True(first.HasWordTimings);
+
+        // Inside the line and before its first word. The line is lit and no word is: nothing is
+        // drawn ahead of the moment being played.
+        player.Advance(TimeSpan.FromSeconds(0.5));
+        ask.Tick();
+        Assert.Same(first, ask.ActiveLine);
+        Assert.Null(MarkedWord(first));
+
+        player.Advance(TimeSpan.FromSeconds(1));
+        ask.Tick();
+        Assert.Equal("one", MarkedWord(first));
+
+        player.Advance(TimeSpan.FromSeconds(2));
+        ask.Tick();
+        Assert.Equal("two", MarkedWord(first));
+
+        // 4.5s: "two" has ended and "three" has not begun. The mark holds across the gap rather
+        // than blinking off — at a tick every 100 ms a rule that lit nothing between words would
+        // flicker through every sentence and go dark at every pause.
+        player.Advance(TimeSpan.FromSeconds(1));
+        ask.Tick();
+        Assert.Equal("two", MarkedWord(first));
+
+        player.Advance(TimeSpan.FromSeconds(1));
+        ask.Tick();
+        Assert.Equal("three", MarkedWord(first));
+
+        // And it is where the word is rather than where a word of that spelling first appears:
+        // "three" is the eighth character in, not the nought-th.
+        Assert.Equal(8, first.Marked.SpokenStart);
+    }
+
+    [Fact]
+    public void TheMarkLeavesTheLineThePlayheadHasLeft()
+    {
+        var (ask, jobs, player) = Create();
+        jobs.Add(Spoken());
+        ask.PlayPauseCommand.Execute(null);
+
+        player.Advance(TimeSpan.FromSeconds(3.5));
+        ask.Tick();
+
+        var first = ask.Lines![0];
+        Assert.Equal("two", MarkedWord(first));
+
+        player.Advance(TimeSpan.FromSeconds(7));
+        ask.Tick();
+
+        Assert.Same(ask.Lines[1], ask.ActiveLine);
+        Assert.Equal("four", MarkedWord(ask.Lines[1]));
+
+        // Nothing left behind: one word lit inside a paragraph nobody is inside reads as a
+        // highlight that has got stuck rather than as a line that has been played.
+        Assert.Equal(-1, first.SpokenWord);
+        Assert.Null(MarkedWord(first));
+    }
+
+    [Fact]
+    public void SeekingBackwardsPutsTheMarkBackWhereThePlayheadIs()
+    {
+        // The mark is computed from the position every time rather than stepped forward, so a
+        // click on an earlier cue — or a press on the seek bar — moves it back with everything
+        // else instead of stranding it ahead of what is being played.
+        var (ask, jobs, player) = Create();
+        jobs.Add(Spoken());
+        ask.PlayPauseCommand.Execute(null);
+
+        player.Advance(TimeSpan.FromSeconds(5.5));
+        ask.Tick();
+        Assert.Equal("three", MarkedWord(ask.Lines![0]));
+
+        ask.SeekToLineCommand.Execute(ask.Lines[0]);
+        Assert.Null(MarkedWord(ask.Lines[0]));
+
+        player.Advance(TimeSpan.FromSeconds(1.5));
+        ask.Tick();
+        Assert.Equal("one", MarkedWord(ask.Lines[0]));
+    }
+
+    [Fact]
+    public void ATranscriptWithNoWordTimingsMarksNoWordAndFollowsTheLineExactlyAsBefore()
+    {
+        // What a translated pane is, and what any engine that reports no word timings produces.
+        // The line highlight is untouched by the absence; no word is marked, and none is guessed
+        // from how far through the line the playhead is — which is the guess `WordTimedVttFormatter`
+        // refuses to write, calling it worthless about when a word is spoken.
+        var (ask, jobs, player) = Create();
+        jobs.Add(Transcribed());
+        ask.PlayPauseCommand.Execute(null);
+
+        player.Advance(TimeSpan.FromSeconds(5));
+        ask.Tick();
+
+        var line = ask.Lines![0];
+        Assert.Same(line, ask.ActiveLine);
+        Assert.True(line.IsActive);
+        Assert.False(line.HasWordTimings);
+        Assert.Equal(-1, line.SpokenWord);
+        Assert.Null(MarkedWord(line));
+    }
+
+    [Fact]
+    public void AWordThatDoesNotSpellTheLineIsSkippedRatherThanPutSomewhereItIsNot()
+    {
+        // Joining the words with single spaces reproduces the segment's text on nearly every
+        // segment this pipeline produces, and `SpeakerAssignment` checks exactly that before it
+        // cuts one — but nearly is not always, and assuming it fails silently: every word after
+        // the first disagreement lights one word early, which looks like a transcript rather than
+        // like a defect. So each word is found in the text or skipped.
+        var job = new JobViewModel("/tmp/a.wav");
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/a.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments =
+                [
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.Zero,
+                        End = TimeSpan.FromSeconds(10),
+                        Text = "the tokon report",
+                        Words = [Word("the", 0, 1), Word("Tokon", 1, 2), Word("report", 2, 3)],
+                    },
+                ],
+            },
+        });
+
+        var (ask, jobs, player) = Create();
+        jobs.Add(job);
+        ask.PlayPauseCommand.Execute(null);
+
+        var line = ask.Lines![0];
+
+        player.Advance(TimeSpan.FromSeconds(0.5));
+        ask.Tick();
+        Assert.Equal("the", MarkedWord(line));
+
+        // The word the engine spelled differently is never marked, and the mark holds on the one
+        // before it rather than sliding onto the wrong word for a second.
+        player.Advance(TimeSpan.FromSeconds(1));
+        ask.Tick();
+        Assert.Equal("the", MarkedWord(line));
+
+        // And the word after it still lands on its own characters rather than one word out.
+        player.Advance(TimeSpan.FromSeconds(1));
+        ask.Tick();
+        Assert.Equal("report", MarkedWord(line));
+        Assert.Equal(10, line.Marked.SpokenStart);
+    }
+
+    [Fact]
+    public void AWordAdvancingTouchesOneLineAndTheHighlightMovingTouchesTwo()
+    {
+        // The same bound the line highlight is held to, extended to the mark inside it. The word
+        // moves several times a second for as long as a recording plays, so what it costs per tick
+        // is the whole question: one line's worth of notifications, never the transcript's.
+        var (ask, jobs, player) = Create();
+        jobs.Add(Spoken());
+        ask.PlayPauseCommand.Execute(null);
+
+        player.Advance(TimeSpan.FromSeconds(1.5));
+        ask.Tick();
+
+        var counts = new int[ask.Lines!.Count];
+
+        for (var i = 0; i < ask.Lines.Count; i++)
+        {
+            var at = i;
+            ask.Lines[i].PropertyChanged += (_, _) => counts[at]++;
+        }
+
+        // A word advancing inside the line being played: one line, and the two facts that moved
+        // on it — which word it is, and the marks the view draws from it.
+        player.Advance(TimeSpan.FromSeconds(2));
+        ask.Tick();
+
+        Assert.Equal(new[] { 2, 0, 0 }, counts);
+
+        // The highlight moving to the next line: two lines, three facts each — whether it is the
+        // line being played, which word it has or no longer has, and the marks.
+        player.Advance(TimeSpan.FromSeconds(7));
+        ask.Tick();
+
+        Assert.Equal(new[] { 5, 3, 0 }, counts);
     }
 
     [Fact]
@@ -441,6 +644,106 @@ public class AskTabTests
         return job;
     }
 
+    /// <summary>
+    /// The same three segments carrying the word timings the engine reports, which is what the
+    /// mark on the word being said is drawn from.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not wall-to-wall words. The first line has half a second of silence in front
+    /// of its first word and a second of it between two others, because both are places the mark
+    /// has to behave — nothing lit before the first word, and the last word held across the gap
+    /// rather than blinking off.
+    /// </remarks>
+    internal static JobViewModel Spoken(string path = "/tmp/a.wav")
+    {
+        var job = new JobViewModel(path);
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments =
+                [
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.Zero,
+                        End = TimeSpan.FromSeconds(10),
+                        Text = "one two three",
+                        Words = [Word("one", 1, 2), Word("two", 3, 4), Word("three", 5, 6)],
+                    },
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.FromSeconds(10),
+                        End = TimeSpan.FromSeconds(20),
+                        Text = "four five",
+                        Words = [Word("four", 10, 11), Word("five", 11, 12)],
+                    },
+                    new TranscriptSegment
+                    {
+                        Start = TimeSpan.FromSeconds(20),
+                        End = TimeSpan.FromSeconds(30),
+                        Text = "six",
+                        Words = [Word("six", 20, 21)],
+                    },
+                ],
+            },
+        });
+
+        return job;
+    }
+
+    /// <summary>
+    /// Sixty ten-second segments — ten minutes, and more transcript than the pane can show, which
+    /// is what the pane following the playhead needs in order to have somewhere to scroll to.
+    /// </summary>
+    internal static JobViewModel Long(int count = 60)
+    {
+        var segments = new List<TranscriptSegment>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            var at = i * 10;
+
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(at),
+                End = TimeSpan.FromSeconds(at + 10),
+                Text = $"line {i}",
+                Words = [Word("line", at, at + 1), Word($"{i}", at + 1, at + 2)],
+            });
+        }
+
+        var job = new JobViewModel("/tmp/long.wav");
+
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = "/tmp/long.wav" },
+            State = JobState.Completed,
+            Document = new TranscriptDocument { Segments = segments },
+        });
+
+        return job;
+    }
+
+    private static TranscriptWord Word(string text, double from, double to) => new()
+    {
+        Text = text,
+        Start = TimeSpan.FromSeconds(from),
+        End = TimeSpan.FromSeconds(to),
+    };
+
+    /// <summary>
+    /// The word <paramref name="line"/> says is being spoken, read back out of the marks the view
+    /// draws rather than off the index behind them — which is the fact that matters, and the one
+    /// that would be wrong if a word were located in the wrong place in the text.
+    /// </summary>
+    private static string? MarkedWord(TranscriptLineViewModel line) =>
+        line.Marked.SpokenLength == 0
+            ? null
+            : line.Text.Substring(line.Marked.SpokenStart, line.Marked.SpokenLength);
+
     /// <summary>Three ten-second segments, which is enough for a highlight to move between them.</summary>
     internal static JobViewModel Transcribed(string path = "/tmp/a.wav")
     {
@@ -690,6 +993,100 @@ public class AskTabWindowTests
     }
 
     [AvaloniaFact]
+    public void TheWordBeingSaidCarriesThePastelYellowAndNoChangeOfWeight()
+    {
+        var (window, viewModel, player) = Open(AskTabTests.Spoken());
+
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+        player.Advance(TimeSpan.FromSeconds(3.5));
+        viewModel.Ask.Tick();
+        window.UpdateLayout();
+
+        var runs = Runs(window, 0);
+
+        // Cut around the word being said and nowhere else, so the rest of the paragraph is one
+        // run and stays one run as the mark walks through it.
+        Assert.Equal(["one ", "two", " three"], runs.Select(r => r.Text));
+
+        var marked = Assert.Single(runs, r => r.Background is not null);
+        Assert.Equal("two", marked.Text);
+
+        // #F0D983, out of the token sheet rather than out of a hex in the converter — the design
+        // pins that colour to this one job. Reading it here also proves the StaticResource
+        // resolved: a converter whose brush stayed null would draw an unmarked word and look like
+        // a mark that never arrived.
+        var brush = Assert.IsAssignableFrom<ISolidColorBrush>(marked.Background);
+        Assert.Equal(Color.Parse("#F0D983"), brush.Color);
+
+        // A ground and nothing else. A weight would change the word's width three times a second
+        // and re-wrap the paragraph under the reader.
+        Assert.NotEqual(FontWeight.Bold, marked.FontWeight);
+    }
+
+    [AvaloniaFact]
+    public void AWordThatIsBothTheHitAndTheOneBeingSaidTakesTheSpokenGroundAndKeepsTheHitsWeight()
+    {
+        // The two marks are independent and land on the same word here. The ground can only be
+        // one of them and it is the spoken one, because that is the mark that is moving; the hit
+        // is still legible because weight is the other half of how a hit is drawn.
+        var (window, viewModel, player) = Open(AskTabTests.Spoken());
+
+        viewModel.Ask.SearchTerm = "two";
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+        player.Advance(TimeSpan.FromSeconds(3.5));
+        viewModel.Ask.Tick();
+        window.UpdateLayout();
+
+        var marked = Assert.Single(Runs(window, 0), r => r.Text == "two");
+
+        var brush = Assert.IsAssignableFrom<ISolidColorBrush>(marked.Background);
+        Assert.Equal(Color.Parse("#F0D983"), brush.Color);
+        Assert.Equal(FontWeight.Bold, marked.FontWeight);
+    }
+
+    [AvaloniaFact]
+    public void ALineNobodyIsInsideIsDrawnPlainHoweverFarThroughTheRecordingItIs()
+    {
+        // The mark exists on exactly one line at a time. Drawn on the line ahead as well — or
+        // left on the line behind — it would say two places in the recording are being played.
+        var (window, viewModel, player) = Open(AskTabTests.Spoken());
+
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+        player.Advance(TimeSpan.FromSeconds(3.5));
+        viewModel.Ask.Tick();
+        window.UpdateLayout();
+
+        Assert.Single(Runs(window, 0), r => r.Background is not null);
+
+        // One run apiece, and no ground on it: a line nobody is inside is not cut up at all.
+        Assert.Equal(["four five"], Runs(window, 1).Select(r => r.Text));
+        Assert.Equal(["six"], Runs(window, 2).Select(r => r.Text));
+
+        player.Advance(TimeSpan.FromSeconds(7));
+        viewModel.Ask.Tick();
+        window.UpdateLayout();
+
+        // And the line the playhead has left goes back to being one of them.
+        Assert.Equal(["one two three"], Runs(window, 0).Select(r => r.Text));
+        Assert.Single(Runs(window, 1), r => r.Background is not null);
+    }
+
+    /// <summary>The runs the cue at <paramref name="index"/> draws its words as.</summary>
+    private static List<Run> Runs(MainWindow window, int index)
+    {
+        var cue = window.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("cue"))
+            .ElementAt(index);
+
+        // The paragraph, rather than the timestamp beside it: only the words are drawn as inlines
+        // through the converter, and only they are ever cut into more than one run.
+        return cue.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.Name == "CueWords")
+            .SelectMany(t => t.Inlines?.OfType<Run>() ?? [])
+            .ToList();
+    }
+
+    [AvaloniaFact]
     public void TheCurrentHitIsMarkedApartFromTheRestWithoutMovingTheWords()
     {
         var (window, viewModel, _) = Open(AskTabTests.Searchable());
@@ -858,6 +1255,114 @@ public class AskTabWindowTests
 
         Assert.Null(viewModel.Ask.VideoNotice);
         Assert.False(notice.IsVisible);
+    }
+
+
+    [AvaloniaFact]
+    public void ThePaneFollowsTheLineBeingPlayed()
+    {
+        // Without this the mark on the word being said is correct and invisible: a pane that does
+        // not move puts the line being played off the top within a minute of pressing play.
+        var (window, viewModel, player, scroller) = OpenLong();
+
+        Assert.Equal(0, scroller.Offset.Y);
+
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+        Advance(window, viewModel, player, TimeSpan.FromMinutes(5));
+
+        Assert.Equal(30, viewModel.Ask.ActiveLineIndex);
+        Assert.True(scroller.Offset.Y > 0, "the pane should have moved to the line being played");
+        Assert.True(PlayedLineInView(window, viewModel), "the line being played should be in view");
+    }
+
+    [AvaloniaFact]
+    public void ThePaneStopsFollowingOnceTheReaderHasScrolledAwayAndPicksItUpAgainAfterwards()
+    {
+        // The rule, and the reason it needs no gesture to detect and no flag to reset: the pane
+        // follows while the line it last left is on screen. A reader who has scrolled somewhere
+        // else is reading, and taking the page back off them every ten seconds would be this
+        // window arguing with them.
+        var (window, viewModel, player, scroller) = OpenLong();
+
+        viewModel.Ask.PlayPauseCommand.Execute(null);
+        Advance(window, viewModel, player, TimeSpan.FromMinutes(5));
+        Assert.True(PlayedLineInView(window, viewModel));
+
+        // The reader goes and reads the end of the transcript.
+        scroller.Offset = new Vector(0, scroller.Extent.Height - scroller.Viewport.Height);
+        window.UpdateLayout();
+
+        var parked = scroller.Offset.Y;
+        Assert.False(PlayedLineInView(window, viewModel));
+
+        Advance(window, viewModel, player, TimeSpan.FromSeconds(10));
+
+        Assert.Equal(31, viewModel.Ask.ActiveLineIndex);
+        Assert.Equal(parked, scroller.Offset.Y);
+
+        // And back: the reader scrolls to the top and clicks the first cue, which seeks there and
+        // is a request to be there. Following picks up from the next line on, with nothing reset.
+        scroller.Offset = default;
+        window.UpdateLayout();
+        viewModel.Ask.SeekToLineCommand.Execute(viewModel.Ask.Lines![0]);
+        window.UpdateLayout();
+
+        Advance(window, viewModel, player, TimeSpan.FromMinutes(5));
+
+        Assert.Equal(30, viewModel.Ask.ActiveLineIndex);
+        Assert.True(scroller.Offset.Y > 0);
+        Assert.True(PlayedLineInView(window, viewModel));
+    }
+
+    /// <summary>The window on a transcript longer than the pane, with the scroller in hand.</summary>
+    private static (MainWindow Window, MainWindowViewModel ViewModel, FakeMediaPlayer Player, ScrollViewer Scroller) OpenLong()
+    {
+        var player = new FakeMediaPlayer { DurationToReport = TimeSpan.FromMinutes(20) };
+        var (window, viewModel, _) = Open(AskTabTests.Long(), player);
+
+        var scroller = window.FindControl<ScrollViewer>("CueScroll");
+        Assert.NotNull(scroller);
+
+        // The premise of both tests above, asserted rather than assumed: a transcript that fits
+        // the pane has nowhere to scroll, and every assertion about scrolling would pass on it.
+        Assert.True(
+            scroller!.Extent.Height > scroller.Viewport.Height,
+            "the fixture has to be longer than the pane or there is nothing to follow");
+
+        return (window, viewModel, player, scroller);
+    }
+
+    /// <summary>Moves the clock on and lets the window do everything the moment would make it do.</summary>
+    private static void Advance(
+        MainWindow window,
+        MainWindowViewModel viewModel,
+        FakeMediaPlayer player,
+        TimeSpan elapsed)
+    {
+        player.Advance(elapsed);
+        viewModel.Ask.Tick();
+
+        // The scroll is posted at background priority, because the container for a row may not
+        // exist when the index changes. Nothing has moved until the post has run.
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+    }
+
+    /// <summary>Whether any part of the line being played is inside the pane.</summary>
+    private static bool PlayedLineInView(MainWindow window, MainWindowViewModel viewModel)
+    {
+        var cues = window.FindControl<ItemsControl>("Cues");
+        var scroller = window.FindControl<ScrollViewer>("CueScroll");
+
+        if (cues?.ContainerFromIndex(viewModel.Ask.ActiveLineIndex) is not Control container
+            || scroller is null)
+        {
+            return false;
+        }
+
+        return container.TranslatePoint(default, scroller) is { } top
+            && top.Y + container.Bounds.Height > 0
+            && top.Y < scroller.Bounds.Height;
     }
 
     /// <summary>The window, on the Ask tab, with one recording in the queue.</summary>

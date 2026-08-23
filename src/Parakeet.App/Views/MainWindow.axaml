@@ -59,11 +59,13 @@
 
   <Window.Resources>
     <views:IndexMatchConverter x:Key="IndexMatch" />
-    <!-- The search hit's ground comes from the token sheet rather than from a hex in the
-         converter, so taro has one definition. StaticResource because a converter is a plain
-         object with no styled properties for DynamicResource to track — the brush is resolved
-         once, at load, out of the application's dictionary. -->
-    <views:HighlightConverter x:Key="Highlight" Hit="{StaticResource Taro200Brush}" />
+    <!-- Both grounds this converter draws — the search hit's, and the word being spoken — come
+         from the token sheet rather than from hexes in the converter, so taro and the pastel
+         yellow each keep one definition. StaticResource because a converter is a plain object
+         with no styled properties for DynamicResource to track — the brushes are resolved once,
+         at load, out of the application's dictionary. -->
+    <views:HighlightConverter x:Key="Highlight" Hit="{StaticResource Taro200Brush}"
+                              Spoken="{StaticResource SpokenWordBrush}" />
   </Window.Resources>
 
   <!-- The window's edge. Inside the window because there is nothing outside it to draw on: with
@@ -981,7 +983,7 @@
 
             <Border Classes="panel">
               <Panel>
-                <ScrollViewer IsVisible="{Binding HasTranscript}" Padding="7,9">
+                <ScrollViewer Name="CueScroll" IsVisible="{Binding HasTranscript}" Padding="7,9">
                   <ItemsControl Name="Cues" ItemsSource="{Binding Lines}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TranscriptLineViewModel">
@@ -1008,12 +1010,13 @@
                               <TextBlock Text="{Binding Speaker}" />
                             </Border>
                             <!-- Inlines rather than Text, which is what lets one word inside a
-                                 paragraph carry a ground of its own. Bound to Marked — the words
-                                 and the term as one value — because a converter takes one thing,
-                                 and because only the lines that carry the term raise a change for
-                                 it, so a keystroke redraws the handful that matched rather than
-                                 the whole transcript. -->
-                            <TextBlock Grid.Column="2"
+                                 paragraph carry a ground of its own — the term that was searched
+                                 for, and the word being said right now. Bound to Marked, which is
+                                 all three as one value, because a converter takes one thing and
+                                 because only the line it happened to raises a change for it: a
+                                 keystroke redraws the handful that matched, and a word advancing
+                                 redraws the one line being played, rather than the transcript. -->
+                            <TextBlock Grid.Column="2" Name="CueWords"
                                        Inlines="{Binding Marked, Converter={StaticResource Highlight}}"
                                        TextWrapping="Wrap" LineHeight="20.3" />
                           </Grid>

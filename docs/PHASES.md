@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 949 tests, no weights, no display, no network — **947 passed and 2 skipped**, and
+**Status:** met. 962 tests, no weights, no display, no network — **960 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2463,6 +2463,184 @@ as "the provider barely matters here"; both runs were paying the same single-thr
 **10.6 s to 3.2 s** now — 57x against 187x realtime — which is an ordinary GPU result and restores
 the reason `auto` prefers WebGPU. And it makes the catalogue's own sentence true again: the speaker
 pass "roughly doubles how long a file takes" was about 8x before this and is about double now.
+
+### Built 2026-08-23 — the word being spoken is marked in the transcript
+
+**The Ask tab's transcript now marks the one word being said, in the colour the design reserved for
+exactly that and nothing else.** Playback already lit the line; inside the line, the word being
+spoken carries `#F0D983` — the pastel yellow `Theme/Tokens.axaml` has held since the design landed,
+under a comment saying it was pinned to a single job and unused until there was a view for it. This
+is that job. It is **not** the *word-by-word view* the design describes — a lane per speaker, words
+appearing as they are said, a lane lost when a speaker goes quiet — which is still unbuilt. It is
+the same mark, on the same data, on the surface that already exists, which is why the token's rule
+is unchanged rather than widened: one job, one colour, a second surface for it.
+
+**It is v1's data and no new data at all.** `TranscriptSegment.Words` has carried word timings from
+the beginning — they are what `vtt-words` writes, and what `scripts/preview-words-vtt.html` has been
+highlighting from since before this application had a player. `TranscriptLineViewModel` now carries
+them across from the segment unchanged, so the rule that the window never writes a timestamp of its
+own survives intact: it locates a word in the text and reads the word's own start.
+
+**Which word is lit is the prototype's rule: the last word that has *started*, held until the next
+one begins.** Lighting only a word whose own span contains the playhead is the obvious rule and the
+wrong one — at a 100 ms tick it blinks the mark off in the gap between two words and goes dark for
+the length of every pause. Holding it draws nothing *ahead* of the moment being played, which is the
+constraint the word-by-word design sets, and it is what `preview-words-vtt.html` and WebVTT's own
+`:past`/`:future` already do.
+
+**The words are located in the text, not assumed to spell it.** Joining a segment's words with
+single spaces reproduces its text on nearly every segment this pipeline produces — `SpeakerAssignment`
+checks exactly that before it cuts a segment on a speaker change — but nearly is not always, and
+assuming it fails *silently*: every word after the first disagreement lights one word early, which
+reads as a transcript rather than as a defect. So each word is searched for from where the last one
+ended, at a word boundary, and one that is not there is skipped without moving the cursor. Forward
+only, so a mark can never walk backwards through a line; boundary-aligned, so "read" cannot land
+inside "reader"; and a skipped word simply never lights while the words around it keep their places.
+
+**Where there are no word timings there is no mark, and nothing is guessed.** The English pane
+carries none, because translation loses the timing of individual words — and neither does any
+segment an engine returned text but no words for. The alternative is timing a word by its share of
+the line's characters, which is precisely the guess `WordTimedVttFormatter` refuses to write,
+calling it "a worthless guess about when a word is spoken". The line highlight is unaffected either
+way, so a transcript without word timings behaves exactly as it did the day before.
+
+**The mark takes a ground and never a weight**, which is layout rather than taste: a bolded word is
+a wider word, and a word that changes width three times a second re-wraps the paragraph under the
+reader. Where the word being said is also the word being searched for, the ground goes to the spoken
+mark and the search hit keeps its weight, so the two overlap without either being lost.
+
+**What it costs per tick is one line's worth of work.** The transcript scan for the active line is
+unchanged; the word is then looked for on that line alone, which is a sentence's worth of
+comparisons. Moving the mark within a line touches one line and raises two notifications on it;
+moving it to the next line touches two lines and raises three each — the line's own playing flag,
+the word it has or no longer has, and the marks the view draws. A test holds all three counts,
+because that bound is the whole reason this is affordable at 10 Hz on a three-hour transcript.
+
+**The pane follows the playhead, and stops when the reader does.** A mark that is correct and off
+the top of the pane is invisible: the played line left the viewport within a minute of pressing
+play, because the transcript followed the *search* into view and nothing else. It now follows
+playback too — **while the line the playhead has just left is still on screen**, and not otherwise.
+That one rule is the whole of it. A reader who has scrolled somewhere else is reading, and taking
+the page back off them every ten seconds would be this window arguing with them; a reader watching
+the played line gets the next one brought to them. It needs no gesture to detect and no flag to
+reset, and it resumes on its own the moment the played line is in view again — by scrolling back to
+it, or by clicking a cue, which seeks there and is a request to be there. The visibility question is
+asked *before* the scroll is posted, because a posted call runs after the offset may have moved and
+by then "where was the reader looking" can no longer be answered.
+
+**Eleven tests, and the suite is 960.** Six drive the view model against a fake clock — the mark
+appearing, holding across a gap, leaving the line the playhead left, coming back with a backwards
+seek, staying away on a transcript with no timings, and skipping a word the text does not spell.
+Three read the runs a live window's `TextBlock` holds, including the pastel yellow read back off the
+rendered run. Two drive a sixty-line transcript through a live scroller, and they catch the rule
+failing in both directions: never following fails both, and following unconditionally fails the one
+that scrolls away. `docs/UNPROVEN.md` § *Playing a recording* records what nobody has watched.
+
+### Fixed 2026-08-23 — the diariser's CPU was two thread pools spinning on a GPU
+
+**Watching a hardware monitor during a labelling pass found something no timing would have.** The
+pass ran at 179x realtime and nothing about it looked wrong; the maintainer noticed that CPU *and*
+GPU were both past 80 % at the same moment and asked whether a GPU diariser should be doing that.
+It should not. On the desktop the chunk loop was holding about **23 of 32 cores while doing roughly
+half a core of arithmetic** — the rest was ONNX Runtime's twelve intra-op threads and PyTorch's
+sixteen, both busy-waiting through every graph call.
+
+**Neither pool was sized by anyone.** ORT's is the diariser's own default of 12, which the
+application inherits by passing 0. Torch's is one thread per physical core, which nothing in the
+sidecar ever set — and both spin rather than sleep while they wait. The loop is one `sess.run` per
+chunk with a small state update between them, so for the 95 % of each iteration spent inside the
+graph, twenty-eight threads had nothing to do and were spending a core each not doing it.
+
+**The measurement that decided the shape of the fix** was timing the three call sites inside the
+loop rather than the loop as a whole: `sess.run` **0.95 s** of a 0.99 s loop, `streaming_update_async`
+**0.03 s**, `apply_mask_to_preds` **0.00 s**. Sixteen torch threads for thirty milliseconds of work.
+Cutting the pool 16 → 1 left the wall time flat to two decimals and took CPU from 14.95 s to 0.52 s;
+turning ORT's spinning off took another third out on top. `docs/UNPROVEN.md` has every figure.
+
+**Two changes, and both are scoped rather than global — the scoping is the whole of the design.**
+
+- **ORT spinning off for GPU providers only.** On the CPU provider those threads *are* the
+  arithmetic, and that path is where every published figure in this repository was produced.
+  Nothing has measured what taking their spin away would cost there, so nothing takes it.
+- **Torch's pool narrowed to one thread inside `run_mel`, and restored in a `finally`.** Not for the
+  pass — `feats.py` is the opposite case and the reason a global setting would have been a bad
+  trade: over 30 minutes of audio the featurizer runs in **0.19 s at sixteen threads and 0.94 s at
+  one**. So the featurizer keeps what it uses, the loop gives up what it does not, and an engine
+  that raises mid-loop cannot leave the process single-threaded for the next file's features.
+
+**What it is worth**, on the whole `run_wav` path over ten minutes of audio, three runs each:
+**1.09 s wall / 24.9 CPU s / 22.9 cores** becomes **1.08 s wall / 4.5 CPU s / 4.2 cores**. It is not
+a speed change and was never going to be — the GPU was already the thing taking the time. It is the
+difference between a labelling pass that commits the whole machine for its duration and one that
+does not.
+
+**It changes nothing the model computes, and that is measured rather than argued** — this project
+has a DirectML entry that scored 53 % while looking entirely healthy. The committed parity fixture
+passes on both providers after the change (CPU **0.0**, WebGPU **1.0729e-06**, zero decision flips),
+and the baseline taken on the same machine minutes earlier is the same 1.0729e-06 to every digit,
+three runs running. A direct comparison of the probabilities with spinning on against off was
+bit-equal: 0 of 30,000 cells differing, argmax agreeing on all 7,500 frames. No AMI re-score was
+taken, and the argument for not needing one is that the outputs are byte-identical rather than close.
+
+**And it moves the pass's real cost into plain view.** With the spin gone, the 157-minute recording
+that raised the question spends about **15 seconds on the GPU at 0.4 of a core** — and **35 seconds
+before that decoding and resampling the file on one thread with the GPU idle**. Yesterday's
+resampler tabulation (§ *Decided 2026-08-23 — the resampler's kernel is tabulated by phase*) took
+that stage from nine tenths of the pass to a little over half of it; it is now unambiguously the
+largest thing left, and nothing has been done about the fact that it is single-threaded.
+
+### Fixed 2026-08-23 — the labelling pass decoded and resampled one after the other, and had no reason to
+
+**With the spin gone (§ above), the largest thing left in a labelling pass was the stage before the
+model: reading the recording a second time and resampling it to 16 kHz, on one core, with the GPU
+idle.** On the 157-minute podcast that was 35 of the pass's 53 seconds. So it was split into its
+parts before anything was changed to it, because "35 seconds" does not say which part to attack:
+
+| | | share |
+| --- | --- | --- |
+| decode (Media Foundation, 44.1 kHz AAC) | **19.76 s** | 59.4% |
+| resample (the tabulated filter) | **13.09 s** | 39.3% |
+| WAV write, 577 MB at 1383 MB/s | 0.42 s | 1.3% |
+
+The resample at 13.09 s over 9,448 s of audio is **722x realtime**, which is exactly what
+§ *Decided 2026-08-23 — the resampler's kernel is tabulated by phase* measured it at in isolation —
+so the filter was not slow, and making it faster was not the opportunity. **The opportunity was that
+the two halves ran one after the other inside a single loop** — a block read, that block resampled,
+then the next block read — when neither waits on the other's hardware and neither needs the other's
+result. The second was the first's cost paid twice over.
+
+**They now run at the same time**, as a producer and a consumer over a bounded queue eight blocks
+deep. The blocks are *copied* into pooled arrays on the way across, which is not an optimisation to
+regret: `MediaFoundationAudioSource` fills one buffer and yields a window onto it, so the same array
+comes back every time — correct for a consumer that finishes before asking for the next block, fatal
+for one that does not. The copy is 1.6 GB of memcpy over the whole file, a fraction of a second,
+against the thirteen it buys.
+
+**A pair of stages, not the work inside either.** The resampler is a filter carrying history across
+block boundaries, so its blocks still arrive in order and are still processed by one thread; nothing
+here divides a filter. Parallelising the filter as well would buy nothing anyway — it is now entirely
+hidden behind a decode that is 1.5x longer than it.
+
+**Measured on the recording that prompted it**, `uindosill diarise` on WebGPU, 157 minutes:
+**52.7 s becomes 39.2 s**, 179x realtime to **241x**. The 13.5 s saved is the resample's 13.09 s to
+within the noise of a single run, which is what "hidden behind the decode" predicts. Peak host CPU
+went from 1.55 cores to 2.73 — two threads working where there was one.
+
+**The output is byte-identical**, and on the real file rather than a fixture: the RTTM for the
+157-minute podcast has the same MD5 before and after, 1,001 turns either way. Two tests pin it in
+CI, neither needing a model — one comparing a staged 44.1 kHz WAV against a single unbroken pass of
+the resampler (44.1 rather than 16 kHz on purpose, or the identity path would assert nothing about
+resampling), and one holding cancellation to reaching both halves rather than parking a producer on
+a queue nobody is draining. Both fail if a sample is dropped per block.
+
+**What is left, and it is now the whole stage.** The decode is 59% of the staging and unchanged: one
+Media Foundation reader, one thread, 478x realtime on AAC. Overlapping bought everything overlapping
+could buy, and going further means either decoding in parallel — several readers seeking to
+different offsets, which is a real change with real risk at the seams — or not decoding twice at
+all, by teeing the ASR pass's own read into a 16 kHz stream as it goes. The second is the larger
+prize and the larger change: it would remove the stage outright for `transcribe --speakers`, at the
+cost of holding 577 MB through the transcription pass, and it does nothing for `diarise` on its own.
+Neither has been attempted.
 
 ## The honest summary
 

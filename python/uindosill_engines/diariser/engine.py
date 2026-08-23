@@ -17,6 +17,7 @@ Three things a host must do that the graph does not:
     total valid length are otherwise fed into the cache as real frames.
 """
 
+import contextlib
 import math
 import os
 import sys
@@ -108,6 +109,39 @@ PROVIDERS = {
 #: would decide to relax this default on. Do not relax it without re-scoring AMI.
 DEFAULT_GRAPH_OPTIMIZATION = {"dml": "ORT_DISABLE_ALL"}
 
+#: Threads torch is given for the chunk loop, and the reason it is not the default.
+#:
+#: **Measured 2026-08-23 on the desktop (9950X, 32 logical), WebGPU, 10 minutes of audio.** The loop
+#: is one ONNX call per chunk with a small torch state update between them, and the ONNX call is
+#: where the wall time is: 0.95 s of a 0.99 s loop, against 0.03 s in `streaming_update_async`.
+#: Torch's pool is sixteen threads by default — one per physical core, which nothing here sets —
+#: and it *spins* while waiting, so those threads busy-wait through every one of those 0.95 s.
+#:
+#: The sweep, at 16/8/4/2/1 threads: wall 0.99, 0.98, 0.99, 1.01, 1.01 s — flat — while CPU fell
+#: 14.95 -> 7.25 -> 3.41 -> 1.45 -> 0.52 seconds. Sixteen threads bought nothing and cost about
+#: fifteen of this machine's cores. Every setting produced bit-identical probabilities.
+#:
+#: **This is the loop only, and that scoping is the whole point.** `feats.py` is the opposite case:
+#: over 30 minutes of audio its wall time is 0.19 s at sixteen threads and 0.94 s at one, a real
+#: 5x, so the featurizer keeps the default and this is restored the moment the loop ends.
+LOOP_TORCH_THREADS = 1
+
+
+@contextlib.contextmanager
+def torch_threads(count):
+    """Runs a block with torch's intra-op pool narrowed, and puts it back afterwards.
+
+    Restored in a `finally` rather than after the block: an engine that raised mid-loop would
+    otherwise leave the whole process single-threaded, and the next thing to want threads is the
+    featurizer, which is the one stage here that genuinely uses them.
+    """
+    was = torch.get_num_threads()
+    torch.set_num_threads(count)
+    try:
+        yield
+    finally:
+        torch.set_num_threads(was)
+
 
 class SortformerEngine:
     def __init__(self, onnx_path="model/sortformer-default.onnx", threads=12,
@@ -125,6 +159,23 @@ class SortformerEngine:
         so.intra_op_num_threads = threads
         level = graph_optimization or DEFAULT_GRAPH_OPTIMIZATION.get(provider, "ORT_ENABLE_ALL")
         so.graph_optimization_level = getattr(ort.GraphOptimizationLevel, level)
+
+        if provider != "cpu":
+            # The intra-op pool busy-waits by default, which is right when it is about to be handed
+            # more work and wrong when the work is on a GPU. Measured 2026-08-23 on the desktop
+            # (9950X, 32 logical), WebGPU, 10 minutes of audio, three runs each: with spinning on
+            # the loop cost 23.4 CPU seconds, with it off 15.6 — a third of the CPU was threads
+            # waiting — for wall times of 0.96 s and 1.02 s, and that 6% is one outlier (the walls
+            # were 0.84/1.01/1.03 against 1.02/1.00/1.02). Probabilities were bit-identical: 0 of
+            # 30,000 cells differed and the argmax agreed on all 7,500 frames, which is what one
+            # expects from a change to how a thread waits rather than to what it computes.
+            #
+            # **Not on the CPU provider**, where those threads are the ones doing the arithmetic
+            # rather than waiting on somebody else's, and where every published figure in this
+            # repository was produced. Nothing has measured what taking their spin away costs there.
+            so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+            so.add_session_config_entry("session.inter_op.allow_spinning", "0")
+
         if provider == "dml":
             # DirectML's documented requirements, not preferences: the EP does its own allocation
             # planning and ORT's memory pattern optimiser is incompatible with it.
@@ -155,7 +206,18 @@ class SortformerEngine:
     @torch.no_grad()
     def run_mel(self, mel, valid_frames, progress=None):
         """mel: [T, 128] float32 (already padded to a multiple of 16).  Returns [F, 4] float32
-        speaker probabilities at 80 ms per frame."""
+        speaker probabilities at 80 ms per frame.
+
+        Narrowing torch's pool is done here rather than around `run_wav` because the featurizer is
+        the other half of that call and wants the threads this gives up — see LOOP_TORCH_THREADS.
+        Here rather than in the caller, too, so that a host driving the loop directly, and the
+        parity fixture, both get the same conditions the product runs under.
+        """
+        with torch_threads(LOOP_TORCH_THREADS):
+            return self._chunk_loop(mel, valid_frames, progress)
+
+    @torch.no_grad()
+    def _chunk_loop(self, mel, valid_frames, progress=None):
         mods = self.mods
         state = mods.init_streaming_state(batch_size=1, async_streaming=True, device="cpu")
 

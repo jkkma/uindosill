@@ -113,6 +113,14 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// <summary>The line the recording is inside right now, or null.</summary>
     public TranscriptLineViewModel? ActiveLine => _activeLine;
 
+    /// <summary>
+    /// Where that line sits in <see cref="Lines"/>, or -1. What the window follows the playhead
+    /// by: an index, because bringing a row into view is something only the control that has
+    /// realised it can do — the same division the search already uses for its hits.
+    /// </summary>
+    public int ActiveLineIndex =>
+        _activeLine is { } line && Lines is { } lines ? lines.IndexOf(line) : -1;
+
     // ── Finding a word ────────────────────────────────────────────────────────────────────────
     //
     // A transcript is a wall of text and the reason anyone opens a three-hour one is usually a
@@ -524,13 +532,21 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Moves the highlight to whichever line holds <paramref name="position"/>.
+    /// Moves the highlight to whichever line holds <paramref name="position"/>, and the word mark
+    /// to whichever of that line's words is being said.
     /// </summary>
     /// <remarks>
-    /// Two writes at most, however long the transcript is: the line that had it and the line that
+    /// <para>
+    /// Two lines at most, however long the transcript is: the line that had it and the line that
     /// takes it. Setting a flag on every line each tick would be fifteen hundred property
     /// notifications ten times a second on a three-hour recording, all but two of them saying
     /// nothing changed.
+    /// </para>
+    /// <para>
+    /// The word is searched for on the active line alone, and only once the line is settled. It
+    /// moves several times a second while the line sits still, which is the whole point of it —
+    /// and it costs one walk over one sentence's words per tick, rather than over the transcript.
+    /// </para>
     /// </remarks>
     private void UpdateActiveLine(TimeSpan position)
     {
@@ -549,6 +565,14 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         }
 
         SetActiveLine(next);
+
+        if (_activeLine is { } active)
+        {
+            // Assigned rather than compared first: the property is observable and does not raise
+            // when the value is unchanged, so a tick that lands inside the same word costs a
+            // comparison and nothing else.
+            active.SpokenWord = active.WordAt(position);
+        }
     }
 
     private void SetActiveLine(TranscriptLineViewModel? line)
@@ -561,6 +585,11 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         if (_activeLine is not null)
         {
             _activeLine.IsActive = false;
+
+            // A line that is no longer being played has no word being said in it. Left set, the
+            // mark would stay behind on the line the playhead has left — one word lit in a
+            // paragraph nobody is inside, which reads as the highlight having got stuck.
+            _activeLine.SpokenWord = -1;
         }
 
         _activeLine = line;
@@ -571,5 +600,6 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(ActiveLine));
+        OnPropertyChanged(nameof(ActiveLineIndex));
     }
 }

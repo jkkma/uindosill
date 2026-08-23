@@ -3734,7 +3734,9 @@ and nothing here checks it or could.
   than a UI stall and smaller than a seek that feels late. Nothing was measured to pick it.
 - **The 100 ms transport tick**, which scans the transcript for the line holding the current
   position on every tick that finds something moved. On a three-hour transcript that is 1,488
-  comparisons ten times a second; it is a linear scan and no profile has been taken of it.
+  comparisons ten times a second; it is a linear scan and no profile has been taken of it. Since
+  2026-08-23 it also walks the active line's own words for the one being said, which is a
+  sentence's worth of comparisons on top of that scan and is unprofiled for the same reason.
 - **Every container other than the three above**, and any machine other than this laptop.
 
 **What would settle the first of those:** play something in the built application with the volume
@@ -3746,6 +3748,48 @@ step within 0.0014 of lightness and 0.0010 of chroma, and 7.48:1 and 5.24:1 on w
 and taro-600 — was computed from the shipped hex values by the same conversion used on the matcha
 ramp, and the round trip reproduces the design sheet's own coordinates. See `docs/PHASES.md`
 § *Built 2026-08-22 — the Ask tab*.
+
+### The word being spoken, added 2026-08-23
+
+The mark on the one word being said inside the line being played is the one part of this tab that
+**is** under test end to end, and it is worth saying why: it is a position turned into a place in
+the text and drawn by a converter, so there is no device anywhere in it, and the headless window
+runs both halves for real. Eleven tests — six driving the view model against a fake clock, three
+reading the runs a live window's `TextBlock` actually holds, including the pastel yellow read back
+off the rendered run so a brush that failed to resolve cannot pass, and two driving a sixty-line
+transcript through a live scroller for the pane that follows the playhead. Deliberately breaking the
+one assignment that sets the word fails eight of the nine word tests; the ninth is the one asserting
+that a transcript *without* word timings marks nothing, and it correctly still passes. The follow
+rule was broken both ways too — never following fails both scroll tests, following unconditionally
+fails the one that scrolls away.
+
+**What none of that establishes:**
+
+- **That anybody has watched it move.** Every test advances a fake clock by whole and half seconds
+  and asks what is marked. Nobody has watched the mark track a voice at the window's 100 ms tick,
+  on a real recording, with the sound audible — and screen capture is not available in this
+  session, so nobody could here. Until someone has, a release note may say the transcript marks the
+  word the timings name, not that the mark keeps up with the speech.
+- **Whether the engine's word timings are good enough to be pointed at.** They are the same
+  timings `vtt-words` has always written; § *What that costs the word-timed WebVTT output* records
+  what quantisation moves them by, and this project has never checked that a mark drawn from them
+  lands on the word a listener hears. Pointing at a word is a stricter use of a timestamp than
+  writing it into a subtitle file, and nothing has been re-measured for it.
+- **A word shorter than the tick.** At 10 Hz a word under 100 ms can be stepped straight over
+  without ever being drawn. How often that happens in real speech is unknown, and the tick has not
+  been raised to find out — that would cost a transcript scan ten more times a second, which the
+  bullet above about the transport tick is already unprofiled about.
+- **That the pane follows the playhead in a way anybody wants.** The rule — follow while the line
+  just left is still on screen — is asserted against a scroller in a headless window, where the
+  offsets are numbers. Whether it feels right to a person reading along, whether the jump as a line
+  leaves the pane is jarring at the bottom edge, and whether a reader who scrolls back expects it to
+  resume, are all judgements nobody has made against the built application.
+- **Whether the located-not-assumed path ever fires on real data.** Each word is found in the
+  segment's text at a word boundary or skipped; no real transcript has been searched for a segment
+  whose words do not spell its text, so the fallback is reasoned about and exercised only against a
+  fixture. The same is true of a segment carrying text and no words at all — see § *The cue
+  builder's no-word path is reachable, and has never been observed*, which is the same gap seen
+  from the subtitle side.
 
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
@@ -3774,6 +3818,140 @@ Screen capture is not available in this session, so no one has watched the pane 
 labelling bar move, seen the sideloaded section draw, or read either backend off a finished row. That distinction has caught this project
 before: the two contrast defects below, and the window-frame bits that no headless render could
 show, were both invisible to exactly this kind of test.
+
+### The staging stage was decode-then-resample and is now both at once — measured 2026-08-23
+
+**Split before it was changed, because a 35-second stage does not say which part to attack.** On the
+desktop over the 157-minute podcast (44.1 kHz AAC, 145 MB), timed by reading the source and
+discarding to get the decode alone, then the real path, then the write:
+
+| stage | seconds | share | rate |
+| --- | --- | --- | --- |
+| decode | **19.76** | 59.4% | 478x realtime |
+| resample | **13.09** | 39.3% | 722x realtime |
+| WAV write (577 MB) | 0.42 | 1.3% | 1383 MB/s |
+| reading it back | 0.10 | — | — |
+
+Two things that decided the change: the resampler's 722x is exactly what
+§ *The resampler was most of a diarisation* measured in isolation, so the filter was not the
+problem; and the WAV round trip is **1.3%**, so the 577 MB handoff file — which looks like the
+obvious waste — is not worth touching.
+
+**After overlapping the two halves**, the same file through `uindosill diarise` on WebGPU:
+**52.7 s becomes 39.2 s**, 179x to 241x realtime. The saving is 13.5 s against the resample's
+measured 13.09 s, which is what full overlap predicts. Peak host CPU rose from 1.55 to 2.73 cores.
+
+**The output did not move, checked on the real recording rather than a fixture.** The RTTM for the
+157-minute podcast is byte-identical before and after — same MD5, 1,001 turns — and two CI tests
+pin the property without a model: a staged 44.1 kHz WAV against one unbroken pass of the resampler,
+and cancellation reaching both halves. Dropping one sample per block fails both.
+
+**What is not established:**
+
+- **Single runs.** Every figure above is one run. The split harness was run once, and the
+  before/after pair is one run each. Nothing here has a variance.
+- **One file, one container, one rate.** 44.1 kHz AAC in an m4a on this desktop's NVMe. A 48 kHz
+  source takes the resampler's one-phase path and a different share; a 16 kHz source takes the
+  identity path and has no resample to hide at all, which means this change is worth nothing on
+  AMI — where every published DER in this repository was measured.
+- **Whether the decode is the floor.** 478x realtime is what Media Foundation gave on this AAC
+  stream on this machine; nothing has been tried against it. **It is not the downmix**, which was
+  the obvious suspect and was measured on 2026-08-23 rather than assumed: the fold-to-mono loop
+  inside `MediaFoundationAudioSource` runs at **0.77 ns per frame**, which is **0.32 s** over this
+  157-minute file against the decoder's 19.48 s — **1.6%**, and less than a fifth of the decode's own
+  run-to-run spread (19.48 / 21.18 / 21.21 s over three runs). Taking the per-sample `IsFinite`
+  guard away costs the file 0.11 s and unrolling the stereo case 0.09 s, so the whole loop is worth
+  a tenth of a second and is **not worth touching**. What is left in the 19.48 s is Media
+  Foundation's AAC decoder, and nothing here has been past it.
+- **That negative result took two attempts, and the first one was wrong by 7x** — worth recording
+  because the method is the trap rather than the code. Timing a decode-only run and subtracting it
+  from a decode-plus-downmix run put the loop at 2.32 s, and the same subtraction said removing the
+  `IsFinite` guard made it *slower*, which is impossible. Two twenty-second measurements carrying a
+  second of variance each cannot be subtracted to find a difference of tenths. The figures above
+  come from running the loop alone over a megabyte of real decoded audio, forty times, best-of.
+- **The queue depth is eight and nothing measured it.** Chosen so neither half waits on a jitter in
+  the other while the bound stays trivial beside the output buffer. Two would probably do; sixty-four
+  would probably also do.
+- **Memory is unchanged and still large.** The staging holds the whole 16 kHz recording as a
+  `List<float>` — 577 MB for this file, 690 MB for three hours — before writing it. The pipeline adds
+  half a megabyte of queue to that and does not address it.
+
+### Nearly all of the diariser's CPU load was two thread pools spinning — measured and fixed 2026-08-23
+
+**The maintainer's monitor showed CPU and GPU both past 80 % during the labelling pass and asked
+whether that was normal.** It was not: on the desktop (9950X, 32 logical, RTX 5080) the chunk loop
+held about 23 of 32 cores while doing roughly half a core of arithmetic. The rest was two
+independent thread pools busy-waiting on a GPU.
+
+**Where it came from.** Only the Sortformer ONNX graph runs on WebGPU. Around it sit ONNX Runtime's
+own intra-op pool at 12 threads and PyTorch's at 16 — one per physical core, which nothing in the
+sidecar ever set — and **both spin while they wait**. The loop is one `sess.run` per chunk with a
+small torch state update between them, so for the 95 % of each iteration spent inside the graph
+call, 28 threads were spinning.
+
+**The split, timed at the three call sites inside the loop** (WebGPU, 10 min of synthetic audio,
+`run_mel` only so the featurizer could not dilute it): `sess.run` **0.95 s** of a 0.99 s loop,
+`streaming_update_async` **0.03 s**, `apply_mask_to_preds` **0.00 s**. Sixteen torch threads were
+producing thirty milliseconds of arithmetic.
+
+**What each lever is worth**, same conditions, wall against CPU seconds:
+
+| | wall | CPU s | cores of 32 |
+| --- | --- | --- | --- |
+| spinning on, torch 16 — what shipped | 0.96 s | 23.4 | 24.4 |
+| spinning off, torch 16 | 1.02 s | 15.6 | 15.4 |
+| spinning off, torch 1 | 1.01 s | 0.5 | 0.5 |
+
+The torch sweep at 16/8/4/2/1 gives walls of 0.99 / 0.98 / 0.99 / 1.01 / 1.01 s — flat — against
+CPU of 14.95 / 7.25 / 3.41 / 1.45 / 0.52 s. The spinning rows are three runs each; the sweep rows
+one apiece. The 6 % wall difference in the first two rows is one outlier: the individual walls were
+0.84 / 1.01 / 1.03 against 1.02 / 1.00 / 1.02.
+
+**The featurizer is the opposite case, which is why the fix is scoped rather than global.** Over
+30 minutes of audio `feats.py` runs in **0.19 s at sixteen threads and 0.94 s at one** — a real 5x,
+bit-identical at every setting. Cutting torch's pool for the whole pass would have paid for the
+loop's spin by making the featurizer five times slower, so the narrowing is inside `run_mel` and is
+restored in a `finally` — checked by hand, including when the loop raises.
+
+**On the whole `run_wav` path, before against after**, 10 minutes of audio, three runs each:
+**1.09 s wall / 24.9 CPU s / 22.9 cores** becomes **1.08 s wall / 4.5 CPU s / 4.2 cores**. Five and
+a half times less CPU for the same wall clock.
+
+**On the recording that raised the question** — the 157-minute podcast, through `uindosill
+diarise` on WebGPU, sampled at 400 ms — the GPU sits at 85–90 % for about 15 s while the sidecar
+uses **0.31 to 0.55 cores**. The featurizer's one second beforehand still takes its 16. What is left
+of the pass is what it always was and is now plainly the largest part of it: **35 seconds of
+single-threaded decode and resample**, 1.4 cores, GPU idle, before the sidecar is handed anything.
+
+**It changes nothing the model computes, and that was checked rather than argued.** Spinning is how
+a thread waits and torch's thread count does not reach the graph, but this project's own record has
+DirectML scoring 53 % while looking healthy, so: the committed parity fixture passes on both
+providers after the change — **CPU maxAbsDiff 0.0, WebGPU 1.0729e-06, 0 % decision flips** — and the
+baseline measured on this machine immediately before the change is **the same 1.0729e-06, identical
+across three runs**. Separately, a direct comparison of the probabilities with spinning on against
+off was bit-equal: 0 of 30,000 cells differing, argmax agreeing on all 7,500 frames.
+
+*(The parity module's own note records WebGPU at 2.7e-06. That is another machine's figure and
+nothing here moved it; the desktop reports 1.0729e-06 deterministically, before and after.)*
+
+**What is not established:**
+
+- **The CPU provider is untouched, deliberately, and unmeasured.** Spinning stays on there because
+  those threads are the ones doing the arithmetic rather than waiting on somebody else's, and every
+  published figure in this repository was produced on that path. What taking their spin away would
+  cost has not been measured. Torch's narrowing *does* apply on the CPU provider — it is a property
+  of the loop rather than of the backend — and the parity fixture passing at 0.0 there is the only
+  evidence that it is harmless.
+- **CUDA and DirectML get the same change and neither was re-run.** Both take the non-CPU branch by
+  provider name. Nothing has measured what spinning was worth to either.
+- **One machine.** 9950X and RTX 5080, ONNX Runtime 1.27.0, `onnxruntime-webgpu`. A part with fewer
+  cores has a smaller pool to waste and a proportionally smaller prize; a slower single thread makes
+  the one torch thread in the loop matter more than 0.03 s.
+- **Synthetic audio for every timing above.** Fair for this question — the chunk shapes are fixed,
+  so what the graph costs does not depend on what was said — but it is not the podcast, and only the
+  157-minute run above is real audio.
+- **No AMI re-score.** The probabilities are bit-equal on the fixture and on a direct comparison, so
+  the labels cannot move; that is an argument from the outputs rather than a run of the gate.
 
 ### The resampler was most of a diarisation, and the figures that hid it — measured 2026-08-23
 
