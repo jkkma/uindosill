@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1094 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1097 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,7 +36,7 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Four of those 1094 tests skip themselves.** One is the Media Foundation extension list, which is
+**Four of those 1097 tests skip themselves.** One is the Media Foundation extension list, which is
 platform-specific. The other three are asked for by name, because a count that depends on what is
 installed cannot be written into a document CI checks:
 
@@ -56,9 +56,10 @@ graph — a 2.2 MiB download — and skip unless `UINDOSILL_SILERO_VAD` names it
 UINDOSILL_SILERO_VAD=<path to silero_vad.onnx> dotnet test Uindosill.slnx -c Release
 ```
 
-**Run them after any change to `src/Parakeet.Engine.SileroVad/`**, and drive `uindosill transcribe
---vad neural` over a real file beside them: the two tests say the graph loads and scores silence low
-at three sample rates, and nothing else in the suite runs the model.
+**Run them after any change to `src/Parakeet.Engine.SileroVad/`**, and drive `uindosill transcribe`
+over a real file with the model installed beside them (it is the default detector then, and the
+stderr line names it): the two tests say the graph loads and scores silence low at three sample
+rates, and nothing else in the suite runs the model.
 
 **The seven checkpoint tests that used to sit beside it went to `attic/` on 2026-08-21** with the
 C# translator they exercised. Nothing in the suite now reads real translation weights, and nothing

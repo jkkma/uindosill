@@ -54,6 +54,16 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                     writer.WriteNumber("decodeRealTimeFactor", Round(decodeRtf, 4));
                 }
 
+                // What cut the recording into the pieces the model decoded — the gate, a neural
+                // detector with its runtime, or fixed windows. Present only when the engine
+                // reported it, so a transcript written before 2026-08-23 serialises as it did;
+                // absent, the cut was the gate's or --no-vad's, and the flags that made it are the
+                // only record.
+                if (document.SpeechDetector is { } speechDetector)
+                {
+                    writer.WriteString("speechDetector", speechDetector);
+                }
+
                 // Present only when a labeller ran, like every speaker field below: a transcript made
                 // without the opt-in serialises exactly as it did before the field existed.
                 if (document.SpeakerModelId is { } speakerModel)

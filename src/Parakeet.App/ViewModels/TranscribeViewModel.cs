@@ -128,9 +128,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// Cut the audio on a neural speech detector rather than the loudness gate. <b>On by default</b>
     /// — the maintainer's call, later on 2026-08-23, on the documentary that raised it — and unlike
     /// the two sidecar opt-ins, which stay off: a detector that hears pauses under music is what a
-    /// person with a recording wants, and the command line, where every recorded segment figure
-    /// comes from, keeps the gate as its default so nothing measured moves. The box follows the
-    /// model: <see cref="RefreshSpeechDetectionAvailability"/> unticks it when the model is not
+    /// person with a recording wants, and the command line took the same default later that day,
+    /// with every transcript's JSON naming what cut it so a figure keeps its method. The box follows
+    /// the model: <see cref="RefreshSpeechDetectionAvailability"/> unticks it when the model is not
     /// there and ticks it when the model arrives, unless the user has answered the box themselves.
     /// </summary>
     [ObservableProperty]
@@ -1539,6 +1539,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Backend = engine.Capabilities.Backend,
             ProcessingTime = DateTimeOffset.UtcNow - started,
             DecodeTime = (engine as SegmentingTranscriptionEngine)?.LastDecodeDuration,
+            SpeechDetector = (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport?.SpeechDetector,
         };
 
         // Either opt-in pass can fail where the transcript did not, and when one does the transcript

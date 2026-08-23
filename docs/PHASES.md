@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1094 tests, no weights, no display, no network — **1090 passed and 4 skipped**, and
+**Status:** met. 1097 tests, no weights, no display, no network — **1093 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (106 of the project's 168 CLI
+**Status:** usable, tested end to end against the canned engine (106 of the project's 171 CLI
 tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.** `CLAUDE.md`'s second
+**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1094 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1097 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
+**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2880,7 +2880,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
+**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2936,7 +2936,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.**
+**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3008,7 +3008,25 @@ default for a measurement; the podcast table above is why the second half of tha
 and "opt-in" in the paragraphs above describes the command line from here on. Nothing was
 re-measured, because nothing measurable moved.
 
-**1094 tests, no weights, no display, no network — 1090 passed and 4 skipped.** Two of the four are
+**And later still — the command line too.** Asked for in as many words once the app had it, and the
+reason just given for keeping the gate there was weighed and set aside: `--vad` now defaults to the
+detector whenever its model is installed, so the two routes agree, and what the command-line default
+used to protect is protected another way. The default resolves in three sentences — model installed
+and loading, the detector runs and stderr names it; model not installed, the gate runs and stderr
+says so with the download command; model installed but not loading, the run *refuses*, naming
+`models verify`, rather than falling back to the gate under a transcript that would then carry the
+wrong provenance in silence. `--vad energy` asks for the gate and says nothing; `--no-vad` loads no
+detector at all. What is new beside the default is **provenance**: `TranscriptDocument.SpeechDetector`,
+written as `speechDetector` in the JSON and as a row in the Markdown, names what cut the recording —
+the gate, the detector with its runtime, or `fixed windows` — so a run report can quote a segment
+count with its method, and `measure-transcribe.ps1` and `measure-wer.ps1` take `-Vad` and print the
+name. **What it means for the record**: every figure recorded before this is the gate's, and a default
+run of either harness from here on is not a re-run of any of them — pass `-Vad energy` to reproduce
+one, and read `speechDetector` to know which you got. Nothing was re-measured; the two tables above
+are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
+routes.
+
+**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 

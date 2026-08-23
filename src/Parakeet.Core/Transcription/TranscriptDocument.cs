@@ -41,6 +41,16 @@ public sealed record TranscriptDocument
     public TimeSpan? DecodeTime { get; init; }
 
     /// <summary>
+    /// What cut this recording into the pieces the model decoded: the energy gate's name, a neural
+    /// detector's <see cref="Segmentation.ISpeechDetector.Name"/> with its runtime, or
+    /// <see cref="Segmentation.StreamingSegmenter.FixedWindowsName"/> when nothing decided. Null
+    /// from an engine that does not report it. Provenance on the same terms as <see cref="Backend"/>
+    /// and for the same reason: since 2026-08-23 a default run may be cut by either detector, and a
+    /// segment count that cannot say which is a figure without its method.
+    /// </summary>
+    public string? SpeechDetector { get; init; }
+
+    /// <summary>
     /// The speaker turns a labeller produced for this audio, in file time, or empty when speaker
     /// labelling did not run. These are the labeller's output as such — what an RTTM file carries
     /// and what a diarisation scorer reads — not the per-word attribution derived from them, which

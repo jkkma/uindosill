@@ -44,6 +44,10 @@ public static class TranscriptionRunner
             // The model's own share, from an engine that measures it; the wall figure above is the
             // whole pass and is what every published real-time factor is.
             DecodeTime = (engine as SegmentingTranscriptionEngine)?.LastDecodeDuration,
+
+            // What cut it, from the same engine and for the same reason: a segment count is a
+            // figure with a method, and since 2026-08-23 the method is not one thing.
+            SpeechDetector = (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport?.SpeechDetector,
         };
     }
 }

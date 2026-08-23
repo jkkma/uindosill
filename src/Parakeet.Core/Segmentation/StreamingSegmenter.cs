@@ -70,6 +70,12 @@ public sealed class StreamingSegmenter
     public const string EnergyGateName = "energy gate";
 
     /// <summary>
+    /// What the report names under fixed windows, where neither the gate nor a detector decided
+    /// anything: every frame was speech by fiat and the cuts fell at the cap.
+    /// </summary>
+    public const string FixedWindowsName = "fixed windows";
+
+    /// <summary>
     /// A segmenter over <paramref name="sampleRate"/> audio, cutting on the energy gate — or on
     /// <paramref name="detector"/> where one is given, which is a stream already opened at this rate.
     /// </summary>
@@ -209,7 +215,7 @@ public sealed class StreamingSegmenter
 
     public SegmentationReport CreateReport() => new()
     {
-        SpeechDetector = _detector?.Name ?? EnergyGateName,
+        SpeechDetector = !_options.Enabled ? FixedWindowsName : _detector?.Name ?? EnergyGateName,
         SegmentCount = _nextIndex,
         TotalAudio = AudioMath.SamplesToTime(_totalSamples, _sampleRate),
         SegmentedAudio = AudioMath.SamplesToTime(_segmentedSamples, _sampleRate),

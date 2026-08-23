@@ -78,7 +78,7 @@ internal static class DoctorCommand
         }
 
         context.WriteLine();
-        context.WriteLine("Speech detection (--vad neural runs it in this process, on the CPU)");
+        context.WriteLine("Speech detection (the default whenever this model is installed; runs in this process, on the CPU)");
 
         // In process rather than in a child, unlike the backends below: ONNX Runtime loading a
         // two-megabyte graph has no static initialiser that can take the process down, and what
@@ -91,7 +91,9 @@ internal static class DoctorCommand
         }
         else if (context.Store.PathFor(detectionEntry) is var detectionPath && !File.Exists(detectionPath))
         {
-            context.WriteLine($"  {detectionEntry.Id,-24} not installed — uindosill models download {detectionEntry.Id}");
+            context.WriteLine(
+                $"  {detectionEntry.Id,-24} not installed — transcribe cuts on the energy gate until it is: " +
+                $"uindosill models download {detectionEntry.Id}");
         }
         else
         {

@@ -34,6 +34,14 @@ param(
     [ValidateSet('cpu', 'vulkan', 'cuda')]
     [string] $Backend = 'cpu',
 
+    # Which detector cuts the audio: energy (the gate every figure recorded before 2026-08-23 was
+    # measured with) or neural (Silero VAD, the CLI's default whenever its model is installed).
+    # Unset, the CLI decides — so a run without this is NOT a re-run of an earlier figure; pass
+    # -Vad energy to reproduce one. Whichever ran is named in the JSON as speechDetector and
+    # printed in the summary below.
+    [ValidateSet('energy', 'neural')]
+    [string] $Vad,
+
     # Both shapes PowerShell can hand this. Unquoted, `-Formats srt,txt,vtt-words` arrives as an
     # array, because a comma is the array operator in argument mode; quoted, it arrives as one
     # string. It has to be [string[]]: [CmdletBinding()] above makes this script an advanced
@@ -120,13 +128,14 @@ try {
         'transcribe'
         '--backend'; $Backend
         '--model'; $Model
+        if ($Vad) { '--vad'; $Vad }
         '-f'; $formatArgument
         '-o'; $OutputDirectory
         $audio.Path
     )
 
     Write-Host "Transcribing $($audio.Path)" -ForegroundColor Cyan
-    Write-Host "  model $Model, backend $Backend, formats $formatArgument"
+    Write-Host "  model $Model, backend $Backend, vad $(if ($Vad) { $Vad } else { 'default (the CLI decides; stderr names it)' }), formats $formatArgument"
     Write-Host "  writing to $OutputDirectory"
 
     # A GPU timing with no driver version attached cannot be reproduced or argued with later. The
@@ -491,6 +500,10 @@ try {
         Write-Host ("decode RTF     : {0:N4}" -f $document.decodeRealTimeFactor)
     }
     Write-Host ("model          : {0} ({1}) on {2}" -f $document.model, $document.quantisation, $document.backend)
+    # Named beside the backend for the same reason the backend is: a segment count is a figure with
+    # a method, and since 2026-08-23 a default run may be cut by either detector. A transcript
+    # without the field predates it and was cut by the gate (or by --no-vad, if that was passed).
+    Write-Host ("speech detector: {0}" -f $(if ($document.PSObject.Properties.Name -contains 'speechDetector') { $document.speechDetector } else { 'not recorded — the transcript predates the field' }))
     Write-Host ''
     Write-Host ("segments       : {0}" -f $segments.Count)
     Write-Host ("longest segment: {0:N2} s   (cap is 30)" -f $longest)

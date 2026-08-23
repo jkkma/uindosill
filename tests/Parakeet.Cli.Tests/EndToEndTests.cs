@@ -324,18 +324,76 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task TheEnergyGateIsTheDefaultDetectorAndCanBeNamed()
+    public async Task TheEnergyGateCanBeAskedForByNameAndThenNothingIsSaidAboutIt()
     {
-        // --vad energy spells the default out, the way --vk-disable-bf16 does: the same run, the same
-        // transcript, and no model looked for.
+        // --vad energy is the one way to get the gate without a sentence about it: the person asking
+        // knows what they asked for, and no model is looked for.
         using var harness = new Harness();
         var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
 
-        var exit = await harness.RunAsync("transcribe", "--fake", "--vad", "energy", path);
+        var exit = await harness.RunAsync("transcribe", "--fake", "--vad", "energy", "-f", "json,txt", path);
 
         Assert.Equal(ExitCodes.Success, exit);
         Assert.True(File.Exists(Path.ChangeExtension(path, ".txt")));
         Assert.DoesNotContain("Speech detection:", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("\"speechDetector\": \"energy gate\"", await File.ReadAllTextAsync(Path.ChangeExtension(path, ".json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithoutTheModelADefaultRunCutsOnTheGateAndSaysSoWithTheDownloadCommand()
+    {
+        // The default is the detector whenever its model is installed; here it is not, so the gate
+        // cuts, the run succeeds, and one line on stderr says which detector ran and how to get the
+        // other — because since 2026-08-23 the flags alone no longer say. The transcript's JSON
+        // names the cut too, which is what a run report quotes a segment count with.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "-f", "json,txt", path);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains("Speech detection: energy gate", error, StringComparison.Ordinal);
+        Assert.Contains("models download silero-vad-v5.1.2", error, StringComparison.Ordinal);
+        Assert.Contains("--vad energy", error, StringComparison.Ordinal);
+        Assert.Contains("\"speechDetector\": \"energy gate\"", await File.ReadAllTextAsync(Path.ChangeExtension(path, ".json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnInstalledModelThatWillNotLoadRefusesTheDefaultRunRatherThanFallingBackToTheGate()
+    {
+        // A graph on disk that does not open is a sentence naming models verify, under the default
+        // as under --vad neural — never a transcript cut by the gate under a default that promised
+        // the detector, because that transcript's provenance would be wrong in silence.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+        var store = new LocalModelStore(Path.Combine(harness.Directory, "models"));
+        var model = Assert.Single(ModelCatalog.Default.VoiceActivityModels);
+        Directory.CreateDirectory(Path.GetDirectoryName(store.PathFor(model))!);
+        await File.WriteAllTextAsync(store.PathFor(model), "not really a graph");
+
+        var exit = await harness.RunAsync("transcribe", "--fake", path);
+
+        Assert.Equal(ExitCodes.RuntimeError, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains("will not load", error, StringComparison.Ordinal);
+        Assert.Contains("models verify silero-vad-v5.1.2", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.ChangeExtension(path, ".txt")));
+    }
+
+    [Fact]
+    public async Task FixedWindowsLoadNoDetectorSayNothingAboutOneAndAreNamedAsTheCut()
+    {
+        // --no-vad without --vad is not a contradiction: nothing decides where speech is, so no
+        // detector is looked for, nothing is said about one, and the JSON says what cut the file.
+        using var harness = new Harness();
+        var path = harness.WriteWav("talk.wav", (0.5, false), (2, true), (0.5, false));
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--no-vad", "-f", "json,txt", path);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.DoesNotContain("Speech detection:", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("\"speechDetector\": \"fixed windows\"", await File.ReadAllTextAsync(Path.ChangeExtension(path, ".json")), StringComparison.Ordinal);
     }
 
     [Fact]

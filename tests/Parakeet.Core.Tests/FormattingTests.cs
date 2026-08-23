@@ -284,6 +284,7 @@ public class FormatterTests
         Quantisation = "q8_0",
         Backend = ComputeBackend.Vulkan,
         ProcessingTime = TimeSpan.FromSeconds(1.2),
+        SpeechDetector = "energy gate",
         Segments =
         [
             new TranscriptSegment
@@ -337,6 +338,12 @@ public class FormatterTests
         Assert.Equal("meeting.wav", root.GetProperty("source").GetString());
         Assert.Equal("q8_0", root.GetProperty("quantisation").GetString());
         Assert.Equal("vulkan", root.GetProperty("backend").GetString());
+        Assert.Equal("energy gate", root.GetProperty("speechDetector").GetString());
+
+        // And absent, not null, from a document that does not know — the shape a transcript had
+        // before the field existed.
+        var unknown = TranscriptFormats.Json.Format(Document() with { SpeechDetector = null });
+        Assert.DoesNotContain("speechDetector", unknown, StringComparison.Ordinal);
 
         var segments = root.GetProperty("segments");
         Assert.Equal(2, segments.GetArrayLength());
