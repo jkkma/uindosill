@@ -1387,7 +1387,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
             // Appended rather than rebuilt: the collection is what the pane is bound to, and
             // clearing it every 250 ms would scroll the reader back to the top of a transcript they
             // are in the middle of. No speaker and no chip — a speaker is what the opt-in pass
-            // decides afterwards, and Complete() rebuilds these rows with the names on them.
+            // decides afterwards, and Complete() rebuilds these rows with the names on them. The
+            // rows are cut the way Complete() will cut them — one per sentence, through the same
+            // factory — so a transcript does not re-break itself the moment the decode ends.
             for (; lined < segments.Count; lined++)
             {
                 var segment = segments[lined];
@@ -1396,8 +1398,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
                     continue;
                 }
 
-                vm.Lines.Add(new TranscriptLineViewModel(
-                    voice: null, segment.Text.Trim(), segment.Start, segment.End, segment.Words));
+                foreach (var line in TranscriptLineViewModel.LinesFor(segment, voice: null))
+                {
+                    vm.Lines.Add(line);
+                }
             }
 
             if (ReferenceEquals(SelectedJob, vm))

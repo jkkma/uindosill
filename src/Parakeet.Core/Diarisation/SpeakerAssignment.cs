@@ -209,8 +209,10 @@ public static class SpeakerAssignment
             : totals.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).First().Key;
     }
 
+    // The definition lives on the segment, shared with SentenceSplitter, so the two cutters cannot
+    // disagree about which segments may be cut.
     private static bool JoinReproducesText(List<TranscriptWord> words, string text) =>
-        string.Equals(string.Join(' ', words.Select(w => w.Text.Trim())), text.Trim(), StringComparison.Ordinal);
+        TranscriptSegment.WordsReproduceText(words, text);
 
     private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 

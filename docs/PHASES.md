@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1027 tests, no weights, no display, no network — **1025 passed and 2 skipped**, and
+**Status:** met. 1073 tests, no weights, no display, no network — **1071 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.** `CLAUDE.md`'s second
+**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1027 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1073 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.**
+**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2880,7 +2880,63 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1027 tests, no weights, no display, no network — 1025 passed and 2 skipped.**
+**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
+
+### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
+
+**Reported as: the subtitles come out too long.** A YouTube documentary — NDR's *Hinter den Kulissen
+von Hamburgs Kantinen & Co.*, 28 min 49 s — fetched from its link and transcribed through the app,
+and the Ask tab's second line was 29 seconds and 389 characters: nine sentences lit as one block for
+half a minute.
+
+**The line was a segment, and the segment was the detector's.** One line per `TranscriptSegment`,
+one segment per voice-activity cut, and the cut is an energy gate under a hard cap of thirty
+seconds. Measured (`docs/UNPROVEN.md`, § *The Ask tab's lines are sentences*): the bed under the
+narration sits at −23 dBFS median where the gate's threshold cannot rise above −35, so in that 29 s
+segment 131 of 1,270 frames fall below the line and the longest run below it is 450 ms — one
+silence-rule window, which is where the segment did end. The model's own word timings show what the
+gate missed: pauses of 0.96 s, 0.96 s and 1.84 s after sentence-final words inside that one segment,
+and six seconds of nothing inside the next. Across the whole file the cap is the exception — 285
+segments, median 3.5 s, 34 of them ten seconds or longer — and the opening montage is where it
+bites. This is the detector, not the recogniser: the recogniser heard the pauses.
+
+**What was built: the tab reads a segment by its sentences, and the segment is not touched.**
+`SentenceSplitter` in Core cuts a segment between two words when the first ends in `.`, `!`, `?` or
+an ellipsis and the second opens with a capital, a number, a quote or a bracket — refusing a single
+letter, digits alone and a stop inside the word, so `z. B.`, `am 3. Oktober` and `d.h.` hold. Each
+piece is timed by its own words, the first keeping the segment's start and the last its end, exactly
+as `SpeakerAssignment` cuts on a speaker change and on the same gate — the words must reproduce the
+text, now one definition on `TranscriptSegment` shared by both cutters. The Ask tab's lines are the
+pieces, through one factory, `TranscriptLineViewModel.LinesFor`, for the pane that fills mid-decode
+and the rebuild alike, so a transcript does not re-cut itself the moment the decode ends. The
+`TranscriptDocument` is unchanged: the JSON, the subtitle files, the citation unit and every
+recorded segment count stand where they were.
+
+**Measured on the same file, through the C# itself rather than a re-implementation:** 285 segments
+became 478 lines, 80 of them cut, 193 cuts in all; the longest line fell from 29.4 s to 17.0 s — one
+spoken sentence of 45 words — and lines of ten seconds or more from 34 to 4; the mean line is 2.9 s
+and 43 characters against the segment's 5.4 s and 73; every segment's pieces join back to its text.
+The rule declined once, at `bzw. die`, correctly. Its first draft refused a number as a sentence
+opener to protect `ca. 40`; four of its five declines were then real sentence ends before a number
+(`Genau. 50`, `Westen. 4.41`) and the `ca. 40` it protected did not occur, so the number opens a
+sentence and `ca. 40` is a recorded false cut beside `Dr. Müller` — a per-language abbreviation list
+was declined, because twenty-five languages of them is a second thing to keep right and a wrong cut
+costs one line break. All 193 cuts were listed and read: none stands at a token that is an
+abbreviation. What that reading is not is a comparison with the audio, which `docs/UNPROVEN.md`
+says.
+
+**The English pane stays one line per segment**, because a translated segment carries no word times
+and a translation does not hold its source's sentence count; the notice under the pills now says
+both things, since both have the one cause.
+
+**What this does not fix, named so nobody reads it as fixed.** The detector still cannot hear a
+pause under a bed, so segments on such audio still run to the cap and a cap cut still lands at the
+quietest frame rather than in a pause; a neural VAD is the fix for that and is not on the road. The
+subtitle files still break cues mid-sentence — 24 % of the German cues and 29 % of the English ones
+on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
+punctuation; a punctuation-aware cue was offered and declined for now.
+
+**1073 tests, no weights, no display, no network — 1071 passed and 2 skipped.**
 
 ### The dictation seam
 

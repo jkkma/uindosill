@@ -19,7 +19,7 @@ namespace Parakeet.App.ViewModels;
 /// <param name="SpokenLength">How long it is, or 0 when no word is being spoken.</param>
 public sealed record TextHighlight(string Text, string? Term, int SpokenStart = 0, int SpokenLength = 0);
 
-/// <summary>One segment of a transcript, as the window draws it: a speaker chip and the words.</summary>
+/// <summary>One line of a transcript, as the window draws it: a speaker chip and the words.</summary>
 /// <remarks>
 /// <para>
 /// This exists beside <see cref="JobViewModel.Transcript"/> rather than replacing it, and the two
@@ -34,6 +34,13 @@ public sealed record TextHighlight(string Text, string? Term, int SpokenStart = 
 /// seeks. The times come off the <c>TranscriptSegment</c> unchanged — the window never computes a
 /// timestamp of its own, which is the rule <c>docs/V2-ASK-THE-TRANSCRIPT.md</c> sets for citations
 /// and applies just as well to the transcript they cite.
+/// </para>
+/// <para>
+/// A line was one segment until 2026-08-23, and is one <em>sentence</em> of a segment now where
+/// the segment's word timings can tell its sentences apart — see <see cref="LinesFor"/>. The times
+/// are still the engine's: a sentence starts at its first word and ends at its last, and the
+/// first and last sentences keep the segment's own bounds. A segment whose sentences cannot be
+/// timed apart — no words, which is every translated segment — is one line as it always was.
 /// </para>
 /// <para>
 /// It carries the segment's <em>word</em> times too, which is what lets the Ask tab mark the one
@@ -106,6 +113,40 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
         Start = start;
         End = end;
         _spans = Locate(text, words);
+    }
+
+    /// <summary>
+    /// The lines <paramref name="segment"/> is drawn as: one per sentence its word timings can tell
+    /// apart, or the segment whole when they cannot — which is every segment without words, so a
+    /// translated transcript keeps one line per segment. An empty piece is no line at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one place a segment becomes lines, for both the pane that fills while a file is still
+    /// decoding and the rebuild when it finishes, so the two cannot disagree about where a line
+    /// breaks — a transcript that re-cut itself the moment the decode ended would read as a defect.
+    /// </para>
+    /// <para>
+    /// Why the segment is cut at all, and why only here and not in the transcript itself, is on
+    /// <see cref="SentenceSplitter"/>. The short form: a segment is what the voice-activity detector
+    /// cut, and on a recording with music under the speech that is the whole thirty-second cap, nine
+    /// sentences lit up as one block for half a minute. The segment stays what it was — it is the
+    /// citation unit and the unit every recorded figure counts — and this reads it by the sentence.
+    /// </para>
+    /// </remarks>
+    internal static IEnumerable<TranscriptLineViewModel> LinesFor(TranscriptSegment segment, SpeakerViewModel? voice)
+    {
+        ArgumentNullException.ThrowIfNull(segment);
+
+        foreach (var piece in SentenceSplitter.Split(segment))
+        {
+            if (piece.IsEmpty)
+            {
+                continue;
+            }
+
+            yield return new TranscriptLineViewModel(voice, piece.Text.Trim(), piece.Start, piece.End, piece.Words);
+        }
     }
 
     /// <summary>
