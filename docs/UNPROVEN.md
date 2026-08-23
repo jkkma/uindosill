@@ -843,8 +843,9 @@ the product is uninstalled (`docs/GOTCHAS.md` gotcha 8 has the design). What is 
 and each of its guards run against rebuilt directory trees in `UninstallCleanupTests`, including
 the real lock semantics on Windows and a real symbolic link elsewhere.
 
-What is not: no installer has been packed since the hook was added, so no `Update.exe --uninstall`
-has ever invoked it. Unobserved, specifically:
+What is not: no `Update.exe --uninstall` has ever invoked it. An installer carrying the hook now
+exists — `v1.0.0-rc.3`, packed 2026-08-23 — and has never been installed, so the gap moved from
+"no installer" to "no install". Unobserved, specifically:
 
 - **That the hook fires at all from a real uninstall.** The callback chain runs inside the
   installed stub under Velopack's 30-second fast-callback budget; nothing here has watched it do
@@ -891,8 +892,10 @@ substitute for watching the process on a network.
 ### The update check has never found an update
 
 `VelopackUpdater` asks `GithubSource` for the release feed of `jkkma/uindosill`, and that repository
-has no releases. Two draft releases were built and deleted on 2026-08-19 (below), and a draft is not
-a release for this purpose — `vpk` could not see one either. So the path from *a newer version exists* to *it is installed* has never run end to
+has exactly one release — `v1.0.0-rc.3`, published 2026-08-23, marked prerelease, which the
+constructor's `prerelease: false` filters out before it is a candidate. Two draft releases were
+built and deleted on 2026-08-19 (below), and a draft is not a release for this purpose — `vpk`
+could not see one either. So the path from *a newer version exists* to *it is installed* has never run end to
 end: no `CheckForUpdatesAsync` has returned a non-null `UpdateInfo`, no `DownloadUpdatesAsync` has
 downloaded anything, and `ApplyUpdatesAndRestart` has never been called by this application.
 
@@ -929,6 +932,16 @@ is no longer true, and a `VelopackUpdater` test against a canned feed is now a t
 declined to write rather than a thing that cannot be written.
 
 ### The release workflow was run twice, and one step in it still has not been
+
+**Run for real on 2026-08-23: a `v1.0.0-rc.3` tag took the tag path end to end and published.**
+All steps green in 28m2s — against the rehearsals' 7–10 minutes, the difference being the first
+CI assembly of the Python bundle — the suite green on `windows-latest`, eight assets on a release
+marked prerelease, and the seeding step reported "No releases found" a third time, correctly:
+there was still nothing to diff against, so this release ships full packages only and the delta
+path below remains unexercised. The observed sizes are in § *The bundled interpreter is 1.20 GB*.
+One asset moved against the rehearsal without explanation being established here: the CLI zip is
+**60.7 MB** where 2026-08-19 produced 53.9 MB — under its 400 MB guard either way, and the growth
+is not attributed further. Everything below about the rehearsals stands as written.
 
 Rehearsed on 2026-08-19 through `workflow_dispatch` with the `draft` input, twice — 1.0.0-rc.1 and
 then 1.0.0-rc.2 — on `windows-latest`. Both runs went green through all twelve steps, and both
@@ -2513,6 +2526,14 @@ own zip back, but **the script has not been run with that step in it**: the zip 
 built, never unpacked, and never resolved from on a machine that did not also have a repository
 checkout. Its size is assumed equal to the bundle's 1.20 GB and has not been observed after
 compression.
+
+**Superseded in part, 2026-08-23: the `v1.0.0-rc.3` release built all of it, and the sizes are now
+observed.** CI packed both channels with the bundle inside and produced the zip for the first time:
+`uindosill-python-win-x64.zip` is **400.2 MB** — a third of the unpacked 1.20 GB, not the ~1.2 GB
+download the plan had assumed — with `UindosillDesktop-win-Setup.exe` at **485.4 MB** and the CUDA
+flavour at **1187.9 MB**, against 81.9 MB and 818.6 MB bundle-less. What remains unobserved is
+everything past the byte counts: the zip has still never been unpacked and resolved from on a
+machine without a checkout, and no bundle-carrying installer has ever been installed.
 
 **Every execution-provider figure still comes from a development virtual environment**, not from a
 bundle: the AMI arms, the 32-sentence translator arms and the diariser's parity numbers were all
