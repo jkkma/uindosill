@@ -3086,6 +3086,47 @@ to measure.
 
 **1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
 
+### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
+
+The maintainer noticed the translation leaning on the CPU with the GPU nearly idle, and the
+diagnosis ran through three layers before it reached a decision.
+
+**What was actually happening was the design working as documented.** The app asks for `auto`,
+`auto` resolved to WebGPU, WebGPU builds — no silent fallback; the engine's own registered-provider
+check confirms it — and eight Spanish sentences timed at 0.189 s/sentence against the CPU's 0.289,
+in line with the published 1.30×. The GPU sat near idle between two-second spikes because the whole
+beam search — the loop, the logits work, the beam bookkeeping — runs in torch on the CPU, the wheel
+in use ships CPU torch, and IO binding is off, so only the encoder and decoder forward passes reach
+the GPU and the KV cache round-trips on every step. Every part of that is in `engine.py`'s own
+docstring.
+
+**The desktop has a venv the docstring's escape clause describes** — `onnxruntime-gpu 1.29.0` with
+CUDA torch — and CUDA was measured there the same day: **0.142 s/sentence, 1.33× WebGPU, 2× the
+CPU**, sessions registered as `CUDAExecutionProvider`, correct English out. The committed parity
+fixture then passed **6 of 6 string-identical** on CUDA, against a CPU control in the same venv that
+also passed 6 of 6. The fixture is a smoke test by its own docstring; what makes CUDA safe to prefer
+is the 2026-08-21 study's **240 of 240** on the gate hypotheses, and the new timing is only what
+makes it worth preferring.
+
+**So `AUTO_ORDER` is now `["cuda", "webgpu"]`**, and the reorder costs the bundle nothing by
+construction: `resolve_auto` keeps only the providers the wheel was compiled with, the shipped
+`onnxruntime-webgpu` wheel has no CUDA, and the shipped app therefore still tries WebGPU first
+exactly as before. What changes is a machine running the sidecar on a CUDA wheel — today, the
+desktop this was measured on. The 1.65 GB of CUDA libraries stay out of the installer for the same
+reason they were never in it.
+
+**The docstring's "a machine that could bind would be faster than that number, never slower" was
+tested on the first machine that could bind, and the machine aborted.** `use_io_binding` flipped on
+through optimum's own setter, on the CUDA stack above: the first decode step died with `CUDA error
+cudaErrorIllegalAddress: an illegal memory access was encountered` in the `/Mul` node, caught by
+torch's abort handler as a native process abort — not an exception the sidecar could report and fall
+back from. The sentence was true and incomplete: binding would be faster if it ran. The docstring
+now says both halves, and binding stays off everywhere.
+
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** The C# suite does
+not run any of this; what covers it is the parity fixture at load on a real machine, which is
+exactly the arrangement `CLAUDE.md` records for the translator.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

@@ -16,6 +16,17 @@ turned. `generation_config.json` says `num_beams: 4` and nothing this project ha
 torch device, the bundle ships CPU torch, and the WebGPU figure this project publishes was measured
 with binding off for exactly that reason: 0.459 s/sentence against the CPU's 0.595. A machine that
 could bind would be faster than that number, never slower.
+
+**And it is also off because, on the one machine that could bind, binding crashed.** Measured
+2026-08-23 on the RTX 5080 with onnxruntime-gpu 1.29.0, optimum 2.1.0 and torch 2.13.0+cu130 — CUDA
+torch, so `optimum` had a device to bind to: flipping `use_io_binding` on after the load, through
+`optimum`'s own setter, aborted the process on the first decode step — `Non-zero status code
+returned while running Mul node. Name:'/Mul' ... CUDA error cudaErrorIllegalAddress: an illegal
+memory access was encountered`, caught by torch's abort handler rather than raised to Python. A
+native abort is not something the sidecar can report and fall back from; it is the host losing its
+translator mid-run. So the sentence above is true and incomplete: binding would be faster *if it
+ran*, and on the stack it was tried on it does not. Turning it on is a measurement to take again,
+against a different ORT or optimum, not a flag to flip.
 """
 
 from __future__ import annotations
@@ -53,10 +64,22 @@ PROVIDERS = {
 #: diariser's is a diarisation error rate and this one's is string identity against the CPU — and a
 #: single shared order would make one engine's automatic choice rest on the other's measurement.
 #:
-#: WebGPU leads because it is the only non-CPU provider measured to return the CPU's own
-#: translations: on 32 FLEURS es_419 sentences at beam 6, 32 of 32 were string-identical to the
-#: CPU's at 1.30x the speed (2026-08-21). CUDA also matched, on 240 of 240, but it needs about
-#: 1.65 GB of CUDA and cuDNN libraries in the installer to do it.
+#: CUDA leads, as of 2026-08-23, and WebGPU is the provider the bundle actually runs — both of
+#: those are true at once, and the reason is `resolve_auto`: it keeps only what the wheel was
+#: compiled with, so this order decides nothing on the shipped `onnxruntime-webgpu` wheel, where
+#: CUDA is not on the list and WebGPU is tried first as it always was. What the order decides is a
+#: machine running the sidecar on a CUDA wheel, which today is the maintainer's desktop.
+#:
+#: Both are faithful, which is the precondition: on 32 FLEURS es_419 sentences at beam 6, WebGPU
+#: returned the CPU's own translations on 32 of 32 at 1.30x the speed, and CUDA on 240 of 240
+#: (2026-08-21). CUDA is then put first on speed, measured 2026-08-23 on the RTX 5080 over eight
+#: Spanish sentences: 0.142 s/sentence against WebGPU's 0.189 and the CPU's 0.289 — 1.33x WebGPU —
+#: with the committed parity fixture passing 6 of 6 on the same stack, string-identical to a CPU
+#: control that also passed 6 of 6. That is a timing and a smoke test, not the gate corpus; the
+#: 240 of 240 is what makes it safe to prefer, and the 0.142 is only what makes it worth preferring.
+#:
+#: It stays out of the bundle for the reason it was never in it: about 1.65 GB of CUDA and cuDNN
+#: libraries in the installer. This order costs that nothing.
 #:
 #: **DirectML is deliberately not here and cannot be reached by `auto`.** Measured the same day it
 #: agreed with the CPU on 0 of 32 sentences — the decoder falls into a repetition loop — while
@@ -64,7 +87,7 @@ PROVIDERS = {
 #: at full optimisation when driven directly, which puts the fault in `optimum`'s merged KV-cache
 #: path rather than in the provider, and is why disabling the graph optimiser does not rescue it the
 #: way it rescues the diariser. It stays selectable by name so that measuring it stays possible.
-AUTO_ORDER = ["webgpu", "cuda"]
+AUTO_ORDER = ["cuda", "webgpu"]
 
 
 def resolve_auto() -> list[str]:

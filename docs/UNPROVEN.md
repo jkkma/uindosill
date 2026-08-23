@@ -3791,6 +3791,17 @@ fails the one that scrolls away.
   builder's no-word path is reachable, and has never been observed*, which is the same gap seen
   from the subtitle side.
 
+- **CUDA-first `auto` for the translator rests on eight sentences, six fixture lines and one
+  machine.** The faithfulness that justifies it is the 2026-08-21 study's 240 of 240; the 2026-08-23
+  additions are a timing (0.142 s/sentence vs WebGPU's 0.189, RTX 5080, onnxruntime-gpu 1.29.0) and
+  the six-sentence parity fixture passing string-identically. No gate-corpus run has been made on
+  this exact stack, no second CUDA machine exists to try it, and the shipped bundle cannot reach the
+  CUDA branch at all — so the reorder is exercised by exactly one working copy in the world.
+- **The IO-binding crash is recorded, not root-caused.** `cudaErrorIllegalAddress` in `/Mul` on the
+  first decode step with binding on, ORT 1.29.0 + optimum 2.1.0 + torch 2.13.0+cu130, reproduced
+  twice, never chased into which of the three is at fault or whether a different version pairing
+  survives. The docstring now warns rather than promises; nothing more is claimed.
+
 - **The English pane on the Ask tab has not been read against a real translated recording.** Every
   test of it drives a fixture whose "translation" is two hand-written English segments. That the
   pane switches, searches, highlights by line and marks no word is asserted headlessly; that reading
