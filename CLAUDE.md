@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1138 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1144 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,9 +36,11 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Four of those 1138 tests skip themselves.** One is the Media Foundation extension list, which is
-platform-specific. The other three are asked for by name, because a count that depends on what is
-installed cannot be written into a document CI checks:
+**Five of those 1144 tests skip themselves.** Two are halves of platform pairs — the Media
+Foundation extension list, and the uninstall cleanup's link test whose Windows half is the
+locked-file test — so exactly one of each pair skips wherever the suite runs and the count above
+holds on every machine. The other three are asked for by name, because a count that depends on
+what is installed cannot be written into a document CI checks:
 
 ```bash
 UINDOSILL_FLEURS_DIR=<a google/fleurs snapshot's data/ directory> dotnet test Uindosill.slnx -c Release

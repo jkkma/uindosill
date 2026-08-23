@@ -13,6 +13,9 @@ namespace Parakeet.App.Tests;
 /// inside it. This product downloads 700 MB to 1.3 GiB of weights into
 /// <c>%LOCALAPPDATA%\Uindosill\models</c>, and a ~474 MB diariser is joining them. If the package
 /// id were "Uindosill", uninstalling would delete all of it, and nothing in the build would say so.
+/// Uninstall does remove that directory now — but through <c>UninstallCleanup</c>, whose guards
+/// have their own tests; what is held here is the separation that makes its delete a decision
+/// rather than a name collision.
 /// </remarks>
 public class PackagingIdentityTests
 {
@@ -89,7 +92,7 @@ public class PackagingIdentityTests
             Directory.Delete(install, recursive: true);
 
             Assert.False(Directory.Exists(install));
-            Assert.True(File.Exists(weights), "The uninstall took the weights with it.");
+            Assert.True(File.Exists(weights), "The installer's own recursive delete took the weights with it.");
             Assert.Equal("1.34 GiB of somebody's afternoon", File.ReadAllText(weights));
         }
         finally
