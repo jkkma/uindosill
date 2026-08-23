@@ -252,7 +252,7 @@ public class SpeakerCountTests
         viewModel.LabelSpeakers = true;
         var warning = viewModel.SpeakerDurationWarning;
         Assert.StartsWith("long.wav: this recording is 3 minutes", warning, StringComparison.Ordinal);
-        Assert.Contains("not known to be wrong so much as not known to be right", warning, StringComparison.Ordinal);
+        Assert.Contains("treat the names as a guess", warning, StringComparison.Ordinal);
         Assert.Contains("the words are unaffected", warning, StringComparison.Ordinal);
     }
 
@@ -421,7 +421,7 @@ public class SpeakerCountTests
 
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
         Assert.Contains(
-            "not known to be wrong so much as not known to be right",
+            "treat the names as a guess",
             viewModel.Jobs[0].Warning,
             StringComparison.Ordinal);
     }

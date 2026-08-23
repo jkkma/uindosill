@@ -376,8 +376,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public string? VideoNotice =>
         _player.CanDrawVideo || SelectedRecording is not { } job || !(job.IsFromUrl || LooksLikeVideo(job.Path))
             ? null
-            : "This build has no video player, so if this recording has a picture, only its sound "
-              + "plays. Vendoring libmpv adds the picture — see docs/NATIVE-BINARIES.md.";
+            : "This build has no video player, so if this recording has a picture, only its sound plays.";
 
     private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mov", ".wmv", ".asf", ".mkv", ".webm", ".avi"];
 
@@ -426,8 +425,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// rather than as unbuilt.
     /// </summary>
     public string WorkInProgressNotice =>
-        "Asking questions is not built. There is no language model in this application yet, and what one would be "
-        + "is still an open decision — see docs/V2-ASK-THE-TRANSCRIPT.md.\n\n"
+        "Asking questions is not built yet — there is no language model in this application.\n\n"
         + "The recording and its transcript beside it are real: play it, and click any line to jump there.";
 
     /// <summary>

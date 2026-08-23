@@ -449,8 +449,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 // the long-recording escalation is SpeakerDurationWarning's job, drawn right beside
                 // this field.
                 return "Give the number of people talking; 'Label speakers' does not run without it. "
-                    + "The model can estimate the count, but a wrong estimate is silent — past about an hour "
-                    + "it tends to hear one person as two — so this window always asks.";
+                    + "The model's own estimate can silently hear one person as two on long recordings, "
+                    + "so the count is always asked for.";
             }
 
             if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)
@@ -1228,7 +1228,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             StatusMessage = LongestPastTheBound() is { } risky
                 ? $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
-                    + "labels have been established, and past that it tends to hear one person as two. Set "
+                    + "labels are reliable — past that it can hear one person as two. Set "
                     + "'How many speakers' under the opt-in, or turn 'Label speakers' off and take the transcript "
                     + "without names."
                 : "'Label speakers' needs to know how many. Set 'How many speakers' under the opt-in, or turn "
@@ -1705,10 +1705,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private static string? DescribeMerges(IReadOnlyList<SpeakerFold> merges) =>
         merges.Count == 0
             ? null
-            : $"Folded to the speaker count you asked for: merged {string.Join("; ", merges.Select(m => m.Describe()))}. The margin is the "
-              + "evidence rather than the raw seconds — two hosts of a long recording overlap for minutes however "
-              + "you cut them, so what matters is how far behind the next-closest pair was. A merge with little or "
-              + "no margin means the count has probably put two people under one name.";
+            : $"Folded to the speaker count you asked for: merged {string.Join("; ", merges.Select(m => m.Describe()))}. "
+              + "A merge with little or no margin may have put two people under one name.";
 
     private static string? DescribeSilence(ITranscriptionEngine engine, TranscriptDocument document)
     {

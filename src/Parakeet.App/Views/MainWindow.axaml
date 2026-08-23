@@ -383,19 +383,6 @@
 
             <!-- ── The transcript ─────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="2">
-              <!-- Where the rest of this column went, on 2026-08-23. The formats, the folder,
-                   the button that puts the transcript inside the recording and the way the audio
-                   is cut are on the Export and Settings tabs, and this line is the forwarding
-                   address. A control that moves without one is a control the person who used it
-                   every day cannot find, which is the same failure as a control that silently
-                   does nothing.
-
-                   Every control that left is named: a forwarding address that lists some of what
-                   went is worse than none, because the reader concludes the rest was removed. -->
-              <TextBlock DockPanel.Dock="Top" Name="OptionsMoved" Classes="fine meta"
-                         Margin="0,0,0,11"
-                         Text="Output formats, where files are written, and adding the transcript to the recording are on the Export tab. How the audio is cut is on Settings." />
-
               <!-- ── The two extra passes ─────────────────────────────────────────────────────
                    Beside the queue rather than on Settings with the cut controls, since later on
                    2026-08-23: the cut and the formats are machinery, set once and left alone, but
@@ -809,7 +796,7 @@
                  under a left-aligned heading. -->
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="What a finished transcript is written as, and where it goes. Everything here applies to every file in the queue, and to the next batch as much as this one." />
+                       Text="What a finished transcript is written as, and where it goes. These choices apply to every file in the queue." />
 
             <StackPanel Spacing="9">
               <TextBlock Text="OUTPUT FORMATS" Classes="section" />
@@ -1378,7 +1365,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="How a recording is cut up before it is decoded. The two extra passes — speaker labels and the English translation — are on the Transcribe tab, beside the queue they run over." />
+                       Text="How a recording is cut up before it is decoded. Speaker labels and translation are on the Transcribe tab." />
 
             <!-- ── How the audio is cut ────────────────────────────────────────────────────── -->
             <StackPanel Spacing="9">
@@ -1417,7 +1404,7 @@
                    paragraph nobody can act on. -->
               <TextBlock Name="SegmentationNote" Classes="fine meta" MaxWidth="640"
                          HorizontalAlignment="Left"
-                         Text="Every recording is cut into segments of at most 30 seconds before decoding. That is a correctness requirement: Parakeet degrades on long single-pass audio and glues text across chunk boundaries long before it collapses." />
+                         Text="Every recording is cut into segments of at most 30 seconds before it is decoded — the recogniser loses accuracy on longer stretches — so a cap above 30 has no effect." />
             </StackPanel>
 
             <!-- There is no spoken-language picker on this page, and that is a decision rather than

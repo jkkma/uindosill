@@ -159,10 +159,8 @@ internal static class DiariseCommand
             if (merges.Count > 0)
             {
                 context.WriteError(
-                    $"{stem}: folded to the {SpeakerTurns.Speakers(turns).Count} speakers you asked for. The margin " +
-                    "is the evidence, not the raw seconds: two hosts of a long recording overlap for minutes however " +
-                    "you cut them, so what matters is how far behind the next-closest pair was. A merge with little " +
-                    "or no margin means the count you gave has probably put two people under one name.");
+                    $"{stem}: folded to the {SpeakerTurns.Speakers(turns).Count} speakers you asked for. A merge " +
+                    "with little or no margin may have put two people under one name.");
             }
 
             File.WriteAllText(destination, RttmFile.Write(turns, stem), TextOutput.Utf8NoBom);
