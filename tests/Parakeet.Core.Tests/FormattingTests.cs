@@ -428,6 +428,30 @@ public class FormatterTests
     }
 
     [Fact]
+    public void TheDecodeTimeTravelsBesideTheWallFigureAndIsAbsentWhenUnmeasured()
+    {
+        // processingSec is the whole pass and every published real-time factor; decodeSec is the
+        // model's own share, and is null — on the same terms as processingSec and audioDurationSec
+        // — when the engine did not measure it, while the derived factor is simply absent.
+        var measured = Document() with { DecodeTime = TimeSpan.FromSeconds(0.9) };
+
+        using var json = JsonDocument.Parse(TranscriptFormats.Json.Format(measured));
+        var root = json.RootElement;
+        Assert.Equal(1.2, root.GetProperty("processingSec").GetDouble(), 6);
+        Assert.Equal(0.9, root.GetProperty("decodeSec").GetDouble(), 6);
+        Assert.Equal(0.1, root.GetProperty("realTimeFactor").GetDouble(), 4);
+        Assert.Equal(0.075, root.GetProperty("decodeRealTimeFactor").GetDouble(), 4);
+
+        var markdown = TranscriptFormats.Markdown.Format(measured);
+        Assert.Contains("| Real-time factor | 0.1 |", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Decode real-time factor | 0.075 |", markdown, StringComparison.Ordinal);
+
+        using var unmeasured = JsonDocument.Parse(TranscriptFormats.Json.Format(Document()));
+        Assert.Equal(JsonValueKind.Null, unmeasured.RootElement.GetProperty("decodeSec").ValueKind);
+        Assert.False(unmeasured.RootElement.TryGetProperty("decodeRealTimeFactor", out _));
+    }
+
+    [Fact]
     public void JsonIsValidWhenNothingWasTranscribed()
     {
         var json = TranscriptFormats.Json.Format(TranscriptDocument.Empty);

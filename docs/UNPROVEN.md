@@ -206,6 +206,27 @@ drift landed on both; the remaining runs behind these means were not alternated,
 Vulkan pair from the shader-cache experiment below. Every decode time here is `processingSec` from
 the transcript, which excludes model load.
 
+**`processingSec` is the whole pass, not the model — found 2026-08-22, and every "decode time" in
+this file is that figure.** The stopwatch that produces it wraps `TranscribeAsync` end to end, and
+inside that stretch the container is decoded through Media Foundation, the audio mixed down and
+resampled, and the segmenter run, block by block and serialised with the model: the read of a block
+and the decode of the batch before it never overlap. Measured on the second machine with the canned
+engine — which decodes nothing — `sample.m4a` (600.004 s of AAC) costs **1.77 s** of `processingSec`
+on its own, `full-source.m4a` (3,287.6 s) 11.7 s and `two-hosts.mp3` (10,523 s) 9.1 s. Against 49 s
+of CPU decode that is a rounding error; against this table's **3.86 s** on CUDA it is most of the
+number, and that share has not been measured on the desktop. Since 2026-08-22 the transcript also
+carries `decodeSec` and `decodeRealTimeFactor` — the time inside the model's decode calls alone,
+summed over the pass — beside `processingSec`, which keeps its meaning so that every figure already
+recorded stays comparable with every new one. Re-timed on the second machine the same day, same
+file, same model, one run each, with the new field: **CPU `processingSec` 77.3 s (RTF 0.1288)
+against `decodeSec` 74.78 s (0.1246), 2.5 s and 3.3 % outside the model; Vulkan 24.78 s (0.0413)
+against 23.14 s (0.0386), 1.65 s and 6.6 % outside it.** (That CPU run is 9 % faster than the 85.0 s
+in the second-machine table below — one run against one, on a laptop, and nothing here says which
+of the two is the typical one.) **What is owed is the desktop: CUDA's 3.86 s re-timed with the
+read separated**, which this laptop cannot do. Until then the CUDA RTF in this file and in the
+README describes the pipeline, and the model's own share of it is unknown — smaller, by whatever
+the desktop's Media Foundation decode of that file costs.
+
 The Vulkan column was measured with bf16 enabled (`bf16: 1` in the device banner), which was the
 product's configuration until 2026-08-16. The default is now to disable bf16 before loading — the
 workaround the second machine needs — and it was re-measured on this machine before it changed:

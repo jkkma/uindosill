@@ -61,6 +61,13 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Real-time factor", rtf.ToString("0.###", CultureInfo.InvariantCulture)));
             }
 
+            // The model's own, beside the whole pass's: the read and the segmentation are in the
+            // row above and not in this one.
+            if (document.DecodeRealTimeFactor is { } decodeRtf)
+            {
+                rows.Add(("Decode real-time factor", decodeRtf.ToString("0.###", CultureInfo.InvariantCulture)));
+            }
+
             // Which model named the speakers, beside which model wrote the words, for the same
             // reason: a label whose source is unknown cannot be re-examined.
             if (document.SpeakerModelId is { } speakerModel)

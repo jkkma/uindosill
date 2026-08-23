@@ -11,7 +11,11 @@ nothing has packaged one.
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
 > `tdt-0.6b-v3-f16`, on one 16-core x64 desktop with an RTX 5080 — **RTF 0.082 on CPU, 0.011 on
 > Vulkan, 0.0064 on CUDA** — 98 segments and 1,573 words on all three, no duplicated or dropped
-> words at any segment join. Three hours has been run end to end on CPU. The Vulkan figure is
+> words at any segment join. Every RTF here is the whole pass — the container decode, the
+> resampling and the segmentation run inside the timed stretch, serialised with the model — which
+> is a rounding error against a CPU decode and a material share of a fast GPU one; since 2026-08-22
+> the transcript also carries the model's own decode time beside it, and `docs/UNPROVEN.md` says
+> what each figure contains and which have been re-timed. Three hours has been run end to end on CPU. The Vulkan figure is
 > steady-state: the *first* Vulkan run on a fresh machine takes 14 s rather than 6.6 s, because the
 > driver is compiling shaders inside the number that looks like decode time. A second machine — a
 > Ryzen AI 9 365 laptop with an integrated Radeon 880M — has since been measured: **RTF 0.14 on
@@ -132,7 +136,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 868 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 871 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

@@ -1,3 +1,4 @@
+using Parakeet.Core.Audio;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Licensing;
 using Parakeet.Core.Segmentation;
@@ -22,6 +23,71 @@ public class FakeEngineTests
         var second = document.Segments[1];
         Assert.True(second.Words[0].Start >= second.Start);
         Assert.True(second.Words[^1].End <= second.End + TimeSpan.FromMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task TheDecodeTimeIsTheModelsShareAndTheProcessingTimeIsTheWholePass()
+    {
+        // A source that is slow to read and an engine that decodes in no time: the wall figure
+        // carries the read, the decode figure does not. Until 2026-08-22 only the wall figure
+        // existed and every document called it "decode time" — on a fast GPU backend the read is
+        // most of it.
+        var audio = new SlowAudioSource(TestAudio.Build((0.4, false), (2, true), (0.4, false)), delayPerBlock: TimeSpan.FromMilliseconds(60));
+        await using var engine = new FakeTranscriptionEngine();
+
+        var document = await TranscriptionRunner.RunAsync(engine, audio, sourceName: "test");
+
+        Assert.NotNull(document.ProcessingTime);
+        Assert.NotNull(document.DecodeTime);
+        Assert.True(document.DecodeTime <= document.ProcessingTime);
+        Assert.True(document.DecodeTime < TimeSpan.FromMilliseconds(200), $"decode {document.DecodeTime}");
+        Assert.True(document.ProcessingTime >= TimeSpan.FromMilliseconds(300), $"pass {document.ProcessingTime}");
+        Assert.NotNull(document.DecodeRealTimeFactor);
+        Assert.True(document.DecodeRealTimeFactor < document.RealTimeFactor);
+    }
+
+    [Fact]
+    public async Task ASlowDecodeIsMostOfTheProcessingTime()
+    {
+        // The other way round: an engine that takes its time and a source that does not, so the
+        // decode figure accounts for most of the pass.
+        var audio = new ArrayAudioSource(TestAudio.Build((0.4, false), (2, true), (0.4, false)));
+        await using var engine = new FakeTranscriptionEngine(new FakeEngineOptions { SimulatedRealTimeFactor = 0.25 });
+
+        var document = await TranscriptionRunner.RunAsync(engine, audio, sourceName: "test");
+
+        Assert.True(document.DecodeTime >= TimeSpan.FromMilliseconds(400), $"decode {document.DecodeTime}");
+        Assert.True(document.DecodeTime >= document.ProcessingTime * 0.7, $"decode {document.DecodeTime} of pass {document.ProcessingTime}");
+    }
+
+    /// <summary>An in-memory source that pauses between blocks, standing in for a container decode.</summary>
+    private sealed class SlowAudioSource : IAudioSource
+    {
+        private readonly float[] _samples;
+        private readonly TimeSpan _delayPerBlock;
+
+        public SlowAudioSource(float[] samples, TimeSpan delayPerBlock)
+        {
+            _samples = samples;
+            _delayPerBlock = delayPerBlock;
+        }
+
+        public int SampleRate => TestAudio.SampleRate;
+
+        public TimeSpan? Duration => TimeSpan.FromSeconds(_samples.Length / (double)SampleRate);
+
+        public async IAsyncEnumerable<ReadOnlyMemory<float>> ReadAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            const int Block = 8_000;
+            for (var offset = 0; offset < _samples.Length; offset += Block)
+            {
+                await Task.Delay(_delayPerBlock, ct);
+                yield return _samples.AsMemory(offset, Math.Min(Block, _samples.Length - offset));
+            }
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     [Fact]
