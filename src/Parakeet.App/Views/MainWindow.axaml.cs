@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         WireVideoPane();
         WireMediaSplitter();
         WireVoices();
+        FollowTranscript();
 
         // The clock the Ask tab draws from, and it is here rather than in the view model on
         // purpose: a view model that starts a dispatcher timer needs a dispatcher to exist before
@@ -120,6 +121,46 @@ public partial class MainWindow : Window
         // exposes a Tick it does nothing in unless something moved, and this is what calls it.
         _transport = new DispatcherTimer(DispatcherPriority.Background) { Interval = TransportRefresh };
         _transport.Tick += (_, _) => (DataContext as MainWindowViewModel)?.Ask.Tick();
+    }
+
+    /// <summary>
+    /// Keeps the Transcribe tab's transcript scrolled to its end while a batch is filling it, so
+    /// the words being decoded are the words on screen.
+    /// </summary>
+    /// <remarks>
+    /// Only while the content is growing and only while the reader was already at the end: an
+    /// extent change with the view anywhere else means they scrolled up to read something, and
+    /// yanking the view out from under a reader is worse than the stale tail. The stick flag is
+    /// recomputed from every offset change, so scrolling back down to the end re-arms it and
+    /// scrolling up disarms it — no button, the scrollbar itself is the control. Gated on the
+    /// batch actually running, because the extent also changes when a finished row is selected,
+    /// and opening an old transcript at its end would lose the reader its beginning.
+    /// </remarks>
+    private void FollowTranscript()
+    {
+        if (this.FindControl<ScrollViewer>("TranscriptScroll") is not { } scroll)
+        {
+            return;
+        }
+
+        var stick = true;
+        scroll.ScrollChanged += (_, e) =>
+        {
+            if (e.ExtentDelta.Y != 0)
+            {
+                if (stick && (DataContext as MainWindowViewModel)?.Transcribe.IsRunning == true)
+                {
+                    scroll.ScrollToEnd();
+                }
+
+                return;
+            }
+
+            // An offset change with a stable extent is the reader (or the ScrollToEnd above, which
+            // lands at the end and therefore re-arms). Within one line-height of the end counts as
+            // at it, so a rounding pixel cannot silently disarm the follow.
+            stick = scroll.Offset.Y + scroll.Viewport.Height >= scroll.Extent.Height - 21;
+        };
     }
 
     /// <summary>

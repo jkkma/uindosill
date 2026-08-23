@@ -3265,6 +3265,40 @@ count is unchanged: the page assertions moved with the controls rather than mult
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
 
+### Built 2026-08-23, evening — files come from an Export button, and a run only fills the screen
+
+**Transcribing no longer writes files.** The maintainer's decision, the same evening: pressing
+Start fills the transcript on screen and nothing else, and the Export tab carries the format
+ticks, the output folder, and an **Export** button that writes the ticked files for the recording
+selected in the queue. `TranscriptionJob.Formats = []` was already the writer's documented
+"in memory only" mode, so the run pipeline did not change shape — the write moved from the end of
+every job to a command that runs when asked, against the finished row's document under its current
+speaker names, with the English written beside as `.en` files when the run translated.
+
+**Refusals became skips with reasons, and they are better for it.** Start used to refuse RTTM
+without the speaker opt-in and a word-timed WebVTT under translation, predicting the document it
+did not yet have. The export path holds the finished document, so it answers instead of
+predicting: a turns-only format over a transcript with no turns is skipped and the notice says
+why, and the English gets no word-timed file — translation carries no word timings — while the
+spoken transcript still gets its own. The button's notice is never empty: which recording the
+files would be for, why the button is dark, or what the last press wrote.
+
+**The Export pill moved next to Transcribe** — transcribe, then export, one workflow read left to
+right — with the `TabControl` indices untouched underneath, as ever. **The output folder now
+outlives the application**: saved as it changes, restored at launch only while the directory still
+exists, and forgotten — box and file both — when it does not, because the folder people pick is
+often a removable drive and a restored path with nothing behind it would aim every export at
+nowhere.
+
+**Two things the suite does not cover, said rather than hidden.** The Transcribe tab's transcript
+now follows its own tail while a batch fills it — stuck to the end only while the reader was
+already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
+that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
+taro one; both were checked by launching the application and looking, and neither by an
+assertion. **1138 tests, 1134 passed and 4 skipped, the count unchanged**: the file-writing
+assertions moved from Start's tests into export presses in the same tests, and the no-format and
+RTTM refusal tests became the skip-and-say tests of the same names' subjects.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

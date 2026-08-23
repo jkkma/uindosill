@@ -158,7 +158,10 @@ public class SpeakerCountTests
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
 
         // The same four labels, folded to the two that were asked for. The model was never told
-        // anything: it produced four and the repair ran on its output.
+        // anything: it produced four and the repair ran on its output. Read back off the RTTM the
+        // Export button writes, since a run writes nothing itself.
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Equal(2, SpeakersIn(Path.Combine(directory, "a.rttm")));
 
         // And the merges are reported rather than made quietly, each with the seconds the pair
@@ -189,6 +192,8 @@ public class SpeakerCountTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Equal(3, SpeakersIn(Path.Combine(directory, "a.rttm")));
         Assert.DoesNotContain("Folded", viewModel.Jobs[0].Warning ?? string.Empty, StringComparison.Ordinal);
     }
@@ -308,6 +313,8 @@ public class SpeakerCountTests
         // And it warns rather than refuses: the words are unaffected, only the labels are capped.
         await viewModel.StartCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Equal(4, SpeakersIn(Path.Combine(directory, "a.rttm")));
         Assert.Contains("is the most this labeller can tell apart", viewModel.Jobs[0].Warning, StringComparison.Ordinal);
     }
@@ -340,11 +347,9 @@ public class SpeakerCountTests
         // Start be the first place anybody hears it.
         Assert.Contains("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
 
-        // Two ways out, and both are decisions rather than guesses. Turning the opt-in off runs —
-        // dropping RTTM with it, since speaker turns are that opt-in's output and the window already
-        // refuses to write an empty one.
+        // Two ways out, and both are decisions rather than guesses. Turning the opt-in off runs;
+        // the formats are Export's question now, so nothing about RTTM stands in Start's way.
         viewModel.LabelSpeakers = false;
-        viewModel.Formats.First(f => f.Id == "rttm").IsSelected = false;
 
         await viewModel.StartCommand.ExecuteAsync(null);
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
@@ -362,6 +367,8 @@ public class SpeakerCountTests
         await viewModel.StartCommand.ExecuteAsync(null);
 
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Equal(2, SpeakersIn(Path.Combine(directory, "a.rttm")));
     }
 
@@ -388,6 +395,8 @@ public class SpeakerCountTests
         await viewModel.StartCommand.ExecuteAsync(null);
 
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
         Assert.Equal(2, SpeakersIn(Path.Combine(directory, "a.rttm")));
     }
 

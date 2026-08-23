@@ -71,7 +71,7 @@ public class OptionTabTests
     }
 
     [AvaloniaFact]
-    public void TheExportTabCarriesTheFormatsTheFolderAndTheWayIntoTheRecording()
+    public void TheExportTabCarriesTheFormatsTheFolderAndTheExportButton()
     {
         var window = Open(Export, out var viewModel);
 
@@ -84,10 +84,22 @@ public class OptionTabTests
 
         var first = viewModel.Transcribe.Formats[0];
         var tick = Assert.Single(ticks, c => ReferenceEquals(c.DataContext, first));
-        Assert.Equal(first.IsSelected, tick.IsChecked);
-
         tick.IsChecked = !first.IsSelected;
         Assert.Equal(tick.IsChecked, first.IsSelected);
+
+        // The page's own button, bound, dark in the state this page opens in — nothing is
+        // selected in a queue that is on another tab — and explained by the notice beside it,
+        // which points at that queue.
+        var export = Drawn<Button>(window, "ExportFiles");
+        Assert.NotNull(export.Command);
+
+        // IsEffectivelyEnabled, not IsEnabled: a command's CanExecute reaches the button through
+        // effective enablement, and the local property stays true either way.
+        Assert.False(export.IsEffectivelyEnabled);
+
+        var exportNotice = Drawn<TextBlock>(window, "ExportNotice");
+        Assert.True(exportNotice.IsVisible);
+        Assert.Contains("Transcribe tab", exportNotice.Text, StringComparison.Ordinal);
 
         // The folder box writes through. Blank means "beside each input file", which is why the
         // placeholder rather than a default is what fills the empty case.
@@ -193,8 +205,9 @@ public class OptionTabTests
         Assert.True(englishTop < speakersTop,
             $"'Translate to English' (y={englishTop}) is drawn below 'Label speakers' (y={speakersTop})");
 
-        // And exactly those two ticks on the whole page: the formats went to Export and the cut to
-        // Settings, so a third checkbox here is a copy rather than a leftover.
+        // Exactly those two ticks on the whole page: the formats are on Export with the button
+        // that writes them, the cut is on Settings, so a third checkbox here is a copy rather
+        // than a leftover.
         Assert.Equal(2, window.GetVisualDescendants().OfType<CheckBox>().Count());
 
         var drawn = window.GetVisualDescendants().OfType<Control>()
