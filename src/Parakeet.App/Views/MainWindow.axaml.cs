@@ -21,12 +21,14 @@ public partial class MainWindow : Window
     private static readonly TimeSpan TransportRefresh = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
-    /// The smallest the picture is allowed to be dragged to. The splitter reads the row's MinHeight,
-    /// so this is the floor the drag stops at as well as the floor the layout enforces — and it is
-    /// set from here rather than left in the XAML because the row's minimum has to be lifted and
-    /// dropped as the picture comes and goes.
+    /// The smallest the recording's row is allowed to be dragged to. The splitter reads the row's
+    /// MinHeight, so this is the floor the drag stops at as well as the floor the layout enforces
+    /// — and it is set from here rather than left in the XAML because the row's minimum has to be
+    /// lifted and dropped as the picture comes and goes. The transport shares the row since
+    /// 2026-08-23, so the number covers its height as well as a picture worth keeping: it was 120
+    /// when the row held the picture alone.
     /// </summary>
-    private const double PictureFloor = 120;
+    private const double PictureFloor = 210;
 
     private readonly DispatcherTimer _transport;
 
@@ -113,6 +115,7 @@ public partial class MainWindow : Window
         WireVideoPane();
         WireMediaSplitter();
         WireVoices();
+        WireRecordingsDrawer();
         FollowTranscript();
 
         // The clock the Ask tab draws from, and it is here rather than in the view model on
@@ -568,12 +571,35 @@ public partial class MainWindow : Window
             RoutingStrategies.Bubble);
     }
 
+    /// <summary>
+    /// A press outside the recordings drawer closes it. The scrim is the whole page behind the
+    /// drawer; it exists only while the drawer is open, and it is a plain Border because a surface
+    /// whose one job is to catch a press has no command to bind.
+    /// </summary>
+    private void WireRecordingsDrawer()
+    {
+        if (this.FindControl<Border>("DrawerScrim") is not { } scrim)
+        {
+            return;
+        }
+
+        scrim.PointerPressed += (_, e) =>
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.Ask.IsRecordingsDrawerOpen = false;
+                e.Handled = true;
+            }
+        };
+    }
+
     /// <summary>Remembers whatever height the reader drags the picture to.</summary>
     /// <remarks>
-    /// The picture row starts as a pixel length and the splitter writes pixel lengths back into it,
-    /// because a row that is not a star is resized by being given a number. So the row's height is
-    /// always a number, and reading it back when the drag finishes is the whole of remembering what
-    /// was chosen — there is nothing to convert and nothing to infer.
+    /// The recording's row and the reading's are both stars — the tab opens split evenly — and the
+    /// splitter writes star lengths back into both, keeping the ratio it was dragged to. So the
+    /// row's height is always a star, and reading it back when the drag finishes is the whole of
+    /// remembering what was chosen: restored against a different window height it is the same
+    /// proportion rather than the same pixel count, which is the better memory anyway.
     /// </remarks>
     private void WireMediaSplitter()
     {
@@ -607,9 +633,9 @@ public partial class MainWindow : Window
     /// property change is the version that cannot fight itself.
     /// </para>
     /// <para>
-    /// Auto rather than zero when there is no picture, so the row measures its only child — which
-    /// is collapsed — and comes out at nothing. No black band, and with the handle hidden beside
-    /// it, nothing to drag one back out by.
+    /// Auto rather than zero when there is no picture, so the row measures what is left in it —
+    /// the transport, over a collapsed pane — and comes out at exactly that. No black band, and
+    /// with the handle hidden beside it, nothing to drag one back out by.
     /// </para>
     /// </remarks>
     private void ShowPictureRow(bool hasVideo)

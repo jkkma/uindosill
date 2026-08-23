@@ -563,11 +563,77 @@
   <Style Selector="Button.transport:disabled /template/ Border#Ground">
     <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
   </Style>
+
+  <!-- The presenter inside the circle, stripped of the grounds other rules give it. The
+       window-wide Button:disabled style at the top of this file paints every disabled button's
+       ContentPresenter in GroundBrush — right for the standard button, whose whole face that
+       presenter is, and here it drew a white square behind the glyph in the middle of the
+       disabled disc. Fluent's own ControlTheme does the same on hover and press. Each state is
+       named in full because a rule only overrides the properties it names, and these come after
+       the window-wide one so they win the declaration-order tie. -->
+  <Style Selector="Button.transport /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.transport:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.transport:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.transport:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- The glyph's colour runs along its edge as well as filling it, with round joins: a filled
+       polygon alone has needle corners, which anti-alias to fuzz at 13px, and the stroke is what
+       gives the triangle and the bars their soft corners. The stroke has to be recoloured beside
+       the fill in the disabled state, because it does not follow it. -->
   <Style Selector="Button.transport Path">
     <Setter Property="Fill" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="StrokeLineCap" Value="Round" />
   </Style>
   <Style Selector="Button.transport:disabled Path">
     <Setter Property="Fill" Value="{DynamicResource Taro400Brush}" />
+    <Setter Property="Stroke" Value="{DynamicResource Taro400Brush}" />
+  </Style>
+
+  <!-- The recordings drawer's button. A toggle rather than a Button, because open and shut are
+       its two states and the checked face says which is on; the same 30px square hairline as
+       every button standing in a row, checked in taro because the drawer belongs to the Ask tab.
+       Fluent rounds a ToggleButton's corner and paints its checked state in the accent, so both
+       are overridden on the template part the theme itself styles. -->
+  <Style Selector="ToggleButton.drawer">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="13,0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.drawer:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Taro50Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro200Brush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.drawer:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro200Brush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+  <Style Selector="ToggleButton.drawer:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Taro200Brush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Taro700Brush}" />
   </Style>
 
   <!-- The played part of the recording. A ProgressBar rather than a Slider, and that is a

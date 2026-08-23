@@ -3978,6 +3978,16 @@ timestamp beside the words, and the surrounding `ScrollViewer`, are both irrelev
   one voice object per speaker and a test asserts both panes' lines report the new name, but the
   Transcribe tab's chips have not been watched changing while the Ask tab's strip is typed into.
 
+**Superseded again later on 2026-08-23, the same way as the 820 figure above.** The recordings
+list left the page for a drawer behind a button — the tab's columns are now `*,330` — the
+transport moved into the picture's row, and the picture and reading rows are stars opening at an
+even split, with floors of 210 (picture and transport together) and 140 in place of the 120-unit
+picture minimum this section reasons about. The 28-unit words column is therefore doubly
+unreachable, the new floors are as chosen-not-derived as the ones they replace, and none of the
+new arrangement — the drawer floating over the words, the even split at any real window size —
+has been seen on a screen either; what holds it is the same headless suite, with the geometry
+assertions rewritten to the new rows.
+
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
 Four things the maintainer found by running the built application were fixed the same day: the

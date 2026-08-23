@@ -61,6 +61,14 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     private JobViewModel? _selectedRecording;
 
     /// <summary>
+    /// Whether the recordings drawer is open. The queue is not on the page any more — it floats
+    /// over it, behind a button, because most of a session is spent reading one recording and a
+    /// resident column spent a quarter of the tab on a list nobody was looking at.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRecordingsDrawerOpen;
+
+    /// <summary>
     /// What to look for in the transcript. Every line carrying it is marked as it is typed; Enter
     /// steps through them.
     /// </summary>
@@ -209,7 +217,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </summary>
     public string? TranscriptNotice =>
         HasTranscript ? null
-        : SelectedRecording is null ? "Choose a recording on the left. Anything in the queue on the Transcribe tab is here."
+        : SelectedRecording is null ? "Choose a recording — the Recordings button above opens the queue. Anything on the Transcribe tab is there, playable straight away."
         : "This recording has not been transcribed yet. Run it on the Transcribe tab and its words will appear here, "
           + "each one a place in the recording you can click. It plays either way.";
 
@@ -447,6 +455,14 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         Redraw();
     }
 
+    /// <summary>
+    /// Shuts the recordings drawer — the Close control in its own header. Opening is the toggle's
+    /// two-way binding; the other ways out, choosing a recording and pressing the scrim, are in
+    /// <see cref="OnSelectedRecordingChanged"/> and the window's WireRecordingsDrawer.
+    /// </summary>
+    [RelayCommand]
+    private void CloseRecordingsDrawer() => IsRecordingsDrawerOpen = false;
+
     /// <summary>Jumps to a line of the transcript and plays from there.</summary>
     /// <remarks>
     /// It plays rather than merely seeking. Clicking a line is a request to hear it, and a seek
@@ -559,6 +575,11 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         }
 
         PlaybackNotice = null;
+
+        // Choosing a recording is the errand the drawer is opened for, so a choice closes it and
+        // the words it was floating over are readable again. Harmless on the programmatic changes
+        // — the first arrival's auto-select, a queue cleared — because the drawer is shut then.
+        IsRecordingsDrawerOpen = false;
 
         try
         {

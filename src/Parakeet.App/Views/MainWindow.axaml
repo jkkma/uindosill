@@ -116,16 +116,36 @@
             Padding="14,0,0,0">
       <Grid ColumnDefinitions="210,*,210">
 
-        <!-- The mark and the name. matcha-100 ground, matcha-700 strokes: the application's own
-             badge is the one place the accent appears without meaning "selected". -->
+        <!-- The mark and the name. Half matcha, half taro since 2026-08-23: the product is both
+             generations now, and the badge is the one surface allowed to say both at once — the
+             generation rule binds surfaces that do something, and the badge only says who this
+             is. The ground is a gradient with its two stops at the same offset, which is how a
+             brush draws a hard seam rather than a blend; the strokes are the same glyph twice,
+             the taro copy clipped to the right half, so the centre bar — which sits exactly on
+             the seam — is split down its own middle. -->
         <StackPanel Grid.Column="0" Name="Wordmark" Orientation="Horizontal" Spacing="9"
                     VerticalAlignment="Center">
-          <Border Width="22" Height="22" Background="{DynamicResource Matcha100Brush}">
-            <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
-                  StrokeLineCap="Round"
-                  Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
-                  Width="13" Height="13" Stretch="Uniform"
-                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <Border Width="22" Height="22">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Offset="0.5" Color="{StaticResource Matcha100}" />
+                <GradientStop Offset="0.5" Color="{StaticResource Taro100}" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <Panel>
+              <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="2.4"
+                    StrokeLineCap="Round"
+                    Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                    Width="13" Height="13" Stretch="Uniform"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Panel Clip="M11,0 L22,0 L22,22 L11,22 Z">
+                <Path Stroke="{DynamicResource Taro700Brush}" StrokeThickness="2.4"
+                      StrokeLineCap="Round"
+                      Data="M4 11.5v1M8.5 7v10M13 3.5v17M17.5 8.5v7M22 11.5v1"
+                      Width="13" Height="13" Stretch="Uniform"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Panel>
+            </Panel>
           </Border>
           <TextBlock Text="Uindosill" FontSize="13" FontWeight="Bold"
                      LetterSpacing="-0.156" VerticalAlignment="Center" />
@@ -948,58 +968,54 @@
            so many words what it cannot do is the opposite of a silent failure. What would break
            the rule is a live-looking text box that swallows a question. -->
       <TabItem Header="Ask">
-        <Grid ColumnDefinitions="228,14,*,330" Margin="16"
-              DataContext="{Binding Ask}" x:DataType="vm:AskViewModel">
+        <!-- A Panel, because the queue floats now. The base layer is the page — the recording,
+             its words, the chat panel — and over it sit a scrim and the recordings drawer,
+             declared last so they draw on top of everything. The queue held a 228px column of
+             its own until later on 2026-08-23; most of a session is spent inside one recording,
+             and a resident list spent a fifth of the tab repeating what the drawer now says only
+             when asked. -->
+        <Panel Margin="16" DataContext="{Binding Ask}" x:DataType="vm:AskViewModel">
+        <DockPanel>
 
-          <!-- ── The queue, again ───────────────────────────────────────────────────────────
-               The same rows the Transcribe tab is filling, not a copy of them. Everything in the
-               queue, not only what has finished: a file is playable the moment it is dropped. -->
-          <DockPanel Grid.Column="0">
-            <TextBlock DockPanel.Dock="Top" Text="RECORDINGS" Classes="section" Margin="0,0,0,9" />
-            <TextBlock DockPanel.Dock="Top" Classes="fine meta" Margin="0,0,0,9"
-                       IsVisible="{Binding !HasRecordings}"
-                       Text="Nothing in the queue yet. Drop a file on the Transcribe tab and it appears here, playable straight away." />
-            <ListBox ItemsSource="{Binding Recordings}" SelectedItem="{Binding SelectedRecording}">
-              <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:JobViewModel">
-                  <StackPanel Spacing="3">
-                    <TextBlock Text="{Binding DisplayName}" Classes="emphasis"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Status}" Classes="meta" />
-                  </StackPanel>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-          </DockPanel>
+          <!-- The way into the queue. A toggle rather than a button, because open and shut are
+               its two states and the checked face says which one is on without a caret glyph. -->
+          <ToggleButton DockPanel.Dock="Top" Name="RecordingsToggle" Classes="drawer"
+                        Content="Recordings" HorizontalAlignment="Left" Margin="0,0,0,11"
+                        IsChecked="{Binding IsRecordingsDrawerOpen}" />
 
-          <GridSplitter Grid.Column="1" Background="Transparent" />
+        <Grid ColumnDefinitions="*,330">
 
           <!-- ── The recording, and its words ───────────────────────────────────
                A Grid rather than a DockPanel, because one edge in this column is draggable and a
                DockPanel has no edges: it says where a child goes by the order it was declared in,
                which is not a property a splitter can move.
 
-               Three rows, and only the first ever changes size. The transport is in the reading
-               row rather than in the picture's, which is what makes the drag mean one thing — a
-               splitter moves the two rows either side of it and nothing else, so anything sharing
-               the picture's row would be resized along with it, and anything given a row of its
-               own in between would cap how far the drag could go. Docked to the top of the reading
-               row it is still directly under the picture, and it is never resized. -->
-          <Grid Grid.Column="2" Name="MediaColumn" Margin="0,0,14,0">
+               Three rows. The first is the recording — the picture with its transport flush
+               underneath, the way every video player draws its controls — and the third is the
+               reading. The transport shares the picture's row since later on 2026-08-23, because
+               it belongs to the recording rather than to the reading: docked to the bottom of
+               that row it keeps its own height while the picture absorbs whatever the drag
+               trades, so the splitter still moves exactly two things. -->
+          <Grid Grid.Column="0" Name="MediaColumn" Margin="0,0,14,0">
             <Grid.RowDefinitions>
-              <!-- Pixels rather than Auto, because the splitter writes pixels here and a row that
-                   starts in the unit it will end in does not jump on the first drag. Swapped for
-                   Auto the moment there is no picture — see ShowPictureRow in MainWindow.axaml.cs,
-                   which is also why this is not a binding: a RowDefinition is an AvaloniaObject
-                   rather than a StyledElement, so it has no DataContext to bind against. -->
-              <RowDefinition Height="260" MinHeight="120" />
+              <!-- Star and star, so the recording and the reading open at half the column each —
+                   the even split this tab took later on 2026-08-23 — and the splitter trades one
+                   for the other in the same units. Swapped for Auto the moment there is no
+                   picture — see ShowPictureRow in MainWindow.axaml.cs, which is also why this is
+                   not a binding: a RowDefinition is an AvaloniaObject rather than a StyledElement,
+                   so it has no DataContext to bind against. The first row's minimum covers the
+                   transport as well as the picture's floor, because both live in it now. -->
+              <RowDefinition Height="*" MinHeight="210" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" MinHeight="140" />
             </Grid.RowDefinitions>
 
-            <!-- ── The picture ────────────────────────────────────────────
-                 Only when the open recording has one and the build can draw one: a video pane
-                 over an audio file is dead glass, so the pane exists exactly when frames do.
+            <!-- ── The picture, and the controls that move it ─────────────────────────────
+                 One row for both. The pane exists only when the open recording has one and the
+                 build can draw one — a video pane over an audio file is dead glass, so it exists
+                 exactly when frames do — and without one the row is set to Auto and this panel
+                 measures to the transport alone, which keeps the controls at the top of the
+                 column for a podcast.
 
                  The Image's bitmap is filled from the code-behind rather than bound: frames
                  arrive at the decoder's rate on the decoder's thread, and thirty property
@@ -1010,61 +1026,15 @@
                  whose ground is the convention of every video player rather than this design's —
                  letterbox bars in Sunken grey would read as a layout bug, not a choice.
 
-                 No height of its own any more: the row owns it, or a drag would move the row while
-                 the pane stayed 260 and the handle would visibly do nothing. -->
-            <Border Grid.Row="0" Name="VideoPane"
-                    Background="Black" IsVisible="{Binding HasVideo}">
-              <Image Name="VideoSurface" Stretch="Uniform" />
-            </Border>
+                 No height of its own: the row owns it, or a drag would move the row while the
+                 pane stayed put and the handle would visibly do nothing. -->
+            <DockPanel Grid.Row="0">
 
-            <!-- ── The edge that moves ───────────────────────────────────────
-                 Drag it and the picture grows or shrinks; the transcript takes back whatever the
-                 picture gives up. Direction and behaviour are both named rather than left to
-                 resolve: Auto would land on the right answer here by accident, from this strip
-                 being wider than it is tall, and a layout that is correct by fallback is one edit
-                 away from being wrong.
-
-                 Gone for an audio recording, along with the row it would move — a handle that
-                 does nothing is worse than no handle. Its own row stays declared and measures
-                 zero around a collapsed child, so no row index shifts.
-
-                 It has to stay a direct child of this Grid: a splitter reads its own Grid.Row off
-                 itself, so one nested a panel deeper would read row 0 and move the wrong pair. -->
-            <GridSplitter Grid.Row="1" Name="MediaSplitter" Classes="handle"
-                          ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
-                          IsVisible="{Binding HasVideo}"
-                          ToolTip.Tip="Drag to resize the picture" />
-
-            <!-- ── The reading ────────────────────────────────────────────
-                 Everything that is not the picture, in one row, so the drag above can reach none
-                 of it but the space it all shares. A DockPanel, because what the order expresses
-                 here is a stack rather than a set of sizes.
-
-                 The transcript is the last child on purpose. LastChildFill is on and that Border
-                 carries no Dock, so it fills because it is last; declare anything after it and it
-                 collapses to a strip while the newcomer takes the column. -->
-            <DockPanel Grid.Row="2">
-
-              <!-- Why there is no picture, when one might be expected and the build cannot draw
-                   one. Absent entirely for audio files: no picture is not a limitation there.
-
-                   In this row rather than in the picture's, because it stands in for the picture
-                   and is drawn exactly when the picture cannot be: VideoNotice is non-null only
-                   where the player cannot draw video at all, which is where HasVideo is false and
-                   the row above has already collapsed. So this is the top of the column whenever
-                   it is on screen. -->
-              <TextBlock DockPanel.Dock="Top" Name="VideoNotice" Classes="fine warning"
-                         Margin="0,0,0,11"
-                         Text="{Binding VideoNotice}"
-                         IsVisible="{Binding VideoNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-              <!-- The transport. Under the picture and above the words, because it belongs to the
-                   recording rather than to the reading: the controls that move a recording stay
-                   with the recording rather than travelling down the column past a transcript
-                   somebody is scrolling. It was docked to the bottom until 2026-08-23, which put
-                   the controls below the words they move. -->
-              <Border DockPanel.Dock="Top" Name="Transport" Classes="tinted taro"
-                      Padding="13,11" Margin="0,0,0,11">
+              <!-- The transport, flush under the picture. It belongs to the recording rather
+                   than to the reading, so it lives on the picture's side of the splitter and is
+                   never resized: the pane above it absorbs the whole of a drag. -->
+              <Border DockPanel.Dock="Bottom" Name="Transport" Classes="tinted taro"
+                      Padding="13,11">
                 <StackPanel Spacing="8">
                   <Grid ColumnDefinitions="Auto,13,*,Auto">
 
@@ -1074,13 +1044,17 @@
                     <Button Grid.Column="0" Name="PlayPause" Classes="transport"
                             Command="{Binding PlayPauseCommand}"
                             ToolTip.Tip="{Binding PlayPauseLabel}">
-                      <Panel Width="14" Height="15">
+                      <Panel Width="13" Height="13">
                         <!-- Nudged right by two: a triangle centred on its bounding box reads as
-                             sitting left of centre inside a circle. -->
-                        <Path Data="M0,0 L13,7.5 L0,15 Z" Stretch="None" Margin="3,0,0,0"
+                             sitting left of centre inside a circle. The corners come from the
+                             stroke — Button.transport Path in Theme/Controls.axaml runs each
+                             glyph's own colour along its edge with round joins, because a filled
+                             polygon alone has needle corners that anti-alias to fuzz at this
+                             size. -->
+                        <Path Data="M0,0 L11,6.5 L0,13 Z" Stretch="None" Margin="2,0,0,0"
                               HorizontalAlignment="Center" VerticalAlignment="Center"
                               IsVisible="{Binding !IsPlaying}" />
-                        <Path Data="M0,0 H4 V15 H0 Z M8,0 H12 V15 H8 Z" Stretch="None"
+                        <Path Data="M0,0 H3 V13 H0 Z M8,0 H11 V13 H8 Z" Stretch="None"
                               HorizontalAlignment="Center" VerticalAlignment="Center"
                               IsVisible="{Binding IsPlaying}" />
                       </Panel>
@@ -1131,6 +1105,55 @@
                              IsVisible="{Binding PlaybackNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 </StackPanel>
               </Border>
+
+              <Border Name="VideoPane"
+                      Background="Black" IsVisible="{Binding HasVideo}">
+                <Image Name="VideoSurface" Stretch="Uniform" />
+              </Border>
+            </DockPanel>
+
+            <!-- ── The edge that moves ───────────────────────────────────────
+                 Drag it and the picture grows or shrinks; the transcript takes back whatever the
+                 picture gives up. Direction and behaviour are both named rather than left to
+                 resolve: Auto would land on the right answer here by accident, from this strip
+                 being wider than it is tall, and a layout that is correct by fallback is one edit
+                 away from being wrong.
+
+                 Gone for an audio recording, along with the row it would move — a handle that
+                 does nothing is worse than no handle. Its own row stays declared and measures
+                 zero around a collapsed child, so no row index shifts.
+
+                 It has to stay a direct child of this Grid: a splitter reads its own Grid.Row off
+                 itself, so one nested a panel deeper would read row 0 and move the wrong pair. -->
+            <GridSplitter Grid.Row="1" Name="MediaSplitter" Classes="handle"
+                          ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
+                          IsVisible="{Binding HasVideo}"
+                          ToolTip.Tip="Drag to resize the picture" />
+
+            <!-- ── The reading ────────────────────────────────────────────
+                 Everything that is not the recording, in one row, so the drag above can reach
+                 none of it but the space it all shares. A DockPanel, because what the order
+                 expresses here is a stack rather than a set of sizes. The top margin is the gap
+                 under the transport, said here because the transport itself sits flush against
+                 the picture on its other side.
+
+                 The transcript is the last child on purpose. LastChildFill is on and that Border
+                 carries no Dock, so it fills because it is last; declare anything after it and it
+                 collapses to a strip while the newcomer takes the column. -->
+            <DockPanel Grid.Row="2" Margin="0,11,0,0">
+
+              <!-- Why there is no picture, when one might be expected and the build cannot draw
+                   one. Absent entirely for audio files: no picture is not a limitation there.
+
+                   In this row rather than in the picture's, because it stands in for the picture
+                   and is drawn exactly when the picture cannot be: VideoNotice is non-null only
+                   where the player cannot draw video at all, which is where HasVideo is false and
+                   the pane above has already collapsed. So it reads directly under the transport,
+                   in the place the picture would have been explained from. -->
+              <TextBlock DockPanel.Dock="Top" Name="VideoNotice" Classes="fine warning"
+                         Margin="0,0,0,11"
+                         Text="{Binding VideoNotice}"
+                         IsVisible="{Binding VideoNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
               <!-- ── Who is speaking ────────────────────────────────────────
                    The diariser numbers voices; it cannot name them, and it never will — a name is
@@ -1307,7 +1330,7 @@
           </Grid>
 
           <!-- ── The chat panel, drawn and not built ────────────────────────────────────────── -->
-          <Border Grid.Column="3" Classes="panel">
+          <Border Grid.Column="1" Classes="panel">
             <Panel>
               <DockPanel Name="AskPanel" IsEnabled="False" Margin="15,14">
                 <TextBlock DockPanel.Dock="Top" Text="ASK THIS TRANSCRIPT" Classes="section" />
@@ -1359,6 +1382,57 @@
             </Panel>
           </Border>
         </Grid>
+        </DockPanel>
+
+        <!-- ── The recordings drawer ──────────────────────────────────────────────────────────
+             The queue, floating over the page. The same rows the Transcribe tab is filling, not
+             a copy of them — everything in the queue, not only what has finished: a file is
+             playable the moment it is dropped.
+
+             Three ways out, because a surface that covers the page has to be easy to leave:
+             choosing a recording closes it (the choice is the errand it was opened for — see
+             OnSelectedRecordingChanged in AskViewModel), the Close button closes it, and the
+             scrim underneath closes it on any press outside — which includes the press on the
+             toggle the drawer is covering, so the button's two states cannot trap anyone.
+
+             The scrim is transparent rather than a wash: a dimmed page says modal, and nothing
+             about reading a list of recordings needs the rest of the window taken away. It is
+             hit-testable because it names a Background — a null one is not — and its press is
+             wired in WireRecordingsDrawer in MainWindow.axaml.cs, because a plain Border has no
+             command to bind. -->
+        <Border Name="DrawerScrim" Background="Transparent"
+                IsVisible="{Binding IsRecordingsDrawerOpen}" />
+
+        <Border Name="RecordingsDrawer" Width="280"
+                HorizontalAlignment="Left"
+                Background="{DynamicResource GroundBrush}"
+                BorderBrush="{DynamicResource Taro200Brush}"
+                BorderThickness="1"
+                BoxShadow="8 0 26 0 #30000000"
+                IsVisible="{Binding IsRecordingsDrawerOpen}">
+          <DockPanel Margin="13">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,9">
+              <TextBlock Text="RECORDINGS" Classes="section" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Name="CloseRecordings" Content="Close"
+                      Command="{Binding CloseRecordingsDrawerCommand}" />
+            </Grid>
+            <TextBlock DockPanel.Dock="Top" Classes="fine meta" Margin="0,0,0,9"
+                       IsVisible="{Binding !HasRecordings}"
+                       Text="Nothing in the queue yet. Drop a file on the Transcribe tab and it appears here, playable straight away." />
+            <ListBox ItemsSource="{Binding Recordings}" SelectedItem="{Binding SelectedRecording}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:JobViewModel">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding DisplayName}" Classes="emphasis"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Status}" Classes="meta" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+        </Border>
+        </Panel>
       </TabItem>
 
       <!-- ══ Settings ══════════════════════════════════════════════════════════════════════════
