@@ -24,7 +24,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ModelCatalog? catalog = null,
         IAppUpdater? updater = null,
         AppSettingsStore? settings = null,
-        Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null)
+        Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null,
+        IAudioPlayer? player = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
@@ -49,6 +50,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 Model = Models.SelectedDescriptor,
             },
             Session);
+
+        // The queue is handed over rather than copied: the Ask tab plays and reads the same rows
+        // the Transcribe tab is filling, so a transcript that finishes while this tab is open
+        // fills in where it stands. Two collections would need reconciling, and getting that
+        // wrong shows a transcript beside the wrong recording.
+        Ask = new AskViewModel(Transcribe.Jobs, player ?? new SystemAudioPlayer());
 
         // Load and unload have to be shut off for the duration of a batch: the running jobs hold
         // the engine an unload would dispose out from under them.
@@ -112,6 +119,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public ModelsViewModel Models { get; }
 
+    /// <summary>
+    /// The v2 tab: a recording with a transport, its transcript as cues that seek it, and a chat
+    /// panel that is drawn, disabled and covered by a notice because nothing is behind it yet.
+    /// </summary>
+    public AskViewModel Ask { get; }
+
     /// <summary>The launch check, the notice it produces, and the setting that switches it off.</summary>
     public UpdatesViewModel Updates { get; }
 
@@ -143,6 +156,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 await Task.Delay(50).ConfigureAwait(true);
             }
         }
+
+        // Before the session, and it is not arbitrary: the audio device is a COM object activated
+        // on this thread, and it has to be released while the process still has one. It is also
+        // the cheaper of the two, so a window closing during playback goes quiet at once rather
+        // than after however long the engine takes to unload.
+        Ask.Dispose();
 
         await Session.DisposeAsync().ConfigureAwait(true);
     }

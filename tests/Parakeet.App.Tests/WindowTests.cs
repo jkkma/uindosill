@@ -24,7 +24,7 @@ public class WindowTests
         // them, so this looks the control up by name rather than asserting on window.Content.
         var tabs = window.FindControl<TabControl>("Tabs");
         Assert.NotNull(tabs);
-        Assert.Equal(4, tabs!.Items.Count);
+        Assert.Equal(5, tabs!.Items.Count);
     }
 
     [AvaloniaFact]

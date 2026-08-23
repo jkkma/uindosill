@@ -85,8 +85,18 @@ nothing has packaged one.
   words. What is measured and what is not is in
   [UNPROVEN.md](docs/UNPROVEN.md); the decision is in [PHASES.md](docs/PHASES.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
-  cites timestamps you can click. Not built; the open decisions are in
-  [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
+  cites timestamps you can click. **The asking is not built and the panel says so** — it is drawn,
+  disabled, and covered by a work-in-progress notice, because there is no language model in this
+  application and which one it should be is still open. **The half that needs no model shipped
+  2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
+  cues you click to jump to that moment, the line being spoken lights up as it goes, and a find box
+  marks every mention of a word and steps between them with Enter. All of that runs on times v1
+  already writes. The playback path needs a Windows audio device, so **nothing in the suite runs
+  it** and it was driven by hand instead — an m4a, an mp3 and a WAVE file on one laptop, where the
+  endpoint opens, the clock runs at real time, and seeks land where the transcript says. That found
+  two defects in the play button, both fixed. **Nobody has yet written down that they heard it**,
+  which is a different claim; [UNPROVEN.md](docs/UNPROVEN.md) keeps the two apart. The open
+  decisions are in [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md).
 - **v3 is push-to-talk dictation.** Not built, not architected out —
   [V3-DICTATION.md](docs/V3-DICTATION.md) records what it will need.
 
@@ -139,7 +149,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 874 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 909 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Parakeet.App.ViewModels"
         xmlns:views="using:Parakeet.App.Views"
+        xmlns:sys="using:System"
         x:Class="Parakeet.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Uindosill — local transcription"
@@ -58,6 +59,11 @@
 
   <Window.Resources>
     <views:IndexMatchConverter x:Key="IndexMatch" />
+    <!-- The search hit's ground comes from the token sheet rather than from a hex in the
+         converter, so taro has one definition. StaticResource because a converter is a plain
+         object with no styled properties for DynamicResource to track — the brush is resolved
+         once, at load, out of the application's dictionary. -->
+    <views:HighlightConverter x:Key="Highlight" Hit="{StaticResource Taro200Brush}" />
   </Window.Resources>
 
   <!-- The window's edge. Inside the window because there is nothing outside it to draw on: with
@@ -111,6 +117,13 @@
           <StackPanel Orientation="Horizontal" Spacing="2">
             <RadioButton Name="TabTranscribe" Classes="segment" GroupName="Switcher" Content="Transcribe"
                          IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+            <!-- Ask sits next to Transcribe because it acts on what Transcribe produces, and last
+                 in the TabControl because the four before it are indexed where tests and settings
+                 already found them. The switcher's order and the TabControl's have never been the
+                 same thing — Licences is index 2 and shown last — so this is the existing
+                 arrangement rather than a new exception to it. -->
+            <RadioButton Name="TabAsk" Classes="segment" GroupName="Switcher" Content="Ask"
+                         IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=4}" />
             <RadioButton Name="TabModels" Classes="segment" GroupName="Switcher" Content="Models"
                          IsChecked="{Binding SelectedTab, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
             <RadioButton Name="TabUpdates" Classes="segment" GroupName="Switcher" Content="Updates"
@@ -703,6 +716,241 @@
 
           </StackPanel>
         </ScrollViewer>
+      </TabItem>
+
+      <!-- ══ Ask ═══════════════════════════════════════════════════════════════════════════════
+           v2's tab, and the first surface in this application drawn in taro. Everything here is
+           that colour and nothing above it is, which is the whole of the generation rule: a
+           surface's colour says which product generation it belongs to.
+
+           Two thirds of it work. The recording plays, the transcript beside it is the pipeline's
+           own segments with their own times, and clicking one jumps there — none of which needs a
+           language model, which is the sequencing `docs/V2-ASK-THE-TRANSCRIPT.md` asks for.
+
+           The last third is drawn and covered. The chat panel is the shape the feature will take,
+           every control in it disabled, under a notice that says it is not built. That is a
+           deliberate exception to this window's own rule against shipping controls wired to
+           nothing: the rule exists so that nothing here fails silently, and a panel that says in
+           so many words what it cannot do is the opposite of a silent failure. What would break
+           the rule is a live-looking text box that swallows a question. -->
+      <TabItem Header="Ask">
+        <Grid ColumnDefinitions="228,14,*,330" Margin="16"
+              DataContext="{Binding Ask}" x:DataType="vm:AskViewModel">
+
+          <!-- ── The queue, again ───────────────────────────────────────────────────────────
+               The same rows the Transcribe tab is filling, not a copy of them. Everything in the
+               queue, not only what has finished: a file is playable the moment it is dropped. -->
+          <DockPanel Grid.Column="0">
+            <TextBlock DockPanel.Dock="Top" Text="RECORDINGS" Classes="section" Margin="0,0,0,9" />
+            <TextBlock DockPanel.Dock="Top" Classes="fine meta" Margin="0,0,0,9"
+                       IsVisible="{Binding !HasRecordings}"
+                       Text="Nothing in the queue yet. Drop a file on the Transcribe tab and it appears here, playable straight away." />
+            <ListBox ItemsSource="{Binding Recordings}" SelectedItem="{Binding SelectedRecording}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:JobViewModel">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding FileName}" Classes="emphasis"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Status}" Classes="meta" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+
+          <GridSplitter Grid.Column="1" Background="Transparent" />
+
+          <!-- ── The recording, and its words ───────────────────────────────────────────────── -->
+          <DockPanel Grid.Column="2" Margin="0,0,14,0">
+
+            <!-- The transport. Docked to the bottom of this column rather than floating over the
+                 transcript, because it belongs to the recording rather than to the reading. -->
+            <Border DockPanel.Dock="Bottom" Name="Transport" Classes="tinted taro"
+                    Padding="13,11" Margin="0,11,0,0">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,13,*,Auto">
+
+                  <!-- One of the shapes that is genuinely a circle. Two glyphs rather than one
+                       that changes: a filled triangle and two bars, each visible on its own half
+                       of the state, so neither is drawn by a converter nobody can test. -->
+                  <Button Grid.Column="0" Name="PlayPause" Classes="transport"
+                          Command="{Binding PlayPauseCommand}"
+                          ToolTip.Tip="{Binding PlayPauseLabel}">
+                    <Panel Width="14" Height="15">
+                      <!-- Nudged right by two: a triangle centred on its bounding box reads as
+                           sitting left of centre inside a circle. -->
+                      <Path Data="M0,0 L13,7.5 L0,15 Z" Stretch="None" Margin="3,0,0,0"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsVisible="{Binding !IsPlaying}" />
+                      <Path Data="M0,0 H4 V15 H0 Z M8,0 H12 V15 H8 Z" Stretch="None"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsVisible="{Binding IsPlaying}" />
+                    </Panel>
+                  </Button>
+
+                  <!-- The bar, and a transparent strip over it that takes the pointer. The strip
+                       is what makes the bar seekable: it knows its own width, so a press at an x
+                       is a fraction of the recording, which is a question no binding can answer.
+                       18px tall over a 6px bar, so the target is a comfortable one. -->
+                  <Panel Grid.Column="2" VerticalAlignment="Center">
+                    <ProgressBar Classes="seek" Minimum="0"
+                                 Maximum="{Binding DurationSeconds}"
+                                 Value="{Binding PositionSeconds}" />
+                    <Border Name="SeekStrip" Background="Transparent" Height="18" Cursor="Hand" />
+                  </Panel>
+
+                  <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="5"
+                              VerticalAlignment="Center" Margin="13,0,0,0">
+                    <TextBlock Text="{Binding PositionLabel}" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Taro700Brush}" />
+                    <TextBlock Text="/" Classes="meta" />
+                    <TextBlock Text="{Binding DurationLabel}" Classes="meta" />
+                  </StackPanel>
+                </Grid>
+
+                <TextBlock Text="{Binding SelectedRecording.FileName}" Classes="meta"
+                           TextTrimming="CharacterEllipsis"
+                           IsVisible="{Binding SelectedRecording, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <!-- Why the transport is dead, when it is. A file this build cannot sound is still
+                     a file whose transcript is worth reading, so the tab carries on around it. -->
+                <TextBlock Name="PlaybackNotice" Text="{Binding PlaybackNotice}"
+                           Classes="fine warning"
+                           IsVisible="{Binding PlaybackNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+            </Border>
+
+            <!-- ── Find a word ────────────────────────────────────────────────────────────────
+                 The reason anyone opens a three-hour transcript is usually one word. This runs on
+                 v1's own data and needs no model, which is why it is here rather than waiting for
+                 the panel on the right: it is useful before anything can be asked.
+
+                 It does not seek. Finding a word and hearing it are two intentions — somebody
+                 scanning for every mention of a name does not want the audio jumping under them
+                 on each press of Enter — so a hit is scrolled to and marked, and clicking it is
+                 what plays it. -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10"
+                  IsEnabled="{Binding HasTranscript}">
+              <TextBox Grid.Column="0" Name="SearchBox" Text="{Binding SearchTerm}"
+                       PlaceholderText="Find a word — Enter for the next one" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
+                          Margin="9,0,0,0" VerticalAlignment="Center">
+                <TextBlock Name="SearchSummary" Text="{Binding SearchSummary}" Classes="meta"
+                           MinWidth="62" TextAlignment="Right" VerticalAlignment="Center" />
+                <Button Name="PreviousMatch" Content="Previous" ToolTip.Tip="The hit before this one"
+                        Command="{Binding PreviousMatchCommand}" />
+                <Button Name="NextMatch" Content="Next" ToolTip.Tip="The next hit — or press Enter"
+                        Command="{Binding NextMatchCommand}" />
+              </StackPanel>
+            </Grid>
+
+            <Border Classes="panel">
+              <Panel>
+                <ScrollViewer IsVisible="{Binding HasTranscript}" Padding="7,9">
+                  <ItemsControl Name="Cues" ItemsSource="{Binding Lines}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TranscriptLineViewModel">
+                        <!-- A Button, so the keyboard reaches every cue and the seek is a command
+                             like everything else in this window. Its template draws no chrome —
+                             see Button.cue — so what a reader sees is a paragraph that lights up
+                             under the pointer and stays lit while it is the one being played. -->
+                        <Button Classes="cue" Classes.playing="{Binding IsActive}"
+                                Classes.found="{Binding IsCurrentMatch}"
+                                Command="{Binding $parent[ItemsControl].((vm:AskViewModel)DataContext).SeekToLineCommand}"
+                                CommandParameter="{Binding}">
+                          <Grid ColumnDefinitions="54,Auto,*">
+                            <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
+                                       FontSize="11.5" FontWeight="SemiBold"
+                                       VerticalAlignment="Top" Margin="0,2,0,0"
+                                       Foreground="{DynamicResource Taro700Brush}" />
+                            <Border Grid.Column="1" Margin="0,0,9,0"
+                                    IsVisible="{Binding HasSpeaker}"
+                                    Classes="speaker"
+                                    Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                                    Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
+                                    Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
+                                    Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
+                              <TextBlock Text="{Binding Speaker}" />
+                            </Border>
+                            <!-- Inlines rather than Text, which is what lets one word inside a
+                                 paragraph carry a ground of its own. Bound to Marked — the words
+                                 and the term as one value — because a converter takes one thing,
+                                 and because only the lines that carry the term raise a change for
+                                 it, so a keystroke redraws the handful that matched rather than
+                                 the whole transcript. -->
+                            <TextBlock Grid.Column="2"
+                                       Inlines="{Binding Marked, Converter={StaticResource Highlight}}"
+                                       TextWrapping="Wrap" LineHeight="20.3" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+
+                <TextBlock Name="TranscriptNotice" Text="{Binding TranscriptNotice}"
+                           IsVisible="{Binding !HasTranscript}"
+                           Classes="secondary" TextWrapping="Wrap" MaxWidth="380"
+                           LineHeight="20" Margin="26"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextAlignment="Center" />
+              </Panel>
+            </Border>
+          </DockPanel>
+
+          <!-- ── The chat panel, drawn and not built ────────────────────────────────────────── -->
+          <Border Grid.Column="3" Classes="panel">
+            <Panel>
+              <DockPanel Name="AskPanel" IsEnabled="False" Margin="15,14">
+                <TextBlock DockPanel.Dock="Top" Text="ASK THIS TRANSCRIPT" Classes="section" />
+
+                <!-- The input, which is where a question would go. -->
+                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,8,Auto" Margin="0,12,0,0">
+                  <TextBox Grid.Column="0" Name="AskInput"
+                           PlaceholderText="Ask about this recording…" />
+                  <Button Grid.Column="2" Name="AskSend" Content="Ask" />
+                </Grid>
+
+                <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,11,0,0">
+                  <TextBlock Classes="fine secondary"
+                             Text="Answers would arrive as short bullets, each carrying the moment it came from — a timestamp you click to hear it, so every claim is one press from being checked." />
+                  <ItemsControl ItemsSource="{Binding Suggestions}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="sys:String">
+                        <Border Classes="chip">
+                          <TextBlock Text="{Binding}" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <!-- Where the conversation would be. Empty on purpose: a canned exchange here
+                     would be a screenshot of a feature nobody can use. -->
+                <Panel />
+              </DockPanel>
+
+              <!-- The notice, over all of it. Not a grey wash — the panel's own ground at 82%, so
+                   what is underneath reads as designed-but-not-yet rather than switched off. -->
+              <Border Name="AskWorkInProgress" Classes="wip">
+                <StackPanel Spacing="11" MaxWidth="250" Margin="24"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Border Classes="badge taro" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding WorkInProgressTitle}" />
+                  </Border>
+                  <TextBlock Text="{Binding WorkInProgressNotice}" TextWrapping="Wrap"
+                             FontSize="11.5" LineHeight="18.5" TextAlignment="Center"
+                             Foreground="{DynamicResource Taro700Brush}" />
+                </StackPanel>
+              </Border>
+            </Panel>
+          </Border>
+        </Grid>
       </TabItem>
 
     </TabControl>
