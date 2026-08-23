@@ -632,9 +632,15 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 return result;
             }
 
+            // Not null any more, and the move to the Export tab is why. This notice used to sit
+            // under a button on the same screen as the queue, so "nothing is selected" explained
+            // itself — the empty list was right there. On a page of its own the button is simply
+            // dark with nothing beside it, which is the shape of every interface defect this
+            // window has shipped.
             if (SelectedJob is not { } job)
             {
-                return null;
+                return "Choose a recording in the queue on the Transcribe tab; this writes the transcript of "
+                    + "whichever one is highlighted there.";
             }
 
             if (_muxer.DescribeUnavailable() is { } unavailable)
@@ -1721,8 +1727,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (report?.LooksLikeMissedSpeech == true)
         {
-            return "There is audio here but no speech was detected. Try 'fixed windows' below, which decodes " +
-                   "everything instead of trusting the detector.";
+            return "There is audio here but no speech was detected. Try 'fixed windows' on the Settings tab, " +
+                   "which decodes everything instead of trusting the detector.";
         }
 
         return "No speech was found in this file.";
@@ -1745,6 +1751,6 @@ public sealed partial class TranscribeViewModel : ObservableObject
             CultureInfo.InvariantCulture,
             $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS sat below " +
             $"the voice-activity gate and was not decoded. If this is quiet speech over background noise, try " +
-            $"'fixed windows' below, which decodes everything.");
+            $"'fixed windows' on the Settings tab, which decodes everything.");
     }
 }

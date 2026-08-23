@@ -43,7 +43,11 @@ public partial class AboutWindow : Window
         }
     }
 
-    /// <summary>Both ways out: the glyph in the corner and the button at the foot.</summary>
+    /// <summary>
+    /// Two of the three ways out: the glyph in the corner and the button at the foot. The third is
+    /// Escape, which the platform routes to the <c>IsCancel</c> button in the markup without
+    /// passing through here.
+    /// </summary>
     private void OnClose(object? sender, RoutedEventArgs e) => Close();
 
     /// <summary>

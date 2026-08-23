@@ -81,7 +81,11 @@
               BorderBrush="{DynamicResource RuleSeenBrush}"
               BorderThickness="0,1,0,0"
               Padding="26,13">
-        <Button Name="Dismiss" Classes="primary" Content="Close"
+        <!-- IsCancel is what makes Escape close this window. Without it the dialog answers the
+             one key every modal on the platform answers by doing nothing, and because ShowDialog
+             disables the owner, a reader who has not found either Close is looking at an
+             application that has stopped responding. -->
+        <Button Name="Dismiss" Classes="primary" Content="Close" IsCancel="True"
                 HorizontalAlignment="Right" />
       </Border>
 
@@ -209,9 +213,11 @@
                                LineHeight="18.5" />
                   </StackPanel>
 
-                  <!-- Both paths, because an update replaces the application's own files and
-                       neither of these, and somebody clearing space or reporting a fault needs to
-                       know which folder is which. -->
+                  <!-- The folder and the file, because an update replaces the application's own
+                       files and neither of these, and somebody clearing space or reporting a fault
+                       needs to know which is which. MODELS is a directory and is where the
+                       gigabytes are; SETTINGS names one small JSON file, not the directory holding
+                       it — which matters, because that directory is the models' parent. -->
                   <StackPanel Spacing="3">
                     <TextBlock Text="MODELS" Classes="section" />
                     <SelectableTextBlock Name="ModelDirectory" Text="{Binding ModelDirectory}"

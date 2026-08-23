@@ -1685,11 +1685,14 @@ public class AskTabWindowTests
     {
         // A star row with a MinHeight can over-allocate where a DockPanel's fill child simply
         // shrank, so the three rows have to add up inside the smallest window this application
-        // allows — 820 x 520, off MinWidth and MinHeight on the Window itself.
+        // allows — 920 x 520, off MinWidth and MinHeight on the Window itself. It was 820 until
+        // 2026-08-23, when a sixth switcher pill raised MinWidth; the number is read off the
+        // window here rather than typed, so the next change to it cannot leave this testing a
+        // width the window can no longer be dragged to.
         var (window, _, _) = OpenWithPicture();
 
-        window.Width = 820;
-        window.Height = 520;
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
