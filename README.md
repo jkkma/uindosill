@@ -139,32 +139,30 @@ obviously broken.
 
 ## Getting it
 
-**There is an installer, and no release to download it from yet.** Packaging is built —
-a `v*` tag produces a Windows installer for the desktop app in two flavours, the CLI as a zip beside
-it, and the bundled Python as a third zip for CLI users — unpack that one into
+**There is a release, and it is a release candidate.** `v1.0.0-rc.3`, published 2026-08-23, is a
+prerelease on the releases page: a Windows installer for the desktop app in two flavours, the CLI
+as a zip beside it, and the bundled Python as a third zip for CLI users — unpack that one into
 `%LOCALAPPDATA%\Uindosill` and `uindosill diarise` and `transcribe --translate` find it, since the
-CLI zip carries no interpreter of its own — but no version has been tagged, so the releases page is
-empty. Until one is, there are
-two ways to run this: build it from source, below, or take the `uindosill-win-x64` artefact from any
+CLI zip carries no interpreter of its own. v1.0 itself is not tagged yet. The other two ways to
+run this remain: build it from source, below, or take the `uindosill-win-x64` artefact from any
 CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and vulkan
-natives already in place, kept for seven days. Both still need a model, which the CLI or the app's
-Models tab downloads.
+natives already in place, kept for seven days. Everything still needs a model, which the CLI or the
+app's Models tab downloads.
 
-When a release does arrive, three things are worth knowing before you download it:
+Three things are worth knowing before you download it:
 
 - **It is unsigned**, by decision rather than oversight, so expect Windows to warn about an unknown
   publisher. Nobody here has seen that dialog — both installers were only ever run silently — so
   what it says exactly is one of the things [UNPROVEN.md](docs/UNPROVEN.md) records.
   [PHASES.md](docs/PHASES.md) records what shipping unsigned accepts, and why signing left v1.
-- **Two flavours.** The default installer carries the CPU and Vulkan backends and is about 82 MB;
-  the `win-cuda` one adds the NVIDIA CUDA runtime and is about 819 MB. **Both figures were measured
-  before the Python bundle and neither includes it**, because no installer has been packed with one
-  yet; the bundle itself measures **1.20 GB**, and [UNPROVEN.md](docs/UNPROVEN.md) carries what that
-  means for a download nobody has built.
+- **Two flavours.** The default installer carries the CPU and Vulkan backends with the bundled
+  Python inside and is **485.4 MB**; the `win-cuda` one adds the NVIDIA CUDA runtime at
+  **1187.9 MB**. Both figures are read off the published `v1.0.0-rc.3` assets — the first release
+  packed with the bundle, which measures 1.20 GB unpacked and 400.2 MB as its own zip.
   Take the first unless you know you want CUDA. Whichever you install is meant to keep updating
   itself from the same flavour: the channel is recorded at install time and the app never overrides
-  it, which was read off an installed copy — but no release exists yet, so no update has ever been
-  fetched from one.
+  it, which was read off an installed copy — but no update has ever been fetched from a release:
+  the only release is a prerelease, which the update check deliberately does not offer.
 - **Your models are not in it, so updates cannot cost you a re-download.** The application
   installs into `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights and settings live in
   `%LOCALAPPDATA%\Uindosill`. That updates leave the second directory byte-identical was measured
