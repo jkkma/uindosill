@@ -678,8 +678,9 @@ public class TranscribeViewModelTests
         }
 
         Assert.NotNull(firstRows);
-        Assert.Equal("One here.", firstRows[0]);
-        Assert.All(firstRows, row => Assert.True(row is "One here." or "Two there.", $"a mid-decode row held more than a sentence: '{row}'"));
+        // Rows are drawn without their sentence-final stop, as subtitles are (TranscriptLineTests).
+        Assert.Equal("One here", firstRows[0]);
+        Assert.All(firstRows, row => Assert.True(row is "One here" or "Two there", $"a mid-decode row held more than a sentence: '{row}'"));
 
         await batch;
 
@@ -688,7 +689,7 @@ public class TranscribeViewModelTests
         // search window — and the rebuild cut them the same way the stream did.
         Assert.Equal(JobState.Completed, job.State);
         Assert.Equal(2 * job.Document!.Segments.Count(s => !s.IsEmpty), job.Lines.Count);
-        Assert.All(job.Lines, line => Assert.True(line.Text is "One here." or "Two there."));
+        Assert.All(job.Lines, line => Assert.True(line.Text is "One here" or "Two there"));
     }
 
     [Fact]

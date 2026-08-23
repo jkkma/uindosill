@@ -592,7 +592,10 @@ internal static class TranscribeCommand
                 // two-model cascade meets worst. Compared against the transcript as the engine wrote
                 // it, which is what `transcribed` is being kept for, so the comparison is against what
                 // was heard rather than against a second reading of the English.
-                numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+                // Against the units the translator was actually given — the sentences — not the
+                // segments: the English pairs with those by index, and a segment of three
+                // sentences is three English segments now.
+                numeralWarning = TranslationNumerals.Describe(TranscriptTranslation.Units(transcribed), document.Segments);
             }
             else
             {

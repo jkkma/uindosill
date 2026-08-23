@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1097 tests, no weights, no display, no network — **1093 passed and 4 skipped**, and
+**Status:** met. 1116 tests, no weights, no display, no network — **1112 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2750,9 +2750,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.** `CLAUDE.md`'s second
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1097 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1116 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,7 +2836,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2880,7 +2880,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2927,7 +2927,8 @@ says.
 
 **The English pane stays one line per segment**, because a translated segment carries no word times
 and a translation does not hold its source's sentence count; the notice under the pills now says
-both things, since both have the one cause.
+both things, since both have the one cause. *Superseded later the same day* — § *Built 2026-08-23 —
+the English is translated a sentence at a time*: the translator is given the sentences instead.
 
 **What this does not fix, named so nobody reads it as fixed.** The detector still cannot hear a
 pause under a bed, so segments on such audio still run to the cap and a cap cut still lands at the
@@ -2936,7 +2937,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.**
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3026,9 +3027,64 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1097 tests, no weights, no display, no network — 1093 passed and 4 skipped.** Two of the four are
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
+
+### Built 2026-08-23 — the English is translated a sentence at a time
+
+**Asked for with two screenshots**: the Transcript pane reading "Die erste Zeit…" / "Und ich stand
+hier…" / "Meine ganzen Augen…" as three lines at 02:43, 02:48 and 02:53, and the English pane
+holding all three in one line at 02:43. The cause was the one the notice under the pills stated
+since the morning: the translator was fed the recogniser's segments, one request per segment, and
+handed back one English string per segment with no word timings — so there was nothing to cut the
+English *by*, and the window never invents a timestamp. Splitting the English after the fact would
+have meant guessing times; the fix is to translate what is already cut.
+
+**What was built.** `TranscriptTranslation` splits the source with `SentenceSplitter` before the
+translator sees it — the same cut the Ask tab's transcript lines are made with, on the word timings
+the model reported — and sends one request per sentence. Each English segment keeps its sentence's
+start and end (the first piece the segment's start, the last its end, every time between them a
+word's), its `SourceSegmentIndex` and its speaker, and the driver's checks hold per sentence as they
+held per segment. `TranscriptTranslation.Units` is that split, and the numeral check in both the
+command line and the window now compares against it, so the pairing stays by index. A segment the
+splitter leaves whole — one sentence, no words, words that do not reproduce the text — is translated
+as before, which is every line `uindosill translate` reads from a text file. The English pane reads
+one line per sentence at the sentence's own time; `.en.srt` and `.en.vtt` cues no longer straddle a
+sentence end; the English JSON's segments are sentences and pair with the transcript JSON's by time
+— each lies inside its source segment's span — rather than one to one, the source index being
+carried in the document model and not written to the JSON. The notice under the pills now names
+only the word mark as what does not follow across. Driven once on the real path: the ten-minute
+podcast cut, Vulkan and WebGPU, exit 0 in 51 s, the detector's 78 segments became 162 English
+sentences, two of them cut after `vs.` and `Mr.` — the splitter's documented abbreviation weakness,
+and the only thing that read wrong.
+
+**What this is not.** Not measured: no chrF++ and no adequacy check has been run with the sentence
+as the unit — the FLEURS figures are per sentence by construction and the cascade penalty was
+measured per ASR segment, and whether a shorter input moves either is not established on any file;
+`docs/UNPROVEN.md` § *The Ask tab's lines are sentences* says so. Not faster: more requests of less
+text each (478 where there were 285 on the documentary's gate segmentation), and the time was not
+measured. And not the word mark — a translated sentence still carries no word times, and the English
+pane still marks no word.
+
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+
+### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
+
+**Asked for** the moment the English read by the sentence: "real subtitles don't have dots at the
+end." `TrailingStop.Strip` takes exactly one sentence-final `.` off the end of a line — never `?` or
+`!`, never an ellipsis, and a closing quote or bracket after the stop stays while the stop inside it
+goes — and it is applied at two places and nowhere else. `SubtitleCueBuilder` applies it to every
+finished cue, after `Tidy`: the last line, and the last word of `LineWords` with it, so SRT, VTT and
+the word-timed VTT write the same text; a stop between two sentences inside one cue stays.
+`TranscriptLineViewModel` applies it to the lines the window draws, on both tabs and both panes, and
+locates the last word without its stop so the word mark still lands on it. The document is untouched
+— it is what the sentence splitter and the word times are computed from — and so are TXT, JSON and
+Markdown, which carry the text as the model wrote it. An abbreviation that ends a line on a bad cut
+(`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
+to measure.
+
+**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
 
 ### The dictation seam
 

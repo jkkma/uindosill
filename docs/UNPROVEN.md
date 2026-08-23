@@ -4122,6 +4122,24 @@ Segmentation does not depend on the backend, and the boundaries matched the app'
 same link to the second — 0:00, 0:08, 0:37, 1:03, 1:11, 1:26, 1:31 — so this is the segmentation the
 report was about.
 
+**Since later the same day the English is translated by these sentences too.**
+`TranscriptTranslation` splits the source with the same splitter before the translator sees it, so
+the English pane reads one line per sentence at the sentence's own time and `.en.srt` cues stop
+straddling a sentence end; the English JSON's segments are sentences and pair with the transcript's
+by time — each lies inside its source segment's span — rather than one to one (the source index is
+carried in the document model and is not written to the JSON). Driven once on the real path the day
+it landed: the ten-minute podcast cut, Vulkan for the recogniser and WebGPU for the translator, exit
+0 in 51 s; the detector's 78 segments became **162 English sentences**, two of them cut after `vs.`
+and `Mr.` — the abbreviation-before-a-capital weakness the splitter's own record names — and nothing
+else read wrong on a pass over the lines. **None of it is measured.** No chrF++ and no
+adequacy check has been run with the sentence as the unit: the FLEURS figures (§ *Translating into
+English*) are per sentence by construction, since FLEURS is sentence-level, and the cascade penalty
+(Spanish −2.95, German −4.34 chrF++) was measured per ASR segment — whether a shorter, single-sentence
+input moves either is not established on any file. It is more requests of less text each — on the
+gate's segmentation of this file, 478 sentences where there were 285 segments — and the time that
+costs was not measured. The German number rewrite (`TranslationRequest.Mark`) runs per request and
+reads nothing across a sentence boundary, so it is unchanged by where the boundary falls.
+
 **What the detector did on it.** The Ask tab's second line was the segment 8.52–37.95 s: 29.43 s,
 389 characters, 9 sentences, 58 words — the thirty-second cap, cut at the quietest frame in the last
 four seconds. Why the energy gate never closed it earlier, in 30 ms frames of RMS level (ffmpeg

@@ -109,10 +109,15 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
         IReadOnlyList<TranscriptWord>? words = null)
     {
         Voice = voice;
-        Text = text;
+
+        // Drawn without its sentence-final full stop, the way a subtitle is — asked for on
+        // 2026-08-23, and the rule (only `.`, never `?`, `!` or an ellipsis) is TrailingStop's, the
+        // same one the cue builder applies to every exported cue. The document keeps the stop; this
+        // is the line as it is drawn, and the last word is located without it below.
+        Text = Parakeet.Core.Formatting.TrailingStop.Strip(text);
         Start = start;
         End = end;
-        _spans = Locate(text, words);
+        _spans = Locate(Text, words);
     }
 
     /// <summary>
@@ -285,9 +290,16 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
         var spans = new List<WordSpan>(words.Count);
         var at = 0;
 
-        foreach (var word in words)
+        for (var i = 0; i < words.Count; i++)
         {
-            var token = word.Text.Trim();
+            var token = words[i].Text.Trim();
+
+            // The line lost its sentence-final full stop on the way into Text, and the last word is
+            // the one that carried it — so it is looked for without it, or it would never light.
+            if (i == words.Count - 1)
+            {
+                token = Parakeet.Core.Formatting.TrailingStop.Strip(token);
+            }
 
             if (token.Length == 0)
             {
@@ -301,7 +313,7 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
                 continue;
             }
 
-            spans.Add(new WordSpan(found, token.Length, word.Start));
+            spans.Add(new WordSpan(found, token.Length, words[i].Start));
             at = found + token.Length;
         }
 

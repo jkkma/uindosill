@@ -130,19 +130,19 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public bool IsShowingTranslation => TranscriptPane == 1 && CanShowTranslation;
 
     /// <summary>
-    /// Why no word lights up while the English is being read, and why its lines are whole segments
-    /// where the transcript's are sentences — or null on the spoken transcript.
+    /// Why no word lights up while the English is being read — or null on the spoken transcript.
     /// </summary>
     /// <remarks>
-    /// Said rather than left to be noticed: the mark and the sentence cut both work on one pane and
-    /// not the other, and a feature that silently stops is indistinguishable from a broken one. Both
-    /// have the same cause — a translated segment carries no word times — so it is one sentence.
+    /// Said rather than left to be noticed: the mark works on one pane and not the other, and a
+    /// feature that silently stops is indistinguishable from a broken one. Until later on 2026-08-23
+    /// this also said the English was not cut into sentences; it is now — the translator is given
+    /// the sentences the transcript's lines are cut into, so the English has the same lines at the
+    /// same times — and what remains true is the word: a translated sentence carries no word times.
     /// </remarks>
     public string? TranslationPaneNotice =>
         IsShowingTranslation
-            ? "The English follows the recording a segment at a time. Individual words are not marked here "
-              + "and a segment's sentences are not split apart — translating loses which word was said when — "
-              + "so switch to Transcript for either."
+            ? "The English follows the recording a sentence at a time. Individual words are not marked here — "
+              + "translating loses which word was said when — so switch to Transcript for the word being spoken."
             : null;
 
     public bool HasTranscript => Lines is { Count: > 0 };

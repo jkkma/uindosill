@@ -1633,7 +1633,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 // Dates and figures are what a listener checks a transcript for, and they are where a
                 // two-model cascade meets worst. Compared against what was heard rather than against a
                 // second reading of the English.
-                numeralWarning = TranslationNumerals.Describe(transcribed.Segments, document.Segments);
+                // Against the sentences the translator was given, not the segments: the English
+                // pairs with those by index since it is translated a sentence at a time.
+                numeralWarning = TranslationNumerals.Describe(TranscriptTranslation.Units(transcribed), document.Segments);
 
                 // What ran, on the same terms as the labeller's. The translator checks itself against a
                 // committed reference at load and this window was running that check and discarding the

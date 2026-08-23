@@ -100,6 +100,60 @@ public class TranslationTests
     }
 
     [Fact]
+    public async Task ASegmentOfSeveralSentencesIsTranslatedASentenceAtATimeAndEachEnglishSentenceKeepsItsOwnTimes()
+    {
+        // Asked for with two screenshots on 2026-08-23: three German lines at 02:43, 02:48 and
+        // 02:53 and one English line at 02:43 holding all three. The translator is given the
+        // sentences the transcript's word timings cut the segment into, so the English pairs with
+        // those — first piece keeps the segment's start, last keeps its end, the cut between them
+        // is a word's — and carries the source index and the speaker through. Units() is that same
+        // split, which is what a caller comparing source against English has to compare against.
+        await using var translator = new FakeTranscriptTranslator();
+        var segment = new TranscriptSegment
+        {
+            Start = TimeSpan.FromSeconds(163),
+            End = TimeSpan.FromSeconds(175),
+            Text = "Die erste Zeit hat er geweint. Und ich stand hier. Meine Augen brennen",
+            SourceSegmentIndex = 41,
+            Speaker = "Speaker 2",
+            Words =
+            [
+                Word("Die", 163.2, 163.4), Word("erste", 163.4, 163.8), Word("Zeit", 163.8, 164.1),
+                Word("hat", 164.1, 164.3), Word("er", 164.3, 164.5), Word("geweint.", 164.5, 165.0),
+                Word("Und", 168.0, 168.2), Word("ich", 168.2, 168.4), Word("stand", 168.4, 168.7), Word("hier.", 168.7, 169.1),
+                Word("Meine", 173.0, 173.3), Word("Augen", 173.3, 173.7), Word("brennen", 173.7, 174.2),
+            ],
+        };
+        var document = Document(Spoken(0, 3, "hola qué tal"), segment);
+
+        var translated = await TranscriptTranslation.TranslateAsync(document, translator);
+
+        Assert.Equal(4, translator.Requests.Count);
+        Assert.Equal(">>eng<< Die erste Zeit hat er geweint.", translator.Requests[1].Source);
+        Assert.Equal(">>eng<< Und ich stand hier.", translator.Requests[2].Source);
+        Assert.Equal(">>eng<< Meine Augen brennen", translator.Requests[3].Source);
+
+        Assert.Equal(4, translated.Segments.Count);
+        var english = translated.Segments.Skip(1).ToList();
+        Assert.Equal(
+            [(163.0, 165.0), (168.0, 169.1), (173.0, 175.0)],
+            english.Select(s => (Math.Round(s.Start.TotalSeconds, 3), Math.Round(s.End.TotalSeconds, 3))));
+        Assert.All(english, s => Assert.Equal(41, s.SourceSegmentIndex));
+        Assert.All(english, s => Assert.Equal("Speaker 2", s.Speaker));
+        Assert.All(english, s => Assert.Empty(s.Words));
+        Assert.Equal("[en] Und ich stand hier.", english[1].Text);
+
+        // And the units the caller compares against are exactly what was sent.
+        var units = TranscriptTranslation.Units(document);
+        Assert.Equal(translated.Segments.Count, units.Count);
+        Assert.Equal(units.Select(u => u.Start), translated.Segments.Select(s => s.Start));
+        Assert.Null(TranslationNumerals.Describe(units, translated.Segments));
+
+        static TranscriptWord Word(string text, double start, double end) =>
+            new() { Text = text, Start = TimeSpan.FromSeconds(start), End = TimeSpan.FromSeconds(end) };
+    }
+
+    [Fact]
     public async Task TheDocumentRecordsWhatTranslatedItAndIntoWhat()
     {
         // A backend the fake does not default to, so the assertion below tells a provenance read
