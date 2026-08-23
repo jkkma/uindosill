@@ -401,6 +401,73 @@ public class AskTabTests
     }
 
     [Fact]
+    public void ASegmentOfSeveralSentencesIsDrawnAsOneCuePerSentence()
+    {
+        // The defect this answers, found on a broadcast documentary on 2026-08-23: the energy gate
+        // never saw a pause under the music bed, so one segment ran to the thirty-second cap holding
+        // nine sentences, and this tab lit the whole block for half a minute. The segment is not
+        // changed — it is the citation unit and the unit every recorded figure counts — but the tab
+        // reads it by the sentence, on the engine's own word times.
+        var (ask, jobs, player) = Create();
+        jobs.Add(Sentences());
+
+        var lines = ask.Lines!;
+        Assert.Equal(["Erst eins.", "Dann zwei.", "Und drei"], lines.Select(l => l.Text));
+
+        // Times come off the words, never invented: the first cue keeps the segment's start, the
+        // last keeps its end, and the one between starts where its first word does.
+        Assert.Equal(TimeSpan.Zero, lines[0].Start);
+        Assert.Equal("00:04", lines[1].Timestamp);
+        Assert.Equal(TimeSpan.FromSeconds(12), lines[2].End);
+
+        // Each is a cue in its own right: it is the one being played while the playhead is inside
+        // it, it marks its own words, and it seeks. 4.25 s is inside "Dann" (4–4.5) and before
+        // "zwei." has started, so the mark is unambiguous.
+        ask.PlayPauseCommand.Execute(null);
+        player.Advance(TimeSpan.FromSeconds(4.25));
+        ask.Tick();
+        Assert.Same(lines[1], ask.ActiveLine);
+        Assert.Equal("Dann", MarkedWord(lines[1]));
+
+        ask.SeekToLineCommand.Execute(lines[2]);
+        Assert.Equal(TimeSpan.FromSeconds(8), player.Position);
+    }
+
+    [Fact]
+    public void TheEnglishPaneStaysOneLinePerSegmentBecauseATranslationHasNoWordTimes()
+    {
+        // A language and its translation do not hold the same number of sentences, and a translated
+        // segment carries no word times to cut by, so the English is left whole rather than timed
+        // by a guess — and the notice under the pills says so, beside the word mark it already
+        // explains.
+        var (ask, jobs, _) = Create();
+        var job = new JobViewModel("/tmp/a.wav");
+        job.Complete(
+            new JobResult
+            {
+                Job = new TranscriptionJob { InputPath = job.Path },
+                State = JobState.Completed,
+                Document = new TranscriptDocument
+                {
+                    TranslatedTo = "en",
+                    Segments =
+                    [
+                        new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(12), Text = "First one. Then two. And three" },
+                    ],
+                },
+            },
+            source: SentencesDocument());
+        jobs.Add(job);
+
+        Assert.Equal(3, job.Lines.Count);
+        Assert.Single(job.TranslatedLines);
+
+        ask.TranscriptPane = 1;
+        Assert.Single(ask.Lines!);
+        Assert.Contains("a segment at a time", ask.TranslationPaneNotice, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SeekingBackwardsPutsTheMarkBackWhereThePlayheadIs()
     {
         // The mark is computed from the position every time rather than stepped forward, so a
@@ -925,6 +992,41 @@ public class AskTabTests
                 ],
             },
         });
+
+    /// <summary>
+    /// One twelve-second segment holding three sentences, the last without its full stop — the
+    /// shape the segment cap leaves when it cuts through a sentence at the quietest frame.
+    /// </summary>
+    internal static JobViewModel Sentences(string path = "/tmp/a.wav")
+    {
+        var job = new JobViewModel(path);
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = path },
+            State = JobState.Completed,
+            Document = SentencesDocument(),
+        });
+        return job;
+    }
+
+    internal static TranscriptDocument SentencesDocument() => new()
+    {
+        Segments =
+        [
+            new TranscriptSegment
+            {
+                Start = TimeSpan.Zero,
+                End = TimeSpan.FromSeconds(12),
+                Text = "Erst eins. Dann zwei. Und drei",
+                Words =
+                [
+                    Word("Erst", 1, 1.5), Word("eins.", 1.5, 2),
+                    Word("Dann", 4, 4.5), Word("zwei.", 4.5, 5),
+                    Word("Und", 8, 8.5), Word("drei", 8.5, 9),
+                ],
+            },
+        ],
+    };
 }
 
 /// <summary>

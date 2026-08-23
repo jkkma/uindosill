@@ -628,6 +628,66 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
+    public async Task TheRowsThatFillWhileDecodingAreAlreadyOnePerSentence()
+    {
+        // Two places turn a segment into rows — the pane filling mid-decode above, and the rebuild
+        // Complete() does — and since 2026-08-23 both go through TranscriptLineViewModel.LinesFor,
+        // which cuts a segment at its sentences. This drives the first through the fake engine with
+        // a two-sentence phrase and reads the rows the moment they appear, before the rebuild can
+        // have happened: a transcript that re-cut itself when the decode ended would read as a
+        // defect, and nothing but this would see it.
+        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var provider = new FakeEngineProvider(new FakeEngineOptions
+        {
+            PerSegmentDelay = TimeSpan.FromMilliseconds(100),
+            Phrases = ["One here. Two there."],
+        });
+
+        var main = new MainWindowViewModel(
+            provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+        var viewModel = main.Transcribe;
+        viewModel.OutputDirectory = directory;
+        viewModel.UseFixedWindows = true;
+        viewModel.MaxSegmentSeconds = 5;
+        await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
+
+        viewModel.AddFiles([WriteTone(directory, "long.wav", seconds: 60)]);
+        var job = viewModel.Jobs[0];
+
+        var batch = viewModel.StartCommand.ExecuteAsync(null);
+
+        List<string>? firstRows = null;
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (job.Lines.Count > 0 && viewModel.IsRunning)
+            {
+                firstRows = [.. job.Lines.Select(l => l.Text)];
+                break;
+            }
+
+            if (!viewModel.IsRunning)
+            {
+                break;
+            }
+
+            await Task.Delay(25);
+        }
+
+        Assert.NotNull(firstRows);
+        Assert.Equal("One here.", firstRows[0]);
+        Assert.All(firstRows, row => Assert.True(row is "One here." or "Two there.", $"a mid-decode row held more than a sentence: '{row}'"));
+
+        await batch;
+
+        // Two rows per decoded segment — however many the fixed windows made of a flat tone, which
+        // is not twelve: on audio with no quietest frame the forced cut lands at the start of its
+        // search window — and the rebuild cut them the same way the stream did.
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal(2 * job.Document!.Segments.Count(s => !s.IsEmpty), job.Lines.Count);
+        Assert.All(job.Lines, line => Assert.True(line.Text is "One here." or "Two there."));
+    }
+
+    [Fact]
     public void ASecondPassClearsTheBarTheDecodeLeftFull()
     {
         // The decode ends at 100%. Speaker labelling then reads and resamples the whole file again

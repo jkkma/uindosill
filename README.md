@@ -77,8 +77,9 @@ nothing has packaged one.
   written for this project decoded it until 2026-08-21 and are now in `attic/`.
   `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
   a checkbox beside the speaker one, and the English arrives *beside* the transcript rather than
-  instead of it — a switcher over the transcript pane shows either, with the same times and the
-  same speakers on both sides.
+  instead of it — a switcher over the transcript pane shows either, with the same speakers on both
+  sides; the transcript is read by the sentence and the English by the segment, since a translation
+  carries no word times to cut it by.
   **The gate it was written against is not passed**, and that is a statement about a criterion
   nobody has performed rather than about a score: chrF++ clears its per-language bar in 23 of 24
   languages and Slovak misses by 0.74, and the human adequacy check has been declined. Those scores
@@ -95,9 +96,10 @@ nothing has packaged one.
   disabled, and covered by a work-in-progress notice, because there is no language model in this
   application and which one it should be is still open. **The half that needs no model shipped
   2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
-  cues you click to jump to that moment, the line being spoken lights up as it goes, and a find box
-  marks every mention of a word and steps between them with Enter. All of that runs on times v1
-  already writes. **A video plays its picture too, as of 2026-08-23**, through a vendored libmpv —
+  cues you click to jump to that moment — one per sentence where the engine's word times can tell
+  the sentences apart, so a thirty-second segment reads as the sentences it holds rather than as one
+  block — the line being spoken lights up as it goes, and a find box marks every mention of a word
+  and steps between them with Enter. All of that runs on times v1 already writes. **A video plays its picture too, as of 2026-08-23**, through a vendored libmpv —
   which is why a build carrying it is GPL rather than MIT; see the licence section below. A build
   without it plays a video's sound and says on the tab that it is not drawing the picture.
   Playback needs a Windows audio device and, for video, the vendored library, so **nothing in the
@@ -159,7 +161,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1027 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1073 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

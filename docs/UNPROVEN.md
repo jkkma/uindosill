@@ -4110,6 +4110,89 @@ them to combine them with. On the one file timed here the sidecar half was 25.3 
 half was not separately timed at all. A single combined bar would need a weight, and there is no
 evidence for one.
 
+## The Ask tab's lines are sentences — measured on one broadcast documentary, 2026-08-23
+
+The Ask tab drew one line per segment until 2026-08-23 and draws one per sentence now, where a
+segment's word timings can tell its sentences apart — `SentenceSplitter`, applied to the lines and
+never to the document; `docs/PHASES.md` § *Built 2026-08-23 — the Ask tab reads by the sentence* has
+what and why. Everything here was measured on **one file**: NDR's *Hinter den Kulissen von Hamburgs
+Kantinen & Co.*, 28 min 49 s, fetched from its YouTube link and transcribed with `tdt-0.6b-v3-f16`
+on **Vulkan** on the desktop (RTF 0.011, 285 segments, 68 carrying a word below 0.45 confidence).
+Segmentation does not depend on the backend, and the boundaries matched the app's own run on the
+same link to the second — 0:00, 0:08, 0:37, 1:03, 1:11, 1:26, 1:31 — so this is the segmentation the
+report was about.
+
+**What the detector did on it.** The Ask tab's second line was the segment 8.52–37.95 s: 29.43 s,
+389 characters, 9 sentences, 58 words — the thirty-second cap, cut at the quietest frame in the last
+four seconds. Why the energy gate never closed it earlier, in 30 ms frames of RMS level (ffmpeg
+`astats` over the decoded mono 16 kHz audio, outside the app):
+
+| stretch | min / median / max dBFS | what the gate saw |
+|---|---|---|
+| 8.5–38 s, the 29 s segment | −43.9 / **−23.1** / −8.3 | 131 of 1,270 frames below −35; longest run below it 450 ms |
+| 16.1–19.6 s, the 1.84 s gap after "Jackfrucht." | −40.3 / −25.8 / −12.4 | no frame below −35 for 420 ms together |
+| 55–61 s, six seconds with no word after "gesehen." | −34.8 / −30.6 / −15.8 | music bed, read as speech throughout |
+
+The gate's "definitely speech" line is −35 dBFS (`AbsoluteSpeechDb`) and its adaptive floor is
+capped so the threshold can never sit above it; a bed at −23 to −31 dBFS is speech to it. The
+silence rule needs 420 ms; the one 450 ms run is where the segment ended. The recogniser heard what
+the gate did not: inside that segment its word timings leave 0.96 s after "aussieht.", 0.96 s after
+"lieber.", 1.84 s after "Jackfrucht." and 0.48–0.64 s after three more sentence-final words, and the
+next segment holds 6.08 s with no word after "gesehen." Over the whole file, 91 of 3,151
+within-segment word gaps are 420 ms or longer and 33 are a second or longer. Across all 285 segments
+the cap is the exception — median 3.5 s, mean 5.4 s, 34 of ten seconds or more, 10 of twenty or
+more, 2 of twenty-eight or more — and the opening montage is where it bites. `§ Ten minutes of real
+podcast` records that on conversational audio the cap never fired in 98 segments; this is the first
+material here on which it does, and it is the first material here with a bed.
+
+**What the rule did on it, through the C# itself.** A scratch console over the CLI's JSON, calling
+`SentenceSplitter.Split` and nothing of its own: 285 segments → **478 lines**, 80 segments cut, 193
+cuts; every segment's words reproduce its text (285 of 285), so no segment was left whole for that
+reason; every segment's pieces join back to its text with single spaces (0 failures). The longest
+line fell from 29.4 s to **17.0 s** — one spoken sentence of 45 words — and lines of ten seconds or
+more from 34 to **4** (17.0, 14.3, 14.0 and 13.3 s; 45, 13, 18 and 9 words; each one sentence);
+twenty seconds or more from 10 to 0. Mean line 2.9 s and 43 characters, against the segment's 5.4 s
+and 73. The rule declined exactly one terminal mark, `bzw. die`, and that is right. Its first draft
+did not let a number open a sentence, to protect `ca. 40`; that draft declined five marks, and four
+of them — `Genau. 50`, `habe. 17`, `Westen. 4.41`, `Schanzenviertel. 7` — were sentence ends, while
+no `ca. 40` occurred. The measurement won: a number opens a sentence, and `ca. 40` and `Nr. 5` join
+`Dr. Müller` as the rule's recorded false cuts (a test names all four). **All 193 cuts were listed
+and read**, shortest token first: none stands at a token that is an abbreviation, and the shortest
+are `ab. | Aber`, `ne? | Das`, `da. | Ich`, `du. | Hab` — sentence ends all.
+
+**What that reading is not.** Nobody compared a cut to the audio. The rule follows the model's
+punctuation, so where the model wrote a full stop that a listener would not — `Abd. | Ciao.` looks
+like a name the recogniser broke — the line breaks there too, and it is counted above as a sentence
+end. The rule's accuracy is the punctuation's accuracy, and this project has never measured the
+punctuation.
+
+**What none of it establishes:**
+
+- **One file, one language, one genre, one backend.** The refusals (a single letter, digits alone, a
+  stop inside the word) and the known false cuts were chosen on German and English examples and
+  exercised on German. None of the other twenty-three languages the model transcribes has been run
+  through it. The failure on a language it handles badly is "the lines stay as long as they were",
+  never a wrong cut of the text — the words reproduce the text or the segment is left whole — but
+  that is an argument from the code, not a measurement.
+- **That a person has read the result.** Every figure above is a count over a JSON; nobody has
+  watched the highlight step from one sentence to the next while this recording plays, and screen
+  capture is unavailable in this session by standing rule. The line being played is found by the
+  same rule as before over shorter lines, and the word mark inside it is the same mark — both under
+  test — but "it reads well" is a judgement nobody has made.
+- **The detector is unchanged, and so is everything downstream of it.** Segments on audio with a bed
+  still run to the cap; a cap cut still lands at the quietest frame and not in a pause; the subtitle
+  files still break cues mid-sentence — on this file **24 % of the German `.srt` cues and 29 % of
+  the English `.en.srt` cues open in lower case** (101 of 418 and 116 of 407), because
+  `SubtitleCueBuilder` splits on characters and seconds and never on punctuation. That was offered
+  as a second change on 2026-08-23 and declined for now; it is not done, and not half done.
+- **The four lines still ten seconds or longer are single sentences**, 9 to 45 words. Nothing here
+  shortens a sentence the speaker made long, and nothing should; a reader who wants a shorter unit
+  wants the word mark, which still runs inside the line.
+- **The English pane is one line per segment**, which on this file is up to 29 s of English, and
+  says so in its notice. A translation carries no word times and does not hold its source's sentence
+  count, so there is nothing to cut it by that is not a guess; that is a decision, not a gap, and it
+  is recorded here because a reader of the English will meet the old shape there.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository

@@ -142,12 +142,15 @@ public sealed partial class JobViewModel : ObservableObject
     public List<string> OutputFiles { get; } = [];
 
     /// <summary>
-    /// The transcript as the window draws it: one entry per segment, each carrying its speaker as
-    /// a chip rather than as a prefix on the text.
+    /// The transcript as the window draws it: one entry per sentence where a segment's word timings
+    /// can tell its sentences apart, otherwise one per segment, each carrying its speaker as a chip
+    /// rather than as a prefix on the text.
     /// </summary>
     /// <remarks>
     /// Beside <see cref="Transcript"/> rather than instead of it. That string is what a person
     /// copies out of the window and what the pipeline's own tests pin; this is the view's shape.
+    /// The sentence cut is <see cref="TranscriptLineViewModel.LinesFor"/>'s, applied here and on the
+    /// pane that fills mid-decode alike; the document's segments are not touched by it.
     /// </remarks>
     public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> Lines { get; } = [];
 
@@ -479,12 +482,15 @@ public sealed partial class JobViewModel : ObservableObject
                 chips[speaker] = voice;
             }
 
-            // The words come across too, and they are what the Ask tab marks the spoken one from.
-            // A translated document carries none — `SidecarTranscriptTranslator` writes an empty
-            // list, because translating loses the timing of individual words — so the English pane
-            // gets segment times and no word times, which is exactly what it is entitled to.
-            target.Add(new TranscriptLineViewModel(
-                voice, segment.Text.Trim(), segment.Start, segment.End, segment.Words));
+            // The words come across too, and they are what the Ask tab marks the spoken one from
+            // and cuts the segment into sentences by. A translated document carries none —
+            // `SidecarTranscriptTranslator` writes an empty list, because translating loses the
+            // timing of individual words — so the English pane gets one line per segment with
+            // segment times and no word times, which is exactly what it is entitled to.
+            foreach (var line in TranscriptLineViewModel.LinesFor(segment, voice))
+            {
+                target.Add(line);
+            }
         }
     }
 

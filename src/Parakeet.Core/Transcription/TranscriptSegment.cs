@@ -59,6 +59,31 @@ public sealed record TranscriptSegment
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text);
 
     /// <summary>
+    /// Whether joining <see cref="Words"/>' trimmed texts with single spaces reproduces
+    /// <see cref="Text"/> exactly — the condition under which the segment may be cut between two
+    /// of its words and the text carved to match. True of every segment the real engine has
+    /// produced here (1,378 of 1,378 in one three-hour transcript) and of the fake; false of a
+    /// segment with no words at all.
+    /// </summary>
+    /// <remarks>
+    /// One definition, because two callers cut segments on it — <c>SpeakerAssignment</c> where the
+    /// speaker changes and <c>SentenceSplitter</c> where a sentence ends — and a segment that one
+    /// of them judged cuttable and the other did not would be cut in one place and whole in the
+    /// other, which is a defect nothing would report.
+    /// </remarks>
+    public bool WordsReproduceText() => WordsReproduceText(Words, Text);
+
+    /// <summary>The same test over a word list that is not yet the segment's — attributed copies, say.</summary>
+    public static bool WordsReproduceText(IReadOnlyList<TranscriptWord> words, string text)
+    {
+        ArgumentNullException.ThrowIfNull(words);
+        ArgumentNullException.ThrowIfNull(text);
+
+        return words.Count > 0
+            && string.Equals(string.Join(' ', words.Select(w => w.Text.Trim())), text.Trim(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Mean word confidence, or null when the engine reported none. Averaging is the right
     /// aggregate for "is this segment worth a second look"; it is not a probability.
     /// </summary>
