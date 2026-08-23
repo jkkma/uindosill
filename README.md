@@ -70,10 +70,12 @@ nothing has packaged one.
   and can only hand back 25 languages is a narrower product than the one intended. `--translate`
   reads real weights as of 2026-08-20: a Marian checkpoint exported here to ONNX, nine files and
   1.34 GiB, decoded at beam 6 by HuggingFace's own beam search inside the bundled Python — on
-  WebGPU where it loads, then CUDA, then the CPU. **The provider changes the English, not only the
-  speed**, so it is picked for faithfulness: on 32 FLEURS sentences WebGPU returned the CPU's own
-  translations on 32 of 32 at 1.30x the speed, and DirectML on 0 of 32 while falling into a
-  repetition loop, so DirectML is refused by name. The SentencePiece tokenizer and the beam search
+  CUDA where the wheel carries it, then WebGPU, then the CPU; the bundle's wheel carries only
+  WebGPU, so the shipped app tries that first as it always did. **The provider changes the English,
+  not only the speed**, so both GPU routes were held to faithfulness before speed ordered them: on
+  FLEURS sentences at beam 6, WebGPU returned the CPU's own translations on 32 of 32 at 1.30x the
+  speed, CUDA on 240 of 240 (and 1.33x WebGPU on the one machine measured, 2026-08-23), and
+  DirectML on 0 of 32 while falling into a repetition loop, so DirectML is refused by name. The SentencePiece tokenizer and the beam search
   written for this project decoded it until 2026-08-21 and are now in `attic/`.
   `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
   a checkbox beside the speaker one, and the English arrives *beside* the transcript rather than
