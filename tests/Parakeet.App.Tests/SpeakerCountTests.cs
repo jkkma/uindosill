@@ -4,6 +4,7 @@ using Parakeet.Audio;
 using Parakeet.Core.Diarisation;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
+using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.Tests;
 
@@ -184,6 +185,48 @@ public class SpeakerCountTests
 
         Assert.Equal(3, SpeakersIn(Path.Combine(directory, "a.rttm")));
         Assert.DoesNotContain("Folded", viewModel.Jobs[0].Warning ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheRowNamesWhichBackendProducedTheSpeakerLabels()
+    {
+        // The window named the backend the *transcription* ran on and never the one the labels came
+        // from, so a GPU diarisation and a CPU one were indistinguishable here — in a product whose
+        // rule is that a figure is never quoted without its backend. WebGPU is the case that was
+        // silent: DescribeBackend returns a sentence only for the two backends that do not
+        // reproduce the published figure, and this is one of the two that do.
+        var (viewModel, directory) = Create(OverSegmenting with { Backend = ComputeBackend.WebGpu });
+
+        viewModel.AddFiles([WriteWav(directory, "a.wav")]);
+        SelectTextAndTurns(viewModel);
+        viewModel.LabelSpeakers = true;
+        viewModel.SpeakerCount = 4;
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        var job = viewModel.Jobs[0];
+        Assert.Equal(JobState.Completed, job.State);
+        Assert.Equal("Speakers: fake-speakers on webgpu", job.SpeakerProvenance);
+
+        // And it stays out of the warning line, which is reserved for things that need attention:
+        // a sentence there on every run about a backend that agrees is what trains people to
+        // ignore the line that matters.
+        Assert.DoesNotContain("webgpu", job.Warning ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARunWithoutSpeakersClaimsNoLabellingBackend()
+    {
+        // No labels, nothing to attribute. The line is absent rather than saying "none".
+        var (viewModel, directory) = Create(OverSegmenting);
+
+        viewModel.AddFiles([WriteWav(directory, "a.wav")]);
+        viewModel.LabelSpeakers = false;
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.Null(viewModel.Jobs[0].SpeakerProvenance);
     }
 
     [Fact]

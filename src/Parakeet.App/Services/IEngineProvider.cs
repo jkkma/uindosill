@@ -447,7 +447,18 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// <summary>How many times the backend was released, so a test can see that shutdown got here.</summary>
     public int ReleaseCount { get; private set; }
 
-    public bool IsModelAvailable(EngineSelection selection) => true;
+    /// <summary>
+    /// What <see cref="IsModelAvailable"/> answers. True, as this provider has always behaved.
+    /// </summary>
+    /// <remarks>
+    /// Settable rather than fixed at construction because the interesting case moves during a test:
+    /// since Start loads for itself, "no weights on disk" is the only thing that still refuses it,
+    /// and a test needs to be able to put the window into that state and then out of it — which is
+    /// what installing a model from the tab next door does.
+    /// </remarks>
+    public bool ModelAvailable { get; set; } = true;
+
+    public bool IsModelAvailable(EngineSelection selection) => ModelAvailable;
 
     public ITranscriptionEngine Create(EngineSelection selection) => new FakeTranscriptionEngine(_options);
 

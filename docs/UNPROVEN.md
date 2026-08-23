@@ -3747,6 +3747,81 @@ and taro-600 — was computed from the shipped hex values by the same conversion
 ramp, and the round trip reproduces the design sheet's own coordinates. See `docs/PHASES.md`
 § *Built 2026-08-22 — the Ask tab*.
 
+## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
+
+Four things the maintainer found by running the built application were fixed the same day: the
+transcript pane not filling during a decode, the row sitting at a full bar under "Labelling
+speakers", the Models tab not accounting for weights the catalogue no longer claims, and Start
+refusing until a model had been loaded from another tab. `docs/PHASES.md` has what each turned out
+to be and why each change is the shape it is. What belongs here is the gap between what was tested
+and what was claimed.
+
+**Two engine timings are real, on this desktop, through the product path.** `csb384-8438.m4a`
+diarised on WebGPU in **25.3 s for 10 min of audio**, exit 0; the same file through
+`transcribe --speakers --speaker-count 2` — the window's exact path, fold included — finished in
+**37.7 s**, exit 0. Those are what establish that "stuck on labelling speakers" was a reporting
+defect rather than a hang, and they are single runs quoted for that purpose rather than benchmarks:
+no repeat, no variance, and the ASR half ran on CUDA because that is what the command line picked.
+
+**Nobody has looked at any of it.** The twenty-one new tests are headless — view models and Avalonia
+controls under the test host — so what is established is that `JobViewModel.Lines` gains rows while
+a file is decoding, that a second pass clears the bar and names its two halves, that the sideloaded
+section lists and deletes, that opening the Models tab re-reads the folder, that Start refuses
+only when no weights are installed, and that a finished row reports the backend behind each opt-in
+pass — the labels' and the English's, on separate lines. **What is not established is that any of
+it appears on screen.**
+Screen capture is not available in this session, so no one has watched the pane fill, seen the
+labelling bar move, seen the sideloaded section draw, or read either backend off a finished row. That distinction has caught this project
+before: the two contrast defects below, and the window-frame bits that no headless render could
+show, were both invisible to exactly this kind of test.
+
+### The resampler was most of a diarisation, and the figures that hid it — measured 2026-08-23
+
+**Every "the diariser runs at Nx realtime" sentence this project has written was timing two things
+and naming one.** The labelling pass decodes and resamples the whole recording to 16 kHz before the
+sidecar is handed anything, and `Resampler` evaluated its Blackman-windowed sinc per tap per output
+sample — a sine and two cosines each time, about 9.3 million transcendental calls per second of
+audio at 48 kHz. Benchmarked alone on the desktop it ran at **25.7x realtime at 48 kHz and 25.6x at
+44.1 kHz**, which is the same order as the whole pass was reported at.
+
+**Tabulating the kernel by phase moved it to 722x (48 kHz) and 784x (44.1 kHz)** — 28 to 30 times
+faster — and the effect on the product path, on `csb384-8438.m4a`, 10 minutes, through
+`uindosill diarise`:
+
+| | before | after |
+|---|---|---|
+| reported pass | 25.3 s — 24x realtime | **3.3 s — 183x realtime** |
+| wall clock | 28.3 s | **6.7 s** |
+| turns / speakers | 60 / 2 | 60 / 2 |
+
+So roughly nine tenths of what was being called the diariser was the resampler. **The model's own
+speed had never been measured apart from it**, and two things follow that are worth stating rather
+than leaving to be re-derived:
+
+- **It hid the GPU.** CPU against WebGPU was 37.0 s to 25.3 s — a ratio of 1.5x, which reads as "the
+  provider barely matters on this model". With the shared bottleneck gone it is **10.6 s (57x) to
+  3.2 s (187x)**, a 3.3x speedup, which is an ordinary GPU result. The earlier ratio was an artefact
+  of both runs paying the same single-threaded CPU filter.
+- **It makes the catalogue's own sentence true again.** `models.json` tells users the speaker pass
+  "roughly doubles how long a file takes". Against the ASR pass's RTF of 0.006 (~167x realtime) that
+  was about 8x before this change and is about double now.
+
+**What is not established.** These are single runs on one machine and one file, quoted to show a
+change of order rather than as benchmarks — no repeats, no variance, and the ASR half of the
+comparison ran on CUDA because that is what the command line picks. The DER is untouched and
+unre-scored, and does not need to be: AMI is 16 kHz, so the resampler is bypassed on the only corpus
+this project scores against, which is the same reason recorded above for why nothing measured has
+ever been through this code. At 48 kHz the new filter is **bit-identical** to the old one and the
+question does not arise; at 44.1 kHz the worst single sample moved by **5.96e-08** and at 22.05 kHz
+by **1.19e-07**, which is half an ulp and one ulp of a float at unit magnitude. No listening test,
+and no comparison of speaker turns on a 44.1 kHz file.
+
+**One number in the labelling bar is a judgement, not a measurement.** The staging half and the
+sidecar half report separately, each sweeping 0–100%, because there is no measured ratio between
+them to combine them with. On the one file timed here the sidecar half was 25.3 s and the staging
+half was not separately timed at all. A single combined bar would need a weight, and there is no
+evidence for one.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository

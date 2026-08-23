@@ -352,7 +352,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
 
         await LoadAsync(ct).ConfigureAwait(false);
 
-        var wav = await WriteResampledWavAsync(audio, ct).ConfigureAwait(false);
+        var wav = await WriteResampledWavAsync(audio, ct, progress).ConfigureAwait(false);
         try
         {
             var total = audio.Duration;
@@ -412,7 +412,22 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// is twice the size and costs the reference nothing to read: soundfile hands back the bytes.
     /// </para>
     /// </remarks>
-    internal static async Task<string> WriteResampledWavAsync(IAudioSource audio, CancellationToken ct)
+    /// <summary>
+    /// <paramref name="progress"/> is reported against the recording's own length, under
+    /// <see cref="TranscriptionStage.LabellingSpeakers"/> and named as the reading half.
+    /// </summary>
+    /// <remarks>
+    /// This half used to report nothing. On a three-hour file it is minutes of decoding and
+    /// resampling before the sidecar is sent anything, and the caller's row kept whatever the
+    /// transcription pass had left on it, so a working labeller was indistinguishable from a stuck
+    /// one. The two halves report separately rather than as one number because there is no measured
+    /// ratio between them to combine them with, and inventing one would be a bar that lies about
+    /// how far along it is instead of a bar that says nothing.
+    /// </remarks>
+    internal static async Task<string> WriteResampledWavAsync(
+        IAudioSource audio,
+        CancellationToken ct,
+        IProgress<TranscriptionProgress>? progress = null)
     {
         var resampler = new Resampler(audio.SampleRate, TargetSampleRate);
 
@@ -426,9 +441,35 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             : 0;
         var samples = new List<float>(expected);
 
+        // One report per whole percent, like the sidecar's own: the reader hands over a block every
+        // few milliseconds, and a report each time is thousands of cross-thread posts saying what
+        // the last one said.
+        var lastPercent = -1;
+
         await foreach (var block in audio.ReadAsync(ct).ConfigureAwait(false))
         {
             resampler.Process(block.Span, samples);
+
+            if (progress is null || audio.Duration is not { Ticks: > 0 } whole)
+            {
+                continue;
+            }
+
+            var read = TimeSpan.FromSeconds(samples.Count / (double)TargetSampleRate);
+            var percent = (int)(100 * Math.Clamp(read.Ticks / (double)whole.Ticks, 0d, 1d));
+            if (percent == lastPercent)
+            {
+                continue;
+            }
+
+            lastPercent = percent;
+            progress.Report(new TranscriptionProgress
+            {
+                Stage = TranscriptionStage.LabellingSpeakers,
+                Detail = "Labelling speakers — reading the audio again",
+                Processed = read,
+                Total = whole,
+            });
         }
 
         resampler.Complete(samples);

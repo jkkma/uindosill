@@ -127,6 +127,41 @@ public sealed partial class ModelViewModel : ObservableObject
     public bool CanDownload => !IsBusy && !IsInstalled;
 }
 
+/// <summary>
+/// A weights file in the model directory that no catalogue entry claims.
+/// </summary>
+/// <remarks>
+/// <para>
+/// These are real and they are not small. The four quantisations withdrawn from the catalogue on
+/// 2026-08-20 stayed on the disk of everyone who had installed one — about 3 GiB on this
+/// maintainer's machine — and the tab that manages models did not admit they existed: it lists
+/// catalogue entries, and they stopped being entries. So the folder the tab names at the top of
+/// itself held several gigabytes the tab would neither show nor remove, while
+/// <c>uindosill models</c> listed them under a heading of their own.
+/// </para>
+/// <para>
+/// Deliberately thinner than <see cref="ModelViewModel"/>. There is no licence, no provenance and
+/// no Load button here, because none of those are knowable: what is known about one of these is
+/// its name and its size, and offering to load a file the catalogue cannot describe would be
+/// offering to run weights this build cannot say anything true about.
+/// </para>
+/// </remarks>
+public sealed class SideloadedFileViewModel
+{
+    public SideloadedFileViewModel(string fileName, long sizeBytes)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        FileName = fileName;
+        SizeBytes = sizeBytes;
+    }
+
+    public string FileName { get; }
+
+    public long SizeBytes { get; }
+
+    public string SizeLabel => ByteSize.Describe(SizeBytes);
+}
+
 public sealed partial class ModelsViewModel : ObservableObject
 {
     private readonly IModelStore _store;
@@ -138,6 +173,7 @@ public sealed partial class ModelsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanLoad))]
+    [NotifyPropertyChangedFor(nameof(LoadHint))]
     [NotifyPropertyChangedFor(nameof(CanUnload))]
     private ModelViewModel? _selected;
 
@@ -153,7 +189,10 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanLoad))]
+    [NotifyPropertyChangedFor(nameof(LoadHint))]
     [NotifyPropertyChangedFor(nameof(CanUnload))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSideloadedCommand))]
     private bool _isTranscribing;
 
     public ModelsViewModel(
@@ -177,6 +216,8 @@ public sealed partial class ModelsViewModel : ObservableObject
             ?? Models.FirstOrDefault(m => m.IsTranscriptionModel)
             ?? Models.FirstOrDefault();
 
+        Refresh();
+
         if (_session is not null)
         {
             _session.Changed += (_, _) => SyncSession();
@@ -184,6 +225,19 @@ public sealed partial class ModelsViewModel : ObservableObject
     }
 
     public ObservableCollection<ModelViewModel> Models { get; }
+
+    /// <summary>
+    /// Weights in the model directory that no catalogue entry claims. Usually empty.
+    /// </summary>
+    public ObservableCollection<SideloadedFileViewModel> Sideloaded { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSideloadedCommand))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
+    private SideloadedFileViewModel? _selectedSideloaded;
+
+    /// <summary>Whether the sideloaded section is drawn at all. Nothing to say when there is nothing there.</summary>
+    public bool HasSideloaded => Sideloaded.Count > 0;
 
     public string ModelDirectory => _store.RootDirectory;
 
@@ -215,7 +269,13 @@ public sealed partial class ModelsViewModel : ObservableObject
 
             if (!_session.IsLoaded)
             {
-                return "Nothing loaded. Choose a model and press Load before transcribing.";
+                // It said "Choose a model and press Load before transcribing", which stopped being
+                // true on 2026-08-23 when Start began loading for itself. A window telling somebody
+                // to press a button they do not need is the same defect as one that hides a button
+                // they do — and this one had the additional problem of describing a refusal that no
+                // longer happens.
+                return "Nothing loaded. Transcribing loads it — press Load first only if you want "
+                       + "to choose the backend.";
             }
 
             var name = _session.Model?.DisplayName ?? "a model";
@@ -253,6 +313,58 @@ public sealed partial class ModelsViewModel : ObservableObject
 
     public bool CanLoad =>
         _session is not null && !_session.IsBusy && !IsTranscribing && Selected is { IsInstalled: true, IsTranscriptionModel: true };
+
+    /// <summary>
+    /// Why Load is dark, or null when it is not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This window's rule, stated at every checkbox on the Transcribe tab, is that a disabled
+    /// control says why — because one that quietly does nothing is worse than one that explains
+    /// itself. These two buttons were the exception, and the case that made it visible is a
+    /// diarisation entry: the panel is the transcription engine's, so selecting Speaker labelling
+    /// darkens Load with no way to find out that it was never going to apply.
+    /// </para>
+    /// <para>
+    /// Silent while a load is in flight, because <see cref="LoadedSummary"/> already says
+    /// "Loading…" directly above and two sentences about one state read as two states.
+    /// </para>
+    /// </remarks>
+    public string? LoadHint
+    {
+        get
+        {
+            if (_session is null || CanLoad || _session.IsBusy)
+            {
+                return null;
+            }
+
+            if (IsTranscribing)
+            {
+                return "A batch is running. The engine it is decoding with cannot be swapped until it finishes.";
+            }
+
+            if (Selected is not { } model)
+            {
+                return "Choose a model on the left.";
+            }
+
+            if (!model.IsTranscriptionModel)
+            {
+                // Named per task rather than "not a transcription model", which describes what it
+                // is not and leaves the reader to work out what it is for.
+                var used = model.Descriptor.Task == ModelTask.Diarisation
+                    ? "'Label speakers'"
+                    : "'English version'";
+
+                return $"This panel loads the model that turns speech into text. {model.DisplayName} does "
+                       + $"something else — it runs from {used} on the Transcribe tab, on a backend it "
+                       + "chooses itself, and is never loaded here.";
+            }
+
+            return model.IsInstalled ? null : "Download it first.";
+        }
+    }
 
     public bool CanUnload => _session is { IsLoaded: true, IsBusy: false } && !IsTranscribing;
 
@@ -311,6 +423,7 @@ public sealed partial class ModelsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSessionBusy));
         OnPropertyChanged(nameof(BackendNote));
         OnPropertyChanged(nameof(CanLoad));
+        OnPropertyChanged(nameof(LoadHint));
         OnPropertyChanged(nameof(CanUnload));
     }
 
@@ -385,6 +498,10 @@ public sealed partial class ModelsViewModel : ObservableObject
             model.IsBusy = false;
             _cancellation?.Dispose();
             _cancellation = null;
+
+            // What the folder holds has changed, whether the download finished, failed or was
+            // cancelled — a resumable partial is not installed but the total on disk moved.
+            Refresh();
         }
     }
 
@@ -410,14 +527,109 @@ public sealed partial class ModelsViewModel : ObservableObject
         model.Progress = 0;
         model.Status = "Not installed";
         StatusMessage = removed ? $"Removed {model.Id}." : $"{model.Id} was not installed.";
+        Refresh();
     }
 
+    /// <summary>
+    /// Re-reads the model directory: which entries are installed, what else is in there, and what
+    /// the whole folder now comes to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This existed and nothing called it. Every fact on this tab was therefore established once,
+    /// at construction, and the only things that ever moved afterwards were the ones this view
+    /// model changed itself — so a download finishing in another copy of the application, a file
+    /// deleted in Explorer, or weights left behind by an older version were all invisible until
+    /// the window was restarted.
+    /// </para>
+    /// <para>
+    /// It is cheap on purpose: file existence and lengths, no hashing. <see cref="IModelStore"/>
+    /// says why that is the right trade for something a tab switch runs.
+    /// </para>
+    /// </remarks>
     public void Refresh()
     {
         foreach (var model in Models)
         {
             model.IsInstalled = _store.IsInstalled(model.Descriptor);
         }
+
+        var onDisk = _store.ListInstalled(_catalog);
+
+        // Rebuilt rather than reconciled: this list is short, changes rarely, and nothing is bound
+        // to the identity of a row in it.
+        var chosen = SelectedSideloaded?.FileName;
+        Sideloaded.Clear();
+
+        foreach (var file in onDisk.Where(m => m.IsSideloaded))
+        {
+            Sideloaded.Add(new SideloadedFileViewModel(Path.GetFileName(file.Path), file.SizeBytes));
+        }
+
+        SelectedSideloaded = Sideloaded.FirstOrDefault(f =>
+            string.Equals(f.FileName, chosen, StringComparison.OrdinalIgnoreCase));
+
+        _installedBytes = onDisk.Sum(m => m.SizeBytes);
+
+        OnPropertyChanged(nameof(HasSideloaded));
+        OnPropertyChanged(nameof(SideloadedSummary));
+        OnPropertyChanged(nameof(KeptOnUninstallNotice));
+    }
+
+    private long _installedBytes;
+
+    /// <summary>
+    /// What the sideloaded files are and what they cost, in one line.
+    /// </summary>
+    public string SideloadedSummary =>
+        Sideloaded.Count == 0
+            ? string.Empty
+            : $"{Sideloaded.Count} file{(Sideloaded.Count == 1 ? string.Empty : "s")} in this folder "
+              + $"({ByteSize.Describe(Sideloaded.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
+              + "weights from an older version of Uindosill, or files put here by hand. Nothing uses them.";
+
+    /// <summary>
+    /// The uninstall notice, with the size read off the folder rather than written into the window.
+    /// </summary>
+    /// <remarks>
+    /// It said "the three of them come to over 3 GiB" — a count of catalogue entries and a total
+    /// that were both true when they were typed. The count is wrong for anyone who has installed
+    /// one or two of the three, and the total is wrong for anyone carrying weights the catalogue no
+    /// longer lists, which on this maintainer's machine put nearly 3 GiB outside the sentence. A
+    /// figure a window states about the user's own disk can simply be measured.
+    /// </remarks>
+    public string KeptOnUninstallNotice =>
+        _installedBytes == 0
+            ? "Uninstalling Uindosill does not delete downloaded models. They live outside the "
+              + "application directory on purpose, so they survive an update or a reinstall."
+            : "Uninstalling Uindosill does not delete downloaded models. They live outside the "
+              + $"application directory on purpose — what is in that folder now comes to {ByteSize.Describe(_installedBytes)}.";
+
+    /// <summary>Whether there is a sideloaded file selected to delete.</summary>
+    public bool CanRemoveSideloaded => SelectedSideloaded is not null && !IsTranscribing;
+
+    /// <summary>
+    /// Deletes one sideloaded file.
+    /// </summary>
+    /// <remarks>
+    /// It cannot be loaded from here, so the only thing this tab can offer to do with it is give
+    /// the space back. The store refuses anything a catalogue entry claims, so this cannot become a
+    /// second way to remove a real entry.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRemoveSideloaded))]
+    private void RemoveSideloaded()
+    {
+        if (SelectedSideloaded is not { } file)
+        {
+            return;
+        }
+
+        var removed = _store.RemoveSideloaded(file.FileName, _catalog);
+        StatusMessage = removed
+            ? $"Deleted {file.FileName} ({file.SizeLabel})."
+            : $"{file.FileName} could not be deleted. It may be in use, or already gone.";
+
+        Refresh();
     }
 
     private static string Describe(ModelInstallProgress progress)

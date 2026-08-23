@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 923 tests, no weights, no display, no network — **921 passed and 2 skipped**, and
+**Status:** met. 949 tests, no weights, no display, no network — **947 passed and 2 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2315,6 +2315,154 @@ tested without a network. Suite 923.
 
 **What this costs an installer is unmeasured and now substantial.** About 115 MB of tools on top of
 libmpv's 114 MB. No packaging run has included either; `docs/UNPROVEN.md` says so.
+
+### Decided 2026-08-23 — four defects found by using the built application, and what each one changes
+
+**The maintainer ran the real window against real weights and reported four things.** None was
+found by the suite, and the reason is the same in three of the four cases: every one of them is a
+statement the window makes to a person, and the tests asserted the view models' data rather than
+whether any view was bound to it. What follows is what each turned out to be, because two of them
+were not what they looked like.
+
+**The transcript pane was never live, and this was not a regression.** The Transcribe tab's pane
+draws `JobViewModel.Lines`, which `Complete()` fills in one go when a file finishes. The streamed
+transcript goes into `TranscribeViewModel.LiveTranscript`, rebuilt every 250 ms for exactly this
+purpose — and `git log -S LiveTranscript -- '*.axaml'` returns **nothing in any commit**: no view
+has ever bound it. So the work of streaming was done and discarded from the first commit, and a
+file being transcribed showed a progress bar and nothing to read. The rows are now appended as
+segments arrive, unlabelled, and `Complete()` still rebuilds them with speaker chips on.
+
+**"Stuck on labelling speakers" is a reporting defect, not a hang — and the distinction was
+measured rather than assumed.** Through the product path on this machine's WebGPU,
+`csb384-8438.m4a` diarised in **25.3 s for 10 min of audio, exit 0**, and the same file through
+`transcribe --speakers --speaker-count 2` — the window's exact path, including the fold the window
+forces and the command line does not — finished in **37.7 s, exit 0**. What the window showed
+instead was the bar the decode had left at 100%, under a status that then did not change: speaker
+labelling reads and resamples the whole file a second time before the sidecar is sent anything, and
+that half reported nothing at all. On a three-hour recording it is minutes long. A full bar that
+does not move is the shape of a hang and was reasonably read as one.
+
+Two changes, and the second is the one with a judgement in it. A second pass now clears the bar the
+decode left full — an indeterminate bar is the honest state for work with no number yet, where a
+full one is a number belonging to work already finished. And the staging half reports itself, under
+`TranscriptionProgress.Detail`, as a named sub-phase rather than being folded into the labelling
+figure. **The two halves are reported separately because there is no measured ratio between them**;
+combining them would need a weight nobody here has measured, and a bar built on a guessed weight
+lies about how far along it is. Two sweeps, each saying which it is, is the smaller dishonesty.
+
+**The Models tab described part of its own folder.** It lists catalogue entries, and four
+quantisations were withdrawn from the catalogue on 2026-08-20 (above) while staying on the disk of
+everyone who had installed one — about 2.95 GiB on this machine. `uindosill models` lists them
+under a heading of their own and `doctor` marks them `(sideloaded)`; the tab that manages models
+would neither show nor remove them, and could not, because removal took a descriptor and there is
+no descriptor for a file the catalogue does not claim. The tab now has a section for them with a
+delete, `IModelStore` grew `RemoveSideloaded`, and it refuses anything a catalogue entry claims, is
+not weights, or carries a path separator. Two smaller things went with it: `Refresh()` existed with
+**nothing calling it**, so every fact on the tab was read once at construction and never again —
+it now runs when the tab is opened and after every install or removal — and the uninstall notice
+said "the three of them come to over 3 GiB", a count of catalogue entries and a total that were
+both true when typed and neither of which is a fact about the reader's disk. It measures the folder
+now.
+
+**Start loads the model, and deliberately not at launch.** Start refused with "open the Models tab
+and press Load", which is a second button for a decision already made by pressing the first one:
+there is one transcription entry, and wanting it loaded is the only reason to press Start. The
+maintainer asked for the model to load at startup instead, and was shown the consequence — a load
+fixes the compute backend for the rest of the process, because a native library of one backend
+cannot be swapped for another's — and **chose loading on first Start over loading at launch**. That
+keeps the backend choice available until somebody actually asks for work, and keeps 1.34 GiB out of
+VRAM in a session spent on the Ask tab. Nothing is loaded before a person presses something.
+
+**A fifth thing came out of the fourth: the window never said which backend produced the speaker
+labels.** Asked why WebGPU appears nowhere in the application, the answer is that it is not a
+parakeet.cpp backend at all — the Models tab's list is the ASR engine's three ggml builds, and
+WebGPU is an ONNX Runtime provider only the sidecar uses, resolved by `auto` with no picker by
+design. But the window did not *report* it either. `SpeakerLabelling.DescribeBackend` returns a
+sentence only for CUDA and DirectML, the two that do not reproduce the published figure, and
+`LabellerFactory` gives the reason: a line on every run about a backend that agrees would train
+people to ignore the line that matters.
+
+**That convention was written for the command line and does not transfer.** A CLI run prints a
+block of provenance the reader is already looking at; the window printed the backend the
+*transcription* ran on and nothing about the labels, so a GPU diarisation and a CPU one were
+indistinguishable without opening the JSON — in a product whose rule is that a figure is never
+quoted without its backend. The row now carries `Speakers: <model> on <backend>` after a labelling
+run, in the row's ordinary voice rather than the warning one, so the warning line keeps meaning
+"something needs your attention". The existing sentences are untouched.
+
+**The translator had the same hole and got the same line.** `DescribeTranslator` speaks only when
+the parity check has a finding or when `auto` fell back, so an English run on the provider that
+agrees reported nothing either. `English: <model> on <backend>` now sits beside the speakers' line.
+**Two lines rather than one**, because the two passes are independent: either runs without the
+other, and either can fail while the other succeeds, so a single combined string would have to be
+rebuilt to say which half it was describing.
+
+**A sixth, found by looking at the Models tab: a global panel drawn inside a per-entry pane.** The
+LOADED MODEL panel is the window's one `ModelSession` — one ASR engine per window — and it sat
+inside the block gated on which catalogue row is highlighted. So selecting *Speaker labelling* drew
+a Backend picker and a Load button beneath it, which reads as that model's backend and is nothing of
+the sort: `CanLoad` has always required a transcription entry, and the diariser resolves its own
+provider inside the sidecar. It is the same misreading the WebGPU question came from, built into the
+layout. The panel now sits outside the per-entry block, with the sideloaded section and the
+uninstall notice — all three are about the window or the folder rather than about a row.
+
+**Two smaller things went with it.** Load and Unload were disabled with no reason given, against
+this window's own rule, stated at every checkbox on the Transcribe tab, that a disabled control says
+why; a diarisation entry is the case that made the omission visible, and `LoadHint` now names what
+the panel loads and where that model is used instead. And `LoadedSummary` still said "Choose a model
+and press Load before transcribing" — **a sentence this session's own change had falsified hours
+earlier**, since Start now loads for itself. A window that tells somebody to press a button they do
+not need is the same defect as one that hides a button they do.
+
+**What is verified and what is not.** The build is clean at 0 warnings and the suite is 942, up
+twenty-one, with the new behaviour pinned: rows appearing in the pane while a file is still decoding,
+a second pass clearing the bar and naming its two halves, the sideloaded section listing and
+deleting, the tab re-reading on open, Start refusing only when no weights are installed, and the
+row naming each pass's backend separately — WebGPU specifically, the case that was silent for both.
+The
+two engine timings above are real runs on this desktop. **The window itself has not been driven by
+hand for any of this** — these are headless view-model and control tests, and screen capture is not
+available in this session, so nobody has yet looked at the running application and seen the pane
+fill, the labelling bar move, or the sideloaded section appear. `docs/UNPROVEN.md` carries that.
+
+### Decided 2026-08-23 — the resampler's kernel is tabulated by phase
+
+**Asked why the speaker pass was slow, the answer turned out to be that it was not the speaker
+model.** `Resampler` band-limits before it decimates, and it evaluated its Blackman-windowed sinc
+per tap per output sample — one sine and two cosines each time, about 9.3 million transcendental
+calls per second of audio at 48 kHz. Benchmarked alone it ran at **25.7x realtime**, and the whole
+labelling pass was being reported at 24x. `docs/UNPROVEN.md` has the table; the short version is
+that **roughly nine tenths of a diarisation was this filter**, and on a ten-minute file the pass
+went from 25.3 s to 3.3 s with identical turns.
+
+**The class had already named the fix and misjudged when it would matter.** Its own remarks said a
+tabulated kernel was the answer "if a very high input rate ever matters". 48 kHz is not a high rate.
+The arithmetic it wrote down — 9 million transcendental calls per second of audio — was right; what
+was wrong was the sentence next to it calling that "still small against the model", which rested on
+a 65x figure for a model whose speed had never been measured apart from this filter.
+
+**It is a phase table and not an interpolated one, which is the decision worth recording.** Every
+sample rate is a rational multiple of 16 kHz: reduce `source/target` to `A/B` and output `n` sits at
+`n*A/B`, whose fractional part depends only on `n mod B` — one phase at 48 kHz, 160 at 44.1 kHz. Each
+phase's taps are computed once with the same kernel function and reused, so a tap is a value that
+function returned rather than an interpolation between two of them. The alternative the old remark
+proposed — a table with linear interpolation between entries — would have been an approximation
+needing a measurement to justify; this needs none, because nothing is approximated.
+
+**Where the centre comes from changed, and that is the one thing that is not identical.** It is now
+exact integer arithmetic on `A` and `B` rather than `n * ratio` accumulating rounding in a double.
+For a ratio whose reduced denominator is a power of two — 48 kHz, 32 kHz, 96 kHz, 8 kHz — the two
+agree exactly and the output is **bit-identical**, pinned by a test that holds the new filter against
+a frozen copy of the old one. For 44.1 kHz and 22.05 kHz they do not: the worst single sample moves
+by 5.96e-08 and 1.19e-07, half an ulp and one ulp of a float. The new arithmetic is the more accurate
+of the two, and no published figure describes either — AMI is 16 kHz, so this code is bypassed on the
+only corpus scored.
+
+**It also un-hid the GPU.** CPU against WebGPU had been 37.0 s to 25.3 s, a ratio of 1.5x that reads
+as "the provider barely matters here"; both runs were paying the same single-threaded filter. It is
+**10.6 s to 3.2 s** now — 57x against 187x realtime — which is an ordinary GPU result and restores
+the reason `auto` prefers WebGPU. And it makes the catalogue's own sentence true again: the speaker
+pass "roughly doubles how long a file takes" was about 8x before this and is about double now.
 
 ## The honest summary
 

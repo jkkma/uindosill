@@ -29,6 +29,45 @@ public sealed partial class JobViewModel : ObservableObject
     [ObservableProperty]
     private string? _warning;
 
+    /// <summary>
+    /// Which model and which backend produced this row's speaker labels, or null on a run that did
+    /// not label any.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A statement of fact, and deliberately not on <see cref="Warning"/>. The warning line carries
+    /// the backends that do <em>not</em> reproduce the published figure — CUDA and DirectML — and
+    /// <c>SpeakerLabelling.DescribeBackend</c> returns null for the two that do, on the reasoning
+    /// spelled out in <c>LabellerFactory</c>: a sentence on every run about a backend that agrees
+    /// would train people to ignore the line that matters. That convention was written for the
+    /// command line, where a run prints a block of provenance the reader is already looking at.
+    /// </para>
+    /// <para>
+    /// In the window it left a hole. The Models tab names the backend the <em>transcription</em>
+    /// ran on and nothing named the one the speaker labels came from, so a person had no way to
+    /// tell a GPU diarisation from a CPU one short of opening the JSON — in a product whose rule is
+    /// that a figure is never quoted without its backend. This says it plainly, in the row's
+    /// ordinary voice, so the warning line keeps meaning "something needs your attention".
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    private string? _speakerProvenance;
+
+    /// <summary>
+    /// Which model and which backend produced this row's English, or null on a run that did not
+    /// translate.
+    /// </summary>
+    /// <remarks>
+    /// The twin of <see cref="SpeakerProvenance"/>, added the same day and for the same hole:
+    /// <c>DescribeTranslator</c> speaks only when the parity check has a finding or when <c>auto</c>
+    /// fell back, so an English run on the provider that agrees said nothing at all. Its own
+    /// property rather than a clause on the speakers' line, because the two passes are independent
+    /// — either can run without the other, and either can fail while the other succeeds — and one
+    /// string would have to be rebuilt to say so.
+    /// </remarks>
+    [ObservableProperty]
+    private string? _translationProvenance;
+
     [ObservableProperty]
     private string _transcript = string.Empty;
 
@@ -171,7 +210,7 @@ public sealed partial class JobViewModel : ObservableObject
         State = JobState.Running;
         IsIndeterminate = progress.Fraction is null;
         Progress = (progress.Fraction ?? 0) * 100;
-        Status = progress.Stage switch
+        Status = progress.Detail is { Length: > 0 } detail ? detail : progress.Stage switch
         {
             TranscriptionStage.Reading => "Reading",
             TranscriptionStage.Segmenting => "Segmenting",
@@ -181,6 +220,34 @@ public sealed partial class JobViewModel : ObservableObject
             TranscriptionStage.Translating => "Translating",
             _ => "Working",
         };
+    }
+
+    /// <summary>
+    /// Puts the row at the start of a second pass: this status, no percentage yet.
+    /// </summary>
+    /// <remarks>
+    /// The transcription pass ends at 100%, and the opt-in passes that follow it reported nothing
+    /// until their own first report arrived — which for speaker labelling is after the whole file
+    /// has been read and resampled a second time. So the row showed a full bar under "Labelling
+    /// speakers" for minutes, which is indistinguishable from a job that has stopped. An
+    /// indeterminate bar is the honest state here: work is happening and there is no number for it
+    /// yet, as opposed to a number that belongs to work already finished.
+    /// </remarks>
+    public void BeginPass(string status)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(status);
+
+        lock (_gate)
+        {
+            if (IsFinished)
+            {
+                return;
+            }
+
+            Status = status;
+            Progress = 0;
+            IsIndeterminate = true;
+        }
     }
 
     /// <summary>
@@ -199,6 +266,8 @@ public sealed partial class JobViewModel : ObservableObject
         IsIndeterminate = false;
         Error = null;
         Warning = null;
+        SpeakerProvenance = null;
+        TranslationProvenance = null;
         Transcript = string.Empty;
         TranslatedTranscript = string.Empty;
         Lines.Clear();
@@ -270,6 +339,21 @@ public sealed partial class JobViewModel : ObservableObject
             // disagree: a speaker whose first segment came back empty from the translator appeared
             // later in the English pane's walk and took a different chip there.
             var chips = ChipMap(spoken);
+
+            // Read off the spoken document rather than the result's. Both carry it — translation
+            // derives from the labelled document and may not change who said a segment — but the
+            // labels are the spoken one's fact, and reading provenance from the document that
+            // owns it is what keeps that true if the translation contract is ever widened.
+            SpeakerProvenance = spoken.SpeakerBackend is { } speakerBackend
+                ? $"Speakers: {spoken.SpeakerModelId ?? "unnamed model"} on {speakerBackend.ToString().ToLowerInvariant()}"
+                : null;
+
+            // The result's document rather than the spoken one, which is the mirror image of the
+            // line above and for the same reason: TranscriptTranslation stamps these onto the
+            // English document it returns, so that is the document that owns the fact.
+            TranslationProvenance = document.TranslationBackend is { } translationBackend
+                ? $"English: {document.TranslationModelId ?? "unnamed model"} on {translationBackend.ToString().ToLowerInvariant()}"
+                : null;
 
             Transcript = Render(spoken);
             Relines(spoken, chips, Lines);

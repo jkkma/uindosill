@@ -413,6 +413,23 @@ public sealed partial class TranscribeViewModel : ObservableObject
     public string? TranslationHint => CanTranslate ? null : _engines.DescribeUnavailable(ModelTask.Translation);
 
     /// <summary>
+    /// Re-asks whether there are weights for Start to load, after the Models tab has installed or
+    /// removed the transcription entry.
+    /// </summary>
+    /// <remarks>
+    /// The third of these, and it exists for the same reason as the other two: this view model is
+    /// built once for the life of the window, so anything it answers from disk goes stale the
+    /// moment the tab next door changes what is on it. Without it Start stays dark after a
+    /// download finishes, which reads as a broken button beside a model the tab says is installed.
+    /// </remarks>
+    public void RefreshModelAvailability()
+    {
+        OnPropertyChanged(nameof(IsModelInstalled));
+        OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(StartHint));
+    }
+
+    /// <summary>
     /// Re-asks whether a translator is available and brings the checkbox and its hint into line.
     /// </summary>
     /// <remarks>
@@ -501,11 +518,29 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     public bool IsModelLoaded => _session?.IsLoaded ?? true;
 
+    /// <summary>
+    /// Whether there are weights on disk for Start to load if none are resident.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the store through the provider on every evaluation rather than cached, on the same
+    /// terms as the two opt-ins: the Models tab can install or remove an entry while this tab is
+    /// open, and the answer is a file's existence rather than anything expensive.
+    /// </remarks>
+    public bool IsModelInstalled => _engines.IsModelAvailable(_selection());
+
     /// <summary>An enabled Start button with an empty queue does nothing when pressed, which reads
-    /// as a broken button rather than an empty queue. The same is true of a Start with no model
-    /// loaded, and of a Start with every file already transcribed, so all three are disabled here
-    /// rather than failing at the press.</summary>
-    public bool CanStart => !IsRunning && HasWorkToDo && IsModelLoaded;
+    /// as a broken button rather than an empty queue. The same is true of a Start with every file
+    /// already transcribed, and of a Start with no weights anywhere to run, so all three are
+    /// disabled here rather than failing at the press.</summary>
+    /// <remarks>
+    /// A model that is installed but not <em>loaded</em> no longer disables this. Start loads it —
+    /// see <see cref="StartAsync"/> — because requiring a visit to another tab to press a second
+    /// button before the obvious one works is a step that exists for the implementation's benefit
+    /// rather than the user's. It is deliberately here and not at launch: loading fixes the compute
+    /// backend for the rest of the process, so doing it on startup would take the backend choice
+    /// away from somebody who had not asked for anything yet.
+    /// </remarks>
+    public bool CanStart => !IsRunning && HasWorkToDo && (IsModelLoaded || IsModelInstalled);
 
     /// <summary>
     /// Says why Start is off when the reason is not simply an empty queue. A disabled button with
@@ -514,7 +549,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// front of them is full.
     /// </summary>
     public string? StartHint =>
-        !IsModelLoaded ? "No model is loaded — open the Models tab and press Load."
+        !IsModelLoaded && !IsModelInstalled ? "No model is installed — open the Models tab and download one."
         : HasJobs && !HasWorkToDo ? "Every file here is transcribed. 'Run again' runs them a second time; Clear empties the queue."
         : null;
 
@@ -790,14 +825,42 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             // With a session, the loaded engine is what runs — not whichever row happens to be
             // highlighted in the Models list, which may be a speaker model or nothing installed.
-            // Only when nothing is loaded does the selection matter, and then "download one" is
-            // the more useful instruction when there is nothing on disk to load in the first place.
+            //
+            // Nothing loaded is no longer a refusal. Until 2026-08-23 this told the user to go to
+            // the Models tab and press Load, which is a second button for a decision they had
+            // already made by pressing this one: there is exactly one transcription entry, and
+            // wanting it loaded is the only reason to press Start. What it is *not* is a load at
+            // launch — the backend cannot be changed once any model is resident, so the load waits
+            // for the moment somebody actually asks for work.
             if (!_session.IsLoaded)
             {
-                StatusMessage = _engines.IsModelAvailable(selection)
-                    ? "No model is loaded. Open the Models tab, choose a backend and press Load."
-                    : "No model is installed. Open the Models tab and download one first.";
-                return;
+                if (!_engines.IsModelAvailable(selection))
+                {
+                    StatusMessage = "No model is installed. Open the Models tab and download one first.";
+                    return;
+                }
+
+                StatusMessage = "Loading the model…";
+
+                try
+                {
+                    await _session.LoadAsync(selection).ConfigureAwait(true);
+                }
+#pragma warning disable CA1031 // A load failure belongs in the status line, not in a crash dialog.
+                catch (Exception exception)
+#pragma warning restore CA1031
+                {
+                    StatusMessage = exception.Message;
+                    return;
+                }
+
+                if (!_session.IsLoaded)
+                {
+                    StatusMessage = "The model did not load.";
+                    return;
+                }
+
+                StatusMessage = null;
             }
         }
         else if (!_engines.IsModelAvailable(selection))
@@ -1111,9 +1174,33 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // window stops responding long before the decode finishes.
         var lastPublished = Stopwatch.StartNew();
 
+        // How many of `segments` have been turned into rows in the pane. The pane draws
+        // JobViewModel.Lines, and until 2026-08-23 that collection was filled in one go by
+        // Complete() — so the transcript area stayed empty for the whole decode and the streamed
+        // text went into LiveTranscript, which no view has ever bound. A file being transcribed
+        // showed a progress bar and nothing to read.
+        var lined = 0;
+
         void Publish()
         {
             vm.Transcript = text.ToString();
+
+            // Appended rather than rebuilt: the collection is what the pane is bound to, and
+            // clearing it every 250 ms would scroll the reader back to the top of a transcript they
+            // are in the middle of. No speaker and no chip — a speaker is what the opt-in pass
+            // decides afterwards, and Complete() rebuilds these rows with the names on them.
+            for (; lined < segments.Count; lined++)
+            {
+                var segment = segments[lined];
+                if (segment.IsEmpty)
+                {
+                    continue;
+                }
+
+                vm.Lines.Add(new TranscriptLineViewModel(
+                    speaker: null, segment.Text.Trim(), chip: -1, segment.Start, segment.End));
+            }
+
             if (ReferenceEquals(SelectedJob, vm))
             {
                 LiveTranscript = vm.Transcript;
@@ -1156,7 +1243,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             // The second pass. Both audio sources are single-read, so the file is opened again;
             // the labelled transcript then replaces the streamed one in the window, names in front.
-            vm.Status = "Labelling speakers";
+            //
+            // BeginPass rather than a status assignment: the bar is still full from the decode that
+            // has just finished, and leaving it there under a new status is a finished-looking row
+            // that then does not move for as long as this pass takes.
+            vm.BeginPass("Labelling speakers");
 
             async Task<TranscriptDocument> LabelAsync()
             {
@@ -1217,7 +1308,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (translator is not null)
         {
-            vm.Status = "Translating";
+            vm.BeginPass("Translating");
 
             var (english, failure) = await OptInPass.Translation.RunAsync(
                 document,

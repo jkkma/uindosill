@@ -30,6 +30,21 @@ public sealed record TranscriptionProgress
 {
     public required TranscriptionStage Stage { get; init; }
 
+    /// <summary>
+    /// What is happening inside the stage, when the stage alone does not say it. Null when the
+    /// stage is the whole answer, which is every report but one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TranscriptionStage.LabellingSpeakers"/> is two pieces of work with one name: the
+    /// host reads and resamples the whole file again and writes it out for the sidecar, and only
+    /// then does the sidecar run the model. On a three-hour recording the first piece is minutes
+    /// long and reported nothing at all, so the row sat at whatever the transcription pass had left
+    /// on it — 100% — with a status that never changed. That is the shape of a hang, and it was
+    /// mistaken for one. A stage cannot carry the distinction because both halves genuinely are
+    /// speaker labelling; this says which half.
+    /// </remarks>
+    public string? Detail { get; init; }
+
     /// <summary>How much audio has been decoded so far.</summary>
     public TimeSpan Processed { get; init; }
 

@@ -308,6 +308,22 @@
                                  IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
                       <TextBlock Text="{Binding Warning}" Classes="fine warning"
                                  IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- Which model and backend produced the speaker labels. The window named the
+                           backend the transcription ran on and never the one the labels came from,
+                           so a GPU diarisation and a CPU one were indistinguishable here — see
+                           JobViewModel.SpeakerProvenance for why this is the ordinary voice rather
+                           than the warning one. -->
+                      <TextBlock Text="{Binding SpeakerProvenance}" Classes="fine meta"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding SpeakerProvenance, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- And the same for the English, which was as silent as the labels were:
+                           DescribeTranslator speaks only when parity has a finding or auto fell
+                           back. Two lines rather than one, because the two passes are independent
+                           — either runs without the other, and either fails while the other does
+                           not. -->
+                      <TextBlock Text="{Binding TranslationProvenance}" Classes="fine meta"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding TranslationProvenance, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -579,6 +595,12 @@
           <GridSplitter Grid.Column="1" Background="Transparent" />
 
           <ScrollViewer Grid.Column="2">
+           <!-- Two blocks, and the outer panel is what lets the second one exist. Everything about
+                a catalogue entry is hidden when no entry is highlighted, which is right; the
+                sideloaded section below is about the folder rather than about an entry, and
+                nesting it inside that visibility would have hidden the one thing on this tab that
+                reports what the catalogue cannot describe. -->
+           <StackPanel Spacing="12">
             <StackPanel Spacing="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
 
               <StackPanel Spacing="4">
@@ -631,53 +653,108 @@
               <TextBlock Text="{Binding Selected.Status}" Classes="meta" />
               <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Classes="secondary" />
 
-              <Separator />
-
-              <!-- What is in memory, and the controls for putting it there and taking it out
-                   again. Until this existed the engine was built and torn down inside one Start,
-                   so there was no loaded model to name and nothing in the window said which one
-                   ran. The backend row is bound here too: MainWindowViewModel has exposed Backends
-                   and Backend all along and this view referenced neither, so the app was pinned to
-                   its Vulkan default with no way to see or change it. -->
-              <Border Classes="tinted" Padding="14">
-                <StackPanel Spacing="11">
-                  <TextBlock Text="LOADED MODEL" Classes="section"
-                             Foreground="{DynamicResource Matcha700Brush}" />
-                  <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
-
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="Backend" Classes="secondary" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
-                              SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
-                              IsEnabled="{Binding !IsLoaded}" MinWidth="132" />
-                    <Button Content="Load" Command="{Binding LoadCommand}"
-                            IsEnabled="{Binding CanLoad}" />
-                    <Button Content="Unload" Command="{Binding UnloadCommand}"
-                            IsEnabled="{Binding CanUnload}" />
-                  </StackPanel>
-
-                  <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Classes="meta" />
-                  <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
-                             TextWrapping="Wrap" Classes="meta" />
-                </StackPanel>
-              </Border>
-
-              <!-- The one amber panel in the window, and it earns the colour: an uninstall that
-                   silently kept 4 GiB of weights would be a surprise either way round. -->
-              <Border Background="{DynamicResource WarningPanelBrush}"
-                      BorderBrush="{DynamicResource WarningPanelEdgeBrush}"
-                      BorderThickness="1" Padding="12,10">
-                <StackPanel Orientation="Horizontal" Spacing="9">
-                  <Path Stroke="{DynamicResource StatusWarningBrush}" StrokeThickness="1.5"
-                        StrokeLineCap="Round" StrokeJoin="Round"
-                        Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
-                        Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
-                  <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
-                             Text="Uninstalling Uindosill does not delete downloaded models. They live outside the application directory on purpose — the three of them come to over 3 GiB." />
-                </StackPanel>
-              </Border>
-
             </StackPanel>
+
+            <!-- ── The loaded model ───────────────────────────────────────────────────────
+                 Outside the per-entry block above, and that placement is the point rather than a
+                 tidy-up. There is one ModelSession per window, so this panel is global — but it
+                 was drawn inside the detail pane, which put it under whichever row was highlighted
+                 and made it read as a property of that row. Selecting Speaker labelling therefore
+                 showed a Backend picker and a Load button beneath a model that can never be loaded
+                 here and whose own provider is chosen inside the sidecar, which is exactly the
+                 misreading it produced.
+
+                 The backend row is bound here too: MainWindowViewModel has exposed Backends and
+                 Backend all along and this view referenced neither, so the app was pinned to its
+                 default with no way to see or change it. -->
+            <Border Classes="tinted" Padding="14">
+              <StackPanel Spacing="11">
+                <TextBlock Text="LOADED MODEL" Classes="section"
+                           Foreground="{DynamicResource Matcha700Brush}" />
+                <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Backend" Classes="secondary" VerticalAlignment="Center" />
+                  <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backends}"
+                            SelectedItem="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Backend}"
+                            IsEnabled="{Binding !IsLoaded}" MinWidth="132" />
+                  <Button Content="Load" Command="{Binding LoadCommand}"
+                          IsEnabled="{Binding CanLoad}" />
+                  <Button Content="Unload" Command="{Binding UnloadCommand}"
+                          IsEnabled="{Binding CanUnload}" />
+                </StackPanel>
+
+                <!-- Why Load is dark, when it is. Every other disabled control in this window says
+                     why; these two buttons were the exception, and a diarisation entry is the case
+                     that made it visible. -->
+                <TextBlock Text="{Binding LoadHint}" Classes="meta" TextWrapping="Wrap"
+                           IsVisible="{Binding LoadHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <TextBlock Text="{Binding BackendNote}" TextWrapping="Wrap" Classes="meta" />
+                <TextBlock Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BackendExplanation}"
+                           TextWrapping="Wrap" Classes="meta" />
+              </StackPanel>
+            </Border>
+
+            <!-- ── What else is in the folder ────────────────────────────────────────────────
+                 Weights no catalogue entry claims: left behind by an older version, or put here
+                 by hand. Drawn only when there are some, which for most people is never.
+
+                 It exists because this tab names the model directory at the top of itself and
+                 then described only part of its contents. Four quantisations were withdrawn from
+                 the catalogue on 2026-08-20 and stayed on disk, so a tab that manages models sat
+                 beside gigabytes of models it would not admit to — while `uindosill models`
+                 listed them under a heading of their own. There is no Load here, deliberately:
+                 nothing true can be said about weights the catalogue cannot describe, so the only
+                 thing offered is the space back. -->
+            <Border Classes="tinted" Padding="14" IsVisible="{Binding HasSideloaded}">
+              <StackPanel Spacing="11">
+                <TextBlock Text="ALSO IN THIS FOLDER" Classes="section"
+                           Foreground="{DynamicResource Matcha700Brush}" />
+                <TextBlock Text="{Binding SideloadedSummary}" TextWrapping="Wrap" Classes="meta" />
+
+                <ListBox Name="SideloadedFiles" MaxHeight="180"
+                         ItemsSource="{Binding Sideloaded}"
+                         SelectedItem="{Binding SelectedSideloaded}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SideloadedFileViewModel">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding FileName}" Classes="mono"
+                                   FontSize="11" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{Binding SizeLabel}" Classes="meta"
+                                   Margin="10,0,0,0" />
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Button Classes="onPage" Content="Delete file"
+                        HorizontalAlignment="Left"
+                        Command="{Binding RemoveSideloadedCommand}"
+                        IsEnabled="{Binding CanRemoveSideloaded}" />
+              </StackPanel>
+            </Border>
+
+            <!-- The one amber panel in the window, and it earns the colour: an uninstall that
+                 silently kept gigabytes of weights would be a surprise either way round. Global
+                 like the two panels above it — it is about the folder, not about an entry. -->
+            <Border Background="{DynamicResource WarningPanelBrush}"
+                    BorderBrush="{DynamicResource WarningPanelEdgeBrush}"
+                    BorderThickness="1" Padding="12,10">
+              <StackPanel Orientation="Horizontal" Spacing="9">
+                <Path Stroke="{DynamicResource StatusWarningBrush}" StrokeThickness="1.5"
+                      StrokeLineCap="Round" StrokeJoin="Round"
+                      Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
+                      Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
+                <!-- The size is read off the folder rather than written here. It used to say
+                     "the three of them come to over 3 GiB", which was a count of catalogue
+                     entries and a total that were both true on the day they were typed and
+                     neither of which is a fact about the reader's disk. -->
+                <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
+                           Text="{Binding KeptOnUninstallNotice}" />
+              </StackPanel>
+            </Border>
+           </StackPanel>
           </ScrollViewer>
         </Grid>
       </TabItem>
