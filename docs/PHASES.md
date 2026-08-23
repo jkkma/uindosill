@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1116 tests, no weights, no display, no network — **1112 passed and 4 skipped**, and
+**Status:** met. 1137 tests, no weights, no display, no network — **1133 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -394,6 +394,12 @@ it off. Both faces are OFL and ship inside the installer.
 view-switcher centred, and circular window buttons at the right. Tab order is **Transcribe ·
 Models · Updates · Licences** — Licences last, because it is the one tab nobody opens twice.
 
+That order has since changed three times, and the reason Licences was last is the reason it is now
+gone: Ask joined on 2026-08-22, and on 2026-08-23 Export and Settings were split off the Transcribe
+tab while Licences retired into an About window opened from Settings. The order is now
+**Transcribe · Ask · Export · Settings · Models · Updates**, six pills — which is also what set
+`MinWidth`, because six of them measure 464px and the headerbar's fixed columns take 420 more.
+
 **Corners are square, and the exceptions are the argument.** A 12px-rounded version was built first
 and put beside a square one on the same day; the square one won. Every rectangle is square — the
 window, the panels, the buttons, fields, checkboxes, list rows, badges, progress bars. Four things
@@ -473,7 +479,7 @@ would settle it.
 
 ### Decided 2026-08-19 — translating the transcript into English
 
-**A v1 Transcribe-tab opt-in that produces an English version of the transcript beside it, decided
+**A v1 opt-in that produces an English version of the transcript beside it, decided
 2026-08-19 and not yet built.** The study is in the dated folder `translate-to-english-2026-08-19`,
 beside the other research on the maintainer's Drive, per `CLAUDE.md`.
 
@@ -2417,7 +2423,7 @@ layout. The panel now sits outside the per-entry block, with the sideloaded sect
 uninstall notice — all three are about the window or the folder rather than about a row.
 
 **Two smaller things went with it.** Load and Unload were disabled with no reason given, against
-this window's own rule, stated at every checkbox on the Transcribe tab, that a disabled control says
+this window's own rule, stated at every checkbox in it, that a disabled control says
 why; a diarisation entry is the case that made the omission visible, and `LoadHint` now names what
 the panel loads and where that model is used instead. And `LoadedSummary` still said "Choose a model
 and press Load before transcribing" — **a sentence this session's own change had falsified hours
@@ -2750,9 +2756,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** `CLAUDE.md`'s second
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1116 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1137 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2836,14 +2842,14 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
 Two things found by running the built application, one asked for and one reported.
 
 **The Ask tab shows the translation, with a pill switcher back to the transcript.** Asking for an
-English version on the Transcribe tab and then having nowhere to read it against the recording was
+English version elsewhere in the window and then having nowhere to read it against the recording was
 the wrong way round. The tab now switches to the English the moment one arrives on the open row, and
 switches back on a pill; a reader who goes back to the transcript stays there, and another
 recording gaining a translation later does not drag them off it.
@@ -2880,7 +2886,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2937,7 +2943,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3027,7 +3033,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** Two of the four are
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3067,7 +3073,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3084,7 +3090,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.**
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3132,9 +3138,79 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1116 tests, no weights, no display, no network — 1112 passed and 4 skipped.** The C# suite does
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
+
+### Built 2026-08-23 — Export and Settings tabs, and Licences retires into an About window
+
+The Transcribe tab had grown a right-hand column that was two features stacked on one page: what a
+run writes, and how the run is done. Both were asked for by the maintainer to be split out, and the
+Licences tab — the fifth page, and the one page nobody opens twice — was asked to go with them, into
+an About window opened from Settings.
+
+**Export** carries the output formats, the output folder, and *Add transcript to the recording*, in
+that order: what a transcript is, where it lands, and the button for somebody who wanted no files at
+all. **Settings** carries how the audio is cut (fixed windows, the segment cap, neural speech
+detection) and the two v1 opt-ins that run an extra model — speaker labelling with its count, and
+the English version. The 30-second segmentation footnote followed the cap it explains rather than
+staying on a page where the control it describes no longer is. Both pages are drawn as reading
+pages — one column, `26,22`, a `title` at the top — rather than as the three-column workbenches
+Transcribe, Models and Ask use.
+
+**What did not move, and the reason is the same both times.** The backend picker stays on Models
+beside the Load button it governs; the launch update check stays on Updates beside the paragraph
+explaining it. Both are settings, and both are more use next to the thing they change than in a
+drawer with everything else.
+
+**The Transcribe tab says where its column went.** One 10.5px line above the transcript naming both
+tabs. A control that moves without a forwarding address is as hard to find as one that was deleted,
+and this window's standing rule is that nothing fails silently — a control nobody can locate is a
+quieter failure than a control that does nothing.
+
+**The About window is the Licences page plus the two things that were hiding under it.** Three
+panes: *About* (what this program is, and the network promise the Updates tab also makes), *Licences*
+(the same notice package, from the same one builder, now in `AboutViewModel`), and *System* — the
+runtime line and the threading note, which had been sitting beneath the licence text where nobody
+looking for them would think to go, joined by the version and both folder paths and a button that
+puts all five on the clipboard. It wears the main window's chrome exactly: no OS title bar, the same
+46px headerbar, the same square corner asked of DWM, the same pill switcher over a headless
+`TabControl`. Modal and owned, so there is never a second copy.
+
+**The TabControl's order is not the switcher's, and this is the second time that has paid.** The
+pages are 0 Transcribe, 1 Models, 2 Export, 3 Updates, 4 Ask, 5 Settings — Export took the index
+Licences vacated, which is what keeps Models at 1, Updates at 3 and Ask at 4, where tests, settings
+and `MainWindowViewModel.ModelsTabIndex` already found them. Renumbering four working pages to make
+one list agree with the other would have bought tidiness and spent correctness. The switcher reads
+**Transcribe · Ask · Export · Settings · Models · Updates**: the work, then the two pages that
+configure it, then the library and the housekeeping.
+
+**`MinWidth` went from 820 to 920, and it was measured rather than chosen.** Six pills measure 464px
+and the headerbar's two fixed 210 columns plus its 14px padding take 434 more. At 820 the switcher
+was handed 384px: a `Border` does not clip its children, so the sunken rail stopped in the middle of
+a word while the last pill carried on and drew under the close button — by four pixels, at a width
+nobody opens the window at while checking a design. Five pills had fitted with three pixels to
+spare, so this was one pill away from happening either way. The new assertion measures the pills'
+own ink against the wordmark and the window buttons and fails with the figure to put in the file, so
+a seventh pill cannot ship the same defect.
+
+**One thing believed and then measured, which went the other way.** The move was made on the
+assumption that a control on an unselected tab does not exist to `FindControl` — the obvious reading
+of "a `TabControl` realises only the selected tab", and the reason the first draft named its two
+handlers in the markup as `Click="…"` instead of wiring them in the constructor. It is wrong.
+Avalonia builds the whole markup tree at load and registers every `Name` in the window's one name
+scope, which is what `FindControl` reads; the visual tree is the only thing that is deferred. With
+the window on tab 0 and the button on tab 2: `ctor-scope=found after-show=found inVisualTree=False`.
+So constructor wiring never broke, the markup handlers came back out, and the file keeps one idiom.
+The real trap is the mirror image and it is a testing one — `Assert.NotNull(FindControl(…))` passes
+for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
+second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
+
+**1137 tests, no weights, no display, no network — 1133 passed and 4 skipped.** Twenty-one new: the
+About window's panes and its chrome, both new pages asserted for controls that write through rather
+than merely draw, the Transcribe tab asserted for what it no longer carries, every switcher pill
+held against the page it names — six hand-written converter parameters that nothing else checked —
+and the headerbar measurement above.
 
 ### The dictation seam
 
@@ -3260,7 +3336,7 @@ The next actions, in order:
      cue across a speaker change; a seventh format, `rttm`, writing the labeller's turns; a canned
      labeller for CI; the catalogue's `"task"` discriminator, so a diarisation entry can be
      installed through the same digest checks and never surface as a selectable ASR model. The
-     opt-in shapes it: `transcribe --speakers` and a checkbox on the Transcribe tab, both off by
+     opt-in shapes it: `transcribe --speakers` and a checkbox in the app, both off by
      default, and both honest about the fact that this build has no real labeller — the flag says so
      and stops, the checkbox is disabled with the reason. The suite grew from 359 to 451 at that commit.
    - **Not done, by design:** the sherpa-onnx and Sortformer spikes belong to the desktop, which is

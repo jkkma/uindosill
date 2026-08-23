@@ -550,7 +550,7 @@ public class AttributionTests
     public void TheProprietaryCudaRuntimeIsListedAndNotDescribedAsMit()
     {
         // The CUDA drop is three NVIDIA proprietary DLLs and the component list is what the CLI
-        // and the Licences tab render, so an omission here reaches the shipped product. Asserted
+        // and the About window render, so an omission here reaches the shipped product. Asserted
         // rather than trusted because the failure is silent: five MIT rows look complete.
         var cuda = Assert.Single(
             Attributions.Components,

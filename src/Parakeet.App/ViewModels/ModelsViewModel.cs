@@ -363,7 +363,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 };
 
                 return $"This panel loads the model that turns speech into text. {model.DisplayName} does "
-                       + $"something else — it runs from {used} on the Transcribe tab, alongside the recogniser, "
+                       + $"something else — it runs from {used} on the Settings tab, alongside the recogniser, "
                        + "and is never loaded here.";
             }
 

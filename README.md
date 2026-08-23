@@ -78,7 +78,7 @@ nothing has packaged one.
   DirectML on 0 of 32 while falling into a repetition loop, so DirectML is refused by name. The SentencePiece tokenizer and the beam search
   written for this project decoded it until 2026-08-21 and are now in `attic/`.
   `uindosill translate` runs the same pass over a text file with no audio at all. In the app it is
-  a checkbox beside the speaker one, and the English arrives *beside* the transcript rather than
+  a checkbox on the Settings tab beside the speaker one, and the English arrives *beside* the transcript rather than
   instead of it — a switcher over the transcript pane shows either, with the same speakers on both
   sides; both are read by the sentence — the translator is given the sentences the transcript's word
   timings cut it into, so the English has the same lines at the same times — and only the word mark
@@ -99,7 +99,7 @@ nothing has packaged one.
   them under music: a documentary with a bed under the narration came out in thirty-second blocks
   holding nine sentences each. Silero VAD — a 2.2 MiB MIT graph run on ONNX Runtime in process on
   the CPU, which listens for speech rather than for quiet — cuts on the pauses instead, and **it is
-  the default wherever its model is installed**: the checkbox in the app is ticked, and the command
+  the default wherever its model is installed**: the checkbox on the app's Settings tab is ticked, and the command
   line loads it and names it on stderr. Without the model both cut on the gate and say that instead;
   `--vad energy` asks for the gate on purpose. Every transcript's JSON names what cut it
   (`speechDetector`), because every segment figure this repository recorded before 2026-08-23 is the
@@ -178,7 +178,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1116 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1137 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -383,7 +383,7 @@ The ten notes live in [`docs/`](docs/); the last two rows are at the repository 
 source code in this repository is MIT. **A build that vendors libmpv — the video player behind the
 Ask tab — is distributed under GPLv2-or-later**, because libmpv and the FFmpeg libraries linked
 into it are GPL and the GPL governs the combined work. A build without it contains no GPL component
-and is MIT throughout; the Licences tab lists libmpv only when it is there. That was decided on
+and is MIT throughout; the app's Licences pane lists libmpv only when it is there. That was decided on
 2026-08-23 in preference to shipping no video or maintaining an LGPL mpv build of our own — see
 [PHASES.md](docs/PHASES.md) — and the obligations it creates, including where the corresponding
 source lives, are in [LICENSE](LICENSE), [licences/mpv-WRITTEN-OFFER.txt](licences/mpv-WRITTEN-OFFER.txt)
@@ -392,7 +392,8 @@ and [LICENSING.md](docs/LICENSING.md).
 The **model weights are not**. They are CC BY 4.0 from NVIDIA, which permits commercial
 redistribution and bundling but attaches a seven-element notice requirement, forbids DRM on the
 weights, and withholds patent and trademark rights. The notice is shown inside the application (the
-Licences tab, and `uindosill notice`), not only in this repository. See
+About window's Licences pane, reached from the Settings tab, and `uindosill notice`), not only in
+this repository. See
 [NOTICE.md](NOTICE.md) and [LICENSING.md](docs/LICENSING.md).
 
 `parakeet-tdt-0.6b-v3` covers 25 European languages. It does **not** cover Chinese, Japanese,

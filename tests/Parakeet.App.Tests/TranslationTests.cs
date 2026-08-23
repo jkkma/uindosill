@@ -404,11 +404,24 @@ public class TranslationTests
     }
 
 
+    /// <summary>
+    /// The opt-in, on the Settings tab it moved to on 2026-08-23.
+    /// </summary>
+    /// <remarks>
+    /// Two tests rather than the one this used to be. The checkbox is on Settings and the pane
+    /// switcher it used to be asserted beside is on Transcribe, and no single <c>SelectedTab</c>
+    /// draws both. It would still have passed as one test — <c>FindControl</c> reads the name
+    /// scope, which holds every page whether or not it is realised (gotcha 31) — and that is
+    /// exactly the reason to split it: half of it would have been asserting on a control the
+    /// window had not drawn, which is the weaker claim of the two this file makes.
+    /// </remarks>
     [AvaloniaFact]
-    public void TheWindowCarriesTheOptInAndASwitcherThatIsHiddenUntilThereIsEnglish()
+    public void TheSettingsTabCarriesTheEnglishOptIn()
     {
         var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+        main.SelectedTab = 5;
+
         var window = new MainWindow { DataContext = main };
         window.Show();
         window.UpdateLayout();
@@ -423,6 +436,20 @@ public class TranslationTests
         main.Transcribe.TranslateToEnglish = true;
         window.UpdateLayout();
         Assert.True(optIn.IsChecked);
+    }
+
+    /// <inheritdoc cref="TheSettingsTabCarriesTheEnglishOptIn" />
+    [AvaloniaFact]
+    public void TheSwitcherIsHiddenUntilThereIsEnglish()
+    {
+        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+        var window = new MainWindow { DataContext = main };
+        window.Show();
+        window.UpdateLayout();
+
+        main.Transcribe.TranslateToEnglish = true;
+        window.UpdateLayout();
 
         // No row has English yet, so there is nothing to switch between.
         var switcher = window.FindControl<Border>("TranscriptPaneSwitcher");

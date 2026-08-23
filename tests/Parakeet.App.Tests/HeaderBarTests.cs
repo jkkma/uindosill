@@ -84,9 +84,10 @@ public class HeaderBarTests
     [AvaloniaTheory]
     [InlineData("TabTranscribe")]
     [InlineData("TabAsk")]
+    [InlineData("TabExport")]
+    [InlineData("TabSettings")]
     [InlineData("TabModels")]
     [InlineData("TabUpdates")]
-    [InlineData("TabLicences")]
     public void APressOnATabPillReachesThePillRatherThanDraggingTheWindow(string name)
     {
         // The headerbar is the TitleBar role, so inside it every press is a window move unless the
@@ -113,6 +114,85 @@ public class HeaderBarTests
 
         // And the pill is inside the bar: the carve-out is the switcher, not a hole in the headerbar.
         Assert.True(pill!.GetVisualAncestors().Contains(header!), "the pill is not inside the headerbar");
+    }
+
+    /// <summary>
+    /// The switcher clears the wordmark on its left and the window buttons on its right, at every
+    /// width the window can be dragged to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The switcher is centred in the star column of <c>ColumnDefinitions="210,*,210"</c>, so it
+    /// grows outwards from the middle as pills are added and a star column does not push its
+    /// neighbours aside — it lets the content run over them. The pills went from four to five when
+    /// Ask shipped and to six when Export and Settings did, and the failure that arrives at some
+    /// number is a pill drawn under the window buttons: still clickable in the middle, dead at the
+    /// end, and invisible at the width anybody screenshots at.
+    /// </para>
+    /// <para>
+    /// Measured rather than estimated, and at <c>MinWidth</c> as well as the declared width,
+    /// because <c>MinWidth</c> is the case that fails first and the one nobody opens the window at
+    /// while checking a design. A seventh pill is what this is really guarding against.
+    /// </para>
+    /// </remarks>
+    [AvaloniaTheory]
+    [InlineData(1080)]  // the width the window opens at
+    [InlineData(920)]   // MinWidth — the narrowest it can be dragged, and the case that fails first
+    public void TheSwitcherClearsTheNameAndTheWindowButtonsAtEveryWidthTheWindowAllows(double width)
+    {
+        var window = new MainWindow { DataContext = WindowTests.NewViewModel(out _), Width = width };
+        window.Show();
+        window.UpdateLayout();
+
+        // The narrow case is only a test of anything if the window really took the width.
+        Assert.True(window.MinWidth <= width, $"MinWidth is {window.MinWidth}, above the {width} asked for");
+
+        var header = window.FindControl<Border>("HeaderBar");
+        var wordmark = window.FindControl<StackPanel>("Wordmark");
+        var switcher = window.FindControl<Border>("Switcher");
+        var buttons = window.FindControl<StackPanel>("WindowButtons");
+
+        Assert.NotNull(header);
+        Assert.NotNull(wordmark);
+        Assert.NotNull(switcher);
+        Assert.NotNull(buttons);
+
+        static double Left(Visual child, Visual of) =>
+            child.TranslatePoint(default, of)?.X ?? throw new InvalidOperationException("not in the tree");
+
+        // The pills, not the Border around them, and that distinction is the whole test. A Grid
+        // hands its star column whatever is left and a Border arranged into it reports that width
+        // back — so the switcher's own Bounds are the space it was given rather than the space it
+        // needs, and they look correct at every width including the ones where it is clipped. The
+        // pills inside are arranged at their desired width regardless, so their ink is where the
+        // reader's eye and the pointer actually land.
+        var pills = switcher!.GetVisualDescendants().OfType<RadioButton>().ToList();
+        Assert.Equal(6, pills.Count);
+
+        var inkLeft = pills.Min(p => Left(p, header!));
+        var inkRight = pills.Max(p => Left(p, header!) + p.Bounds.Width);
+
+        var wordmarkRight = Left(wordmark!, header!) + wordmark!.Bounds.Width;
+        var buttonsLeft = Left(buttons!, header!);
+
+        Assert.True(
+            inkLeft >= wordmarkRight,
+            $"at {width}px the first pill starts at {inkLeft:0.#} and the name ends at {wordmarkRight:0.#}");
+
+        Assert.True(
+            inkRight <= buttonsLeft,
+            $"at {width}px the last pill ends at {inkRight:0.#} and the window buttons start at {buttonsLeft:0.#}");
+
+        // And the sunken track still goes round them. A Border does not clip, so a switcher squeezed
+        // by its column keeps drawing its pills at full width and simply stops painting the rail
+        // underneath them — the pills survive, the shape they sit in does not, and the failure is a
+        // rounded track that ends in the middle of a word.
+        var switcherLeft = Left(switcher, header!);
+
+        Assert.True(
+            inkLeft >= switcherLeft && inkRight <= switcherLeft + switcher.Bounds.Width,
+            $"at {width}px the pills run from {inkLeft:0.#} to {inkRight:0.#}, "
+                + $"outside a track that runs from {switcherLeft:0.#} to {switcherLeft + switcher.Bounds.Width:0.#}");
     }
 
     /// <summary>The role that answers a press on <paramref name="visual"/>: its own, or the nearest ancestor's.</summary>

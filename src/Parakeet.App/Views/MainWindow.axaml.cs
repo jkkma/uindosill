@@ -89,10 +89,22 @@ public partial class MainWindow : Window
             DragDrop.AddDropHandler(dropZone, OnDrop);
         }
 
+        // Both of these are on tabs that are not the one the window opens on — Browse moved to
+        // Export on 2026-08-23 and About arrived on Settings the same day — and both are still
+        // found from here. A TabControl defers only the *drawing* of an unselected page; the
+        // markup tree is built at load and every Name in it goes into the window's one name scope,
+        // which is what FindControl reads. Measured rather than assumed, because the opposite is
+        // the obvious guess and would have made both of these silently dead. Gotcha 31.
         var browse = this.FindControl<Button>("BrowseOutput");
         if (browse is not null)
         {
             browse.Click += OnBrowseOutput;
+        }
+
+        var about = this.FindControl<Button>("ShowAbout");
+        if (about is not null)
+        {
+            about.Click += OnShowAbout;
         }
 
         WireHeaderBar();
@@ -660,7 +672,7 @@ public partial class MainWindow : Window
         // whole reason this design is reachable where the earlier 12px one was not.
         //
         // Nothing reads the answer: this is decoration, and a machine that refuses gets the
-        // rounded corner it would have had anyway. See Services/WindowCorner.cs.
+        // rounded corner it would have had anyway. See Services/WindowFrame.cs.
         if (TryGetPlatformHandle() is { } handle)
         {
             Services.WindowFrame.MakeSquare(handle.Handle);
@@ -771,6 +783,24 @@ public partial class MainWindow : Window
         }
 
         viewModel.Transcribe.AddFiles(paths);
+    }
+
+    /// <summary>
+    /// Opens the About window: which build this is, the notice package, and the machine facts.
+    /// </summary>
+    /// <remarks>
+    /// Modal and owned, which is what keeps there from being a second copy of it: while the dialog
+    /// is up this window takes no clicks, so the button cannot be pressed again. Not awaited —
+    /// there is nothing to do afterwards, and the window closes itself.
+    /// </remarks>
+    private void OnShowAbout(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        _ = new AboutWindow { DataContext = viewModel.About }.ShowDialog(this);
     }
 
     private async void OnBrowseOutput(object? sender, RoutedEventArgs e)

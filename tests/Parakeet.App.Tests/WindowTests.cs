@@ -24,7 +24,86 @@ public class WindowTests
         // them, so this looks the control up by name rather than asserting on window.Content.
         var tabs = window.FindControl<TabControl>("Tabs");
         Assert.NotNull(tabs);
-        Assert.Equal(5, tabs!.Items.Count);
+        Assert.Equal(6, tabs!.Items.Count);
+    }
+
+    /// <summary>
+    /// Every pill in the headerbar selects the page it names.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The switcher's order and the TabControl's are two different lists and always have been, so
+    /// each pill carries a hand-written <c>ConverterParameter</c> naming its page's index. That is
+    /// six numbers typed by a person, in a file where the pages have twice been reordered, and
+    /// nothing else checks them: a pill wired to the wrong index still renders, still highlights,
+    /// and quietly shows the wrong page. Swapping any two of them leaves the suite green without
+    /// this.
+    /// </para>
+    /// <para>
+    /// Asserted on the TabItem's <c>Header</c> rather than on an index, because an index is the
+    /// thing under test — restating it here would only check that a number equals itself.
+    /// </para>
+    /// </remarks>
+    [AvaloniaTheory]
+    [InlineData("TabTranscribe", "Transcribe")]
+    [InlineData("TabAsk", "Ask")]
+    [InlineData("TabExport", "Export")]
+    [InlineData("TabSettings", "Settings")]
+    [InlineData("TabModels", "Models")]
+    [InlineData("TabUpdates", "Updates")]
+    public void EveryPillSelectsThePageItNames(string pillName, string header)
+    {
+        var window = new MainWindow { DataContext = NewViewModel(out _) };
+        window.Show();
+        window.UpdateLayout();
+
+        var pill = window.FindControl<RadioButton>(pillName);
+        var tabs = window.FindControl<TabControl>("Tabs");
+        Assert.NotNull(pill);
+        Assert.NotNull(tabs);
+
+        pill!.IsChecked = true;
+        window.UpdateLayout();
+
+        var selected = Assert.IsType<TabItem>(tabs!.SelectedItem);
+        Assert.Equal(header, selected.Header);
+    }
+
+    /// <summary>
+    /// The Licences page is gone from the switcher, and its notice is reachable from Settings.
+    /// </summary>
+    /// <remarks>
+    /// A retired tab is only retired if nothing still draws it. The pill and the page were removed
+    /// together on 2026-08-23; this asserts both halves, and that the button which replaces them is
+    /// where the reader was told to look.
+    /// </remarks>
+    [AvaloniaFact]
+    public void TheLicencesTabIsGoneAndSettingsCarriesTheWayToTheNotice()
+    {
+        var viewModel = NewViewModel(out _);
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        window.UpdateLayout();
+
+        Assert.Null(window.FindControl<RadioButton>("TabLicences"));
+
+        var tabs = window.FindControl<TabControl>("Tabs");
+        Assert.NotNull(tabs);
+        Assert.DoesNotContain(
+            tabs!.Items.OfType<TabItem>(),
+            tab => tab.Header as string == "Licences");
+
+        // The Settings page, where the way in now is — and drawn there, which is a stronger claim
+        // than FindControl can make: the name scope holds every page whether it is realised or not
+        // (gotcha 31), so this walks what the window has actually put on screen.
+        viewModel.SelectedTab = 5;
+        window.UpdateLayout();
+
+        var about = Assert.Single(
+            window.GetVisualDescendants().OfType<Button>(),
+            b => b.Name == "ShowAbout");
+
+        Assert.Equal("About Uindosill", about.Content);
     }
 
     [AvaloniaFact]
@@ -170,12 +249,14 @@ public class WindowTests
     }
 
     [AvaloniaFact]
-    public void LicenceTabCarriesTheFullNoticeInsideTheApplication()
+    public void TheAboutWindowCarriesTheFullNoticeInsideTheApplication()
     {
         // The notice has to be present where the material is used, not only in a file in the
-        // source repository, so it is asserted on the view model the window renders.
+        // source repository, so it is asserted on the view model the window renders. It moved off
+        // MainWindowViewModel with the Licences tab on 2026-08-23 — the notice is now the About
+        // window's second pane, and AboutViewModel is the one builder of it.
         var viewModel = NewViewModel(out _);
-        var licence = viewModel.LicenceText;
+        var licence = viewModel.About.LicenceText;
 
         Assert.Contains("NVIDIA Corporation", licence, StringComparison.Ordinal);
         Assert.Contains("Modified:", licence, StringComparison.Ordinal);

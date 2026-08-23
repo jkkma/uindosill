@@ -34,7 +34,7 @@ cannot be separated from the GPL is the *combination* with libmpv. So:
 - `LICENSE` states both, and which governs which kind of copy.
 - A build that has **not** vendored libmpv contains no GPL component and is MIT throughout. This is
   not a theoretical case: `MediaPlayers.ForThisBuild()` picks the audio-only player when the library
-  is absent, and the Licences tab lists libmpv only when it is present, so a reader can tell which
+  is absent, and the About window's Licences pane lists libmpv only when it is present, so a reader can tell which
   kind of copy they have by looking.
 - The GPL notices travel with the binary rather than with the repository.
 
@@ -101,7 +101,7 @@ Elements 4 and 6 are the two most commonly missed.
 `src/Parakeet.Core/Licensing/Attribution.cs` has nine `required` properties — one per element,
 `LicenceStatement` and `LicenceUri` splitting element 7, plus a `Title`. A record that cannot be
 constructed without all of them cannot silently ship with five. There is one renderer, and both the
-CLI (`uindosill notice`) and the application's Licences tab call it, so the two cannot drift.
+CLI (`uindosill notice`) and the application's About window call it, so the two cannot drift.
 `NOTICE.md` is the same text.
 
 Two tests hold it up, at different layers. `AttributionTests.RenderedNoticeContainsAllSevenRequiredElements`
@@ -326,7 +326,7 @@ of the Software." So two things travel with the graph — the copyright line and
 and both do: `Licences.targets` copies the file into every build output, `package-windows.ps1`
 refuses a publish without it, and `Attributions.ById["silero-vad"]` is an `MitAttribution`, a record
 that cannot be constructed without the copyright line and the path to the text. `uindosill notice`
-and the Licences tab render it with the other three.
+and the About window render it with the other three.
 
 **The graph is unmodified and is not hosted here.** It is installed from upstream's own repository
 at a pinned commit, which is the arrangement the diariser and the translation weights already use;
@@ -442,7 +442,7 @@ project's own; `NOTICE.md` carries the entry and the §4 check against it, and n
 here.
 
 **Nothing above is discharged.** No notice package has been assembled for any of it, no audit has
-been run, and `uindosill notice` and the Licences tab say nothing about the Python. This section is
+been run, and `uindosill notice` and the About window say nothing about the Python. This section is
 the record of **what will be owed when an installer carries one** — written before the bundle is
 built rather than after, which is where the Marian §4(c) check was done and for the same reason.
 
@@ -540,7 +540,7 @@ notice package that does not describe what is shipped.
   provenance of every byte vendored here.
 
 **What this changes about shipping.** The notice gap is closed: `Attributions.Components` carries
-the entry, so `uindosill notice` and the app's Licences tab both render it, and a test asserts the
+the entry, so `uindosill notice` and the app's About window both render it, and a test asserts the
 entry survives. Nothing found in the EULA requires the licence *text* to travel beside the binaries
 the way MIT requires for the other backends, so no file is dropped into `native/win-x64/cuda/`. If a
 later reading finds such a requirement, that is a `build/NativeAssets.targets` change and the glob
