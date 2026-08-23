@@ -1085,6 +1085,11 @@ generalisation estimate. **No measurement anywhere in this repository prices wha
 with five or more speakers**, and the only figures that exist are NVIDIA's own: 38.90% on DIHARD III
 eval 5–9 spk and 34.81% on NOTSOFAR1 eval ≥5 spk, against 14.84% and 15.95% below the cap.
 
+**NOTSOFAR-1 itself has never been scored here, and as of 2026-08-23 that is scheduled rather than
+open-ended: it is scored after v1.0.** An obligation, not a waiver — the corpus stays in the gate's
+definition and the AMI pass is the whole of what the gate holds until the score exists.
+`docs/PHASES.md` records the decision, under the same *After v1* section that holds the NPU study.
+
 **Measured 2026-08-20: on whole podcast episodes this model returns four speakers whatever the
 truth is, and the reason is not the cap.** The four episodes at the repository root went through
 `uindosill diarise` on the desktop's CPU — 2, 3, 5 and 7 speakers, counts the maintainer confirmed
@@ -2129,6 +2134,9 @@ the score existed.
 wrote **60 Spanish rows** — source, model output and FLEURS reference side by side — and the
 maintainer declined to rate them on 2026-08-20. That is recorded as the state it is rather than left
 looking pending: the sheet exists, it is 30 minutes of work, and **it is not queued to anybody**.
+Declined again on 2026-08-23, and this time with finality: **v1.0 ships without the check** — the
+decision is in `docs/PHASES.md` — so this stops being an open item and becomes a permanent marker.
+The gate stays unpassed by its own definition rather than being redefined to fit.
 **So the gate is not passed.** Criterion one clears in 23 of 24 languages, the collapse ceiling
 clears, and criterion two is unperformed — which is not the same as failed and is not the same as
 met. Anyone reading a chrF++ table here and concluding the translation gate holds is reading two
