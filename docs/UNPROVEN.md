@@ -848,6 +848,22 @@ the feature was removed rather than shipped in that state** (`docs/PHASES.md`, *
 2026-08-23*). What is left proven is only the negative: nothing this application does unattended
 deletes a user's files, because there is no longer any code that does.
 
+**The behaviour that replaced it is measured, on a locally packed installer, 2026-08-23.** A real
+`vpk` package of the post-removal build, installed silently, with a 2,000-file decoy planted where
+the data directory goes, then uninstalled through `Update.exe --uninstall --silent`: the decoy came
+through **2,000 of 2,000 files**, and the install directory, the Add/Remove Programs key and both
+shortcuts were gone. That is the whole of the promise — the uninstaller removes what it installed
+and touches nothing the user downloaded. **It was packed here rather than by CI**, so what the next
+release candidate adds is that the same holds for a package this machine did not build.
+
+**One thing that run explains, and it is worth writing down.** With no callback registered, Velopack
+still logs `Found fast exit hook: --veloapp-uninstall`, `Completed hook, exiting...` and
+`Hook executed successfully (took 91.1288ms)` — the message names the *argument* it recognised, not
+a handler it found. That is indistinguishable from the failing rc.3 run's own log (98.6846 ms,
+"successfully", nothing deleted), so the log this project reasoned from could never have told a
+registered-but-inert callback from an unregistered one. Any future hook needs its own evidence that
+it ran, written by the hook, not by the installer.
+
 The record below stands as what was believed at the time.
 
 ### The uninstall cleanup hook has never run on a real machine — noted 2026-08-23
