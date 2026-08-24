@@ -4320,9 +4320,14 @@ win-cuda channel's ask tier was the same vulkan drop while the cudart-13.3 quest
 5080, CUDA buys 2.40× on the whole-transcript prefill (7.9 s against 19.1 s) and about 9 % on
 decode; § *The same file over Vulkan on the same card* below the engine section has the table —
 and then the maintainer decided win-cuda ships `llm/cuda`, alone, with the locator reasoning
-recorded beside `package-windows.ps1`'s channel table. What remains unobserved is every release
-artefact of that decision: no tagged release has carried any ask tier, let alone the CUDA one,
-and the next tag is the first observation of both channels' real sizes.
+recorded beside `package-windows.ps1`'s channel table. **The packaging path ran once with the
+new table the same sitting** — win-cuda, `-SkipPython`, on the desktop — and the read-back held:
+the prune dropped `llm/vulkan` as not in the channel, and the package carried `llm/cuda` with
+the MIT text, the three ASR natives, the companions and both bundled weights, in a
+**1,971,785,933-byte nupkg** (1,976,256,205-byte Setup.exe). That is a python-less dev-machine
+figure under a dev version string, quoted so the ~1.97 GB scale of the decision is on the record
+— not a release observation. No tagged release has carried any ask tier, and the next tag is
+the first observation of both channels' real sizes.
 
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
