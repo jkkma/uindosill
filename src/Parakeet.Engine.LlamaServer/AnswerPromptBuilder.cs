@@ -10,13 +10,13 @@ namespace Parakeet.Engine.LlamaServer;
 /// the grammar makes any other shape unsamplable — including any id that is not live.
 /// </summary>
 /// <remarks>
-/// The evidence lines carry no speaker labels, which is the conservative default the register's
-/// open question 2 records: a resolved citation scrolls to cues that already wear their chips,
-/// so the reader sees who spoke without the model ever being in a position to say it. The
+/// The evidence lines carry no speaker labels — decided by the maintainer 2026-08-24, the
+/// register's question 2: a resolved citation scrolls to cues that already wear their chips, so
+/// the reader sees who spoke without the model ever being in a position to say it. The
 /// instruction is English for now — where the transcript's language comes from is the register's
-/// open question 3, and this class does not decide it; it does pass the answer-language request
-/// through when the caller knows one. Citation tokens stay ASCII whatever the language, so the
-/// grammar never has to know it.
+/// one remaining open question, and this class does not decide it; it does pass the
+/// answer-language request through when the caller knows one. Citation tokens stay ASCII
+/// whatever the language, so the grammar never has to know it.
 /// </remarks>
 public static class AnswerPromptBuilder
 {

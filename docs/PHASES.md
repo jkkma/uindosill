@@ -3723,6 +3723,16 @@ own contract now states the rule where Stage 4's wiring will read it. Still open
 list: whether evidence lines carry speaker labels, and where the transcript's language comes
 from.
 
+### Decided 2026-08-24 — evidence lines carry no speaker labels
+
+The second of the three, taken by the maintainer the same day: the conservative default is now
+the decision. An evidence line is the citation id and the text, nothing more, so the model is
+never in a position to attribute speech and *who said it* keeps its shape — a range and a quote,
+or a refusal, never a name — while the render answers the question anyway, because a resolved
+citation scrolls to cues that already wear their speaker chips. `AnswerPromptBuilder` already
+built exactly this line; what changed is that its remark now cites a decision rather than a
+default awaiting one. Of v1's three questions, only the language source remains open.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

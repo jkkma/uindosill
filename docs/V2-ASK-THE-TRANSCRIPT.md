@@ -128,6 +128,20 @@ already calls for is where it gets measured. And R6 stands unchanged: the model 
 evidence and the answer still arrives in the transcript's language, from wherever the still-open
 language-source question ends up supplying it.
 
+### Decided 2026-08-24 — evidence lines carry no speaker labels
+
+**The maintainer's decision, taken the same day: the conservative default stands.** An evidence
+line is `[S12-S15] text` and nothing more — no diariser label, no reader-typed name — so the
+model is never in a position to attribute speech, and *who said it* keeps exactly the shape this
+register gave it before diarisation shipped: a range and a quote, or a refusal, never a name.
+The reasoning is the section above's and is not restated; what the decision adds is that it now
+binds the prompt builder rather than describing its default. The reader still gets their answer:
+a resolved citation scrolls to cues that already wear their speaker chips, so the render says
+who spoke without the model ever saying it — attribution stays the diariser's claim, checked by
+the reader's own ear, rather than becoming the model's.
+
+Of the three questions v1 created, one remains open: where the transcript's language comes from.
+
 ## Why this is harder than v1, and it is not the modelling
 
 **A transcript can be wrong loudly. A summary cannot.**
