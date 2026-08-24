@@ -1127,10 +1127,16 @@ whole-transcript path is an opt-in with a progress bar and a saved slot.
 block; then decision 2's first file with the counters sampled at each phase — idle, ASR loaded,
 language model loaded, after the 40k prefill, after an answer — with and without the ASR model
 resident. That is the first VRAM data this project has had, and it is what decides this decision.
-**The first is measured — 2026-08-24: 2,115 MiB dedicated**, under the ~2.5 GiB the "fits" lines
-above assumed, with the caveat the machine block carries: it moves with what is open. The second
-runs without the with-ASR phases, because the policy above has since taken both-resident off the
-table.
+**Both ran on 2026-08-24, the same sitting.** The idle figure is 2,115 MiB dedicated — under
+the ~2.5 GiB the "fits" lines above assumed, with the caveat the machine block carries: it moves
+with what is open. And the first file at `-c 53248` on CUDA gave this decision its data: ggml's
+own allocation lines put the 9B at **8,045 MiB of weights on the card, a 1,664 MiB f16 KV cache —
+the arithmetic above landing to the MiB — 201 MiB of recurrent state and a 140 MiB compute
+buffer**, so the 1.5 GiB compute allowance every fit line assumed measures an order of magnitude
+smaller here; the card holds ~11.7 of 16,303 MiB with the model resident, and the adapter
+returned to idle exactly on the kill. The with-ASR phases were dropped from the run, because the
+policy above had already taken both-resident off the table. `docs/UNPROVEN.md` § *The engine on
+the product path* carries the run, prefill and decode included.
 
 **The laptop is a different budget, and its one published number needs its footnote.** The 7.36 GiB
 that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memory_budget` budget**
