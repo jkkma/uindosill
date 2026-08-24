@@ -24,7 +24,11 @@
          which reads this file rather than carrying a second copy of the number. -->
     <PackageVersion Include="Velopack" Version="1.2.0" />
 
-    <!-- NAudio 2.3.0 is the last stable line. 3.0 is preview-only with no GA date.
+    <!-- NAudio stays pinned at 2.3.0 although 3.0 is GA: 3.0.0 and 3.0.1 are stable on
+         nuget.org (verified 2026-08-23; 3.0.0 went GA 2026-08-15). 3.0 carries an exact-seek
+         fix (NAudio PR #1368) and renames WasapiOut to WasapiPlayer, so moving is a measured
+         decision, not a version bump — the pin holds until seek drift is measured here (the
+         v2 plan's Stage 0.6).
          The NAudio metapackage is deliberately NOT used: it drags in NAudio.WinForms, whose
          FrameworkReference on Microsoft.WindowsDesktop.App.WindowsForms cannot be resolved on a
          Linux SDK, which would end cross-building the Windows target from CI. Media Foundation
