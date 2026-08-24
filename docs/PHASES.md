@@ -3850,6 +3850,24 @@ machine block as decision 4's largest unmeasured term made a measurement. `docs/
 evidence. What this did not measure: anything at depth, and anything about answer quality —
 the 9B and the transcript are the next sitting.
 
+### Measured 2026-08-24, later — the 9B at depth, and the desktop tier gets its numbers
+
+The next sitting was the same one. The desktop produced its own f16 reference transcript
+(`runs/csb384-f16` — CUDA, the neural detector, 1,023 segments, RTF 0.0092, the labelling
+session's pin target), decision 2's first file was pinned against the hub's LFS oid and
+downloaded (`Qwen3.5-9B-Q8_0`, 9,527,502,048 bytes, hash matching), and the spike ran it at
+`-c 53248` on CUDA: **the whole three-hour transcript prefills in 7.93 s** — 6,017.7 tok/s
+over 47,721 tokens, against the laptop's 467.9 s on its own encode — **decode holds 75.4 tok/s
+at full depth**, a cached follow-up costs 40.7 ms of prompt time, and `/health` arrives in
+3.6 s with the JIT cache disabled. ggml's allocation lines give the register's decision 4 its
+first per-buffer data — 8,045 MiB of weights, a 1,664 MiB KV cache that lands the register's
+arithmetic to the MiB, 201 MiB of recurrent state, a 140 MiB compute buffer against the
+1.5 GiB allowance — and the card holds ~11.7 of 16,303 MiB with the model resident. The
+`--reasoning-budget 0` finding reproduces on CUDA. `docs/UNPROVEN.md` carries the run with its
+caveats: one run per figure, no answer-quality claim, and no question through the panel yet on
+any machine. What follows for the product: the whole-transcript path the register priced as
+minutes-with-a-progress-bar is an eight-second wait on the desktop tier.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

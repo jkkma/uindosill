@@ -3611,6 +3611,51 @@ note for the next run: b10603's default server verbosity does not emit ggml's
 `model/KV/compute buffer size` lines — `-lv 5` restores them (probed separately: at `-c 4096`
 the 0.6B reports CUDA0 model 604.15 MiB, KV 448.00 MiB, compute 30.01 MiB).
 
+#### Decision 2's first file at depth — the 9B on the desktop tier, 2026-08-24, same sitting
+
+`unsloth/Qwen3.5-9B-GGUF`'s `Qwen3.5-9B-Q8_0.gguf`, 9,527,502,048 bytes, sha256
+`809626574d0cb43d4becfa56169980da2bb448f2299270f7be443cb89d0a6ae4` — the LFS `oid` read from
+the hub's tree listing on 2026-08-24 per `docs/MODELS.md`'s procedure and verified against the
+downloaded file. Run through `scripts/spike-llama-server.ps1` (`runs/20260824-033145-spike-cuda`),
+release b10603, `-c 53248 -fa on`, f16 cache, `--fit off`, `--reasoning-format none`,
+`CUDA_CACHE_DISABLE=1`, backend **cuda**. The prompt is this desktop's own f16 transcript,
+produced the same sitting (`runs/csb384-f16`: `tdt-0.6b-v3-f16` on **cuda**, the silero neural
+detector, 1,023 segments, RTF 0.0092) — **47,721 tokens under the 9B's template, not the
+laptop's 51,712**: a different machine's encode and a different segmentation (neural detector
+against the gate), so the two counts describe two documents, not a disagreement.
+
+| | this desktop, CUDA, Q8_0 | the laptop, Vulkan, Q4_K_M (2026-08-16) |
+|---|---|---|
+| `/health`, first / second start | **3.61 / 3.60 s** | 3.64 / 2.54 s |
+| Prefill, whole transcript | **7.93 s (6,017.7 tok/s, 47,721 tokens)** | 467.9 s (110.7 tok/s, 51,712 tokens) |
+| Decode after it, 160 tokens | **75.4 tok/s** | 9.8 tok/s |
+| Follow-up on the cached prefix | prompt 40.7 ms | prompt 566 ms |
+
+One run per figure, different quantisations and prompts — a tier description, not a controlled
+comparison. What it settles about the shape: **the whole-transcript path on the desktop tier is
+an eight-second wait, not the laptop's eight minutes**, and the decode after a full-depth
+prefill is interactive. The `--reasoning-budget 0` finding reproduces on CUDA: the 9B's 160
+answer tokens were all visible thinking under `--reasoning-format none` — the budget does not
+bind this template, and the grammar (which the product path applies and this spike does not)
+remains the mechanism.
+
+**The first per-buffer VRAM figures, from ggml's own allocation lines (`-lv 5`), backend cuda:**
+CUDA0 model buffer **8,045.05 MiB** (plus 1,030.62 MiB CPU-mapped), KV buffer **1,664.00 MiB —
+exactly the register's arithmetic** for 8 growing layers of 4 KV heads × 256 at 53,248 tokens
+f16, recurrent-state buffer **201.00 MiB** (the 24 linear-attention layers, at the server's
+default `n_slots = 4`), compute buffer **140.02 MiB** — an order of magnitude under the 1.5 GiB
+allowance every fit line in the register assumed. Counters beside them: server dedicated
+10,319.7 MiB loaded → 10,333.7 after the 47.7k prefill; adapter dedicated 1,381.4 idle →
+11,677.4 loaded → 11,719.9 after prefill → **1,358.3 after the kill**, `nvidia-smi` tracking
+within ~10 MiB throughout. With the model resident the card holds ~11.7 of 16,303 MiB — about
+4.6 GiB of headroom, before anything else opens. Under the prefill, sampled at 1 s:
+53 °C, 402.8 W, 98 % GPU utilisation at peak.
+
+What none of this measures: answer quality (the CSB384 question set is still a template, so
+recall and citation precision have no numbers), variance (every figure is one run), and the
+panel path — this is the lab script; no question has gone through the Ask tab's input box on
+any machine.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the
