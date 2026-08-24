@@ -361,10 +361,10 @@ reproduce; the MIT text is the whole of the obligation as far as it was read.
 ## The ask engine is MIT (llama.cpp), and its notice is fetched rather than found
 
 `llama-server.exe` and the DLLs beside it — the child process behind the Ask panel, vendored
-under `native/win-x64/llm/<backend>/` since 2026-08-24 and shipped in both installer channels
-(the vulkan drop; `scripts/package-windows.ps1` holds the channel table and the two decisions
-beside it) — are llama.cpp's own Windows release binaries, MIT, *Copyright (c) 2023-2026 The
-ggml authors*.
+under `native/win-x64/llm/<backend>/` since 2026-08-24 and shipped per channel: the vulkan drop
+in the default channel, the CUDA drop in win-cuda (`scripts/package-windows.ps1` holds the
+channel table and the decisions beside it) — are llama.cpp's own Windows release binaries, MIT,
+*Copyright (c) 2023-2026 The ggml authors*.
 
 **The obligation has one wrinkle the other natives do not: no llama.cpp release zip carries a
 LICENSE file** — measured at b10448 and at the b10603 pin alike — so there is nothing in the
@@ -382,10 +382,23 @@ pinned by the release API's own per-asset digests and re-hashed locally on every
 this project adds is the C# that starts, asks and kills the process, which is this project's own
 MIT code.
 
+**The win-cuda channel's ask tier redistributes a second CUDA runtime, and it is
+NVIDIA-proprietary, not MIT.** The maintainer decided on 2026-08-24 that win-cuda ships
+`llm/cuda`: the b10603 CUDA drop together with the DLLs of upstream's
+`cudart-llama-bin-win-cuda-13.3-x64.zip` — a CUDA 13.3 runtime (`cudart64_13.dll`, file version
+13030, read on the desktop that vendored it) beside the ASR tier's 12.8 trio, two CUDA runtime
+majors in one package. The legal basis is the ASR tier's reading, unchanged: §2.6 (Attachment A)
+of the CUDA Toolkit EULA names `cudart`, `cublas` and `cublasLt` as redistributable in
+version-numbered variants, and the §1.1.2/§1.2 conditions are met the same way — the
+application is the material functionality, the files sit in the application's own native tree
+and are loaded only by its `llama-server` child, and nothing ships them stand-alone. What is
+*not* yet done: the cudart archive's full DLL inventory is not recorded in this repository's
+tables, so reconciling each shipped DLL name against Attachment A's list, on a machine holding
+the drop, is owed before the first win-cuda tag. `NOTICE.md` carries the component's row either
+way, for the same reason the ASR row is unconditional.
+
 **What is not claimed.** No lawyer has read this either. The zips also carry OpenMP runtime
-DLLs and, in the CUDA case not yet shipped, would carry NVIDIA's cudart under the CUDA EULA —
-that channel decision is still open and its licensing section will be written when it is taken,
-not before.
+DLLs, covered by the same reading as the ASR tier's.
 
 ## The bundled Python is fifty more redistributions, and none of them is discharged
 

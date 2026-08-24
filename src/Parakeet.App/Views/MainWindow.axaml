@@ -1355,7 +1355,13 @@
                              Text="{Binding Chat.QuestionText}"
                              PlaceholderText="Ask about this recording…" />
                     <Button Grid.Column="2" Name="AskSend" Content="Ask"
-                            Command="{Binding Chat.AskCommand}" />
+                            Command="{Binding Chat.AskCommand}"
+                            IsVisible="{Binding !Chat.IsAsking}" />
+                    <!-- The same spot Ask stood in: while an answer is under way — including the
+                         minutes a cold model load can take — this is the way out of it. -->
+                    <Button Grid.Column="2" Name="AskStop" Content="Stop"
+                            Command="{Binding Chat.StopCommand}"
+                            IsVisible="{Binding Chat.IsAsking}" />
                   </Grid>
                 </StackPanel>
 

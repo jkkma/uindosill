@@ -136,6 +136,11 @@ public sealed partial class AskChatViewModel : ObservableObject
         var document = _recording?.TranslatedDocument ?? _recording?.Document;
         if (!ReferenceEquals(document, _document))
         {
+            // An in-flight ask was built over the document being replaced: its evidence, grammar
+            // ids and validation are meaningless against the new one, and letting it finish would
+            // refill the index fields below from the old transcript.
+            _asking?.Cancel();
+
             _document = document;
             _windows = null;
             _retriever = null;
@@ -171,7 +176,10 @@ public sealed partial class AskChatViewModel : ObservableObject
             return;
         }
 
-        if (_transcriptionRunning())
+        // Both halves of the residency probe: a batch that is running, and a batch still inside
+        // its model load — IsRunning is only set once the load await returns, so the session's
+        // own busy flag is what covers the minutes a large model spends loading.
+        if (_transcriptionRunning() || _session is { IsBusy: true })
         {
             ResidencyNotice = "Wait for the transcription to finish — the transcriber and the "
                 + "ask model cannot be loaded at the same time.";
@@ -191,10 +199,22 @@ public sealed partial class AskChatViewModel : ObservableObject
         {
             await EnsureEngineAsync(entry, cancellation.Token).ConfigureAwait(true);
 
+            // The load await is the window a recording switch can slip through; its cancel may
+            // land after the load completed without observing the token, so it is re-checked
+            // here before the stale local rebuilds the index.
+            cancellation.Token.ThrowIfCancellationRequested();
+
             entry.Status = "Searching the transcript…";
             _windows ??= TranscriptWindowBuilder.Build(document);
             _retriever ??= new Bm25Retriever(_windows);
             var evidence = _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window).ToList();
+
+            // The English pane's ask drops the source hint — the maintainer's decision,
+            // 2026-08-24, closing the review's collision: the hint survives onto the translated
+            // document as provenance, but forwarding it here instructed source-language answers
+            // over English evidence, whose grammar-forced quotes the verbatim check could only
+            // fail. A translated ask is unlocalised; the transcript as spoken keeps its hint.
+            var language = document.IsTranslated ? null : document.Language;
 
             var request = new AskRequest
             {
@@ -202,7 +222,7 @@ public sealed partial class AskChatViewModel : ObservableObject
                 Transcript = document,
                 Mode = AnswerMode.Retrieval,
                 Evidence = evidence,
-                Language = document.Language,
+                Language = language,
             };
 
             entry.Status = "Answering…";
@@ -224,10 +244,19 @@ public sealed partial class AskChatViewModel : ObservableObject
                 Quantisation = _engine.Capabilities.Quantisation,
                 Backend = _engine.Capabilities.Backend,
                 Mode = AnswerMode.Retrieval,
-                Language = document.Language,
+                Language = language,
             };
 
-            entry.Complete(answer, CitationValidator.Validate(answer, document), evidence, document, _seekAndPlay);
+            if (answer.IsEmpty)
+            {
+                // Neither claims nor the sentinel. Rendering this as the abstention would turn
+                // silence into the definite claim "the recording doesn't answer that".
+                entry.Fail("The model produced no answer. Ask again, or ask differently.");
+            }
+            else
+            {
+                entry.Complete(answer, CitationValidator.Validate(answer, document), evidence, document, _seekAndPlay);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -381,7 +410,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     {
         StreamingText = null;
         Status = null;
-        Abstained = answer.Abstained || answer.IsEmpty;
+        Abstained = answer.Abstained;
 
         foreach (var bullet in validation.Bullets)
         {
@@ -507,6 +536,7 @@ public sealed class AnswerBulletViewModel
         Text = bullet.Bullet.Text;
         Quote = bullet.Bullet.Quote;
         QuoteVerified = bullet.Citations.Any(c => c.Check.QuoteMatches == true);
+        QuoteChecked = bullet.Citations.Any(c => c.Check.QuoteMatches is not null);
         Citations = [.. bullet.Citations.Select(c => new CitationChipViewModel(c, seekAndPlay))];
         IsUncited = bullet.Bullet.IsUncited || Citations.All(c => !c.IsResolved);
     }
@@ -521,6 +551,10 @@ public sealed class AnswerBulletViewModel
     /// still shown — it is what the model said — but marked, never silently trusted.</summary>
     public bool QuoteVerified { get; }
 
+    /// <summary>Whether any citation resolved to a span the quote could be checked against. A
+    /// claim citing only <c>[?]</c> was never checked, which is not the same as failing.</summary>
+    public bool QuoteChecked { get; }
+
     public IReadOnlyList<CitationChipViewModel> Citations { get; }
 
     /// <summary>Nothing on this claim resolves; it renders with the unresolved marker.</summary>
@@ -532,9 +566,11 @@ public sealed class AnswerBulletViewModel
 
     public string? QuoteDisplay => Quote is null ? null : $"“{Quote}”";
 
-    public string? QuoteCaveat => Quote is not null && !QuoteVerified
-        ? "quote not found in the transcript"
-        : null;
+    public string? QuoteCaveat => Quote is null || QuoteVerified
+        ? null
+        : QuoteChecked
+            ? "quote not found in the transcript"
+            : "quote not checked — no place in the recording to check it against";
 }
 
 /// <summary>One citation as a chip: a time that seeks, or the unresolved marker that does not.</summary>

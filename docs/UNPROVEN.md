@@ -4309,12 +4309,31 @@ decision 5's copy form. What stands behind the claims:
 
 ### The shipped ask tier — packaged 2026-08-24, and three things no release has observed
 
-`package-windows.ps1` now vendors the vulkan `llama-server` drop into both channels, prunes what
-a channel does not promise, and refuses a package without `llama-server.exe` and the MIT text —
-all of which has run exactly nowhere: the last release (rc.3) predates it, so every size in that
-record — 485.4 MB default installer, 60.7 MB CLI zip — is a pre-ask-tier figure, and what the
-~94 MB unpacked drop does to the installer, the delta packages and the CLI zip (which inherits
-whatever is vendored) is the next release's first observation. Second: the channels ship the
+`package-windows.ps1` now vendors the `llama-server` drops per channel — vulkan in the default,
+cuda in win-cuda — prunes what a channel does not promise, and refuses a package without
+`llama-server.exe` and the MIT text — all of which has run in no tagged release: rc.3 predates
+it, so every size in that record — 485.4 MB default installer, 60.7 MB CLI zip — is a
+pre-ask-tier figure, and what the unpacked drops do to the installers and the delta packages is
+the next release's first observation. The CLI zip no longer inherits the vendored tree: since
+41ef482 the publish drops `llm/**` wholesale — no CLI verb starts the server — after the first
+rc.4 attempt shipped without that prune, measured 621.9 MB against rc.3's 60.7, and failed its
+400 MB size guard exactly as the guard was written to.
+
+**The win-cuda asset projected past GitHub's limit, and the diariser's weight is what gives —
+decided 2026-08-24.** From this repository's own numbers: the python-less win-cuda Setup.exe
+measured 1,976,256,205 bytes on 2026-08-24 (dev version string, both bundled weights inside),
+rc.3 observed the Python bundle adding 369.3 MB to that channel's installer (1187.9 MB against
+818.6 MB bundle-less), and the sum sat roughly 200 MB past the 2,147,483,648-byte per-asset
+limit rc.3's record already names as the binding one. The maintainer's decision, taken the day
+the projection was written down: **the win-cuda channel stops bundling the speaker labeller**
+(`BundledModels.NotInCudaChannelIds`; the packaging script reads the list and its read-back
+checks the absence as positively as the presences) — a fresh CUDA install downloads the
+diariser from the Models tab, which is what every install did before 2026-08-23. Treating
+weights as incompressible, the projection lands near 1.87 GB, under the limit by ~276 MB. That
+is still a projection from a dev-machine figure: **no package has been built with the exclusion
+applied, and the next win-cuda tag is the first observation** of the real asset size. The
+suite's `TheOnesThatDoNotFitAreNotBundled` recomputes the arithmetic from the two lists, so
+growing either one is a decision taken against these numbers. Second: the channels ship the
 vulkan drop alone, on the reading that `GGML_BACKEND_DL` builds fall back to the bundled per-ISA
 CPU variants when Vulkan cannot initialise — structurally sound, since the vulkan zip is the cpu
 zip plus one DLL, and **run on no machine with a broken or absent Vulkan driver**. Third: the

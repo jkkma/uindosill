@@ -67,7 +67,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // fills in where it stands. Two collections would need reconciling, and getting that
         // wrong shows a transcript beside the wrong recording. The session goes with it for R9 —
         // the chat's first question unloads the transcription model through it — and the
-        // IsRunning probe is what keeps the two model loads from ever overlapping.
+        // IsRunning probe, together with the session's own busy flag for the stretch a load
+        // spends inside its await, is what keeps the two model loads from overlapping.
         Ask = new AskViewModel(
             Transcribe.Jobs,
             player ?? MediaPlayers.ForThisBuild(),
@@ -274,10 +275,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             Models.Refresh();
         }
+        else if (value == AskTabIndex)
+        {
+            // The same principle for the chat panel's cover: it tells the user to put a .gguf in
+            // the models folder "and come back here", and switching to this tab is the coming
+            // back — the refresh re-runs the availability check, in both directions.
+            Ask.Chat.RefreshDocument();
+        }
     }
 
     /// <summary>Where the Models page sits in the TabControl. The switcher's order is its own.</summary>
     private const int ModelsTabIndex = 1;
+
+    /// <summary>Where the Ask page sits in the TabControl.</summary>
+    private const int AskTabIndex = 4;
 
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];

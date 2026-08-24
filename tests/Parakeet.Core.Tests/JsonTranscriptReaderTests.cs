@@ -242,6 +242,32 @@ public class JsonTranscriptReaderTests
     }
 
     [Fact]
+    public void TimesOutsideAnyRecordingRefuseLoudlyInsteadOfOverflowingOrWalkingForever()
+    {
+        // One bound in the reader's single time funnel kills three failure modes at once: the
+        // negative time that made segments silently unretrievable, the epoch-seconds unit
+        // mistake that walks the window grid for hours on the UI thread, and the absurd value
+        // whose tick multiply throws OverflowException past every FormatException catch.
+        var negative = Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [{"start": -1, "end": 1, "text": "x"}]}"""));
+        Assert.Contains("start", negative.Message, StringComparison.Ordinal);
+        Assert.Contains("-1", negative.Message, StringComparison.Ordinal);
+
+        var epoch = Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [{"start": 1700000000, "end": 1700000010, "text": "x"}]}"""));
+        Assert.Contains("1700000000", epoch.Message, StringComparison.Ordinal);
+
+        Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [{"start": 0, "end": 1, "text": "x"}], "audioDurationSec": 999999999999}"""));
+
+        // The cap is a week, and the boundary itself still reads: refusal is for values no
+        // recording can hold, not for a long one.
+        var week = JsonTranscriptReader.Read(
+            """{"segments": [{"start": 0, "end": 604800, "text": "x"}]}""");
+        Assert.Equal(TimeSpan.FromDays(7), week.Segments[0].End);
+    }
+
+    [Fact]
     public void NonJsonRefusesLoudly() =>
         Assert.Throws<FormatException>(() => JsonTranscriptReader.Read("WEBVTT\n\n00:00:00.500 --> ..."));
 

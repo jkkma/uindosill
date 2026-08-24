@@ -128,8 +128,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The chat panel's three window-level jobs: Enter asks, the clipboard answers the Copy
-    /// button, and a new exchange scrolls into view.
+    /// The chat panel's window-level jobs: Enter asks, Escape stops the ask under way, the
+    /// clipboard answers the Copy button, and a new exchange scrolls into view.
     /// </summary>
     /// <remarks>
     /// The clipboard is here because only a TopLevel has one — the view model builds the copied
@@ -143,17 +143,25 @@ public partial class MainWindow : Window
         {
             input.KeyDown += (_, e) =>
             {
-                if (e.Key != Key.Enter || DataContext is not MainWindowViewModel viewModel)
+                if (DataContext is not MainWindowViewModel viewModel)
                 {
                     return;
                 }
 
-                if (viewModel.Ask.Chat.AskCommand.CanExecute(null))
+                if (e.Key == Key.Enter)
                 {
-                    viewModel.Ask.Chat.AskCommand.Execute(null);
-                }
+                    if (viewModel.Ask.Chat.AskCommand.CanExecute(null))
+                    {
+                        viewModel.Ask.Chat.AskCommand.Execute(null);
+                    }
 
-                e.Handled = true;
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Escape && viewModel.Ask.Chat.StopCommand.CanExecute(null))
+                {
+                    viewModel.Ask.Chat.StopCommand.Execute(null);
+                    e.Handled = true;
+                }
             };
         }
 

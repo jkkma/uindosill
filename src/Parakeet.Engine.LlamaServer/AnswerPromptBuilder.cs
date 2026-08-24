@@ -90,9 +90,12 @@ public static class AnswerPromptBuilder
         // more of the grammar than that, which is the point of keeping citations ASCII.
         builder.Append("text ::= [^\\n\\[\\]\\u00AB\\u00BB]{1,400}\n");
 
+        // The quote excludes brackets exactly as free text does: the parser lifts citations from
+        // the whole bullet before it lifts the quote, so a bracket admitted here would let the
+        // model write an id inside «…» and have it promoted to a real citation.
         if (requireQuote)
         {
-            builder.Append("quote ::= \"\\u00AB\" [^\\n\\u00AB\\u00BB]{3,300} \"\\u00BB\"\n");
+            builder.Append("quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{3,300} \"\\u00BB\"\n");
         }
 
         builder.Append("cites ::= \"[\" cite (\", \" cite){0,4} \"]\" | \"[?]\"\n");
