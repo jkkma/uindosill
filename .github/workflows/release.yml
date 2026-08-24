@@ -165,11 +165,17 @@ jobs:
       # vendors them for the installer, so the CLI publish inherits them too. Nothing in the CLI can
       # use any of them — links, video and muxing are all in the desktop application — so they are
       # dropped rather than charged to every command-line download.
+      #
+      # And since 2026-08-24, the llm tree: the ask tier's llama-server drops are vendored for the
+      # installer channels, the Ask panel is the only thing that starts that server, and no CLI verb
+      # does — `retrieve` is tier 0 and needs no model. rc.4's first attempt is the observation: with
+      # llm/ inherited whole (the win-cuda channel's cuda drop included), this zip measured 621.9 MB
+      # against rc.3's 60.7, and the guard below caught it exactly as written.
       - name: Zip the CLI, without the drops it inherited
         shell: pwsh
         run: |
           $native = 'packaging/cli-win-x64/native/win-x64'
-          foreach ($drop in 'cuda', 'tools', 'ffmpeg', 'mpv') {
+          foreach ($drop in 'cuda', 'tools', 'ffmpeg', 'mpv', 'llm') {
             if (Test-Path "$native/$drop") {
               Write-Host "dropping native/win-x64/$drop from the CLI zip"
               Remove-Item -LiteralPath "$native/$drop" -Recurse -Force
