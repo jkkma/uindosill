@@ -3868,6 +3868,20 @@ caveats: one run per figure, no answer-quality claim, and no question through th
 any machine. What follows for the product: the whole-transcript path the register priced as
 minutes-with-a-progress-bar is an eight-second wait on the desktop tier.
 
+### Measured 2026-08-24, later still — the Vulkan fallback priced, and the cudart decision gets its number
+
+The win-cuda channel ships the vulkan drop for the ask tier until the cudart-13.3 decision is
+taken, and what that fallback costs an NVIDIA card had been measured nowhere. Now it is: the
+vulkan drop vendored on the desktop (digest reproducing), the same 9B, transcript and flags as
+the CUDA run, `GGML_VK_DISABLE_BFLOAT16=1` in the child because that is the engine's shipped
+default — and it loads and runs under it on this driver. **CUDA buys 2.40× on the prefill
+(7.9 s against 19.1 s on the whole transcript), about 9 % on decode (75.4 against
+69.2 tok/s), and about two seconds on the load**; VRAM within 200 MiB of each other, the
+adapter back to idle on the kill on both. The +391 MB question is now priced rather than
+blind, and the Vulkan column read alone says the fallback is not a degraded mode: a 19-second
+prefill and a 69 tok/s conversation. One run per figure, this card and driver only —
+`docs/UNPROVEN.md` § *The same file over Vulkan on the same card* carries the table.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

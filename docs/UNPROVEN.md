@@ -3656,6 +3656,33 @@ recall and citation precision have no numbers), variance (every figure is one ru
 panel path — this is the lab script; no question has gone through the Ask tab's input box on
 any machine.
 
+#### The same file over Vulkan on the same card — the win-cuda channel's current ask path, priced
+
+The shipped channels carry the vulkan drop only, so until the cudart-13.3 decision an NVIDIA
+card asks over Vulkan — and what that costs had been measured nowhere. Same sitting, same
+machine, same model, same transcript, same flags (`runs/20260824-034354-spike-vulkan`; the
+vulkan drop vendored on this machine first, digest reproducing), with
+**`GGML_VK_DISABLE_BFLOAT16=1` in the child's environment because that is the engine's shipped
+default** — and the model loads and runs under it on this driver, so the knob keeps costing
+nothing observable on NVIDIA:
+
+| Qwen3.5-9B Q8_0, `-c 53248`, 47,721 tokens | CUDA | Vulkan |
+|---|---|---|
+| `/health`, first / second start | 3.61 / 3.60 s | 5.63 / 4.04 s |
+| Prefill, whole transcript | **7.93 s (6,017.7 tok/s)** | 19.05 s (2,504.6 tok/s) |
+| Decode after it, 160 tokens | 75.4 tok/s | 69.2 tok/s |
+| Follow-up on the cached prefix | prompt 40.7 ms | prompt 51.2 ms |
+| Server dedicated, loaded | 10,319.7 MiB | 10,126.3 MiB |
+| Adapter dedicated, loaded | 11,677.4 MiB | 11,422.5 MiB |
+| Peak under prefill (1 s samples) | 53 °C, 402.8 W, 98 % | 50 °C, 307.0 W, 99 % |
+
+So the +391 MB cudart question now has its price attached: **CUDA buys 2.40× on the prefill —
+eleven seconds on a three-hour transcript, 19.1 s against 7.9 s — about 9 % on decode, and
+about two seconds on the load**; the adapter returns to idle on the kill on both. One run per
+figure, this card and driver only, and the number that matters for the decision is arguably the
+Vulkan column standing alone: the fallback path is not a degraded mode, it is a 19-second
+prefill and a 69 tok/s conversation.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the
@@ -4266,8 +4293,10 @@ CPU variants when Vulkan cannot initialise — structurally sound, since the vul
 zip plus one DLL, and **run on no machine with a broken or absent Vulkan driver**. Third: the
 win-cuda channel's ask tier is the same vulkan drop, because the LLM's cudart-13.3 beside the
 ASR's cudart-12.8 is the maintainer's open decision; an NVIDIA card asks over Vulkan in that
-channel until it is taken, and nothing has measured what that costs against the CUDA path the
-desktop tier is meant to be.
+channel until it is taken. **What that costs is measured as of 2026-08-24** — on the desktop's
+5080, CUDA buys 2.40× on the whole-transcript prefill (7.9 s against 19.1 s) and about 9 % on
+decode; § *The same file over Vulkan on the same card* below the engine section has the table.
+What remains unobserved is the release itself.
 
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
