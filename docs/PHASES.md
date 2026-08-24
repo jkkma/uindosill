@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1144 tests, no weights, no display, no network — **1140 passed and 4 skipped**, and
+**Status:** met. 1216 tests, no weights, no display, no network — **1212 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2758,9 +2758,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** `CLAUDE.md`'s second
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1144 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1216 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2844,7 +2844,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2888,7 +2888,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2945,7 +2945,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3035,7 +3035,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Two of the four are
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3075,7 +3075,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3092,7 +3092,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3140,7 +3140,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** The C# suite does
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3231,7 +3231,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Twenty-two new, and
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3261,7 +3261,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** The
+page instead. **1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3296,7 +3296,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1144 tests, 1140 passed and 4 skipped, the count unchanged**: the file-writing
+assertion. **1216 tests, 1212 passed and 4 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3353,7 +3353,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3480,7 +3480,7 @@ design; an interactive installer with a directory picker would mean a different 
 different update story. What it gets instead is the icon and the splash, so the one window a user
 sees during an install is branded rather than bare.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Six of the new ones
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** Six of the new ones
 are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
 that they are single-file entries the catalogue actually has, that the sum still fits under the
 asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
@@ -3571,9 +3571,79 @@ publish is a few dozen files. They size the executable instead: about 98 MB with
 against a couple of megabytes without, which is the thing that actually differs. Trimming and
 NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
 
-**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** No test changed: the
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped.** No test changed: the
 suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
 changes is the shape of a deployment rather than the behaviour of any code.
+
+### Built 2026-08-23 — v2 begins: a transcript reopens, the seek bar takes the keyboard, and retrieval exists with nothing to retrieve for
+
+The first v2 work, and none of it touches a model — which is the point of the order it was built
+in. The register (`docs/V2-ASK-THE-TRANSCRIPT.md`) holds the decisions; the maintainer's revised
+implementation plan, kept outside this repository until v1.0 ships, holds the stages; and the
+stages it names as buildable with no language model in the room are what landed here.
+
+**A transcript written in an earlier session can be reopened.** `JsonTranscriptFormatter` had no
+inverse — checked and recorded in the plan — so a chat could only ever have been had against a
+transcript from the current session's queue, and a pinned transcript could be hashed but never
+loaded. `JsonTranscriptReader` is that inverse: it reads exactly what the formatter writes,
+skips properties it does not know (the format has grown fields all its life, and a reader that
+refused a newer file would punish exactly the transcript it exists to reopen), refuses malformed
+structure with a `FormatException` naming the segment at fault, and refuses a compute backend it
+cannot represent rather than silently dropping provenance. Derived values — `text`,
+`realTimeFactor`, each segment's `conf` — are recomputed, never read, so a file whose derived
+figures disagree with its own segments cannot smuggle the disagreement in.
+
+One property came out of the round-trip test sharper than it went in. The file's stated
+resolution is a millisecond; a live document's ticks are finer; so the first write is where that
+precision is shed, and `Format(document)` is not byte-identical to `Format(Read(Format(document)))`
+— the derived real-time factor recomputed from a rounded `processingSec` can move in its last
+digit. What the export pin actually needs is the fixpoint from the *file*: a transcript reopened
+and rewritten hashes identically, and that is what the suite asserts. Times read back exactly —
+the reader parses seconds as `decimal` and multiplies to ticks, where a pass through
+`double` would land `1.234` a tick off.
+
+**The seek bar answers to arrow keys.** The cost recorded when the Ask tab's strip was chosen
+over a `Slider` was that keyboard seeking did not exist: a `Border` takes no focus, so no key
+could ever reach the bar. The strip is now focusable, a press hands it the keyboard along with
+the seek, and the keys do what a transport's keys do — five seconds an arrow, thirty with Shift,
+Home and End to the two ends. The step scrubs without changing whether the recording is playing,
+and both halves are tested through the keyboard on the real window, because the handler that
+turns a key into a step is the thing under test.
+
+**Retrieval exists, with citations checked by machinery rather than trust.** Stage 2 of the plan,
+`Parakeet.Core` only, no new dependency:
+
+- `TranscriptWindowBuilder` cuts a transcript into ~60 s windows of contiguous segments at 50 %
+  overlap (a 120 s variant beside it, for the comparison run the register names). A window
+  carries the 1-based segment ids it spans, so **a retrieved window is a citation by
+  construction** — the suite asserts that resolving a hit's `CitationId` lands on the window's
+  own times.
+- `Bm25Retriever` behind `IRetriever` — hand-rolled, k1 = 1.2, b = 0.75, Lucene's
+  never-negative idf, ties kept in transcript order so recall runs are repeatable. About two
+  hundred lines, as the register's arithmetic priced it.
+- `SearchTokenizer` is the one definition of "the same text" that indexing and quote-checking
+  share: letter-and-digit runs, lower-cased invariantly so the machine's locale can never change
+  what retrieval finds. Unstemmed on purpose — the register wants stemming's contribution to
+  recall measured, not assumed.
+- `Citation`, `AnswerParser`, `CitationValidator` and `AnswerDocument` implement the register's
+  rule that the model never writes a timestamp. Ids are opaque and 1-based; the parser keeps the
+  raw spelling even when it parses, takes a bracket group as citations only when everything
+  inside it parses as ids — `[laughs]` stays prose, inert — and treats `NOT_IN_TRANSCRIPT` and
+  `[?]` as the first-class outcomes the grammar admits. The validator resolves, checks
+  non-emptiness, the recording's end, the verbatim quote as a normalised token-boundary
+  substring of the cited span, and monotonicity only where chronology was claimed; an
+  unresolved citation carries no times at all, so nothing unresolved can ever render as a
+  number a reader might trust. `AnswerDocument` carries the provenance `TranscriptDocument`
+  taught this repository to carry — model, quantisation, backend, and the mode that says how
+  much of the recording the answer could have seen.
+
+What none of this claims: a recall figure. recall@10 needs the thirty labelled CSB384 questions,
+and the labelling session is a person's — the one Stage 0 item no script can do. The register's
+decision 3 order stands: tier 0 first, the thirty questions, and an embedding model only if the
+paraphrase questions say so.
+
+**1216 tests, no weights, no display, no network — 1212 passed and 4 skipped**, up from 1144;
+`check-test-counts.py` agrees with every document that quotes a count.
 
 ### The dictation seam
 

@@ -71,6 +71,11 @@ corpus/
 # Not /*.md: README.md and NOTICE.md live here, so a `-f md` transcript written to the root has to
 # be moved or deleted by hand. Use the harnesses, which write into runs/, and this does not arise.
 
+# Research fetched from the maintainer's Drive by scripts/sync-drive.ps1 -Fetch, read on disk and
+# never committed: the standing convention in CLAUDE.md keeps research outside this public
+# repository until v1.0 ships. Scoped to the root, where a fetch lands.
+/*-research-*/
+
 # OS noise
 .DS_Store
 Thumbs.db

@@ -198,7 +198,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1144 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1216 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
