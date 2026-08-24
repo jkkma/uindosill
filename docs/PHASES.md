@@ -3709,6 +3709,20 @@ first run remains the corroboration the register has been waiting for since 2026
 
 **1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
 
+### Decided 2026-08-24 — the model sees the English pane
+
+The first of the three register questions v1's changes created is taken, by the maintainer: an
+ask against a translated recording runs over the English translation, whole — windows, grammar
+ids, quote checks and validation all against the translated document. Recording it turned up a
+premise worth correcting: the plan's revision had said the two panes share segments one-for-one,
+and they do not — the translated document is the original cut into sentences, one English
+segment per sentence with its own guarded times — so an id minted against the English resolves
+only against the English, and a pinned artefact made against a translated ask pins the
+translated document. The register's new decision block carries the consequences; `AskRequest`'s
+own contract now states the rule where Stage 4's wiring will read it. Still open from the same
+list: whether evidence lines carry speaker labels, and where the transcript's language comes
+from.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

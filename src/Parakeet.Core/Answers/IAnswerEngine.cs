@@ -37,7 +37,13 @@ public sealed record AskRequest
 {
     public required string Question { get; init; }
 
-    /// <summary>The transcript the ids in the answer are meaningful against.</summary>
+    /// <summary>
+    /// The transcript the ids in the answer are meaningful against — the ask's entire world:
+    /// windows, grammar, quote checks and validation all run over this one document. On a
+    /// translated recording this is the translated document, whole (the maintainer's decision,
+    /// 2026-08-24: the model sees the English pane), whose sentence-cut segment array is its own
+    /// and not the original's — `docs/V2-ASK-THE-TRANSCRIPT.md` records what follows from that.
+    /// </summary>
     public required TranscriptDocument Transcript { get; init; }
 
     public AnswerMode Mode { get; init; } = AnswerMode.Retrieval;
