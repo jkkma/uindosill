@@ -443,6 +443,18 @@ public static class Attributions
         },
         new ComponentLicence
         {
+            Component = "llama.cpp (the llama-server child process behind the Ask panel)",
+            License = "MIT",
+            Uri = new Uri("https://github.com/ggml-org/llama.cpp"),
+            Notes =
+                "Copyright (c) 2023-2026 The ggml authors. Run as a separate process serving the " +
+                "language model the Ask panel questions, and killed when the panel lets it go. The " +
+                "release archives ship no licence file, so the MIT text is fetched from the source " +
+                "tree at the pinned tag and travels beside the binaries — docs/NATIVE-BINARIES.md " +
+                "holds the pin and the digests.",
+        },
+        new ComponentLicence
+        {
             Component = "Avalonia",
             License = "MIT",
             Uri = new Uri("https://github.com/AvaloniaUI/Avalonia"),

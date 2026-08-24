@@ -579,6 +579,22 @@ public class AttributionTests
     }
 
     [Fact]
+    public void TheAskEngineIsListedWithItsCopyrightAndTheTravellingText()
+    {
+        // llama.cpp's release archives ship no licence file, so the notice discipline is the
+        // vendoring script fetching the MIT text to travel beside the binaries — and this list
+        // is what the CLI and the About window render, so the component has to be in it.
+        var llama = Assert.Single(
+            Attributions.Components,
+            c => c.Component.Contains("llama.cpp", StringComparison.Ordinal));
+
+        Assert.Equal("MIT", llama.License);
+        Assert.Contains("The ggml authors", llama.Notes ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("travels beside the binaries", llama.Notes ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("github.com/ggml-org/llama.cpp", llama.Uri.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LanguageClaimsDoNotIncludeScriptsTheModelCannotHandle()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);

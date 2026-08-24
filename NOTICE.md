@@ -151,6 +151,7 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 |---|---|---|
 | parakeet.cpp (ggml port of NeMo Parakeet) | MIT | https://github.com/mudler/parakeet.cpp |
 | ggml | MIT | https://github.com/ggml-org/ggml |
+| llama.cpp (the `llama-server` child process behind the Ask panel; the vulkan drop ships in both installer channels) | MIT — Copyright (c) 2023-2026 The ggml authors. The release archives ship no licence file, so the MIT text is fetched from the source tree at the pinned tag and travels at `native/win-x64/llm/<backend>/LICENSE`; `docs/NATIVE-BINARIES.md` holds the pin and the digests | https://github.com/ggml-org/llama.cpp |
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia |
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |

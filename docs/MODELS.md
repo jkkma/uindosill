@@ -37,6 +37,19 @@ uindosill models verify   tdt-0.6b-v3-f16
 uindosill models remove   tdt-0.6b-v3-f16
 ```
 
+## The ask model is a file you supply, not a catalogue entry — deliberately, for now
+
+The Ask panel's language model (since 2026-08-24) is whatever `.gguf` file sits in this same
+models folder: the largest wins where several are present, the answer's model line names it, and
+nothing else is consulted. There is no catalogue entry, no download button and no
+recommendation, because `docs/V2-ASK-THE-TRANSCRIPT.md` decision 2 forbids recommending a model
+until its CSB384 measurements have been run — a recommendation is a claim, and the register's
+rule is that claims are measured. When those measurements exist, entries join this catalogue
+under the same discipline as everything above: exact byte size, SHA-256, licence and attribution,
+verified on download and again before an installer would carry one. Until then, a user-supplied
+file keeps the capability available without this application asserting anything about any model
+it has not measured.
+
 ## The catalogue is data
 
 `src/Parakeet.Core/Models/models.json` is an embedded resource, not code, so pinning a digest is a

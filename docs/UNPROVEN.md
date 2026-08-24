@@ -4170,6 +4170,22 @@ decision 5's copy form. What stands behind the claims:
 - Streaming was asserted at completion granularity — the fake completes in microseconds — so
   "the answer visibly streams" is a design intention the real model run has to show.
 
+### The shipped ask tier — packaged 2026-08-24, and three things no release has observed
+
+`package-windows.ps1` now vendors the vulkan `llama-server` drop into both channels, prunes what
+a channel does not promise, and refuses a package without `llama-server.exe` and the MIT text —
+all of which has run exactly nowhere: the last release (rc.3) predates it, so every size in that
+record — 485.4 MB default installer, 60.7 MB CLI zip — is a pre-ask-tier figure, and what the
+~94 MB unpacked drop does to the installer, the delta packages and the CLI zip (which inherits
+whatever is vendored) is the next release's first observation. Second: the channels ship the
+vulkan drop alone, on the reading that `GGML_BACKEND_DL` builds fall back to the bundled per-ISA
+CPU variants when Vulkan cannot initialise — structurally sound, since the vulkan zip is the cpu
+zip plus one DLL, and **run on no machine with a broken or absent Vulkan driver**. Third: the
+win-cuda channel's ask tier is the same vulkan drop, because the LLM's cudart-13.3 beside the
+ASR's cudart-12.8 is the maintainer's open decision; an NVIDIA card asks over Vulkan in that
+channel until it is taken, and nothing has measured what that costs against the CUDA path the
+desktop tier is meant to be.
+
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
 Four things the maintainer found by running the built application were fixed the same day: the
