@@ -101,6 +101,33 @@ them is designed rather than improvised, and so nobody builds towards diarisatio
 is another model — its own native, its own licence gate, its own place in decision 4's residency
 budget — and it is out of scope until v2 has shipped what it can already cite honestly.
 
+### Decided 2026-08-24 — on a translated transcript, the model sees the English
+
+**The maintainer's decision**, answering a question v1 created when the Ask tab gained its
+English translation pane: a translated recording shows two texts, and an ask has to be against
+one of them. It is the English, whole — the evidence windows are built over the translated
+document, the grammar's ids are positions in *its* segment array, the verbatim-quote check runs
+against *its* text, and the validator resolves against it. One document is the ask's entire
+world, which is the discipline the ids already carry: a citation is only meaningful against the
+one transcript it was answered from.
+
+What that rests on, read from the code rather than assumed: the translated document is **not**
+the original with its text swapped. `TranscriptTranslation` cuts the original's segments into
+sentences and returns one English segment per sentence, each keeping its own start and end — and
+it refuses a translator that moves one in time — so the two panes do not share a segment array,
+and an id minted against the English resolves only against the English. It still resolves to
+real times in the recording, which is all a citation needs to seek; and the consequence for
+every pinned artefact is the one the pin discipline already states: a question set or an export
+made against a translated ask pins the translated document, not the original.
+
+Two things the decision leaves as it found them. Retrieval over English windows will meet
+questions asked in the recording's own language, and whether BM25 survives that lexical gap is a
+measurement, not a design position — the thirty-question set is English against an English
+transcript, so the first numbers will not touch it, and the second-language set decision 6
+already calls for is where it gets measured. And R6 stands unchanged: the model reads English
+evidence and the answer still arrives in the transcript's language, from wherever the still-open
+language-source question ends up supplying it.
+
 ## Why this is harder than v1, and it is not the modelling
 
 **A transcript can be wrong loudly. A summary cannot.**
