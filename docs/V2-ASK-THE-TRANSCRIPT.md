@@ -1250,11 +1250,15 @@ what a machine can score (citations resolve, ranges forward, overlap with gold, 
 abstained, a planted needle cited), validates each label's quote against its own span so a bad
 label reports as a labelling error rather than a model failure, measures the grammar's decode cost
 per run, and prints a summary whose citation-precision column is deliberately blank for a person.
-`-PrintPin` computes the transcript pin block for the labelling session. **recall@10 is a stub that
-says so**: tier 0 belongs in `Parakeet.Core`, and a BM25 reimplemented in the script would measure
-the script's tokenizer rather than the product's. (Core has it as of 2026-08-23 — `Bm25Retriever` —
-and the stub stays a stub until the script can reach the product's index through a CLI verb, which
-is engine-stage work.) What it measures, with the same discipline about
+`-PrintPin` computes the transcript pin block for the labelling session. **recall@10 runs through
+the product's own index as of 2026-08-24**: tier 0 belongs in `Parakeet.Core`, and a BM25
+reimplemented in the script would measure the script's tokenizer rather than the product's — so
+`uindosill retrieve` exposes the panel's exact construction (the same `TranscriptWindowBuilder`,
+`SearchTokenizer` and `Bm25Retriever`, ranked windows wearing their citation ids, `--wide` for the
+120 s comparison variant) and the script scores its top-10 against the gold ranges. Global
+questions stay out of the figure — they are the router's path and a person's judgement — and
+needles stay out because their hit rate is the model's citation. The number itself still waits on
+the thirty labels. What it measures, with the same discipline about
 naming the backend beside every number:
 
 - recall@10 for retrieval on the thirty CSB384 questions (decision 3); planted-needle hit rate;

@@ -190,6 +190,11 @@ namespace Parakeet.Cli
                 return Task.FromResult(RttmCommand.Run(context, parsed));
             }
 
+            if (command == Commands.Retrieve)
+            {
+                return Task.FromResult(RetrieveCommand.Run(context, parsed));
+            }
+
             context.WriteError($"Command '{command.Name}' has no handler.");
             return Task.FromResult(ExitCodes.UsageError);
         }
