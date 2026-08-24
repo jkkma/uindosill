@@ -117,6 +117,7 @@ public partial class MainWindow : Window
         WireVoices();
         WireRecordingsDrawer();
         FollowTranscript();
+        WireAskChat();
 
         // The clock the Ask tab draws from, and it is here rather than in the view model on
         // purpose: a view model that starts a dispatcher timer needs a dispatcher to exist before
@@ -124,6 +125,68 @@ public partial class MainWindow : Window
         // exposes a Tick it does nothing in unless something moved, and this is what calls it.
         _transport = new DispatcherTimer(DispatcherPriority.Background) { Interval = TransportRefresh };
         _transport.Tick += (_, _) => (DataContext as MainWindowViewModel)?.Ask.Tick();
+    }
+
+    /// <summary>
+    /// The chat panel's three window-level jobs: Enter asks, the clipboard answers the Copy
+    /// button, and a new exchange scrolls into view.
+    /// </summary>
+    /// <remarks>
+    /// The clipboard is here because only a TopLevel has one — the view model builds the copied
+    /// text and borrows the writing through a delegate, which is also what a headless test
+    /// replaces to see what would have been copied. It is handed over on DataContextChanged
+    /// rather than in this constructor, because the DataContext arrives after construction.
+    /// </remarks>
+    private void WireAskChat()
+    {
+        if (this.FindControl<TextBox>("AskInput") is { } input)
+        {
+            input.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter || DataContext is not MainWindowViewModel viewModel)
+                {
+                    return;
+                }
+
+                if (viewModel.Ask.Chat.AskCommand.CanExecute(null))
+                {
+                    viewModel.Ask.Chat.AskCommand.Execute(null);
+                }
+
+                e.Handled = true;
+            };
+        }
+
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
+
+            viewModel.Ask.Chat.CopyToClipboard ??= new Func<string, Task>(text =>
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+                {
+                    return Task.CompletedTask;
+                }
+
+                var transfer = new DataTransfer();
+                transfer.Add(DataTransferItem.Create(DataFormat.Text, text));
+                return clipboard.SetDataAsync(transfer);
+            });
+
+            // A question lands at the bottom of a conversation that may already fill the pane.
+            // On the collection change the new row is not laid out yet, so the scroll is posted
+            // behind the layout pass, the same arrangement the transcript follow uses.
+            viewModel.Ask.Chat.Entries.CollectionChanged += (_, _) =>
+            {
+                if (this.FindControl<ScrollViewer>("AskChatScroll") is { } scroll)
+                {
+                    Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
+                }
+            };
+        };
     }
 
     /// <summary>

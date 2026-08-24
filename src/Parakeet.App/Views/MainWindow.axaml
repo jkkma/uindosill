@@ -1330,22 +1330,40 @@
             </DockPanel>
           </Grid>
 
-          <!-- ── The chat panel, drawn and not built ────────────────────────────────────────── -->
+          <!-- ── The chat panel ─────────────────────────────────────────────────────────────────
+               Live since 2026-08-24, on the seam built for it: questions go to AskChatViewModel,
+               which retrieves evidence windows, streams the model's answer, parses and validates
+               it, and hands this layout bullets whose citation chips carry times the application
+               resolved — the model's own output never becomes a number on this screen.
+
+               The cover is the same surface that said "work in progress" for two days, kept for
+               the states where the panel still cannot work — no engine in the build, no model
+               file, no transcript — because a covered control that does not explain itself reads
+               as broken. -->
           <Border Grid.Column="1" Classes="panel">
             <Panel>
-              <DockPanel Name="AskPanel" IsEnabled="False" Margin="15,14">
+              <DockPanel Name="AskPanel" IsEnabled="{Binding Chat.IsPanelEnabled}" Margin="15,14">
                 <TextBlock DockPanel.Dock="Top" Text="ASK THIS TRANSCRIPT" Classes="section" />
 
-                <!-- The input, which is where a question would go. -->
-                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,8,Auto" Margin="0,12,0,0">
-                  <TextBox Grid.Column="0" Name="AskInput"
-                           PlaceholderText="Ask about this recording…" />
-                  <Button Grid.Column="2" Name="AskSend" Content="Ask" />
-                </Grid>
+                <!-- The input, and the one line that explains what just happened to the models. -->
+                <StackPanel DockPanel.Dock="Bottom" Spacing="7" Margin="0,12,0,0">
+                  <TextBlock Classes="fine secondary" TextWrapping="Wrap"
+                             Text="{Binding Chat.ResidencyNotice}"
+                             IsVisible="{Binding Chat.ResidencyNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <Grid ColumnDefinitions="*,8,Auto">
+                    <TextBox Grid.Column="0" Name="AskInput"
+                             Text="{Binding Chat.QuestionText}"
+                             PlaceholderText="Ask about this recording…" />
+                    <Button Grid.Column="2" Name="AskSend" Content="Ask"
+                            Command="{Binding Chat.AskCommand}" />
+                  </Grid>
+                </StackPanel>
 
-                <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,11,0,0">
-                  <TextBlock Classes="fine secondary"
-                             Text="Answers would arrive as short bullets, each carrying the moment it came from — a timestamp you click to hear it, so every claim is one press from being checked." />
+                <!-- The suggestions, until the first question makes room for the conversation. -->
+                <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,11,0,0"
+                            IsVisible="{Binding !Chat.HasEntries}">
+                  <TextBlock Classes="fine secondary" TextWrapping="Wrap"
+                             Text="Answers arrive as short bullets, each carrying the moment it came from — a timestamp you click to hear it, so every claim is one press from being checked." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -1354,31 +1372,113 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="sys:String">
-                        <Border Classes="chip">
-                          <TextBlock Text="{Binding}" />
-                        </Border>
+                        <Button Classes="chip" Content="{Binding}"
+                                Command="{Binding $parent[ItemsControl].((vm:AskViewModel)DataContext).Chat.AskSuggestionCommand}"
+                                CommandParameter="{Binding}" />
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </StackPanel>
 
-                <!-- Where the conversation would be. Empty on purpose: a canned exchange here
-                     would be a screenshot of a feature nobody can use. -->
-                <Panel />
+                <!-- The conversation. -->
+                <ScrollViewer Name="AskChatScroll" Margin="0,11,0,0"
+                              HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl Name="AskEntries" ItemsSource="{Binding Chat.Entries}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ChatEntryViewModel">
+                        <StackPanel Spacing="7" Margin="0,0,0,16">
+
+                          <Border Classes="chip" HorizontalAlignment="Right" MaxWidth="260">
+                            <TextBlock Text="{Binding Question}" TextWrapping="Wrap" />
+                          </Border>
+
+                          <TextBlock Classes="fine secondary" Text="{Binding Status}"
+                                     IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <!-- The stream, raw and visibly provisional; the parse replaces it. -->
+                          <TextBlock Classes="fine secondary" TextWrapping="Wrap"
+                                     Text="{Binding StreamingText}"
+                                     IsVisible="{Binding StreamingText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <TextBlock TextWrapping="Wrap" Text="{Binding Failure}"
+                                     IsVisible="{Binding Failure, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <TextBlock TextWrapping="Wrap" Text="{Binding AbstainedText}"
+                                     IsVisible="{Binding Abstained}" />
+
+                          <ItemsControl ItemsSource="{Binding Bullets}" IsVisible="{Binding HasBullets}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:AnswerBulletViewModel">
+                                <StackPanel Spacing="3" Margin="0,0,0,9">
+                                  <TextBlock FontWeight="SemiBold" Text="{Binding Label}"
+                                             IsVisible="{Binding HasLabel}" />
+                                  <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
+                                  <TextBlock Classes="fine secondary" FontStyle="Italic" TextWrapping="Wrap"
+                                             Text="{Binding QuoteDisplay}" IsVisible="{Binding HasQuote}" />
+                                  <TextBlock Classes="fine secondary" Text="{Binding QuoteCaveat}"
+                                             IsVisible="{Binding QuoteCaveat, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                  <ItemsControl ItemsSource="{Binding Citations}">
+                                    <ItemsControl.ItemsPanel>
+                                      <ItemsPanelTemplate>
+                                        <WrapPanel ItemSpacing="5" LineSpacing="5" />
+                                      </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate x:DataType="vm:CitationChipViewModel">
+                                        <Button Classes="chip" Content="{Binding Display}"
+                                                Command="{Binding SeekCommand}"
+                                                IsEnabled="{Binding IsResolved}"
+                                                ToolTip.Tip="{Binding Detail}" />
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+
+                          <TextBlock Classes="fine secondary" TextWrapping="Wrap"
+                                     Text="{Binding ModelLine}"
+                                     IsVisible="{Binding ModelLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <Expander Header="Sources" IsVisible="{Binding HasSources}">
+                            <ItemsControl ItemsSource="{Binding Sources}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SourceRowViewModel">
+                                  <Button Classes="chip" Margin="0,0,0,4"
+                                          Command="{Binding SeekCommand}"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Left">
+                                    <StackPanel Spacing="2">
+                                      <TextBlock Classes="fine" Text="{Binding TimeRange}" />
+                                      <TextBlock Classes="fine secondary" TextWrapping="Wrap"
+                                                 Text="{Binding Snippet}" />
+                                    </StackPanel>
+                                  </Button>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </Expander>
+
+                          <Button Content="Copy answer" Command="{Binding CopyCommand}"
+                                  IsVisible="{Binding CanCopy}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
               </DockPanel>
 
-              <!-- The notice, over all of it. Not a grey wash — the panel's own ground at 82%, so
-                   what is underneath reads as designed-but-not-yet rather than switched off. -->
-              <Border Name="AskWorkInProgress" Classes="wip">
-                <StackPanel Spacing="11" MaxWidth="250" Margin="24"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                  <Border Classes="badge taro" HorizontalAlignment="Center">
-                    <TextBlock Text="{Binding WorkInProgressTitle}" />
-                  </Border>
-                  <TextBlock Text="{Binding WorkInProgressNotice}" TextWrapping="Wrap"
-                             FontSize="11.5" LineHeight="18.5" TextAlignment="Center"
-                             Foreground="{DynamicResource Taro700Brush}" />
-                </StackPanel>
+              <!-- The cover, only while the panel cannot work, saying which of its three
+                   prerequisites is missing. The panel's own ground at 82%, so what is underneath
+                   reads as waiting rather than switched off. -->
+              <Border Name="AskNotice" Classes="wip"
+                      IsVisible="{Binding Chat.PanelNotice, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="{Binding Chat.PanelNotice}" TextWrapping="Wrap"
+                           MaxWidth="250" Margin="24"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="11.5" LineHeight="18.5" TextAlignment="Center"
+                           Foreground="{DynamicResource Taro700Brush}" />
               </Border>
             </Panel>
           </Border>

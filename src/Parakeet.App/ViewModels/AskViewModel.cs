@@ -9,16 +9,16 @@ namespace Parakeet.App.ViewModels;
 
 /// <summary>
 /// The Ask tab: a recording you can play, its transcript beside it as cues you can click, and the
-/// chat panel that is not built.
+/// chat panel that asks it questions.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>What is here and what is not.</b> <c>docs/V2-ASK-THE-TRANSCRIPT.md</c> argues that playback
-/// should land before any language model does — "a transcript you can click to hear is useful
-/// before any model is involved" — and that is exactly the half this is. The transport and the
-/// cues are real and work on v1's own data: word and segment timings the pipeline already writes.
-/// The chat panel is drawn, disabled, and covered by a notice saying so, because there is no local
-/// model behind it and every decision about which one is still open in that document.
+/// <b>Two halves, built in the order the register asked for.</b> <c>docs/V2-ASK-THE-TRANSCRIPT.md</c>
+/// argued that playback should land before any language model does, and it did — the transport
+/// and the cues shipped with v1, on timings the pipeline already writes. The chat half is
+/// <see cref="Chat"/>, wired over the same player and the same queue; when nothing can stand
+/// behind it — no engine in the build, no model file, no transcript — it is covered by a notice
+/// that says which, because a covered control that does not explain itself reads as broken.
 /// </para>
 /// <para>
 /// <b>The window never writes a timestamp of its own.</b> Every time drawn here comes off a
@@ -82,7 +82,12 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string? _playbackNotice;
 
-    public AskViewModel(ObservableCollection<JobViewModel> recordings, IMediaPlayer player)
+    public AskViewModel(
+        ObservableCollection<JobViewModel> recordings,
+        IMediaPlayer player,
+        ModelSession? session = null,
+        IAnswerEngineProvider? answerEngines = null,
+        Func<bool>? transcriptionRunning = null)
     {
         ArgumentNullException.ThrowIfNull(recordings);
         ArgumentNullException.ThrowIfNull(player);
@@ -90,8 +95,27 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         Recordings = recordings;
         _player = player;
 
+        // The chat seeks through the same transport a clicked cue does, and for the same reason
+        // it plays rather than merely seeking: a citation chip is a request to hear the claim.
+        Chat = new AskChatViewModel(
+            answerEngines,
+            session,
+            transcriptionRunning,
+            seekAndPlay: time =>
+            {
+                if (CanPlay)
+                {
+                    _player.Seek(time);
+                    _player.Play();
+                    Redraw();
+                }
+            });
+
         Recordings.CollectionChanged += OnRecordingsChanged;
     }
+
+    /// <summary>The chat half of the tab: the questions, the streamed answers, the citations.</summary>
+    public AskChatViewModel Chat { get; }
 
     /// <summary>
     /// The queue, as the Transcribe tab holds it. Everything in it, not only what has been
@@ -409,14 +433,10 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public string PlayPauseLabel => IsPlaying ? "Pause" : "Play";
 
     /// <summary>
-    /// The four questions the panel would open with. Drawn and disabled, because a suggestion is a
-    /// promise that pressing it does something.
+    /// The four questions the panel opens with — an entry point for people who do not yet know
+    /// what to ask, which is the reference product's own shape. Each is a real command's
+    /// parameter: pressing one asks it.
     /// </summary>
-    /// <remarks>
-    /// Kept here rather than in the view because they are the feature's own content and belong
-    /// beside the notice that explains why they do not work yet — and because when the panel is
-    /// built these become a real command's parameters rather than four literals in a layout.
-    /// </remarks>
     public IReadOnlyList<string> Suggestions { get; } =
     [
         "What are the main topics?",
@@ -425,16 +445,6 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         "Find where they disagree",
     ];
 
-    public string WorkInProgressTitle => "Work in progress";
-
-    /// <summary>
-    /// The notice over the chat panel. It says which half of this tab is real, because the other
-    /// half is drawn beneath it and a covered control that does not explain itself reads as broken
-    /// rather than as unbuilt.
-    /// </summary>
-    public string WorkInProgressNotice =>
-        "Asking questions is not built yet — there is no language model in this application.\n\n"
-        + "The recording and its transcript beside it are real: play it, and click any line to jump there.";
 
     /// <summary>
     /// Plays, or pauses. From the end of a recording it starts again, which is what a play button
@@ -648,6 +658,10 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         // looking for a name across a session's worth of files is doing exactly that, and clearing
         // the box for them would mean typing it again for every file.
         Research();
+
+        // The chat does not survive it: its citations were ids into the transcript that is no
+        // longer open, and a chip that seeks the wrong recording is worse than an empty panel.
+        Chat.SetRecording(newValue);
     }
 
     /// <summary>
@@ -772,6 +786,11 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         SetActiveLine(null);
         UpdateActiveLine(_player.Position);
         Research();
+
+        // And the chat re-reads which document it asks over: a transcript arriving on the open
+        // recording is what turns its panel on, and a translation arriving switches its world to
+        // the English (docs/V2-ASK-THE-TRANSCRIPT.md, decided 2026-08-24).
+        Chat.RefreshDocument();
     }
 
     /// <summary>Re-reads everything the transport draws from the player.</summary>

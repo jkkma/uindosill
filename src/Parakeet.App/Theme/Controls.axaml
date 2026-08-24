@@ -519,9 +519,10 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Taro200Brush}" />
   </Style>
 
-  <!-- The suggestion chips: the third of the four shapes that keeps a corner, and it keeps it for
-       the same reason the switcher pills do — a pill reads as tappable. Every one of them is
-       disabled today, because there is nothing behind them to ask. -->
+  <!-- The chips: the third of the four shapes that keeps a corner, and it keeps it for the same
+       reason the switcher pills do — a pill reads as tappable. Since 2026-08-24 most of them are:
+       the suggestion chips ask their question, and an answer's citation chips seek the recording,
+       which is why the Button variant exists beside the Border one. -->
   <Style Selector="Border.chip">
     <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
     <Setter Property="CornerRadius" Value="999" />
@@ -531,6 +532,20 @@
     <Setter Property="FontSize" Value="11.5" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+  <Style Selector="Button.chip">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="11,5" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+  <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Taro200Brush}" />
   </Style>
 
   <!-- The transport's play button, which is one of the things in this design that is genuinely a
