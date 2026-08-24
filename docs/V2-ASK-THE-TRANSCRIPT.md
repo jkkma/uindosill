@@ -848,7 +848,11 @@ be enough: no study measures BM25 against dense retrieval on transcript question
 segment granularity; BEIR's "BM25 is a robust baseline" is the nearest evidence, and a 2026 study
 finds read-everything competitive at the smallest corpus scales, which a 40k-token transcript is
 (all from the research's reading). Cost: no bytes, no VRAM, and it is the one part of v2 that is
-testable with no language model in the room.
+testable with no language model in the room. **Built 2026-08-23** — `TranscriptWindowBuilder`,
+`SearchTokenizer` and `Bm25Retriever` behind `IRetriever` in `Parakeet.Core`, windows carrying
+their segment ids so a hit resolves as a citation by construction, unstemmed as this paragraph
+asks; `docs/PHASES.md` records what landed with it. The recall number still waits on the thirty
+labelled questions.
 
 **Tier 1 — dense retrieval, only if paraphrase recall demands it.**
 `Qwen/Qwen3-Embedding-0.6B-GGUF`, `Q8_0`, **639,150,592 bytes**, apache-2.0, the vendor's own GGUF
@@ -1137,7 +1141,9 @@ label reports as a labelling error rather than a model failure, measures the gra
 per run, and prints a summary whose citation-precision column is deliberately blank for a person.
 `-PrintPin` computes the transcript pin block for the labelling session. **recall@10 is a stub that
 says so**: tier 0 belongs in `Parakeet.Core`, and a BM25 reimplemented in the script would measure
-the script's tokenizer rather than the product's. What it measures, with the same discipline about
+the script's tokenizer rather than the product's. (Core has it as of 2026-08-23 — `Bm25Retriever` —
+and the stub stays a stub until the script can reach the product's index through a CLI verb, which
+is engine-stage work.) What it measures, with the same discipline about
 naming the backend beside every number:
 
 - recall@10 for retrieval on the thirty CSB384 questions (decision 3); planted-needle hit rate;

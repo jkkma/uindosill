@@ -677,6 +677,42 @@ public class AskTabTests
     }
 
     [Fact]
+    public void SteppingSeeksRelativelyAndClampsAtBothEnds()
+    {
+        var (ask, jobs, player) = Create();
+        jobs.Add(Transcribed());
+
+        ask.SeekBy(5);
+        Assert.Equal(TimeSpan.FromSeconds(5), player.Position);
+
+        ask.SeekBy(30);
+        Assert.Equal(TimeSpan.FromSeconds(35), player.Position);
+
+        ask.SeekBy(-5);
+        Assert.Equal(TimeSpan.FromSeconds(30), player.Position);
+
+        // A step past either end lands on the end, not off it.
+        ask.SeekBy(-3600);
+        Assert.Equal(TimeSpan.Zero, player.Position);
+
+        ask.SeekBy(3600);
+        Assert.Equal(TimeSpan.FromMinutes(2), player.Position);
+
+        // And a step does not start playback: a scrub adjusts where you are, not whether you
+        // are listening.
+        Assert.False(ask.IsPlaying);
+    }
+
+    [Fact]
+    public void SteppingWithNothingOpenDoesNothing()
+    {
+        var (ask, _, player) = Create();
+
+        ask.SeekBy(5);
+        Assert.Equal(TimeSpan.Zero, player.Position);
+    }
+
+    [Fact]
     public void TheBarsMaximumIsNeverZero()
     {
         // A ProgressBar whose maximum equals its minimum draws itself full, so an unopened
@@ -1810,6 +1846,54 @@ public class AskTabWindowTests
         Assert.True(strip.Bounds.Width > 0);
         Assert.NotEqual(before, puck.Margin.Left);
         Assert.Equal((strip.Bounds.Width - puck.Width) / 2, puck.Margin.Left, 1);
+    }
+
+    [AvaloniaFact]
+    public void ArrowKeysOnTheBarSeekTheRecording()
+    {
+        // The cost recorded when the strip was chosen over a Slider was that arrow-key seeking
+        // did not exist. Driven through the keyboard rather than by calling SeekBy, because the
+        // handler that turns a key into a step — and the Focusable that lets a key arrive at
+        // all — is the thing under test.
+        var (window, _, player) = Open();
+
+        var strip = window.FindControl<Border>("SeekStrip")!;
+        strip.Focus();
+
+        window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        Assert.Equal(TimeSpan.FromSeconds(5), player.Position);
+
+        window.KeyPress(Key.Right, RawInputModifiers.Shift, PhysicalKey.ArrowRight, null);
+        Assert.Equal(TimeSpan.FromSeconds(35), player.Position);
+
+        window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.ArrowLeft, null);
+        Assert.Equal(TimeSpan.FromSeconds(30), player.Position);
+
+        window.KeyPress(Key.End, RawInputModifiers.None, PhysicalKey.End, null);
+        Assert.Equal(TimeSpan.FromMinutes(2), player.Position);
+
+        window.KeyPress(Key.Home, RawInputModifiers.None, PhysicalKey.Home, null);
+        Assert.Equal(TimeSpan.Zero, player.Position);
+    }
+
+    [AvaloniaFact]
+    public void APressOnTheBarGivesItTheKeyboard()
+    {
+        // The gesture people will actually make: click the bar, then arrow. Without the press
+        // handing the strip focus, the click seeks and the arrows go somewhere else entirely.
+        var (window, _, player) = Open();
+
+        var strip = window.FindControl<Border>("SeekStrip")!;
+        var mid = strip.TranslatePoint(
+            new Point(strip.Bounds.Width / 2, strip.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(mid, MouseButton.Left);
+        window.MouseUp(mid, MouseButton.Left);
+
+        Assert.True(strip.IsFocused, "the press did not give the bar the keyboard");
+
+        var before = player.Position;
+        window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        Assert.Equal(before + TimeSpan.FromSeconds(5), player.Position);
     }
 
     [AvaloniaFact]

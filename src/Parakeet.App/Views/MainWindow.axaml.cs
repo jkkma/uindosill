@@ -224,11 +224,49 @@ public partial class MainWindow : Window
         _seekStrip = strip;
         _seekPuck = this.FindControl<Border>("SeekPuck");
 
+        // A Border takes no focus by default, so before 2026-08-23 no key could ever reach the
+        // bar and arrow-key seeking simply did not exist — the cost recorded when the strip was
+        // chosen over a Slider. Focusable plus a Focus() on press gives the keys somewhere to
+        // land, which is the half of a Slider's behaviour that choice had dropped.
+        strip.Focusable = true;
+
         strip.PointerPressed += (_, e) =>
         {
             _seeking = true;
+            strip.Focus();
             e.Pointer.Capture(strip);
             SeekTo(strip, e.GetPosition(strip).X);
+        };
+
+        strip.KeyDown += (_, e) =>
+        {
+            if (DataContext is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
+
+            // Five seconds an arrow, thirty with Shift: a phrase and a paragraph. Home and End
+            // are the two places a fraction already names.
+            var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            switch (e.Key)
+            {
+                case Key.Left:
+                    viewModel.Ask.SeekBy(shift ? -30 : -5);
+                    break;
+                case Key.Right:
+                    viewModel.Ask.SeekBy(shift ? 30 : 5);
+                    break;
+                case Key.Home:
+                    viewModel.Ask.SeekToFraction(0);
+                    break;
+                case Key.End:
+                    viewModel.Ask.SeekToFraction(1);
+                    break;
+                default:
+                    return;
+            }
+
+            e.Handled = true;
         };
 
         strip.PointerMoved += (_, e) =>

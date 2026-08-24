@@ -499,6 +499,32 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Steps the playhead by a signed number of seconds — what an arrow key on the seek bar
+    /// means. Clamped to the recording at both ends, and it does not change whether the
+    /// recording is playing: a scrub adjusts where you are, not whether you are listening.
+    /// </summary>
+    public void SeekBy(double seconds)
+    {
+        if (!CanPlay || double.IsNaN(seconds))
+        {
+            return;
+        }
+
+        var target = _player.Position + TimeSpan.FromSeconds(seconds);
+        if (target < TimeSpan.Zero)
+        {
+            target = TimeSpan.Zero;
+        }
+        else if (target > _player.Duration)
+        {
+            target = _player.Duration;
+        }
+
+        _player.Seek(target);
+        Redraw();
+    }
+
+    /// <summary>
     /// Reads the player's clock and redraws whatever moved. Called by the window on a timer while
     /// this tab is showing; a call that finds nothing changed does no work and raises nothing.
     /// </summary>
