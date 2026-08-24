@@ -1,8 +1,12 @@
 # v2 — asking questions about a transcript
 
-The asking is not built. This is the decision register: what v2 is for, the one property that makes
-it harder than v1, and the questions that have to be answered before any code is written. Where a
-question has evidence behind it the evidence is here; where it does not, it says so.
+This is the decision register: what v2 is for, the one property that makes it harder than v1,
+and the questions that had to be answered before code was written. Where a question has evidence
+behind it the evidence is here; where it does not, it says so. It opened 2026-08-15 with "the
+asking is not built"; as of 2026-08-24 the asking is built through to the chat panel —
+`docs/PHASES.md` holds the build record, `docs/UNPROVEN.md` what has and has not run — and this
+register remains what it was: the decisions, with their evidence, kept current where a decision
+moved and left as the record where it did not.
 
 ## What it is
 
@@ -1086,7 +1090,13 @@ the wait in each direction: opening the chat pays the language model's load, and
 pays the ASR model's, and the second is the cheap one. **The reverse direction is not yet decided**
 — starting a transcription while a chat is open — and the reading that keeps the rule simple is the
 symmetric one: the language model's child is killed when transcription starts and the chat reopens
-afterwards, with a saved slot making that reopen cheap; a recommendation, not a decision. What the
+afterwards, with a saved slot making that reopen cheap; a recommendation, not a decision. **As of
+2026-08-24 that recommendation is the chat panel's implemented behaviour** — a transcription
+starting mid-chat kills the child, the panel says the next question reloads it, and no slot is
+saved yet — built because shipping the panel required *something* to happen and both-resident is
+the one arrangement this decision rules out. Best-effort during the handoff instant
+(`docs/PHASES.md` records the fire-and-forget), and it stands as the working reading until the
+maintainer takes the decision properly. What the
 counters still decide is the residency that survives — the language model beside decision 3's
 embedder and reranker, all `llama-server` children — and the desktop's idle adapter figure, which
 is now the largest unmeasured term against the language model alone. The language model stays

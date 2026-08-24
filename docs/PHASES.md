@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1248 tests, no weights, no display, no network — **1243 passed and 5 skipped**, and
+**Status:** met. 1261 tests, no weights, no display, no network — **1256 passed and 5 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2758,9 +2758,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** `CLAUDE.md`'s second
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1248 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1261 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2844,7 +2844,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2888,7 +2888,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2945,7 +2945,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3035,7 +3035,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** Two of the four are
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3075,7 +3075,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3092,7 +3092,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3140,7 +3140,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** The C# suite does
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3231,7 +3231,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** Twenty-two new, and
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3261,7 +3261,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** The
+page instead. **1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3296,7 +3296,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1248 tests, 1243 passed and 5 skipped, the count unchanged**: the file-writing
+assertion. **1261 tests, 1256 passed and 5 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3353,7 +3353,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3480,7 +3480,7 @@ design; an interactive installer with a directory picker would mean a different 
 different update story. What it gets instead is the icon and the splash, so the one window a user
 sees during an install is branded rather than bare.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** Six of the new ones
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** Six of the new ones
 are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
 that they are single-file entries the catalogue actually has, that the sum still fits under the
 asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
@@ -3571,7 +3571,7 @@ publish is a few dozen files. They size the executable instead: about 98 MB with
 against a couple of megabytes without, which is the thing that actually differs. Trimming and
 NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.** No test changed: the
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.** No test changed: the
 suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
 changes is the shape of a deployment rather than the behaviour of any code.
 
@@ -3655,7 +3655,7 @@ can actually verify, and keeps one `[?]` bullet so a renderer's uncited state ca
 unbuilt. The suite drives the whole seam end to end with no model: fake stream → the parser →
 the validator → every citation resolves against the transcript it was asked about.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped**, up from 1144;
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped**, up from 1144;
 `check-test-counts.py` agrees with every document that quotes a count.
 
 ### Built 2026-08-23, later — the second native stack is vendored and the engine runs on it
@@ -3707,7 +3707,7 @@ smuggled into prose when the first-token abstain window is missed, is in `docs/U
 pinned and unvendored, its `sm_120` reading is a scan of the b10448 build, and the desktop's
 first run remains the corroboration the register has been waiting for since 2026-08-16.
 
-**1248 tests, no weights, no display, no network — 1243 passed and 5 skipped.**
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### Decided 2026-08-24 — the model sees the English pane
 
@@ -3743,6 +3743,52 @@ recorded would measure an invention. The hint survives translation (the English 
 built with a record `with` expression), so the one document a translated ask runs over still
 carries it. No code changed hands: the prompt builder already emitted the language line only
 when given one, and the decision is what makes that the design rather than the accident.
+
+### Built 2026-08-24 — the chat panel goes live, and the covered controls finally answer
+
+Stage 4 of the maintainer's revised plan: the wiring, exactly as the plan called it, because the
+tab, the player and the queue existed and every decision the panel waited on had been taken the
+same day. The panel that spent two days drawn, disabled and covered now asks.
+
+**The shape.** A question goes to `AskChatViewModel`, which retrieves evidence windows over the
+ask's one document — the English pane on a translated recording, the transcript as spoken
+otherwise — hands them to whatever stands behind `IAnswerEngineProvider`, streams the model's
+raw text into view as visibly provisional, and then replaces it with what the parse and the
+validator made of it: bullets whose citation chips carry times the application resolved from the
+cited segments. A chip seeks and plays through the same transport a clicked cue uses; an
+unresolved citation renders as `[?]` and seeks nothing; a verbatim quote the check could not
+find in the transcript is shown with a caveat rather than trusted or hidden. The abstention is
+one sentence. Under every answer sits the line that says which model generated it and that it is
+not transcribed speech, and a Sources expander holds what the model was shown, in rank order.
+"Copy answer" renders decision 5's form: the marker line first, plain timestamps — never
+clickable references — quotes only where verified, and both models' provenance with the date.
+
+**The model comes from a file, not a catalogue entry.** Decision 2 keeps the model question open
+until the CSB384 measurements run, so nothing is recommended and nothing downloads on this
+application's advice — but a person with a GGUF of their own drops it into the models folder
+(the About window names it) and the panel comes alive; where several are present the largest is
+served and the model line names it. When the panel cannot work — no engine in the build, no
+model file, no transcript — the same cover that said "work in progress" for two days says which
+prerequisite is missing instead.
+
+**Residency is enforced, in both directions.** R9's decided half: the first question unloads the
+transcription model through the same `ModelSession` the other tabs share, with a line saying so.
+The reverse — a transcription starting mid-chat — was left a recommendation by the plan, and it
+is now the implemented behaviour: the language model's child is killed, fire-and-forget from the
+`IsRunning` wiring because the handler cannot await, and the chat says the next question reloads
+it. Best-effort during the handoff instant, recorded as such rather than promised as more, and
+open to reversal if the maintainer reads the symmetric rule differently.
+
+**What is proven and what is not.** Thirteen new view-model and window tests drive the whole
+seam against `FakeAnswerEngine` and the fake player — streaming to bullets, chips seeking, the
+English-pane rule observable from the quote's language, R9 in both directions, the abstain path,
+copy's marker-first form, the three cover states, Enter and the suggestion chips — and the real
+engine behind the same seam ran under its gated integration test. What has still happened on no
+machine is the exit criterion itself: a human asking three questions of a real transcript on
+Windows and following a citation into the audio. `docs/UNPROVEN.md` says so where the tab's
+other unlooked-at work is recorded.
+
+**1261 tests, no weights, no display, no network — 1256 passed and 5 skipped.**
 
 ### The dictation seam
 

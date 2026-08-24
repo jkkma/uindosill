@@ -4141,6 +4141,35 @@ new arrangement — the drawer floating over the words, the even split at any re
 has been seen on a screen either; what holds it is the same headless suite, with the geometry
 assertions rewritten to the new rows.
 
+## The chat panel — built 2026-08-24, measured headlessly, a human has asked it nothing
+
+The Ask tab's covered third went live: retrieval over the open recording's document, a streamed
+answer, parsed bullets with citation chips that seek, the abstain sentence, the provenance line,
+decision 5's copy form. What stands behind the claims:
+
+- **Thirteen view-model and window tests drive the seam against the fakes** — the canned answer
+  engine and the fake player — and they are the whole of what "the panel works" means today:
+  streaming replaced by bullets, a resolved chip seeking and playing, the quote arriving in
+  English on a translated recording, R9 unloading the transcription model on the first question
+  and the language model on a transcription starting, empty retrieval abstaining, the cover
+  naming its missing prerequisite, Enter asking, a suggestion chip asking its question, a dead
+  engine dropped so the next question starts fresh, and copy leading with the marker line.
+- **The real engine behind the same seam ran under its gated integration test** (cpu and vulkan,
+  the 0.6B, the section above) — but never through this panel. No question has gone from this
+  input box through a real `llama-server` on any machine.
+- **The plan's exit criterion is therefore open**: a human asks three questions of a real
+  transcript on Windows and follows a citation into the audio. The path for that run: put a
+  GGUF in the models folder (the About window names it), open the Ask tab, ask. Nothing about
+  it has been observed, including what a 9B's load and prefill waits feel like against the
+  panel's status line, and whether the streamed raw text reads as provisional or as an answer.
+- **The window's real clipboard is unexercised**: the headless tests replace the copy delegate,
+  so `Clipboard.SetDataAsync` on a real desktop has never run. The residency handoff when a
+  transcription starts mid-chat is fire-and-forget and best-effort by design; whether the kill
+  always lands before the ASR load peaks is unmeasured, and on a 16 GB card with a 9 GB model
+  resident the overlap instant is exactly the arithmetic decision 4 warns about.
+- Streaming was asserted at completion granularity — the fake completes in microseconds — so
+  "the answer visibly streams" is a design intention the real model run has to show.
+
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 
 Four things the maintainer found by running the built application were fixed the same day: the

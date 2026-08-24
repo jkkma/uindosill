@@ -1154,15 +1154,17 @@ public class AskTabWindowTests
     }
 
     [AvaloniaFact]
-    public void TheChatPanelIsDrawnDisabledUnderANoticeSayingItIsNotBuilt()
+    public void TheChatPanelIsCoveredWithAReasonUntilEverythingItNeedsExists()
     {
-        // This window's standing rule is that it ships no control wired to nothing. The panel is
-        // the deliberate exception, and these three assertions are what make it one rather than a
-        // breach: nothing in it can be operated, the notice is over it, and the notice says so.
-        var (window, _, _) = Open();
+        // This window's standing rule is that it ships no control wired to nothing. The panel
+        // went live on 2026-08-24, and the same rule now takes this form: when nothing can stand
+        // behind it — here, the real provider with a test store that holds no model file — the
+        // panel is disabled under a cover that says which prerequisite is missing, in the view
+        // model's own words rather than a stale "work in progress".
+        var (window, viewModel, _) = Open();
 
         var panel = window.FindControl<DockPanel>("AskPanel");
-        var notice = window.FindControl<Border>("AskWorkInProgress");
+        var notice = window.FindControl<Border>("AskNotice");
         var input = window.FindControl<TextBox>("AskInput");
         var send = window.FindControl<Button>("AskSend");
 
@@ -1176,12 +1178,13 @@ public class AskTabWindowTests
         Assert.False(send!.IsEffectivelyEnabled);
         Assert.True(notice!.IsVisible);
 
+        var reason = viewModel.Ask.Chat.PanelNotice;
+        Assert.False(string.IsNullOrWhiteSpace(reason));
+
         var said = notice.GetVisualDescendants().OfType<TextBlock>()
             .Select(t => t.Text)
             .ToList();
-
-        Assert.Contains(said, t => t == "Work in progress");
-        Assert.Contains(said, t => t is not null && t.Contains("is not built", StringComparison.Ordinal));
+        Assert.Contains(said, t => t == reason);
     }
 
     [AvaloniaFact]

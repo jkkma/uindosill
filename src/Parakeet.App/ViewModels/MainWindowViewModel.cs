@@ -25,7 +25,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Func<IReadOnlyList<ComputeBackend>>? backendsOnDisk = null,
         IMediaPlayer? player = null,
         Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
-        string? downloadRoot = null)
+        string? downloadRoot = null,
+        IAnswerEngineProvider? answerEngines = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
 
@@ -64,8 +65,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // The queue is handed over rather than copied: the Ask tab plays and reads the same rows
         // the Transcribe tab is filling, so a transcript that finishes while this tab is open
         // fills in where it stands. Two collections would need reconciling, and getting that
-        // wrong shows a transcript beside the wrong recording.
-        Ask = new AskViewModel(Transcribe.Jobs, player ?? MediaPlayers.ForThisBuild());
+        // wrong shows a transcript beside the wrong recording. The session goes with it for R9 —
+        // the chat's first question unloads the transcription model through it — and the
+        // IsRunning probe is what keeps the two model loads from ever overlapping.
+        Ask = new AskViewModel(
+            Transcribe.Jobs,
+            player ?? MediaPlayers.ForThisBuild(),
+            Session,
+            answerEngines ?? new LlamaAnswerEngineProvider(modelStore),
+            () => Transcribe.IsRunning);
 
         // The output folder outlives the run — chosen once, restored at every launch — but only
         // while the directory is really there: the folder people choose is often a removable
@@ -105,6 +113,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (e.PropertyName == nameof(TranscribeViewModel.IsRunning))
             {
                 Models.IsTranscribing = Transcribe.IsRunning;
+
+                // The symmetric half of the residency rule: a transcription starting mid-chat
+                // takes the language model's child down. Fire-and-forget because this handler
+                // cannot await and the kill is fast; the chat says what happened, and best-effort
+                // is recorded as such in docs/PHASES.md rather than promised as more.
+                if (Transcribe.IsRunning)
+                {
+                    _ = Ask.Chat.OnTranscriptionStartedAsync();
+                }
             }
         };
 
@@ -179,8 +196,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ModelsViewModel Models { get; }
 
     /// <summary>
-    /// The v2 tab: a recording with a transport, its transcript as cues that seek it, and a chat
-    /// panel that is drawn, disabled and covered by a notice because nothing is behind it yet.
+    /// The v2 tab: a recording with a transport, its transcript as cues that seek it, and the
+    /// chat panel that asks it questions through a local language model.
     /// </summary>
     public AskViewModel Ask { get; }
 
@@ -221,6 +238,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 await Task.Delay(50).ConfigureAwait(true);
             }
         }
+
+        // The language model's child first: it is a process, the kill is fast, and the job object
+        // would catch an abrupt death anyway — this is the orderly version of the same end.
+        await Ask.Chat.ReleaseEngineAsync().ConfigureAwait(true);
 
         // Before the session, and it is not arbitrary: the audio device is a COM object activated
         // on this thread, and it has to be released while the process still has one. It is also
