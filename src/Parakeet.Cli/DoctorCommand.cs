@@ -122,6 +122,26 @@ internal static class DoctorCommand
         }
 
         context.WriteLine();
+        context.WriteLine("Ask (the v2 language-model tier; llama-server runs as a child process)");
+
+        // Presence only, deliberately: whether a drop *works* on this machine is only ever shown
+        // by running a model through it, and doctor's own note below says the same about the ASR
+        // backends. What this answers is the question a fallback cannot be allowed to blur —
+        // which drop would actually be taken.
+        foreach (var backend in Engine.LlamaServer.LlamaServerLocator.ProbeOrder)
+        {
+            var install = Engine.LlamaServer.LlamaServerLocator.TryFind(backend);
+            context.WriteLine(install is null
+                ? $"  {backend.ToString().ToLowerInvariant(),-8} not vendored"
+                : $"  {backend.ToString().ToLowerInvariant(),-8} vendored — {install.Directory}");
+        }
+
+        var taken = Engine.LlamaServer.LlamaServerLocator.TryFind();
+        context.WriteLine(taken is null
+            ? "  nothing vendored: scripts/vendor-llm-natives.ps1 fetches the pinned drops (docs/NATIVE-BINARIES.md)"
+            : $"  would run: {taken.Backend.ToString().ToLowerInvariant()}");
+
+        context.WriteLine();
         if (!anyWorking)
         {
             context.WriteLine(

@@ -172,7 +172,7 @@ public sealed class PythonSidecar : IAsyncDisposable
         // In the operating system's hands as well as this class's: a host that dies without
         // reaching DisposeAsync — killed from Task Manager, crashed, stopped in a debugger — takes
         // the child with it instead of leaving a gigabyte of weights resident behind a closed pipe.
-        InKillOnCloseJob = KillOnCloseJob.TryAssign(_process);
+        InKillOnCloseJob = Core.Hosting.KillOnCloseJob.TryAssign(_process);
 
         _reader = Task.Run(ReadLoopAsync, CancellationToken.None);
         _errorReader = Task.Run(ReadErrorLoopAsync, CancellationToken.None);

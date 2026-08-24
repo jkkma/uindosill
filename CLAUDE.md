@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1224 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1248 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,8 +36,8 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Four of those 1224 tests skip themselves.** One is the Media Foundation extension list, which is
-platform-specific. The other three are asked for by name, because a count that depends on what is
+**Five of those 1248 tests skip themselves.** One is the Media Foundation extension list, which is
+platform-specific. The other four are asked for by name, because a count that depends on what is
 installed cannot be written into a document CI checks:
 
 ```bash
@@ -60,6 +60,17 @@ UINDOSILL_SILERO_VAD=<path to silero_vad.onnx> dotnet test Uindosill.slnx -c Rel
 over a real file with the model installed beside them (it is the default detector then, and the
 stderr line names it): the two tests say the graph loads and scores silence low at three sample
 rates, and nothing else in the suite runs the model.
+
+The fifth is the v2 answer engine's, in `Parakeet.Engine.LlamaServer.Tests`, which needs the
+vendored `llama-server` drop and a small GGUF, and skips unless both are named:
+
+```bash
+UINDOSILL_LLM_SERVER_ROOT=<a native/win-x64/llm directory> UINDOSILL_LLM_TEST_MODEL=<path to a small .gguf> dotnet test Uindosill.slnx -c Release
+```
+
+**Run it after any change to `src/Parakeet.Engine.LlamaServer/`** — it drives a real child server
+end to end (load, health, a grammar-constrained ask, parse, validate) on the CPU backend, and
+nothing else in the suite starts the process.
 
 **The seven checkpoint tests that used to sit beside it went to `attic/` on 2026-08-21** with the
 C# translator they exercised. Nothing in the suite now reads real translation weights, and nothing
@@ -100,7 +111,7 @@ gigabytes.
 writes the publish, the packages and the release feed under it, and one channel alone is over
 800 MB. Nothing there is an input to anything — delete it whenever.
 
-`scripts/lab.ps1` is one entry point for the sixteen scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the seventeen scripts; run it bare to list them.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
 machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Parakeet.Engine.LlamaServer</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    One project owns one engine's interop, as Parakeet.Engine.ParakeetCpp owns parakeet.cpp's and
+    Parakeet.Engine.Python owns the sidecar. What this one owns is llama.cpp's `llama-server` as a
+    bundled child process — the v2 language-model tier, decided in docs/V2-ASK-THE-TRANSCRIPT.md
+    decision 1: the app starts llama-server.exe from native/win-x64/llm/<backend>/ on a loopback
+    port with an api-key, talks HTTP to it, and kills it on exit. No struct layout crosses the
+    process boundary, which was the point of choosing the child over a binding — and why this
+    project has no native interop beyond the kill-on-close job it shares with the sidecar through
+    Parakeet.Core.
+
+    Parakeet.Core declares IAnswerEngine and knows nothing about processes, ports or SSE; this
+    project implements it and nothing else of Core's. No package references: the HTTP client and
+    the JSON reader are the BCL's.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../Parakeet.Core/Parakeet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Parakeet.Engine.LlamaServer.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -3,8 +3,8 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Sixteen scripts with sixteen names and sixteen flag sets is fifteen names too many to remember
-    when you are switching between machines. This dispatches to them and nothing else: every task is
+    Seventeen scripts with seventeen names and seventeen flag sets is sixteen names too many to
+    remember when you are switching between machines. This dispatches to them and nothing else: every task is
     still a script you can run directly, and this changes none of their behaviour.
 
     It is a dispatcher rather than a merge because the scripts it calls produced every number in
@@ -102,7 +102,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'vendor-mpv', 'vendor-tools', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement', 'bundle')]
+    [ValidateSet('vendor', 'vendor-llm', 'vendor-mpv', 'vendor-tools', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement', 'bundle')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -254,6 +254,7 @@ Set-StrictMode -Version Latest
 
 $tasks = [ordered]@{
     'vendor'        = 'vendor-natives.ps1'
+    'vendor-llm'    = 'vendor-llm-natives.ps1'
     'vendor-mpv'    = 'vendor-mpv.ps1'
     'vendor-tools'  = 'vendor-tools.ps1'
     'measure'       = 'measure-transcribe.ps1'
