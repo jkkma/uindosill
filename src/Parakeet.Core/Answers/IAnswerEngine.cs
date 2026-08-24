@@ -56,7 +56,12 @@ public sealed record AskRequest
     /// </summary>
     public IReadOnlyList<TranscriptWindow> Evidence { get; init; } = [];
 
-    /// <summary>BCP-47 tag the answer should be written in, when known.</summary>
+    /// <summary>
+    /// BCP-47 tag the answer should be written in, when known. Filled from the transcript's
+    /// language hint and from nowhere else — the maintainer's decision, 2026-08-24:
+    /// <c>TranscriptDocument.Language</c> is the request hint or null, nothing detects one, and
+    /// null here means the prompt makes no claim about the answer's language.
+    /// </summary>
     public string? Language { get; init; }
 }
 

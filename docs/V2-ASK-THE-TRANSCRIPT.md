@@ -142,6 +142,31 @@ the reader's own ear, rather than becoming the model's.
 
 Of the three questions v1 created, one remains open: where the transcript's language comes from.
 
+### Decided 2026-08-24 — the transcript's language is the request hint, or nothing
+
+**The maintainer's decision, the last of the three: `TranscriptDocument.Language` stays exactly
+what it is** — the hint the caller passed with `-l`, null when none was — and nothing infers a
+language the user did not state. No detector joins the product, no heuristic reads the text, no
+fourth model earns a place by answering a question nobody asked it to.
+
+What null means downstream is already how the seam behaves, and is now the decided behaviour
+rather than an accident of it: with a language known, the prompt carries the answer-language
+instruction and the mechanical answer-language check (decision 6's, means still unchosen) has a
+target; with null, the prompt carries no language line and **no claim is made** — the model
+answers in whatever language the question and the evidence pull it toward, and R6 is read
+honestly as *enforced where known, silent where not*, because a check against a language nobody
+recorded would be measuring an invention. Decision 6's note that "prompt in the transcript's
+language needs a source the transcript does not yet supply" is thereby answered: the source is
+the hint, and a hintless transcript gets the unlocalised prompt.
+
+One wiring fact, read from the code: `TranscriptTranslation` builds the English document with a
+record `with` expression, so the hint survives translation — the translated document an ask runs
+over (the first decision above) still carries the original recording's `Language`, and Stage 4
+reads it off the one document it already holds.
+
+All three questions v1 created are now taken, on consecutive turns of one day's review:
+the English pane, no speaker labels, the hint or nothing.
+
 ## Why this is harder than v1, and it is not the modelling
 
 **A transcript can be wrong loudly. A summary cannot.**
