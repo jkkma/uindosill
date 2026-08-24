@@ -25,7 +25,14 @@ public static class JsonTranscriptReader
 {
     public static TranscriptDocument Read(string json)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(json);
+        ArgumentNullException.ThrowIfNull(json);
+
+        // A FormatException like every other refusal here, so a caller naming the file names it
+        // for this too — "(Parameter 'json')" points at nothing a user can act on.
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new FormatException("The file is empty. A transcript is a JSON object with a 'segments' array.");
+        }
 
         using var parsed = ParseDocument(json);
         var root = parsed.RootElement;
@@ -148,6 +155,11 @@ public static class JsonTranscriptReader
         foreach (var fold in folds.EnumerateArray())
         {
             var where = $"speaker fold {index}";
+            if (fold.ValueKind != JsonValueKind.Object)
+            {
+                throw new FormatException($"{Capitalise(where)} is {Describe(fold.ValueKind)}, not an object.");
+            }
+
             result.Add(new SpeakerFold
             {
                 Dropped = RequiredString(fold, "from", where),
@@ -173,6 +185,11 @@ public static class JsonTranscriptReader
         foreach (var turn in turns.EnumerateArray())
         {
             var where = $"speaker turn {index}";
+            if (turn.ValueKind != JsonValueKind.Object)
+            {
+                throw new FormatException($"{Capitalise(where)} is {Describe(turn.ValueKind)}, not an object.");
+            }
+
             result.Add(new SpeakerTurn
             {
                 Start = RequiredSeconds(turn, "start", where),
@@ -215,36 +232,95 @@ public static class JsonTranscriptReader
         return value.GetDouble();
     }
 
-    private static string? OptionalString(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
+    // The Optional* helpers accept absence and JSON null — the formatter has grown fields over
+    // its life, and an older file simply lacks the newer ones — but a field that is present with
+    // the wrong type is a misread, not an absence, and nulling it silently is exactly the
+    // never-a-silent-misread rule the segment readers already keep.
+    private static string? OptionalString(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
 
-    private static TimeSpan? OptionalSeconds(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? Seconds(value, name, "the transcript")
-            : null;
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a string.");
+        }
 
-    private static int? OptionalInt(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetInt32()
-            : null;
+        return value.GetString();
+    }
 
-    private static float? OptionalFloat(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetSingle()
-            : null;
+    private static TimeSpan? OptionalSeconds(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
 
-    private static double? OptionalDouble(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetDouble()
-            : null;
+        if (value.ValueKind != JsonValueKind.Number)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a number.");
+        }
+
+        return Seconds(value, name, "the transcript");
+    }
+
+    private static int? OptionalInt(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a number.");
+        }
+
+        return value.GetInt32();
+    }
+
+    private static float? OptionalFloat(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a number.");
+        }
+
+        return value.GetSingle();
+    }
+
+    private static double? OptionalDouble(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a number.");
+        }
+
+        return value.GetDouble();
+    }
 
     private static ComputeBackend? OptionalBackend(JsonElement element, string name)
     {
-        if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return null;
+        }
+
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            throw new FormatException($"'{name}' is {Describe(value.ValueKind)}, not a string.");
         }
 
         var spelled = value.GetString()!;

@@ -100,17 +100,41 @@ public class AskChatTests
     }
 
     [Fact]
-    public async Task AQuestionNothingMatchesAbstains()
+    public async Task AQuestionNothingMatchesAbstainsWithoutLoadingAnyModel()
     {
-        var (chat, _, _) = Chat();
+        var (chat, provider, _) = Chat();
 
         // No word of this appears in the transcript, so retrieval returns nothing — and empty
-        // retrieval is the abstain path, never an invitation to answer from nothing.
+        // retrieval is the abstain path, never an invitation to answer from nothing. The search
+        // costs milliseconds and runs first, so the abstention arrives without the transcriber
+        // being unloaded or a byte of the language model being read.
         await AskAsync(chat, "zzz qqq xxx");
 
         var entry = Assert.Single(chat.Entries);
         Assert.True(entry.Abstained);
         Assert.False(entry.HasBullets);
+        Assert.Equal(0, provider.Created);
+    }
+
+    [Fact]
+    public async Task ATranscriptionStartingDuringTheModelLoadStillLeavesTheSentence()
+    {
+        // The engine field is assigned only after the load returns, and the notice branch used
+        // to require it non-null — a transcription starting during the load yielded "Stopped."
+        // with no line saying why, which reads as a defect rather than the residency policy.
+        var gate = new TaskCompletionSource();
+        var (chat, _, _) = Chat(options: new FakeAnswerOptions { LoadGate = gate.Task });
+
+        chat.QuestionText = "what about the axolotl?";
+        var asking = chat.AskCommand.ExecuteAsync(null);
+        Assert.True(chat.IsAsking);
+
+        await chat.OnTranscriptionStartedAsync();
+        await asking;
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.Equal("Stopped.", entry.Failure);
+        Assert.Contains("unloaded while transcribing", chat.ResidencyNotice, StringComparison.Ordinal);
     }
 
     [Fact]

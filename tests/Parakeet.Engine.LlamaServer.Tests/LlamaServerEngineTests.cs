@@ -55,18 +55,22 @@ public class LlamaServerArgumentTests
 {
     private static LlamaServerOptions Options() => new() { ModelPath = "/models/some-model-Q8_0.gguf" };
 
-    private static List<string> Arguments(LlamaServerOptions options, int port, string apiKey) =>
-        [.. LlamaServerProcess.BuildArguments(options, port, apiKey)];
+    private static List<string> Arguments(LlamaServerOptions options, int port, string apiKeyFile) =>
+        [.. LlamaServerProcess.BuildArguments(options, port, apiKeyFile)];
 
     [Fact]
-    public void TheChildBindsLoopbackWithAKeyAndNoUiAndNoFit()
+    public void TheChildBindsLoopbackWithAKeyFileAndNoUiAndNoFit()
     {
-        var arguments = Arguments(Options(), 4242, "sekrit");
+        var arguments = Arguments(Options(), 4242, "/tmp/sekrit.key");
 
         Assert.Contains("--host", arguments);
         Assert.Equal("127.0.0.1", arguments[arguments.IndexOf("--host") + 1]);
         Assert.Equal("4242", arguments[arguments.IndexOf("--port") + 1]);
-        Assert.Equal("sekrit", arguments[arguments.IndexOf("--api-key") + 1]);
+
+        // The file, never the key: a child's command line is readable by any same-user process
+        // for as long as it runs, so the key itself must appear in no argument.
+        Assert.Equal("/tmp/sekrit.key", arguments[arguments.IndexOf("--api-key-file") + 1]);
+        Assert.DoesNotContain("--api-key", arguments);
         Assert.Contains("--no-webui", arguments);
 
         // --fit on trims layers and context to what fits, so a model that does not fit still
@@ -146,6 +150,22 @@ public class AnswerPromptBuilderTests
     }
 
     [Fact]
+    public void ThePromptsDialsMatchTheGrammars()
+    {
+        // With the abstain production off, an instruction to "reply exactly NOT_IN_TRANSCRIPT"
+        // steers the model toward an output the grammar makes unsamplable — measured as degraded
+        // answers, not as nothing — and a quote instruction without a quote production is the
+        // same shape. The prompt's dials must say only what the grammar can sample.
+        var neither = AnswerPromptBuilder.BuildPrompt(Request(), allowAbstain: false, requireQuote: false);
+        Assert.DoesNotContain(AnswerParser.AbstainSentinel, neither, StringComparison.Ordinal);
+        Assert.DoesNotContain("verbatim", neither, StringComparison.Ordinal);
+
+        var both = AnswerPromptBuilder.BuildPrompt(Request());
+        Assert.Contains(AnswerParser.AbstainSentinel, both, StringComparison.Ordinal);
+        Assert.Contains("verbatim", both, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheLanguageLineAppearsOnlyWhenKnown()
     {
         Assert.DoesNotContain("BCP-47", AnswerPromptBuilder.BuildPrompt(Request()), StringComparison.Ordinal);
@@ -202,7 +222,7 @@ public class AnswerPromptBuilderTests
         var grammar = AnswerPromptBuilder.BuildGrammar(Request().Evidence, requireQuote: true)!;
 
         Assert.Contains(
-            "quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{3,300} \"\\u00BB\"",
+            "quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{8,300} \"\\u00BB\"",
             grammar,
             StringComparison.Ordinal);
     }

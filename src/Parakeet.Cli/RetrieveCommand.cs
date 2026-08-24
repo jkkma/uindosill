@@ -157,12 +157,10 @@ internal static class RetrieveCommand
             for (var rank = 0; rank < hits.Count; rank++)
             {
                 var hit = hits[rank];
-                var preview = hit.Window.Text.Length > 80 ? hit.Window.Text[..80] + "…" : hit.Window.Text;
+                var preview = hit.Window.Preview(80);
                 context.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                    $"  {rank + 1,2}. {hit.Window.CitationId,-12} [{Clock(hit.Window.Start)}–{Clock(hit.Window.End)}]  {hit.Score,8:F3}  {preview}"));
+                    $"  {rank + 1,2}. {hit.Window.CitationId,-12} [{Timecode.ToClock(hit.Window.Start)}–{Timecode.ToClock(hit.Window.End)}]  {hit.Score,8:F3}  {preview}"));
             }
         }
     }
-
-    private static string Clock(TimeSpan time) => time.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
 }

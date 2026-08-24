@@ -78,7 +78,12 @@ public sealed record AskProgress
     /// <summary>Prompt tokens in total, when the engine knows before finishing.</summary>
     public int? PrefillTotalTokens { get; init; }
 
-    /// <summary>Answer tokens produced so far; zero until prefill completes.</summary>
+    /// <summary>
+    /// Answer tokens produced so far; zero until prefill completes. Approximate by contract:
+    /// the server engine counts streamed content chunks, which is one per token on the server
+    /// it drives in practice but is not a promise of the protocol — a consumer may treat this
+    /// as progress, never as a token count to quote.
+    /// </summary>
     public int GeneratedTokens { get; init; }
 
     /// <summary>Prefill completion in [0, 1] when the total is known, otherwise null.</summary>
@@ -113,7 +118,9 @@ public interface IAnswerEngine : IAsyncDisposable
     /// <summary>
     /// Asks one question, yielding the model's output as it decodes so a caller can render a
     /// long answer incrementally. The chunks concatenate to exactly the text
-    /// <see cref="AnswerParser.Parse"/> is given.
+    /// <see cref="AnswerParser.Parse"/> is given. The token is the only timeout: an engine
+    /// streams for as long as an answer takes, so a caller that passes none has asked to wait
+    /// forever — the app always passes one.
     /// </summary>
     IAsyncEnumerable<string> AskAsync(
         AskRequest request,

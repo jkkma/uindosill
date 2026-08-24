@@ -798,6 +798,9 @@ internal static class Commands
             "A window's citation id (S12, or S12-S20 for a run) is a 1-based position in the transcript's segments\n" +
             "array, so it is only meaningful against the transcript searched. A question no window matches returns an\n" +
             "empty list and exit code 0: empty retrieval is the abstain path's input, not an error.\n\n" +
+            "One honest caveat: this reads the written file, whose times carry three decimals, where the panel holds\n" +
+            "raw ticks — a segment whose midpoint sits exactly on a window edge can fall on the other side of it, so\n" +
+            "window membership matches the panel's for the file, not necessarily for the live session that wrote it.\n\n" +
             "No model runs here and none is needed — this is tier 0 of the register's decision 3, the tier that is\n" +
             "testable with no language model in the room.",
     };

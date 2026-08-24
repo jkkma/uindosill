@@ -32,6 +32,28 @@ public sealed record TranscriptWindow
         : FormattableString.Invariant($"S{FirstSegment}-S{LastSegment}");
 
     public TimeSpan Duration => End - Start;
+
+    /// <summary>
+    /// The text cut to at most <paramref name="maxLength"/> chars with an ellipsis — never
+    /// through a surrogate pair, because a preview ending in U+FFFD reads as corruption. The one
+    /// truncation the CLI listing and the Sources expander share.
+    /// </summary>
+    public string Preview(int maxLength)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxLength, 2);
+        if (Text.Length <= maxLength)
+        {
+            return Text;
+        }
+
+        var cut = maxLength - 1;
+        if (char.IsHighSurrogate(Text[cut - 1]))
+        {
+            cut--;
+        }
+
+        return Text[..cut] + "…";
+    }
 }
 
 /// <summary>How the transcript is cut into windows: about a minute at half overlap by default.</summary>
@@ -90,7 +112,20 @@ public static class TranscriptWindowBuilder
         }
 
         var windows = new List<TranscriptWindow>();
-        var last = midpoints[^1].Midpoint;
+
+        // The furthest midpoint, not the final segment's: a transcript whose segments are out of
+        // time order — a hand-edited file is exactly what the reader reopens — would otherwise
+        // end the grid early and leave later speech silently unretrievable.
+        var last = TimeSpan.Zero;
+        foreach (var (_, midpoint) in midpoints)
+        {
+            if (midpoint > last)
+            {
+                last = midpoint;
+            }
+        }
+
+        var seen = new HashSet<(int First, int Last)>();
         for (var k = 0; ; k++)
         {
             var windowStart = k * options.Stride;
@@ -120,9 +155,11 @@ public static class TranscriptWindowBuilder
                 continue;
             }
 
-            // Sparse audio can hand two consecutive grid positions the same run; a duplicate
-            // window would count its terms twice in every document-frequency figure.
-            if (windows.Count > 0 && windows[^1].FirstSegment == first && windows[^1].LastSegment == lastId)
+            // Sparse audio can hand more than one grid position the same run — and with a stride
+            // under half the length, not necessarily consecutive ones. A duplicate window would
+            // count its terms twice in every document-frequency figure, so the run set is the
+            // check, not the neighbour.
+            if (!seen.Add((first, lastId)))
             {
                 continue;
             }

@@ -22,6 +22,22 @@ public static class SearchTokenizer
     {
         ArgumentNullException.ThrowIfNull(text);
 
+        // Composed first: in NFD, "señor" is n + a combining tilde, and a combining mark is not
+        // a letter to Rune.IsLetterOrDigit — the word would tokenize as two fragments and every
+        // accented comparison would silently fail whenever the two sides' forms diverge.
+        try
+        {
+            if (!text.IsNormalized(NormalizationForm.FormC))
+            {
+                text = text.Normalize(NormalizationForm.FormC);
+            }
+        }
+        catch (ArgumentException)
+        {
+            // A lone surrogate — hand-edited JSON can encode one — cannot be normalised;
+            // EnumerateRunes below reads it as U+FFFD either way.
+        }
+
         var tokens = new List<string>();
         var current = new StringBuilder();
         Span<char> encoded = stackalloc char[2];

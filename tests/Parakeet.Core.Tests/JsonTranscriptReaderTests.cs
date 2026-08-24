@@ -101,9 +101,11 @@ public class JsonTranscriptReaderTests
     [Fact]
     public void FormatReadFormatIsByteStable()
     {
-        // The stronger property, and the one the export pin needs: a transcript reopened and
-        // rewritten must hash identically, or a pin computed after a round trip would refuse
-        // the very transcript it was computed from.
+        // Proven on this fixture, whose derived figures are exactly representable — stated
+        // narrowly on purpose. In general the FIRST rewrite of a file may flip a derived
+        // figure's last digit (recomputed from rounded inputs; the fixpoint test further down
+        // concedes this and pins the second generation instead). What the export pin workflow
+        // needs is that pins are computed from files, and a file rewritten again is stable.
         var first = TranscriptFormats.Json.Format(Document());
         var second = TranscriptFormats.Json.Format(JsonTranscriptReader.Read(first));
 
@@ -270,6 +272,48 @@ public class JsonTranscriptReaderTests
     [Fact]
     public void NonJsonRefusesLoudly() =>
         Assert.Throws<FormatException>(() => JsonTranscriptReader.Read("WEBVTT\n\n00:00:00.500 --> ..."));
+
+    [Fact]
+    public void AnEmptyFileRefusesAsAFormatProblemNotAParameterName()
+    {
+        // "(Parameter 'json')" points at nothing a user can act on; the same FormatException as
+        // every other refusal is what lets a caller name the file.
+        var ex = Assert.Throws<FormatException>(() => JsonTranscriptReader.Read("   \n"));
+        Assert.Contains("empty", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Parameter", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NonObjectSpeakerEntriesRefuseLoudlyInsteadOfCrashing()
+    {
+        // These two arrays were the only loops that never checked ValueKind: a string where an
+        // object belongs crashed with InvalidOperationException, against the reader's own
+        // FormatException-naming-what-was-wrong contract.
+        var folds = Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [], "speakerFolds": ["not an object"]}"""));
+        Assert.Contains("speaker fold 0", folds.Message, StringComparison.OrdinalIgnoreCase);
+
+        var turns = Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [], "speakerTurns": [42]}"""));
+        Assert.Contains("speaker turn 0", turns.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void KnownMetadataOfTheWrongTypeRefusesInsteadOfSilentlyNulling()
+    {
+        // Absence and JSON null are tolerated — older files simply lack newer fields — but a
+        // present field of the wrong type is a misread, and nulling it would hand back a
+        // transcript claiming less than its file says.
+        Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [], "model": 42}"""));
+        Assert.Throws<FormatException>(() => JsonTranscriptReader.Read(
+            """{"segments": [], "audioDurationSec": "twelve"}"""));
+
+        var tolerated = JsonTranscriptReader.Read(
+            """{"segments": [], "model": null, "language": null}""");
+        Assert.Null(tolerated.ModelId);
+        Assert.Null(tolerated.Language);
+    }
 
     [Fact]
     public void AnUnknownBackendRefusesRatherThanDroppingProvenance()

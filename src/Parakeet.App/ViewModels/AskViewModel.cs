@@ -435,14 +435,17 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// <summary>
     /// The four questions the panel opens with — an entry point for people who do not yet know
     /// what to ask, which is the reference product's own shape. Each is a real command's
-    /// parameter: pressing one asks it.
+    /// parameter: pressing one asks it. Every one is anchored on words people actually say,
+    /// because the panel's only mode is retrieval: a built-in question that structurally
+    /// abstains ("what are the main topics?" matches no window) would teach on first contact
+    /// that the panel is broken.
     /// </summary>
     public IReadOnlyList<string> Suggestions { get; } =
     [
-        "What are the main topics?",
-        "Summarise the first ten minutes",
         "What was said about pricing?",
-        "Find where they disagree",
+        "What did they decide?",
+        "What problems came up?",
+        "What are the next steps?",
     ];
 
 
@@ -525,8 +528,10 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         {
             target = TimeSpan.Zero;
         }
-        else if (target > _player.Duration)
+        else if (_player.Duration > TimeSpan.Zero && target > _player.Duration)
         {
+            // Only a known duration clamps the far end: before metadata it reads zero, and
+            // clamping to that would turn a forward scrub into a jump to the start.
             target = _player.Duration;
         }
 

@@ -51,6 +51,18 @@ public sealed record ResolvedBullet
     public required AnswerBullet Bullet { get; init; }
 
     public required IReadOnlyList<ResolvedCitation> Citations { get; init; }
+
+    /// <summary>
+    /// Whether the bullet's quote was found in at least one cited span. One quote cannot sit
+    /// inside every one of up to five cited spans at once, so this — not a per-span match — is
+    /// the check a multi-cite bullet honestly earns; each citation's own
+    /// <see cref="CitationCheck.QuoteMatches"/> stays the per-span truth a tooltip can state.
+    /// Null when there is no quote, or no resolved span to have checked it against.
+    /// </summary>
+    public bool? QuoteFound =>
+        Citations.Any(c => c.Check.QuoteMatches == true) ? true
+        : Citations.Any(c => c.Check.QuoteMatches == false) ? false
+        : null;
 }
 
 /// <summary>A whole answer against a transcript.</summary>
@@ -65,9 +77,17 @@ public sealed record AnswerValidation
     /// </summary>
     public bool? Monotone { get; init; }
 
-    /// <summary>Every citation on every bullet passed its checks, the uncited markers aside.</summary>
+    /// <summary>
+    /// Every citation on every bullet resolved to non-empty speech inside the recording, and
+    /// every quote was found in at least one of its bullet's cited spans — the uncited markers
+    /// aside. The quote is judged per bullet, not per span, so an honest multi-cite bullet is
+    /// not failed for quoting only one of the spans it cites.
+    /// </summary>
     public bool AllCitationsPass =>
-        Bullets.All(b => b.Citations.All(c => c.Citation.IsUncitedMarker || c.Check.Passes));
+        Bullets.All(b =>
+            b.Citations.All(c => c.Citation.IsUncitedMarker
+                || (c.Check.Resolves && c.Check.NonEmpty && c.Check.WithinDuration))
+            && b.QuoteFound != false);
 }
 
 /// <summary>
