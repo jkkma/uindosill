@@ -241,25 +241,43 @@ public sealed class EngineProvider : IEngineProvider
     private bool HasBundledPython => _python.Value.Found;
 
     private ModelDescriptor? DiarisationModel =>
-        ModelCatalog.Default.DiarisationModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
+        ModelCatalog.Default.DiarisationModels.FirstOrDefault() is { } model
+        && PathForInstalledOrBundled(model) is not null
             ? model
             : null;
 
     /// <summary>
-    /// True when the speech-detection graph is installed. One question only, unlike the two
-    /// sidecar opt-ins: the detector runs in this process on ONNX Runtime, so there is no
+    /// True when the speech-detection graph is there to be loaded. One question only, unlike the
+    /// two sidecar opt-ins: the detector runs in this process on ONNX Runtime, so there is no
     /// interpreter to be missing.
     /// </summary>
     public bool SupportsNeuralSpeechDetection => VoiceActivityModel is not null;
 
     private ModelDescriptor? VoiceActivityModel =>
-        ModelCatalog.Default.VoiceActivityModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
+        ModelCatalog.Default.VoiceActivityModels.FirstOrDefault() is { } model
+        && PathForInstalledOrBundled(model) is not null
             ? model
             : null;
 
+    /// <summary>
+    /// Where a model's weights actually are: the user's own copy first, the copy the installer
+    /// carried second, and null when neither exists.
+    /// </summary>
+    /// <remarks>
+    /// The order is the decision. A downloaded copy wins because the user chose to download it and
+    /// because it is the copy the Models tab updates and removes; the bundled one is the floor
+    /// under a fresh install, so the speech and speaker opt-ins are live the moment the application
+    /// first opens rather than after a visit to a tab. See <see cref="BundledModels"/> for which
+    /// entries travel and why the other two cannot.
+    /// </remarks>
+    internal string? PathForInstalledOrBundled(ModelDescriptor model) =>
+        _store.IsInstalled(model) ? _store.PathFor(model) : BundledModels.PathFor(model);
+
     /// <inheritdoc />
     public ISpeechDetector? CreateSpeechDetector() =>
-        VoiceActivityModel is { } model ? new SileroSpeechDetector(_store.PathFor(model)) : null;
+        VoiceActivityModel is { } model && PathForInstalledOrBundled(model) is { } path
+            ? new SileroSpeechDetector(path)
+            : null;
 
     public ISpeakerLabeller? CreateSpeakerLabeller()
     {
@@ -270,7 +288,8 @@ public sealed class EngineProvider : IEngineProvider
 
         return new SidecarSpeakerLabeller(new SidecarLabellerOptions
         {
-            ModelPath = _store.PathFor(model),
+            // The same order as everywhere else: the user's own copy, then the installer's.
+            ModelPath = PathForInstalledOrBundled(model)!,
             ModelId = model.Id,
 
             // Chosen inside the sidecar, and no picker for it. The Models tab's backend list is

@@ -154,13 +154,28 @@ Open Model License""*.
   test resolves the path the notice prints and reads the mandated sentence out of the file it names.
   A notice pointing at a file that is not there is worse than no notice.
 
-**This project does not host the weights.** The installer fetches them from soniqo's URL, pinned to
-revision `db3a7b54` rather than `main` because it is a single-maintainer third-party repository. On
-the plain text, §3.1's *"If you distribute the Model"* is not triggered by linking, and §2.2's
-*"(through multiple tiers of distribution)"* shows the drafters contemplated distribution chains
-without imposing anything extra downstream. **That is a reading, not something the text settles** —
-the Agreement contains no clause distinguishing hosting from linking — so the notice and the copy
-ship regardless, which is the same posture this project takes on CC BY.
+**This project distributes the weights, as of 2026-08-23.** Until then it did not: the application
+fetched them from soniqo's URL, pinned to revision `db3a7b54` rather than `main` because it is a
+single-maintainer third-party repository, and the question of whether linking counted as
+distributing was left as an explicit reading rather than a settled one. **Bundling the file inside
+the installer removes the question rather than answering it** — §3.1's *"If you distribute the
+Model"* is now plainly triggered, and both of its conditions were already being met by machinery
+that exists:
+
+- The **copy of the Agreement** ships at `licences/NVIDIA-Open-Model-License-2025-10-24.txt`, in
+  every build output, and `scripts/package-windows.ps1` refuses to pack a publish without it.
+- The **verbatim attribution notice** is emitted by `OpenModelLicenceAttribution.RequiredNotice`,
+  on its own line, asserted character for character by a test.
+
+So the posture that was adopted as insurance — *"the notice and the copy ship regardless"* — is what
+makes the bundling lawful without anything new being written. The pinned revision still decides
+which bytes travel: the packaging step verifies the file against the SHA-256 in `models.json` before
+copying it, so what ships is the revision this document names and not whatever the URL serves later.
+§2.2's *"(through multiple tiers of distribution)"* remains the clause showing the drafters
+contemplated exactly this.
+
+The recogniser's CC BY 4.0 weights are **not** bundled and this paragraph does not reach them — for
+size reasons rather than licensing ones, which `docs/PHASES.md` records.
 
 **Three ways it is stricter than CC BY 4.0, and all three are recorded rather than absorbed.**
 

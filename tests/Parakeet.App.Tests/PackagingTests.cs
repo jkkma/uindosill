@@ -13,9 +13,9 @@ namespace Parakeet.App.Tests;
 /// inside it. This product downloads 700 MB to 1.3 GiB of weights into
 /// <c>%LOCALAPPDATA%\Uindosill\models</c>, and a ~474 MB diariser is joining them. If the package
 /// id were "Uindosill", uninstalling would delete all of it, and nothing in the build would say so.
-/// Uninstall does remove that directory now — but through <c>UninstallCleanup</c>, whose guards
-/// have their own tests; what is held here is the separation that makes its delete a decision
-/// rather than a name collision.
+/// Nothing removes that directory now: the uninstall hook that did was withdrawn on 2026-08-23
+/// (<c>docs/PHASES.md</c>), so this separation is once again the only thing standing between an
+/// uninstall and a user's weights.
 /// </remarks>
 public class PackagingIdentityTests
 {

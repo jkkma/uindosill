@@ -121,6 +121,28 @@ $backendsFor = @{
     'win-cuda' = @('cpu', 'vulkan', 'cuda')
 }
 
+# Every backend name any channel can carry, which is what the prune below is allowed to delete.
+#
+# It used to delete any directory under native/<rid>/ that was not in the channel's list, on the
+# assumption that backends were the only thing there. Three features broke that assumption without
+# anyone noticing — tools/ (yt-dlp and Deno), ffmpeg/ and mpv/ are siblings of cpu/ and vulkan/ —
+# and v1.0.0-rc.3 therefore shipped with links, video and transcript muxing silently absent, on a
+# machine where all three had been vendored. Naming the backends means an unrecognised directory
+# now survives instead of being deleted, which is the direction that fails safely.
+$everyBackend = @('cpu', 'vulkan', 'cuda')
+
+# The other three drops, what proves each is really there, and what has to travel beside it. The
+# notices are not decoration: libmpv is GPLv2+, so its licence, mpv's copyright summary and the
+# written offer are conditions of shipping the DLL at all.
+$companionDrops = @(
+    @{ Directory = 'tools';  Files = @('yt-dlp.exe', 'yt-dlp-LICENSE.txt', 'deno.exe', 'deno-LICENSE.txt')
+       Feature = 'opening a link' }
+    @{ Directory = 'ffmpeg'; Files = @('ffmpeg.exe', 'ffmpeg-LICENSE.txt')
+       Feature = 'adding a transcript to a recording' }
+    @{ Directory = 'mpv';    Files = @('libmpv-2.dll', 'GPL-2.0.txt', 'mpv-Copyright.txt', 'mpv-WRITTEN-OFFER.txt')
+       Feature = 'playing the picture rather than the sound alone' }
+)
+
 function Write-Step([string] $Text) { Write-Host "`n== $Text" -ForegroundColor Cyan }
 function Write-Note([string] $Text) { Write-Host "   $Text" -ForegroundColor DarkGray }
 
@@ -189,6 +211,34 @@ foreach ($candidate in @($packId, $packId.ToLowerInvariant(), ($packId -replace 
     }
 }
 Write-Note "checked: uninstalling %LOCALAPPDATA%\$packId cannot reach %LOCALAPPDATA%\$dataDirectoryName"
+
+# Which catalogue entries travel inside the installer, read out of the file that decides it rather
+# than repeated here — the same rule as the data directory name above, for the same reason. The pins
+# themselves stay in models.json: this list only says which of them ship, so there is exactly one
+# copy of every digest and the installer verifies what the Models tab would have verified.
+$bundledSource = Join-Path $repo 'src/Parakeet.App/Services/BundledModels.cs'
+$bundledBlock = [regex]::Match(
+    (Get-Content -LiteralPath $bundledSource -Raw),
+    'BundledIds\s*=\s*\[(?<ids>[^\]]*)\]')
+if (-not $bundledBlock.Success) {
+    throw "Could not find the BundledIds array in $bundledSource. That array is what decides which " +
+          "weights the installer carries; this cannot run without it."
+}
+$bundledModelIds = @([regex]::Matches($bundledBlock.Groups['ids'].Value, '"([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value })
+
+$catalogue = Get-Content -LiteralPath (Join-Path $repo 'src/Parakeet.Core/Models/models.json') -Raw |
+    ConvertFrom-Json
+
+# The mark, checked before anything is built rather than discovered by vpk halfway through: both
+# files are committed, and a missing one means somebody moved them without running make-icon.ps1.
+$brandIcon = Join-Path $repo 'brand/uindosill.ico'
+$brandSplash = Join-Path $repo 'brand/uindosill-splash.png'
+foreach ($art in @($brandIcon, $brandSplash)) {
+    if (-not (Test-Path -LiteralPath $art -PathType Leaf)) {
+        throw "$art is missing. Run scripts/make-icon.ps1 to regenerate the mark, and commit what it writes."
+    }
+}
 
 Write-Step 'Tooling'
 
@@ -266,9 +316,16 @@ foreach ($channel in $Channels) {
         Write-Note 'not vendoring: -SkipPublish reuses an existing publish, which a new drop would not reach'
     }
     elseif (-not $SkipVendor) {
-        # The same script a developer runs and CI runs: pinned archives, byte count and SHA-256
+        # The same scripts a developer runs and CI runs: pinned archives, byte count and SHA-256
         # checked against docs/NATIVE-BINARIES.md before anything is unpacked.
         & (Join-Path $PSScriptRoot 'vendor-natives.ps1') -Backends $backends
+
+        # The other two, which nothing used to call from here. That was half of why rc.3 shipped
+        # without links, video or muxing: CI ran this script and this script vendored the decoder
+        # alone, so the release path had no way to produce a drop it then went on to prune anyway.
+        # They are cheap when the binaries are already on disk — each verifies a digest and returns.
+        & (Join-Path $PSScriptRoot 'vendor-tools.ps1')
+        & (Join-Path $PSScriptRoot 'vendor-mpv.ps1')
     }
 
     if (-not $SkipPublish) {
@@ -315,7 +372,10 @@ foreach ($channel in $Channels) {
     $nativeRoot = Join-Path $publishDir "native/$Runtime"
     if (Test-Path -LiteralPath $nativeRoot) {
         foreach ($present in Get-ChildItem -LiteralPath $nativeRoot -Directory) {
-            if ($present.Name -notin $backends) {
+            # Only a backend this channel does not promise. Anything else under native/<rid>/ is a
+            # drop every channel carries — or something added later that this script has never
+            # heard of, which is not a reason to delete it. See $everyBackend.
+            if ($present.Name -in $everyBackend -and $present.Name -notin $backends) {
                 Write-Note "dropping native/$Runtime/$($present.Name) — not in channel '$channel'"
                 Remove-Item -LiteralPath $present.FullName -Recurse -Force
             }
@@ -330,6 +390,87 @@ foreach ($channel in $Channels) {
                       "'$backend' backend first, and remember the build is what copies native/ into the output."
             }
         }
+    }
+
+    # The three drops that are not backends, checked the same way and for a better reason: every one
+    # of them is a whole feature of the application, and the application degrades politely when one
+    # is absent — a link box that refuses, sound without picture, a transcript that will not go into
+    # the file. Politeness is why nothing shouted when v1.0.0-rc.3 shipped without all three. A
+    # release that quietly drops a feature is worse than one that fails to build, so this throws.
+    foreach ($drop in $companionDrops) {
+        foreach ($file in $drop.Files) {
+            $path = Join-Path $nativeRoot "$($drop.Directory)/$file"
+            if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
+                throw "native/$Runtime/$($drop.Directory)/$file is missing or empty in the publish, so " +
+                      "this package would ship without $($drop.Feature). Run scripts/vendor-tools.ps1 and " +
+                      "scripts/vendor-mpv.ps1 — and remember the build is what copies native/ into the " +
+                      "output, so vendoring after a publish needs another one."
+            }
+        }
+    }
+    Write-Note "companions: $(($companionDrops.Directory) -join ', ') present with their notices"
+
+    # The weights the installer carries, into <app>/models where BundledModels looks.
+    #
+    # Two of the four catalogue entries fit and two do not, and the line between them is a GitHub
+    # release asset limit of 2 GiB rather than a principle: the recogniser is 1.34 GiB and the
+    # translator 1.34 GiB, so either one puts the CUDA channel over it. The speech detector (2.2 MiB)
+    # and the speaker labeller (452.6 MiB) fit in both channels with room left, and bundling them is
+    # what makes both opt-ins live on a fresh install instead of dead until somebody visits a tab.
+    #
+    # Every file is verified against the digest models.json already pins, before it is copied — the
+    # same check ModelInstaller performs on a download, because a weight nobody hashed is a weight
+    # that ships wrong once and is blamed on the model.
+    $bundledDir = Join-Path $publishDir 'models'
+    New-Item -ItemType Directory -Force -Path $bundledDir | Out-Null
+
+    # Cached beside the publish so packing the second channel does not download the same file again,
+    # and so an interrupted run resumes cheaply. packaging/ is gitignored in its entirety.
+    $cacheDir = Join-Path $OutputDirectory 'model-cache'
+    New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+
+    foreach ($id in $bundledModelIds) {
+        # Not $matches: that is PowerShell's own automatic variable, written by every -match in this
+        # script, and assigning to it is how a regex two hundred lines away starts returning surprises.
+        $found = @($catalogue.models | Where-Object { $_.id -eq $id })
+        if ($found.Count -ne 1) {
+            throw "models.json holds $($found.Count) entries with id '$id', and BundledModels.cs says " +
+                  "the installer carries it. One of the two files is wrong."
+        }
+        $entry = $found[0]
+
+        if ($entry.PSObject.Properties.Name -notcontains 'fileName') {
+            throw "'$id' is a multi-file catalogue entry. The installer carries single-file entries only; " +
+                  "BundledModels.PathFor answers null for the others, so bundling this one would ship a " +
+                  "file nothing reads."
+        }
+
+        $cached = Join-Path $cacheDir $entry.fileName
+        if ((Test-Path -LiteralPath $cached) -and ((Get-Item -LiteralPath $cached).Length -eq $entry.sizeBytes)) {
+            Write-Note "$($entry.fileName): cached"
+        }
+        else {
+            Write-Note ("$($entry.fileName): downloading {0:N1} MB" -f ($entry.sizeBytes / 1MB))
+            $previous = $ProgressPreference
+            $ProgressPreference = 'SilentlyContinue'   # Write-Progress costs more than the download
+            try { Invoke-WebRequest -Uri $entry.url -OutFile $cached }
+            finally { $ProgressPreference = $previous }
+        }
+
+        $size = (Get-Item -LiteralPath $cached).Length
+        if ($size -ne $entry.sizeBytes) {
+            throw "$($entry.fileName) is $size bytes and models.json pins $($entry.sizeBytes). Refusing to " +
+                  "bundle a file that is not the pinned one."
+        }
+
+        $hash = (Get-FileHash -LiteralPath $cached -Algorithm SHA256).Hash
+        if ($hash -ne $entry.sha256.ToUpperInvariant()) {
+            throw "$($entry.fileName) hashes to $hash and models.json pins $($entry.sha256.ToUpperInvariant()). " +
+                  "Refusing to bundle it."
+        }
+
+        Copy-Item -LiteralPath $cached -Destination (Join-Path $bundledDir $entry.fileName) -Force
+        Write-Note ("$($entry.fileName): {0:N1} MB, sha256 matches the catalogue" -f ($size / 1MB))
     }
 
     # The speaker opt-in's two obligations, checked on disk before anything is packed. The graph is
@@ -400,6 +541,15 @@ foreach ($channel in $Channels) {
         '--outputDir', $releaseDir
         '--runtime', $Runtime
         '--channel', $channel
+        # The mark, for Setup.exe and for the Add/Remove Programs row — the same file the
+        # application compiles into its own executable, so the installer and the thing it installs
+        # cannot drift apart. Generated by scripts/make-icon.ps1 and committed.
+        '--icon', $brandIcon
+        # Shown while Setup.exe unpacks. Velopack's installer asks no questions by design — there
+        # is no directory to choose and nothing to configure — so the splash is the whole of what a
+        # user sees, and an unbranded grey box is the difference between "installing" and "what is
+        # this". The mark alone: the window says the name a second later.
+        '--splashImage', $brandSplash
         # vpk checks nuget.org for a newer vpk on every run. A packaging step that reaches the
         # network to talk about itself is a packaging step that fails when nuget.org does.
         '--skip-updates'
@@ -465,9 +615,15 @@ foreach ($entry in $built) {
     try {
         $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
 
-        $inside = @($names |
+        $directories = @($names |
             ForEach-Object { if ($_ -match "native/$Runtime/([^/]+)/") { $Matches[1] } } |
             Sort-Object -Unique)
+
+        # Backend directories only. The companions — tools, ffmpeg, mpv — live beside them and are
+        # checked below on their own terms; counting them here would report every one of them as a
+        # backend this channel does not promise, which is the same conflation that made the prune
+        # delete them.
+        $inside = @($directories | Where-Object { $_ -in $everyBackend })
 
         $missing = @($entry.Backends | Where-Object { $_ -notin $inside })
         $extra = @($inside | Where-Object { $_ -notin $entry.Backends })
@@ -491,7 +647,33 @@ foreach ($entry in $built) {
             }
         }
 
+        # And the three companions, inside the package rather than merely on disk before it. This is
+        # the check that would have stopped v1.0.0-rc.3: everything upstream of it passed while the
+        # package carried no yt-dlp, no ffmpeg and no libmpv.
+        foreach ($drop in $companionDrops) {
+            foreach ($file in $drop.Files) {
+                $wanted = "native/$Runtime/$($drop.Directory)/$file"
+                if (-not ($names | Where-Object { $_.EndsWith($wanted) })) {
+                    $failures += "channel '$channel': $wanted is not inside the package, so it would " +
+                                 "ship without $($drop.Feature)."
+                }
+            }
+        }
+
+        # And the bundled weights, for the same reason: the opt-ins they serve degrade politely to
+        # "not installed yet", so a package that lost them would look exactly like a working one.
+        foreach ($id in $bundledModelIds) {
+            $entry = @($catalogue.models | Where-Object { $_.id -eq $id })[0]
+            $wanted = "models/$($entry.fileName)"
+            if (-not ($names | Where-Object { $_.EndsWith($wanted) })) {
+                $failures += "channel '$channel': $wanted is not inside the package, so '$($entry.displayName)' " +
+                             "would be a download again rather than something the installer carries."
+            }
+        }
+
         Write-Host "     natives inside the package: $($inside -join ', ')"
+        Write-Host "     companions inside the package: $((@($directories | Where-Object { $_ -notin $everyBackend })) -join ', ')"
+        Write-Host "     weights inside the package: $($bundledModelIds -join ', ')"
     }
     finally { $zip.Dispose() }
 }

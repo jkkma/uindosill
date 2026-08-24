@@ -4,14 +4,30 @@ Weights live under `%LOCALAPPDATA%\Uindosill\models` on Windows, and the platfor
 elsewhere — resolved through `Environment.SpecialFolder.LocalApplicationData`, never hardcoded, so
 folder redirection and roaming profiles keep working. `UINDOSILL_MODELS_DIR` overrides it.
 
-Never the install directory: models there are destroyed by every update and uninstall, which turns
+Never the install directory: a **downloaded** model there is destroyed by every update, which turns
 each patch into a 670 MB re-download.
 
-Uninstalling the application removes `%LOCALAPPDATA%\Uindosill` whole — models, settings, the
-Python bundle — through a Velopack uninstall hook, so nothing is left behind to puzzle over. A
-directory you redirected with `UINDOSILL_MODELS_DIR` is yours and stays where it is. The CLI
-shares this directory, so uninstalling the desktop application removes the CLI's models and
-downloaded bundle too — the CLI zip keeps working, and downloading them again is the recovery.
+**Two of the four ship inside the installer instead, as of 2026-08-23**, and they are a different
+thing from a download: speech detection (2.2 MiB, MIT) and speaker labelling (452.6 MiB, NVIDIA Open
+Model License) sit in `models/` beside the executable, so both opt-ins are live on a fresh install
+rather than dead until somebody visits a tab. They are replaced with the application on every update
+and removed with it on uninstall, which is right — they belong to the build, not to the user.
+Speech recognition and English translation are 1.34 GiB each and stay downloads: a GitHub release
+asset must be under 2 GiB, and either one puts the CUDA installer past it.
+
+A copy you downloaded always wins over the copy the installer carried. That is what keeps the Models
+tab meaningful — the entry it installs, updates and removes is the one the application then loads —
+and `scripts/package-windows.ps1` verifies each bundled file against the same SHA-256 in
+`models.json` that a download is checked against, so the two copies are the same bytes either way.
+
+**Uninstalling the application does not touch this folder.** Nothing Uindosill does unattended
+deletes anything on your disk: an uninstaller cannot ask you about files you put somewhere
+yourself, and uninstall-then-reinstall is a repair people try — it should not cost gigabytes. So
+the weights survive an update, a reinstall and an uninstall alike, and clearing them out is a thing
+you do on the Models tab, which shows what is there and what it costs, or by deleting the folder.
+
+An uninstall hook that removed the folder shipped for one night in `v1.0.0-rc.3` and was withdrawn;
+`docs/GOTCHAS.md` gotcha 8 says why, and `docs/PHASES.md` has the full account.
 
 ```bash
 uindosill models list

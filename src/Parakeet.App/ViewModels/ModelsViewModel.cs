@@ -580,7 +580,7 @@ public sealed partial class ModelsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasSideloaded));
         OnPropertyChanged(nameof(SideloadedSummary));
-        OnPropertyChanged(nameof(KeptOnUninstallNotice));
+        OnPropertyChanged(nameof(UninstallNotice));
     }
 
     private long _installedBytes;
@@ -596,21 +596,32 @@ public sealed partial class ModelsViewModel : ObservableObject
               + "weights from an older version of Uindosill, or files put here by hand. Nothing uses them.";
 
     /// <summary>
-    /// The uninstall notice, with the size read off the folder rather than written into the window.
+    /// What becomes of the models folder, with the size read off the folder rather than written
+    /// into the window.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// It said "the three of them come to over 3 GiB" — a count of catalogue entries and a total
     /// that were both true when they were typed. The count is wrong for anyone who has installed
     /// one or two of the three, and the total is wrong for anyone carrying weights the catalogue no
     /// longer lists, which on this maintainer's machine put nearly 3 GiB outside the sentence. A
     /// figure a window states about the user's own disk can simply be measured.
+    /// </para>
+    /// <para>
+    /// For one night it said the opposite — an uninstall hook deleted the folder, and this line was
+    /// rewritten to match. Both the hook and that wording are gone: nothing this application does
+    /// unattended deletes anybody's disk, so the sentence is back to the true one, and the folder's
+    /// path is above it for whoever wants to clear it out by hand.
+    /// </para>
     /// </remarks>
-    public string KeptOnUninstallNotice =>
+    public string UninstallNotice =>
         _installedBytes == 0
             ? "Uninstalling Uindosill does not delete downloaded models. They live outside the "
-              + "application directory on purpose, so they survive an update or a reinstall."
+              + "application folder, so they survive an update, a reinstall and an uninstall."
             : "Uninstalling Uindosill does not delete downloaded models. They live outside the "
-              + $"application directory on purpose — what is in that folder now comes to {ByteSize.Describe(_installedBytes)}.";
+              + "application folder, so they survive an update, a reinstall and an uninstall — "
+              + $"what is in that folder now comes to {ByteSize.Describe(_installedBytes)}, and the "
+              + "buttons above remove any of it you no longer want.";
 
     /// <summary>Whether there is a sideloaded file selected to delete.</summary>
     public bool CanRemoveSideloaded => SelectedSideloaded is not null && !IsTranscribing;

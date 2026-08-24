@@ -48,3 +48,10 @@ python/uindosill_engines/_vendor/** text eol=lf
 # is a heuristic, and a font checked out with its 0x0A bytes rewritten is a font that fails to
 # load on somebody else's clone with no obvious cause. Cheaper to say so than to diagnose.
 *.ttf binary
+
+# The application mark, written by scripts/make-icon.ps1: an .ico of PNG frames, and the installer
+# splash beside it. Marked for the same reason as the fonts — an icon whose 0x0A bytes were
+# rewritten on checkout is one the compiler embeds and Windows then declines to draw, on somebody
+# else's clone, with nothing to point at.
+*.ico binary
+*.png binary

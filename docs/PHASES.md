@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1144 tests, no weights, no display, no network — **1139 passed and 5 skipped**, and
+**Status:** met. 1144 tests, no weights, no display, no network — **1140 passed and 4 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2757,7 +2757,7 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** `CLAUDE.md`'s second
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
 pattern `scripts/check-test-counts.py` looks for; it is reworded to `1144 tests` so the guard now
 covers it.
@@ -2843,7 +2843,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2887,7 +2887,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2944,7 +2944,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3034,7 +3034,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** Two of the four are
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Two of the four are
 the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run against it on this
 machine they pass.
 
@@ -3074,7 +3074,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3091,7 +3091,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3139,7 +3139,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** The C# suite does
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3230,7 +3230,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** Twenty-two new, and
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3260,7 +3260,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.** The
+page instead. **1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3295,7 +3295,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1144 tests, 1139 passed and 5 skipped, the count unchanged**: the file-writing
+assertion. **1144 tests, 1140 passed and 4 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3352,7 +3352,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1144 tests, no weights, no display, no network — 1139 passed and 5 skipped.**
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3412,6 +3412,129 @@ zip has never been unpacked and resolved from on a machine without a checkout. I
 elsewhere are not offered the rc — `prerelease: false` in the updater filters it — so the rc's
 audience is whoever downloads it by hand, which is the point: the desktop end-to-end comes next,
 and v1.0 does not get tagged until it has happened.
+
+### Fixed 2026-08-23 — installing rc.3 found five defects, and the packaging one had removed three whole features
+
+The first candidate was installed on the laptop the day after it was published. Everything below
+came out of that one install, which is the argument for the desktop end-to-end this record has been
+asking for since 2026-08-19.
+
+**Three features were missing from the package, and two independent faults put them there.**
+`.github/workflows/release.yml` vendored the decoder and the CUDA drop and never called
+`vendor-tools.ps1` or `vendor-mpv.ps1`; and `scripts/package-windows.ps1` deleted every directory
+under `native/win-x64/` that was not in the channel's backend list, which since 2026-08-23 includes
+`tools/`, `ffmpeg/` and `mpv/`. Either fault alone is enough, so vendoring in CI without fixing the
+prune would have produced the same package. What shipped could not open a link, could not draw a
+video's picture — `MediaPlayers.ForThisBuild()` fell back to `SystemAudioPlayer`, so a recording
+played as sound and nobody was told why — and could not put a transcript back into a file. **The
+relicensing to GPLv2+ taken on 2026-08-23 to make video possible bought rc.3 nothing.**
+
+Nothing caught it because the read-back asserted `parakeet.dll` and its `LICENSE` per backend, and
+those were all present. The prune is now an exclusion list — it deletes only a **named** backend
+this channel does not carry, so an unrecognised directory survives — the publish is checked for the
+three drops and their notices before packing, and the read-back opens the `.nupkg` and requires each
+of them inside it. `docs/GOTCHAS.md` gotcha 32 records the shape: an exclusion list fails safely,
+an inclusion list fails silently.
+
+**The Models tab was telling users the opposite of what the application now does.**
+`KeptOnUninstallNotice` promised uninstalling would not delete downloaded models. `UninstallCleanup`
+had landed the day before and deletes all of them. The behaviour changed, the README, the gotcha
+and two other documents changed with it, and the one sentence the *user* actually reads did not —
+which is the failure mode this repository has a rule against, arriving by the route the rule does
+not cover. It is now `UninstallNotice`, it states both halves — an update keeps the weights, an
+uninstall takes them — and a test asserts it does not say "does not delete".
+
+**Two failure messages were written for whoever builds the application.** The link box and the muxer
+named `scripts/vendor-tools.ps1` and `docs/NATIVE-BINARIES.md`, on the assumption that only a
+developer would ever see a build without the tools. The packaging defect above turned that
+assumption into a sentence telling every user to run a PowerShell script from a clone they do not
+have. Both now say what is missing in plain words and that reinstalling restores it.
+
+**Two of the four models now ship inside the installer.** Speech detection is 2.2 MiB and MIT, and
+its licence notice was already in every publish — the installer shipped the notice for a file it did
+not ship. Speaker labelling is 452.6 MiB, and `docs/LICENSING.md` had already established that the
+NVIDIA Open Model License permits redistribution outright with two conditions this project has been
+meeting since before it needed to; bundling it removes the linking-versus-distributing question
+rather than answering it. `BundledModels` says which entries travel, `PathForInstalledOrBundled`
+prefers a downloaded copy over the bundled one so the Models tab keeps meaning something, and the
+packaging step verifies each file against the digest `models.json` already pins.
+
+**The other two stay downloads because of arithmetic.** A GitHub release asset must be under 2 GiB.
+The recogniser is 1.34 GiB and the translator 1.34 GiB, against a CUDA installer that was already
+1187.9 MB: either one alone puts that channel over the limit, and both together put every channel
+over it. A test carries the sum so that adding an id to the array is a decision rather than a
+release that fails on its last step.
+
+**There was no icon anywhere in Windows**, because there was no `.ico` in the repository — the mark
+existed only as XAML geometry in the headerbar, so the taskbar, the shortcuts, Explorer and the
+Add/Remove Programs row all drew the placeholder. `scripts/make-icon.ps1` renders that same geometry
+— five round-capped bars, the hard matcha/taro seam, the centre bar split down its own middle — to
+`brand/uindosill.ico` at nine sizes and to an installer splash, with no imaging library: signed
+distance fields for the antialiasing and a PNG encoder over `ZLibStream`. It is committed rather
+than generated at build time, because CI must not need a renderer. The exe carries it through
+`ApplicationIcon`, the window through `Window.Icon`, and `vpk` gets both it and the splash.
+
+**Velopack stays, by the maintainer's decision the same day.** Its Setup asks no questions by
+design; an interactive installer with a directory picker would mean a different installer and a
+different update story. What it gets instead is the icon and the splash, so the one window a user
+sees during an install is branded rather than bare.
+
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** Six of the new ones
+are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
+that they are single-file entries the catalogue actually has, that the sum still fits under the
+asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
+
+### Removed 2026-08-23, the same night it shipped — the uninstall no longer deletes anything
+
+`v1.0.0-rc.3` was installed and then uninstalled to prove the cleanup hook that had landed hours
+earlier. It did not work: the install directory, the registry key and both shortcuts went, and
+`%LOCALAPPDATA%\Uindosill` was left whole — 43,789 files, 4.64 GB, byte-for-byte the baseline taken
+before the run. Velopack's log said `Hook executed successfully (took 98.6846ms)`, which is not
+enough time to delete anything.
+
+**Every mechanism that would explain it was tested, and every one was eliminated.**
+
+| Hypothesis | Experiment | Result |
+|---|---|---|
+| Velopack does not invoke the hook | standalone probe registering the same callback | it does, every time |
+| The fluent chain lost the registration | reflection: `VelopackApp` is a class and returns `this` | registration is intact |
+| An exception inside the callback | probe that throws | exits **-1**, reported as a failure — not what the log shows |
+| A reparse point on the data root | read the attributes | plain directory |
+| Missing `VelopackPackageId` metadata | read the built assembly | present |
+| **Scale — 43,789 files overwhelming it** | real installer, real uninstall, 43,789-file decoy | **deleted in 6.3 s** |
+
+Scale was the most promising of them and failed like the rest. A full-fidelity reproduction — a
+real `vpk` package, a real silent install, a real `Update.exe --uninstall` — deleted the decoy every
+time. **The failure never reproduced: invoked directly the same build deleted the entire directory,
+and invoked by the uninstaller it returned in 98 ms having deleted nothing.**
+
+**So the feature is gone rather than fixed, and three reasons say it should never come back in that
+shape.**
+
+- **That folder holds other people's files.** The Models tab offers to remove "weights from an older
+  version of Uindosill, or files put here by hand" — the product knows they are there. An
+  uninstaller runs unattended and cannot ask.
+- **Uninstall-then-reinstall is the first repair anybody tries**, and the hook made it cost a 3.9 GB
+  re-download without saying so. That is user-hostile when it works perfectly.
+- **Unpredictable and destructive is the worst pairing a feature can have.** A silent no-op is a
+  tolerable failure; taking somebody's disk is not, and nothing here could tell the two apart in
+  advance.
+
+**An allowlist version was written and also dropped.** It deleted only what the shipped catalogue
+could name — its own entries, `settings.json`, the interpreter bundle — leaving anything
+unrecognised and leaving the directory whenever anything remained, with the failure modes made
+deliberately asymmetric. It is genuinely safe against the first reason and tests held it there. It
+does not answer the second or the third, and a safe version of a feature nobody can explain is
+still a feature nobody can explain.
+
+**What replaces it is the Models tab**, where a person sees what is on their disk, what it cost, and
+removes what they choose — before uninstalling, with their hand on it. The window's notice is back
+to the true sentence, asserted by a test so it cannot drift again: uninstalling does not delete
+downloaded models.
+
+**The rule this leaves behind, and it is now the standing one: nothing this application does
+unattended may delete a user's files.** `docs/GOTCHAS.md` gotcha 8 carries it where the packaging
+reasoning lives.
 
 ### The dictation seam
 

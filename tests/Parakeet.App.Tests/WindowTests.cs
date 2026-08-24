@@ -840,8 +840,13 @@ public class TranscribeViewModelTests
         Assert.Contains("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
 
         // The uninstall notice measures the folder rather than repeating a sentence typed once.
-        Assert.Contains("comes to", main.Models.KeptOnUninstallNotice, StringComparison.Ordinal);
-        Assert.DoesNotContain("the three of them", main.Models.KeptOnUninstallNotice, StringComparison.Ordinal);
+        Assert.Contains("comes to", main.Models.UninstallNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("the three of them", main.Models.UninstallNotice, StringComparison.Ordinal);
+
+        // And it says the weights survive, which is true again: the uninstall hook that deleted
+        // them existed for one night and was removed. This line is the only place the window tells
+        // anyone what becomes of gigabytes of their disk, so it is asserted rather than trusted.
+        Assert.Contains("does not delete downloaded models", main.Models.UninstallNotice, StringComparison.Ordinal);
 
         main.Models.SelectedSideloaded = file;
         Assert.True(main.Models.CanRemoveSideloaded);

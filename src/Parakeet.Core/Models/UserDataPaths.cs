@@ -8,10 +8,10 @@ namespace Parakeet.Core.Models;
 /// There is exactly one copy of this path because there are two things under it that must agree:
 /// the model weights (700 MB to 1.3 GiB, and a further ~474 MB once the diariser ships) and the
 /// application's own settings. Both have to survive an update, and the way they survive is by not
-/// being inside the install directory — see <c>docs/GOTCHAS.md</c> gotcha 8. An uninstall is the
-/// opposite case: this directory goes with the product, but through
-/// <c>Parakeet.App.Services.UninstallCleanup</c> and its guards, never as a side effect of where
-/// the installer happened to be pointed.
+/// being inside the install directory — see <c>docs/GOTCHAS.md</c> gotcha 8. They survive an
+/// uninstall for the same reason, and that is now a decision rather than a side effect: an
+/// uninstall hook that deleted this directory shipped for one night and was withdrawn, because
+/// nothing this product does unattended may delete a user's files.
 /// </para>
 /// <para>
 /// This is <b>not</b> the Velopack install root, and it must never become it. Velopack installs a

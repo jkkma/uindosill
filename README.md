@@ -3,9 +3,9 @@
 A Windows desktop app that transcribes audio and video files **locally** with NVIDIA Parakeet, and plays them back beside their transcript.
 Drop files in, get text out — plain text, SRT, VTT, word-timed VTT for karaoke-style highlighting,
 JSON with timestamps, Markdown. No cloud, no account, and **no Python you have to install** — the
-two opt-ins below run in an interpreter that ships inside the application. That bundle does not
-exist yet: the code looks for it beside the executable and says so when it is not there, and
-nothing has packaged one.
+two opt-ins below run in an interpreter that ships inside the application. That bundle was packaged
+for the first time in `v1.0.0-rc.3` on 2026-08-23; a build from source has none, and the code says
+so beside the opt-ins rather than failing when one is started.
 
 > **Status: the CLI and the desktop app both produce correct transcripts from real weights on real
 > Windows.** Ten minutes of podcast through Media Foundation, parakeet.cpp v0.5.0,
@@ -53,7 +53,8 @@ nothing has packaged one.
 - **v1 is file transcription, with optional speaker labels.** No global hotkeys, no text injection,
   no overlay HUD, no microphone capture. **Who spoke when is an opt-in**, off by default: turn it on
   and every format gains `Speaker 1:`, and `rttm` becomes available. It costs a second read of the
-  file and a second model — NVIDIA's Streaming Sortformer, a separate 453 MiB download — and it
+  file and a second model — NVIDIA's Streaming Sortformer, 453 MiB, which the installer carries so
+  the opt-in works on a fresh install and which a build from source downloads — and it
   **tells apart at most four speakers**, which is architectural rather than a setting: a fifth voice
   is merged into one of the four and the product says so rather than degrading quietly. Its labels
   are also **established only up to fifty minutes** — past that this model tends to hear one person
@@ -139,15 +140,25 @@ obviously broken.
 
 ## Getting it
 
-**There is a release, and it is a release candidate.** `v1.0.0-rc.3`, published 2026-08-23, is a
-prerelease on the releases page: a Windows installer for the desktop app in two flavours, the CLI
-as a zip beside it, and the bundled Python as a third zip for CLI users — unpack that one into
+**There is a release, it is a release candidate, and the first one is superseded.** `v1.0.0-rc.3`,
+published 2026-08-23, was the first: a Windows installer for the desktop app in two flavours, the
+CLI as a zip beside it, and the bundled Python as a third zip for CLI users — unpack that one into
 `%LOCALAPPDATA%\Uindosill` and `uindosill diarise` and `transcribe --translate` find it, since the
-CLI zip carries no interpreter of its own. v1.0 itself is not tagged yet. The other two ways to
-run this remain: build it from source, below, or take the `uindosill-win-x64` artefact from any
-CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and vulkan
-natives already in place, kept for seven days. Everything still needs a model, which the CLI or the
-app's Models tab downloads.
+CLI zip carries no interpreter of its own.
+
+**A release candidate exists to be installed, and installing this one found four defects.** Three
+were one packaging fault: a step that pruned the backends a channel does not carry was written when
+backends were the only thing in that directory, and it silently removed the vendored tools that
+three later features depend on — so opening a link, drawing a video's picture and writing a
+transcript back into a recording all did nothing in that build, quietly, because the application is
+designed to degrade politely when a tool is absent. The fourth was cosmetic and total: no icon on
+any Windows surface, because the mark existed only as vector geometry inside the window. All four
+are fixed on `master`, held by assertions that open the built package and require what it promised,
+and land in the next candidate. Until then rc.3 is worth installing only to look at it.
+
+The other two ways to run this remain: build it from source, below, or take the `uindosill-win-x64`
+artefact from any CI run of `master` — a self-contained publish of the CLI and the desktop app with
+the cpu and vulkan natives already in place, kept for seven days.
 
 Three things are worth knowing before you download it:
 
@@ -156,22 +167,28 @@ Three things are worth knowing before you download it:
   what it says exactly is one of the things [UNPROVEN.md](docs/UNPROVEN.md) records.
   [PHASES.md](docs/PHASES.md) records what shipping unsigned accepts, and why signing left v1.
 - **Two flavours.** The default installer carries the CPU and Vulkan backends with the bundled
-  Python inside and is **485.4 MB**; the `win-cuda` one adds the NVIDIA CUDA runtime at
-  **1187.9 MB**. Both figures are read off the published `v1.0.0-rc.3` assets — the first release
-  packed with the bundle, which measures 1.20 GB unpacked and 400.2 MB as its own zip.
-  Take the first unless you know you want CUDA. Whichever you install is meant to keep updating
-  itself from the same flavour: the channel is recorded at install time and the app never overrides
-  it, which was read off an installed copy — but no update has ever been fetched from a release:
-  the only release is a prerelease, which the update check deliberately does not offer.
-- **Your models are not in it, so updates cannot cost you a re-download.** The application
-  installs into `%LOCALAPPDATA%\UindosillDesktop`; downloaded weights and settings live in
-  `%LOCALAPPDATA%\Uindosill`. That updates leave the second directory byte-identical was measured
-  against 4.3 GiB of weights, and [UNPROVEN.md](docs/UNPROVEN.md) has the record. Uninstalling
-  removes both: the app deletes its own data directory on the way out rather than leaving
-  gigabytes of weights orphaned. A models folder you redirected with `UINDOSILL_MODELS_DIR` stays
-  yours — but the standalone CLI shares the data directory, so uninstalling the desktop app takes
-  the CLI's models and downloaded Python bundle too, and downloading them again is the recovery.
-  No installer built since that cleanup was added has been run, which UNPROVEN.md also says.
+  Python inside; the `win-cuda` one adds the NVIDIA CUDA runtime. In rc.3 they measured **485.4 MB**
+  and **1187.9 MB** — figures read off the published assets rather than estimated — and the next
+  candidate is about 455 MB larger than each, because it carries two of the models. Take the first
+  unless you know you want CUDA. Whichever you install is meant to keep updating itself from the
+  same flavour: the channel is recorded at install time and the app never overrides it, which was
+  read off an installed copy — but no update has ever been fetched from a release, because the only
+  releases are prereleases and the update check deliberately does not offer those.
+- **Two of the four models come with it; the two large ones do not.** Speech detection (2.2 MiB) and
+  speaker labelling (452.6 MiB) are inside the installer, so both opt-ins work the moment you first
+  open the app. Speech recognition (1.34 GiB) and English translation (1.34 GiB) are downloads from
+  the Models tab, because a GitHub release asset has to be under 2 GiB and either one would put the
+  CUDA installer over it. Everything you download lands in `%LOCALAPPDATA%\Uindosill`.
+- **Nothing this application does unattended deletes a file on your disk.** That is a rule rather
+  than an observation, and it decides how the folders are arranged: the application installs into
+  `%LOCALAPPDATA%\UindosillDesktop`, everything you download lives in `%LOCALAPPDATA%\Uindosill`,
+  and the second survives an update, a reinstall and an uninstall alike. Updates leave it
+  byte-identical — measured against 4.3 GiB of weights, recorded in
+  [UNPROVEN.md](docs/UNPROVEN.md). Weights go when you remove them on the Models tab, where you can
+  see what is there and what it cost first. The models the installer itself carries are the
+  exception that proves the rule: they live with the application, so uninstalling takes them and
+  nothing you chose to download. [GOTCHAS.md](docs/GOTCHAS.md) has the reasoning, including a
+  cleanup feature that was tried and withdrawn for breaking it.
 
 The application asks GitHub once, when it starts, whether a newer version exists. That is the only
 thing it does on the network without being asked: it shows a notice, downloads nothing until you

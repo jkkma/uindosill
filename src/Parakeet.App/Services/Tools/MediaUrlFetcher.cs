@@ -114,7 +114,7 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
 
         if (BundledTools.YtDlpPath is not { } ytDlp || BundledTools.DenoPath is not { } deno)
         {
-            throw new MediaFetchException(DescribeUnavailable() ?? "This build cannot open links.");
+            throw new MediaFetchException(DescribeUnavailable() ?? "Uindosill cannot open links.");
         }
 
         // http and https only. Not defensive tidiness: yt-dlp accepts local paths and other
@@ -329,7 +329,9 @@ public sealed class FakeMediaUrlFetcher : IMediaUrlFetcher
     public TaskCompletionSource? Gate { get; set; }
 
     public string? DescribeUnavailable() =>
-        IsAvailable ? null : "This build cannot open links: yt-dlp and Deno were not vendored.";
+        IsAvailable
+            ? null
+            : "Uindosill cannot open links: this copy is missing the tools it downloads links with.";
 
     public async Task<FetchedMedia> FetchAudioAsync(
         string url,

@@ -6,6 +6,7 @@
         x:Class="Parakeet.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Uindosill — local transcription"
+        Icon="avares://Uindosill/Assets/uindosill.ico"
         Width="1080" Height="720"
         MinWidth="920" MinHeight="520"
         Background="{DynamicResource GroundBrush}"
@@ -788,7 +789,7 @@
                      entries and a total that were both true on the day they were typed and
                      neither of which is a fact about the reader's disk. -->
                 <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
-                           Text="{Binding KeptOnUninstallNotice}" />
+                           Text="{Binding UninstallNotice}" />
               </StackPanel>
             </Border>
            </StackPanel>
