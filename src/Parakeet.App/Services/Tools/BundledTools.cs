@@ -70,10 +70,19 @@ public static class BundledTools
     public static bool CanFetchUrls => YtDlpPath is not null && DenoPath is not null;
 
     /// <summary>
-    /// Why a link cannot be fetched, or null when it can. Names the missing half rather than
+    /// Why a link cannot be fetched, or null when it can. Names which half is missing rather than
     /// saying "unavailable", because the two are vendored by the same script and a half-drop is
     /// the likely way this goes wrong.
     /// </summary>
+    /// <remarks>
+    /// Written for whoever is looking at the window, not for whoever builds it. It used to name
+    /// the vendoring script and a repository document, on the assumption that only a developer
+    /// would ever see a build without the tools — and then <c>v1.0.0-rc.3</c> shipped without them
+    /// (the channel prune in <c>scripts/package-windows.ps1</c> dropped every directory that was
+    /// not a backend) and every user met a sentence telling them to run a PowerShell script from a
+    /// clone they do not have. Reinstalling is the action a user can actually take; the developer's
+    /// route is in <c>docs/NATIVE-BINARIES.md</c>, where a developer will look anyway.
+    /// </remarks>
     public static string? DescribeUnavailable()
     {
         if (CanFetchUrls)
@@ -81,12 +90,12 @@ public static class BundledTools
             return null;
         }
 
-        var missing = YtDlpPath is null && DenoPath is null ? "yt-dlp and Deno"
-            : YtDlpPath is null ? "yt-dlp"
-            : "Deno, which yt-dlp needs for YouTube";
+        var missing = YtDlpPath is null && DenoPath is null ? "the tools it downloads links with"
+            : YtDlpPath is null ? "the downloader it opens links with"
+            : "the JavaScript runtime its downloader needs for YouTube";
 
-        return $"This build cannot open links: {missing} was not vendored. "
-            + "Run scripts/vendor-tools.ps1 — see docs/NATIVE-BINARIES.md. Files still work.";
+        return $"Uindosill cannot open links: this copy is missing {missing}. "
+            + "Reinstalling should restore it. Opening files still works.";
     }
 
     /// <summary>

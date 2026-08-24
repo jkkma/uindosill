@@ -63,9 +63,12 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
     public string? DescribeUnavailable() =>
         IsAvailable
             ? null
-            : "This build cannot add a transcript to a media file: ffmpeg was not vendored. "
-              + "Run scripts/vendor-tools.ps1 — see docs/NATIVE-BINARIES.md. "
-              + "The transcript files beside the recording are unaffected.";
+            // User copy, for the same reason as BundledTools.DescribeUnavailable: this sentence
+            // shipped to end users in v1.0.0-rc.3, where it named a script from a clone they have
+            // no reason to own.
+            : "Uindosill cannot add a transcript to a media file: this copy is missing the tool "
+              + "that writes it in. Reinstalling should restore it. Saving transcripts as separate "
+              + "files still works.";
 
     public async Task<string> MuxAsync(
         SubtitleMuxPlan plan,

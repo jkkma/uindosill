@@ -160,13 +160,20 @@ jobs:
       # take this zip from ~250 MB to over a gigabyte without anything saying so. The CLI ships the
       # same backends as the default installer; the rest is dropped here and the result asserted,
       # because a size regression nobody measures is one nobody notices.
-      - name: Zip the CLI, without the CUDA drop it inherited
+      #
+      # Since 2026-08-23 the same applies to yt-dlp, Deno, ffmpeg and libmpv: scripts/package-windows.ps1
+      # vendors them for the installer, so the CLI publish inherits them too. Nothing in the CLI can
+      # use any of them — links, video and muxing are all in the desktop application — so they are
+      # dropped rather than charged to every command-line download.
+      - name: Zip the CLI, without the drops it inherited
         shell: pwsh
         run: |
           $native = 'packaging/cli-win-x64/native/win-x64'
-          if (Test-Path "$native/cuda") {
-            Write-Host 'dropping native/win-x64/cuda from the CLI zip'
-            Remove-Item -LiteralPath "$native/cuda" -Recurse -Force
+          foreach ($drop in 'cuda', 'tools', 'ffmpeg', 'mpv') {
+            if (Test-Path "$native/$drop") {
+              Write-Host "dropping native/win-x64/$drop from the CLI zip"
+              Remove-Item -LiteralPath "$native/$drop" -Recurse -Force
+            }
           }
 
           foreach ($backend in 'cpu', 'vulkan') {

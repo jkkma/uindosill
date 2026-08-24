@@ -258,7 +258,7 @@ public sealed unsafe class MpvMediaPlayer : IMediaPlayer
         if (isUrl && !Tools.BundledTools.CanFetchUrls)
         {
             throw new PlaybackException(
-                Tools.BundledTools.DescribeUnavailable() ?? "This build cannot open links.");
+                Tools.BundledTools.DescribeUnavailable() ?? "Uindosill cannot open links.");
         }
 
         Close();

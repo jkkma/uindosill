@@ -114,24 +114,30 @@ and an install/update/uninstall on a real desktop with every weight hashed befor
 (`docs/UNPROVEN.md`). Setting the id to `Uindosill` fails four of the five tests; that was checked by
 doing it, not assumed.
 
-**Uninstall does remove the data now — deliberately, which is a different thing.** Since 2026-08-23
-the application registers Velopack's before-uninstall hook, and `UninstallCleanup`
-(`src/Parakeet.App/Services/UninstallCleanup.cs`) deletes `%LOCALAPPDATA%\Uindosill` — models,
-settings, the Python bundle — so an uninstall does not leave gigabytes of weights orphaned. It
-deletes entry by entry so one locked file strands only itself, refuses a root whose last segment is
-not `Uindosill`, refuses when the install root is nested inside, and unlinks a reparse point rather
-than following it; a models directory redirected with `UINDOSILL_MODELS_DIR` is not touched. None of
-that retires the separation above: updates must still leave the weights alone, and the guards only
-exist because the delete is this product's code rather than the installer's `remove_dir_contents`.
+**Uninstall leaves the data, and that is now a decision rather than an omission.** For one night —
+2026-08-23 — the application registered Velopack's before-uninstall hook and deleted
+`%LOCALAPPDATA%\Uindosill` wholesale. It was removed the same night. Three reasons, any one
+sufficient:
 
-The directory is shared with the CLI, which ships as a zip Velopack knows nothing about — so
-uninstalling the desktop application takes the standalone CLI's models and its downloaded Python
-bundle with it. That is decided rather than overlooked: the uninstaller cannot see whether a CLI is
-still around, and sparing the shared directory to protect an arrangement only some users have would
-reopen the orphaned-gigabytes problem for all of them. The CLI itself keeps working; the recovery is
-the same downloads that stocked the directory the first time.
+- **People keep their own files in that folder.** The Models tab offers to remove "weights from an
+  older version of Uindosill, or files put here by hand", so the product knows they are there. An
+  uninstaller runs unattended and cannot ask anyone anything, and a recursive delete over a
+  directory like that can take something irreplaceable.
+- **Uninstall-then-reinstall is the first repair anybody tries**, and the hook silently made it cost
+  a 3.9 GB re-download.
+- **It did not work, and nobody could find out why.** Invoked directly, the same build deleted the
+  whole directory; invoked by the uninstaller, it returned in 98 ms having deleted nothing. Scale,
+  exceptions, reparse points, missing assembly metadata, lost registration and Velopack not
+  invoking the hook were each eliminated by experiment, and the failure never reproduced.
+  **Unpredictable and destructive is the worst pairing a feature can have.**
 
-The hook has not yet run on a real machine — `docs/UNPROVEN.md` carries that.
+An allowlist version — delete only the catalogue's own entries, `settings.json` and the interpreter
+bundle, leaving anything unrecognised — was written and also dropped. It is genuinely safe against
+the first reason, but the second and third stand, and code nothing calls is worse than no code.
+
+**The rule this leaves behind: nothing this application does unattended may delete a user's files.**
+Removing weights is a thing a person does on the Models tab, where they can see what is there and
+what it costs, before they uninstall. `docs/PHASES.md` records the whole episode.
 
 ## 9. Pin `SelfContained` in the project, not the CI workflow
 
@@ -646,3 +652,27 @@ either file about *which page* something is on goes through it.
 buttons, `MainWindowBuildsWithAllTabs` reaching the `TabControl` itself — because there is no page
 for it to be wrong about. The rule is about the claim, not the API: use it to get hold of something,
 never to prove where something is.
+
+## 32. A prune written as "delete what is not on the list" deletes whatever the list has not heard of
+
+`scripts/package-windows.ps1` drops the backend directories a channel does not promise, so the
+default download carries no CUDA. It was written when `native/win-x64/` held backends and nothing
+else, as `Remove-Item` for every directory `-notin $backends`.
+
+Three features later added siblings to that directory — `tools/` (yt-dlp and Deno), `ffmpeg/` and
+`mpv/` — and none of them is a backend. The prune deleted all three out of every package, on a
+machine where all three had been vendored, printing a `dropping …` line for each that read as
+correct. **`v1.0.0-rc.3` therefore shipped with links, video playback and transcript muxing
+silently absent**, and the failure was invisible because the application degrades politely at each
+of those three points: a link box that refuses, sound with no picture, a transcript that will not
+go into the file. Nothing downstream noticed either — the post-pack read-back asserted
+`parakeet.dll` and its `LICENSE` per backend, which were all present.
+
+**Here:** the prune deletes a directory only when it is a **named backend** this channel does not
+carry (`$everyBackend`), so an unrecognised directory survives instead of being destroyed; the
+publish is checked for the three companion drops and their notices before packing; and the
+read-back opens the `.nupkg` and requires each of them inside it. `.github/workflows/release.yml`
+drops the same three from the CLI zip, which cannot use any of them.
+
+The general rule: **an exclusion list fails safely, an inclusion list fails silently.** When the
+code deletes, enumerate what may be deleted — never what may stay.

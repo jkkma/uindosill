@@ -835,6 +835,21 @@ the correct outcome for it. On a current build the intended outcome is different
   `Update.exe` can apply that delta is untested — and it is exactly the thing velopack/velopack#1008
   reports broken for bsdiff deltas in this version line.
 
+### ~~The uninstall cleanup hook has never run on a real machine~~ — it ran, it was unreliable, and the feature is gone
+
+**Superseded 2026-08-23, the same night.** The section below was written before any installer
+carried the hook. It then ran on a real machine and behaved in two incompatible ways on the same
+build: against a synthetic directory of 43,789 files it deleted everything in 6.3 s, and against the
+real 43,789-file directory it returned in 98 ms having deleted nothing. Every mechanism that would
+explain the difference was tested and eliminated — scale, an exception in the callback (which exits
+-1 and is reported as a failure, not as success), a reparse point, missing assembly metadata, a lost
+registration, and Velopack declining to invoke the hook at all. **The failure never reproduced, and
+the feature was removed rather than shipped in that state** (`docs/PHASES.md`, *Removed
+2026-08-23*). What is left proven is only the negative: nothing this application does unattended
+deletes a user's files, because there is no longer any code that does.
+
+The record below stands as what was believed at the time.
+
 ### The uninstall cleanup hook has never run on a real machine — noted 2026-08-23
 
 Since 2026-08-23 the application registers Velopack's `OnBeforeUninstallFastCallback`, and
@@ -857,6 +872,43 @@ exists — `v1.0.0-rc.3`, packed 2026-08-23 — and has never been installed, so
 The proof is the 2026-08-19 procedure rerun on a current build: hash the weights, install, uninstall,
 and find `%LOCALAPPDATA%\Uindosill` gone rather than intact. Until someone does that, "uninstalling
 removes your models" is a claim about code paths, not about a machine.
+
+### rc.3 shipped three features that could not run, and the fixes are unreleased — observed 2026-08-23
+
+Installing `v1.0.0-rc.3` on the laptop is the first time any installer this project built has been
+run interactively by anybody, and it found five defects in one sitting (`docs/PHASES.md`, *Fixed
+2026-08-23*). Three of them were one packaging fault: the package carried no yt-dlp, no Deno, no
+ffmpeg and no libmpv, so opening a link, drawing a video's picture and adding a transcript to a
+recording were all dead in it.
+
+**What is established.** That the channel prune deleted the three companion directories, on a
+machine where they had been vendored — read out of the script rather than inferred, and the CI
+workflow separately never vendored them at all. That the shipped build falls back to
+`SystemAudioPlayer` when libmpv is absent, which is why video failed silently rather than loudly.
+That the download-and-verify step for the bundled weights works against the real pin: the speech
+detection graph was fetched from the catalogue's URL on 2026-08-23 and matched both the pinned
+2,327,524 bytes and the pinned SHA-256 exactly.
+
+**What is not.**
+
+- **No package has been built with any of these fixes.** The prune, the companion assertions, the
+  bundled weights, the icon and the splash are all held by tests and by a parse check; none has been
+  through `vpk`. The 455 MiB the bundled weights add to each channel is arithmetic from
+  `models.json`, not a figure read off an asset.
+- **The 2 GiB release-asset limit is GitHub's published one, not one this repository has hit.** The
+  largest asset it has ever uploaded is 1187.9 MiB. The limit is what keeps the recogniser and the
+  translator out of the installer, so it decides a design question on documentation rather than on
+  an observation here.
+- **Nothing has resolved a bundled weight from a real install.** `BundledModels` is exercised
+  against a temporary directory and an environment override; that the packaging script writes into
+  `<app>/models` and that the installed application finds it there is untested outside the script's
+  own read-back.
+- **The icon has been rendered and read back, and never seen on Windows.** The `.ico` parses, its
+  nine frames are PNGs whose dimensions agree with their directory entries, and the 256px frame was
+  looked at. Whether Windows draws it in the taskbar, the shortcut, Explorer and the Add/Remove
+  Programs row — the four places that were blank — is what installing the next candidate shows.
+- **The splash has never been shown by Setup.exe**, and `--splashImage`'s behaviour with a 360×220
+  PNG is taken from `vpk pack --help` rather than from a run.
 
 ### Velopack reaches the network exactly once, and that was checked twice
 
