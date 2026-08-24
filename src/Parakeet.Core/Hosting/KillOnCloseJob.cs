@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace Parakeet.Engine.Python;
+namespace Parakeet.Core.Hosting;
 
 /// <summary>
 /// A Windows job object that kills its members when the last handle to it closes — which the
@@ -10,19 +10,22 @@ namespace Parakeet.Engine.Python;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The sidecar is a child process holding 453 MiB or 1.34 GiB of weights. A host that is killed
-/// from Task Manager, crashes, or is stopped by a debugger never reaches <c>DisposeAsync</c>, and
-/// until 2026-08-22 the child outlived it: still resident, still reading a stdin nobody would write
-/// to again, with a staged WAV beside it. The job object is the operating system's answer — one
-/// per host process, created on the first sidecar start and deliberately never closed, because
-/// closing it is the kill.
+/// Every child this application starts holds something expensive — the Python sidecar carries
+/// 453 MiB or 1.34 GiB of weights, and v2's <c>llama-server</c> a ~9 GB model. A host that is
+/// killed from Task Manager, crashes, or is stopped by a debugger never reaches
+/// <c>DisposeAsync</c>, and until 2026-08-22 the sidecar outlived it: still resident, still
+/// reading a stdin nobody would write to again, with a staged WAV beside it. The job object is
+/// the operating system's answer — one per host process, created on the first child start and
+/// deliberately never closed, because closing it is the kill. It moved here from the Python
+/// engine when the second child arrived: two copies of a kernel interop is how one of them gets
+/// a fix the other does not.
 /// </para>
 /// <para>
 /// Off Windows this does nothing and says so through its return value; a host death there still
 /// closes the child's stdin, which ends its loop, and nothing more is promised.
 /// </para>
 /// </remarks>
-internal static partial class KillOnCloseJob
+public static partial class KillOnCloseJob
 {
     private const uint JobObjectLimitKillOnJobClose = 0x2000;
     private const int JobObjectExtendedLimitInformation = 9;

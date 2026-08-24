@@ -469,6 +469,25 @@ Read from `SciSharp/LLamaSharp` at tag `v0.27.0`, `ggml-org/llama.cpp` at `b1044
 NuGet on 2026-08-15; the server sizes were measured from the CPU release zip the same day, the
 CUDA zip was scanned on 2026-08-16, and the cpu and vulkan zips were run on the laptop the same day.
 
+**Re-read 2026-08-23, before any vendoring, because the b10448 reading was eight days and 155
+builds old.** The release on that day is **b10603** (published 2026-08-23T18:45Z), and the asset
+shape is unchanged: `llama-b10603-bin-win-cpu-x64.zip` 18,063,576 bytes, `…-vulkan-x64.zip`
+34,400,125, `…-cuda-13.3-x64.zip` 146,422,151, and `cudart-llama-bin-win-cuda-13.3-x64.zip`
+**390,970,417 — byte-identical to the one read beside b10448**, so the cudart does not churn with
+the builds. One new trap: upstream now marks its build releases as prereleases, so the GitHub
+`releases/latest` endpoint answers with something that is not a build at all — a pin is a tag,
+and any tooling that asks for "latest" gets a wrong answer quietly. The four issues the design
+leans on were re-read the same day and **all four still stand as written**: #26609 (CUDA
+flash-attn illegal access with partial expert offload; deterministic, cross-build; gone with
+`-fa off`) open, so the third file still runs `-fa off`; #21831 (SWA/hybrid re-prefill on
+follow-up turns) open, so the follow-up-turn cost still applies to every candidate; #27007
+(Gemma on the laptop's own gfx1150 under Vulkan) open — since isolated by its reporter to the
+fused MMVQ kernel path, with experts-on-CPU producing correct output — so Gemma stays off the
+laptop; and #26704 (SM120 CUTLASS MoE prefill) is **no longer a draft but still unmerged**, now
+claiming ~8–13% prefill on Qwen3.6-27B behind a CUDA 12.9+ toolchain and an off-by-default CMake
+flag, which is a smaller number than the 2.19× its draft advertised and no reason to wait for
+it. Nothing in the re-read moves a decision; the vendoring pin is b10603.
+
 **Rejected without much investigation**, and worth saying so plainly: Ollama (a separate daemon to
 install, against the no-install positioning), ONNX Runtime GenAI (a different model format and a
 second ecosystem), and the Windows-native AI APIs (hardware-gated, not general).

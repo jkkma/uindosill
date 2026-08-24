@@ -43,9 +43,10 @@ public sealed record AskRequest
     public AnswerMode Mode { get; init; } = AnswerMode.Retrieval;
 
     /// <summary>
-    /// The windows retrieval chose, in rank order — the only part of the transcript a
-    /// retrieval-mode answer may see, and the id set a grammar would enumerate. Empty in
-    /// whole-transcript mode, and empty retrieval in retrieval mode is the abstain path.
+    /// What the model sees, in every mode: retrieval passes the windows it chose in rank order,
+    /// the whole-transcript path passes windows covering the whole recording, and the id set a
+    /// grammar enumerates is exactly these windows' ids either way. Empty evidence in retrieval
+    /// mode is the abstain path — the model is never asked to answer from nothing.
     /// </summary>
     public IReadOnlyList<TranscriptWindow> Evidence { get; init; } = [];
 

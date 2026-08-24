@@ -3542,6 +3542,37 @@ run each: 65.4 → 44.0 tok/s on the 0.6B (33%, a third figure inside the record
 and 15.6 → 14.6 tok/s on the 9B (**6.4%**) — the rejection-sampling cost shrinking as the model
 grows is one run's evidence, not a law.
 
+#### The engine on the product path — the vendored drop's first runs, 2026-08-23
+
+Everything above ran from scratch directories and lab scripts; this is the first time the product
+path ran. `scripts/vendor-llm-natives.ps1` vendored the **b10603** cpu and vulkan server sets into
+`native/win-x64/llm/` (digests in `docs/NATIVE-BINARIES.md`), and
+`Parakeet.Engine.LlamaServer`'s gated integration test drove `LlamaServerAnswerEngine` end to end
+— locate the drop, start the child, `/health`, a grammar-constrained ask, stream, parse, validate
+— on **cpu and on vulkan**, each passing, with test wall-clock of about 5 s and 7 s respectively
+(the whole test: start, load, ask, kill — not a throughput figure). The model is
+`ggml-org/Qwen3-0.6B-GGUF`'s `Qwen3-0.6B-Q8_0.gguf`, 804,753,632 bytes, sha256
+`361cc68159042c36ebff7715dc5a2e4612153e88f3e9c9c234820849d6dc9e1d` — a different conversion from
+the 639,446,688-byte Qwen-repo file the spike used, hashed against the hub's own LFS digest at
+download. On Vulkan the engine's *default* child environment carries
+`GGML_VK_DISABLE_BFLOAT16=1` — the knob is now product behaviour, not a lab flag — and the load
+succeeded on the driver that was measured above to never become healthy without it.
+
+Two observations from the first constrained run, both for decision 6's ledger:
+
+- **The grammar's id guarantee held and its quote production did not.** Every id the 0.6B
+  emitted was live (`S1`, `S2` — the two evidence windows), and every one resolved; the verbatim
+  quote it was forced to produce was `«S2>»`, a fluent three-character invention the normalised
+  substring check caught. FullCite's ~40 % quote failure on an 8B reads as roughly 100 % at
+  0.6B, one run, one machine — the check is the mechanism working, not the model failing to
+  matter.
+- **The whole-answer abstain is first-token-only by construction, and the model that misses its
+  chance smuggles the sentinel into prose.** Six of eight bullets read
+  `- NOT_IN_TRANSCRIPT. «S1>» [S1]` — parsed as ordinary bullets, cited, resolving, and failing
+  nothing but the quote check. A sentinel inside a bullet is not an abstention and nothing flags
+  it yet; whether the thirty-question harness should score it as one is a question this run
+  hands the register rather than answers.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the

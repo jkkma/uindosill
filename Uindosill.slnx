@@ -4,6 +4,7 @@
     <Project Path="src/Parakeet.Audio/Parakeet.Audio.csproj" />
     <Project Path="src/Parakeet.Cli/Parakeet.Cli.csproj" />
     <Project Path="src/Parakeet.Core/Parakeet.Core.csproj" />
+    <Project Path="src/Parakeet.Engine.LlamaServer/Parakeet.Engine.LlamaServer.csproj" />
     <Project Path="src/Parakeet.Engine.ParakeetCpp/Parakeet.Engine.ParakeetCpp.csproj" />
     <Project Path="src/Parakeet.Engine.Python/Parakeet.Engine.Python.csproj" />
     <Project Path="src/Parakeet.Engine.SileroVad/Parakeet.Engine.SileroVad.csproj" />
@@ -16,6 +17,7 @@
     <Project Path="tests/Parakeet.Audio.Tests/Parakeet.Audio.Tests.csproj" />
     <Project Path="tests/Parakeet.Cli.Tests/Parakeet.Cli.Tests.csproj" />
     <Project Path="tests/Parakeet.Core.Tests/Parakeet.Core.Tests.csproj" />
+    <Project Path="tests/Parakeet.Engine.LlamaServer.Tests/Parakeet.Engine.LlamaServer.Tests.csproj" />
     <Project Path="tests/Parakeet.Engine.ParakeetCpp.Tests/Parakeet.Engine.ParakeetCpp.Tests.csproj" />
     <Project Path="tests/Parakeet.Engine.Python.Tests/Parakeet.Engine.Python.Tests.csproj" />
     <Project Path="tests/Parakeet.Engine.SileroVad.Tests/Parakeet.Engine.SileroVad.Tests.csproj" />
