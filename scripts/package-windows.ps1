@@ -12,9 +12,11 @@
         time, which is what keeps ~730 MB of NVIDIA runtime out of the download almost everybody
         wants. Velopack records the channel a release was packed with, and an installed copy asks
         for its own channel without being told — so a CUDA user is never moved onto the default
-        flavour by an update. Since 2026-08-24 both channels also carry the second native stack —
-        the vulkan `llama-server` drop under native/<rid>/llm/, the Ask panel's engine — per the
-        $llmBackendsFor table below and the two decisions recorded beside it.
+        flavour by an update. Since 2026-08-24 both channels also carry the second native stack
+        under native/<rid>/llm/ — the Ask panel's engine: the vulkan `llama-server` drop in the
+        default channel, and (decided later the same day, after the gap was priced on the 5080)
+        the CUDA drop with its cudart-13.3 in win-cuda — per the $llmBackendsFor table below and
+        the decisions recorded beside it.
       * **The desktop application only.** The CLI ships as the zip beside it on the release, which
         is the CI artefact as it already exists. Velopack has no PATH feature, so putting the CLI in
         the installer would be custom code on install and on uninstall.
@@ -125,22 +127,27 @@ $backendsFor = @{
 }
 
 # The second native stack: which llama-server drops each channel carries, under
-# native/<rid>/llm/<backend>/. One entry per channel — vulkan — and that is two decisions, both
-# recorded in docs/V2-ASK-THE-TRANSCRIPT.md and docs/NATIVE-BINARIES.md rather than made here:
+# native/<rid>/llm/<backend>/. Three decisions, recorded in docs/V2-ASK-THE-TRANSCRIPT.md,
+# docs/NATIVE-BINARIES.md and docs/PHASES.md rather than made here:
 #
-#   * No separate llm/cpu drop. Upstream builds these zips with GGML_BACKEND_DL, so the vulkan
-#     drop carries every per-ISA CPU variant beside ggml-vulkan.dll — the cpu drop is a strict
-#     subset of it — and shipping both would be 40 MB of duplicate bytes. Whether the server
-#     actually falls back to those CPU variants on a machine whose Vulkan driver is broken is
-#     recorded as unmeasured in docs/UNPROVEN.md, not assumed here.
-#   * No llm/cuda in the win-cuda channel yet. The LLM's CUDA build wants a cudart-13.3 beside it
-#     — ~391 MB of a second CUDA runtime major next to the ASR tier's cudart-12.8 — and that is a
-#     decision the maintainer has not taken, not a line item this script may add. Until it is
-#     taken, the CUDA channel's ask tier runs on the same vulkan drop, which NVIDIA's own driver
-#     serves.
+#   * No separate llm/cpu drop. Upstream builds these zips with GGML_BACKEND_DL, so every GPU
+#     drop carries every per-ISA CPU variant beside its own backend DLL — the cpu drop is a
+#     strict subset of either — and shipping both would be 40 MB of duplicate bytes. Whether the
+#     server actually falls back to those CPU variants on a machine whose GPU driver is broken
+#     is recorded as unmeasured in docs/UNPROVEN.md, not assumed here.
+#   * win-cuda carries llm/cuda — decided by the maintainer on 2026-08-24, with the cost priced
+#     first: on the 5080, CUDA buys 2.40x on the whole-transcript prefill (7.9 s against 19.1 s)
+#     and ~9% on decode over the vulkan drop, for the CUDA pair's ~537 MB of archives against
+#     vulkan's 34 MB. That puts a second CUDA runtime major (cudart-13.3) beside the ASR tier's
+#     cudart-12.8, inside the llm/cuda directory, exactly the cost the decision accepted.
+#   * win-cuda carries llm/cuda ALONE, not vulkan beside it. LlamaServerLocator takes the best
+#     backend PRESENT — cuda before vulkan, no driver probe — and no product surface lets a user
+#     pick the ask tier's backend, so a vulkan drop beside the cuda one would be 34 MB nothing
+#     could ever run. The broken-driver fallback is the cuda drop's own CPU variants, the same
+#     unproven-marker status as the default channel's.
 $llmBackendsFor = @{
     'win'      = @('vulkan')
-    'win-cuda' = @('vulkan')
+    'win-cuda' = @('cuda')
 }
 
 # Every backend name any channel can carry, which is what the prune below is allowed to delete.

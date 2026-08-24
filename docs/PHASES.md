@@ -3906,6 +3906,33 @@ carrying the term's segment, order preserved across questions, the wide variant'
 retrieval as success, and the three refusals. **1270 tests, no weights, no display, no network —
 1265 passed and 5 skipped**, up from 1262; 179 CLI tests.
 
+### Decided 2026-08-24 — four decisions close the sitting
+
+Taken by the maintainer in one review, each where a session had surfaced it, and each recorded
+where its question was posed:
+
+1. **The win-cuda channel ships `llm/cuda` — alone.** Taken with the cost priced first (the
+   Vulkan fallback measured the same sitting: CUDA buys 2.40× prefill and ~9 % decode for the
+   CUDA pair's ~537 MB of archives against vulkan's 34 MB), and executed as cuda-alone because
+   `LlamaServerLocator` takes the best backend *present* with no driver probe and no product
+   surface picks the ask tier's backend — a vulkan drop beside the cuda one would be bytes
+   nothing could run. `package-windows.ps1`'s channel table carries the decision where it is
+   enforced; `docs/NATIVE-BINARIES.md` and `docs/UNPROVEN.md` carry the record. No release has
+   shipped any ask tier yet, so the next tag observes both channels' real sizes for the first
+   time.
+2. **rc.4 is tagged after the exit-criterion run**, not before: a release whose headline feature
+   no human has exercised is the risk the ordering avoids, and the run — three questions through
+   the Ask tab, a citation followed into the audio — is staged and takes minutes.
+3. **R9's reverse direction is ratified as the symmetric kill.** The implemented behaviour — a
+   transcription starting mid-chat kills the language model's child, best-effort during the
+   handoff instant — stops being a working reading awaiting review and becomes the design. The
+   register's decision 4 and the view-model's remark now cite the decision.
+4. **The labelled question set lives on the Drive only.** Thirty verbatim quotes from a podcast
+   do not go into a public repository; the in-repo `questions.json` stays a template
+   permanently, the suite validates the shape both states share, and `measure-answers.ps1
+   -QuestionsPath` takes the fetched labelled copy. The v1.0 research homecoming meets the file
+   there when it arrives.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now
