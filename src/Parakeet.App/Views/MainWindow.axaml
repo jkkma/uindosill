@@ -1362,8 +1362,11 @@
                 <!-- The suggestions, until the first question makes room for the conversation. -->
                 <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,11,0,0"
                             IsVisible="{Binding !Chat.HasEntries}">
+                  <!-- The second sentence is the non-goals, where a user will look (R13 in the
+                       maintainer's plan): local-only, transient, and the model never attributes
+                       speech — three promises about what this panel does not do. -->
                   <TextBlock Classes="fine secondary" TextWrapping="Wrap"
-                             Text="Answers arrive as short bullets, each carrying the moment it came from — a timestamp you click to hear it, so every claim is one press from being checked." />
+                             Text="Answers arrive as short bullets, each carrying the moment it came from — a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it, and the model never says who spoke — speaker names stay on the transcript." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>

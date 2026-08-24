@@ -12,7 +12,9 @@
         time, which is what keeps ~730 MB of NVIDIA runtime out of the download almost everybody
         wants. Velopack records the channel a release was packed with, and an installed copy asks
         for its own channel without being told — so a CUDA user is never moved onto the default
-        flavour by an update.
+        flavour by an update. Since 2026-08-24 both channels also carry the second native stack —
+        the vulkan `llama-server` drop under native/<rid>/llm/, the Ask panel's engine — per the
+        $llmBackendsFor table below and the two decisions recorded beside it.
       * **The desktop application only.** The CLI ships as the zip beside it on the release, which
         is the CI artefact as it already exists. Velopack has no PATH feature, so putting the CLI in
         the installer would be custom code on install and on uninstall.
@@ -45,7 +47,8 @@
 
 .EXAMPLE
     .\scripts\package-windows.ps1 -Version 1.0.0 -Channels win
-    The default channel alone — cpu and vulkan, ~82 MB of Setup.exe. Runs anywhere pwsh does.
+    The default channel alone — cpu and vulkan for transcription, the vulkan ask engine beside
+    them. Runs anywhere pwsh does.
 
 .EXAMPLE
     # Natives already vendored and the app already published; re-pack only.
@@ -119,6 +122,25 @@ if ($ReleaseNotes) {
 $backendsFor = @{
     'win'      = @('cpu', 'vulkan')
     'win-cuda' = @('cpu', 'vulkan', 'cuda')
+}
+
+# The second native stack: which llama-server drops each channel carries, under
+# native/<rid>/llm/<backend>/. One entry per channel — vulkan — and that is two decisions, both
+# recorded in docs/V2-ASK-THE-TRANSCRIPT.md and docs/NATIVE-BINARIES.md rather than made here:
+#
+#   * No separate llm/cpu drop. Upstream builds these zips with GGML_BACKEND_DL, so the vulkan
+#     drop carries every per-ISA CPU variant beside ggml-vulkan.dll — the cpu drop is a strict
+#     subset of it — and shipping both would be 40 MB of duplicate bytes. Whether the server
+#     actually falls back to those CPU variants on a machine whose Vulkan driver is broken is
+#     recorded as unmeasured in docs/UNPROVEN.md, not assumed here.
+#   * No llm/cuda in the win-cuda channel yet. The LLM's CUDA build wants a cudart-13.3 beside it
+#     — ~391 MB of a second CUDA runtime major next to the ASR tier's cudart-12.8 — and that is a
+#     decision the maintainer has not taken, not a line item this script may add. Until it is
+#     taken, the CUDA channel's ask tier runs on the same vulkan drop, which NVIDIA's own driver
+#     serves.
+$llmBackendsFor = @{
+    'win'      = @('vulkan')
+    'win-cuda' = @('vulkan')
 }
 
 # Every backend name any channel can carry, which is what the prune below is allowed to delete.
@@ -326,6 +348,10 @@ foreach ($channel in $Channels) {
         # They are cheap when the binaries are already on disk — each verifies a digest and returns.
         & (Join-Path $PSScriptRoot 'vendor-tools.ps1')
         & (Join-Path $PSScriptRoot 'vendor-mpv.ps1')
+
+        # And the second stack, under the same rules: pinned archives, digests checked against
+        # docs/NATIVE-BINARIES.md, the MIT text written beside the binaries.
+        & (Join-Path $PSScriptRoot 'vendor-llm-natives.ps1') -Backends $llmBackendsFor[$channel]
     }
 
     if (-not $SkipPublish) {
@@ -403,6 +429,34 @@ foreach ($channel in $Channels) {
             }
         }
     }
+
+    # The second stack's prune and presence check, on the same terms as the first's. A developer
+    # machine that has vendored llm/cpu for its own tests produces a publish carrying it, and the
+    # channel is what decides which drops survive — the prune only ever touches names it knows,
+    # the direction that fails safely.
+    $llmBackends = $llmBackendsFor[$channel]
+    $llmRoot = Join-Path $nativeRoot 'llm'
+    if (Test-Path -LiteralPath $llmRoot) {
+        foreach ($present in Get-ChildItem -LiteralPath $llmRoot -Directory) {
+            if ($present.Name -in $everyBackend -and $present.Name -notin $llmBackends) {
+                Write-Note "dropping native/$Runtime/llm/$($present.Name) — not in channel '$channel'"
+                Remove-Item -LiteralPath $present.FullName -Recurse -Force
+            }
+        }
+    }
+
+    foreach ($backend in $llmBackends) {
+        foreach ($file in @('llama-server.exe', 'LICENSE')) {
+            $path = Join-Path $llmRoot "$backend/$file"
+            if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
+                throw "native/$Runtime/llm/$backend/$file is missing or empty in the publish, so this " +
+                      "package would ship an Ask panel whose engine is never available. Run " +
+                      "scripts/vendor-llm-natives.ps1 — and remember the build is what copies native/ " +
+                      "into the output, so vendoring after a publish needs another one."
+            }
+        }
+    }
+    Write-Note "ask engine: llm/$($llmBackends -join ', llm/') present with the MIT text beside it"
 
     # The three drops that are not backends, checked the same way and for a better reason: every one
     # of them is a whole feature of the application, and the application degrades politely when one
@@ -672,6 +726,32 @@ foreach ($entry in $built) {
             }
         }
 
+        # The second stack, against its own half of the channel table: exactly the promised llm
+        # drops, no others, each with llama-server.exe and the MIT text inside the package.
+        $llmInside = @($names |
+            ForEach-Object { if ($_ -match "native/$Runtime/llm/([^/]+)/") { $Matches[1] } } |
+            Sort-Object -Unique | Where-Object { $_ -in $everyBackend })
+        $llmPromised = $llmBackendsFor[$channel]
+
+        foreach ($backend in @($llmPromised | Where-Object { $_ -notin $llmInside })) {
+            $failures += "channel '$channel': the package is missing llm backend '$backend', so its " +
+                         "Ask panel's engine would never be available."
+        }
+        foreach ($backend in @($llmInside | Where-Object { $_ -notin $llmPromised })) {
+            $failures += "channel '$channel': the package carries llm backend '$backend' that this " +
+                         "channel does not promise."
+        }
+
+        foreach ($backend in $llmPromised) {
+            foreach ($file in @('llama-server.exe', 'LICENSE')) {
+                $wanted = "native/$Runtime/llm/$backend/$file"
+                if (-not ($names | Where-Object { $_.EndsWith($wanted) })) {
+                    $failures += "channel '$channel': $wanted is not inside the package. llama.cpp is " +
+                                 "MIT and its notice has to travel with the binaries."
+                }
+            }
+        }
+
         # And the bundled weights, for the same reason: the opt-ins they serve degrade politely to
         # "not installed yet", so a package that lost them would look exactly like a working one.
         foreach ($id in $bundledModelIds) {
@@ -684,7 +764,8 @@ foreach ($entry in $built) {
         }
 
         Write-Host "     natives inside the package: $($inside -join ', ')"
-        Write-Host "     companions inside the package: $((@($directories | Where-Object { $_ -notin $everyBackend })) -join ', ')"
+        Write-Host "     ask engine inside the package: llm/$($llmInside -join ', llm/')"
+        Write-Host "     companions inside the package: $((@($directories | Where-Object { $_ -notin $everyBackend -and $_ -ne 'llm' })) -join ', ')"
         Write-Host "     weights inside the package: $($bundledModelIds -join ', ')"
     }
     finally { $zip.Dispose() }

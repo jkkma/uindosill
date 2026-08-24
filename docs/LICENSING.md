@@ -358,6 +358,35 @@ the open item it was.
 pinned commit for a NOTICE file and carries none, so there is nothing under that heading to
 reproduce; the MIT text is the whole of the obligation as far as it was read.
 
+## The ask engine is MIT (llama.cpp), and its notice is fetched rather than found
+
+`llama-server.exe` and the DLLs beside it — the child process behind the Ask panel, vendored
+under `native/win-x64/llm/<backend>/` since 2026-08-24 and shipped in both installer channels
+(the vulkan drop; `scripts/package-windows.ps1` holds the channel table and the two decisions
+beside it) — are llama.cpp's own Windows release binaries, MIT, *Copyright (c) 2023-2026 The
+ggml authors*.
+
+**The obligation has one wrinkle the other natives do not: no llama.cpp release zip carries a
+LICENSE file** — measured at b10448 and at the b10603 pin alike — so there is nothing in the
+archive for an unpacking to keep. `scripts/vendor-llm-natives.ps1` therefore fetches the MIT
+text from the source tree at the pinned tag, verifies it against its own recorded digest
+(1,078 bytes; the digest is in `docs/NATIVE-BINARIES.md` beside the archive pins), and writes it
+as `LICENSE` beside the binaries in each backend directory, where `build/NativeAssets.targets`
+carries it into every output and `package-windows.ps1` refuses a package without it — the same
+travel arrangement as parakeet.cpp's, differing only in where the text comes from.
+
+**The component is rendered with the others**: `Attributions.Components` carries the row, so
+`uindosill notice` and the About window both say it, and a suite test holds the row to the
+copyright line and the travelling text. The binaries are unmodified upstream release builds,
+pinned by the release API's own per-asset digests and re-hashed locally on every vendoring; what
+this project adds is the C# that starts, asks and kills the process, which is this project's own
+MIT code.
+
+**What is not claimed.** No lawyer has read this either. The zips also carry OpenMP runtime
+DLLs and, in the CUDA case not yet shipped, would carry NVIDIA's cudart under the CUDA EULA —
+that channel decision is still open and its licensing section will be written when it is taken,
+not before.
+
 ## The bundled Python is fifty more redistributions, and none of them is discharged
 
 **Depending on a package and shipping it are different obligations, and this is the change that

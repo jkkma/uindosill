@@ -109,9 +109,16 @@ so beside the opt-ins rather than failing when one is started.
   to one; on a ten-minute podcast it cut longer rather than shorter. What it costs and what the two
   measurements do not cover are in [UNPROVEN.md](docs/UNPROVEN.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
-  cites timestamps you can click. **The asking is not built and the panel says so** — it is drawn,
-  disabled, and covered by a work-in-progress notice, because there is no language model in this
-  application and which one it should be is still open. **The half that needs no model shipped
+  cites timestamps you can click. **The asking is built as of 2026-08-24, and it brings its own
+  honesty rules**: a local `llama-server` answers from retrieved parts of the transcript, the
+  model cites opaque segment ids the application resolves to times — it never writes a timestamp
+  of its own — a claim it cannot anchor renders as unresolved, and every answer carries a line
+  saying it was generated, not transcribed. **Which model is still deliberately open**: nothing
+  is recommended or downloaded until the measurements in
+  [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) have been run, so the panel comes
+  alive when you put a GGUF file of your own in the models folder, and until then it says what it
+  is waiting for. No human has yet driven it against a real recording; UNPROVEN.md says exactly
+  that. **The half that needs no model shipped
   2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
   cues you click to jump to that moment — one per sentence where the engine's word times can tell
   the sentences apart, so a thirty-second segment reads as the sentences it holds rather than as one
@@ -198,7 +205,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1261 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1262 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

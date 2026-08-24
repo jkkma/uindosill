@@ -594,6 +594,15 @@ the table above. The drop lands under `native/win-x64/llm/<backend>/` and is pru
 set — `llama-server.exe` and the DLLs — because a llama.cpp zip carries a dozen lab tools and
 `build/NativeAssets.targets` globs every `native/**/*.exe` into every build output.
 
+**What ships (since 2026-08-24): the vulkan drop, in both installer channels.** Two decisions,
+recorded in `scripts/package-windows.ps1`'s channel table where they are enforced: no separate
+`llm/cpu` drop ships, because these zips are built with `GGML_BACKEND_DL` and the vulkan drop
+carries every per-ISA CPU variant beside `ggml-vulkan.dll` — whether the server actually falls
+back to them on a machine with a broken Vulkan driver is recorded as unmeasured in
+`docs/UNPROVEN.md`; and no `llm/cuda` ships yet, because its cudart-13.3 is a second CUDA
+runtime major (~391 MB) beside the ASR tier's cudart-12.8, and that is the maintainer's open
+decision, not a packaging line item.
+
 The pin is a release **tag**, never "latest": upstream marks its build releases as prereleases,
 so the GitHub `releases/latest` endpoint answers with something that is not a build at all
 (observed 2026-08-23). No llama.cpp release zip ships a LICENSE (measured at b10448 and b10603
