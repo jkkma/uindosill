@@ -31,6 +31,21 @@ public class SearchTokenizerTests
     [Fact]
     public void NormalizeJoinsWithSingleSpaces() =>
         Assert.Equal("wir haben s gesehen", SearchTokenizer.Normalize("«Wir haben's  gesehen!»"));
+
+    [Fact]
+    public void DecomposedAccentsTokenizeTheSameAsComposedOnes()
+    {
+        // In NFD, "señor" is n plus a combining tilde, and a combining mark is not a letter to
+        // Rune.IsLetterOrDigit — without composing first the word split into "sen" and "or", and
+        // every accented comparison quietly failed whenever the two sides' Unicode forms
+        // diverged. The two spellings below are different char sequences of the same word.
+        var composed = "señor";
+        var decomposed = "señor";
+        Assert.NotEqual(composed, decomposed);
+
+        Assert.Equal(SearchTokenizer.Tokenize(composed), SearchTokenizer.Tokenize(decomposed));
+        Assert.Equal(["señor"], SearchTokenizer.Tokenize(decomposed));
+    }
 }
 
 public class TranscriptWindowBuilderTests
@@ -114,6 +129,43 @@ public class TranscriptWindowBuilderTests
     {
         Assert.Empty(TranscriptWindowBuilder.Build(TranscriptDocument.Empty));
         Assert.Empty(TranscriptWindowBuilder.Build(Transcript("", "", "")));
+    }
+
+    [Fact]
+    public void SegmentsOutOfTimeOrderAreStillRetrievable()
+    {
+        // A hand-edited file is exactly what the reader reopens, and the grid used to stop at
+        // the FINAL segment's midpoint — a transcript whose last entry sat early in time left
+        // everything after it silently outside every window, a recall hole with no refusal
+        // anywhere.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(200), End = TimeSpan.FromSeconds(210), Text = "the late remark about the axolotl" },
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the early opening about the budget" },
+            ],
+        };
+
+        var windows = TranscriptWindowBuilder.Build(document);
+
+        Assert.Contains(windows, w => w.Text.Contains("axolotl", StringComparison.Ordinal));
+        Assert.Contains(windows, w => w.Text.Contains("budget", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void APreviewNeverSplitsASurrogatePair()
+    {
+        // A preview ending in U+FFFD reads as corruption. The window's text is cut between
+        // characters, never through an astral pair.
+        var window = TranscriptWindowBuilder.FromRun(
+            Transcript(string.Concat(Enumerable.Repeat("🦎", 60))), 1, 1);
+
+        var preview = window.Preview(80);
+        Assert.True(preview.Length <= 80);
+        Assert.EndsWith("…", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain('�', preview);
+        Assert.False(char.IsHighSurrogate(preview[^2]), "the cut landed inside a surrogate pair");
     }
 
     [Fact]

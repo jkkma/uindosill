@@ -24,6 +24,14 @@ namespace Parakeet.Core.Hosting;
 /// Off Windows this does nothing and says so through its return value; a host death there still
 /// closes the child's stdin, which ends its loop, and nothing more is promised.
 /// </para>
+/// <para>
+/// Two honest limits. The child is assigned to the job <em>after</em> it is spawned, so a host
+/// dying in that window — milliseconds, but real — leaves that one child outside the guarantee;
+/// closing it would take a suspended native CreateProcess, which is not worth the interop for a
+/// window this small. And a failed job creation latches: this never retries, so a host where the
+/// kernel refused the job once runs every later child unguarded — <see cref="CreationFailed"/>
+/// says so, and each start records its own answer through the return value.
+/// </para>
 /// </remarks>
 public static partial class KillOnCloseJob
 {
@@ -49,6 +57,22 @@ public static partial class KillOnCloseJob
         }
 
         return AssignOnWindows(process);
+    }
+
+    /// <summary>
+    /// True once the job could not be created — the latched state under which every later child
+    /// runs without the host-crash guarantee. Surfaced so a diagnostic can say it, instead of the
+    /// degradation being knowable only from each start's own return value.
+    /// </summary>
+    public static bool CreationFailed
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _creationFailed;
+            }
+        }
     }
 
     /// <summary>True when <paramref name="process"/> is in this host's kill-on-close job.</summary>

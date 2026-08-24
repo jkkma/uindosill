@@ -37,7 +37,7 @@ public static class AnswerParser
                 continue;
             }
 
-            if (line == AbstainSentinel)
+            if (IsSentinelLine(line))
             {
                 abstained = true;
                 continue;
@@ -50,7 +50,28 @@ public static class AnswerParser
             }
         }
 
-        return new AnswerDocument { Bullets = bullets, Abstained = abstained };
+        // A sentinel beside claims is a contradiction no renderer should repeat: the claims are
+        // the checkable half, so they stand and the abstention is dropped rather than the two
+        // rendering together as "the recording doesn't answer that" above a list of answers.
+        return new AnswerDocument { Bullets = bullets, Abstained = abstained && bullets.Count == 0 };
+    }
+
+    /// <summary>
+    /// The sentinel as a whole line, tolerating the dressing a post-hoc model puts on it — a
+    /// bullet marker, bold or italic marks, terminal punctuation — because rendering the raw
+    /// internal token as a claim is worse than reading it generously. A sentinel <em>inside</em>
+    /// prose stays inert: only a line that is nothing but the token counts.
+    /// </summary>
+    private static bool IsSentinelLine(string line)
+    {
+        var candidate = line;
+        if (candidate.StartsWith("- ", StringComparison.Ordinal))
+        {
+            candidate = candidate[2..].Trim();
+        }
+
+        candidate = candidate.Trim('*', '_').TrimEnd('.', '!').Trim();
+        return candidate == AbstainSentinel;
     }
 
     private static AnswerBullet? ParseBullet(string line)
@@ -61,6 +82,12 @@ public static class AnswerParser
 
         var (text, citations) = ExtractCitations(body);
         var (remaining, quote) = ExtractQuote(text);
+
+        // Guillemets are the answer's reserved quote marks — the grammar excludes them from free
+        // text — so any left in the prose after the one quote was lifted are re-marked as plain
+        // quotes rather than rendering dressed as the verified one.
+        remaining = remaining.Replace('«', '“').Replace('»', '”');
+
         var (finalText, label) = ExtractLabel(remaining);
 
         if (finalText.Length == 0 && citations.Count == 0 && quote is null)

@@ -197,17 +197,26 @@ public sealed partial class AskChatViewModel : ObservableObject
 
         try
         {
-            await EnsureEngineAsync(entry, cancellation.Token).ConfigureAwait(true);
-
-            // The load await is the window a recording switch can slip through; its cancel may
-            // land after the load completed without observing the token, so it is re-checked
-            // here before the stale local rebuilds the index.
-            cancellation.Token.ThrowIfCancellationRequested();
-
+            // The search costs milliseconds and the model load can cost minutes, in that order
+            // on purpose: a question retrieval cannot anchor abstains right here, before the
+            // transcriber is unloaded or a byte of the language model is read.
             entry.Status = "Searching the transcript…";
             _windows ??= TranscriptWindowBuilder.Build(document);
             _retriever ??= new Bm25Retriever(_windows);
             var evidence = _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window).ToList();
+
+            if (evidence.Count == 0)
+            {
+                entry.AbstainWithoutAsking();
+                return;
+            }
+
+            await EnsureEngineAsync(entry, cancellation.Token).ConfigureAwait(true);
+
+            // The load await is the window a recording switch can slip through; its cancel may
+            // land after the load completed without observing the token, so it is re-checked
+            // here before the ask runs over the document it was built against.
+            cancellation.Token.ThrowIfCancellationRequested();
 
             // The English pane's ask drops the source hint — the maintainer's decision,
             // 2026-08-24, closing the review's collision: the hint survives onto the translated
@@ -318,17 +327,20 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// </summary>
     public async Task ReleaseEngineAsync(string? reason = null)
     {
+        // An ask still inside its cold load has no engine yet, but taking it down deserves the
+        // same sentence — "Stopped." with no explanation reads as a defect, not a policy.
+        var hadModelWork = _engine is not null || _asking is not null;
         _asking?.Cancel();
 
         if (_engine is not null)
         {
             await _engine.DisposeAsync().ConfigureAwait(true);
             _engine = null;
+        }
 
-            if (reason is not null)
-            {
-                ResidencyNotice = reason;
-            }
+        if (reason is not null && hadModelWork)
+        {
+            ResidencyNotice = reason;
         }
     }
 
@@ -381,7 +393,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
 
     public bool HasSources => Sources.Count > 0;
 
-    public bool CanCopy => IsDone && Failure is null;
+    public bool CanCopy => IsDone && Failure is null && _copyText is not null;
 
     /// <summary>What the abstention says. One sentence, no apology, no invention.</summary>
     public string AbstainedText => "The recording doesn't answer that.";
@@ -437,6 +449,20 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         StreamingText = null;
         Status = null;
         Failure = message;
+        IsDone = true;
+        OnPropertyChanged(nameof(CanCopy));
+        CopyCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Empty retrieval's outcome: the abstention, reached without loading any model — and with
+    /// no model line or copy, because nothing generated anything.
+    /// </summary>
+    public void AbstainWithoutAsking()
+    {
+        StreamingText = null;
+        Status = null;
+        Abstained = true;
         IsDone = true;
         OnPropertyChanged(nameof(CanCopy));
         CopyCommand.NotifyCanExecuteChanged();
@@ -595,9 +621,11 @@ public sealed partial class CitationChipViewModel
             ? "The model gave no place in the recording for this."
             : !citation.Check.NonEmpty
                 ? "Points at silence."
-                : citation.Check.QuoteMatches == false
-                    ? "The quoted words are not at this place."
-                    : "Click to listen from here.";
+                : !citation.Check.WithinDuration
+                    ? "Points past the end of the recording."
+                    : citation.Check.QuoteMatches == false
+                        ? "The quoted words are not at this place."
+                        : "Click to listen from here.";
     }
 
     /// <summary>The rendered time — resolved by the application from the cited segments, exactly
@@ -630,7 +658,7 @@ public sealed partial class SourceRowViewModel
         _start = window.Start;
         Rank = rank;
         TimeRange = $"{Timecode.Format(window.Start)}–{Timecode.Format(window.End)}";
-        Snippet = window.Text.Length > 120 ? window.Text[..117] + "…" : window.Text;
+        Snippet = window.Preview(120);
     }
 
     public int Rank { get; }

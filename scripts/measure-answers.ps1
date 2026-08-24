@@ -474,11 +474,14 @@ try {
         # must appear in the text of the gold ranges. A false here is a labelling error, and it has
         # to be reported as one — otherwise it would surface later as a model failing the substring
         # check against a quote the transcript never contained.
+        # Token-boundary containment, exactly the product's own check: bare .Contains would let a
+        # gold quote validate here on a boundary the product fails ("art" inside "start"), and a
+        # label the harness blesses must not be one the product then rejects.
         $labelQuoteOk = $null
         $goldQuote = [string](Get-Prop $gold 'quote' '')
         if ($goldQuote -and $goldRanges.Count -gt 0) {
             $spanText = ($goldRanges | ForEach-Object { for ($i = $_.From; $i -le $_.To; $i++) { [string]$segments[$i - 1].text } }) -join ' '
-            $labelQuoteOk = (Normalize-Text $spanText).Contains((Normalize-Text $goldQuote))
+            $labelQuoteOk = (' ' + (Normalize-Text $spanText) + ' ').Contains(' ' + (Normalize-Text $goldQuote) + ' ')
             if (-not $labelQuoteOk) {
                 Write-Host ("  {0,-5} LABEL ERROR: the gold quote is not in the gold span's text — fix the set, not the model" -f $id) -ForegroundColor Red
             }
@@ -522,6 +525,15 @@ $byKind = $results | Group-Object kind
 $summary = [ordered]@{
     date = $startedAt.ToString('yyyy-MM-dd HH:mm zzz')
     backend = $Backend; release = $Release
+
+    # The release above is an -Release argument nobody verified against anything; the hash below
+    # is the binary that actually ran, so the report carries evidence beside the assertion and a
+    # reader can check it against docs/NATIVE-BINARIES.md themselves.
+    serverExe = [ordered]@{
+        path = $exe
+        bytes = (Get-Item -LiteralPath $exe).Length
+        sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
     model = [ordered]@{ path = (Split-Path -Leaf $ModelPath); bytes = (Get-Item -LiteralPath $ModelPath).Length }
     transcript = [ordered]@{ path = (Split-Path -Leaf $TranscriptPath); segments = $segments.Count; sha256 = $transcriptSha }
     questions = $questions.Count

@@ -68,6 +68,13 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         var port = TakeFreePort();
         var apiKey = Guid.NewGuid().ToString("N");
 
+        // The key travels in a file, not on the command line: a command line is readable by any
+        // same-user process for the child's whole life, while the file is gone the moment the
+        // child has read it. --api-key-file is in the vendored b10603 build's own --help
+        // (read on 2026-08-24); the temp directory is already per-user on Windows.
+        var apiKeyFile = Path.Combine(Path.GetTempPath(), $"uindosill-llm-{Guid.NewGuid():N}.key");
+        await File.WriteAllTextAsync(apiKeyFile, apiKey, ct).ConfigureAwait(false);
+
         var start = new ProcessStartInfo
         {
             FileName = install.ExecutablePath,
@@ -78,7 +85,7 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             CreateNoWindow = true,
         };
 
-        foreach (var argument in BuildArguments(options, port, apiKey))
+        foreach (var argument in BuildArguments(options, port, apiKeyFile))
         {
             start.ArgumentList.Add(argument);
         }
@@ -88,36 +95,55 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             start.Environment[name] = value;
         }
 
-        var process = Process.Start(start)
-            ?? throw new InvalidOperationException($"Could not start {install.ExecutablePath}.");
-
-        var inJob = KillOnCloseJob.TryAssign(process);
-
-        var client = new HttpClient
-        {
-            BaseAddress = new Uri(FormattableString.Invariant($"http://127.0.0.1:{port}/")),
-            // Streams run as long as an answer takes; per-request cancellation is the timeout.
-            Timeout = Timeout.InfiniteTimeSpan,
-        };
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        var server = new LlamaServerProcess(process, client, client.BaseAddress, inJob);
-        process.OutputDataReceived += (_, e) => server.Append(e.Data);
-        process.ErrorDataReceived += (_, e) => server.Append(e.Data);
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
         try
         {
-            await server.WaitHealthyAsync(options.LoadTimeout, ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            await server.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+            var process = Process.Start(start)
+                ?? throw new InvalidOperationException($"Could not start {install.ExecutablePath}.");
 
-        return server;
+            var inJob = KillOnCloseJob.TryAssign(process);
+
+            var client = new HttpClient
+            {
+                BaseAddress = new Uri(FormattableString.Invariant($"http://127.0.0.1:{port}/")),
+                // Streams run as long as an answer takes; per-request cancellation is the timeout.
+                Timeout = Timeout.InfiniteTimeSpan,
+            };
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            var server = new LlamaServerProcess(process, client, client.BaseAddress, inJob);
+            process.OutputDataReceived += (_, e) => server.Append(e.Data);
+            process.ErrorDataReceived += (_, e) => server.Append(e.Data);
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            try
+            {
+                await server.WaitHealthyAsync(options.LoadTimeout, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                await server.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            return server;
+        }
+        finally
+        {
+            // A healthy child has read the key; a failed one is dead. Either way the file has
+            // done its job, and a leftover key on disk is the thing this arrangement exists to
+            // avoid outliving.
+            try
+            {
+                File.Delete(apiKeyFile);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
     }
 
     /// <summary>
@@ -125,14 +151,17 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
     /// hold it without a process: these flags are decisions with records behind them, and a
     /// refactor that dropped one would otherwise only be found by running a model.
     /// </summary>
-    internal static IReadOnlyList<string> BuildArguments(LlamaServerOptions options, int port, string apiKey)
+    internal static IReadOnlyList<string> BuildArguments(LlamaServerOptions options, int port, string apiKeyFile)
     {
         var arguments = new List<string>
         {
             "-m", options.ModelPath,
             "--host", "127.0.0.1",
             "--port", port.ToString(CultureInfo.InvariantCulture),
-            "--api-key", apiKey,
+
+            // The file, never the key itself: a child's command line is readable by any
+            // same-user process for as long as it runs.
+            "--api-key-file", apiKeyFile,
             "-c", options.ContextSize.ToString(CultureInfo.InvariantCulture),
             "-ngl", options.GpuLayers.ToString(CultureInfo.InvariantCulture),
 
@@ -192,7 +221,22 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
 
             try
             {
-                using var response = await Client.GetAsync(new Uri("health", UriKind.Relative), ct).ConfigureAwait(false);
+                // The probe itself is bounded by what remains of the deadline: the client's own
+                // timeout is infinite for the sake of answer streams, and a child that accepts
+                // the connection and then stalls (the driver-hang-at-load class) would otherwise
+                // hang this await past any timeout the caller set.
+                var remaining = deadline - DateTime.UtcNow;
+                using var probe = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                if (remaining > TimeSpan.Zero)
+                {
+                    probe.CancelAfter(remaining);
+                }
+                else
+                {
+                    await probe.CancelAsync().ConfigureAwait(false);
+                }
+
+                using var response = await Client.GetAsync(new Uri("health", UriKind.Relative), probe.Token).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     return;
@@ -201,6 +245,12 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             catch (HttpRequestException)
             {
                 // Not listening yet; a 9 GB model is tens of seconds from a cold disk.
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // A probe still hanging at the deadline is the timeout, with the stall named.
+                throw new TimeoutException(
+                    $"llama-server did not become healthy within {timeout.TotalSeconds.ToString("F0", CultureInfo.InvariantCulture)} s — a /health probe was accepted and then stalled. Its last lines:\n{OutputTail}");
             }
 
             if (DateTime.UtcNow > deadline)

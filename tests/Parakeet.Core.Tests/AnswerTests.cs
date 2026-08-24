@@ -98,6 +98,55 @@ public class AnswerParserTests
     }
 
     [Fact]
+    public void ASentinelBesideBulletsDoesNotAbstain()
+    {
+        // "The recording doesn't answer that." above a list of answers is a contradiction no
+        // renderer should repeat: the bullets are the checkable half, so they stand.
+        var answer = AnswerParser.Parse("NOT_IN_TRANSCRIPT\n- but also this claim [S1]\n");
+
+        Assert.False(answer.Abstained);
+        Assert.Single(answer.Bullets);
+    }
+
+    [Theory]
+    [InlineData("NOT_IN_TRANSCRIPT.")]
+    [InlineData("**NOT_IN_TRANSCRIPT**")]
+    [InlineData("- NOT_IN_TRANSCRIPT")]
+    [InlineData("_NOT_IN_TRANSCRIPT_")]
+    public void ANearMissSentinelLineAbstainsInsteadOfRenderingTheRawToken(string line)
+    {
+        // The post-hoc path's dressing — punctuation, bold, a bullet marker — must not turn the
+        // internal token into a rendered claim.
+        var answer = AnswerParser.Parse(line + "\n");
+
+        Assert.True(answer.Abstained);
+        Assert.Empty(answer.Bullets);
+    }
+
+    [Fact]
+    public void TheSentinelInsideProseStaysInert()
+    {
+        var answer = AnswerParser.Parse("- NOT_IN_TRANSCRIPT is what it replies when unsure [S1]\n");
+
+        Assert.False(answer.Abstained);
+        Assert.Single(answer.Bullets);
+    }
+
+    [Fact]
+    public void ASecondGuillemetPairIsReMarkedAsPlainQuotes()
+    {
+        // Guillemets are the answer's reserved quote marks; only the extracted quote may ever
+        // render wearing them, or a second pair reads as a verified quote it is not.
+        var answer = AnswerParser.Parse("- One «real quote» and another «impostor» beside it [S1]\n");
+
+        var bullet = Assert.Single(answer.Bullets);
+        Assert.Equal("real quote", bullet.Quote);
+        Assert.DoesNotContain('«', bullet.Text);
+        Assert.DoesNotContain('»', bullet.Text);
+        Assert.Contains("“impostor”", bullet.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AQuoteIsExtractedAndTheTextKeepsReading()
     {
         var answer = AnswerParser.Parse("- They were sure about it «we checked the numbers twice» [S7]\n");
@@ -282,6 +331,26 @@ public class CitationValidatorTests
         var answer = AnswerParser.Parse("- fine [S1]\n- invented [S17]\n");
 
         Assert.False(CitationValidator.Validate(answer, transcript).AllCitationsPass);
+    }
+
+    [Fact]
+    public void AMultiCiteBulletNeedsItsQuoteInOneSpanNotEveryOne()
+    {
+        // The grammar invites up to five citations on a bullet; one quote cannot sit inside
+        // every one of their spans at once, so an honest multi-cite bullet is judged per bullet.
+        // Each citation's own QuoteMatches stays the per-span truth a tooltip can state.
+        var transcript = Transcript("the axolotl was discussed at length", "entirely other business");
+        var found = AnswerParser.Parse("- Both moments matter «axolotl was discussed» [S1, S2]\n");
+        var validation = CitationValidator.Validate(found, transcript);
+
+        Assert.True(validation.AllCitationsPass);
+        Assert.True(validation.Bullets[0].QuoteFound);
+        Assert.Equal(
+            [true, false],
+            validation.Bullets[0].Citations.Select(c => c.Check.QuoteMatches).ToArray());
+
+        var nowhere = AnswerParser.Parse("- Both moments matter «never spoken words» [S1, S2]\n");
+        Assert.False(CitationValidator.Validate(nowhere, transcript).AllCitationsPass);
     }
 
     [Fact]

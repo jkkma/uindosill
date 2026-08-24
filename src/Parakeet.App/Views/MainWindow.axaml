@@ -1422,11 +1422,18 @@
                                   <TextBlock FontWeight="SemiBold" Text="{Binding Label}"
                                              IsVisible="{Binding HasLabel}" />
                                   <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
+                                  <!-- The same marker the copied text carries: an uncited claim
+                                       must not read more confident on screen than in an email. -->
+                                  <TextBlock Classes="fine secondary" Text="[unverified]"
+                                             IsVisible="{Binding IsUncited}" />
                                   <TextBlock Classes="fine secondary" FontStyle="Italic" TextWrapping="Wrap"
                                              Text="{Binding QuoteDisplay}" IsVisible="{Binding HasQuote}" />
                                   <TextBlock Classes="fine secondary" Text="{Binding QuoteCaveat}"
                                              IsVisible="{Binding QuoteCaveat, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                  <ItemsControl ItemsSource="{Binding Citations}">
+                                  <!-- Disabled with the transport, exactly as the cue rows are: a
+                                       chip that silently does nothing reads as broken. -->
+                                  <ItemsControl ItemsSource="{Binding Citations}"
+                                                IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
                                     <ItemsControl.ItemsPanel>
                                       <ItemsPanelTemplate>
                                         <WrapPanel ItemSpacing="5" LineSpacing="5" />
@@ -1451,7 +1458,8 @@
                                      IsVisible="{Binding ModelLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                           <Expander Header="Sources" IsVisible="{Binding HasSources}">
-                            <ItemsControl ItemsSource="{Binding Sources}">
+                            <ItemsControl ItemsSource="{Binding Sources}"
+                                          IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SourceRowViewModel">
                                   <Button Classes="chip" Margin="0,0,0,4"

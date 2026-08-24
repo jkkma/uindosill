@@ -20,8 +20,13 @@ namespace Parakeet.Engine.LlamaServer;
 /// </remarks>
 public static class AnswerPromptBuilder
 {
-    /// <summary>The prompt: instruction, evidence lines named by their citation ids, question.</summary>
-    public static string BuildPrompt(AskRequest request)
+    /// <summary>
+    /// The prompt: instruction, evidence lines named by their citation ids, question. The dials
+    /// mirror <see cref="BuildGrammar"/>'s: an instruction the grammar makes unsamplable — reply
+    /// with a sentinel the abstain production does not exist for — steers the model toward an
+    /// output it cannot produce, which is measured as degraded answers, not as nothing.
+    /// </summary>
+    public static string BuildPrompt(AskRequest request, bool allowAbstain = true, bool requireQuote = true)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -31,11 +36,18 @@ public static class AnswerPromptBuilder
         builder.Append("Every bullet ends with the ids of the evidence that supports it, in square brackets, ");
         builder.Append("exactly as they appear below — for example [S12-S15].\n");
         builder.Append("Never write a timestamp, a time of day, or a duration.\n");
-        builder.Append("Quote the transcript verbatim inside «» in each bullet.\n");
+        if (requireQuote)
+        {
+            builder.Append("Quote the transcript verbatim inside «» in each bullet.\n");
+        }
+
         builder.Append("A claim you cannot support from the evidence gets [?] instead of an id.\n");
-        builder.Append("If the evidence does not answer the question at all, reply exactly: ");
-        builder.Append(AnswerParser.AbstainSentinel);
-        builder.Append('\n');
+        if (allowAbstain)
+        {
+            builder.Append("If the evidence does not answer the question at all, reply exactly: ");
+            builder.Append(AnswerParser.AbstainSentinel);
+            builder.Append('\n');
+        }
 
         if (request.Language is { } language)
         {
@@ -92,10 +104,12 @@ public static class AnswerPromptBuilder
 
         // The quote excludes brackets exactly as free text does: the parser lifts citations from
         // the whole bullet before it lifts the quote, so a bracket admitted here would let the
-        // model write an id inside «…» and have it promoted to a real citation.
+        // model write an id inside «…» and have it promoted to a real citation. Eight characters
+        // minimum, because a three-character quote («the») verifies against nearly any span and
+        // verifies nothing.
         if (requireQuote)
         {
-            builder.Append("quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{3,300} \"\\u00BB\"\n");
+            builder.Append("quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{8,300} \"\\u00BB\"\n");
         }
 
         builder.Append("cites ::= \"[\" cite (\", \" cite){0,4} \"]\" | \"[?]\"\n");

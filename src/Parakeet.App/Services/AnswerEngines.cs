@@ -81,8 +81,12 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 
     public IAnswerEngine Create()
     {
+        // Reachable when the file was deleted between Check() and the ask; the message lands in
+        // the chat verbatim, so it is user copy, not a developer's assertion.
         var model = FindModelFile()
-            ?? throw new InvalidOperationException("No .gguf in the models folder; Check() said so.");
+            ?? throw new InvalidOperationException(
+                "The language model file is gone from the models folder. Put a .gguf file back — "
+                + "the About window shows where the folder is.");
 
         return new LlamaServerAnswerEngine(new LlamaServerOptions { ModelPath = model });
     }

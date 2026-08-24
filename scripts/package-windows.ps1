@@ -760,9 +760,12 @@ foreach ($entry in $built) {
 
         # The second stack, against its own half of the channel table: exactly the promised llm
         # drops, no others, each with llama-server.exe and the MIT text inside the package.
+        # Deliberately NOT filtered to $everyBackend: the prune deletes only names it knows,
+        # which is the direction that fails safely — so this check is what keeps a drop under a
+        # name nothing here recognises from shipping in every channel unflagged.
         $llmInside = @($names |
             ForEach-Object { if ($_ -match "native/$Runtime/llm/([^/]+)/") { $Matches[1] } } |
-            Sort-Object -Unique | Where-Object { $_ -in $everyBackend })
+            Sort-Object -Unique)
         $llmPromised = $llmBackendsFor[$channel]
 
         foreach ($backend in @($llmPromised | Where-Object { $_ -notin $llmInside })) {

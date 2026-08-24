@@ -15,15 +15,24 @@ namespace Parakeet.Engine.LlamaServer;
 /// REST surface is the contract, and it changes far less often than `llama.h`.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The stream this yields is the model's raw text: <c>AnswerParser</c> stays the single place
 /// structure comes from, and the grammar built beside the prompt is what keeps that text inside
 /// the shape the parser reads — including keeping a thinking model's reasoning out of the answer
 /// channel, which the grammar was measured to do where <c>--reasoning-budget 0</c> alone was not
 /// (docs/UNPROVEN.md).
+/// </para>
+/// <para>
+/// Ownership: disposing this is what ends the child while the host lives — there is no finalizer
+/// backstop, deliberately, because a finalizer that killed a process the host might still be
+/// streaming from would trade a bounded leak for a race. The kill-on-close job is the backstop
+/// for a host that dies without disposing anything.
+/// </para>
 /// </remarks>
 public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
 {
     private readonly LlamaServerOptions _options;
+    private readonly SemaphoreSlim _loading = new(1, 1);
     private LlamaServerInstall? _install;
     private LlamaServerProcess? _server;
     private bool _disposed;
@@ -53,24 +62,35 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_server is { HasExited: false })
+        // Serialised: the check below is check-then-act, and two racing loads would each start a
+        // child of which only one could ever be killed again. The second caller waits, sees the
+        // first one's server, and returns.
+        await _loading.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            return;
-        }
+            if (_server is { HasExited: false })
+            {
+                return;
+            }
 
-        if (_server is not null)
+            if (_server is not null)
+            {
+                await _server.DisposeAsync().ConfigureAwait(false);
+                _server = null;
+            }
+
+            _install = LlamaServerLocator.TryFind(_options.Backend, _options.ServerRoot)
+                ?? throw new InvalidOperationException(
+                    _options.Backend is { } wanted
+                        ? $"No {LlamaServerLocator.BackendDirectoryName(wanted)} llama-server drop is vendored. Run scripts/vendor-llm-natives.ps1 -Backends {LlamaServerLocator.BackendDirectoryName(wanted)}."
+                        : "No llama-server drop is vendored at all. Run scripts/vendor-llm-natives.ps1.");
+
+            _server = await LlamaServerProcess.StartAsync(_install, _options, ct).ConfigureAwait(false);
+        }
+        finally
         {
-            await _server.DisposeAsync().ConfigureAwait(false);
-            _server = null;
+            _loading.Release();
         }
-
-        _install = LlamaServerLocator.TryFind(_options.Backend, _options.ServerRoot)
-            ?? throw new InvalidOperationException(
-                _options.Backend is { } wanted
-                    ? $"No {LlamaServerLocator.BackendDirectoryName(wanted)} llama-server drop is vendored. Run scripts/vendor-llm-natives.ps1 -Backends {LlamaServerLocator.BackendDirectoryName(wanted)}."
-                    : "No llama-server drop is vendored at all. Run scripts/vendor-llm-natives.ps1.");
-
-        _server = await LlamaServerProcess.StartAsync(_install, _options, ct).ConfigureAwait(false);
     }
 
     public async IAsyncEnumerable<string> AskAsync(
@@ -96,10 +116,22 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             yield break;
         }
 
-        var prompt = AnswerPromptBuilder.BuildPrompt(request);
+        var prompt = AnswerPromptBuilder.BuildPrompt(request, _options.AllowAbstain, _options.RequireQuote);
         var grammar = _options.UseGrammar
             ? AnswerPromptBuilder.BuildGrammar(request.Evidence, _options.AllowAbstain, _options.RequireQuote)
             : null;
+
+        // A prompt past the context would be truncated server-side in silence, leaving the
+        // grammar's ids live for evidence the model never saw. Four characters per token is an
+        // estimate and the message says so; the panel's ~2k-token evidence never comes near it.
+        var estimatedTokens = prompt.Length / 4;
+        if (estimatedTokens > _options.ContextSize)
+        {
+            throw new InvalidOperationException(
+                $"The prompt is roughly {estimatedTokens} tokens (estimated at four characters per token) "
+                + $"against a context of {_options.ContextSize}. Fewer or shorter evidence windows are the "
+                + "fix; a silent truncation is not.");
+        }
 
         using var message = new HttpRequestMessage(HttpMethod.Post, new Uri("completion", UriKind.Relative))
         {
@@ -121,16 +153,66 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         var generated = 0;
         var prefillTokens = 0;
         int? prefillTotal = null;
+        var endedCleanly = false;
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await foreach (var payload in SseReader.ReadPayloadsAsync(stream, ct).ConfigureAwait(false))
+
+        // The loop advances by hand rather than await foreach so a transport failure can be told
+        // apart by whether the child is still alive: a dead child's tail is the diagnostic, and a
+        // raw socket exception would bury it.
+        var payloads = SseReader.ReadPayloadsAsync(stream, ct).GetAsyncEnumerator(ct);
+        await using var _ = payloads.ConfigureAwait(false);
+        while (true)
         {
+            string payload;
+            try
+            {
+                if (!await payloads.MoveNextAsync().ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                payload = payloads.Current;
+            }
+            catch (Exception failure) when (failure is IOException or HttpRequestException && server.HasExited)
+            {
+                throw new InvalidOperationException(
+                    $"llama-server died mid-answer. Its last lines:\n{server.OutputTail}", failure);
+            }
+
             if (payload == "[DONE]")
             {
+                endedCleanly = true;
                 break;
             }
 
-            using var chunk = JsonDocument.Parse(payload);
-            var root = chunk.RootElement;
+            // An empty data: line is SSE housekeeping, not a frame to parse.
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                continue;
+            }
+
+            JsonDocument chunk;
+            try
+            {
+                chunk = JsonDocument.Parse(payload);
+            }
+            catch (JsonException failure)
+            {
+                throw new InvalidOperationException(
+                    $"llama-server sent a frame that is not JSON: '{Snippet(payload)}'.", failure);
+            }
+
+            using var parsed = chunk;
+            var root = parsed.RootElement;
+
+            // A slot-level failure — context overflow, an OOM the server survived — arrives as an
+            // error frame with the process still alive, and swallowing it would parse whatever
+            // came before as a truncated answer.
+            if (root.TryGetProperty("error", out var error))
+            {
+                throw new InvalidOperationException(
+                    $"llama-server reported an error mid-answer: {error.GetRawText()}");
+            }
 
             // With return_progress on, prefill chunks carry how much of the prompt has been
             // processed — the wait the panel renders, 467.9 measured seconds at its worst.
@@ -165,6 +247,7 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
 
             if (root.TryGetProperty("stop", out var stop) && stop.ValueKind == JsonValueKind.True)
             {
+                endedCleanly = true;
                 break;
             }
         }
@@ -174,6 +257,29 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             throw new InvalidOperationException(
                 $"llama-server died mid-answer. Its last lines:\n{server.OutputTail}");
         }
+
+        // The stream closing with neither a stop chunk nor [DONE], under a child that still
+        // lives, is a truncation — and a truncated stream parses as bullets, which is worse
+        // than an error. What exact frames the vendored build emits around failure is still
+        // the open observation docs/UNPROVEN.md owes; this only refuses the unambiguous case.
+        if (!endedCleanly)
+        {
+            throw new InvalidOperationException(
+                $"llama-server's answer stream ended before the answer did. Its last lines:\n{server.OutputTail}");
+        }
+    }
+
+    /// <summary>The first line of a payload, bounded, for an error message.</summary>
+    private static string Snippet(string payload)
+    {
+        var line = payload.AsSpan();
+        var newline = line.IndexOf('\n');
+        if (newline >= 0)
+        {
+            line = line[..newline];
+        }
+
+        return line.Length > 160 ? string.Concat(line[..157], "…") : line.ToString();
     }
 
     /// <summary>
@@ -230,5 +336,7 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             await _server.DisposeAsync().ConfigureAwait(false);
             _server = null;
         }
+
+        _loading.Dispose();
     }
 }
