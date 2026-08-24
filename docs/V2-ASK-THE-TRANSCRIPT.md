@@ -1093,16 +1093,16 @@ never has to decide residency per file, so the "beside the ASR model" column abo
 only alone, fit in the product; the runtime never needs a counter-confirmed check before loading;
 and the sysmem-fallback trap in decision 1 has one fewer way to be fallen into. What it costs is
 the wait in each direction: opening the chat pays the language model's load, and transcribing again
-pays the ASR model's, and the second is the cheap one. **The reverse direction is not yet decided**
-— starting a transcription while a chat is open — and the reading that keeps the rule simple is the
-symmetric one: the language model's child is killed when transcription starts and the chat reopens
-afterwards, with a saved slot making that reopen cheap; a recommendation, not a decision. **As of
-2026-08-24 that recommendation is the chat panel's implemented behaviour** — a transcription
-starting mid-chat kills the child, the panel says the next question reloads it, and no slot is
-saved yet — built because shipping the panel required *something* to happen and both-resident is
-the one arrangement this decision rules out. Best-effort during the handoff instant
-(`docs/PHASES.md` records the fire-and-forget), and it stands as the working reading until the
-maintainer takes the decision properly. What the
+pays the ASR model's, and the second is the cheap one. **The reverse direction — starting a
+transcription while a chat is open — was decided by the maintainer on 2026-08-24, ratifying the
+symmetric reading**: the language model's child is killed when transcription starts, the panel
+says the next question reloads it, and no slot is saved yet. It had been implemented as the
+working reading the day the panel shipped — built because shipping required *something* to happen
+and both-resident is the one arrangement this decision rules out — and what the ratification
+changes is its standing: the behaviour is the design now, not an accident awaiting review.
+Best-effort during the handoff instant stays part of the record (`docs/PHASES.md` has the
+fire-and-forget), and a saved slot making the reopen cheap remains an improvement, not a
+correction. What the
 counters still decide is the residency that survives — the language model beside decision 3's
 embedder and reranker, all `llama-server` children — and the desktop's idle adapter figure, which
 is now the largest unmeasured term against the language model alone. The language model stays
@@ -1306,11 +1306,14 @@ English, because CSB384 is; the twenty-five-language claim needs a second set la
 `status` is `labelled` the suite enforces the composition and the pin. What is consumed by whom:
 the suite checks shape only; `measure-answers.ps1` checks ranges against the transcript when it is
 present, runs tier 0 for recall@10 once BM25 exists in `Parakeet.Core`, plants the needles, and
-diffs every model run's citations against gold. One question the maintainer decides, not this
-document: a labelled file carries about thirty short quotes from a podcast in a public repository.
-It is a fixture and not a measurement product, so the `runs/` rule does not cover it; the
-alternatives are beside the transcript under `runs/`, unversioned, or with the research outside the
-repository.
+diffs every model run's citations against gold. One question was the maintainer's, not this
+document's, and it was taken on 2026-08-24: a labelled file carries about thirty short quotes from
+a podcast, and this repository is public, so **the labelled set lives on the Drive only** — beside
+the research, per `CLAUDE.md`'s convention, pushed and fetched with `lab.ps1 drive`. The in-repo
+`tests/fixtures/csb384/questions.json` stays a template permanently: the suite goes on validating
+the shape both states must have, and `measure-answers.ps1 -QuestionsPath` points at the fetched
+labelled copy when it runs. What the v1.0 research homecoming does with the file is that
+migration's question, met when it arrives.
 
 **The mechanism exists server-side.** `tools/server/README.md` at b10448 (read 2026-08-16)
 documents `grammar` and `json_schema` on `/completion` and `response_format` with a schema on

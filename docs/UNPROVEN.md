@@ -4315,12 +4315,14 @@ whatever is vendored) is the next release's first observation. Second: the chann
 vulkan drop alone, on the reading that `GGML_BACKEND_DL` builds fall back to the bundled per-ISA
 CPU variants when Vulkan cannot initialise — structurally sound, since the vulkan zip is the cpu
 zip plus one DLL, and **run on no machine with a broken or absent Vulkan driver**. Third: the
-win-cuda channel's ask tier is the same vulkan drop, because the LLM's cudart-13.3 beside the
-ASR's cudart-12.8 is the maintainer's open decision; an NVIDIA card asks over Vulkan in that
-channel until it is taken. **What that costs is measured as of 2026-08-24** — on the desktop's
+win-cuda channel's ask tier was the same vulkan drop while the cudart-13.3 question stood open.
+**Both halves closed on 2026-08-24, in order**: first the cost was measured — on the desktop's
 5080, CUDA buys 2.40× on the whole-transcript prefill (7.9 s against 19.1 s) and about 9 % on
-decode; § *The same file over Vulkan on the same card* below the engine section has the table.
-What remains unobserved is the release itself.
+decode; § *The same file over Vulkan on the same card* below the engine section has the table —
+and then the maintainer decided win-cuda ships `llm/cuda`, alone, with the locator reasoning
+recorded beside `package-windows.ps1`'s channel table. What remains unobserved is every release
+artefact of that decision: no tagged release has carried any ask tier, let alone the CUDA one,
+and the next tag is the first observation of both channels' real sizes.
 
 ## The four window defects fixed 2026-08-23 — tested headlessly, not looked at
 

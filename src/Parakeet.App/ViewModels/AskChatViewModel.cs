@@ -29,9 +29,9 @@ namespace Parakeet.App.ViewModels;
 /// <para>
 /// <b>Residency is the policy, not a heuristic (R9).</b> Asking the first question unloads the
 /// transcription model before the language model loads, and the panel says so; a transcription
-/// starting mid-chat kills the language model's child process the same way, which is the
-/// symmetric reading the plan records as a recommendation — implemented because the alternative
-/// is both resident, which is the one arrangement the register rules out.
+/// starting mid-chat kills the language model's child process the same way — the symmetric
+/// reading the maintainer ratified on 2026-08-24 (docs/V2-ASK-THE-TRANSCRIPT.md, decision 4),
+/// because the alternative is both resident, the one arrangement the register rules out.
 /// </para>
 /// </remarks>
 public sealed partial class AskChatViewModel : ObservableObject

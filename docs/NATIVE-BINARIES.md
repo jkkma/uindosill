@@ -594,14 +594,20 @@ the table above. The drop lands under `native/win-x64/llm/<backend>/` and is pru
 set — `llama-server.exe` and the DLLs — because a llama.cpp zip carries a dozen lab tools and
 `build/NativeAssets.targets` globs every `native/**/*.exe` into every build output.
 
-**What ships (since 2026-08-24): the vulkan drop, in both installer channels.** Two decisions,
-recorded in `scripts/package-windows.ps1`'s channel table where they are enforced: no separate
-`llm/cpu` drop ships, because these zips are built with `GGML_BACKEND_DL` and the vulkan drop
-carries every per-ISA CPU variant beside `ggml-vulkan.dll` — whether the server actually falls
-back to them on a machine with a broken Vulkan driver is recorded as unmeasured in
-`docs/UNPROVEN.md`; and no `llm/cuda` ships yet, because its cudart-13.3 is a second CUDA
-runtime major (~391 MB) beside the ASR tier's cudart-12.8, and that is the maintainer's open
-decision, not a packaging line item.
+**What ships (decided 2026-08-24, in two steps): the vulkan drop in the default channel, the
+CUDA drop in win-cuda.** Three decisions, recorded in `scripts/package-windows.ps1`'s channel
+table where they are enforced. No separate `llm/cpu` drop ships, because these zips are built
+with `GGML_BACKEND_DL` and every GPU drop carries every per-ISA CPU variant beside its own
+backend DLL — whether the server actually falls back to them on a machine with a broken GPU
+driver is recorded as unmeasured in `docs/UNPROVEN.md`. `llm/cuda` ships in win-cuda — the
+maintainer's decision, taken later the same day the gap was priced on the 5080 (CUDA buys 2.40×
+on the whole-transcript prefill and ~9 % on decode over the vulkan drop; `docs/UNPROVEN.md` has
+the table), accepting the CUDA pair's ~537 MB of archives against vulkan's 34 MB and a second
+CUDA runtime major (cudart-13.3) beside the ASR tier's cudart-12.8. And win-cuda carries the
+CUDA drop **alone**: `LlamaServerLocator` takes the best backend *present*, cuda before vulkan,
+with no driver probe, and no product surface picks the ask tier's backend, so a vulkan drop
+beside the cuda one would be bytes nothing could run. No release has carried `llm/cuda` yet;
+the next tag is its first observation.
 
 The pin is a release **tag**, never "latest": upstream marks its build releases as prereleases,
 so the GitHub `releases/latest` endpoint answers with something that is not a build at all
