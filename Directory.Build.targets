@@ -24,11 +24,34 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
 
-    <!-- Deliberately off. Native dependencies make all three hostile: single-file extracts
-         natives to a temp path that breaks the backend directory layout, trimming cannot see
-         through P/Invoke, and NativeAOT plus a hand-loaded native library is a debugging
-         surface nobody needs. Do not turn these on without re-reading docs/GOTCHAS.md. -->
-    <PublishSingleFile>false</PublishSingleFile>
+    <!--
+      Single-file is ON since 2026-08-23, and the reason it was off was wrong.
+
+      What it said: "single-file extracts natives to a temp path that breaks the backend directory
+      layout". That is what happens with IncludeNativeLibrariesForSelfExtract, which is off by
+      default and which nothing here sets. Measured instead of assumed: the five native libraries
+      that come from NuGet — SkiaSharp, HarfBuzz, ANGLE, ONNX Runtime — stay beside the executable,
+      and native/<rid>/<backend>/ is untouched because those files are copied by
+      build/NativeAssets.targets rather than bundled. Nothing extracts anywhere.
+
+      What it buys, measured the same day by packing two versions with a one-line source change
+      between them and reading the delta vpk produced:
+
+        loose assemblies   84,365-byte delta,  209,965,214-byte full package, ~200 files
+        single file        18,518-byte delta,  206,751,439-byte full package,   34 files
+
+      So the update every user downloads is 4.6x smaller, not larger, which is the opposite of what
+      was expected: a relinked 98.5 MB executable diffs well under zstd. Fewer loose assemblies
+      beside the executable also means fewer things to side-load in its place.
+
+      Trimming and NativeAOT stay off, and those reasons still hold: trimming cannot see through
+      P/Invoke, and NativeAOT plus a hand-loaded native library is a debugging surface nobody needs.
+
+      Two checks key on the shape of a publish and had to move with this — the file count and
+      hostfxr.dll are gone from the output — see scripts/package-windows.ps1 and ci.yml, which now
+      size the executable instead.
+    -->
+    <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
     <PublishAot>false</PublishAot>
 

@@ -343,12 +343,24 @@ foreach ($channel in $Channels) {
     # Self-contained, not framework-dependent. Eleven files means a lost --self-contained; see
     # Directory.Build.targets and docs/GOTCHAS.md gotcha 9. Checked here as well as in CI, because
     # this is the output a user actually receives.
+    # Both of the old signals went away when single-file was turned on: hostfxr.dll is inside the
+    # executable now, and the publish is around 34 files rather than 200. What still separates a
+    # self-contained build from a framework-dependent one is the size of the executable itself — the
+    # runtime is either in there or it is not, and that is about 98 MB of difference.
     $publishedFiles = @(Get-ChildItem -LiteralPath $publishDir -Recurse -File)
-    if ((-not (Test-Path -LiteralPath (Join-Path $publishDir 'hostfxr.dll'))) -or ($publishedFiles.Count -lt 100)) {
-        throw "$publishDir has $($publishedFiles.Count) files and no hostfxr.dll — this publish is not " +
-              "self-contained, and would need the exact .NET runtime present on every machine."
+    $mainExePath = Join-Path $publishDir $mainExe
+    if (-not (Test-Path -LiteralPath $mainExePath)) {
+        throw "$publishDir has no $mainExe. Publishing produced something this cannot package."
     }
-    Write-Note "publish: $($publishedFiles.Count) files, self-contained"
+
+    $mainExeBytes = (Get-Item -LiteralPath $mainExePath).Length
+    if ($mainExeBytes -lt 50MB) {
+        throw "$mainExe is $('{0:N0}' -f $mainExeBytes) bytes, which is a framework-dependent " +
+              "single-file build: it would need the exact .NET runtime present on every machine. " +
+              "A RuntimeIdentifier does not imply SelfContained on .NET 8+; see Directory.Build.targets."
+    }
+    Write-Note ("publish: {0} files, {1:N0} MB executable, self-contained and single-file" -f `
+        $publishedFiles.Count, ($mainExeBytes / 1MB))
 
     # The bundled Python, which is where two of this product's three models actually run. It goes
     # into the publish rather than being packed separately because Velopack ships a directory: what

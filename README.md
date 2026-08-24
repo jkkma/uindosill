@@ -373,7 +373,7 @@ still C#. Moving the engines across a process boundary did not move the decision
 | The other two models | Diariser and translator in a bundled Python sidecar — one child process per run, JSON lines over stdin and stdout, WebGPU by default | Both are ONNX Runtime models, and the C# ports of them were about 7,400 lines reimplementing what NVIDIA and HuggingFace already ship. **ONNX Runtime lives in that process now: no .NET project in this solution references it.** WebGPU because it reproduces the CPU's answer to 0.0005 DER points and CUDA does not (2026-08-21; `attic/README.md` has what was retired). |
 | Model format | GGUF | `mudler/parakeet-cpp-gguf`, f16 only — the quantisations were withdrawn from the catalogue 2026-08-20. |
 | Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
-| Deployment | Self-contained + ReadyToRun, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | No single-file, no trimming, no NativeAOT. |
+| Deployment | Self-contained + ReadyToRun + single-file, `win-x64` (`win-arm64` publishes but has no natives — upstream ships none — so it cannot transcribe) | The managed assemblies are inside the executable; the vendored natives are not, and are found by path. No trimming, no NativeAOT. |
 
 Why parakeet.cpp and not the obvious alternatives is recorded in
 [ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md).
