@@ -4275,34 +4275,37 @@ new arrangement — the drawer floating over the words, the even split at any re
 has been seen on a screen either; what holds it is the same headless suite, with the geometry
 assertions rewritten to the new rows.
 
-## The chat panel — built 2026-08-24, measured headlessly, a human has asked it nothing
+## The chat panel — built 2026-08-24, measured headlessly, and used by a human the same day
 
 The Ask tab's covered third went live: retrieval over the open recording's document, a streamed
 answer, parsed bullets with citation chips that seek, the abstain sentence, the provenance line,
 decision 5's copy form. What stands behind the claims:
 
 - **Thirteen view-model and window tests drive the seam against the fakes** — the canned answer
-  engine and the fake player — and they are the whole of what "the panel works" means today:
+  engine and the fake player — and they are most of what "the panel works" means:
   streaming replaced by bullets, a resolved chip seeking and playing, the quote arriving in
   English on a translated recording, R9 unloading the transcription model on the first question
   and the language model on a transcription starting, empty retrieval abstaining, the cover
   naming its missing prerequisite, Enter asking, a suggestion chip asking its question, a dead
   engine dropped so the next question starts fresh, and copy leading with the marker line.
-- **The real engine behind the same seam ran under its gated integration test** (cpu and vulkan,
-  the 0.6B, the section above) — but never through this panel. No question has gone from this
-  input box through a real `llama-server` on any machine.
-- **The plan's exit criterion is therefore open**: a human asks three questions of a real
-  transcript on Windows and follows a citation into the audio. The path for that run: put a
-  GGUF in the models folder (the About window names it), open the Ask tab, ask. Nothing about
-  it has been observed, including what a 9B's load and prefill waits feel like against the
-  panel's status line, and whether the streamed raw text reads as provisional or as an answer.
-- **The window's real clipboard is unexercised**: the headless tests replace the copy delegate,
-  so `Clipboard.SetDataAsync` on a real desktop has never run. The residency handoff when a
-  transcription starts mid-chat is fire-and-forget and best-effort by design; whether the kill
-  always lands before the ASR load peaks is unmeasured, and on a 16 GB card with a 9 GB model
-  resident the overlap instant is exactly the arithmetic decision 4 warns about.
-- Streaming was asserted at completion granularity — the fake completes in microseconds — so
-  "the answer visibly streams" is a design intention the real model run has to show.
+- **The real engine behind the same seam ran under its gated integration test** (cpu, vulkan
+  and cuda — the section above), and **through this panel on 2026-08-24: the plan's exit
+  criterion is met.** The maintainer's run, on the desktop, against a development build with
+  the llm/cuda drop and `Qwen3.5-9B-Q8_0` served from the models folder: three questions of a
+  real transcript asked through the input box, answered, and **the citations played the
+  audio** — the click-through into the recording that the whole citation discipline exists
+  for. Reported by the person who ran it (this is a human's criterion, so a human's report is
+  its evidence); no counters were sampled and nothing was timed, deliberately — the panel's
+  numbers live in the engine sections above.
+- **What the run did not report, so it stays open**: whether the streamed raw text reads as
+  provisional before the parse replaces it (streaming was asserted at completion granularity —
+  the fake completes in microseconds), and the window's real clipboard — the headless tests
+  replace the copy delegate, so `Clipboard.SetDataAsync` on a real desktop has still never
+  run. The residency handoff when a transcription starts mid-chat also remains best-effort by
+  design: whether the kill always lands before the ASR load peaks is unmeasured, and on a
+  16 GB card with a 9 GB model resident the overlap instant is exactly the arithmetic
+  decision 4 warns about. And the run was a development build — no *installed package's*
+  panel has asked anything, which the first rc.4 install can close.
 
 ### The shipped ask tier — packaged 2026-08-24, and three things no release has observed
 
