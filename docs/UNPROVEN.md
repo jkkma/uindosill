@@ -3683,6 +3683,30 @@ figure, this card and driver only, and the number that matters for the decision 
 Vulkan column standing alone: the fallback path is not a degraded mode, it is a 19-second
 prefill and a 69 tok/s conversation.
 
+#### The answers harness ran whole on the desktop — 2026-08-24, synthetic labels, no quality claim
+
+`measure-answers.ps1` had run only on the laptop, against a synthetic 120-segment transcript.
+With `uindosill retrieve` landed (recall@10 through the product's own index — `docs/PHASES.md`
+§ *Built 2026-08-24* has the verb), the whole harness ran here against the real f16 transcript
+and the 9B on CUDA (`runs/20260824-035526-answers-cuda`) — over a **four-question
+harness-validation set whose gold ranges a session lifted from the transcript's own text**, so
+every pass/fail below validates the machinery and none of it measures answer quality. Three
+observations survive that caveat, because they are about the mechanism:
+
+- **The 9B invents citations on the adversarial question at full depth, with the abstain exit
+  available** — six `[S1]` citations for a Reykjavik weather question the episode never touches.
+  The 2026-08-16 laptop finding reproduces at 1,023 segments on CUDA: scale did not buy the
+  abstain branch. The thirty labelled questions measure this dial properly.
+- **The needle mechanism works at scale**: a segment planted after S500 of 1,023 was cited
+  (S501, six times) — and both pointed questions came back citing exactly their gold segments.
+  recall@10 through the verb read 2/2 over 349 windows, which is the path working, not a recall
+  figure; the figure waits on the labels.
+- **The grammar's decode cost measured 25 % on this run** — 68.4 tok/s unconstrained against
+  51.2 under the grammar, the 9B at full transcript depth on CUDA. The recorded spread was
+  12–44 % on a 0.6B and 6.4 % on the same 9B at the same depth on the laptop's Vulkan, so the
+  cost does not simply shrink with model size — it moves with backend, prompt and run, which is
+  why the harness measures it per run rather than quoting any one of these.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the

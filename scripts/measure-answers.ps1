@@ -20,10 +20,14 @@
 
     What it deliberately does not do:
 
-      - **recall@k is not implemented.** Tier 0 retrieval (windowed BM25) belongs in
-        Parakeet.Core, and a BM25 reimplemented here in PowerShell would measure this script's
-        tokenizer rather than the product's — the exact failure docs/UNPROVEN.md exists to
-        prevent. The summary prints the stub honestly.
+      - **recall@10 is not reimplemented here.** Tier 0 retrieval (windowed BM25) belongs in
+        Parakeet.Core, and a BM25 in PowerShell would measure this script's tokenizer rather
+        than the product's — the exact failure docs/UNPROVEN.md exists to prevent. Since
+        2026-08-24 the measurement runs through `uindosill retrieve`, the product's own index
+        behind a verb, over the questions that carry gold ranges (pointed, paraphrase,
+        who-said). Global questions are excluded — they are the router's path and a person's
+        judgement — and needles are excluded here because their hit rate above is the model's
+        citation; when the CLI is not built the summary prints the stub honestly instead.
       - **Citation precision is not scored.** Whether a resolving citation actually supports the
         claim is a person's judgement; the summary carries an empty column for it.
       - **A template is not scored.** The question set's status must be 'labelled'; scoring
@@ -191,6 +195,65 @@ if ([string]$pinnedSha -ne $transcriptSha) {
 
 $questions = @($questionsDoc.questions)
 Write-Host ("question set: {0} questions, pin ok ({1} segments, sha256 {2}…)" -f $questions.Count, $segments.Count, $transcriptSha.Substring(0, 12))
+
+# ── recall@10, through the product's own index ───────────────────────────────────────────────────
+# `uindosill retrieve` is the same window builder, tokenizer and BM25 the Ask panel retrieves
+# evidence with, which is what makes this a figure about the product. Scored over the questions
+# that carry gold ranges; global stays out (the router's path, judged by a person) and needles
+# stay out (their hit rate below is the model's citation, and the plant lives in a copy of the
+# transcript this index never saw).
+$recall = $null
+$recallKinds = @('pointed', 'paraphrase', 'who-said')
+$recallQuestions = @($questions | Where-Object {
+    $recallKinds -contains [string]$_.kind -and @(Get-Prop $_.gold 'segments' @()).Count -gt 0
+})
+$cli = Join-Path $repo 'src/Parakeet.Cli/bin/Release/net10.0/uindosill.exe'
+if (-not (Test-Path -LiteralPath $cli)) { $cli = Join-Path $repo 'src/Parakeet.Cli/bin/Release/net10.0/uindosill' }
+if ($recallQuestions.Count -gt 0 -and (Test-Path -LiteralPath $cli)) {
+    $retrieveArgs = @('retrieve', $TranscriptPath, '--json', '-k', '10')
+    foreach ($q in $recallQuestions) { $retrieveArgs += @('-q', [string]$q.question) }
+    $retrieved = (& $cli @retrieveArgs) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "uindosill retrieve exited $LASTEXITCODE; recall cannot be scored. Its stderr is above." }
+    $retrievedDoc = $retrieved | ConvertFrom-Json
+
+    $perQuestion = [System.Collections.Generic.List[object]]::new()
+    for ($i = 0; $i -lt $recallQuestions.Count; $i++) {
+        $q = $recallQuestions[$i]
+        $ranges = @(Get-Prop $q.gold 'segments' @() | ForEach-Object { [pscustomobject]@{ From = [int]$_[0]; To = [int]$_[1] } })
+        $firstHitRank = $null
+        foreach ($hit in @($retrievedDoc.results[$i].hits)) {
+            foreach ($g in $ranges) {
+                if ([int]$hit.firstSegment -le $g.To -and $g.From -le [int]$hit.lastSegment -and $null -eq $firstHitRank) {
+                    $firstHitRank = [int]$hit.rank
+                }
+            }
+        }
+        $perQuestion.Add([pscustomobject]@{
+            id = [string]$q.id; kind = [string]$q.kind
+            hit = ($null -ne $firstHitRank); firstHitRank = $firstHitRank
+            top = @($retrievedDoc.results[$i].hits | ForEach-Object { [string]$_.citation })
+        })
+    }
+
+    $recall = [ordered]@{
+        k = 10
+        windows = [int]$retrievedDoc.windows
+        byKind = [ordered]@{}
+        overallHits = @($perQuestion | Where-Object hit).Count
+        overallOf = $perQuestion.Count
+        questions = $perQuestion
+    }
+    foreach ($kind in $recallKinds) {
+        $ofKind = @($perQuestion | Where-Object { $_.kind -eq $kind })
+        if ($ofKind.Count -gt 0) {
+            $recall.byKind[$kind] = [ordered]@{ hits = @($ofKind | Where-Object hit).Count; of = $ofKind.Count }
+        }
+    }
+    Write-Host ("recall@10: {0}/{1} over {2} windows (tier 0, via uindosill retrieve)" -f $recall.overallHits, $recall.overallOf, $recall.windows)
+}
+elseif ($recallQuestions.Count -gt 0) {
+    Write-Host "recall@10: skipped — no uindosill CLI at $cli; build first (dotnet build -c Release)." -ForegroundColor Yellow
+}
 
 if (-not $ServerDirectory) { $ServerDirectory = Join-Path $repo "runs/llama-$Release/$Backend" }
 $exe = Join-Path $ServerDirectory 'llama-server.exe'
@@ -450,6 +513,7 @@ $summary = [ordered]@{
     environment = $childEnv
     results = $results
     grammarCost = $grammarCost
+    recall = $recall
 }
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'answers.json') -Encoding utf8
 
@@ -479,7 +543,13 @@ foreach ($r in $results) {
     $null = $md.AppendLine(("| {0} | {1} | {2} | {3} | {4} | {5} |" -f $r.id, $r.kind, $(if ($r.pass) { 'pass' } else { '**FAIL**' }), ($(if ($r.citations.Count) { $r.citations -join ' ' } else { '—' })), ($(if ($r.goldSegments.Count) { $r.goldSegments -join ' ' } else { 'abstain' })), (Fmt $r.predictedPerSecond 'N1')))
 }
 $null = $md.AppendLine('')
-$null = $md.AppendLine('recall@10: **not implemented** — tier 0 (windowed BM25) belongs in Parakeet.Core, and a PowerShell reimplementation here would measure this script rather than the product.')
+if ($null -ne $recall) {
+    $kindParts = @($recall.byKind.Keys | ForEach-Object { "{0} {1}/{2}" -f $_, $recall.byKind[$_].hits, $recall.byKind[$_].of })
+    $null = $md.AppendLine(("recall@10 (tier 0, the product's own index via ``uindosill retrieve``, {0} windows): **{1}/{2}** — {3}. A hit is a top-10 window overlapping a gold range. Global questions are the router's path and a person's judgement; needles are scored above by the model's citation." -f $recall.windows, $recall.overallHits, $recall.overallOf, ($kindParts -join ', ')))
+}
+else {
+    $null = $md.AppendLine('recall@10: **not scored this run** — no labelled gold ranges, or the uindosill CLI is not built; tier 0 is measured through `uindosill retrieve` so the figure describes the product''s own index, never a reimplementation here.')
+}
 $null = $md.AppendLine('')
 $null = $md.AppendLine('Citation precision — does a resolving citation actually support its claim — is a **person''s column, and it is blank**: spot-check N answers in answers.json and record the count beside this block, labelled as a human judgement.')
 $md.ToString() | Set-Content -LiteralPath (Join-Path $OutputDirectory 'summary.md') -Encoding utf8
