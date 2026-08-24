@@ -21,6 +21,12 @@ public sealed record TranscriptDocument
 
     public ComputeBackend? Backend { get; init; }
 
+    /// <summary>
+    /// The language hint the caller passed with the request, or null when none was — and that is
+    /// the whole story, by decision (docs/V2-ASK-THE-TRANSCRIPT.md, 2026-08-24): nothing detects
+    /// a language the user did not state, and consumers treat null as "unknown", never as a
+    /// value to infer.
+    /// </summary>
     public string? Language { get; init; }
 
     /// <summary>

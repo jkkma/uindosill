@@ -3733,6 +3733,17 @@ citation scrolls to cues that already wear their speaker chips. `AnswerPromptBui
 built exactly this line; what changed is that its remark now cites a decision rather than a
 default awaiting one. Of v1's three questions, only the language source remains open.
 
+### Decided 2026-08-24 — the transcript's language is the request hint, or nothing
+
+The last of the three, and with it the register's list of questions v1 created is empty:
+`TranscriptDocument.Language` stays the `-l` hint or null, nothing detects a language the user
+did not state, and null means the prompt makes no claim about the answer's language — R6 read
+honestly as enforced where known, silent where not, because a check against a language nobody
+recorded would measure an invention. The hint survives translation (the English document is
+built with a record `with` expression), so the one document a translated ask runs over still
+carries it. No code changed hands: the prompt builder already emitted the language line only
+when given one, and the decision is what makes that the design rather than the accident.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

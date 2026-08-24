@@ -12,11 +12,11 @@ namespace Parakeet.Engine.LlamaServer;
 /// <remarks>
 /// The evidence lines carry no speaker labels — decided by the maintainer 2026-08-24, the
 /// register's question 2: a resolved citation scrolls to cues that already wear their chips, so
-/// the reader sees who spoke without the model ever being in a position to say it. The
-/// instruction is English for now — where the transcript's language comes from is the register's
-/// one remaining open question, and this class does not decide it; it does pass the
-/// answer-language request through when the caller knows one. Citation tokens stay ASCII
-/// whatever the language, so the grammar never has to know it.
+/// the reader sees who spoke without the model ever being in a position to say it. The language
+/// line appears only when the caller knows a language, and that is the decided shape (register,
+/// 2026-08-24): the transcript's language is the request hint or nothing, so a hintless
+/// transcript gets the unlocalised prompt and no claim is made about the answer's language.
+/// Citation tokens stay ASCII whatever the language, so the grammar never has to know it.
 /// </remarks>
 public static class AnswerPromptBuilder
 {
