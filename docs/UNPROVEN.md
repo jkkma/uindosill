@@ -159,6 +159,7 @@ surprising about these figures is a property of this hardware rather than of the
 | CPU | AMD Ryzen 9 9950X — **16 cores, 32 threads**, Zen 5, 4.3 GHz base |
 | Memory | 32 GB DDR5-6000 CL28 (2 × 16 GB) |
 | GPU | GeForce RTX 5080, 16 GB (16,302 MiB reported), **driver 610.88** |
+| GPU memory held, idle | From the Windows performance counters on 2026-08-24, about 03:13 local, no model loaded, no browser open — the Claude desktop app, Windows Settings and the NVIDIA overlay the only windows: **`\GPU Adapter Memory(*)\Dedicated Usage` 2,115 MiB, `Shared Usage` 51 MiB** (mean of 3 samples at 1 s); by process, `\GPU Process Memory(pid_*)\Dedicated Usage` has `dwm` at 6,704 MiB, `NVIDIA Overlay` 781 MiB, the Claude app 177 MiB. As on the laptop's entry, the per-process figures are commitments and sum far past the adapter's held total; the adapter figure is what the card is holding. `nvidia-smi` read 1,832 MiB used at the same moment — the two count differently, and the WDDM adapter counter is the one every fit figure in the v2 register is stated against. This was the largest unmeasured term in decision 4's arithmetic; at ~2.1 GiB it sits under the ~2.5 GiB that register's "fits" lines assumed, and it is a number that moves with what is open, not a constant of the machine |
 | Storage | 2 TB PCIe 5.0 ×2 NVMe SSD |
 | Runtime | .NET 10.0.11, SDK 10.0.400 |
 | Native | parakeet.cpp v0.5.0, ABI 6 |
@@ -3572,6 +3573,43 @@ Two observations from the first constrained run, both for decision 6's ledger:
   nothing but the quote check. A sentinel inside a bullet is not an abstention and nothing flags
   it yet; whether the thirty-question harness should score it as one is a question this run
   hands the register rather than answers.
+
+#### CUDA executed for the first time — desktop, 2026-08-24, and the sm_120 scan is corroborated
+
+Until this run the cuda-13.3 drop had been scanned and never run on any machine. Three claims,
+each now measured on the RTX 5080 (driver 610.88), all from the b10603 pin:
+
+- **The vendoring reproduces.** `vendor-llm-natives.ps1 -Backends cuda` hashed both archives to
+  exactly the digests recorded in `docs/NATIVE-BINARIES.md`, and
+  `scripts/vendor-cuda.ps1 -InspectOnly` against the b10603 `ggml-cuda.dll` (141,895,168 bytes)
+  read the same architecture list the b10448 scan did: `sm_86`, `sm_89`, `sm_120`, `sm_121`
+  cubins, PTX `compute_75/80/90`, 142 containers parsed, 0 rejected.
+- **The kernels are native, not a JIT.** The gated integration test — the product path:
+  `LlamaServerAnswerEngine` on `ComputeBackend.Cuda` over the vendored drop, load, `/health`,
+  a grammar-constrained ask, stream, parse, validate — **passed in about 1 s of test time**
+  (4.5 s of `dotnet test` wall-clock) on the machine's first-ever CUDA execution, where no
+  driver JIT cache could have existed. The spike
+  (`runs/20260824-032020-spike-cuda`, `Qwen3-0.6B-Q8_0.gguf`, 804,753,632 bytes, hash matching
+  the pin) then made the same point mechanically: **two starts to `/health` in 1.12 s and
+  1.03 s with `CUDA_CACHE_DISABLE=1`** — a PTX-only backend would have JIT'd on both. This is
+  the corroboration the register's decision 1 had been waiting for since 2026-08-16.
+- **The first VRAM figures on the desktop, backend named (cuda).** The 0.6B at `-c 40960`,
+  f16 cache, all 29 layers offloaded: **server dedicated 5,415.7 MiB** (+126.0 MiB shared);
+  adapter dedicated 1,367.2 MiB idle → 6,782.9 loaded → 6,786.9 after prefill and answer →
+  **1,367.2 after the kill**, with `nvidia-smi` tracking beside it (1,357 → 6,772 → 1,357 MiB).
+  The unload-is-a-kill claim now holds measured on both machines and both GPU backends.
+  The 5.4 GiB is consistent with arithmetic — ~0.77 GiB of weights plus a 4.375 GiB f16 cache
+  for 28 layers of 8 KV heads × 128 at 40,960 tokens plus compute — and it is why the test
+  model is no sizing guide: its per-token KV cost is nearly four times the 9B's.
+- Peak under the gated test, sampled by `nvidia-smi` at 1 s: 2,676 MiB used, 30 °C, 44.9 W —
+  a 0.6B at `-c 4096` barely wakes the card.
+
+What this run does not establish: any timing at depth (the spike ran the built-in stand-in
+prompt — 119 tokens; its 8,043.8 tok/s prefill and 620.2 tok/s decode are a 0.6B at trivial
+depth and mean nothing for the feature), and nothing about answer quality. One operational
+note for the next run: b10603's default server verbosity does not emit ggml's
+`model/KV/compute buffer size` lines — `-lv 5` restores them (probed separately: at `-c 4096`
+the 0.6B reports CUDA0 model 604.15 MiB, KV 448.00 MiB, compute 30.01 MiB).
 
 ### The confidence threshold is set by guess, and the first real data disagrees
 

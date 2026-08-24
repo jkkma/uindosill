@@ -3833,6 +3833,23 @@ to rc.3's 485.4 MB installer, which carried the Python bundle but predated the b
 (455 MB of the difference) and the ask tier; the next tagged release is where the real channel
 sizes get their first observation.
 
+### Measured 2026-08-24 — the desktop's first CUDA execution, and the reading becomes a run
+
+The corroboration the register had been waiting for since 2026-08-16, on the RTX 5080. The
+cuda-13.3 pair vendored under `native/win-x64/llm/cuda/` with both digests reproducing;
+`vendor-cuda.ps1 -InspectOnly` reading the same architecture list out of the b10603
+`ggml-cuda.dll` that the b10448 scan predicted (`sm_120` among the cubins); the gated
+integration test passing on `ComputeBackend.Cuda` in about a second of test time on the
+machine's first-ever CUDA execution; and the spike putting the same fact mechanically — two
+starts to `/health` in 1.12 s and 1.03 s with the driver's JIT cache disabled, which a PTX-only
+backend could not do. The first VRAM figures this project has had arrived with it — the 0.6B
+holding 5,415.7 MiB of the card at a 40,960-token f16 cache, the adapter returning to its idle
+figure exactly on the kill — and the desktop's idle hold itself, 2,115 MiB, went into the
+machine block as decision 4's largest unmeasured term made a measurement. `docs/UNPROVEN.md`
+§ *The engine on the product path* carries the run; `runs/20260824-032020-spike-cuda` is the
+evidence. What this did not measure: anything at depth, and anything about answer quality —
+the 9B and the transcript are the next sitting.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now
