@@ -49,25 +49,40 @@ public sealed class BundledModelsTests : IDisposable
     [Fact]
     public void TheOnesThatDoNotFitAreNotBundled()
     {
-        // A GitHub release asset must be under 2 GiB. The recogniser is 1.34 GiB and the translator
-        // 1.34 GiB, so either one puts the CUDA channel — 1.19 GiB before any weights — over that
-        // limit, and the release simply cannot be published. This is the arithmetic written down as
-        // an assertion, so that adding one to the array is a decision somebody makes on purpose
-        // rather than a change that fails on the upload at the end of a release.
+        // A GitHub release asset must be under 2 GiB, and the llm/cuda decision spent win-cuda's
+        // room: the python-less Setup.exe measured 1,976,256,205 bytes on 2026-08-24 with both
+        // weights inside, and rc.3's observed Python delta (+369.3 MB) projected the release
+        // asset ~200 MB past the limit. The maintainer's decision, same day: the diariser's
+        // weight leaves the win-cuda bundle (BundledModels.NotInCudaChannelIds), which this
+        // arithmetic projects back under the limit — treating weights as incompressible, with
+        // the next win-cuda tag as the observation (docs/UNPROVEN.md § the shipped ask tier).
+        // Growing either list re-runs this sum, so adding a weight is a decision taken against
+        // recorded numbers rather than a change that fails on the upload at the end of a release.
         var bundled = ModelCatalog.Default.Models.Where(m => BundledModels.BundledIds.Contains(m.Id)).ToList();
-        var bundledBytes = bundled.Sum(m => m.Files.Sum(f => f.SizeBytes));
+        long BytesOf(string id) => bundled.Single(m => m.Id == id).Files.Sum(f =>
+            f.SizeBytes ?? throw new InvalidOperationException($"'{id}' has a file without a pinned size."));
 
         Assert.All(bundled, model =>
             Assert.True(model.Files.Sum(f => f.SizeBytes) < 1_000_000_000L,
                 $"'{model.Id}' is bundled and is {model.Files.Sum(f => f.SizeBytes):N0} bytes."));
 
-        // The CUDA channel is the binding one: 1187.9 MiB of installer before a single weight.
-        const long CudaChannelBytes = 1245_514_138L;
+        // Every exclusion must name something the bundle actually carries — an exclusion of
+        // nothing is the decision quietly not applying. The packaging script holds the same guard.
+        Assert.All(BundledModels.NotInCudaChannelIds, id => Assert.Contains(id, BundledModels.BundledIds));
+
+        const long MeasuredCudaSetupBytes = 1_976_256_205L;   // python-less, both weights inside
+        const long BundledBytesWhenMeasured = 476_957_770L;
+        const long ObservedPythonDeltaBytes = 369_300_000L;   // rc.3: 1187.9 MB against 818.6
         const long GitHubAssetLimit = 2L * 1024 * 1024 * 1024;
 
-        Assert.True(CudaChannelBytes + bundledBytes < GitHubAssetLimit,
-            $"The bundled weights come to {bundledBytes:N0} bytes, which would take the CUDA installer "
-            + $"past GitHub's {GitHubAssetLimit:N0}-byte limit for a release asset.");
+        var cudaBundleBytes = BundledModels.BundledIds
+            .Except(BundledModels.NotInCudaChannelIds)
+            .Sum(BytesOf);
+        var projected = MeasuredCudaSetupBytes - BundledBytesWhenMeasured + cudaBundleBytes + ObservedPythonDeltaBytes;
+
+        Assert.True(projected < GitHubAssetLimit,
+            $"The projected win-cuda asset is {projected:N0} bytes against GitHub's "
+            + $"{GitHubAssetLimit:N0}-byte limit. Something has to leave the channel before it is tagged.");
     }
 
     [Fact]

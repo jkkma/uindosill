@@ -270,8 +270,21 @@ public static class JsonTranscriptReader
             throw new FormatException($"{Capitalise(where)}'s '{name}' is not a readable number.");
         }
 
+        // Bounded before the tick multiply, in the one place every time field funnels through.
+        // A negative time places nothing, and past the cap the tick arithmetic overflows and the
+        // window grid walks unboundedly — while the commonest way such a value really arrives, a
+        // timestamp in epoch seconds, sits nine orders of magnitude past a week.
+        if (seconds < 0 || seconds > MaxSeconds)
+        {
+            throw new FormatException(
+                $"{Capitalise(where)}'s '{name}' is {value.GetRawText()} seconds, which is not a time inside a recording.");
+        }
+
         return TimeSpan.FromTicks((long)(seconds * TimeSpan.TicksPerSecond));
     }
+
+    /// <summary>A week — longer than any recording this product transcribes.</summary>
+    private const decimal MaxSeconds = 7m * 24 * 3600;
 
     private static string Describe(JsonValueKind kind) => kind switch
     {

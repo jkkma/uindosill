@@ -11,6 +11,10 @@ public sealed record FakeAnswerOptions
     /// <summary>Answer <c>NOT_IN_TRANSCRIPT</c> to everything, whatever the evidence says.</summary>
     public bool AlwaysAbstain { get; init; }
 
+    /// <summary>Stream nothing at all — neither bullets nor the sentinel — so a caller's
+    /// empty-output path is exercised: silence must never render as an abstention.</summary>
+    public bool ProduceNothing { get; init; }
+
     /// <summary>Append the bullet that admits it has no anchor — the <c>[?]</c> case.</summary>
     public bool IncludeUncitedBullet { get; init; } = true;
 
@@ -18,6 +22,10 @@ public sealed record FakeAnswerOptions
     public TimeSpan PerChunkDelay { get; init; } = TimeSpan.Zero;
 
     public TimeSpan LoadDelay { get; init; } = TimeSpan.Zero;
+
+    /// <summary>Hold <see cref="IAnswerEngine.LoadAsync"/> open until this completes, so a test
+    /// can interleave other work with a load in flight — the window a cold load really has.</summary>
+    public Task? LoadGate { get; init; }
 
     /// <summary>Throw from <see cref="IAnswerEngine.LoadAsync"/> instead of loading.</summary>
     public bool FailOnLoad { get; init; }
@@ -52,6 +60,9 @@ public sealed class FakeAnswerEngine : IAnswerEngine
 
     public int AskCount { get; private set; }
 
+    /// <summary>The last request asked, so a test can see what a caller really sent.</summary>
+    public AskRequest? LastRequest { get; private set; }
+
     public AnswerEngineCapabilities Capabilities { get; } = new()
     {
         EngineName = "fake",
@@ -72,6 +83,11 @@ public sealed class FakeAnswerEngine : IAnswerEngine
         if (_options.LoadDelay > TimeSpan.Zero)
         {
             await Task.Delay(_options.LoadDelay, ct).ConfigureAwait(false);
+        }
+
+        if (_options.LoadGate is { } gate)
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
         }
 
         _loaded = true;
@@ -102,6 +118,7 @@ public sealed class FakeAnswerEngine : IAnswerEngine
         }
 
         AskCount++;
+        LastRequest = request;
 
         // The prefill is the wait a real engine makes the caller sit through; the fake reports
         // it completing so a panel's progress state is exercised rather than skipped.
@@ -137,6 +154,11 @@ public sealed class FakeAnswerEngine : IAnswerEngine
 
     private IEnumerable<string> Answer(AskRequest request)
     {
+        if (_options.ProduceNothing)
+        {
+            yield break;
+        }
+
         if (_options.AlwaysAbstain
             || request.Transcript.IsEmpty
             || (request.Mode == AnswerMode.Retrieval && request.Evidence.Count == 0))

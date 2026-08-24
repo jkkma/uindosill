@@ -256,6 +256,31 @@ if (-not $bundledBlock.Success) {
 $bundledModelIds = @([regex]::Matches($bundledBlock.Groups['ids'].Value, '"([^"]+)"') |
     ForEach-Object { $_.Groups[1].Value })
 
+# The win-cuda channel bundles less — the maintainer's decision, 2026-08-24: with llm/cuda
+# inside, the measured python-less package (1,976,256,205-byte Setup.exe) plus rc.3's observed
+# Python delta (+369.3 MB) projected past GitHub's 2 GiB asset limit, and the diariser's weight
+# is what gives. The list of what stays out lives beside BundledIds in BundledModels.cs, read
+# the same way, so there is one copy of the decision and the suite can hold its arithmetic.
+$excludedBlock = [regex]::Match(
+    (Get-Content -LiteralPath $bundledSource -Raw),
+    'NotInCudaChannelIds\s*=\s*\[(?<ids>[^\]]*)\]')
+if (-not $excludedBlock.Success) {
+    throw "Could not find the NotInCudaChannelIds array in $bundledSource. That array is what keeps " +
+          "the win-cuda channel under the release asset limit; this cannot run without it."
+}
+$notInCudaIds = @([regex]::Matches($excludedBlock.Groups['ids'].Value, '"([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value })
+foreach ($id in $notInCudaIds) {
+    if ($id -notin $bundledModelIds) {
+        throw "NotInCudaChannelIds names '$id', which BundledIds does not carry — an exclusion of " +
+              "nothing is a decision that quietly stopped applying. Fix BundledModels.cs."
+    }
+}
+$bundledIdsFor = @{
+    'win'      = $bundledModelIds
+    'win-cuda' = @($bundledModelIds | Where-Object { $_ -notin $notInCudaIds })
+}
+
 $catalogue = Get-Content -LiteralPath (Join-Path $repo 'src/Parakeet.Core/Models/models.json') -Raw |
     ConvertFrom-Json
 
@@ -485,11 +510,11 @@ foreach ($channel in $Channels) {
 
     # The weights the installer carries, into <app>/models where BundledModels looks.
     #
-    # Two of the four catalogue entries fit and two do not, and the line between them is a GitHub
-    # release asset limit of 2 GiB rather than a principle: the recogniser is 1.34 GiB and the
-    # translator 1.34 GiB, so either one puts the CUDA channel over it. The speech detector (2.2 MiB)
-    # and the speaker labeller (452.6 MiB) fit in both channels with room left, and bundling them is
-    # what makes both opt-ins live on a fresh install instead of dead until somebody visits a tab.
+    # The line between bundled and downloaded is a GitHub release asset limit of 2 GiB rather than
+    # a principle: the recogniser is 1.34 GiB and the translator 1.34 GiB, so either one puts the
+    # CUDA channel over it, and since llm/cuda the speaker labeller does too — $bundledIdsFor above
+    # holds that decision. Bundling what fits is what makes the opt-ins live on a fresh install
+    # instead of dead until somebody visits a tab.
     #
     # Every file is verified against the digest models.json already pins, before it is copied — the
     # same check ModelInstaller performs on a download, because a weight nobody hashed is a weight
@@ -502,7 +527,7 @@ foreach ($channel in $Channels) {
     $cacheDir = Join-Path $OutputDirectory 'model-cache'
     New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-    foreach ($id in $bundledModelIds) {
+    foreach ($id in $bundledIdsFor[$channel]) {
         # Not $matches: that is PowerShell's own automatic variable, written by every -match in this
         # script, and assigning to it is how a regex two hundred lines away starts returning surprises.
         $found = @($catalogue.models | Where-Object { $_.id -eq $id })
@@ -761,7 +786,7 @@ foreach ($entry in $built) {
 
         # And the bundled weights, for the same reason: the opt-ins they serve degrade politely to
         # "not installed yet", so a package that lost them would look exactly like a working one.
-        foreach ($id in $bundledModelIds) {
+        foreach ($id in $bundledIdsFor[$channel]) {
             $entry = @($catalogue.models | Where-Object { $_.id -eq $id })[0]
             $wanted = "models/$($entry.fileName)"
             if (-not ($names | Where-Object { $_.EndsWith($wanted) })) {
@@ -770,10 +795,21 @@ foreach ($entry in $built) {
             }
         }
 
+        # The excluded weight's absence is checked as positively as the others' presence: a weight
+        # that slipped back into win-cuda is the 2 GiB upload failure coming back silently.
+        foreach ($id in @($bundledModelIds | Where-Object { $_ -notin $bundledIdsFor[$channel] })) {
+            $entry = @($catalogue.models | Where-Object { $_.id -eq $id })[0]
+            $wanted = "models/$($entry.fileName)"
+            if ($names | Where-Object { $_.EndsWith($wanted) }) {
+                $failures += "channel '$channel': $wanted is inside the package, and the channel table " +
+                             "excludes it — that is the release asset limit decision not being applied."
+            }
+        }
+
         Write-Host "     natives inside the package: $($inside -join ', ')"
         Write-Host "     ask engine inside the package: llm/$($llmInside -join ', llm/')"
         Write-Host "     companions inside the package: $((@($directories | Where-Object { $_ -notin $everyBackend -and $_ -ne 'llm' })) -join ', ')"
-        Write-Host "     weights inside the package: $($bundledModelIds -join ', ')"
+        Write-Host "     weights inside the package: $($bundledIdsFor[$channel] -join ', ')"
     }
     finally { $zip.Dispose() }
 }

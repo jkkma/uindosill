@@ -772,8 +772,8 @@ internal static class Commands
                 Short = 'k',
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Windows returned per question, best first. Default 10 — recall@10 is the register's " +
-                       "measurement; the Ask panel hands the model its top 8.",
+                Help = "Windows returned per question, best first. Default 10 for reading; the Ask panel " +
+                       "hands the model its top 8, and the recall harness passes -k 8 to match it.",
             },
             new OptionSpec
             {
@@ -794,7 +794,7 @@ internal static class Commands
             "retrieves evidence from, indexed by the same tokenizer and scored by the same BM25 — so what this prints\n" +
             "is what the panel's language model would have been shown, which is what makes a recall figure measured\n" +
             "through it a figure about the product. scripts/measure-answers.ps1 is the consumer: it scores these hits\n" +
-            "against the labelled CSB384 question set for recall@10.\n\n" +
+            "against the labelled CSB384 question set at the panel's own evidence depth (-k 8).\n\n" +
             "A window's citation id (S12, or S12-S20 for a run) is a 1-based position in the transcript's segments\n" +
             "array, so it is only meaningful against the transcript searched. A question no window matches returns an\n" +
             "empty list and exit code 0: empty retrieval is the abstain path's input, not an error.\n\n" +

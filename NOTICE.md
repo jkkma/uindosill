@@ -151,7 +151,7 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 |---|---|---|
 | parakeet.cpp (ggml port of NeMo Parakeet) | MIT | https://github.com/mudler/parakeet.cpp |
 | ggml | MIT | https://github.com/ggml-org/ggml |
-| llama.cpp (the `llama-server` child process behind the Ask panel; the vulkan drop ships in both installer channels) | MIT — Copyright (c) 2023-2026 The ggml authors. The release archives ship no licence file, so the MIT text is fetched from the source tree at the pinned tag and travels at `native/win-x64/llm/<backend>/LICENSE`; `docs/NATIVE-BINARIES.md` holds the pin and the digests | https://github.com/ggml-org/llama.cpp |
+| llama.cpp (the `llama-server` child process behind the Ask panel; the default channel ships the vulkan drop, win-cuda the CUDA drop) | MIT — Copyright (c) 2023-2026 The ggml authors. The release archives ship no licence file, so the MIT text is fetched from the source tree at the pinned tag and travels at `native/win-x64/llm/<backend>/LICENSE`; `docs/NATIVE-BINARIES.md` holds the pin and the digests | https://github.com/ggml-org/llama.cpp |
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia |
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
@@ -160,6 +160,7 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
 | ONNX Runtime (`Microsoft.ML.OnnxRuntime` 1.29.0 beside the .NET assemblies, running the speech-detection graph in process; and `onnxruntime-webgpu` 1.27.0 in the bundled Python, running the speaker diarisation model and the translator) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; `licences/onnxruntime-LICENSE.txt` and `licences/onnxruntime-ThirdPartyNotices.txt` are the 1.29.0 package's own (69 blocks, verbatim), which is the in-process copy's notice exactly; the wheel ships its own `ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
+| NVIDIA CUDA runtime 13.3 (the ask tier's runtime in the win-cuda channel's `llm/cuda`, beside `llama-server.exe` — `cudart64_13.dll` and the rest of upstream's `cudart-llama` archive) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A; `docs/LICENSING.md` records what about the inventory is still owed | https://docs.nvidia.com/cuda/eula/index.html |
 | CPython (embeddable 3.12.10; the interpreter the diariser and the translator run in) | PSF License Agreement Version 2, plus the Microsoft Distributable Code conditions its Windows binary build adds | https://www.python.org/ |
 | The bundled Python packages (pinned in `python/requirements-bundle.txt`) | Mostly MIT, BSD and Apache-2.0 — but `soxr` is LGPL-2.1-or-later and `soundfile`'s wheel carries LGPL-2.1 `libsndfile`. Read package by package in `docs/LICENSING.md`; **not yet assembled into a notice package** | https://pypi.org/ |
 | NVIDIA NeMo (source, vendored at `python/uindosill_engines/_vendor/nemo/`; runs the diariser's speaker cache) | Apache-2.0 — Copyright (c) 2025, NVIDIA CORPORATION | https://github.com/NVIDIA/NeMo |
@@ -169,7 +170,9 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 Builds that vendor the **opt-in CUDA backend** ship three NVIDIA proprietary binaries beside
 `parakeet.dll`. The CPU and Vulkan backends contain none of them, and the row above is listed
 unconditionally anyway: a notice that appears only when a build flag says so is a notice that can go
-missing.
+missing. Since 2026-08-24 the win-cuda channel also carries a **second CUDA runtime major — 13.3,
+inside `llm/cuda` beside `llama-server.exe`** — for the Ask panel's model; same EULA, same
+Attachment A basis, its own row above.
 
 §2.6 (Attachment A) of the CUDA Toolkit EULA lists `cudart`, `cublas` and `cublasLt` as files that
 may be distributed with applications, and says so for version-numbered variants of those names

@@ -11,14 +11,15 @@ namespace Parakeet.App.Services;
 /// them. That is right for the two biggest entries and was absurd for the smallest: the
 /// speech-detection graph is <b>2.2 MiB</b>, and asking a user to visit a tab and download it
 /// bought nothing but a dead checkbox on a fresh install. Since 2026-08-23 the installer carries
-/// what fits — the speech detector and the speaker labeller, 455 MiB between them — and
+/// what fits — the speech detector and the speaker labeller — and
 /// <c>scripts/package-windows.ps1</c> fetches each against the digest the catalogue already pins.
 /// </para>
 /// <para>
 /// <b>What does not fit, and why the rule survives.</b> A GitHub release asset must be under 2 GiB.
 /// The recogniser is 1.34 GiB and the translator 1.34 GiB, so either one pushes the CUDA channel
 /// past that limit and both together push every channel past it. Those two stay downloads because
-/// of arithmetic, not principle.
+/// of arithmetic, not principle — and since the llm/cuda decision the same arithmetic reaches the
+/// speaker labeller in one channel: see <see cref="NotInCudaChannelIds"/>.
 /// </para>
 /// <para>
 /// The catalogue entries stay for all four: a machine that already downloaded one keeps using its
@@ -49,6 +50,19 @@ public static class BundledModels
     public static readonly string[] BundledIds =
     [
         "silero-vad-v5.1.2",
+        "sortformer-4spk-v2.1",
+    ];
+
+    /// <summary>
+    /// Bundled entries the win-cuda channel leaves out — the maintainer's decision, 2026-08-24:
+    /// with llm/cuda inside, the measured python-less win-cuda package plus rc.3's observed
+    /// Python delta projected past GitHub's 2 GiB asset limit, and the diariser's 474.6 MB
+    /// weight is what gives. A fresh CUDA install downloads it from the Models tab; nothing else
+    /// changes, because absence is already an answer here. The packaging script reads this list
+    /// exactly as it reads the one above, and the arithmetic lives in <c>BundledModelsTests</c>.
+    /// </summary>
+    public static readonly string[] NotInCudaChannelIds =
+    [
         "sortformer-4spk-v2.1",
     ];
 

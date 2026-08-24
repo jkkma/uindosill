@@ -248,12 +248,17 @@ public class CitationValidatorTests
     }
 
     [Fact]
-    public void AQuoteAgainstAnUnresolvedCitationFailsAndNoQuoteChecksNothing()
+    public void AQuoteAgainstAnUnresolvedCitationWasNeverCheckedAndNoQuoteChecksNothing()
     {
+        // An unresolved citation names no span, so the quote was never checked. False here is
+        // reserved for checked-and-failed: a [?]-only bullet whose quote reported false used to
+        // render "quote not found in the transcript" — an accusation of a check that never ran.
         var transcript = Transcript("something");
 
-        Assert.False(CitationValidator.Resolve(Citation.Parse("S9"), transcript, "something").Check.QuoteMatches);
+        Assert.Null(CitationValidator.Resolve(Citation.Parse("S9"), transcript, "something").Check.QuoteMatches);
+        Assert.Null(CitationValidator.Resolve(Citation.Parse("?"), transcript, "something").Check.QuoteMatches);
         Assert.Null(CitationValidator.Resolve(Citation.Parse("S1"), transcript).Check.QuoteMatches);
+        Assert.False(CitationValidator.Resolve(Citation.Parse("S1"), transcript, "not these words").Check.QuoteMatches);
     }
 
     [Fact]

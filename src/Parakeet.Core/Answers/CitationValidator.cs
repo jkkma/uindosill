@@ -17,7 +17,9 @@ public sealed record CitationCheck
 
     /// <summary>
     /// The bullet's verbatim quote appears in the cited span after both go through
-    /// <see cref="SearchTokenizer.Normalize"/>. Null when the bullet carries no quote.
+    /// <see cref="SearchTokenizer.Normalize"/>. Null when the bullet carries no quote — and when
+    /// the citation never resolved, because a quote with no span to check against was never
+    /// checked: false is reserved for checked-and-failed.
     /// </summary>
     public bool? QuoteMatches { get; init; }
 
@@ -97,8 +99,10 @@ public static class CitationValidator
                     Resolves = false,
                     NonEmpty = false,
                     WithinDuration = false,
-                    // A quote against an unresolved citation has nothing to match inside.
-                    QuoteMatches = quote is null ? null : false,
+                    // An unresolved citation names no span, so the quote was never checked;
+                    // false here would render as "quote not found" — an accusation of a check
+                    // that never ran.
+                    QuoteMatches = null,
                 },
             };
         }

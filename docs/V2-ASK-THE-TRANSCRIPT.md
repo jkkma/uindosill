@@ -171,6 +171,19 @@ reads it off the one document it already holds.
 All three questions v1 created are now taken, on consecutive turns of one day's review:
 the English pane, no speaker labels, the hint or nothing.
 
+**Decided 2026-08-24 — the English pane's ask drops the source hint.** The same day's
+adversarial review found the two decisions above colliding: on a translated recording the ask
+runs over the English document while the hint that survives translation made the prompt
+instruct the model to answer in the source language — Spanish bullets over English evidence,
+whose grammar-forced «quote» could then never pass the verbatim check against English spans, so
+every bullet on the headline translated flow carried the quote caveat, and the answer wore the
+source-language tag as provenance. The maintainer's decision: **an ask over the translated
+document forwards no language hint and stamps no language claim** — the unlocalised prompt over
+English evidence, exactly the hintless shape the decision above already defines, with the quote
+check meaningful again. The transcript as spoken keeps its hint unchanged, and the wiring fact
+above stands: the translated document still carries the original `Language` as provenance — the
+ask simply stops forwarding it.
+
 ## Why this is harder than v1, and it is not the modelling
 
 **A transcript can be wrong loudly. A summary cannot.**
@@ -1250,19 +1263,23 @@ what a machine can score (citations resolve, ranges forward, overlap with gold, 
 abstained, a planted needle cited), validates each label's quote against its own span so a bad
 label reports as a labelling error rather than a model failure, measures the grammar's decode cost
 per run, and prints a summary whose citation-precision column is deliberately blank for a person.
-`-PrintPin` computes the transcript pin block for the labelling session. **recall@10 runs through
-the product's own index as of 2026-08-24**: tier 0 belongs in `Parakeet.Core`, and a BM25
+`-PrintPin` computes the transcript pin block for the labelling session. **Tier-0 recall runs
+through the product's own index as of 2026-08-24**: tier 0 belongs in `Parakeet.Core`, and a BM25
 reimplemented in the script would measure the script's tokenizer rather than the product's — so
 `uindosill retrieve` exposes the panel's exact construction (the same `TranscriptWindowBuilder`,
 `SearchTokenizer` and `Bm25Retriever`, ranked windows wearing their citation ids, `--wide` for the
-120 s comparison variant) and the script scores its top-10 against the gold ranges. Global
+120 s comparison variant) and the script scores its hits against the gold ranges **at the panel's
+own evidence depth — recall@8, not the @10 this section first planned**, because the panel hands
+the model eight windows and a gold window at rank 9–10 would count as recall the model never
+sees, inflating exactly the figure the tier-1 gate reads (aligned 2026-08-24, before any recall
+figure was published). Global
 questions stay out of the figure — they are the router's path and a person's judgement — and
 needles stay out because their hit rate is the model's citation. The number itself still waits on
 the thirty labels. What it measures, with the same discipline about
 naming the backend beside every number:
 
-- recall@10 for retrieval on the thirty CSB384 questions (decision 3); planted-needle hit rate;
-  abstain rate on adversarial questions;
+- recall@8 for retrieval on the thirty CSB384 questions (decision 3, at the panel's depth as
+  above); planted-needle hit rate; abstain rate on adversarial questions;
 - **citation precision by human spot-check on N answers** — the one quality number this feature
   can have, and it is a person's, labelled as such in the run's output;
 - the grammar's cost in tokens per second through the binding — 80 → 13 tok/s was reported for

@@ -192,6 +192,22 @@ public class AnswerPromptBuilderTests
     }
 
     [Fact]
+    public void TheQuoteProductionAdmitsNoCitationBrackets()
+    {
+        // The parser lifts citations from the whole bullet before it lifts the quote, so a
+        // grammar whose quote production admitted brackets would let a "grammar-constrained"
+        // model write an id inside «…» and have it promoted to a real citation — model-authored
+        // text becoming a rendered time, the central prohibition. The quote's character class
+        // must exclude the brackets exactly as free text's does.
+        var grammar = AnswerPromptBuilder.BuildGrammar(Request().Evidence, requireQuote: true)!;
+
+        Assert.Contains(
+            "quote ::= \"\\u00AB\" [^\\n\\[\\]\\u00AB\\u00BB]{3,300} \"\\u00BB\"",
+            grammar,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NoEvidenceMeansNoGrammar()
     {
         // A grammar over an empty id set could only cite [?]; whether that or an unconstrained

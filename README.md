@@ -117,8 +117,9 @@ so beside the opt-ins rather than failing when one is started.
   is recommended or downloaded until the measurements in
   [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) have been run, so the panel comes
   alive when you put a GGUF file of your own in the models folder, and until then it says what it
-  is waiting for. No human has yet driven it against a real recording; UNPROVEN.md says exactly
-  that. **The half that needs no model shipped
+  is waiting for. A human first drove it against a real recording on 2026-08-24 — three questions
+  asked, citations clicked through to the audio they name; what that run did and did not
+  establish is in UNPROVEN.md. **The half that needs no model shipped
   2026-08-22**: the app has an Ask tab where a recording plays, its transcript sits beside it as
   cues you click to jump to that moment — one per sentence where the engine's word times can tell
   the sentences apart, so a thirty-second segment reads as the sentences it holds rather than as one
@@ -205,7 +206,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1270 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1279 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
