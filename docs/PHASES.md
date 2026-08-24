@@ -3933,6 +3933,20 @@ where its question was posed:
    -QuestionsPath` takes the fetched labelled copy. The v1.0 research homecoming meets the file
    there when it arrives.
 
+### Met 2026-08-24 — the Stage 4 exit criterion: a human asked, and the citations played
+
+The last open claim of the revised plan's Stage 4 closed the way it was written to close: not
+by a test but by a person. The maintainer, on the desktop, against a development build carrying
+the llm/cuda drop and the 9B served from the models folder, asked three questions of a real
+transcript through the Ask tab and clicked citations that played the audio. That is the whole
+criterion — the click-through into the recording is what every rule in the register (opaque
+ids, the grammar, the validator, the resolve-or-`[?]` render) exists to make trustworthy — and
+it is a human's report by design, so nothing was counted or timed. `docs/UNPROVEN.md`'s chat
+panel section records what the run established and the three things it deliberately did not:
+whether streaming reads as provisional, the real clipboard, and an installed package's panel,
+which the first rc.4 install can close. With the criterion met, rc.4 is unblocked by the
+maintainer's own ordering, decided earlier the same day.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now
