@@ -614,16 +614,19 @@ beside the binaries in each backend directory.
 |---|---|---|---|
 | b10603 | `llama-b10603-bin-win-cpu-x64.zip` | `878efa5bc0cdeb9c3fcb96335521556e06ca9252f83de3a1d924981918607702` | 2026-08-23 |
 | b10603 | `llama-b10603-bin-win-vulkan-x64.zip` | `8e2fa4ef100af6e4a08f7d9cf9686ee40b1349e6c11933efd63f4e68f9261d2e` | 2026-08-23 |
-| b10603 | `llama-b10603-bin-win-cuda-13.3-x64.zip` | `687a4e750e89790491802fa369f4541763f7e8d43cb27f0d3cf2e4fc4063258d` | not yet — desktop |
-| b10603 | `cudart-llama-bin-win-cuda-13.3-x64.zip` | `1462a050eb4c684921ba51dcc4cc488a036674c3e73e9945ee705b854808d03e` | not yet — desktop |
+| b10603 | `llama-b10603-bin-win-cuda-13.3-x64.zip` | `687a4e750e89790491802fa369f4541763f7e8d43cb27f0d3cf2e4fc4063258d` | 2026-08-24, desktop |
+| b10603 | `cudart-llama-bin-win-cuda-13.3-x64.zip` | `1462a050eb4c684921ba51dcc4cc488a036674c3e73e9945ee705b854808d03e` | 2026-08-24, desktop |
 
 The digests are the `digest` field the GitHub releases API serves per asset (read 2026-08-23),
 and every download is re-hashed against them locally — 18,063,576 bytes for cpu, 34,400,125 for
-vulkan, 146,422,151 and 390,970,417 for the CUDA pair. The cudart archive's bytes are identical
-to the ones read beside b10448 on 2026-08-16, so the runtime does not churn with the builds. The
-CUDA zip's compiled GPU architectures were scanned at b10448 (`sm_86`, `sm_89`, `sm_120`,
-`sm_121` cubins — the b10603 build has not been scanned) and **have still been executed on no
-machine**; the first desktop run corroborates or corrects that reading, with
-`scripts/vendor-cuda.ps1 -InspectOnly` re-run against the b10603 DLL first. Nothing in this
-stack has loaded on any machine from this drop yet: the laptop's spike ran the b10448 zips from
-a scratch directory, not from `native/`, and this table says which claim is which.
+vulkan, 146,422,151 and 390,970,417 for the CUDA pair; the desktop's 2026-08-24 vendoring
+reproduced both CUDA digests exactly. The cudart archive's bytes are identical to the ones read
+beside b10448 on 2026-08-16, so the runtime does not churn with the builds. The b10603
+`ggml-cuda.dll` (141,895,168 bytes) was scanned on the desktop on 2026-08-24 with
+`scripts/vendor-cuda.ps1 -InspectOnly`: **`sm_86`, `sm_89`, `sm_120`, `sm_121` cubins and PTX
+`compute_75`, `compute_80`, `compute_90`** — 142 containers parsed, 0 rejected, the same list the
+b10448 scan read, so the reading survives the re-pin. The same caveat as every row above: all
+payloads are compressed, so nothing was read back against its own ELF header, and the walker does
+not tell `120a` from `120`. The cudart beside it identifies as CUDA 13.3 (`cudart64_13.dll`,
+file version 13030), above the 12.8 floor that first emits `sm_120`. Execution is a separate
+claim from the scan and is recorded in `docs/UNPROVEN.md` § *The engine on the product path*.

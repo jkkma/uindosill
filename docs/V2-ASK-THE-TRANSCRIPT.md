@@ -433,7 +433,13 @@ parakeet's row lacks — every payload is compressed, so nothing was read back a
 header — with one difference that matters: parakeet's `sm_120` row was corroborated by a run on the
 5080, and **this one has been run nowhere**. Its corroboration is the first thing the desktop
 produces. The desktop's driver is 610.88; the minimum a 13.3 runtime needs was not looked up here,
-and `nvidia-smi`'s header on that machine answers it in one line.
+and `nvidia-smi`'s header on that machine answers it in one line. **Corroborated 2026-08-24, on
+the desktop**: the b10603 DLL scans to the same architecture list, and the vendored drop's first
+executions — the gated integration test through the product path, then two `llama-server` starts
+that both reached `/health` in about a second with `CUDA_CACHE_DISABLE=1` — are native-cubin
+behaviour, not a JIT (`docs/UNPROVEN.md` § *The engine on the product path*). The header answered
+the runtime question the same day: driver 610.88 reports **CUDA UMD Version 13.3**, exactly the
+vendored runtime's major.minor.
 
 LLamaSharp, for the comparison this section exists to make: `.github/workflows/compile.yml` at
 `v0.27.0` installs CUDA **12.4.0** and passes `-DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF
@@ -1121,6 +1127,10 @@ whole-transcript path is an opt-in with a progress bar and a saved slot.
 block; then decision 2's first file with the counters sampled at each phase — idle, ASR loaded,
 language model loaded, after the 40k prefill, after an answer — with and without the ASR model
 resident. That is the first VRAM data this project has had, and it is what decides this decision.
+**The first is measured — 2026-08-24: 2,115 MiB dedicated**, under the ~2.5 GiB the "fits" lines
+above assumed, with the caveat the machine block carries: it moves with what is open. The second
+runs without the with-ASR phases, because the policy above has since taken both-resident off the
+table.
 
 **The laptop is a different budget, and its one published number needs its footnote.** The 7.36 GiB
 that `docs/UNPROVEN.md` quotes for the second machine is **heap 0's `VK_EXT_memory_budget` budget**
