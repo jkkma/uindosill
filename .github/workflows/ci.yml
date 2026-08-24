@@ -92,15 +92,31 @@ jobs:
       - name: Publish desktop app
         run: dotnet publish src/Parakeet.App --configuration Release -r ${{ matrix.rid }} -o out/app-${{ matrix.rid }}
 
+      # Since single-file was turned on, neither hostfxr.dll nor a file count says anything: the
+      # runtime is inside the executable and the publish is a few dozen files. The executable's own
+      # size is what separates a self-contained build from a framework-dependent one — about 98 MB
+      # of runtime, against a couple of megabytes without it.
       - name: Assert the publish is genuinely self-contained
         shell: bash
         run: |
           set -euo pipefail
-          for dir in out/cli-${{ matrix.rid }} out/app-${{ matrix.rid }}; do
+          for pair in "out/cli-${{ matrix.rid }}:uindosill" "out/app-${{ matrix.rid }}:Uindosill"; do
+            dir="${pair%%:*}"
+            stem="${pair##*:}"
+            exe="$dir/$stem"
+            [ -f "$exe.exe" ] && exe="$exe.exe"
+
+            if [ ! -f "$exe" ]; then
+              echo "::error::$dir has no $stem executable."
+              exit 1
+            fi
+
+            bytes=$(stat -c%s "$exe")
             count=$(find "$dir" -type f | wc -l)
-            echo "$dir: $count files"
-            if [ ! -f "$dir/hostfxr.dll" ] || [ "$count" -lt 100 ]; then
-              echo "::error::$dir is not self-contained ($count files, hostfxr.dll missing)."
+            echo "$dir: $count files, $(( bytes / 1048576 )) MB executable"
+
+            if [ "$bytes" -lt 52428800 ]; then
+              echo "::error::$exe is $bytes bytes — a framework-dependent build, which needs the exact .NET runtime on every machine."
               echo "A RuntimeIdentifier does not imply SelfContained on .NET 8+. See Directory.Build.targets."
               exit 1
             fi

@@ -153,7 +153,8 @@ unsigned by the decision recorded below, so every user meets SmartScreen's unkno
 
 **Before that, from 2026-08-15,** the piece that had no external dependency. What existed before
 was the groundwork: publish is self-contained + ReadyToRun and verified to cross-publish from Linux
-for `win-x64`, single-file and trimming are off (and documented as deliberately off), and every
+for `win-x64`, single-file is on since 2026-08-23 and trimming stays off (both documented in
+`Directory.Build.targets`, with the measurement that reversed the first), and every
 native lives under `native/<rid>/<backend>/` where a signing step can enumerate it.
 
 What is new is that **the natives no longer arrive by hand.** `scripts/vendor-natives.ps1`
@@ -3535,6 +3536,44 @@ downloaded models.
 **The rule this leaves behind, and it is now the standing one: nothing this application does
 unattended may delete a user's files.** `docs/GOTCHAS.md` gotcha 8 carries it where the packaging
 reasoning lives.
+
+### Reversed 2026-08-23 — the managed assemblies go inside the executable, and the reason they were not was wrong
+
+`Directory.Build.targets` had turned single-file publishing off since the deployment shape was
+settled, with a reason written beside it: *"single-file extracts natives to a temp path that breaks
+the backend directory layout"*. **That describes `IncludeNativeLibrariesForSelfExtract`, which is
+off by default and which nothing here sets.** Publishing with it on and looking at the output
+settles it: the five native libraries that arrive through NuGet — SkiaSharp, HarfBuzz, ANGLE, ONNX
+Runtime — stay beside the executable, and `native/<rid>/<backend>/` is untouched, because those
+files are copied in by `build/NativeAssets.targets` rather than bundled. Nothing extracts anywhere,
+and `AppContext.BaseDirectory` still resolves to the executable's own directory, which is what
+`BundledTools`, `BundledModels` and `PythonRuntime` all search from. `uindosill doctor` run from a
+single-file publish reports that directory and finds everything it did before.
+
+**The cost to updates was the real question, and it goes the other way.** Velopack builds a delta by
+diffing against the previous package, so the expectation was that relinking a 98.5 MB executable on
+every change would make every user's update enormous. Measured by packing two versions with a
+one-line source edit between them and reading what `vpk` produced:
+
+| | delta | full package | files in the publish |
+|---|---|---|---|
+| loose assemblies | 84,365 bytes | 209,965,214 bytes | ~200 |
+| single file | **18,518 bytes** | **206,751,439 bytes** | **34** |
+
+The update every user downloads is **4.6x smaller**, and the full package is 3.2 MB smaller besides:
+zstd diffs a relinked bundle well. Fewer loose assemblies beside the executable is also fewer things
+that can be side-loaded in place of one.
+
+**Two checks were keyed to the old shape and moved with it.** `scripts/package-windows.ps1` and
+`ci.yml` both proved self-containedness by finding `hostfxr.dll` and counting at least a hundred
+files — and single-file removes both signals, since the runtime is inside the executable and the
+publish is a few dozen files. They size the executable instead: about 98 MB with the runtime in it
+against a couple of megabytes without, which is the thing that actually differs. Trimming and
+NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
+
+**1144 tests, no weights, no display, no network — 1140 passed and 4 skipped.** No test changed: the
+suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
+changes is the shape of a deployment rather than the behaviour of any code.
 
 ### The dictation seam
 
