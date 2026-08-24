@@ -3471,11 +3471,12 @@ The candidate is the v2 note's laptop row made real: `unsloth/Qwen3.5-9B-GGUF`'s
 the hub listing's LFS oid on 2026-08-16 per `docs/MODELS.md`'s procedure and verified against the
 downloaded file twice (once at download, once by the spike).
 
-**The transcript does not fit the number the v2 note carries.** The 169,291-byte `.txt` is
+**The transcript does not fit the number the v2 note carried.** The 169,291-byte `.txt` is
 **50,892 tokens** under the 0.6B's chat template and **51,712** under the 9B's — the note's "about
-40k tokens" (its line "Three hours of transcript is roughly 30k words, about 40k tokens") is
-word-count arithmetic, and the measured figure is a quarter larger. Every "fits at 40k" line in
-that note inherits this correction for this episode.
+40k tokens" (its line then read "Three hours of transcript is roughly 30k words, about 40k tokens")
+was word-count arithmetic, and the measured figure is a quarter larger. Every "fits at 40k" line in
+that note inherits this correction for this episode; **the note carries it since 2026-08-23** — its
+decision 2 correction block scales the standing arithmetic and names the verdicts that tighten.
 
 **Raising `-c` does not raise the ceiling: `n_ctx_train` does.** At `-c 53248` the 0.6B server
 allocated the larger cache (6,332.9 MiB committed against 5,179.5 at 40,960) and then refused the

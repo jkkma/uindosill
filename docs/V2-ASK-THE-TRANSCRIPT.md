@@ -151,11 +151,16 @@ release and digest table, its own ISA-baseline question, its own version of ever
 work just went through. Budget for that, not for the code.
 
 Sizing, on the machine this project is developed against (16 GB VRAM): the candidate decision 2 now
-names is 8.87 GiB at Q8_0, plus 1.25 GiB of cache for three hours of transcript, on top of the
+names is 8.87 GiB at Q8_0, plus 1.58 GiB of cache for three hours of transcript, on top of the
 1.34 GiB ASR model. On paper both fit at once; whether they do is decision 4.
 
-Three hours of transcript is roughly 30k words, about 40k tokens. That is either a long-context
-model or a map-reduce, which is decision 3.
+Three hours of transcript was first written here as "roughly 30k words, about 40k tokens", and the
+word-count arithmetic did not survive its measurement: the CSB384 transcript is **50,892 tokens
+under the 0.6B's chat template and 51,712 under the 9B's** (laptop, 2026-08-16, on the laptop's
+re-encode of the episode — `docs/UNPROVEN.md` § *Upstream llama.cpp on the second machine*). A chat
+template and real tokenisation cost about a quarter more than the words-times-four-thirds rule.
+That is either a long-context model or a map-reduce, which is decision 3; what the extra quarter
+does to every figure below that was computed at 40,960 is in decision 2's correction block.
 
 ## The open decisions
 
@@ -487,6 +492,52 @@ Licensing is a hard gate, not a formality. Every entry in `models` carries a lic
 registered attribution, and `DeferredModelPin` deliberately has no licence property so a pin cannot
 assert one carelessly. Any summarizer model has to clear that bar before it can be an entry.
 
+#### Corrected 2026-08-23 — the transcript measures a quarter longer than the arithmetic below assumes
+
+Every cache figure and fit verdict in this section was computed at 40,960 tokens, from "three hours
+≈ 30k words ≈ 40k tokens". The transcript has since been tokenised for real: **50,892 tokens under
+the 0.6B's chat template, 51,712 under the 9B's** (laptop, 2026-08-16, on the laptop's re-encode of
+the episode — 1,378 segments against the original encode's 1,488, a 4% difference that does not
+close a 26% one; `docs/UNPROVEN.md` § *Upstream llama.cpp on the second machine*). The formulas
+below are left at 40,960 — they are the 2026-08-15/16 record, and the research documents beside
+this register use the same anchor — with the correction applied here once, because a growing KV
+cache scales linearly in the prompt: **multiply every growing-cache figure by 1.26** and leave the
+sliding-window constants and the recurrent state alone.
+
+What that does to the figures that carry weight, at 51,712 tokens (arithmetic, labelled):
+
+- the 9B's cache is **1.58 GiB** f16 rather than 1.25; Q8_0 weights plus cache **10.45 GiB — still
+  fits** — and the laptop's Q4_K_M rises from 6.54 to **6.87 GiB**, further past the ~5.6 GiB the
+  fast heap actually offers with a browser open;
+- the 27B's cache is **3.16 GiB** f16 rather than 2.50 — the retirement arithmetic below only gets
+  stronger;
+- the second file's cache is ~1.27 GiB (growing 0.80, constant 0.47); Q6_K plus cache ~10.4 GiB —
+  still fits;
+- the third file's growing cache is ~0.98 GiB; the fourth's is ~1.19 GiB, **~14.0 GiB alone —
+  still fits alone**, and its 131k YaRN window takes 51.7k without comment;
+- the fifth file tightens most: cache ~1.27 GiB, weights plus cache plus the compute allowance
+  **~15.4 GiB against the card's reported 15.92 — the "under a GiB to spare" below is nearer half
+  a GiB**, before the desktop's unmeasured idle hold;
+- the sixth file's f16 cache is **7.89 GiB — an f16 cache no longer fits at all** (17.1 GiB with
+  weights and allowance), so its q8_0-cache instruction is a requirement rather than advice
+  (4.19 GiB of cache, ~13.4 GiB alone, still fits); and 51.7k tokens is **3.2×** its 16,384 native
+  window, not 2.5×.
+
+No verdict flips: what fitted at 40,960 fits at 51,712, the retired stays retired, and the two
+files that fit only alone still fit only alone. The margins are what moved, and the fifth file's is
+now thin enough that its first desktop load should read the idle adapter figure first.
+
+Two measured facts from the same runs supersede arithmetic quoted further down this document.
+**A full-transcript prefill on the laptop candidate is measured: 467.9 s** — 110.7 tok/s over
+51,712 tokens, Qwen3.5-9B Q4_K_M, Vulkan, `-c 53248`, decode 9.8 tok/s after it, and a cached
+follow-up costing ~0.5 s of prompt time — where decision 3 and 4 quote "75–190 s" for a 40k prompt
+from third-party rates; the measurement landed at the pessimistic corner of that arithmetic's own
+at-depth doubling, and it hardens the conclusion it was under: the laptop tier is retrieval.
+And **raising `-c` does not raise the ceiling — `n_ctx_train` does**: the 0.6B test model refused
+the full transcript at any `-c` because it trains at 40,960. Every candidate in this section trains
+at 262,144 and is unaffected, but "fits in one pass" below means inside `n_ctx_train`, not inside
+a flag.
+
 #### One candidate, recorded and then retired
 
 `Qwen/Qwen3.8-27B` — **apache-2.0**, which clears the licensing gate outright, and that is rarer
@@ -607,7 +658,8 @@ others. Weights plus cache is 10.2 GiB — with the same allowances, about 13.1 
 model — which is **the 9B's envelope spent differently: more parameters at a lower quantisation.**
 Which of those buys more for citing a transcript is unmeasured, and the two cards' own numbers do
 not compare (different benchmarks, self-reported), which is why this is a second file and not a
-second candidate: same folder, same `-c 40960 -fa on`, same CSB384 questions, diff the citations.
+second candidate: same folder, same `-c 53248 -fa on` (the measured transcript needs it — the
+correction block above), same CSB384 questions, diff the citations.
 Its Q8_0 (12,669,647,680 bytes, 11.80 GiB) fits alone at about 14.4 GiB, and not beside the ASR
 model.
 
@@ -887,6 +939,14 @@ buffer, the 1.34 GiB ASR model, 15.92 GiB reported):
 | 4 `gpt-oss-20b` MXFP4 | **no** — alone at 13.7 GiB |
 | 5 `gemma-4-26B-A4B-it` IQ4_XS, on the card | **no** — alone at 15.2 GiB |
 | 6 `Ministral-3-14B` Q4_K_M, q8_0 cache | yes — ~13.8 GiB; not with an f16 cache |
+
+**Corrected 2026-08-23:** the table's arithmetic is at 40,960 tokens and the measured transcript is
+51,712 (decision 2's correction block). Growing caches scale by 1.26: files 1–3 keep their "yes",
+file 6 keeps it only with the q8_0 cache — which is now a requirement, its f16 cache alone being
+7.9 GiB — at ~14.7 GiB beside the ASR model, files 4 and 5 keep their "no", and file 5's fit-alone
+margin thins to about half a GiB. The laptop paragraph's 6.54 GiB is 6.87 at the measured length,
+and the slot-save figure below scales the same way: the 9B's prefilled state is 1.58 GiB at f16,
+not 1.25.
 
 So *are the two ever resident at once* is a **catalogue property** — VRAM at 40k, RAM if offloaded,
 resident-with-ASR or not — which is what decision 2's remark that an entry cannot describe its
