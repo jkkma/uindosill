@@ -181,14 +181,15 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             "--jinja",
         };
 
-        if (!options.ThinkBeforeAnswer)
+        if (!options.ThinkBeforeAnswer && options.UseGrammar)
         {
-            // The grammar mode: every generated token stays in content, where the grammar
+            // The grammar mode only: every generated token stays in content, where the grammar
             // shapes it from the first sampled token. Without this a template that forces a
             // think block open files the whole grammar-shaped stream under reasoning_content
             // and a client reading content sees nothing — measured 2026-08-16,
-            // docs/UNPROVEN.md. In thinking mode the server's default reasoning parsing is
-            // exactly what routes the thinking away from the answer, so the flag stays off.
+            // docs/UNPROVEN.md. Everywhere else the server's default reasoning parsing is what
+            // keeps a template's thought channel out of the answer stream — ungrammared, a
+            // literal thought tag would otherwise land in content as a junk bullet.
             arguments.Add("--reasoning-format");
             arguments.Add("none");
         }

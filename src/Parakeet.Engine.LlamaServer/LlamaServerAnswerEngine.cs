@@ -17,12 +17,13 @@ namespace Parakeet.Engine.LlamaServer;
 /// <remarks>
 /// <para>
 /// The stream this yields is the model's answer text: <c>AnswerParser</c> stays the single place
-/// structure comes from. By default the grammar built beside the prompt constrains decoding from
-/// the first sampled token; in thinking mode (<see cref="LlamaServerOptions.ThinkBeforeAnswer"/>,
-/// off by default on its measured cost) the model reasons first, the server's reasoning parser
-/// keeps that thinking in <c>reasoning_content</c> where this stream never carries it, and
-/// citation trust is the validator's, post-hoc. The two never combine: an eager grammar was
-/// measured shaping the think block itself (docs/UNPROVEN.md).
+/// structure comes from, and citation trust in the shipped configuration is the validator's,
+/// post-hoc — the template-only decode, temperature 0, no grammar, the one configuration the
+/// 2026-08-24/25 sessions measured clean (docs/UNPROVEN.md). The grammar remains available
+/// (<see cref="LlamaServerOptions.UseGrammar"/>) for models that do not terminate without it,
+/// and thinking mode (<see cref="LlamaServerOptions.ThinkBeforeAnswer"/>) reasons first with the
+/// server's parser keeping the thinking out of this stream. Grammar and thinking never combine:
+/// an eager grammar was measured shaping the think block itself.
 /// </para>
 /// <para>
 /// Ownership: disposing this is what ends the child while the host lives — there is no finalizer

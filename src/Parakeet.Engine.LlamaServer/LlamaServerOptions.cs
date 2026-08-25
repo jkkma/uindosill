@@ -76,12 +76,16 @@ public sealed record LlamaServerOptions
     public int ThinkingBudgetTokens { get; init; } = 2_048;
 
     /// <summary>
-    /// Constrain decoding to the citation grammar — the non-thinking mode's mechanism, applied
-    /// only when <see cref="ThinkBeforeAnswer"/> is off. Measured on a 0.6B model: the grammar —
-    /// not `--reasoning-budget 0` — is what kept reasoning out of the answer channel and made
-    /// the output terminate (docs/UNPROVEN.md).
+    /// Constrain decoding to the citation grammar, applied only when
+    /// <see cref="ThinkBeforeAnswer"/> is off. **Off by default — the maintainer's decision,
+    /// 2026-08-25**, on the first real app sessions: under greedy decoding the grammar's
+    /// free-text spans trap the model in repetition loops it cannot leave (docs/UNPROVEN.md),
+    /// while the template-only configuration ran clean in every same-day measurement. Citation
+    /// trust without the grammar is the parser's and validator's, post-hoc — an invented id
+    /// renders unresolved instead of being unsamplable. The grammar remains the measured tool
+    /// for models whose output does not terminate without it.
     /// </summary>
-    public bool UseGrammar { get; init; } = true;
+    public bool UseGrammar { get; init; }
 
     /// <summary>
     /// Admit the <c>NOT_IN_TRANSCRIPT</c> production. A measured dial, not a formality: with it
