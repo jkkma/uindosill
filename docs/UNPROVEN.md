@@ -3938,6 +3938,26 @@ and the alternative — treating a lead as carried by the cited bullets beneath 
 lead assert more than they do. **Nobody has decided it**; the marker stays until someone does,
 because over-marking is the safe direction.
 
+**The retrieval shape was then tuned against a competitor's answers to the same two questions —
+2026-08-25, the maintainer's target.** Bullets gained topic labels in retrieval as well as
+overview (they read well in both, and a reader scanning an enumeration wants them), and a
+question with one answer may now be answered in the opening sentence alone, since forcing bullets
+under a "yes" made the panel restate its own opening. The lead carries ids either way, so
+stopping there costs no citation. Observed after: "Art conversion:" and "Art removal:" on the
+Kojima answer, "Development Costs:", "Budget Elaboration:", "Accuracy Disputes:" and "Refunds:"
+on the money one, every quote verified. **The model kept the bullets rather than collapsing to
+one sentence**, which is its judgement to make and was not overridden.
+
+**The comparison also produced the sharpest evidence yet for the citation discipline, against the
+target rather than for it.** Asked whether Kojima is mentioned, the competitor answered "Yes,
+*Hideo* Kojima is mentioned" — the recording is discussing **Ayami** Kojima, whose artwork the
+PlayStation 2 *Castlevania* titles converted, and no part of the transcript names a first name at
+all. It disambiguated, fluently, in the wrong direction. This project's answer said "Kojima" and
+quoted "Castlevania like conversion of Kojima artwork" with a time that plays those words. Not a
+measurement — one question, one competitor, one run — but it is the failure mode the whole rule
+set exists for, met in the wild: **the fluent wrong answer and the checkable right one are
+indistinguishable to a reader who has no way to hear the source.**
+
 **A quote failed its check in the same run, and the wording of the failure was wrong.** A bullet
 quoting "Just Ship It mentality" cited a span beginning at 10:00; the phrase is at 09:57. The
 caveat said *"quote not found in the transcript"* — but the check runs against the cited span,

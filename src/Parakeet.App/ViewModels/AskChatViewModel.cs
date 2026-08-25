@@ -450,6 +450,21 @@ public sealed partial class AskChatViewModel : ObservableObject
 /// failure — exactly one of the three, and the raw stream is never left looking like an answer.</summary>
 public sealed partial class ChatEntryViewModel : ObservableObject
 {
+    /// <summary>
+    /// What an uncited claim wears, on screen and in an email alike — the two must agree, or the
+    /// same sentence reads more confident in one than the other.
+    /// </summary>
+    public const string UncitedNotice = "[unverified]";
+
+    /// <summary>
+    /// What an uncited *opening* sentence wears instead. The maintainer's decision, 2026-08-25:
+    /// a lead is a topic sentence over claims that do carry times, so "[unverified]" reports on
+    /// the wrong thing — nothing failed a check, there was simply no citation to check. The
+    /// marker stays because a lead can still assert more than its bullets support; only the
+    /// wording changes, to what is actually true of it.
+    /// </summary>
+    public const string LeadUncitedNotice = "[not separately checked]";
+
     private readonly Func<string, Task> _copy;
     private string? _copyText;
 
@@ -644,18 +659,17 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             text.AppendLine(AbstainedText);
         }
 
-        // The overview's framing sentence keeps its place at the top and its times with it: an
-        // email that opened with the claims would lose what the recording was. It is marked
-        // exactly as a bullet is when it anchors nothing — the panel draws [unverified] on it,
-        // and an email that quietly dropped that would make the same sentence read more
-        // confident away from the application than inside it. Observed on the first real
-        // overview, 2026-08-25: the 26B wrote a good framing sentence and cited nothing.
+        // The opening sentence keeps its place at the top and its times with it: an email that
+        // opened with the claims would lose what the answer actually said. Marked when it
+        // anchors nothing — in the lead's own words, not a bullet's — because an email that
+        // quietly dropped the marker would make the same sentence read more confident away from
+        // the application than inside it.
         if (validation.Lead is { } lead)
         {
             var leadTimes = lead.Citations.Where(c => c.Check.Resolves).ToList();
             text.Append(leadTimes.Count > 0
                 ? "[" + string.Join("; ", leadTimes.Select(c => Range(c.Start!.Value, c.End!.Value))) + "] "
-                : "[unverified] ");
+                : LeadUncitedNotice + " ");
 
             text.AppendLine(lead.Bullet.Text);
             text.AppendLine();
@@ -674,7 +688,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             }
             else
             {
-                text.Append("[unverified] ");
+                text.Append(UncitedNotice).Append(' ');
             }
 
             if (bullet.Bullet.Label is { } label)

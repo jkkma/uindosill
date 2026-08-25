@@ -121,7 +121,7 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         }
 
         // The verbatim quote is retrieval's check and is dropped on the whole-transcript path —
-        // decided 2026-08-25, on what the two modes ask the model to produce. A retrieval bullet
+        // the maintainer's decision, 2026-08-25, on what the two modes ask for. A retrieval bullet
         // answers a pointed question from a span, so a quote is a sentence really in it and the
         // substring check is the strongest guarantee this project has. An overview bullet is a
         // synthesis across minutes; forcing one sentence of it to be verbatim either

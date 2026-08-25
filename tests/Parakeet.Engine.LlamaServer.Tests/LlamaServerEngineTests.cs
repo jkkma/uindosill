@@ -263,12 +263,21 @@ public class AnswerPromptBuilderTests
         Assert.Contains("Transcript:", userContent, StringComparison.Ordinal);
         Assert.Contains("[S1-S2] first stretch of speech second stretch", userContent, StringComparison.Ordinal);
 
-        // Retrieval keeps its own framing and its own grouping rules.
+        // Retrieval keeps its own framing and its own rules. Both modes label their bullets —
+        // labels read well in either, and a reader scanning an enumeration wants them — but
+        // only the overview is told to cover the recording and cite every discussing part,
+        // which are the two things a summary is graded on and a pointed answer never needs.
         var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
         Assert.Contains("from transcript evidence", retrieval, StringComparison.Ordinal);
-        Assert.DoesNotContain("short topic label", retrieval, StringComparison.Ordinal);
+        Assert.Contains("short topic label", retrieval, StringComparison.Ordinal);
         Assert.DoesNotContain("Cite every part", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("draw on the whole recording", retrieval, StringComparison.Ordinal);
         Assert.Contains("make sense on its own", retrieval, StringComparison.Ordinal);
+
+        // And a question with one answer may be answered in one sentence: forcing bullets under
+        // a "yes" made the panel restate its own opening. The lead carries ids either way, so
+        // stopping there costs no citation.
+        Assert.Contains("answers the question completely, write nothing more", retrieval, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -286,9 +295,35 @@ public class AnswerPromptBuilderTests
         Assert.Contains("Open with one sentence answering the question directly", retrieval, StringComparison.Ordinal);
         Assert.Contains("Open with one sentence answering the question directly", whole, StringComparison.Ordinal);
 
+        // The opening sentence carries ids like any other line, and that clause is load-bearing:
+        // without it the model wrote good openings and cited none of them, so every answer led
+        // with a line the panel had to mark.
+        Assert.Contains("ending with ids like every other line", retrieval, StringComparison.Ordinal);
+
         // And the grammar admits one wherever the prompt asks for it — the two are one contract.
         var grammar = AnswerPromptBuilder.BuildGrammar(Request().Evidence, wantLead: true)!;
         Assert.Contains("lead ::=", grammar, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheOverviewIsToldNotToWriteSectionHeadings()
+    {
+        // The topic-label instruction invites them, and a heading is a line that asserts
+        // nothing, cites nothing, and therefore renders as an unsupported claim — real ones
+        // observed 2026-08-25. The maintainer's decision the same day: forbid them in the prompt
+        // rather than guess at them in the parser, since a heuristic over "uncited line ending
+        // in a colon" would eventually swallow a real claim, and the bullets' own topic labels
+        // already group what a heading would have grouped.
+        var (whole, _) = AnswerPromptBuilder.BuildMessages(
+            Request() with { Mode = AnswerMode.WholeTranscript }, requireQuote: false);
+
+        Assert.Contains("Do not write section headings", whole, StringComparison.Ordinal);
+        Assert.Contains("short topic label", whole, StringComparison.Ordinal);
+
+        // Retrieval never wrote one and does not carry the line — it has no topic-label
+        // instruction to invite it, and prompt length is not free.
+        var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
+        Assert.DoesNotContain("section headings", retrieval, StringComparison.Ordinal);
     }
 
     [Fact]

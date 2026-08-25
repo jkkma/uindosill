@@ -1502,7 +1502,11 @@
                               <DataTemplate x:DataType="vm:AnswerBulletViewModel">
                                 <StackPanel Spacing="3">
                                   <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
-                                  <TextBlock Classes="fine secondary" Text="[unverified]"
+                                  <!-- An opening sentence that cites nothing failed no check —
+                                       there was none to fail — so it says that rather than
+                                       wearing the claim marker. -->
+                                  <TextBlock Classes="fine secondary"
+                                             Text="{x:Static vm:ChatEntryViewModel.LeadUncitedNotice}"
                                              IsVisible="{Binding IsUncited}" />
                                   <ItemsControl ItemsSource="{Binding Citations}"
                                                 IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
@@ -1534,7 +1538,8 @@
                                   <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
                                   <!-- The same marker the copied text carries: an uncited claim
                                        must not read more confident on screen than in an email. -->
-                                  <TextBlock Classes="fine secondary" Text="[unverified]"
+                                  <TextBlock Classes="fine secondary"
+                                             Text="{x:Static vm:ChatEntryViewModel.UncitedNotice}"
                                              IsVisible="{Binding IsUncited}" />
                                   <!-- No separate quote line: the quoted words sit inside the
                                        claim above, in quotation marks, where the model wrote
