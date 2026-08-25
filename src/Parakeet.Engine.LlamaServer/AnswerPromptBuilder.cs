@@ -44,23 +44,64 @@ public static class AnswerPromptBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var whole = request.Mode == AnswerMode.WholeTranscript;
         var builder = new StringBuilder();
-        builder.Append("You are answering questions about a recording, from transcript evidence.\n");
-        builder.Append("Answer as short bullets, one claim per line, starting with \"- \".\n");
-        builder.Append("Every bullet ends with the ids of the evidence that supports it, in square brackets, ");
-        builder.Append("exactly as they appear below — for example [S12-S15].\n");
+
+        if (whole)
+        {
+            // The whole-transcript instruction is a different job, not a longer one: the model
+            // is holding the entire recording rather than a shortlist retrieval already judged
+            // relevant, so what it needs told is coverage and grouping — the two things a
+            // summary is graded on and a pointed answer never needs. The failure this steers
+            // away from is the one the register predicted for the global path: an answer drawn
+            // from the opening minutes that reads exactly like an answer drawn from all of them.
+            builder.Append("You are describing a recording. Below is its complete transcript, ");
+            builder.Append("cut into numbered parts in the order they were spoken.\n");
+            builder.Append("Open with one sentence saying what the recording is and what it covers, ");
+            builder.Append("on its own line, with no \"- \" in front of it.\n");
+            builder.Append("Then write bullets, one point per line, starting with \"- \".\n");
+            builder.Append("Give each bullet a short topic label followed by \": \".\n");
+            builder.Append("Group related points under one bullet, and draw on the whole recording ");
+            builder.Append("rather than its opening.\n");
+            builder.Append("Every line ends with the ids of the parts that support it, in square brackets, ");
+            builder.Append("exactly as they appear below — for example [S12-S15]. ");
+            builder.Append("Cite every part where a point is discussed, not only the first.\n");
+        }
+        else
+        {
+            builder.Append("You are answering questions about a recording, from transcript evidence.\n");
+            builder.Append("Answer as short bullets, one claim per line, starting with \"- \".\n");
+            builder.Append("Every bullet ends with the ids of the evidence that supports it, in square brackets, ");
+            builder.Append("exactly as they appear below — for example [S12-S15].\n");
+        }
+
         builder.Append("Never write a timestamp, a time of day, or a duration.\n");
         if (requireQuote)
         {
             builder.Append("Quote the transcript verbatim inside «» in each bullet.\n");
         }
 
-        builder.Append("A claim you cannot support from the evidence gets [?] instead of an id.\n");
+        builder.Append("A claim you cannot support from the ");
+        builder.Append(whole ? "transcript" : "evidence");
+        builder.Append(" gets [?] instead of an id.\n");
         if (allowAbstain)
         {
-            builder.Append("If the evidence does not answer the question at all, reply exactly: ");
+            builder.Append(whole
+                ? "If the transcript does not answer the question at all, reply exactly: "
+                : "If the evidence does not answer the question at all, reply exactly: ");
             builder.Append(AnswerParser.AbstainSentinel);
             builder.Append('\n');
+        }
+
+        // The file's name is provenance the application holds and the transcript does not: it is
+        // how a person refers to the recording, and an overview that cannot name what it is
+        // describing opens with "this recording". Fenced to naming on purpose — a file name is
+        // not evidence, and a claim sourced from it would be the one line in the answer with no
+        // segment behind it.
+        if (whole && FileLabel(request.Transcript.SourceName) is { } label)
+        {
+            builder.Append("The recording's file is named \"").Append(label);
+            builder.Append("\" — use it to name the recording, never as a fact about its contents.\n");
         }
 
         if (request.Language is { } language)
@@ -71,7 +112,7 @@ public static class AnswerPromptBuilder
         var instruction = builder.ToString();
 
         builder.Clear();
-        builder.Append("Evidence:\n");
+        builder.Append(whole ? "Transcript:\n" : "Evidence:\n");
         foreach (var window in request.Evidence)
         {
             builder.Append('[').Append(window.CitationId).Append("] ").Append(window.Text).Append('\n');
@@ -79,6 +120,33 @@ public static class AnswerPromptBuilder
 
         builder.Append("\nQuestion: ").Append(request.Question).Append('\n');
         return (instruction, builder.ToString());
+    }
+
+    /// <summary>
+    /// The recording's file name without its directory or extension, or null when there is
+    /// nothing usable. The directory never travels: it is the user's folder structure, and the
+    /// prompt has no use for it.
+    /// </summary>
+    private static string? FileLabel(string? sourceName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return null;
+        }
+
+        string label;
+        try
+        {
+            label = Path.GetFileNameWithoutExtension(sourceName);
+        }
+        catch (ArgumentException)
+        {
+            // A source name that is not a path shape at all — it is a label, not a file.
+            label = sourceName;
+        }
+
+        label = label.Trim();
+        return label.Length == 0 ? null : label;
     }
 
     /// <summary>
@@ -95,7 +163,10 @@ public static class AnswerPromptBuilder
     /// FullCite's finding into a mechanical check here.
     /// </remarks>
     public static string? BuildGrammar(
-        IReadOnlyList<TranscriptWindow> evidence, bool allowAbstain = true, bool requireQuote = true)
+        IReadOnlyList<TranscriptWindow> evidence,
+        bool allowAbstain = true,
+        bool requireQuote = true,
+        bool wantLead = false)
     {
         ArgumentNullException.ThrowIfNull(evidence);
         if (evidence.Count == 0)
@@ -105,10 +176,21 @@ public static class AnswerPromptBuilder
 
         var ids = string.Join(" | ", evidence.Select(w => "\"" + w.CitationId + "\""));
 
+        // The lead has a production wherever the prompt asks for one, and that is this file's
+        // stated principle rather than tidiness: prompt and grammar are two statements of one
+        // contract, and an instruction the grammar makes unsamplable steers the model toward an
+        // output it cannot produce — measured as degraded answers, not as nothing.
+        var root = wantLead ? "lead bullet{1,8}" : "bullet{1,8}";
+
         var builder = new StringBuilder();
         builder.Append(allowAbstain
-            ? "root ::= abstain | bullet{1,8}\nabstain ::= \"" + AnswerParser.AbstainSentinel + "\" \"\\n\"\n"
-            : "root ::= bullet{1,8}\n");
+            ? "root ::= abstain | " + root + "\nabstain ::= \"" + AnswerParser.AbstainSentinel + "\" \"\\n\"\n"
+            : "root ::= " + root + "\n");
+
+        if (wantLead)
+        {
+            builder.Append("lead ::= text \" \" cites \"\\n\"\n");
+        }
 
         builder.Append(requireQuote
             ? "bullet ::= \"- \" text \" \" quote \" \" cites \"\\n\"\n"

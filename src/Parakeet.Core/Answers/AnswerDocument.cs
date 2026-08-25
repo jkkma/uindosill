@@ -47,6 +47,20 @@ public sealed record AnswerDocument
 {
     public required IReadOnlyList<AnswerBullet> Bullets { get; init; }
 
+    /// <summary>
+    /// The framing sentence an overview opens with — what the recording is and what it covers —
+    /// before the claims below it. Null in retrieval mode, where prose ahead of the bullets is
+    /// not a shape the prompt asks for and stays an uncited claim.
+    /// </summary>
+    /// <remarks>
+    /// An <see cref="AnswerBullet"/> rather than a string, and that is the whole point: a lead
+    /// makes claims about the recording exactly as a bullet does, so it carries citations, goes
+    /// through <see cref="CitationValidator"/>, and renders with the unresolved marker when it
+    /// cites nothing. A lead exempt from the citation rule would be the one paragraph in the
+    /// panel a reader could not check.
+    /// </remarks>
+    public AnswerBullet? Lead { get; init; }
+
     /// <summary>The model said the recording does not answer this, and said so explicitly.</summary>
     public bool Abstained { get; init; }
 
@@ -62,5 +76,5 @@ public sealed record AnswerDocument
     public string? Language { get; init; }
 
     /// <summary>Neither claims nor an abstention: the model produced nothing usable.</summary>
-    public bool IsEmpty => !Abstained && Bullets.Count == 0;
+    public bool IsEmpty => !Abstained && Bullets.Count == 0 && Lead is null;
 }

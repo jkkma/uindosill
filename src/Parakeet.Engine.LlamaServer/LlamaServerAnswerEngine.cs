@@ -120,15 +120,26 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             yield break;
         }
 
+        // The verbatim quote is retrieval's check and is dropped on the whole-transcript path —
+        // decided 2026-08-25, on what the two modes ask the model to produce. A retrieval bullet
+        // answers a pointed question from a span, so a quote is a sentence really in it and the
+        // substring check is the strongest guarantee this project has. An overview bullet is a
+        // synthesis across minutes; forcing one sentence of it to be verbatim either
+        // misrepresents the claim or picks a line so generic it verifies against anything, and
+        // the check that passes then has checked nothing. Citation trust in this mode is
+        // resolve-only: the id still names a real span the reader can click and hear.
+        var requireQuote = _options.RequireQuote && request.Mode != AnswerMode.WholeTranscript;
+        var wantLead = request.Mode == AnswerMode.WholeTranscript;
+
         var (instruction, userContent) =
-            AnswerPromptBuilder.BuildMessages(request, _options.AllowAbstain, _options.RequireQuote);
+            AnswerPromptBuilder.BuildMessages(request, _options.AllowAbstain, requireQuote);
 
         // In thinking mode the grammar must stay home: an eager grammar constrains sampling
         // wherever the stream happens to be, and it was measured shaping the think block itself
         // — every grammar-legal token filed as reasoning, content empty (2026-08-16, re-measured
         // 2026-08-24). Citation trust in this mode is the parser's and validator's, post-hoc.
         var grammar = _options.UseGrammar && !_options.ThinkBeforeAnswer
-            ? AnswerPromptBuilder.BuildGrammar(request.Evidence, _options.AllowAbstain, _options.RequireQuote)
+            ? AnswerPromptBuilder.BuildGrammar(request.Evidence, _options.AllowAbstain, requireQuote, wantLead)
             : null;
         var maxTokens = _options.MaxAnswerTokens
             + (_options.ThinkBeforeAnswer ? _options.ThinkingBudgetTokens : 0);

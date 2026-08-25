@@ -87,6 +87,70 @@ public class AnswerParserTests
     }
 
     [Fact]
+    public void TheLeadIsTakenOnlyWhereItWasAskedForAndOnlyBeforeTheClaims()
+    {
+        const string overview = "This recording covers the budget [S1]\n- Budget: it ran long [S2]\n";
+
+        // Asked for: the framing sentence is the lead, and it keeps its own citations.
+        var asked = AnswerParser.Parse(overview, allowLead: true);
+        Assert.NotNull(asked.Lead);
+        Assert.Equal("This recording covers the budget", asked.Lead!.Text);
+        Assert.Equal("S1", Assert.Single(asked.Lead.Citations).Raw);
+        Assert.Equal("Budget", Assert.Single(asked.Bullets).Label);
+
+        // Not asked for: the same text is claims, and the unmarked one is a claim like any
+        // other — dropping model output silently would hide what the validator exists to catch.
+        var unasked = AnswerParser.Parse(overview);
+        Assert.Null(unasked.Lead);
+        Assert.Equal(2, unasked.Bullets.Count);
+
+        // Only before the claims: once a bullet has been seen, a later unmarked line is a claim
+        // the model forgot to mark, not a second framing sentence.
+        var late = AnswerParser.Parse("- Budget: it ran long [S2]\nand another thing [S3]\n", allowLead: true);
+        Assert.Null(late.Lead);
+        Assert.Equal(2, late.Bullets.Count);
+
+        // And only the first: three paragraphs of preamble are claims, and marked as claims.
+        var wordy = AnswerParser.Parse("First framing [S1]\nSecond paragraph [S2]\n- A claim [S3]\n", allowLead: true);
+        Assert.Equal("First framing", wordy.Lead!.Text);
+        Assert.Equal(2, wordy.Bullets.Count);
+    }
+
+    [Fact]
+    public void ACitationLiftedFromMidSentenceDoesNotLeaveASpaceBeforeThePunctuation()
+    {
+        // The overview path invites citations mid-sentence ("cite every part where a point is
+        // discussed"), and lifting one out used to leave the space that was in front of it:
+        // "…the staging environment [S1-S4]." rendered as "…the staging environment .".
+        var bullet = AnswerParser.Parse("- Budget: it went over [S1-S4].\n").Bullets[0];
+        Assert.Equal("it went over.", bullet.Text);
+
+        var commas = AnswerParser.Parse("- Two things [S1], and a third [S2].\n").Bullets[0];
+        Assert.Equal("Two things, and a third.", commas.Text);
+
+        // French typography puts a space before ; : ! ? and the twenty-five languages are the
+        // requirement, so those keep theirs.
+        var french = AnswerParser.Parse("- Vraiment [S1] ?\n").Bullets[0];
+        Assert.Equal("Vraiment ?", french.Text);
+    }
+
+    [Fact]
+    public void ALeadAloneIsAnAnswerAndDoesNotAbstain()
+    {
+        // A lead is content: an answer that is only a framing sentence is thin, but rendering
+        // it as "the model produced no answer" would throw away what it did say — and a
+        // sentinel beside it is the same contradiction a sentinel beside bullets is.
+        var leadOnly = AnswerParser.Parse("This recording covers the budget [S1]\n", allowLead: true);
+        Assert.False(leadOnly.IsEmpty);
+        Assert.NotNull(leadOnly.Lead);
+
+        var contradictory = AnswerParser.Parse(
+            "This recording covers the budget [S1]\nNOT_IN_TRANSCRIPT\n", allowLead: true);
+        Assert.False(contradictory.Abstained);
+        Assert.NotNull(contradictory.Lead);
+    }
+
+    [Fact]
     public void ALeadingThinkTagIsStrippedNotParsed()
     {
         // A template that forces its think block open leaves a literal `<think>` at the front
@@ -349,6 +413,29 @@ public class CitationValidatorTests
         var answer = AnswerParser.Parse("- fine [S1]\n- invented [S17]\n");
 
         Assert.False(CitationValidator.Validate(answer, transcript).AllCitationsPass);
+    }
+
+    [Fact]
+    public void TheLeadIsCheckedLikeAnyOtherClaim()
+    {
+        // The lead makes claims about the recording exactly as a bullet does. An unchecked lead
+        // would be the one paragraph in the panel a reader could not verify — so an invented id
+        // in it fails the whole answer, and a resolved one carries real times like the rest.
+        var transcript = Transcript("first", "second");
+
+        var good = AnswerParser.Parse("This recording covers two things [S1-S2]\n- fine [S1]\n", allowLead: true);
+        var goodValidation = CitationValidator.Validate(good, transcript);
+        Assert.True(goodValidation.AllCitationsPass);
+        Assert.NotNull(goodValidation.Lead);
+        Assert.True(goodValidation.Lead!.Citations[0].Check.Resolves);
+
+        var invented = AnswerParser.Parse("This recording covers two things [S17]\n- fine [S1]\n", allowLead: true);
+        Assert.False(CitationValidator.Validate(invented, transcript).AllCitationsPass);
+
+        // No lead, no resolved lead — and nothing about the bullets changes.
+        var plain = CitationValidator.Validate(AnswerParser.Parse("- fine [S1]\n"), transcript);
+        Assert.Null(plain.Lead);
+        Assert.True(plain.AllCitationsPass);
     }
 
     [Fact]

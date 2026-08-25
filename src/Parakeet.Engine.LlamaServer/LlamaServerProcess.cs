@@ -181,6 +181,19 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             "--jinja",
         };
 
+        // Thinking is turned off, not merely redirected — measured 2026-08-25, and the defect it
+        // repairs was in the shipped default. The server's `--reasoning` defaults to `auto`,
+        // which lets the model's own template decide, so a thinking model thought regardless of
+        // this setting: `--reasoning-format` only chose where the thought text was filed, and
+        // filing it under reasoning_content (the default parse) meant the engine dropped it and
+        // the answer budget was spent before a single content token existed. On the second
+        // machine the 26B-A4B answered a twelve-segment overview with **nothing at all in 79.4 s**
+        // under `auto`, and with the same prompt under `off` produced a lead and four cited
+        // bullets in 45.5 s. A toggle labelled "think before answering" has to be the thing that
+        // decides, and now it is.
+        arguments.Add("--reasoning");
+        arguments.Add(options.ThinkBeforeAnswer ? "on" : "off");
+
         if (!options.ThinkBeforeAnswer && options.UseGrammar)
         {
             // The grammar mode only: every generated token stays in content, where the grammar

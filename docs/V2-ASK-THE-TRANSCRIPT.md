@@ -1084,6 +1084,24 @@ should make follow-up questions skip the re-prefill — the evidence prefix is i
 questions in this mode, which it never is under retrieval — expected from `cache_prompt`'s
 documented behaviour, not yet observed on a real run.
 
+**Two decisions taken with it, both on measured grounds, both open to the maintainer's
+reversal.** The **verbatim quote is dropped on this path**: a retrieval bullet answers a pointed
+question from one span, so a quote is a sentence really in it and the substring check is the
+strongest guarantee this project has, but an overview bullet is a synthesis across minutes, and
+forcing one sentence of it to be verbatim either misrepresents the claim or picks a line generic
+enough to verify against anything — a check that passes having checked nothing. Citation trust
+here is resolve-only: the id still names a real span the reader can click and hear. And the
+**recording's file name is offered to the prompt**, fenced to naming ("use it to name the
+recording, never as a fact about its contents"), because an overview that cannot say what it is
+describing opens with "this recording" — the name is provenance the application holds and the
+transcript does not.
+
+The shape was then read once, end to end: the 26B-A4B over a twelve-segment synthetic meeting
+produced a framing sentence and four labelled, multiply-cited bullets touching all three thirds
+of the recording. That run is in `docs/UNPROVEN.md` with its limits stated — a shape
+observation on a toy transcript, not a quality claim, and a 0.6B on the same prompt emitted no
+citations at all, which is the ungrammared post-hoc contract behaving as specified.
+
 What it is not: not the router — global-versus-pointed stays the person's call at the toggle
 until the labelled set (whose `global` question kind is written for exactly this) can measure a
 classifier; not map-reduce, which remains the laptop's eventual path for long recordings, where
