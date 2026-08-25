@@ -10,6 +10,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 {
     private readonly AppSettingsStore _settings;
 
+    /// <summary>The real provider when this window built one, so the model picker can list what
+    /// is on disk. Null under the fake provider the tests supply, and the picker is then empty
+    /// but for its automatic row.</summary>
+    private readonly LlamaAnswerEngineProvider? _llamaAnswerEngines;
+
     [ObservableProperty]
     private ComputeBackend _backend = ComputeBackend.Vulkan;
 
@@ -22,6 +27,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Automatic as shipped — the register's decision 3 router.</summary>
     [ObservableProperty]
     private AskModePreference _askMode;
+
+    /// <summary>The .gguf chosen for asking, or null for "the largest one there".</summary>
+    [ObservableProperty]
+    private string? _askModelFileName;
 
     [ObservableProperty]
     private int _selectedTab;
@@ -52,6 +61,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
         _askThinking = loaded.AskThinking;
         _askMode = loaded.AskMode;
+        _askModelFileName = loaded.AskModelFileName;
 
         Session = new ModelSession(engines);
 
@@ -82,11 +92,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // the chat's first question unloads the transcription model through it — and the
         // IsRunning probe, together with the session's own busy flag for the stretch a load
         // spends inside its await, is what keeps the two model loads from overlapping.
+        // Kept as well as handed over, so the model picker can ask it what is on the disk. The
+        // tests supply their own provider and leave this null; the picker is then just its
+        // automatic row, which is the honest thing to show when nothing can enumerate a folder.
+        if (answerEngines is null)
+        {
+            _llamaAnswerEngines = new LlamaAnswerEngineProvider(
+                modelStore, () => AskThinking, () => AskMode, () => AskModelFileName);
+        }
+
         Ask = new AskViewModel(
             Transcribe.Jobs,
             player ?? MediaPlayers.ForThisBuild(),
             Session,
-            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking, () => AskMode),
+            answerEngines ?? _llamaAnswerEngines,
             () => Transcribe.IsRunning);
 
         // The output folder outlives the run — chosen once, restored at every launch — but only
@@ -284,6 +303,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         PersistAskMode(value);
     }
 
+    /// <summary>Remembers the model; the panel builds a fresh engine at the next question.</summary>
+    partial void OnAskModelFileNameChanged(string? value) =>
+        _settings.Update(current => current with { AskModelFileName = value });
+
     /// <summary>Remembers the choice; the panel reads it at the next question.</summary>
     private void PersistAskMode(AskModePreference value) =>
         _settings.Update(current => current with { AskMode = value });
@@ -310,6 +333,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // back — the refresh re-runs the availability check, in both directions.
             Ask.Chat.RefreshDocument();
         }
+        else if (value == SettingsTabIndex)
+        {
+            // And the same again for the model picker, which lists files on that same disk.
+            OnPropertyChanged(nameof(AskModels));
+            OnPropertyChanged(nameof(SelectedAskModel));
+        }
     }
 
     /// <summary>Where the Models page sits in the TabControl. The switcher's order is its own.</summary>
@@ -317,6 +346,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Where the Ask page sits in the TabControl.</summary>
     private const int AskTabIndex = 4;
+
+    /// <summary>Where the Settings page sits — the model picker reads the disk when it opens.</summary>
+    private const int SettingsTabIndex = 5;
 
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];
@@ -337,6 +369,46 @@ public sealed partial class MainWindowViewModel : ObservableObject
         set => AskMode = value.Mode;
     }
 
+    /// <summary>
+    /// The ask-model picker's rows: every .gguf in the models folder, largest first, under a
+    /// row for letting the application choose. Re-read whenever the Settings page is opened,
+    /// because the folder is not this application's alone to write.
+    /// </summary>
+    public IReadOnlyList<AskModelChoice> AskModels
+    {
+        get
+        {
+            var rows = new List<AskModelChoice> { new(null, "The largest one there") };
+            if (_llamaAnswerEngines is { } provider)
+            {
+                rows.AddRange(provider.AvailableModelFileNames().Select(name => new AskModelChoice(name, name)));
+            }
+
+            // A name chosen before the file went away still shows, so the picker explains the
+            // setting rather than silently reverting to a row the person did not choose.
+            if (AskModelFileName is { Length: > 0 } chosen
+                && !rows.Any(row => string.Equals(row.FileName, chosen, StringComparison.OrdinalIgnoreCase)))
+            {
+                rows.Add(new AskModelChoice(chosen, chosen + " (not in the folder)"));
+            }
+
+            return rows;
+        }
+    }
+
+    public AskModelChoice SelectedAskModel
+    {
+        get => AskModels.FirstOrDefault(
+                row => string.Equals(row.FileName, AskModelFileName, StringComparison.OrdinalIgnoreCase))
+            ?? AskModels[0];
+        set => AskModelFileName = value?.FileName;
+    }
+
+    public string AskModelExplanation =>
+        "Which model answers your questions. Bigger is not always slower — a mixture-of-experts "
+        + "model can answer faster than a smaller dense one. Whichever you pick is used from your "
+        + "next question.";
+
     public string AskModeExplanation =>
         "Deciding from your question sends summaries and \"what are the main topics\" through the "
         + "whole recording, and everything else through the parts that matched — which is faster. "
@@ -353,6 +425,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 public sealed record AskModeChoice(AskModePreference Mode, string Label)
 {
     /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
+    public override string ToString() => Label;
+}
+
+/// <summary>One row of the ask-model picker; a null file name is "let the application choose".</summary>
+public sealed record AskModelChoice(string? FileName, string Label)
+{
     public override string ToString() => Label;
 }
 

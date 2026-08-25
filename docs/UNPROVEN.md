@@ -4011,16 +4011,19 @@ never ran. The three that used the convention split 1 verified, 2 failed — one
 past the end of its own cited range, one joined across a gap with an ellipsis. The 26B used the
 convention on 11 of 11 and all 11 verified.
 
-**That is a hole in this project's own rule, not only a fact about a model.** `AnswerParser`
-extracts a quote from `«…»` and nothing else, and `QuoteCaveat` is null when there is no quote —
-so a bullet reading `The speaker compares it to "the Castlevania like conversion of Kojima
-artwork"` renders as quoted text, beside a citation chip, with nothing anywhere saying it was
-never checked. The panel's stated promise is that it never shows unverified text dressed as
-transcript, and on a model that ignores the convention it does exactly that. **Undecided, and
-listed rather than fixed**: accept straight quotes as quote candidates and check them (risks
-falsely accusing a title or a scare-quote), or detect them and say only that they were not
-checked (honest, noisier), or leave the convention as a per-model quality signal. The 26B, which
-is what ships and what the maintainer runs, does not exhibit it.
+**That was a hole in this project's own rule, not only a fact about a model, and it is closed.**
+`AnswerParser` extracts a quote from `«…»` and nothing else, and `QuoteCaveat` was null when
+there was no quote — so a bullet reading `The speaker compares it to "the Castlevania like
+conversion of Kojima artwork"` rendered as quoted text, beside a citation chip, with nothing
+anywhere saying it was never checked. The panel's stated promise is that it never shows
+unverified text dressed as transcript, and on a model that ignores the convention it did exactly
+that. **The maintainer's decision, the same day: say so rather than guess.** A bullet with no
+`«…»` whose text carries quotation marks now reads *"the quoted words here were not checked"*, on
+screen and in the copied email alike. The alternative — treating a straight-quoted span as a
+transcript quote and checking it — would verify more but would eventually tell a model that a
+title or an aside is "not at the time cited", and false is reserved here for checked-and-failed,
+as it already is for a quote whose citation never resolved. **What this does not do is check
+those seven bullets**; they remain unverified, and now say so.
 
 Nothing here is a quality ranking. Coverage, correctness and usefulness of the answers were not
 scored on any of the four; that is the labelled set's job, and three questions in one run is a

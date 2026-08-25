@@ -701,9 +701,16 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             // is the caveat when the check did not pass, since an email carries no tooltip.
             text.Append(bullet.Bullet.Text);
 
+            // The same caveats the panel shows, because an email carries no tooltip and a claim
+            // must not read more confident away from the application than inside it.
             if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
             {
                 text.Append(" [the quoted words are not at the time cited]");
+            }
+            else if (bullet.Bullet.Quote is null
+                && bullet.Bullet.Text.AsSpan().IndexOfAny('"', '“', '”') >= 0)
+            {
+                text.Append(" [the quoted words here were not checked]");
             }
 
             text.AppendLine();
@@ -744,6 +751,17 @@ public sealed class AnswerBulletViewModel
         QuoteChecked = bullet.Citations.Any(c => c.Check.QuoteMatches is not null);
         Citations = [.. bullet.Citations.Select(c => new CitationChipViewModel(c, seekAndPlay))];
         IsUncited = bullet.Bullet.IsUncited || Citations.All(c => !c.IsResolved);
+
+        // A model that ignores the «…» convention still quotes — in ordinary marks, which this
+        // parser does not lift and this check therefore never sees. Measured 2026-08-25: seven
+        // of the 9B's ten bullets, every one of them really quoting the transcript. Left alone,
+        // such a bullet renders quoted words beside a citation chip with nothing saying they
+        // were unchecked, which is precisely the "unverified text dressed as transcript" this
+        // panel promises never to show. Detected and said, rather than checked: guessing that
+        // a quoted span was meant as a transcript quote would eventually accuse a title or an
+        // aside of not being at its cited time, and false is reserved here for checked-and-failed.
+        HasUncheckedQuotedText = bullet.Bullet.Quote is null
+            && Text.AsSpan().IndexOfAny('"', '“', '”') >= 0;
     }
 
     public string? Label { get; }
@@ -770,14 +788,23 @@ public sealed class AnswerBulletViewModel
     public bool HasQuote => Quote is not null;
 
     /// <summary>
+    /// The bullet shows quoted words that this project never checked, because the model wrote
+    /// them in ordinary marks rather than the ones the prompt asks for.
+    /// </summary>
+    public bool HasUncheckedQuotedText { get; }
+
+    /// <summary>
     /// What the quote check found, when it did not pass. The failing case says *cited time*
     /// rather than *transcript*, because that is what was searched: the check runs against the
     /// span the citation names, and the words are often really in the recording a few seconds
     /// away — observed 2026-08-25, a real bullet quoting "Just Ship It mentality" from 09:57
     /// under a citation covering 10:00 onwards. "Not in the transcript" would be a claim about
-    /// the recording that nothing here established.
+    /// the recording that nothing here established. The last case is quoted words that arrived
+    /// outside the convention and so were never checked at all — an absence, stated as one.
     /// </summary>
-    public string? QuoteCaveat => Quote is null || QuoteVerified
+    public string? QuoteCaveat => Quote is null
+        ? HasUncheckedQuotedText ? "the quoted words here were not checked" : null
+        : QuoteVerified
         ? null
         : QuoteChecked
             ? "the quoted words are not at the time cited"

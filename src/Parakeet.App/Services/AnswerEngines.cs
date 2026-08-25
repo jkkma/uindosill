@@ -104,16 +104,39 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     private readonly IModelStore _store;
     private readonly Func<bool> _thinkingMode;
     private readonly Func<AskModePreference> _modePreference;
+    private readonly Func<string?> _chosenModel;
 
     public LlamaAnswerEngineProvider(
         IModelStore store,
         Func<bool>? thinkingMode = null,
-        Func<AskModePreference>? modePreference = null)
+        Func<AskModePreference>? modePreference = null,
+        Func<string?>? chosenModel = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         _thinkingMode = thinkingMode ?? (static () => false);
         _modePreference = modePreference ?? (static () => AskModePreference.Automatic);
+        _chosenModel = chosenModel ?? (static () => null);
+    }
+
+    /// <summary>
+    /// The .gguf files in the models folder, largest first — the list the picker offers, read
+    /// fresh because the folder is not this application's alone to write.
+    /// </summary>
+    public IReadOnlyList<string> AvailableModelFileNames()
+    {
+        if (!Directory.Exists(_store.RootDirectory))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. Directory.EnumerateFiles(_store.RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly)
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(file => file.Length)
+                .Select(file => file.Name),
+        ];
     }
 
     public bool ThinkingMode => _thinkingMode();
@@ -159,8 +182,18 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         });
     }
 
-    /// <summary>The largest .gguf in the models folder, or null. Largest rather than newest,
-    /// because it is the pick a person can predict without asking.</summary>
+    /// <summary>
+    /// The .gguf to serve: the one chosen in Settings when it is still there, and otherwise the
+    /// largest present.
+    /// </summary>
+    /// <remarks>
+    /// Largest rather than newest for the unchosen case, because it is the pick a person can
+    /// predict without asking — but predicting it is not the same as choosing it, which is why
+    /// the picker exists as of 2026-08-25. A chosen name that no longer matches a file falls
+    /// back silently to the largest: the models folder is not this application's alone, and a
+    /// panel that refused to answer because a file someone deleted was once selected would be a
+    /// setting failing loudly at the wrong person.
+    /// </remarks>
     private string? FindModelFile()
     {
         if (!Directory.Exists(_store.RootDirectory))
@@ -168,10 +201,22 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             return null;
         }
 
-        return Directory.EnumerateFiles(_store.RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly)
+        var files = Directory.EnumerateFiles(_store.RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly)
             .Select(path => new FileInfo(path))
             .OrderByDescending(file => file.Length)
-            .FirstOrDefault()?.FullName;
+            .ToList();
+
+        if (_chosenModel() is { Length: > 0 } chosen)
+        {
+            var match = files.FirstOrDefault(
+                file => string.Equals(file.Name, chosen, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                return match.FullName;
+            }
+        }
+
+        return files.FirstOrDefault()?.FullName;
     }
 }
 

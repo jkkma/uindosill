@@ -32,6 +32,14 @@ public sealed record FakeAnswerOptions
 
     /// <summary>Throw after this many chunks have been yielded, for mid-stream failure paths.</summary>
     public int? FailAfterChunks { get; init; }
+
+    /// <summary>
+    /// Quote in ordinary marks rather than the <c>«…»</c> the prompt asks for — what a real
+    /// model was measured doing on seven of ten bullets (2026-08-25). The words are still the
+    /// transcript's, so what this exercises is the panel's handling of a quote it cannot check
+    /// rather than a wrong one.
+    /// </summary>
+    public bool StraightQuotes { get; init; }
 }
 
 /// <summary>
@@ -193,7 +201,7 @@ public sealed class FakeAnswerEngine : IAnswerEngine
             var quote = string.Join(' ', words.Take(4));
 
             yield return $"- {labels[i]}: the recording covers this ";
-            yield return $"«{quote}» ";
+            yield return _options.StraightQuotes ? $"\"{quote}\" " : $"«{quote}» ";
             yield return $"[{window.CitationId}]\n";
         }
 
