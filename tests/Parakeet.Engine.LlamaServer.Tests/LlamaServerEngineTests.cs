@@ -340,6 +340,7 @@ public class RequestBodyTests
 
         Assert.Equal("the grammar", root.GetProperty("grammar").GetString());
         Assert.Equal(512, root.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(0, root.GetProperty("temperature").GetInt32());
         Assert.True(root.GetProperty("stream").GetBoolean());
         Assert.True(root.GetProperty("cache_prompt").GetBoolean());
         Assert.True(root.GetProperty("return_progress").GetBoolean());
