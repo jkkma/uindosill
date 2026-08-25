@@ -1767,6 +1767,14 @@
                            Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
               </DockPanel>
               <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Model" Classes="secondary" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding AskModels}"
+                          SelectedItem="{Binding SelectedAskModel}" MinWidth="320" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding AskModelExplanation}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Answer from" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskModes}"
                           SelectedItem="{Binding SelectedAskMode}" MinWidth="200" />

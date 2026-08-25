@@ -108,6 +108,33 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void TheChosenAskModelIsRememberedByNameAndOmittedWhenUnchosen()
+    {
+        // A name rather than a path: the models folder may move between installs, and a stored
+        // path to a file since deleted is a setting that fails silently. Unchosen is omitted
+        // from the file, so "never chosen" and "cleared" are one shape — the same rule the
+        // backend and the output folder follow.
+        var path = TempFile();
+        try
+        {
+            Assert.Null(new AppSettingsStore(path).Load().AskModelFileName);
+
+            Assert.True(new AppSettingsStore(path).Save(
+                new AppSettings { AskModelFileName = "Qwen3.5-9B-Q4_K_M.gguf" }));
+            Assert.Equal("Qwen3.5-9B-Q4_K_M.gguf", new AppSettingsStore(path).Load().AskModelFileName);
+            Assert.Contains("askModelFileName", File.ReadAllText(path), StringComparison.Ordinal);
+
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { AskModelFileName = null }));
+            Assert.Null(new AppSettingsStore(path).Load().AskModelFileName);
+            Assert.DoesNotContain("askModelFileName", File.ReadAllText(path), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AFileThatIsNotJsonIsTheShippedDefaultRatherThanAThrow()
     {
         // Whatever a hand-edited or half-written settings file contains, the window opens.

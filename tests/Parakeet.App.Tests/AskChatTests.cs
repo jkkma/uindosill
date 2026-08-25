@@ -836,6 +836,68 @@ public class AskChatTests
     }
 
     [Fact]
+    public void QuotedWordsOutsideTheConventionAreSaidToBeUnchecked()
+    {
+        // The 9B quoted the transcript in ordinary marks on seven of ten bullets (2026-08-25),
+        // which this parser does not lift and this check therefore never saw. Left alone, such
+        // a bullet showed quoted words beside a citation chip with nothing saying they were
+        // unchecked — the "unverified text dressed as transcript" the panel promises never to
+        // show. The maintainer's decision: say so, rather than guess the words were meant as a
+        // transcript quote and risk accusing a title of not being at its cited time.
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved" }],
+        };
+
+        var straight = AnswerParser.Parse("- They said \"the budget was approved\" plainly [S1]\n");
+        var bullet = new AnswerBulletViewModel(
+            CitationValidator.Validate(straight, transcript).Bullets[0], _ => { });
+
+        Assert.Null(bullet.Quote);
+        Assert.True(bullet.HasUncheckedQuotedText);
+        Assert.Equal("the quoted words here were not checked", bullet.QuoteCaveat);
+
+        // A bullet with no quotation of any kind says nothing — the caveat is for quoted words,
+        // not for every uncited sentence.
+        var plain = AnswerParser.Parse("- They approved the budget [S1]\n");
+        var plainBullet = new AnswerBulletViewModel(
+            CitationValidator.Validate(plain, transcript).Bullets[0], _ => { });
+        Assert.False(plainBullet.HasUncheckedQuotedText);
+        Assert.Null(plainBullet.QuoteCaveat);
+
+        // And a bullet that used the convention is checked as before, not merely reported on.
+        var proper = AnswerParser.Parse("- They said «the budget was approved» [S1]\n");
+        var properBullet = new AnswerBulletViewModel(
+            CitationValidator.Validate(proper, transcript).Bullets[0], _ => { });
+        Assert.False(properBullet.HasUncheckedQuotedText);
+        Assert.True(properBullet.QuoteVerified);
+        Assert.Null(properBullet.QuoteCaveat);
+    }
+
+    [Fact]
+    public async Task TheUncheckedQuoteCaveatTravelsIntoTheEmail()
+    {
+        // A claim must not read more confident away from the application than inside it, and an
+        // email carries no tooltip.
+        var (chat, _, _) = Chat(options: new FakeAnswerOptions { StraightQuotes = true });
+
+        string? copied = null;
+        chat.CopyToClipboard = text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        };
+
+        await AskAsync(chat, "what did maria present about the axolotl?");
+        var entry = Assert.Single(chat.Entries);
+        await entry.CopyCommand.ExecuteAsync(null);
+
+        Assert.NotNull(copied);
+        Assert.Contains("[the quoted words here were not checked]", copied, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AFailedEngineIsDroppedSoTheNextQuestionStartsFresh()
     {
         var (chat, provider, _) = Chat(options: new FakeAnswerOptions { FailAfterChunks = 0 });

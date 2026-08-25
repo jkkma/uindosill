@@ -58,6 +58,20 @@ public sealed record AppSettings
     public AskModePreference AskMode { get; init; } = AskModePreference.Automatic;
 
     /// <summary>
+    /// The file name — not the path — of the .gguf the Ask panel should serve, or null to take
+    /// the largest present. Null is the shipped default and stays meaningful: it means "nobody
+    /// has chosen", so a folder whose contents change later still resolves to something.
+    /// </summary>
+    /// <remarks>
+    /// A name rather than a path because the folder is the application's own and may move
+    /// between installs, and because a stored path to a file someone has since deleted is a
+    /// setting that fails silently. A name that no longer matches anything falls back to the
+    /// largest, exactly as if nothing had been chosen — the models on that disk are not this
+    /// application's to keep track of between runs.
+    /// </remarks>
+    public string? AskModelFileName { get; init; }
+
+    /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
     /// files beside each input.
     /// </summary>
@@ -121,6 +135,7 @@ public sealed class AppSettingsStore
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 AskMode = ReadAskMode(root),
+                AskModelFileName = ReadString(root, "askModelFileName"),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
@@ -188,6 +203,11 @@ public sealed class AppSettingsStore
             if (settings.OutputDirectory is { Length: > 0 } outputDirectory)
             {
                 values["outputDirectory"] = outputDirectory;
+            }
+
+            if (settings.AskModelFileName is { Length: > 0 } askModel)
+            {
+                values["askModelFileName"] = askModel;
             }
 
             var json = JsonSerializer.Serialize(values);
