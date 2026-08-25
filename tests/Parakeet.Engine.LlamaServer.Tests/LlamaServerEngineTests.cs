@@ -91,10 +91,14 @@ public class LlamaServerArgumentTests
     public void TheTemplateIsAppliedAndReasoningRoutingFollowsTheThinkingMode()
     {
         // --jinja always: the raw-prompt path was measured leaving models unable to stop
-        // (2026-08-24). --reasoning-format none only in the default grammar mode — it is that
-        // mode's routing; in thinking mode the server's default parsing is what keeps the
-        // thinking out of the answer stream.
-        var grammarMode = Arguments(Options(), 1, "k");
+        // (2026-08-24). --reasoning-format none belongs to the grammar mode alone — it keeps
+        // the grammar-shaped stream in content; everywhere else the server's reasoning parsing
+        // is what keeps a template's thought channel out of the answer stream.
+        var ungrammared = Arguments(Options(), 1, "k");
+        Assert.Contains("--jinja", ungrammared);
+        Assert.DoesNotContain("--reasoning-format", ungrammared);
+
+        var grammarMode = Arguments(Options() with { UseGrammar = true }, 1, "k");
         Assert.Contains("--jinja", grammarMode);
         Assert.Equal("none", grammarMode[grammarMode.IndexOf("--reasoning-format") + 1]);
 
@@ -417,9 +421,10 @@ public sealed class LlamaServerIntegrationTests
             ContextSize = 4096,
             MaxAnswerTokens = 256,
 
-            // The default (grammar) mode, and this test asserts exactly its guarantee: every
-            // citation resolves. The thinking mode has its own test below, with the post-hoc
-            // contract it actually makes.
+            // Pinned on: this test asserts the GRAMMAR's guarantee (every citation resolves),
+            // which only holds when the grammar decodes. The shipped default is ungrammared
+            // since 2026-08-25; the test below carries that mode's weaker post-hoc contract.
+            UseGrammar = true,
         });
 
         await engine.LoadAsync(TestContext.Current.CancellationToken);

@@ -3798,6 +3798,24 @@ under the new template-plus-grammar pairing (its product-path failures above pre
 endpoint move), and whether thinking buys answer quality anywhere — the labelled set decides
 that as it decides everything else.
 
+**The grammar came off by default the next sitting — the maintainer's decision, 2026-08-25 —
+because the first real app sessions showed greedy decoding trapped in the grammar's free-text
+spans.** At the server's default temperature the app's first answers carried charset-legal
+noise (repetition loops, foreign-script tokens inside English bullets — every one flagged by
+the quote check); pinning temperature to 0 changed the noise's character, not its existence —
+greedy cannot leave a repetition attractor inside a 400-character any-character span, and a
+"give me a summary" ask produced bullets of pure loop. The gauntlet's grammar-mode
+degeneration after clean opening bullets was the same mechanism, mis-read at the time as
+purely the raw prompt's stopping problem. The shipped configuration is now template + temp 0
++ no grammar + the server's reasoning parsing — the configuration every clean 26B run of
+2026-08-24/25 used — with the parser and validator carrying citation trust post-hoc, exactly
+the FullCite configuration the register records. Also observed in the same sessions, for the
+record: a global question ("give me a summary") hands retrieval nothing to rank on — the
+register's decision that global is the router's path, felt in the product; the engine's Vulkan
+environment gained the expert-offload pair as defaults after the app's first 26B load OOM'd
+without them; and the 26B at ~1.3 GB of free system RAM decodes at a paging crawl — the
+model's experts want ~10 GB of the 15.6 GB pool to themselves.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the
