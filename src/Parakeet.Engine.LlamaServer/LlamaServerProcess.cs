@@ -215,6 +215,17 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         if (backend == ComputeBackend.Vulkan)
         {
             environment["GGML_VK_DISABLE_BFLOAT16"] = "1";
+
+            // Mixture-of-experts weights stay in system memory on Vulkan, and the pinned host
+            // buffer is bypassed — measured 2026-08-24 on the second machine (docs/UNPROVEN.md):
+            // a UMA driver splits its memory into two ~7.8 GiB heaps, "CPU" placement resolves
+            // to the pinned heap without --no-host and overflows it, and a 26B-class mixture
+            // that runs comfortably with these knobs cannot load at all without them. On a
+            // dense model the expert override matches no tensors; the unpinned-transfer cost
+            // on discrete-card Vulkan is unmeasured and marked so. Interim until the catalogue
+            // carries per-model launch options (the register's open lineup question).
+            environment["LLAMA_ARG_CPU_MOE"] = "1";
+            environment["LLAMA_ARG_NO_HOST"] = "1";
         }
 
         foreach (var (name, value) in overrides)

@@ -106,15 +106,23 @@ public class LlamaServerArgumentTests
     [Fact]
     public void VulkanGetsTheBf16KnobUnlessTheCallerSaysOtherwise()
     {
-        // The laptop's driver hangs at model load without it — measured 2026-08-16,
-        // docs/UNPROVEN.md — and a hang is strictly worse than bf16 being unavailable.
+        // The laptop's driver hangs at model load without the bf16 knob (measured 2026-08-16),
+        // and a 26B-class mixture cannot load at all without the expert-offload pair (measured
+        // 2026-08-24, the app's own failed load) — docs/UNPROVEN.md carries both.
         var vulkan = LlamaServerProcess.BuildEnvironment(
             ComputeBackend.Vulkan, new Dictionary<string, string>());
         Assert.Equal("1", vulkan["GGML_VK_DISABLE_BFLOAT16"]);
+        Assert.Equal("1", vulkan["LLAMA_ARG_CPU_MOE"]);
+        Assert.Equal("1", vulkan["LLAMA_ARG_NO_HOST"]);
 
         var overridden = LlamaServerProcess.BuildEnvironment(
-            ComputeBackend.Vulkan, new Dictionary<string, string> { ["GGML_VK_DISABLE_BFLOAT16"] = "0" });
+            ComputeBackend.Vulkan, new Dictionary<string, string>
+            {
+                ["GGML_VK_DISABLE_BFLOAT16"] = "0",
+                ["LLAMA_ARG_CPU_MOE"] = "0",
+            });
         Assert.Equal("0", overridden["GGML_VK_DISABLE_BFLOAT16"]);
+        Assert.Equal("0", overridden["LLAMA_ARG_CPU_MOE"]);
 
         Assert.Empty(LlamaServerProcess.BuildEnvironment(ComputeBackend.Cpu, new Dictionary<string, string>()));
     }
