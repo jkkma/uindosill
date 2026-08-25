@@ -120,6 +120,19 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     }
 
     /// <summary>
+    /// Which model file would answer the next question, or null when the folder holds none.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Check"/> on purpose, and it is a distinction with teeth: Check
+    /// answers "can this panel work at all", which is false on a build with no vendored
+    /// <c>llama-server</c> whatever is in the models folder, and it returns before it ever looks
+    /// at one. Asking it which file would be served therefore also asks whether this machine has
+    /// the natives — two questions in one answer, and a test written against it passes or fails
+    /// on the tester's vendored drop rather than on the code.
+    /// </remarks>
+    public string? ResolveModelFileName() => Path.GetFileName(FindModelFile());
+
+    /// <summary>
     /// The .gguf files in the models folder, largest first — the list the picker offers, read
     /// fresh because the folder is not this application's alone to write.
     /// </summary>
