@@ -1102,15 +1102,59 @@ of the recording. That run is in `docs/UNPROVEN.md` with its limits stated — a
 observation on a toy transcript, not a quality claim, and a 0.6B on the same prompt emitted no
 citations at all, which is the ungrammared post-hoc contract behaving as specified.
 
-What it is not: not the router — global-versus-pointed stays the person's call at the toggle
-until the labelled set (whose `global` question kind is written for exactly this) can measure a
-classifier; not map-reduce, which remains the laptop's eventual path for long recordings, where
-this section's own table prices a whole-transcript prefill in tens of minutes; and not a quality
-claim — no whole-transcript answer has been scored, and the mode's honest advertisement today is
-the desktop's measured 7.93 s CUDA prefill against the laptop's 467.9–2,104.1 s. Sizing to the
-recording matters on the laptop too: a seventeen-minute clip's whole transcript fits the 16,384
-floor and prefills in ordinary time, so the opt-in is not desktop-only, merely desktop-shaped at
-three hours.
+What it is not: not map-reduce, which remains the laptop's eventual path for long recordings,
+where this section's own table prices a whole-transcript prefill in tens of minutes; and not a
+quality claim — no whole-transcript answer has been scored, and the mode's honest advertisement
+today is the desktop's measured 7.93 s CUDA prefill against the laptop's 467.9–2,104.1 s. Sizing
+to the recording matters on the laptop too: a seventeen-minute clip's whole transcript fits the
+16,384 floor, so the opt-in is not desktop-only, merely desktop-shaped at three hours.
+
+#### Built 2026-08-25 — the router, and what it leans on instead of a model
+
+The toggle lasted a day. Asked for by the maintainer immediately after using it — a pointed
+question ("when did they mention money?") asked with whole-transcript on came back wrapped in a
+framing sentence and section headings, which is the opt-in's other failure mode and the reason a
+person should not have to know which tier serves which question.
+
+**The heuristic is the one this decision sketched, and the model is not the classifier — it
+cannot be.** Routing decides the context the child process is started with, so a model-based
+classifier would have to load a model to decide how to load it. Routing therefore stays lexical
+and runs in the same window retrieval does, before anything is loaded. Two rules, in order: an
+explicit cue for the whole recording (stems — `summar`, `recap`, `overview`, `gist`, `rundown`,
+`tldr`, `takeaway` — and phrases: *main topics*, *key points*, *tl;dr*, *what is this about*,
+*what did they discuss*, *overall*), then the rule that needs no vocabulary at all — **every term
+in the question is present in at least half the windows**, which is the mechanical statement of
+"nothing to rank on", since at half the windows the classical BM25 idf reaches zero and the
+ordering it produces is arbitrary. Anything else retrieves.
+
+**A term the recording never uses does not count as ubiquitous, and that asymmetry is the point.**
+Naming something absent — *did they mention Reggie?* — is a pointed question whose honest answer
+is retrieval's abstention, reached in milliseconds; routing it global would read the whole
+recording to conclude the same thing. The session that produced this router had that exact
+question on the record already.
+
+**It leans to retrieval when unsure, because the mistakes are not symmetric.** A pointed question
+answered from the whole recording costs a prefill measured in minutes on integrated graphics; a
+global question answered from retrieval costs seconds and is visibly thin. Cheap-and-obviously-
+wrong beats expensive-and-plausible — the same reasoning this section already applies to the
+global path degrading into "the model saw a tenth of the transcript and guessed the rest".
+
+**The automatic path will not start a long read unasked**, on the rule that the whole transcript
+must fit the context the retrieval tier already allocates (16,384 tokens), so the router never
+commits someone to a bigger cache — or a longer prefill — than the tier they were on when they
+typed. Above that it retrieves and says why. One consequence had to be handled rather than
+inherited: retrieval then usually finds nothing, because the words of a summary request appear in
+no transcript, and reporting that as the abstention would assert *"the recording doesn't answer
+that"* — a claim about the recording, when the truth is a claim about the tier. That case gets an
+explanation instead, and the abstention stays reserved for a question the right tier really could
+not answer.
+
+The setting became three-way — decide from my question (shipped), the parts that matched, the
+whole transcript — and the one-day-old boolean migrates: a stored *true* was a deliberate choice
+and becomes the fixed whole-transcript setting, a stored *false* was the default nobody touched
+and becomes automatic. **Nothing about the router's accuracy is measured**, the cue list is
+English, and the labelled set's `global` questions are what will say how often either rule is
+right; `docs/UNPROVEN.md` carries that with what the run against the real transcript did show.
 
 ### 4. Are the two models ever resident at once
 

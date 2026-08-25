@@ -3907,13 +3907,39 @@ segments 23–24 would have verified while supporting nothing, and a quote of th
 line would have failed against the span the model chose. Neither outcome corrects the pointer;
 the reader does.
 
-Two shape notes from the same answer, neither a defect: the model wrote section headers
+#### The router picks the mode, and its accuracy is unmeasured — built 2026-08-25
+
+Both shape notes below were answered by building the register's decision 3 router the same day.
+What can be said about it: **run over the real 16:50 transcript, it routed all three questions
+this session had already asked by hand the way the hand check says they should go** — "give me a
+summary" whole (global cue), "when did they mention money?" to the parts that matched, and "did
+they mention reggie?" to the parts that matched, so the absent-subject question keeps retrieval's
+millisecond abstention instead of reading seventeen minutes to reach it. Eleven further questions
+over the same transcript are in the session record; the two rules disagreed with no reading of
+mine on that set.
+
+That is fourteen questions on one transcript in one language, which is a sanity check and not a
+measurement. **Unmeasured and marked so:** the cue list is English, and how it fares in the other
+twenty-four is untested — the second rule (every term ubiquitous) needs no vocabulary and is the
+only part that transfers by construction; how often either rule is right at all, which is the
+labelled question set's `global` bullet; and the borderline cues, of which *overall* and *in
+general* are the ones most likely to modify an otherwise pointed question.
+
+**The affordability ceiling is structural, not timed.** The automatic path reads a recording
+whole only when the whole transcript fits the context the retrieval tier already allocates
+(16,384 tokens) — about forty minutes of speech at this transcript's density, and the 16:50 clip
+needs 12,288. The justification is that the automatic path never commits someone to a larger
+cache or a longer prefill than the tier they were already on; **what that costs in wall time at
+the ceiling is not measured on either machine.** The prefill bar and Stop are what a person has
+in the meantime.
+
+Two shape notes from the same answer, both now answered by the router: the model wrote section headers
 ("Development costs:", "Financial impact and industry context:") as bullets, and with no
-citations on them they render `[unverified]` — honest, and odd on a line that asserts nothing.
-And the question was pointed rather than global, so the overview instruction applied to it and
-produced a framing sentence and headings around what is really a list of mentions. Both are the
-router's absence showing from the other direction: with the toggle on, every question is
-answered as an overview.
+citations on them they render `[unverified]` — honest, and odd on a line that asserts nothing;
+that one is still open. And the question was pointed rather than global, so the overview
+instruction applied to it and produced a framing sentence and headings around what is really a
+list of mentions — which was the router's absence showing from the other direction, and is what
+prompted building it.
 
 **No whole-transcript answer has been scored** — one hand-checked answer is an observation, not
 a rate, and the labelled set's `global` questions are what will score them. Until then the

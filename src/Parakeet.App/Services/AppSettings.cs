@@ -4,6 +4,20 @@ using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.Services;
 
+/// <summary>Where an answer is drawn from, as the person has asked for it to be decided.</summary>
+public enum AskModePreference
+{
+    /// <summary>The question decides, through <see cref="Parakeet.Core.Answers.QuestionRouter"/>.</summary>
+    Automatic = 0,
+
+    /// <summary>Always the parts that matched — the fast tier, and the only one with acceptable
+    /// prefill on integrated graphics at length.</summary>
+    Retrieval = 1,
+
+    /// <summary>Always the whole recording, however long it is.</summary>
+    WholeTranscript = 2,
+}
+
 /// <summary>The handful of choices that outlive a run of the application.</summary>
 public sealed record AppSettings
 {
@@ -36,13 +50,12 @@ public sealed record AppSettings
     public bool AskThinking { get; init; }
 
     /// <summary>
-    /// Whether answers draw on the whole transcript instead of retrieval — the opt-in the
-    /// register's decision 3 names. Off as shipped: retrieval is the fast path everywhere and
-    /// the only path with acceptable prefill on integrated graphics; the whole-transcript pass
-    /// is what answers global questions — summaries, main topics — at the price of reading
-    /// everything first.
+    /// Where answers are drawn from. <see cref="AskModePreference.Automatic"/> as shipped — the
+    /// question decides, which is the register's decision 3 router — because the alternative is
+    /// a person having to know that "summarise this" and "when did they mention X" are served by
+    /// different tiers. The two fixed settings stay for anyone who would rather decide once.
     /// </summary>
-    public bool AskWholeTranscript { get; init; }
+    public AskModePreference AskMode { get; init; } = AskModePreference.Automatic;
 
     /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
@@ -107,7 +120,7 @@ public sealed class AppSettingsStore
             {
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
-                AskWholeTranscript = ReadBool(root, "askWholeTranscript", AppSettings.Default.AskWholeTranscript),
+                AskMode = ReadAskMode(root),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
@@ -153,7 +166,11 @@ public sealed class AppSettingsStore
             {
                 ["checkForUpdatesOnLaunch"] = settings.CheckForUpdatesOnLaunch,
                 ["askThinking"] = settings.AskThinking,
-                ["askWholeTranscript"] = settings.AskWholeTranscript,
+
+                // The name, never the enum's number — same rule as the backend, and for the same
+                // reason: reordering the enum would silently turn one user's saved choice into
+                // another's.
+                ["askMode"] = settings.AskMode.ToString().ToLowerInvariant(),
             };
 
             // Omitted rather than written as null when nobody has chosen, so "never chosen" and
@@ -217,6 +234,36 @@ public sealed class AppSettingsStore
             "cuda" => ComputeBackend.Cuda,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The stored ask mode, falling back to the boolean this setting replaced.
+    /// </summary>
+    /// <remarks>
+    /// <c>askWholeTranscript</c> was the 2026-08-25 shipped shape and lived for one day. A stored
+    /// <c>true</c> was a deliberate choice and is honoured as the fixed whole-transcript setting;
+    /// a stored <c>false</c> carries no choice at all — it was the default nobody had to touch —
+    /// so it becomes <see cref="AskModePreference.Automatic"/> rather than pinning a user to
+    /// retrieval on the strength of a value they never set.
+    /// </remarks>
+    private static AskModePreference ReadAskMode(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("askMode", out var value)
+            && value.ValueKind == JsonValueKind.String)
+        {
+            return value.GetString()?.Trim().ToLowerInvariant() switch
+            {
+                "automatic" => AskModePreference.Automatic,
+                "retrieval" => AskModePreference.Retrieval,
+                "wholetranscript" => AskModePreference.WholeTranscript,
+                _ => AppSettings.Default.AskMode,
+            };
+        }
+
+        return ReadBool(root, "askWholeTranscript", false)
+            ? AskModePreference.WholeTranscript
+            : AppSettings.Default.AskMode;
     }
 
     private static string? ReadString(JsonElement root, string name) =>

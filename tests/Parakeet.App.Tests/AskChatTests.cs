@@ -329,7 +329,7 @@ public class AskChatTests
         // expander stays empty (the source is the whole recording, already on screen) and the
         // provenance line claims the coverage the answer really had.
         var (chat, provider, _) = Chat();
-        provider.WholeTranscriptMode = true;
+        provider.ModePreference = AskModePreference.WholeTranscript;
 
         await AskAsync(chat, "give me a summary");
 
@@ -355,7 +355,7 @@ public class AskChatTests
         // claims. It is a claim itself, so it resolves and seeks exactly as a bullet does —
         // a lead exempt from the citation rule would be the one paragraph nobody could check.
         var (chat, provider, seeks) = Chat();
-        provider.WholeTranscriptMode = true;
+        provider.ModePreference = AskModePreference.WholeTranscript;
 
         await AskAsync(chat, "give me a summary");
 
@@ -397,7 +397,7 @@ public class AskChatTests
     public async Task TheCopiedOverviewLeadsWithTheFramingSentenceAndItsTimes()
     {
         var (chat, provider, _) = Chat();
-        provider.WholeTranscriptMode = true;
+        provider.ModePreference = AskModePreference.WholeTranscript;
 
         string? copied = null;
         chat.CopyToClipboard = text =>
@@ -460,6 +460,118 @@ public class AskChatTests
     }
 
     [Fact]
+    public async Task TheQuestionPicksTheModeWhenNobodyHasPickedOne()
+    {
+        // Automatic is the shipped setting, so this is the default path through the panel: a
+        // summary reads the recording, a pointed question retrieves, and neither needed anyone
+        // to know that those are different tiers.
+        var (chat, provider, _) = Chat();
+        Assert.Equal(AskModePreference.Automatic, provider.ModePreference);
+
+        await AskAsync(chat, "give me a summary");
+        Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
+
+        await AskAsync(chat, "what did maria present about the axolotl?");
+        Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
+
+        // Nothing was routed against the person's back: no notice on either, because the
+        // answer's own provenance line already says which mode produced it.
+        Assert.All(chat.Entries, e => Assert.Null(e.RoutingNotice));
+    }
+
+    [Fact]
+    public async Task AFixedSettingOverrulesTheQuestion()
+    {
+        // The two fixed settings exist for someone who would rather decide once, and they are
+        // not advisory: a summary asked under "the parts that matched" retrieves.
+        var (chat, provider, _) = Chat();
+
+        // "summarise" is a global cue, so Automatic would read the recording; pinned to the
+        // matched parts it retrieves, and the axolotl in the question gives it something to
+        // match so the difference is visible rather than swallowed by an abstention.
+        provider.ModePreference = AskModePreference.Retrieval;
+        await AskAsync(chat, "summarise what maria said about the axolotl");
+        Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
+
+        provider.ModePreference = AskModePreference.WholeTranscript;
+        await AskAsync(chat, "what did maria present about the axolotl?");
+        Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
+    }
+
+    [Fact]
+    public async Task ALongRecordingIsNotReadWholeAutomaticallyAndTheAnswerSaysSo()
+    {
+        // A whole-recording pass on a long transcript is minutes of prefill, and the automatic
+        // path will not start one unasked. What it must not do is answer thinly in silence: the
+        // asker would read a retrieval-shaped summary as the recording being thin.
+        var segments = new List<TranscriptSegment>();
+        for (var i = 0; i < 120; i++)
+        {
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(i * 10),
+                End = TimeSpan.FromSeconds((i * 10) + 10),
+                Text = $"segment {i} about the quarterly budget review " + new string('x', 420),
+            });
+        }
+
+        var job = new JobViewModel("/tmp/long.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = job.Path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                SourceName = job.Path,
+                AudioDuration = TimeSpan.FromSeconds(1_200),
+                Segments = segments,
+            },
+        });
+
+        var (chat, provider, _) = Chat(job);
+        await AskAsync(chat, "give me a summary");
+
+        // No model was loaded and nothing was read: the words of a summary request match nothing
+        // in a transcript, so the fallback tier came up empty too.
+        Assert.Equal(0, provider.Created);
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.NotNull(entry.RoutingNotice);
+        Assert.Contains("whole recording", entry.RoutingNotice, StringComparison.Ordinal);
+
+        // And it must not claim the recording has no answer. That is a statement about the
+        // recording; the truth here is a statement about the tier, and only one of the two is
+        // something the panel actually knows.
+        Assert.False(entry.Abstained);
+        Assert.NotNull(entry.Failure);
+        Assert.Contains("whole transcript", entry.Failure, StringComparison.Ordinal);
+
+        // Asking for it explicitly still reads the whole thing — the ceiling is on the
+        // automatic path, never on the person.
+        provider.ModePreference = AskModePreference.WholeTranscript;
+        await AskAsync(chat, "give me a summary");
+        Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
+        Assert.Null(chat.Entries[^1].RoutingNotice);
+    }
+
+    [Fact]
+    public async Task ARealAbstentionIsStillAnAbstention()
+    {
+        // The guard above must not swallow the honest case: a pointed question about something
+        // the recording never covers is answered by retrieval coming up empty, and that IS a
+        // claim about the recording — the one the abstention sentence exists to make.
+        var (chat, provider, _) = Chat();
+
+        await AskAsync(chat, "did they mention reggie?");
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.True(entry.Abstained);
+        Assert.Null(entry.Failure);
+        Assert.Null(entry.RoutingNotice);
+        Assert.Equal(0, provider.Created);
+    }
+
+    [Fact]
     public async Task AShortRecordingKeepsItsEngineAcrossTheModeFlip()
     {
         // Unlike thinking, the mode is a per-request fact, not a child-process argument: on a
@@ -471,12 +583,12 @@ public class AskChatTests
         Assert.Equal(1, provider.Created);
         Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
 
-        provider.WholeTranscriptMode = true;
+        provider.ModePreference = AskModePreference.WholeTranscript;
         await AskAsync(chat, "give me a summary");
         Assert.Equal(1, provider.Created);
         Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
 
-        provider.WholeTranscriptMode = false;
+        provider.ModePreference = AskModePreference.Retrieval;
         await AskAsync(chat, "and the budget?");
         Assert.Equal(1, provider.Created);
         Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
@@ -514,7 +626,7 @@ public class AskChatTests
         });
 
         var (chat, provider, _) = Chat(job);
-        provider.WholeTranscriptMode = true;
+        provider.ModePreference = AskModePreference.WholeTranscript;
 
         await AskAsync(chat, "give me a summary");
         Assert.Equal(1, provider.Created);
@@ -526,7 +638,7 @@ public class AskChatTests
         await AskAsync(chat, "main topics?");
         Assert.Equal(1, provider.Created);
 
-        provider.WholeTranscriptMode = false;
+        provider.ModePreference = AskModePreference.Retrieval;
         await AskAsync(chat, "what about filler segment three?");
         Assert.Equal(2, provider.Created);
         Assert.Equal(

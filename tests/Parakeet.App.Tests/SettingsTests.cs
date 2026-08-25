@@ -50,17 +50,56 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
-    public void AskWholeTranscriptIsOffAsShippedAndSurvivesARoundTrip()
+    public void TheAskModeIsAutomaticAsShippedAndSurvivesARoundTrip()
     {
-        // Retrieval is the fast path and the laptop tier (decision 3); the whole-transcript
-        // pass is the opt-in, so shipped-off is part of the design, not a leftover.
+        // Automatic is the register's decision 3 router, and it ships on: the alternative is a
+        // person having to know which tier answers which shape of question.
         var path = TempFile();
         try
         {
-            Assert.False(new AppSettingsStore(path).Load().AskWholeTranscript);
+            Assert.Equal(AskModePreference.Automatic, new AppSettingsStore(path).Load().AskMode);
 
-            Assert.True(new AppSettingsStore(path).Save(new AppSettings { AskWholeTranscript = true }));
-            Assert.True(new AppSettingsStore(path).Load().AskWholeTranscript);
+            Assert.True(new AppSettingsStore(path).Save(
+                new AppSettings { AskMode = AskModePreference.WholeTranscript }));
+            Assert.Equal(
+                AskModePreference.WholeTranscript, new AppSettingsStore(path).Load().AskMode);
+
+            Assert.True(new AppSettingsStore(path).Save(
+                new AppSettings { AskMode = AskModePreference.Retrieval }));
+            Assert.Equal(AskModePreference.Retrieval, new AppSettingsStore(path).Load().AskMode);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheOneDayOldBooleanIsHonouredOnlyWhereItCarriedAChoice()
+    {
+        // askWholeTranscript shipped 2026-08-25 and lived one day. A stored true was somebody
+        // deliberately turning it on and becomes the fixed whole-transcript setting; a stored
+        // false was the default nobody had to touch, so it carries no choice and becomes
+        // Automatic rather than pinning a user to retrieval on a value they never set.
+        var path = TempFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+            File.WriteAllText(path, "{\"askWholeTranscript\":true}");
+            Assert.Equal(
+                AskModePreference.WholeTranscript, new AppSettingsStore(path).Load().AskMode);
+
+            File.WriteAllText(path, "{\"askWholeTranscript\":false}");
+            Assert.Equal(AskModePreference.Automatic, new AppSettingsStore(path).Load().AskMode);
+
+            // And the new name wins wherever both are present.
+            File.WriteAllText(path, "{\"askWholeTranscript\":true,\"askMode\":\"retrieval\"}");
+            Assert.Equal(AskModePreference.Retrieval, new AppSettingsStore(path).Load().AskMode);
+
+            // An unreadable name degrades to as-shipped, like every other setting here.
+            File.WriteAllText(path, "{\"askMode\":\"whatever\"}");
+            Assert.Equal(AskModePreference.Automatic, new AppSettingsStore(path).Load().AskMode);
         }
         finally
         {

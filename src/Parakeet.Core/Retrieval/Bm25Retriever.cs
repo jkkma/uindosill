@@ -65,6 +65,36 @@ public sealed class Bm25Retriever : IRetriever
         _averageLength = windows.Count == 0 ? 0 : _lengths.Average();
     }
 
+    /// <summary>How many windows hold this term at all. Zero for a term the recording never uses.</summary>
+    public int DocumentFrequency(string term)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        return _postings.TryGetValue(term, out var postings) ? postings.Count : 0;
+    }
+
+    public int WindowCount => _windows.Count;
+
+    /// <summary>
+    /// Whether every term in the query is one this index cannot separate windows by — present,
+    /// and present in at least half of them. That is the mechanical statement of "the question
+    /// hands retrieval nothing to rank on": at half the windows the classical BM25 idf reaches
+    /// zero, so such a term contributes nothing to any ordering and the top of the list is
+    /// arbitrary. A term the recording never uses does <em>not</em> count as ubiquitous — naming
+    /// something absent is a pointed question, and retrieval's abstention is the honest, cheap
+    /// answer to it.
+    /// </summary>
+    public bool EveryTermIsUbiquitous(string query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (_windows.Count == 0)
+        {
+            return false;
+        }
+
+        var terms = SearchTokenizer.Tokenize(query).Distinct(StringComparer.Ordinal).ToList();
+        return terms.Count > 0 && terms.All(term => DocumentFrequency(term) * 2 >= _windows.Count);
+    }
+
     public IReadOnlyList<RetrievalHit> Retrieve(string query, int limit)
     {
         ArgumentNullException.ThrowIfNull(query);
