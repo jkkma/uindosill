@@ -2,6 +2,30 @@ using Parakeet.Core.Transcription;
 
 namespace Parakeet.Engine.LlamaServer;
 
+/// <summary>
+/// Where a mixture-of-experts model's expert weights are placed on the Vulkan backend.
+/// </summary>
+/// <remarks>
+/// A dial with one measured end and one unmeasured one, which is why it is a setting rather than
+/// a constant. <see cref="SystemMemory"/> is what the second machine needs — a UMA driver splits
+/// its memory into two ~7.8 GiB heaps and a 26B-class mixture cannot load at all without it
+/// (measured 2026-08-24, docs/UNPROVEN.md). <see cref="Device"/> is what a card with memory of
+/// its own should want, and no machine here has measured it. On a dense model the override
+/// matches no tensors and the choice costs nothing either way.
+/// </remarks>
+public enum MoeExpertPlacement
+{
+    /// <summary>From <see cref="VulkanDeviceProbe.Classify"/>: on a card, in system memory
+    /// otherwise. What ships.</summary>
+    Automatic = 0,
+
+    /// <summary>On the GPU, whatever the loader reports.</summary>
+    Device = 1,
+
+    /// <summary>In system memory, whatever the loader reports.</summary>
+    SystemMemory = 2,
+}
+
 /// <summary>How the child is started. Everything here becomes an argument or an environment.</summary>
 public sealed record LlamaServerOptions
 {
@@ -43,6 +67,13 @@ public sealed record LlamaServerOptions
     /// </summary>
     public IReadOnlyDictionary<string, string> Environment { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Where a mixture's experts go on Vulkan. <see cref="MoeExpertPlacement.Automatic"/> asks
+    /// the loader; <see cref="Environment"/> still overrides whatever this resolves to, because
+    /// an explicit environment is the caller saying they know better than both.
+    /// </summary>
+    public MoeExpertPlacement ExpertPlacement { get; init; } = MoeExpertPlacement.Automatic;
 
     /// <summary>How long a load may take before it is a failure. A ~9 GB file is tens of seconds
     /// from a cold disk.</summary>

@@ -130,14 +130,15 @@ public class LlamaServerArgumentTests
     [Fact]
     public void VulkanGetsTheBf16KnobUnlessTheCallerSaysOtherwise()
     {
-        // The laptop's driver hangs at model load without the bf16 knob (measured 2026-08-16),
-        // and a 26B-class mixture cannot load at all without the expert-offload pair (measured
-        // 2026-08-24, the app's own failed load) — docs/UNPROVEN.md carries both.
-        var vulkan = LlamaServerProcess.BuildEnvironment(
-            ComputeBackend.Vulkan, new Dictionary<string, string>());
-        Assert.Equal("1", vulkan["GGML_VK_DISABLE_BFLOAT16"]);
-        Assert.Equal("1", vulkan["LLAMA_ARG_CPU_MOE"]);
-        Assert.Equal("1", vulkan["LLAMA_ARG_NO_HOST"]);
+        // The laptop's driver hangs at model load without the bf16 knob (measured 2026-08-16,
+        // docs/UNPROVEN.md). Unlike the expert pair below, this one does not depend on which
+        // kind of graphics is there: it is unconditional on the backend.
+        foreach (var graphics in new[] { Unknown, Integrated, Card(16) })
+        {
+            var vulkan = LlamaServerProcess.BuildEnvironment(
+                ComputeBackend.Vulkan, new Dictionary<string, string>(), graphics: graphics);
+            Assert.Equal("1", vulkan["GGML_VK_DISABLE_BFLOAT16"]);
+        }
 
         var overridden = LlamaServerProcess.BuildEnvironment(
             ComputeBackend.Vulkan, new Dictionary<string, string>
@@ -149,6 +150,166 @@ public class LlamaServerArgumentTests
         Assert.Equal("0", overridden["LLAMA_ARG_CPU_MOE"]);
 
         Assert.Empty(LlamaServerProcess.BuildEnvironment(ComputeBackend.Cpu, new Dictionary<string, string>()));
+    }
+
+    private static readonly VulkanGraphics Unknown = VulkanGraphics.Unknown;
+
+    private static readonly VulkanGraphics Integrated = new(GpuClass.Integrated, 0);
+
+    /// <summary>A card with <paramref name="gibibytes"/> of memory of its own.</summary>
+    private static VulkanGraphics Card(int gibibytes) =>
+        new(GpuClass.Discrete, (long)gibibytes << 30);
+
+    /// <summary>A model file of <paramref name="gibibytes"/>, as the rule reads it off the disk.</summary>
+    private static long Model(double gibibytes) => (long)(gibibytes * (1L << 30));
+
+    private static bool ExpertsInSystemMemory(
+        VulkanGraphics? graphics,
+        long modelBytes = 0,
+        MoeExpertPlacement placement = MoeExpertPlacement.Automatic)
+    {
+        var environment = LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Vulkan, new Dictionary<string, string>(), placement, graphics, modelBytes);
+
+        // Both or neither: --cpu-moe without --no-host is the combination measured to overflow
+        // the pinned host heap, so nothing may ever set one alone.
+        var pair = environment.ContainsKey("LLAMA_ARG_CPU_MOE");
+        Assert.Equal(pair, environment.ContainsKey("LLAMA_ARG_NO_HOST"));
+        return pair;
+    }
+
+    [Fact]
+    public void TheExpertPairFollowsTheGraphicsWhenTheChoiceIsAutomatic()
+    {
+        // A card holds its own experts when they fit. Everything else does not — and "everything
+        // else" includes the machine the loader could not answer for, because the two failures
+        // are not the same size: on the second machine's UMA split a 26B-class mixture without
+        // this pair does not load at all (measured 2026-08-24), while on a card it is weights in
+        // system RAM that would have fitted in VRAM. The unanswered question takes the one that
+        // still starts.
+        Assert.False(ExpertsInSystemMemory(Card(16), Model(8.87)));
+        Assert.True(ExpertsInSystemMemory(Integrated, Model(8.87)));
+        Assert.True(ExpertsInSystemMemory(Unknown, Model(8.87)));
+        Assert.True(ExpertsInSystemMemory(graphics: null, Model(8.87)));
+    }
+
+    [Fact]
+    public void ACardTooSmallForTheModelKeepsTheExpertsInSystemMemory()
+    {
+        // The gap this rule was widened to close: an 8 GiB card is a DISCRETE_GPU, and a
+        // 26B-class mixture at IQ4_XS is about 14 GiB. Keying on the device's type alone
+        // answered "is there a card" to a question that was really "does this fit", and got it
+        // wrong by a whole model — on a machine that has both an integrated and a discrete GPU,
+        // where the mixture is exactly the model class the setting exists for.
+        Assert.True(ExpertsInSystemMemory(Card(8), Model(14)));
+        Assert.False(ExpertsInSystemMemory(Card(24), Model(14)));
+
+        // The desktop's measured load, both ways round: the 9B Q8_0's 8.87 GiB file fits its
+        // 16 GiB card — it really did, holding about 11.7 GiB at a 53,248-token context — and
+        // would not fit an 8 GiB one.
+        Assert.False(ExpertsInSystemMemory(Card(16), Model(8.87)));
+        Assert.True(ExpertsInSystemMemory(Card(8), Model(8.87)));
+    }
+
+    [Fact]
+    public void NotKnowingDoesNotFit()
+    {
+        // A file whose size could not be read and a card whose heap the loader did not report
+        // are both "not known", and not-known takes the placement that always loads. Nothing
+        // here may read a zero as "fits in nothing" or as "fits anything".
+        Assert.True(ExpertsInSystemMemory(Card(16), modelBytes: 0));
+        Assert.True(ExpertsInSystemMemory(new VulkanGraphics(GpuClass.Discrete, 0), Model(1)));
+
+        Assert.False(LlamaServerProcess.FitsOnDevice(0, 16L << 30));
+        Assert.False(LlamaServerProcess.FitsOnDevice(1L << 30, 0));
+        Assert.False(LlamaServerProcess.FitsOnDevice(-1, 16L << 30));
+    }
+
+    [Fact]
+    public void TheAllowanceIsAQuarterOfTheModelPlusAGibibyte()
+    {
+        // Conservative on purpose, and in one direction: refusing a card that would have fitted
+        // costs speed, accepting one that does not costs a load, because the engine runs with
+        // --fit off and nothing silently trims. The boundary is held so that a change to the
+        // allowance is a change somebody made rather than one that drifted.
+        const long Model4Gib = 4L << 30;
+        const long Needed = Model4Gib + (Model4Gib / 4) + (1L << 30);
+
+        Assert.True(LlamaServerProcess.FitsOnDevice(Model4Gib, Needed));
+        Assert.False(LlamaServerProcess.FitsOnDevice(Model4Gib, Needed - 1));
+    }
+
+    [Fact]
+    public void EitherFixedPlacementOverrulesTheGraphicsAndTheFit()
+    {
+        // The picker's whole purpose: a machine the loader reads wrongly, a driver it cannot
+        // answer for, or a fit rule that is too cautious for somebody's card, is one setting
+        // away from either placement.
+        foreach (var graphics in new[] { Unknown, Integrated, Card(8), Card(24) })
+        {
+            Assert.False(ExpertsInSystemMemory(graphics, Model(14), MoeExpertPlacement.Device));
+            Assert.True(ExpertsInSystemMemory(graphics, Model(1), MoeExpertPlacement.SystemMemory));
+        }
+    }
+
+    [Fact]
+    public void ThePlacementDecidesNothingOffVulkan()
+    {
+        // The pair is a Vulkan-backend knob. A CUDA or CPU child gets no environment at all,
+        // whatever the picker says, whatever the loader reports and whatever the model measures.
+        foreach (var backend in new[] { ComputeBackend.Cpu, ComputeBackend.Cuda })
+        {
+            foreach (var placement in new[]
+            {
+                MoeExpertPlacement.Automatic,
+                MoeExpertPlacement.Device,
+                MoeExpertPlacement.SystemMemory,
+            })
+            {
+                Assert.Empty(LlamaServerProcess.BuildEnvironment(
+                    backend, new Dictionary<string, string>(), placement, Card(8), Model(14)));
+            }
+        }
+    }
+
+    [Fact]
+    public void AnExplicitEnvironmentStillOutranksTheResolvedPlacement()
+    {
+        // The caller saying so is the last word — the lab scripts drive this to measure one
+        // placement against the other without touching a setting.
+        var forced = LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Vulkan,
+            new Dictionary<string, string> { ["LLAMA_ARG_CPU_MOE"] = "1", ["LLAMA_ARG_NO_HOST"] = "1" },
+            MoeExpertPlacement.Device,
+            Card(24),
+            Model(1));
+        Assert.Equal("1", forced["LLAMA_ARG_CPU_MOE"]);
+        Assert.Equal("1", forced["LLAMA_ARG_NO_HOST"]);
+    }
+
+    [Fact]
+    public void TheProbeAnswersRatherThanThrowingWhereThereIsNoLoader()
+    {
+        // Every CI runner is such a machine, and so is every Windows box with the CPU drop and
+        // no Vulkan driver. A probe that threw would take the model load with it.
+        var graphics = VulkanDeviceProbe.Describe();
+        Assert.Contains(
+            graphics.Class, new[] { GpuClass.Unknown, GpuClass.Integrated, GpuClass.Discrete });
+
+        // The memory figure is the card's or nothing: a UMA device's device-local heap is system
+        // memory, and reporting it would answer a different question than its name suggests.
+        if (graphics.Class != GpuClass.Discrete)
+        {
+            Assert.Equal(0, graphics.DeviceLocalBytes);
+        }
+        else
+        {
+            Assert.True(graphics.DeviceLocalBytes > 0, "a card reported no device-local heap");
+        }
+
+        // Cached: the answer cannot change while the process runs, and creating an instance
+        // loads every installed driver.
+        Assert.Equal(graphics, VulkanDeviceProbe.Describe());
     }
 }
 

@@ -80,6 +80,13 @@ public interface IAnswerEngineProvider
     AskModePreference ModePreference { get; }
 
     /// <summary>
+    /// Where a mixture's experts go, read by the panel before every ask exactly as
+    /// <see cref="ThinkingMode"/> is, and for the same reason: it is a child-process
+    /// environment, so a changed setting can only take effect through a fresh child.
+    /// </summary>
+    MoeExpertPlacement ExpertPlacement { get; }
+
+    /// <summary>
     /// A new engine, not yet loaded, sized for a prompt of roughly <paramref name="promptChars"/>
     /// characters per <see cref="AnswerContextBudget.ContextTokensFor"/>. Throws when
     /// <see cref="Check"/> says unavailable.
@@ -105,18 +112,21 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     private readonly Func<bool> _thinkingMode;
     private readonly Func<AskModePreference> _modePreference;
     private readonly Func<string?> _chosenModel;
+    private readonly Func<MoeExpertPlacement> _expertPlacement;
 
     public LlamaAnswerEngineProvider(
         IModelStore store,
         Func<bool>? thinkingMode = null,
         Func<AskModePreference>? modePreference = null,
-        Func<string?>? chosenModel = null)
+        Func<string?>? chosenModel = null,
+        Func<MoeExpertPlacement>? expertPlacement = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         _thinkingMode = thinkingMode ?? (static () => false);
         _modePreference = modePreference ?? (static () => AskModePreference.Automatic);
         _chosenModel = chosenModel ?? (static () => null);
+        _expertPlacement = expertPlacement ?? (static () => MoeExpertPlacement.Automatic);
     }
 
     /// <summary>
@@ -156,6 +166,8 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 
     public AskModePreference ModePreference => _modePreference();
 
+    public MoeExpertPlacement ExpertPlacement => _expertPlacement();
+
     public AnswerEngineAvailability Check()
     {
         if (LlamaServerLocator.TryFind() is null)
@@ -192,6 +204,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             ModelPath = model,
             ThinkBeforeAnswer = ThinkingMode,
             ContextSize = AnswerContextBudget.ContextTokensFor(promptChars),
+            ExpertPlacement = ExpertPlacement,
         });
     }
 
@@ -254,6 +267,9 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
 
     /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
     public AskModePreference ModePreference { get; set; } = AskModePreference.Automatic;
+
+    /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
+    public MoeExpertPlacement ExpertPlacement { get; set; } = MoeExpertPlacement.Automatic;
 
     /// <summary>What the panel said the last engine's prompt would roughly measure.</summary>
     public int LastPromptChars { get; private set; }

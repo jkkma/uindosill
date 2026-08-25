@@ -1781,6 +1781,19 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskModeExplanation}" />
+
+              <!-- The expert placement. Here rather than left as a constant because the constant
+                   was the second machine's answer applied to every machine: integrated graphics
+                   need the experts in system memory or a large mixture will not load, and a card
+                   with memory of its own should be holding them. Automatic asks the loader; the
+                   two fixed rows are for a machine it reads wrongly. -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Expert layers" Classes="secondary" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding AskExpertPlacements}"
+                          SelectedItem="{Binding SelectedAskExpertPlacement}" MinWidth="200" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding AskExpertPlacementExplanation}" />
             </StackPanel>
 
             <Separator />

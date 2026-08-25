@@ -4207,7 +4207,61 @@ those seven bullets**; they remain unverified, and now say so.
 
 Nothing here is a quality ranking. Coverage, correctness and usefulness of the answers were not
 scored on any of the four; that is the labelled set's job, and three questions in one run is a
-sanity check.
+sanity check. **The 12B's `2 / — / —` is filled in by the block below**, which ran that model both
+ways on one machine: its absent count is what the row was really measuring.
+
+#### The 12B's two missing columns, filled — measured 2026-08-25, and the row was the convention
+
+The table above records `gemma-4-12b-it` as **2 / — / —**: two bullets verified, and the failed
+and absent counts never taken. That is the model whose row has been read as a quality result, and
+**absent** is the column that decides whether it is one — a bullet with no `«…»` at all is one
+this project never checked, which is what the 9B's seven-of-ten turned out to be.
+
+**The previous day already answered it, in a file nobody had read against this one.**
+`runs/20260824-moe-gauntlet/NOTES.md`, finding 5, same model, same driver, **grammar on** — which
+was the shipped default until 00:31 that morning: *"all eight bullets quote-verified on the easy
+question"*. Eight of eight one day, two of twelve the next, with the grammar coming off in
+between.
+
+**Run both ways to settle it** (`runs/20260825-grammar-arms/`, second machine, Vulkan, b10603,
+`gemma-4-12b-it-Q6_K` at `-ngl 24` — the 2026-08-24 placement — context 16,384, temperature 0,
+chat endpoint and template, `--reasoning off`, CSB384 at 1,378 segments, the gauntlet's three
+questions, per **bullet** rather than per citation). The only thing that differs between the arms
+is `UseGrammar`:
+
+| | wall, 3 questions | bullets | ok | failed | absent | uncheckable |
+|---|---:|---:|---:|---:|---:|---:|
+| grammar **off** — the shipped default | **160.2 s** | 8 | **0** | 0 | **8** | 0 |
+| grammar **on** | 576.3 s | 18 | **8** | 1 | 8 | 1 |
+
+**Six of the eight absent bullets carried straight-quoted text**, the 9B's signature exactly: the
+model quotes the transcript verbatim, in ordinary double quotes, and the check never runs. q1 off
+in full, 49.3 s — *"The little man woke up at eight forty, which provided an extra hour and twenty
+of sleep."* then two bullets, each a verbatim span in straight marks, each correctly cited. A
+correct, cited, verbatim-quoting answer scoring zero.
+
+**So the row measured which marks the model reached for, and this document should not be read as
+saying otherwise.** What separates these models on that table is the convention, which is what its
+own heading says and what the 9B's breakdown showed; the 12B's breakdown was simply never taken.
+Nothing here scores coverage, correctness or usefulness on any model — still the labelled set's
+job.
+
+**The second finding was not the question, and it is the more useful one: the grammar is not a
+free fix.** Two of the three questions hit the 1,022-token generation cap inside a repetition
+loop — q1 at 232.9 s (against 49.3 s off) opening with the same correct sentence and then looping
+citation ids, and q3, the adversarial one, at 236.7 s leaking `<|channel>thought`, emitting
+`NOT_IN_TRANSCRIPT_` with a trailing underscore so it **does not parse as an abstention**, and
+repeating one sentence to the cap — where the off arm abstained cleanly in 40.3 s on ~6 tokens.
+Only q2 ran clean, and all eight of the arm's verified quotes are in it. That is the attractor
+`904ce2c` took the grammar off for, reproduced on the model the register calls the quality lane,
+and the same failure class the 2026-08-24 gauntlet recorded for it on a different question.
+
+**Unmeasured, and marked so:** one run per arm on one machine; the other three candidates were not
+run both ways, so nothing here says the convention explains their rows too; and the 2026-08-25
+four-candidate run used a 16:50 transcript that no longer exists on disk, so this reproduces the
+finding rather than that run. Whether a per-model grammar option is worth 3.6× the wall and a
+destroyed abstention is a decision the register does not yet have — it is the "per-model launch
+options" cost the lineup question already names, now with a price on it.
 
 #### gpt-oss-20b does not work on the shipped path — measured 2026-08-25, and this closes an item open since 2026-08-24
 
@@ -4266,11 +4320,92 @@ file loads in half the time and then answers half again as slowly. This reproduc
 
 **The larger difference in the same run was not speed.** Of the 26B's eleven quoted bullets,
 eleven verified against their cited spans; of the 12B's twelve, **two**, both on the one question
-where its answer was shortest. Nothing here says why — a quote paraphrased rather than lifted and
+where its answer was shortest. **That "nothing here says why" was answered on 2026-08-25** — the
+grammar-arms block above: off-grammar this model writes its quotes in ordinary double quotes and
+scores zero, on-grammar it scores eight on the same input, so the figure is about a convention and
+not about the answering. What follows was written before that ran. Nothing here says why — a quote paraphrased rather than lifted and
 a quote lifted from a span the bullet did not cite fail the same check — and three questions in
 one run is not a rate. But it is the opposite of what the register's open lineup question assumes
 in naming the 12B the quality option on the strength of it writing "the richest answers", and the
 labelled set should settle it before that lineup is decided.
+
+#### The expert placement follows the graphics, and only one branch of it has been measured — built 2026-08-25
+
+`LLAMA_ARG_CPU_MOE=1` and `LLAMA_ARG_NO_HOST=1` were set on every Vulkan child from the day the
+MoE gauntlet found they were the second machine's one working offload form. That was one
+machine's answer applied to every machine, and the two ends of it are not the same kind of cost:
+on the 880M's UMA split a 26B-class mixture **does not load at all** without the pair
+(`ErrorOutOfDeviceMemory`, measured 2026-08-24 above), while on a card with memory of its own the
+pair parks in system RAM expert weights that would have fitted in VRAM — a model that runs
+slowly rather than one that does not run.
+
+**The pair is now conditional.** `VulkanDeviceProbe` asks the Vulkan loader for
+`VkPhysicalDeviceProperties.deviceType` — the enum the question is actually about, from the API
+the backend runs on, rather than DXGI's dedicated-memory figure or WMI's 4 GB-capped
+`AdapterRAM` — and reads the card's largest `VK_MEMORY_HEAP_DEVICE_LOCAL` heap beside it.
+`LlamaServerProcess.BuildEnvironment` keeps the pair for `INTEGRATED_GPU` and drops it for a
+`DISCRETE_GPU` **whose memory the model fits**. The Settings tab carries the override as
+*Expert layers*: automatic, on the graphics card, in system memory.
+
+**The type alone was not the question, and the first draft of this rule got that wrong.** An
+8 GiB card is a `DISCRETE_GPU`, and `gemma-4-26B-A4B` at IQ4_XS is about 14 GiB: keying on the
+type answered "is there a card" to a question that was really "does this fit", and was off by a
+whole model on exactly the model class the setting exists for. The fit test is the model file's
+size plus a quarter of it plus a gibibyte, against the device-local heap — an allowance anchored
+to the one full load in this record (the 9B Q8_0's 8.87 GiB file held about 11.7 GiB on the
+desktop's card at a 53,248-token context, so the rule asks for more room than that load took).
+It is conservative in one direction on purpose: refusing a card that would have fitted costs
+speed, and accepting one that does not costs a load, because the engine runs with `--fit off` and
+nothing silently trims. A file size or a heap size that could not be read is "not known", and
+not-known does not fit.
+
+**What is measured is the integrated branch.** Two things, on the second machine, 2026-08-25:
+the probe classifies this laptop **Integrated**, which is the right answer for a Radeon 880M and
+means the automatic rule reproduces the previous unconditional behaviour here — the change is a
+no-op on the only machine that has run an ask; and the three gated engine tests pass on **cpu and
+vulkan** against a real child with the probe in the start path, so enumerating the loader before
+a load breaks neither. What the gauntlet establishes is separate and older: a 26B mixture needs
+the pair on this laptop. Nothing establishes that the pair costs anything here when the model is
+dense, and nothing at all has been run on the other branch.
+
+**Unmeasured and marked so:**
+
+- **No discrete-GPU Vulkan ask run exists with the pair off.** The only discrete card here is an
+  RTX 5080, whose Vulkan figures above (19.05 s prefill, 69.2 tok/s decode) were taken on the lab
+  script — which sets no environment — with a **dense** Q8_0 9B, where `--cpu-moe` matches no
+  tensors and the pair is a no-op either way. So the change is a no-op on every measurement this
+  document holds, and the branch it opens has never been exercised on any machine.
+- **The unpinned-transfer cost of `--no-host` on a discrete card is unmeasured**, which is the
+  half of the pair that is not obviously about experts at all.
+- **A machine with both an integrated and a discrete GPU is untested**, and the rule there is a
+  guess with a reason: any `DISCRETE_GPU` present answers Discrete, because llama.cpp's default
+  main-gpu takes the backend's first device and on such a machine that is usually the card. The
+  engine passes no `--main-gpu`, `--device` or `--split-mode`, so which device that is comes from
+  ggml's own enumeration order. Nobody here has such a machine, and if ggml picks the integrated
+  device anyway the automatic rule is wrong in the direction that fails to load — which is what
+  the picker is for.
+- **The fit allowance is anchored to one load and is otherwise a judgement.** A quarter of the
+  file plus a gibibyte asks for more room than the largest load in this record took (2.83 GiB
+  above an 8.87 GiB file at 53,248 tokens), but nobody has run a model that lands near the
+  boundary, in either direction: no card has been refused that would have fitted, and none has
+  been accepted that then failed to load.
+- **The allowance does not grow with the context.** KV cost per token is a property of the
+  architecture and is not readable from a `.gguf` by anything in this codebase, so a
+  whole-transcript ask — which sizes the context to the recording — can exceed a fit the rule
+  granted for the retrieval tier. The failure mode is a load that does not start, on a card at
+  the margin, and nothing measures where that margin is.
+- **`DeviceLocalBytes` is the largest device-local heap, not free memory.** A card with another
+  application resident reports the same figure as an idle one, so the rule answers "does this
+  card have room in principle" and not "is there room right now".
+- **`GpuClass.Unknown` resolves to system memory**, deliberately: the unanswered question takes
+  the failure that still starts. It is not known whether the loader ever returns Unknown on a
+  machine that has a working Vulkan drop — the CI runners that exercise the fallback have no
+  Vulkan at all, and the one machine here with a driver answers Integrated.
+
+What would settle it: `scripts/lab.ps1 spike -Backend vulkan` on a discrete card, once with
+`LLAMA_ARG_CPU_MOE=1 LLAMA_ARG_NO_HOST=1` in the environment and once without, over a mixture
+whose experts fit that card's VRAM. Two runs, one machine, and the branch stops being a
+projection.
 
 #### The router picks the mode, and its accuracy is unmeasured — built 2026-08-25
 
