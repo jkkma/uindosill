@@ -3991,6 +3991,35 @@ Sony to “put another two hundred in to get it to the finish line”."* Two sma
 with it, both of our own making rather than the model's: a citation removed from between a comma
 and a full stop left `,.`, and one that ended the sentence left the comma before it dangling.
 
+#### The dense 12B is slower than the 26B mixture on this machine, and its quotes did not verify — measured 2026-08-25
+
+Asked directly by the maintainer — would the dense model answer faster? — and measured rather
+than reasoned, because the intuition that a 12B beats a 26B is exactly the one a mixture breaks.
+Three retrieval questions, the same 16:50 transcript, the same shipped configuration (chat
+endpoint, temperature 0, no grammar, `--reasoning off`), Vulkan, 8.8 GB of system memory free at
+the start, one run each:
+
+| | load | three answers | tokens | decode |
+|---|---:|---:|---:|---:|
+| `gemma-4-26B-A4B-it` UD-IQ4_XS, `-ngl 999` | 16.3 s | **141.5 s** | 543 | **3.8 tok/s** |
+| `gemma-4-12b-it` Q6_K, `-ngl 24` | 8.5 s | 210.4 s | 603 | 2.9 tok/s |
+
+**The mixture wins because only about 4B of its 26B are active per token**, and the engine's
+Vulkan defaults keep its experts in system RAM, so what runs on the adapter is small. The dense
+12B is 9.1 GB against a 7.36 GiB fast heap, so it cannot fit and runs partially offloaded at
+`-ngl 24` — every parameter touched for every token, half of them across the bus. Its smaller
+file loads in half the time and then answers half again as slowly. This reproduces the
+2026-08-24 gauntlet's ordering on a different workload: that day the same two placements decoded
+5.7 and 3.2 tok/s on whole-transcript prompts.
+
+**The larger difference in the same run was not speed.** Of the 26B's eleven quoted bullets,
+eleven verified against their cited spans; of the 12B's twelve, **two**, both on the one question
+where its answer was shortest. Nothing here says why — a quote paraphrased rather than lifted and
+a quote lifted from a span the bullet did not cite fail the same check — and three questions in
+one run is not a rate. But it is the opposite of what the register's open lineup question assumes
+in naming the 12B the quality option on the strength of it writing "the richest answers", and the
+labelled set should settle it before that lineup is decided.
+
 #### The router picks the mode, and its accuracy is unmeasured — built 2026-08-25
 
 Both shape notes below were answered by building the register's decision 3 router the same day.
