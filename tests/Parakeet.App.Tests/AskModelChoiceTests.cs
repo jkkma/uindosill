@@ -9,6 +9,14 @@ namespace Parakeet.App.Tests;
 /// matter: on this hardware a 9B answered 2.3x faster than a 26B mixture whose citations held up
 /// better. These drive the picker's seam with files on a real disk and no model in any of them.
 /// </summary>
+/// <remarks>
+/// Every assertion here goes through <see cref="LlamaAnswerEngineProvider.ResolveModelFileName"/>
+/// rather than <c>Check()</c>, and the first draft of this file did the opposite and passed here
+/// while failing on a clean runner. <c>Check()</c> answers "can this panel work at all" and
+/// returns before looking at the models folder when no <c>llama-server</c> drop is vendored — so
+/// asserting on its <c>ModelFileName</c> tests the machine's native drop as much as the code, and
+/// a development machine that has one hides that from the person who wrote it.
+/// </remarks>
 public class AskModelChoiceTests
 {
     private static (LlamaAnswerEngineProvider Provider, string Directory, Func<string?> Chosen, Action<string?> Choose) Provider()
@@ -44,10 +52,11 @@ public class AskModelChoiceTests
     {
         var (provider, directory, _, _) = Provider();
         Assert.Empty(provider.AvailableModelFileNames());
+        Assert.Null(provider.ResolveModelFileName());
 
         Directory.Delete(directory, recursive: true);
         Assert.Empty(provider.AvailableModelFileNames());
-        Assert.False(provider.Check().IsAvailable);
+        Assert.Null(provider.ResolveModelFileName());
     }
 
     [Fact]
@@ -58,14 +67,14 @@ public class AskModelChoiceTests
         Write(directory, "big.gguf", 300);
 
         // Nobody has chosen: the largest, which is the pick a person can predict.
-        Assert.Equal("big.gguf", provider.Check().ModelFileName);
+        Assert.Equal("big.gguf", provider.ResolveModelFileName());
 
         choose("small.gguf");
-        Assert.Equal("small.gguf", provider.Check().ModelFileName);
+        Assert.Equal("small.gguf", provider.ResolveModelFileName());
 
         // Case is not a distinction a Windows file name makes.
         choose("SMALL.GGUF");
-        Assert.Equal("small.gguf", provider.Check().ModelFileName);
+        Assert.Equal("small.gguf", provider.ResolveModelFileName());
     }
 
     [Fact]
@@ -79,8 +88,6 @@ public class AskModelChoiceTests
         Write(directory, "big.gguf", 300);
         choose("deleted-yesterday.gguf");
 
-        var availability = provider.Check();
-        Assert.True(availability.IsAvailable);
-        Assert.Equal("big.gguf", availability.ModelFileName);
+        Assert.Equal("big.gguf", provider.ResolveModelFileName());
     }
 }
