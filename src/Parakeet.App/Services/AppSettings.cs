@@ -36,6 +36,15 @@ public sealed record AppSettings
     public bool AskThinking { get; init; }
 
     /// <summary>
+    /// Whether answers draw on the whole transcript instead of retrieval — the opt-in the
+    /// register's decision 3 names. Off as shipped: retrieval is the fast path everywhere and
+    /// the only path with acceptable prefill on integrated graphics; the whole-transcript pass
+    /// is what answers global questions — summaries, main topics — at the price of reading
+    /// everything first.
+    /// </summary>
+    public bool AskWholeTranscript { get; init; }
+
+    /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
     /// files beside each input.
     /// </summary>
@@ -98,6 +107,7 @@ public sealed class AppSettingsStore
             {
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
+                AskWholeTranscript = ReadBool(root, "askWholeTranscript", AppSettings.Default.AskWholeTranscript),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
@@ -143,6 +153,7 @@ public sealed class AppSettingsStore
             {
                 ["checkForUpdatesOnLaunch"] = settings.CheckForUpdatesOnLaunch,
                 ["askThinking"] = settings.AskThinking,
+                ["askWholeTranscript"] = settings.AskWholeTranscript,
             };
 
             // Omitted rather than written as null when nobody has chosen, so "never chosen" and

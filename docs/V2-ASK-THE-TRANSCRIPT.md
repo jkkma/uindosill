@@ -1060,6 +1060,40 @@ twenty-five languages before anything is claimed about them.
 Order: tier 0, the thirty questions, recall@10; tier 1 only if recall is the problem; tier 2 only
 if precision is. Nothing needs a GPU before tier 1, and nothing here is measured.
 
+#### Built 2026-08-25 — the whole-transcript opt-in, and the global path stops being only prose
+
+The sentence decision 4's laptop paragraph ends on — "the whole-transcript path is an opt-in
+with a progress bar" — is now code, prompted by the gap being felt in the product: a global
+question (*give me a summary*) asked of the retrieval tier hands BM25 nothing to rank on, so the
+top-8 windows are effectively arbitrary and the model summarises eight minutes of a recording
+while the answer reads fine. The failure this section predicted on paper — "the model saw a
+tenth of the transcript and guessed the rest… would look exactly like a good answer" — observed.
+
+The shape as built: a Settings toggle ("Answer from the whole transcript", persisted, off as
+shipped), read by the panel before every question exactly as the thinking toggle is. Evidence is
+the recording tiled once — `TranscriptWindowOptions.Cover`, non-overlapping 60 s windows,
+because the retrieval shape's half-overlap would send the transcript twice in one prompt. The
+child's context is sized to the recording through one budget function (chars/4, the engine's own
+overflow-guard ratio, a quarter margin for denser tokenizers — unmeasured across the 25
+languages, marked in UNPROVEN — plus the generation allowance, floor 16,384), and the panel
+rebuilds the engine exactly when that figure changes: the mode itself is a per-request fact, so
+a short recording flips modes on the engine it already holds, while a long one pays its KV on
+entry and shrinks back on exit. The progress bar this section asked for already existed — the
+`prompt_progress` frames the panel has drawn since the chat-endpoint move. The prompt cache
+should make follow-up questions skip the re-prefill — the evidence prefix is identical across
+questions in this mode, which it never is under retrieval — expected from `cache_prompt`'s
+documented behaviour, not yet observed on a real run.
+
+What it is not: not the router — global-versus-pointed stays the person's call at the toggle
+until the labelled set (whose `global` question kind is written for exactly this) can measure a
+classifier; not map-reduce, which remains the laptop's eventual path for long recordings, where
+this section's own table prices a whole-transcript prefill in tens of minutes; and not a quality
+claim — no whole-transcript answer has been scored, and the mode's honest advertisement today is
+the desktop's measured 7.93 s CUDA prefill against the laptop's 467.9–2,104.1 s. Sizing to the
+recording matters on the laptop too: a seventeen-minute clip's whole transcript fits the 16,384
+floor and prefills in ordinary time, so the opt-in is not desktop-only, merely desktop-shaped at
+three hours.
+
 ### 4. Are the two models ever resident at once
 
 Open, and interactivity sharpens it. A one-shot summary could load a model, run, and unload. A chat

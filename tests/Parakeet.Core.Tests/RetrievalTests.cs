@@ -184,6 +184,23 @@ public class TranscriptWindowBuilderTests
     }
 
     [Fact]
+    public void TheCoverVariantTilesEverySegmentExactlyOnce()
+    {
+        // The whole-transcript path's evidence shape: retrieval's half-overlap would send the
+        // transcript twice in one prompt, so the cover tiles it — every non-empty segment in
+        // exactly one window, none left out.
+        var document = Transcript([.. Enumerable.Range(0, 30).Select(i => $"segment number {i}")]);
+        var windows = TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
+
+        for (var id = 1; id <= 30; id++)
+        {
+            Assert.Equal(1, windows.Count(w => w.FirstSegment <= id && id <= w.LastSegment));
+        }
+
+        Assert.Equal(document.Segments.Count, windows.Sum(w => w.LastSegment - w.FirstSegment + 1));
+    }
+
+    [Fact]
     public void TheWideVariantMakesLongerWindows()
     {
         var document = Transcript([.. Enumerable.Range(0, 30).Select(i => $"segment number {i}")]);

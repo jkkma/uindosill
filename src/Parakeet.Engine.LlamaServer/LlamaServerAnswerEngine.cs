@@ -109,10 +109,11 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             throw new InvalidOperationException("Ask before load. Call LoadAsync first.");
         }
 
-        // The abstain path is mechanical, not the model's to decide: an empty transcript, or
-        // retrieval that found nothing, is answered without a model in the room — the same
-        // behaviour the fake promises, decision 6's "empty retrieval yields an abstention".
-        if (request.Transcript.IsEmpty || (request.Mode == AnswerMode.Retrieval && request.Evidence.Count == 0))
+        // The abstain path is mechanical, not the model's to decide: an empty transcript, or an
+        // ask handed no evidence at all — in any mode; the whole-transcript path passes windows
+        // tiling the recording, and this engine builds none itself — is answered without a model
+        // in the room, the same behaviour the fake promises (decision 6).
+        if (request.Transcript.IsEmpty || request.Evidence.Count == 0)
         {
             yield return AnswerParser.AbstainSentinel;
             yield return "\n";

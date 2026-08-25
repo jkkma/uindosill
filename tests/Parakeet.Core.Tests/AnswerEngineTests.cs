@@ -77,8 +77,11 @@ public class AnswerEngineTests
     }
 
     [Fact]
-    public async Task EmptyRetrievalAbstainsAndAnEmptyTranscriptAbstains()
+    public async Task EmptyEvidenceAbstainsInEveryModeAndSoDoesAnEmptyTranscript()
     {
+        // The model is never asked to answer from nothing, and no engine fills the evidence in
+        // itself: a fake that built its own windows in whole-transcript mode would be more
+        // forgiving than the real engine, which is how two v1 defects got through.
         await using var engine = new FakeAnswerEngine();
         await engine.LoadAsync();
 
@@ -90,6 +93,14 @@ public class AnswerEngineTests
         });
         Assert.True(AnswerParser.Parse(noEvidence).Abstained);
 
+        var noEvidenceWhole = await Collect(engine, new AskRequest
+        {
+            Question = "main topics?",
+            Transcript = Transcript("plenty of speech"),
+            Mode = AnswerMode.WholeTranscript,
+        });
+        Assert.True(AnswerParser.Parse(noEvidenceWhole).Abstained);
+
         var noSpeech = await Collect(engine, new AskRequest
         {
             Question = "anything?",
@@ -100,7 +111,7 @@ public class AnswerEngineTests
     }
 
     [Fact]
-    public async Task WholeTranscriptModeCitesWithoutBeingHandedEvidence()
+    public async Task WholeTranscriptModeCitesTheCoverWindowsItWasHanded()
     {
         var transcript = Transcript("the one thing that was said", "and the other thing");
 
@@ -112,6 +123,7 @@ public class AnswerEngineTests
             Question = "main topics?",
             Transcript = transcript,
             Mode = AnswerMode.WholeTranscript,
+            Evidence = TranscriptWindowBuilder.Build(transcript, TranscriptWindowOptions.Cover),
         }));
 
         Assert.False(answer.Abstained);

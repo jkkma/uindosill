@@ -22,6 +22,38 @@ public sealed record AnswerEngineAvailability
 }
 
 /// <summary>
+/// Turns the size of an ask's prompt into the context the engine's child is started with. One
+/// place, because two callers use it for two halves of one decision: the provider sizes the
+/// engine it creates, and the panel compares against the engine it holds to know when a rebuild
+/// is due. Retrieval's ~2k-token evidence always lands on <see cref="Minimum"/> — the default the
+/// engine has always run at — and only the whole-transcript path grows past it, paying its KV
+/// cost per recording rather than at the largest transcript anyone might ever open.
+/// </summary>
+public static class AnswerContextBudget
+{
+    /// <summary>The retrieval tier's context, and the floor for everything else.</summary>
+    public const int Minimum = 16_384;
+
+    /// <summary>
+    /// The context, in tokens, for a prompt of roughly this many characters. Four characters
+    /// per token is the same estimate the engine's own overflow guard uses, so a context sized
+    /// here always passes that guard; the quarter margin covers languages that tokenize denser
+    /// than English (an estimate, unmeasured across the 25 — docs/UNPROVEN.md); the flat
+    /// allowance covers the instruction, the template's own tokens and the full
+    /// answer-plus-thinking generation budget; and the result lands on a 4,096 boundary because
+    /// a KV cache is allocated in big pieces either way.
+    /// </summary>
+    public static int ContextTokensFor(int promptChars)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(promptChars);
+        var estimated = promptChars / 4;
+        var needed = estimated + (estimated / 4) + 4_096;
+        var rounded = (needed + 4_095) / 4_096 * 4_096;
+        return Math.Max(Minimum, rounded);
+    }
+}
+
+/// <summary>
 /// Creates the engine behind the Ask panel — the same seam <see cref="IEngineProvider"/> is for
 /// transcription, for the same reason: the headless tests exercise the real panel, the real
 /// parser and the real validator against the canned engine, without a nine-gigabyte model in CI.
@@ -38,8 +70,21 @@ public interface IAnswerEngineProvider
     /// </summary>
     bool ThinkingMode { get; }
 
-    /// <summary>A new engine, not yet loaded. Throws when <see cref="Check"/> says unavailable.</summary>
-    IAnswerEngine Create();
+    /// <summary>
+    /// Whether the next ask runs over the whole transcript instead of retrieval — the opt-in
+    /// the register's decision 3 names, read by the panel before every question exactly as
+    /// <see cref="ThinkingMode"/> is. Unlike thinking, the mode itself is a per-request fact,
+    /// not a child-process argument: flipping it forces a fresh engine only when the context
+    /// the new ask needs differs from the one the held engine was built with.
+    /// </summary>
+    bool WholeTranscriptMode { get; }
+
+    /// <summary>
+    /// A new engine, not yet loaded, sized for a prompt of roughly <paramref name="promptChars"/>
+    /// characters per <see cref="AnswerContextBudget.ContextTokensFor"/>. Throws when
+    /// <see cref="Check"/> says unavailable.
+    /// </summary>
+    IAnswerEngine Create(int promptChars = 0);
 }
 
 /// <summary>
@@ -58,15 +103,20 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 {
     private readonly IModelStore _store;
     private readonly Func<bool> _thinkingMode;
+    private readonly Func<bool> _wholeTranscriptMode;
 
-    public LlamaAnswerEngineProvider(IModelStore store, Func<bool>? thinkingMode = null)
+    public LlamaAnswerEngineProvider(
+        IModelStore store, Func<bool>? thinkingMode = null, Func<bool>? wholeTranscriptMode = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         _thinkingMode = thinkingMode ?? (static () => false);
+        _wholeTranscriptMode = wholeTranscriptMode ?? (static () => false);
     }
 
     public bool ThinkingMode => _thinkingMode();
+
+    public bool WholeTranscriptMode => _wholeTranscriptMode();
 
     public AnswerEngineAvailability Check()
     {
@@ -90,7 +140,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         return new AnswerEngineAvailability { ModelFileName = Path.GetFileName(model) };
     }
 
-    public IAnswerEngine Create()
+    public IAnswerEngine Create(int promptChars = 0)
     {
         // Reachable when the file was deleted between Check() and the ask; the message lands in
         // the chat verbatim, so it is user copy, not a developer's assertion.
@@ -103,6 +153,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         {
             ModelPath = model,
             ThinkBeforeAnswer = ThinkingMode,
+            ContextSize = AnswerContextBudget.ContextTokensFor(promptChars),
         });
     }
 
@@ -141,13 +192,19 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
     /// <summary>Settable so the panel's mode-flip behaviour is testable without a server.</summary>
     public bool ThinkingMode { get; set; }
 
+    /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
+    public bool WholeTranscriptMode { get; set; }
+
+    /// <summary>What the panel said the last engine's prompt would roughly measure.</summary>
+    public int LastPromptChars { get; private set; }
+
     public AnswerEngineAvailability Check() => new()
     {
         WhyNot = _whyNot,
         ModelFileName = _whyNot is null ? "fake-answer-model.gguf" : null,
     };
 
-    public IAnswerEngine Create()
+    public IAnswerEngine Create(int promptChars = 0)
     {
         if (_whyNot is not null)
         {
@@ -155,6 +212,7 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
         }
 
         Created++;
+        LastPromptChars = promptChars;
         LastCreated = new FakeAnswerEngine(_options);
         return LastCreated;
     }

@@ -41,7 +41,7 @@ public sealed record FakeAnswerOptions
 /// </summary>
 /// <remarks>
 /// The behaviour it fakes is the honest one, not the convenient one: it abstains on an empty
-/// transcript and on empty retrieval-mode evidence, because those are the paths the register's
+/// transcript and on empty evidence in every mode, because those are the paths the register's
 /// decision 6 requires an answer to have, and a fake that always answered would let a panel ship
 /// with no abstain state. Its citations come from the evidence it was handed, so everything it
 /// says passes <see cref="CitationValidator"/> against the same transcript — and the one bullet
@@ -159,21 +159,20 @@ public sealed class FakeAnswerEngine : IAnswerEngine
             yield break;
         }
 
+        // Empty evidence abstains whatever the mode: the whole-transcript path hands over
+        // windows tiling the recording, it does not hand over nothing — and a fake that filled
+        // the gap itself would be more forgiving than the real engine, which is how two v1
+        // defects got through.
         if (_options.AlwaysAbstain
             || request.Transcript.IsEmpty
-            || (request.Mode == AnswerMode.Retrieval && request.Evidence.Count == 0))
+            || request.Evidence.Count == 0)
         {
             yield return AnswerParser.AbstainSentinel;
             yield return "\n";
             yield break;
         }
 
-        // Whole-transcript and map-reduce answers see the recording rather than a shortlist, so
-        // with no evidence handed over the fake cites the transcript's own opening windows —
-        // an answer in those modes still resolves or it is not an answer.
-        IReadOnlyList<TranscriptWindow> evidence = request.Evidence.Count > 0
-            ? request.Evidence
-            : [.. TranscriptWindowBuilder.Build(request.Transcript).Take(2)];
+        var evidence = request.Evidence;
 
         // One bullet per evidence window, citing the window's own run and quoting its first
         // words verbatim — so the quote check has something true to verify.

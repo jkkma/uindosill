@@ -3816,6 +3816,27 @@ environment gained the expert-offload pair as defaults after the app's first 26B
 without them; and the 26B at ~1.3 GB of free system RAM decodes at a paging crawl — the
 model's experts want ~10 GB of the 15.6 GB pool to themselves.
 
+#### The whole-transcript opt-in exists, and nothing about its answers is measured — built 2026-08-25
+
+The global-question gap above got its designed answer the same day: a Settings toggle sends the
+ask over the recording tiled once (`TranscriptWindowOptions.Cover`, non-overlapping — the
+retrieval windows' half-overlap would send the transcript twice), with the child's context
+sized to the recording by `AnswerContextBudget` (floor 16,384, the retrieval tier's unchanged
+default) and the panel rebuilding the engine exactly when that figure changes. The register's
+decision 3 block carries the shape; what this file owes is the unproven list. **No
+whole-transcript answer has been scored** — the labelled set's `global` questions are what will
+score them, and until then the mode's only honest numbers are prefill costs measured elsewhere
+in this file (7.93 s for 47.7k tokens on the desktop's CUDA; 467.9–2,104.1 s for the same
+transcript on this machine's four placements). **The budget's chars-per-token margin is an
+estimate**: chars/4 plus a quarter covers the languages tried so far, but no tokenizer-density
+measurement exists across the 25 languages, and a transcript that tokenizes denser than the
+margin would hit the server's context error honestly rather than silently — the failure path
+is designed, not observed. **The prompt-cache win is expected, not observed**: in this mode the
+evidence prefix is identical across questions, so `cache_prompt` should make follow-ups skip
+the re-prefill entirely — documented server behaviour, not yet watched on a real run. And the
+mode has never been driven end to end against a real model in the app; the suite drives it
+against the fake through the real panel, parser and validator.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the

@@ -47,9 +47,11 @@ public sealed partial class AskChatViewModel : ObservableObject
 
     private IAnswerEngine? _engine;
     private bool _engineThinking;
+    private int _engineContextTokens;
     private JobViewModel? _recording;
     private TranscriptDocument? _document;
     private IReadOnlyList<TranscriptWindow>? _windows;
+    private IReadOnlyList<TranscriptWindow>? _coverWindows;
     private Bm25Retriever? _retriever;
     private CancellationTokenSource? _asking;
 
@@ -144,6 +146,7 @@ public sealed partial class AskChatViewModel : ObservableObject
 
             _document = document;
             _windows = null;
+            _coverWindows = null;
             _retriever = null;
             Entries.Clear();
             OnPropertyChanged(nameof(HasEntries));
@@ -172,7 +175,7 @@ public sealed partial class AskChatViewModel : ObservableObject
 
     private async Task AskCore(string question)
     {
-        if (_document is not { } document || _provider is null)
+        if (_document is not { } document || _provider is not { } provider)
         {
             return;
         }
@@ -198,13 +201,27 @@ public sealed partial class AskChatViewModel : ObservableObject
 
         try
         {
-            // The search costs milliseconds and the model load can cost minutes, in that order
-            // on purpose: a question retrieval cannot anchor abstains right here, before the
-            // transcriber is unloaded or a byte of the language model is read.
-            entry.Status = "Searching the transcript…";
-            _windows ??= TranscriptWindowBuilder.Build(document);
-            _retriever ??= new Bm25Retriever(_windows);
-            var evidence = _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window).ToList();
+            // The evidence costs milliseconds and the model load can cost minutes, in that order
+            // on purpose: a question the evidence cannot anchor abstains right here, before the
+            // transcriber is unloaded or a byte of the language model is read. The whole-
+            // transcript opt-in (the register's decision 3) skips retrieval entirely — every
+            // question is global to it — and its evidence is the recording tiled once, in the
+            // non-overlapping shape, because the overlap would send the transcript twice.
+            var whole = provider.WholeTranscriptMode;
+            var mode = whole ? AnswerMode.WholeTranscript : AnswerMode.Retrieval;
+            IReadOnlyList<TranscriptWindow> evidence;
+            if (whole)
+            {
+                _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
+                evidence = _coverWindows;
+            }
+            else
+            {
+                entry.Status = "Searching the transcript…";
+                _windows ??= TranscriptWindowBuilder.Build(document);
+                _retriever ??= new Bm25Retriever(_windows);
+                evidence = _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window).ToList();
+            }
 
             if (evidence.Count == 0)
             {
@@ -212,7 +229,16 @@ public sealed partial class AskChatViewModel : ObservableObject
                 return;
             }
 
-            await EnsureEngineAsync(entry, cancellation.Token).ConfigureAwait(true);
+            // A character count standing in for the prompt: the evidence text, each line's id
+            // bracket, the question, and an allowance for the instruction. The provider turns
+            // it into the context the engine is built with.
+            var promptChars = 1_024 + question.Length;
+            foreach (var window in evidence)
+            {
+                promptChars += window.Text.Length + 16;
+            }
+
+            await EnsureEngineAsync(entry, promptChars, cancellation.Token).ConfigureAwait(true);
 
             // The load await is the window a recording switch can slip through; its cancel may
             // land after the load completed without observing the token, so it is re-checked
@@ -230,12 +256,14 @@ public sealed partial class AskChatViewModel : ObservableObject
             {
                 Question = question,
                 Transcript = document,
-                Mode = AnswerMode.Retrieval,
+                Mode = mode,
                 Evidence = evidence,
                 Language = language,
             };
 
-            entry.Status = "Answering…";
+            // In whole-transcript mode the wait ahead is the prefill, and the progress frames
+            // that draw it as a percentage take a beat to start arriving.
+            entry.Status = whole ? "Reading the whole transcript…" : "Answering…";
 
             // Progress captures this (UI) context at construction, so the engine may report from
             // wherever it runs and the entry is still only ever touched here.
@@ -253,7 +281,7 @@ public sealed partial class AskChatViewModel : ObservableObject
                 ModelId = _engine.Capabilities.ModelId,
                 Quantisation = _engine.Capabilities.Quantisation,
                 Backend = _engine.Capabilities.Backend,
-                Mode = AnswerMode.Retrieval,
+                Mode = mode,
                 Language = language,
             };
 
@@ -265,7 +293,16 @@ public sealed partial class AskChatViewModel : ObservableObject
             }
             else
             {
-                entry.Complete(answer, CitationValidator.Validate(answer, document), evidence, document, _seekAndPlay);
+                // The Sources expander lists what the model was shown in rank order; in whole-
+                // transcript mode that is the entire recording — already on screen in the
+                // transcript pane, and with no rank to order it by — so the list stays empty
+                // and the model line says what was seen instead.
+                entry.Complete(
+                    answer,
+                    CitationValidator.Validate(answer, document),
+                    whole ? [] : evidence,
+                    document,
+                    _seekAndPlay);
             }
         }
         catch (OperationCanceledException)
@@ -291,12 +328,17 @@ public sealed partial class AskChatViewModel : ObservableObject
         }
     }
 
-    private async Task EnsureEngineAsync(ChatEntryViewModel entry, CancellationToken ct)
+    private async Task EnsureEngineAsync(ChatEntryViewModel entry, int promptChars, CancellationToken ct)
     {
         // An engine built under the other thinking mode is dropped, not reused: the mode is a
         // child-process argument, so the settings toggle can only take effect through a fresh
         // child — at the next question, which is when a person expects a setting to matter.
-        if (_engine is not null && _engineThinking != _provider!.ThinkingMode)
+        // The context is the same kind of fact: one too small cannot hold this ask's prompt,
+        // and a whole-transcript context kept past its ask is a KV cache the machine feels for
+        // nothing — retrieval's need is the budget's floor, so leaving the mode shrinks it back.
+        var contextTokens = AnswerContextBudget.ContextTokensFor(promptChars);
+        if (_engine is not null
+            && (_engineThinking != _provider!.ThinkingMode || _engineContextTokens != contextTokens))
         {
             await _engine.DisposeAsync().ConfigureAwait(true);
             _engine = null;
@@ -318,7 +360,8 @@ public sealed partial class AskChatViewModel : ObservableObject
 
         entry.Status = "Loading the model — a large one takes a while…";
         _engineThinking = _provider!.ThinkingMode;
-        var engine = _provider.Create();
+        _engineContextTokens = contextTokens;
+        var engine = _provider.Create(promptChars);
         try
         {
             await engine.LoadAsync(ct).ConfigureAwait(true);
@@ -513,7 +556,13 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         var backend = answer.Backend?.ToString().ToLowerInvariant();
         var parts = string.Join(", ", new[] { answer.Quantisation, backend }.Where(p => !string.IsNullOrEmpty(p)));
         var model = parts.Length > 0 ? $"{name} ({parts})" : name;
-        return $"Generated by {model} from retrieved parts of the transcript — not transcribed speech.";
+
+        // How much of the recording the answer could have seen is provenance, not decoration:
+        // "retrieved parts" and "the whole transcript" are different claims about coverage.
+        var scope = answer.Mode == AnswerMode.WholeTranscript
+            ? "from the whole transcript"
+            : "from retrieved parts of the transcript";
+        return $"Generated by {model} {scope} — not transcribed speech.";
     }
 
     /// <summary>

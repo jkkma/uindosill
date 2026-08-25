@@ -69,6 +69,18 @@ public sealed record TranscriptWindowOptions
         Stride = TimeSpan.FromSeconds(60),
     };
 
+    /// <summary>
+    /// Non-overlapping ~60 s windows tiling the recording end to end — the whole-transcript
+    /// path's evidence shape. No overlap on purpose: retrieval's half-overlap exists so a hit
+    /// near a window edge finds its context in the neighbour, but a prompt that carries every
+    /// window carries every neighbour too, and the overlap would send the transcript twice.
+    /// </summary>
+    public static TranscriptWindowOptions Cover { get; } = new()
+    {
+        WindowLength = TimeSpan.FromSeconds(60),
+        Stride = TimeSpan.FromSeconds(60),
+    };
+
     public TimeSpan WindowLength { get; init; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Distance between window starts; half the length gives 50 % overlap.</summary>

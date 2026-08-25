@@ -50,6 +50,25 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void AskWholeTranscriptIsOffAsShippedAndSurvivesARoundTrip()
+    {
+        // Retrieval is the fast path and the laptop tier (decision 3); the whole-transcript
+        // pass is the opt-in, so shipped-off is part of the design, not a leftover.
+        var path = TempFile();
+        try
+        {
+            Assert.False(new AppSettingsStore(path).Load().AskWholeTranscript);
+
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { AskWholeTranscript = true }));
+            Assert.True(new AppSettingsStore(path).Load().AskWholeTranscript);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AFileThatIsNotJsonIsTheShippedDefaultRatherThanAThrow()
     {
         // Whatever a hand-edited or half-written settings file contains, the window opens.
