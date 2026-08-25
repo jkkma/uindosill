@@ -1214,7 +1214,10 @@ been correct.
 
 **Two diagnostics that rule out the obvious explanations.** The spurious cluster is **not localised**:
 in the failing hour-long window its first turn is at 2138 s and its last at 5650 s, spread across the
-whole span rather than appearing after long exposure. And the stretch a failing window contains that
+whole span rather than appearing after long exposure. **That reading is wrong and was corrected on
+2026-08-25** — first and last turn are not where the speech is, and by duration 93.4% of that label
+falls in the final ten minutes; see § *The over-segmented labels do sound like one person*. The
+sentence is left standing because the statistic that produced it is an easy one to reach for. And the stretch a failing window contains that
 a passing one does not — 5000 to 5800 s — **is correct in isolation**, 54.1% / 45.0% over two
 speakers, so no content in it introduces a third voice. What that leaves is over-segmentation of one
 host into two labels, which the near-complementary time distributions of the two largest clusters in
@@ -1819,6 +1822,108 @@ saturated reference could be repaired by intersecting it with a voice-activity p
 a plan, and it would make the reference partly machine-derived — a decision for `docs/PHASES.md` if
 anyone takes it. **Adding a corpus to the speakers gate is likewise a decision and none has been
 made**; what is recorded here is that the material exists, what it can carry, and what it cannot.
+
+### The over-segmented labels do sound like one person — measured 2026-08-25, and the rule that separates them is fitted rather than validated
+
+**`SpeakerTurns.FoldDownTo` repairs over-segmentation and needs the user to supply the count;
+nothing in this product estimates one.** The entry above says why an automatic rule was refused —
+two real speakers who never overlap look exactly like one drifted speaker to a timeline-only rule,
+and `IS1008a` is such a meeting. A speaker embedding is the evidence a timeline cannot supply, so
+this asks the prior question: **do two labels that are really one person actually look alike to an
+embedder?** It does not build the repair; it prices the signal the repair would need.
+
+**Setup, all on the CPU — the reference path, and no GPU was used at any point.** Fifteen files were
+diarised through `uindosill diarise --backend cpu` at 41–69× realtime: five windows of `two-hosts`
+(true speakers 2), `two-hosts-one-guest` whole (true 3), and nine AMI test meetings whose
+`only_words` references were read rather than assumed — all nine hold four speakers. Each label's
+*clean* speech was sampled — regions where only that label is active, since a region two labels share
+embeds as a mixture — as forty three-second windows spread evenly **in time**, and embedded with
+3D-Speaker CAM++ (`3dspeaker_speech_campplus_sv_en_voxceleb_16k`, 29.6 MB, the sherpa-onnx export).
+Each pair is scored as the median between-label cosine divided by the smaller of the two labels'
+own within-label medians, so **1.0 means "as alike as each is to itself"**. Labels holding under 1%
+of a file's speech are dropped, which is the criterion the duration ladder above counts by.
+
+**The ladder reproduced exactly, and the 1% rule is why four labels can be a correct answer.**
+
+| window | labels | ≥1% | true | ladder says |
+|---|---:|---:|---:|---|
+| `th-60-200` (60 min from 200 s) | 4 | **2** | 2 | correct |
+| `th-60-6000` (60 min from 6000 s) | 4 | **2** | 2 | correct |
+| `two-hosts-60m` (60 min from 2104 s) | 3 | **3** | 2 | wrong |
+| `th-120` (120 min) | 4 | **3** | 2 | wrong |
+| `th-full` (175.4 min) | 4 | **3** | 2 | wrong |
+
+**One diagnostic in the entry above is wrong, and this run corrects it.** That entry says the
+spurious cluster *"is not localised… spread across the whole span rather than appearing after long
+exposure"*, on the evidence of its first turn at 2138 s and its last at 5650 s. Those are first and
+last turns; by **duration** the label is localised, and sharply:
+
+| ten-minute bucket | spk2 turns | seconds |
+|---|---:|---:|
+| 0–40 min | 2 | 0.8 |
+| 40–50 min | 5 | 13.1 |
+| 50–60 min | 20 | **197.8** |
+
+**93.4% of the spurious label's speech is in the final ten minutes**, and 99.6% of it after forty.
+It does appear after long exposure, which supports the cache-drift diagnosis more strongly than the
+first-and-last-turn reading did. Both readings are of the same file; the earlier one is left above
+because the statistic that produced it is an easy one to reach for.
+
+**The signal is real and its signature is consistent.** Highest pair ratio per file, over-segmented
+files being those whose substantial labels outnumber the recording's people, so at least one pair
+*is* one person:
+
+| | n | highest-pair ratio | that pair's margin over the next |
+|---|---:|---|---|
+| **over-segmented** | 4 | **1.004 – 1.017** | **0.057 – 0.080** |
+| clean (every pair two people) | 11 | 0.923 – 1.008 | 0.000 – 0.055 |
+
+**The two same-domain controls are the strongest part.** On the same podcast, the same two hosts and
+the same recording, the 60-minute windows the ladder calls *correct* score **0.939** and **0.941**,
+against **1.004–1.017** for the windows it calls wrong. Nothing about domain, microphone or speaker
+identity differs between them — only whether the model over-segmented.
+
+**Ratio alone does not separate, and one meeting is why.** `IS1009c` — four genuinely different AMI
+speakers — reaches **1.008**, inside the over-segmented range. A ratio-only threshold would merge two
+real speakers on an AMI meeting the diariser already gets right, which is precisely the no-op
+property that makes the fold safe against a passed gate. Adding the margin fixes this sample:
+`IS1009c`'s best pair beats its second by **0.042**, under every over-segmented file's 0.057.
+**`ratio ≥ 1.00` and `margin ≥ 0.05` classifies all fifteen with no false fire and no miss**, and
+`ratio ≥ 0.995` does the same.
+
+**That rule is fitted, and by this project's own standard it is not a result.** Two thresholds were
+chosen after seeing fifteen files with **four** positives among them; nothing was held out, and the
+gate's protocol — tune on dev, apply unchanged to test, score once — has not been run. The separating
+gap is **0.015** on the margin between `IS1009c` at 0.042 and the tightest over-segmented file at
+0.057, which is thin. Treat the number as evidence that a signal exists, not as a threshold anybody
+may ship.
+
+**The second embedder does not corroborate it, and was included so that this would show.**
+`wespeaker_en_voxceleb_resnet34_LM` picked two genuinely different podcast speakers as the most-alike
+pair in one configuration and a different pair in another, at margins of 0.003 and 0.012; its cosines
+run 0.13–0.22 on close-mic'd AMI against 0.71–0.83 on studio podcast audio, so **no absolute
+threshold survives a change of domain** and the CAM++ numbers above are that model's, not a property
+of speaker embeddings.
+
+**The offline model is not the escape it looks like.** The cache exists because this is *Streaming*
+Sortformer; NVIDIA's offline `diar_sortformer_4spk-v1` has none. It cannot be used here for two
+independent reasons, both read from its card on 2026-08-25: *"The maximum duration of a test
+recording depends on available GPU memory. For an RTX A6000 48GB model, the limit is around 12
+minutes"* — against 60-minute podcasts, on a machine with a 16 GB card — and `license:
+cc-by-nc-4.0`, non-commercial, where the streaming v2.1's NVIDIA Open Model License clears
+commercial use outright (`docs/LICENSING.md`). Reaching an hour with it means chunking and
+stitching, which is measured and rejected above at 23.53% against 8.62%. **The drift is therefore
+structural for this product rather than a configuration mistake**, and post-hoc repair is the only
+lever.
+
+**What is not established.** No estimator was built and nothing was scored end to end: this prices a
+signal, and a DER unchanged on AMI is what would price a repair. Four positives, one podcast series,
+one embedding model, one language. The pair the rule identifies is assumed to be the same person
+because two hosts produced three labels — **no reference says which two labels are one voice**, and
+none exists for this material. `TS3003a` yielded only one usable pair, so clean-side coverage is
+uneven. And the whole approach still costs a second model in the catalogue with its own licence read,
+which nothing here has done. The artefacts are `runs/spike-relink/` on the desktop and travel no
+further; `runs/` is gitignored and machine-local, as `runs/spike-sherpa/` is.
 
 ### NPU offload — assessed 2026-08-16, nothing measured
 
