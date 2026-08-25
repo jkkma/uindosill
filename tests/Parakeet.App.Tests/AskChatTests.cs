@@ -321,6 +321,108 @@ public class AskChatTests
     }
 
     [Fact]
+    public async Task WholeTranscriptModeSendsTheRecordingTiledOnceWithNoSourceRows()
+    {
+        // The opt-in the register's decision 3 names: no retrieval — every question is global to
+        // it — and the evidence is the recording tiled once in the non-overlapping cover shape,
+        // because the retrieval windows' overlap would send the transcript twice. The Sources
+        // expander stays empty (the source is the whole recording, already on screen) and the
+        // provenance line claims the coverage the answer really had.
+        var (chat, provider, _) = Chat();
+        provider.WholeTranscriptMode = true;
+
+        await AskAsync(chat, "give me a summary");
+
+        var request = provider.LastCreated!.LastRequest!;
+        Assert.Equal(AnswerMode.WholeTranscript, request.Mode);
+
+        var window = Assert.Single(request.Evidence);
+        Assert.Equal(1, window.FirstSegment);
+        Assert.Equal(3, window.LastSegment);
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.True(entry.IsDone);
+        Assert.True(entry.HasBullets);
+        Assert.False(entry.HasSources);
+        Assert.Contains("whole transcript", entry.ModelLine, StringComparison.Ordinal);
+        Assert.DoesNotContain("retrieved", entry.ModelLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AShortRecordingKeepsItsEngineAcrossTheModeFlip()
+    {
+        // Unlike thinking, the mode is a per-request fact, not a child-process argument: on a
+        // recording whose prompt fits the retrieval-tier context either way, flipping the toggle
+        // changes the next request and keeps the engine that is already loaded.
+        var (chat, provider, _) = Chat();
+
+        await AskAsync(chat, "what about the axolotl?");
+        Assert.Equal(1, provider.Created);
+        Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
+
+        provider.WholeTranscriptMode = true;
+        await AskAsync(chat, "give me a summary");
+        Assert.Equal(1, provider.Created);
+        Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
+
+        provider.WholeTranscriptMode = false;
+        await AskAsync(chat, "and the budget?");
+        Assert.Equal(1, provider.Created);
+        Assert.Equal(AnswerMode.Retrieval, provider.LastCreated!.LastRequest!.Mode);
+    }
+
+    [Fact]
+    public async Task ALongRecordingRebuildsTheEngineWhenTheContextItNeedsChanges()
+    {
+        // The whole-transcript prompt on a long recording outgrows the retrieval-tier context,
+        // so entering the mode rebuilds the engine sized to the recording — and leaving it
+        // rebuilds again at the floor, because a whole-transcript KV cache kept past its ask is
+        // memory held for nothing.
+        var segments = new List<TranscriptSegment>();
+        for (var i = 0; i < 100; i++)
+        {
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(i * 10),
+                End = TimeSpan.FromSeconds((i * 10) + 10),
+                Text = $"filler segment {i} " + new string('x', 480),
+            });
+        }
+
+        var job = new JobViewModel("/tmp/long.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = job.Path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                SourceName = job.Path,
+                AudioDuration = TimeSpan.FromSeconds(1_000),
+                Segments = segments,
+            },
+        });
+
+        var (chat, provider, _) = Chat(job);
+        provider.WholeTranscriptMode = true;
+
+        await AskAsync(chat, "give me a summary");
+        Assert.Equal(1, provider.Created);
+        Assert.True(
+            AnswerContextBudget.ContextTokensFor(provider.LastPromptChars) > AnswerContextBudget.Minimum,
+            "the whole-transcript prompt was meant to outgrow the retrieval-tier context");
+
+        // The same mode over the same recording needs the same context: no rebuild.
+        await AskAsync(chat, "main topics?");
+        Assert.Equal(1, provider.Created);
+
+        provider.WholeTranscriptMode = false;
+        await AskAsync(chat, "what about filler segment three?");
+        Assert.Equal(2, provider.Created);
+        Assert.Equal(
+            AnswerContextBudget.Minimum, AnswerContextBudget.ContextTokensFor(provider.LastPromptChars));
+    }
+
+    [Fact]
     public async Task SwitchingRecordingsClearsTheConversation()
     {
         // The citations were ids into the transcript that is no longer open; a chip that seeks
@@ -508,6 +610,50 @@ public class AskChatTests
         // The next ask does not reuse the dead engine.
         await AskAsync(chat, "again?");
         Assert.Equal(2, provider.Created);
+    }
+}
+
+/// <summary>The arithmetic both halves of the rebuild decision share.</summary>
+public class AnswerContextBudgetTests
+{
+    [Fact]
+    public void RetrievalScalePromptsLandOnTheFloor()
+    {
+        // The retrieval tier's ~2k-token evidence, and anything near it, maps to the default
+        // the engine has always run at — the budget only ever grows past it.
+        Assert.Equal(AnswerContextBudget.Minimum, AnswerContextBudget.ContextTokensFor(0));
+        Assert.Equal(AnswerContextBudget.Minimum, AnswerContextBudget.ContextTokensFor(10_000));
+        Assert.Equal(AnswerContextBudget.Minimum, AnswerContextBudget.ContextTokensFor(30_000));
+    }
+
+    [Fact]
+    public void ALongTranscriptGetsTheEstimateTheMarginAndTheGenerationAllowance()
+    {
+        // 207,000 chars is the measured three-hour transcript's scale: chars/4 estimates
+        // 51,750 tokens, the quarter margin adds 12,937, the flat allowance 4,096, and the sum
+        // lands on the next 4,096 boundary. The point pinned is the shape, not the constant.
+        Assert.Equal(69_632, AnswerContextBudget.ContextTokensFor(207_000));
+    }
+
+    [Fact]
+    public void TheResultIsAlwaysAWholeNumberOfPages()
+    {
+        for (var chars = 0; chars < 400_000; chars += 17_321)
+        {
+            Assert.Equal(0, AnswerContextBudget.ContextTokensFor(chars) % 4_096);
+        }
+    }
+
+    [Fact]
+    public void TheBudgetAlwaysClearsTheEnginesOwnOverflowGuard()
+    {
+        // The engine refuses a prompt whose chars/4 estimate exceeds its context; a context
+        // sized by this budget must always clear that guard, or the whole-transcript path
+        // would refuse the very prompt it was sized for.
+        for (var chars = 0; chars < 400_000; chars += 9_973)
+        {
+            Assert.True(chars / 4 <= AnswerContextBudget.ContextTokensFor(chars));
+        }
     }
 }
 

@@ -1706,9 +1706,9 @@
             <Separator />
 
             <!-- ── Asking ─────────────────────────────────────────────────────────────────────
-                 The one ask setting, and it reaches past this page's Transcribe data context to
-                 the window's, where the settings file is written. The engine reads it at each
-                 question, so the hint can promise "next question" honestly. -->
+                 The ask settings, and they reach past this page's Transcribe data context to
+                 the window's, where the settings file is written. The panel reads them at each
+                 question, so the hints can promise "next question" honestly. -->
             <StackPanel Spacing="9"
                         DataContext="{Binding $parent[Window].DataContext}"
                         x:DataType="vm:MainWindowViewModel">
@@ -1719,6 +1719,13 @@
                               IsChecked="{Binding AskThinking}" />
                 <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
                            Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
+              </DockPanel>
+              <DockPanel LastChildFill="True">
+                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,9,0"
+                              Content="Answer from the whole transcript"
+                              IsChecked="{Binding AskWholeTranscript}" />
+                <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
+                           Text="Answers draw on the entire recording instead of the most relevant minutes — the way to ask for summaries and overviews. The first question reads the whole transcript, which takes a while on long recordings. Takes effect at your next question." />
               </DockPanel>
             </StackPanel>
 

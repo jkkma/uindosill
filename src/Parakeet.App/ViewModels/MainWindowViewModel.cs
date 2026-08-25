@@ -18,6 +18,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _askThinking;
 
+    /// <summary>The Settings toggle: answers draw on the whole transcript instead of retrieval.
+    /// Off as shipped — retrieval is the fast path, and the laptop tier (decision 3).</summary>
+    [ObservableProperty]
+    private bool _askWholeTranscript;
+
     [ObservableProperty]
     private int _selectedTab;
 
@@ -46,6 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ?? ParakeetNativeLibrary.PreferredBackend(
                 backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
         _askThinking = loaded.AskThinking;
+        _askWholeTranscript = loaded.AskWholeTranscript;
 
         Session = new ModelSession(engines);
 
@@ -80,7 +86,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Transcribe.Jobs,
             player ?? MediaPlayers.ForThisBuild(),
             Session,
-            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking),
+            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking, () => AskWholeTranscript),
             () => Transcribe.IsRunning);
 
         // The output folder outlives the run — chosen once, restored at every launch — but only
@@ -270,6 +276,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Remembers the choice; the engine picks it up at the next question.</summary>
     partial void OnAskThinkingChanged(bool value) =>
         _settings.Update(current => current with { AskThinking = value });
+
+    /// <summary>Remembers the choice; the panel reads it at the next question.</summary>
+    partial void OnAskWholeTranscriptChanged(bool value) =>
+        _settings.Update(current => current with { AskWholeTranscript = value });
 
     /// <summary>
     /// Re-reads the model directory whenever the Models tab is opened.

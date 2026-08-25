@@ -50,9 +50,10 @@ public sealed record AskRequest
 
     /// <summary>
     /// What the model sees, in every mode: retrieval passes the windows it chose in rank order,
-    /// the whole-transcript path passes windows covering the whole recording, and the id set a
-    /// grammar enumerates is exactly these windows' ids either way. Empty evidence in retrieval
-    /// mode is the abstain path — the model is never asked to answer from nothing.
+    /// the whole-transcript path passes non-overlapping windows tiling the whole recording
+    /// (<see cref="TranscriptWindowOptions.Cover"/>), and the id set a grammar enumerates is
+    /// exactly these windows' ids either way. Empty evidence is the abstain path in every mode —
+    /// the model is never asked to answer from nothing, and no engine fills this in itself.
     /// </summary>
     public IReadOnlyList<TranscriptWindow> Evidence { get; init; } = [];
 

@@ -20,9 +20,10 @@ public sealed record LlamaServerOptions
 
     /// <summary>
     /// The context window to allocate, in tokens. The default covers retrieval-mode evidence
-    /// with room to spare; the whole-transcript path needs 53,248 — the measured three-hour
-    /// transcript is 51,712 tokens under the working candidate's template
-    /// (docs/V2-ASK-THE-TRANSCRIPT.md, decision 2's correction block) — and pays for it in KV.
+    /// with room to spare; the whole-transcript path pays for what it reads in KV — the measured
+    /// three-hour transcript is 51,712 tokens under the working candidate's template
+    /// (docs/V2-ASK-THE-TRANSCRIPT.md, decision 2's correction block) — so the application sizes
+    /// this to the open recording rather than to the largest transcript anyone might open.
     /// </summary>
     public int ContextSize { get; init; } = 16_384;
 
