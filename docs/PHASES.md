@@ -4051,8 +4051,9 @@ because a helper that creates what it names would turn each of those tests into 
 something else. Measured rather than asserted, since a test cannot watch its own process exit:
 the `%TEMP%` entries were compared **by name** across a full suite — not by count, because a
 second worktree was running the same suite on this machine and its directories land in the same
-place — and the set came back identical, nothing added. Suite unchanged at **1314 tests, 1308
-passed and 6 skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
+place — and the set came back identical, nothing added. That run's suite was unchanged by the
+change, and the count this document quotes is the current one — **1326 tests, 1319 passed and 7
+skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
 
 The 17,140 already there are not deleted by any of this. About 1.06 GiB of that is research
 output rather than test litter — an ONNX export run of 39,936 files, a premise-scoring directory
