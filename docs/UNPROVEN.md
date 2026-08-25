@@ -4311,7 +4311,9 @@ the start, one run each:
 | `gemma-4-12b-it` Q6_K, `-ngl 24` | 8.5 s | 210.4 s | 603 | 2.9 tok/s |
 
 **The mixture wins because only about 4B of its 26B are active per token**, and the engine's
-Vulkan defaults keep its experts in system RAM, so what runs on the adapter is small. The dense
+Vulkan defaults keep its experts in system RAM, so what runs on the adapter is small. **That
+reason is also why the result does not generalise** — the block below works out where it should
+invert, as a projection. The dense
 12B is 9.1 GB against a 7.36 GiB fast heap, so it cannot fit and runs partially offloaded at
 `-ngl 24` — every parameter touched for every token, half of them across the bus. Its smaller
 file loads in half the time and then answers half again as slowly. This reproduces the
@@ -4328,6 +4330,74 @@ a quote lifted from a span the bullet did not cite fail the same check — and t
 one run is not a rate. But it is the opposite of what the register's open lineup question assumes
 in naming the 12B the quality option on the strength of it writing "the richest answers", and the
 labelled set should settle it before that lineup is decided.
+
+#### Where the dense 12B would beat the offloaded 26B — a projection, measured on no machine
+
+Every comparison of these two above is the second machine's, and the second machine is one
+regime of three. The block above records the mixture winning there on every axis, and gives the
+reason: about 4B of the 26B are active per token with its experts in system RAM, while the dense
+9.1 GB model cannot fit a 7.36 GiB heap and runs partially offloaded. That reason is also the
+reason it does not generalise, and the register's lineup question already says the lanes "invert
+on the desktop" without anybody having shown it. This block is that inversion written down as
+arithmetic so it can be checked, and **it is a projection: no number below was measured here.**
+
+**The mechanism.** Decode is set by bytes read per token and by where they are read from.
+
+| | bytes per token | read from |
+|---|---|---|
+| 12B dense, resident | the whole file — ~6.7 GB at Q4_K_M | VRAM |
+| 26B-A4B, experts offloaded | only the active experts — ~2.1 GB at IQ4_XS | **system RAM** |
+
+The mixture reads about a third as much, from memory several times slower. So the dense model is
+ahead when
+
+```
+VRAM bandwidth / system-RAM bandwidth  >  dense bytes / active-expert bytes  ~ 3.2
+```
+
+A discrete card at 300 GB/s or more clears that against dual-channel DDR5, and against this
+laptop's quad-channel LPDDR5X-7500 (the machine block's row; the register derives a ~94 tok/s
+ceiling from it for a ~1.27 GB-per-token read). **The condition that actually binds is not the
+ratio but residency: the dense model has to fit.**
+
+**Three regimes, under this repository's own fit rule** (file + a quarter + 1 GiB against the
+device-local heap):
+
+| VRAM | 12B resident? | 26B resident? | projected winner |
+|---|---|---|---|
+| under ~9 GiB — integrated, 8 GiB cards | no | no | **mixture**, and this is the measured regime |
+| ~10–18 GiB — 12 and 16 GiB cards | **yes** | no | **dense 12B** |
+| over ~18 GiB | yes | **yes** | **mixture**, by more than it ever lost |
+
+So it is a window, not a threshold: the mixture is ahead below it because only its attention and
+router need the device (4,664 MiB measured), and ahead above it because 4B active per token beats
+12B dense per token once both are in VRAM.
+
+**Prefill is the larger term, and it is the one this product feels.** A resident dense model
+prefills wholly on the GPU; an offloaded mixture does its expert compute on the CPU. The two
+measured anchors are on different machines and so are not a comparison — 47.6 tok/s for the 26B
+offloaded here, 2,504.6 tok/s for a resident dense 9B on the desktop's card over Vulkan — but the
+whole-transcript path is prefill-dominated, so this is the term that decides how long a summary
+takes.
+
+**A cost that is not speed:** the offloaded mixture pins its experts in system RAM for as long as
+it is loaded — 9,682 MiB measured for gpt-oss on this machine, and the 26B is the same order. On
+a 16 GB machine that is a real tax the resident dense model does not pay, and it does not appear
+in any tok/s figure.
+
+**Provenance of every quantity above**, because a projection is only checkable if its inputs are:
+the 9.1 GB Q6_K file, the 4,664 MiB device figure, the 9,682 MiB expert residency and the 47.6 /
+2,504.6 tok/s prefills are measured and recorded above. The Q4_K_M and IQ4_XS sizes are
+**estimates**, scaled from the measured Q6_K by bits per weight; the active-parameter share is the
+model card's; the card bandwidths are spec sheets, not read on any machine here. The 3.2 ratio is
+therefore an estimate divided by an estimate.
+
+**What would settle it:** one desktop sitting with both models on a card that holds the 12B —
+`gemma-4-12b-it` at Q4_K_M fully offloaded against `gemma-4-26B-A4B-it` with
+`LLAMA_ARG_CPU_MOE=1 LLAMA_ARG_NO_HOST=1`, the same three questions and the same whole-transcript
+prefill. That is the same sitting the placement block below asks for, and it would answer both.
+Until it runs, **nothing in this block may be quoted as a figure**, and the only measured statement
+about these two models remains that the mixture wins on the second machine.
 
 #### The expert placement follows the graphics, and only one branch of it has been measured — built 2026-08-25
 
