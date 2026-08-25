@@ -365,6 +365,15 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             writer.WriteEndObject();
             writer.WriteEndArray();
             writer.WriteNumber("max_tokens", maxTokens);
+
+            // Greedy decoding, pinned. Every measured figure and every clean answer in the
+            // record was taken at temperature 0; unpinned, the server's own default (~0.8)
+            // applies, and under the grammar's any-character text production a hot sampler
+            // wanders into charset-legal noise — observed in the app on 2026-08-25, repetition
+            // loops and foreign-script tokens inside English bullets, every one caught by the
+            // quote check. Citing a transcript is extraction, not creation; greedy is the mode
+            // the task wants and the only one the lab has measured.
+            writer.WriteNumber("temperature", 0);
             writer.WriteBoolean("stream", true);
             writer.WriteBoolean("cache_prompt", true);
             writer.WriteBoolean("return_progress", true);
