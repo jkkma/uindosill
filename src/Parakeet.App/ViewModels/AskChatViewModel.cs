@@ -680,11 +680,14 @@ public sealed partial class ChatEntryViewModel : ObservableObject
                 text.Append(label).Append(": ");
             }
 
+            // The quote is inside this text, in quotation marks, where the model wrote it — so
+            // appending it again would print it twice. What the copied form still owes a reader
+            // is the caveat when the check did not pass, since an email carries no tooltip.
             text.Append(bullet.Bullet.Text);
 
-            if (bullet.Bullet.Quote is { } quote && resolved.Any(c => c.Check.QuoteMatches == true))
+            if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
             {
-                text.Append(" — “").Append(quote).Append('”');
+                text.Append(" [quoted words not found at the cited time]");
             }
 
             text.AppendLine();
@@ -749,8 +752,6 @@ public sealed class AnswerBulletViewModel
     public bool HasLabel => Label is not null;
 
     public bool HasQuote => Quote is not null;
-
-    public string? QuoteDisplay => Quote is null ? null : $"“{Quote}”";
 
     public string? QuoteCaveat => Quote is null || QuoteVerified
         ? null

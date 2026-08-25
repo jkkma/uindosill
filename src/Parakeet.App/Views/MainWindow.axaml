@@ -1536,8 +1536,9 @@
                                        must not read more confident on screen than in an email. -->
                                   <TextBlock Classes="fine secondary" Text="[unverified]"
                                              IsVisible="{Binding IsUncited}" />
-                                  <TextBlock Classes="fine secondary" FontStyle="Italic" TextWrapping="Wrap"
-                                             Text="{Binding QuoteDisplay}" IsVisible="{Binding HasQuote}" />
+                                  <!-- No separate quote line: the quoted words sit inside the
+                                       claim above, in quotation marks, where the model wrote
+                                       them. Only the caveat is still owed. -->
                                   <TextBlock Classes="fine secondary" Text="{Binding QuoteCaveat}"
                                              IsVisible="{Binding QuoteCaveat, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                   <!-- Disabled with the transport, exactly as the cue rows are: a

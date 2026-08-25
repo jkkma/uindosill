@@ -187,6 +187,19 @@ public static class AnswerParser
         return (Collapse(text.ToString()), citations);
     }
 
+    /// <summary>
+    /// Reads the quote for the validator to check, and leaves it exactly where the model put it.
+    /// </summary>
+    /// <remarks>
+    /// Lifting it out was right while the grammar shaped every bullet — <c>text " " quote " "
+    /// cites</c> puts the quote last, so removing it left a whole sentence behind. Ungrammared,
+    /// which is the shipped decode since 2026-08-25, a model writes the quote into the sentence
+    /// where it reads naturally, and cutting it out left holes: "The budget was allegedly." was a
+    /// real bullet, its subject removed by this method (observed 2026-08-25). The quote is
+    /// re-marked with ordinary quotation marks by the caller, so it still reads as quoted rather
+    /// than as the model's own words, and <see cref="CitationValidator"/> still checks it against
+    /// the cited span — what changes is only that the sentence survives.
+    /// </remarks>
     private static (string Text, string? Quote) ExtractQuote(string text)
     {
         var open = text.IndexOf('«', StringComparison.Ordinal);
@@ -202,8 +215,7 @@ public static class AnswerParser
         }
 
         var quote = text[(open + 1)..close].Trim();
-        var remaining = Collapse(text[..open] + text[(close + 1)..]);
-        return (remaining, quote.Length == 0 ? null : quote);
+        return (text, quote.Length == 0 ? null : quote);
     }
 
     private static (string Text, string? Label) ExtractLabel(string text)
@@ -252,9 +264,17 @@ public static class AnswerParser
                 pendingSpace = false;
             }
 
+            // A citation removed from between a comma and a full stop — "…on the PS2, [S1]." —
+            // leaves ",.", which is our own damage and is not punctuation in any of them.
+            if (ch == '.' && builder.Length > 0 && builder[^1] is ',' or ';')
+            {
+                builder.Length--;
+            }
+
             builder.Append(ch);
         }
 
-        return builder.ToString();
+        // And a citation that ended the sentence leaves the comma before it dangling.
+        return builder.ToString().TrimEnd(' ', ',', ';');
     }
 }

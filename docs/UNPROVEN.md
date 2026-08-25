@@ -3907,6 +3907,31 @@ segments 23–24 would have verified while supporting nothing, and a quote of th
 line would have failed against the span the model chose. Neither outcome corrects the pointer;
 the reader does.
 
+#### Turning the grammar off broke the parser's quote handling, and it took four questions to see — fixed 2026-08-25
+
+The bullets the maintainer read back from two retrieval answers were not sentences: *"The budget
+was allegedly."*, *"There was an that was not shaping up"*, *"The speaker mentions the on the
+PS2,."*. Every one of those holes was this project's own parser, not the model.
+
+`AnswerParser` lifted the `«…»` quote **out** of the bullet's text and returned it separately.
+That was right for as long as the citation grammar shaped every bullet — its production is
+`text " " quote " " cites`, so the quote is always last and removing it leaves a whole sentence
+behind. The grammar came off by default earlier the same day, and an ungrammared model writes
+the quote **into** the sentence where it reads naturally — often as the subject. Cutting it out
+deleted the subject. The two changes were a day apart and neither run looked at the other's
+output, which is why a shipped default broke a shipped parser silently: the answers still
+parsed, still validated, still resolved, and only a person reading the prose could see it.
+
+The quote now stays where the model put it, re-marked with ordinary quotation marks so it still
+reads as quoted rather than as the model's own words, and the validator checks it against the
+cited span exactly as before; the separate italic quote line in the panel is gone, because it
+would now print the same words twice. Same six bullets through the fixed parser: *"The budget
+was allegedly “two hundred in in original development and then two hundred in outsourcing after
+the fact”."* and *"There was an “initial two hundred bet budget” that was not shaping up, leading
+Sony to “put another two hundred in to get it to the finish line”."* Two smaller repairs came
+with it, both of our own making rather than the model's: a citation removed from between a comma
+and a full stop left `,.`, and one that ended the sentence left the comma before it dangling.
+
 #### The router picks the mode, and its accuracy is unmeasured — built 2026-08-25
 
 Both shape notes below were answered by building the register's decision 3 router the same day.
