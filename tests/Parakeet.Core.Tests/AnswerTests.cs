@@ -87,6 +87,24 @@ public class AnswerParserTests
     }
 
     [Fact]
+    public void ALeadingThinkTagIsStrippedNotParsed()
+    {
+        // A template that forces its think block open leaves a literal `<think>` at the front
+        // of the stream under `--reasoning-format none` (measured 2026-08-16); unstripped it
+        // parses as a junk bullet and defeats the abstain match. Only the leading tag is
+        // stripped — one deeper in the text is model output the validator should see.
+        var abstained = AnswerParser.Parse("<think>\nNOT_IN_TRANSCRIPT\n");
+        Assert.True(abstained.Abstained);
+        Assert.Empty(abstained.Bullets);
+
+        var answered = AnswerParser.Parse("<think>\n- a claim [S1]\n");
+        Assert.Single(answered.Bullets);
+
+        var inline = AnswerParser.Parse("- the tag <think> mid-text [S1]\n");
+        Assert.Contains("<think>", inline.Bullets[0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EmptyOutputIsEmptyNotAbstained()
     {
         // The model producing nothing and the model saying "not in the recording" are different

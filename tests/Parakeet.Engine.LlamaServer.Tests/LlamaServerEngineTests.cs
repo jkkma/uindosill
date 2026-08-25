@@ -88,6 +88,22 @@ public class LlamaServerArgumentTests
     }
 
     [Fact]
+    public void TheTemplateIsAppliedAndReasoningRoutingFollowsTheThinkingMode()
+    {
+        // --jinja always: the raw-prompt path was measured leaving models unable to stop
+        // (2026-08-24). --reasoning-format none only in the default grammar mode — it is that
+        // mode's routing; in thinking mode the server's default parsing is what keeps the
+        // thinking out of the answer stream.
+        var grammarMode = Arguments(Options(), 1, "k");
+        Assert.Contains("--jinja", grammarMode);
+        Assert.Equal("none", grammarMode[grammarMode.IndexOf("--reasoning-format") + 1]);
+
+        var thinking = Arguments(Options() with { ThinkBeforeAnswer = true }, 1, "k");
+        Assert.Contains("--jinja", thinking);
+        Assert.DoesNotContain("--reasoning-format", thinking);
+    }
+
+    [Fact]
     public void VulkanGetsTheBf16KnobUnlessTheCallerSaysOtherwise()
     {
         // The laptop's driver hangs at model load without it — measured 2026-08-16,
@@ -147,6 +163,26 @@ public class AnswerPromptBuilderTests
         Assert.Contains("what was said?", prompt, StringComparison.Ordinal);
         Assert.Contains(AnswerParser.AbstainSentinel, prompt, StringComparison.Ordinal);
         Assert.Contains("Never write a timestamp", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheMessagesSplitTheContractWithoutChangingIt()
+    {
+        // The chat form: rules in the system message, evidence and question in the user
+        // message, no "Answer:" cue — the template's assistant turn is that cue, and with it
+        // the end-of-turn the raw-prompt path was measured to lack (2026-08-24). BuildPrompt
+        // remains the two halves joined, so the two forms cannot drift apart.
+        var (instruction, userContent) = AnswerPromptBuilder.BuildMessages(Request());
+
+        Assert.Contains("You are answering questions", instruction, StringComparison.Ordinal);
+        Assert.Contains(AnswerParser.AbstainSentinel, instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("[S1-S2]", instruction, StringComparison.Ordinal);
+
+        Assert.Contains("[S1-S2] first stretch of speech second stretch", userContent, StringComparison.Ordinal);
+        Assert.Contains("Question: what was said?", userContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("Answer:", userContent, StringComparison.Ordinal);
+
+        Assert.Equal(instruction + "\n" + userContent + "Answer:\n", AnswerPromptBuilder.BuildPrompt(Request()));
     }
 
     [Fact]
@@ -280,22 +316,32 @@ public class RequestBodyTests
     [Fact]
     public void TheBodySaysWhatWasDecided()
     {
-        var body = LlamaServerAnswerEngine.BuildRequestBody("the prompt", "the grammar", 512);
+        var body = LlamaServerAnswerEngine.BuildRequestBody("the rules", "the evidence", "the grammar", 512);
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
 
-        Assert.Equal("the prompt", root.GetProperty("prompt").GetString());
+        // Messages, not a raw prompt: the template's turn structure is what end-of-turn was
+        // trained against, and the raw-prompt path was measured leaving every candidate model
+        // unable to stop (2026-08-24, docs/UNPROVEN.md).
+        var messages = root.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("system", messages[0].GetProperty("role").GetString());
+        Assert.Equal("the rules", messages[0].GetProperty("content").GetString());
+        Assert.Equal("user", messages[1].GetProperty("role").GetString());
+        Assert.Equal("the evidence", messages[1].GetProperty("content").GetString());
+
         Assert.Equal("the grammar", root.GetProperty("grammar").GetString());
-        Assert.Equal(512, root.GetProperty("n_predict").GetInt32());
+        Assert.Equal(512, root.GetProperty("max_tokens").GetInt32());
         Assert.True(root.GetProperty("stream").GetBoolean());
         Assert.True(root.GetProperty("cache_prompt").GetBoolean());
         Assert.True(root.GetProperty("return_progress").GetBoolean());
+        Assert.False(root.TryGetProperty("prompt", out _));
     }
 
     [Fact]
     public void NoGrammarMeansNoGrammarField()
     {
-        using var json = JsonDocument.Parse(LlamaServerAnswerEngine.BuildRequestBody("p", null));
+        using var json = JsonDocument.Parse(LlamaServerAnswerEngine.BuildRequestBody("r", "e", null));
 
         Assert.False(json.RootElement.TryGetProperty("grammar", out _));
     }
@@ -361,6 +407,10 @@ public sealed class LlamaServerIntegrationTests
             ServerRoot = serverRoot,
             ContextSize = 4096,
             MaxAnswerTokens = 256,
+
+            // The default (grammar) mode, and this test asserts exactly its guarantee: every
+            // citation resolves. The thinking mode has its own test below, with the post-hoc
+            // contract it actually makes.
         });
 
         await engine.LoadAsync(TestContext.Current.CancellationToken);
@@ -409,5 +459,69 @@ public sealed class LlamaServerIntegrationTests
             Assert.NotNull(citation.Start);
             Assert.NotNull(citation.End);
         }
+    }
+
+    [Fact]
+    public async Task ThinkingModeStreamsAnAnswerAndTerminates()
+    {
+        var model = Environment.GetEnvironmentVariable(ModelVariable);
+        var serverRoot = Environment.GetEnvironmentVariable(ServerRootVariable);
+        Assert.SkipWhen(
+            string.IsNullOrWhiteSpace(model) || string.IsNullOrWhiteSpace(serverRoot),
+            $"Set {ModelVariable} to a small GGUF and {ServerRootVariable} to a native/win-x64/llm directory to run the engine against the real server.");
+
+        var transcript = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "The meeting opened with the quarterly budget review." },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Text = "Maria presented the axolotl conservation project." },
+            ],
+            AudioDuration = TimeSpan.FromSeconds(20),
+        };
+
+        var backend = Environment.GetEnvironmentVariable(BackendVariable) is { Length: > 0 } named
+            ? Enum.Parse<ComputeBackend>(named, ignoreCase: true)
+            : ComputeBackend.Cpu;
+
+        await using var engine = new LlamaServerAnswerEngine(new LlamaServerOptions
+        {
+            ModelPath = model!,
+            Backend = backend,
+            ServerRoot = serverRoot,
+            ContextSize = 4096,
+            MaxAnswerTokens = 256,
+            ThinkBeforeAnswer = true,
+        });
+
+        await engine.LoadAsync(TestContext.Current.CancellationToken);
+
+        // The thinking mode's contract is weaker by design and this asserts exactly it: the
+        // stream terminates on its own (the raw-prompt path was measured never stopping,
+        // 2026-08-24), the answer parses, and whatever thinking happened never reaches this
+        // stream — no grammar, so citation resolution is the validator's business, not a
+        // guarantee. The 0.6B's template opens no think block; a thinking template's routing
+        // is the lab's to measure per model.
+        var chunks = new List<string>();
+        var progress = new List<AskProgress>();
+        var request = new AskRequest
+        {
+            Question = "What did Maria present?",
+            Transcript = transcript,
+            Evidence = [TranscriptWindowBuilder.FromRun(transcript, 2, 2)],
+        };
+
+        await foreach (var chunk in engine.AskAsync(
+            request, new Progress<AskProgress>(progress.Add), TestContext.Current.CancellationToken))
+        {
+            chunks.Add(chunk);
+        }
+
+        var text = string.Concat(chunks);
+        Assert.NotEmpty(text);
+        Assert.DoesNotContain("<think>", text, StringComparison.Ordinal);
+
+        var answer = AnswerParser.Parse(text);
+        Assert.True(answer.Abstained || answer.Bullets.Count > 0, $"nothing parsed out of:\n{text}");
     }
 }

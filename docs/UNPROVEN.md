@@ -3770,6 +3770,34 @@ the adversarial question, exactly the construction the 0.6B run recorded on 2026
 *quality* across all of this remains a person's judgement over three ad-hoc questions; the
 labelled set is still the measurement that decides anything.
 
+#### The engine moved to the chat endpoint the same evening, and thinking became a setting
+
+The raw-prompt finding above was acted on the same day. `LlamaServerAnswerEngine` now posts
+messages to `/v1/chat/completions` with `--jinja` — the model's own template, whose turn
+structure is what end-of-turn was trained against — after a probe on the vendored b10603
+established the endpoint honours `grammar` and emits `return_progress`'s `prompt_progress`
+frames (the 0.6B stopped at `finish_reason: stop` under template plus grammar). The default
+mode keeps the citation grammar and adds `--reasoning-format none`; the gated integration
+tests pass on cpu and vulkan through the new path.
+
+**Think-before-answering exists and is off by default — the maintainer's decisions, 2026-08-24
+evening.** In thinking mode the engine sends no grammar (an eager grammar was re-measured
+shaping the think block itself — grammar-legal tokens filed as reasoning, content empty, the
+2026-08-16 finding reproduced on the 9B and the 26B) and the server's reasoning parser keeps
+the thinking in `reasoning_content`, which the engine counts for progress and never yields. A
+lazy grammar with a `</think>` trigger (`preserved_tokens` required — the server's own 400
+said so) was probed working on `/completion`, but a free think outruns budgets: the 9B burned
+900 tokens on a toy question without closing the block. The measured cost that set the
+default: the 26B-A4B in thinking mode answered the wake-up question in **415.6 s wall — ~6
+minutes of it thinking at decode speed — for a two-bullet answer, both quotes verified**,
+where its grammar-less template walls in the same session's shape were 17–23 s (different
+questions; a controlled same-question pair has not been run). The toggle is on the Settings
+tab, applies at the next question — the panel drops an engine built the other way — and the
+panel shows typing-indicator dots while the model thinks. Unmeasured and marked so: gpt-oss
+under the new template-plus-grammar pairing (its product-path failures above predate the
+endpoint move), and whether thinking buys answer quality anywhere — the labelled set decides
+that as it decides everything else.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the

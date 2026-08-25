@@ -51,9 +51,35 @@ public sealed record LlamaServerOptions
     public int MaxAnswerTokens { get; init; } = 1_024;
 
     /// <summary>
-    /// Constrain decoding to the citation grammar. On by default: measured on a 0.6B model, the
-    /// grammar — not `--reasoning-budget 0` — is what kept reasoning out of the answer channel
-    /// and made the output terminate (docs/UNPROVEN.md).
+    /// Let the model think before answering. On, the child's reasoning parser keeps the
+    /// thinking in <c>reasoning_content</c> where the answer stream never sees it, and the
+    /// engine sends no grammar: an eager grammar was measured shaping the think block itself
+    /// and filing the whole answer as reasoning (2026-08-16, re-measured 2026-08-24), so in
+    /// this mode citation trust is the parser's and validator's, post-hoc. Off, the grammar
+    /// constrains from the first sampled token and no thinking is possible.
+    /// </summary>
+    /// <remarks>
+    /// Off by default — the maintainer's decision, 2026-08-24, taken on the measured cost:
+    /// thinking runs at decode speed, and on the second machine the 26B-A4B spent ~6 minutes
+    /// thinking before a two-bullet answer (415.6 s wall) whose grammar-mode sibling was
+    /// ~20–40 s — with the grammar-mode answer measured no worse. The dial exists for the
+    /// desktop tier, where decode is an order of magnitude faster.
+    /// </remarks>
+    public bool ThinkBeforeAnswer { get; init; }
+
+    /// <summary>
+    /// Extra generation budget for the thinking, on top of <see cref="MaxAnswerTokens"/>, when
+    /// <see cref="ThinkBeforeAnswer"/> is on. The 2,048 default is a dial set from one measured
+    /// point — the 9B closed a toy question's think block at ~550 tokens (2026-08-16) — not a
+    /// measured optimum.
+    /// </summary>
+    public int ThinkingBudgetTokens { get; init; } = 2_048;
+
+    /// <summary>
+    /// Constrain decoding to the citation grammar — the non-thinking mode's mechanism, applied
+    /// only when <see cref="ThinkBeforeAnswer"/> is off. Measured on a 0.6B model: the grammar —
+    /// not `--reasoning-budget 0` — is what kept reasoning out of the answer channel and made
+    /// the output terminate (docs/UNPROVEN.md).
     /// </summary>
     public bool UseGrammar { get; init; } = true;
 

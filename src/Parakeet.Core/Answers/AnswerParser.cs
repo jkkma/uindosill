@@ -26,10 +26,20 @@ public static class AnswerParser
     {
         ArgumentNullException.ThrowIfNull(modelOutput);
 
+        // A template that forces its think block open leaves a literal `<think>` at the front
+        // of the stream under `--reasoning-format none` (measured 2026-08-16); unstripped it
+        // would parse as a junk bullet and defeat the abstain match. Only the leading tag: a
+        // tag deeper in the text is model output the validator should get to see.
+        var output = modelOutput.TrimStart();
+        if (output.StartsWith("<think>", StringComparison.Ordinal))
+        {
+            output = output["<think>".Length..].TrimStart();
+        }
+
         var bullets = new List<AnswerBullet>();
         var abstained = false;
 
-        foreach (var rawLine in modelOutput.Split('\n'))
+        foreach (var rawLine in output.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r').Trim();
             if (line.Length == 0)

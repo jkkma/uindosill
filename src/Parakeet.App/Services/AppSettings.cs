@@ -28,6 +28,14 @@ public sealed record AppSettings
     public ComputeBackend? Backend { get; init; }
 
     /// <summary>
+    /// Whether the ask model thinks before answering. Off as shipped: thinking runs at the
+    /// model's own generation speed, which on integrated graphics turns a half-minute answer
+    /// into several minutes — the measured 2026-08-24 basis is in docs/UNPROVEN.md — and the
+    /// grammar-constrained default answered no worse in the same session's comparison.
+    /// </summary>
+    public bool AskThinking { get; init; }
+
+    /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
     /// files beside each input.
     /// </summary>
@@ -89,6 +97,7 @@ public sealed class AppSettingsStore
             return new AppSettings
             {
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
+                AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
@@ -133,6 +142,7 @@ public sealed class AppSettingsStore
             var values = new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["checkForUpdatesOnLaunch"] = settings.CheckForUpdatesOnLaunch,
+                ["askThinking"] = settings.AskThinking,
             };
 
             // Omitted rather than written as null when nobody has chosen, so "never chosen" and

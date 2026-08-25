@@ -172,7 +172,26 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
 
             // No browser UI on a loopback port nobody is meant to find.
             "--no-webui",
+
+            // The model's own chat template, applied server-side. The raw-prompt path was
+            // measured on 2026-08-24 (docs/UNPROVEN.md, the product-path gauntlet) leaving
+            // every candidate model unable to stop: the template's turn structure is what
+            // end-of-turn was trained against, and without it the grammar bounds the shape of
+            // the runaway but not its length.
+            "--jinja",
         };
+
+        if (!options.ThinkBeforeAnswer)
+        {
+            // The grammar mode: every generated token stays in content, where the grammar
+            // shapes it from the first sampled token. Without this a template that forces a
+            // think block open files the whole grammar-shaped stream under reasoning_content
+            // and a client reading content sees nothing — measured 2026-08-16,
+            // docs/UNPROVEN.md. In thinking mode the server's default reasoning parsing is
+            // exactly what routes the thinking away from the answer, so the flag stays off.
+            arguments.Add("--reasoning-format");
+            arguments.Add("none");
+        }
 
         if (options.FlashAttention is { } flashAttention)
         {

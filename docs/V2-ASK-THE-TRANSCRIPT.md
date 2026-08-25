@@ -881,7 +881,9 @@ shape. **Through the product path — the raw `/completion` prompt plus grammar,
 the harmony channel has nowhere to go — it fails as this paragraph said it might**: one verified
 bullet, then grammar-legal filler to the token cap on one question, and a **false abstention** on
 a question it answers correctly under its template. As the engine ships, this file is not
-usable through it; the record is in `docs/UNPROVEN.md`'s product-path gauntlet block.
+usable through it; the record is in `docs/UNPROVEN.md`'s product-path gauntlet block. The
+engine moved to the chat endpoint with the template later that day (UNPROVEN's dated block);
+this file's behaviour under the new pairing is unmeasured.
 
 **The fifth file: `google/gemma-4-26B-A4B-it` at `UD-IQ4_XS`, every expert on the card.**
 `unsloth/gemma-4-26B-A4B-it-GGUF`, 13,597,177,568 bytes (12.66 GiB); apache-2.0 on source and GGUF
@@ -1145,6 +1147,11 @@ saying so, which is its own question. Blocking fact from the same session: **as 
 ships, its raw-prompt-plus-grammar pairing carries the Gemmas but not gpt-oss** (the fourth
 file's dated block), so the speed option is conditional on an engine change the register has
 not weighed. Decided after the labelled set runs; until then the working candidate stands.
+(Later the same day the engine change landed — `/v1/chat/completions` with the template,
+grammar in the default mode, and think-before-answering as a Settings toggle, off by default
+on its measured cost, UNPROVEN's dated block — so the blocking fact is retired in form;
+gpt-oss under the new pairing is unmeasured, and the gauntlet re-runs before the speed option
+is treated as live.)
 
 **The measurement exists, is vendor-neutral, and works on both machines.** Verified on the laptop
 2026-08-16 with `Get-Counter -ListSet`: `\GPU Process Memory(pid_<pid>_luid_…_phys_N)\Dedicated

@@ -86,6 +86,14 @@ public sealed record AskProgress
     /// </summary>
     public int GeneratedTokens { get; init; }
 
+    /// <summary>
+    /// Thinking tokens produced so far, when the engine lets the model think before answering
+    /// (the maintainer's 2026-08-24 decision) — the stretch where the answer stream is silent
+    /// but the model is working, which a panel showing nothing would render as a hang.
+    /// Approximate by the same contract as <see cref="GeneratedTokens"/>.
+    /// </summary>
+    public int ThinkingTokens { get; init; }
+
     /// <summary>Prefill completion in [0, 1] when the total is known, otherwise null.</summary>
     public double? PrefillFraction =>
         PrefillTotalTokens is > 0

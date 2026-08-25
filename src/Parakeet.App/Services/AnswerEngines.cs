@@ -31,6 +31,13 @@ public interface IAnswerEngineProvider
     /// <summary>Cheap and side-effect free; the panel calls it whenever its state could have changed.</summary>
     AnswerEngineAvailability Check();
 
+    /// <summary>
+    /// Whether the next <see cref="Create"/> builds a think-before-answering engine. The panel
+    /// reads it before every ask and drops an engine built the other way, so flipping the
+    /// setting takes effect at the next question rather than at the next restart.
+    /// </summary>
+    bool ThinkingMode { get; }
+
     /// <summary>A new engine, not yet loaded. Throws when <see cref="Check"/> says unavailable.</summary>
     IAnswerEngine Create();
 }
@@ -50,12 +57,16 @@ public interface IAnswerEngineProvider
 public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 {
     private readonly IModelStore _store;
+    private readonly Func<bool> _thinkingMode;
 
-    public LlamaAnswerEngineProvider(IModelStore store)
+    public LlamaAnswerEngineProvider(IModelStore store, Func<bool>? thinkingMode = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
+        _thinkingMode = thinkingMode ?? (static () => false);
     }
+
+    public bool ThinkingMode => _thinkingMode();
 
     public AnswerEngineAvailability Check()
     {
@@ -88,7 +99,11 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
                 "The language model file is gone from the models folder. Put a .gguf file back — "
                 + "the About window shows where the folder is.");
 
-        return new LlamaServerAnswerEngine(new LlamaServerOptions { ModelPath = model });
+        return new LlamaServerAnswerEngine(new LlamaServerOptions
+        {
+            ModelPath = model,
+            ThinkBeforeAnswer = ThinkingMode,
+        });
     }
 
     /// <summary>The largest .gguf in the models folder, or null. Largest rather than newest,
@@ -122,6 +137,9 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
     public int Created { get; private set; }
 
     public FakeAnswerEngine? LastCreated { get; private set; }
+
+    /// <summary>Settable so the panel's mode-flip behaviour is testable without a server.</summary>
+    public bool ThinkingMode { get; set; }
 
     public AnswerEngineAvailability Check() => new()
     {
