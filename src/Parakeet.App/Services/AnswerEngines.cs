@@ -71,13 +71,13 @@ public interface IAnswerEngineProvider
     bool ThinkingMode { get; }
 
     /// <summary>
-    /// Whether the next ask runs over the whole transcript instead of retrieval — the opt-in
-    /// the register's decision 3 names, read by the panel before every question exactly as
-    /// <see cref="ThinkingMode"/> is. Unlike thinking, the mode itself is a per-request fact,
-    /// not a child-process argument: flipping it forces a fresh engine only when the context
-    /// the new ask needs differs from the one the held engine was built with.
+    /// Where the next ask draws from, or that the question should decide — the register's
+    /// decision 3, read by the panel before every question exactly as <see cref="ThinkingMode"/>
+    /// is. Unlike thinking, the mode is a per-request fact rather than a child-process argument:
+    /// changing it forces a fresh engine only when the context the new ask needs differs from
+    /// the one the held engine was built with.
     /// </summary>
-    bool WholeTranscriptMode { get; }
+    AskModePreference ModePreference { get; }
 
     /// <summary>
     /// A new engine, not yet loaded, sized for a prompt of roughly <paramref name="promptChars"/>
@@ -103,20 +103,22 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 {
     private readonly IModelStore _store;
     private readonly Func<bool> _thinkingMode;
-    private readonly Func<bool> _wholeTranscriptMode;
+    private readonly Func<AskModePreference> _modePreference;
 
     public LlamaAnswerEngineProvider(
-        IModelStore store, Func<bool>? thinkingMode = null, Func<bool>? wholeTranscriptMode = null)
+        IModelStore store,
+        Func<bool>? thinkingMode = null,
+        Func<AskModePreference>? modePreference = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         _thinkingMode = thinkingMode ?? (static () => false);
-        _wholeTranscriptMode = wholeTranscriptMode ?? (static () => false);
+        _modePreference = modePreference ?? (static () => AskModePreference.Automatic);
     }
 
     public bool ThinkingMode => _thinkingMode();
 
-    public bool WholeTranscriptMode => _wholeTranscriptMode();
+    public AskModePreference ModePreference => _modePreference();
 
     public AnswerEngineAvailability Check()
     {
@@ -193,7 +195,7 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
     public bool ThinkingMode { get; set; }
 
     /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
-    public bool WholeTranscriptMode { get; set; }
+    public AskModePreference ModePreference { get; set; } = AskModePreference.Automatic;
 
     /// <summary>What the panel said the last engine's prompt would roughly measure.</summary>
     public int LastPromptChars { get; private set; }

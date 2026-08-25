@@ -203,42 +203,63 @@ public sealed partial class AskChatViewModel : ObservableObject
         {
             // The evidence costs milliseconds and the model load can cost minutes, in that order
             // on purpose: a question the evidence cannot anchor abstains right here, before the
-            // transcriber is unloaded or a byte of the language model is read. The whole-
-            // transcript opt-in (the register's decision 3) skips retrieval entirely — every
-            // question is global to it — and its evidence is the recording tiled once, in the
-            // non-overlapping shape, because the overlap would send the transcript twice.
-            var whole = provider.WholeTranscriptMode;
+            // transcriber is unloaded or a byte of the language model is read. Routing sits in
+            // the same window and for the same reason — it decides the context the child is
+            // started with, so it has to happen before anything is started.
+            entry.Status = "Searching the transcript…";
+            _windows ??= TranscriptWindowBuilder.Build(document);
+            _retriever ??= new Bm25Retriever(_windows);
+            _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
+
+            var whole = provider.ModePreference == AskModePreference.WholeTranscript;
+            RoutingDecision? routed = null;
+            if (provider.ModePreference == AskModePreference.Automatic)
+            {
+                // Affordable means the recording fits the context the retrieval tier already
+                // allocates: the automatic path never commits someone to a bigger cache — or a
+                // longer prefill — than the tier they were on when they typed the question.
+                var affordable = AnswerContextBudget.ContextTokensFor(PromptChars(question, _coverWindows))
+                    <= AnswerContextBudget.Minimum;
+
+                routed = QuestionRouter.Route(question, _retriever, affordable);
+                whole = routed.Mode == AnswerMode.WholeTranscript;
+                entry.RoutingNotice = routed.Notice;
+            }
+
             var mode = whole ? AnswerMode.WholeTranscript : AnswerMode.Retrieval;
-            IReadOnlyList<TranscriptWindow> evidence;
-            if (whole)
-            {
-                _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
-                evidence = _coverWindows;
-            }
-            else
-            {
-                entry.Status = "Searching the transcript…";
-                _windows ??= TranscriptWindowBuilder.Build(document);
-                _retriever ??= new Bm25Retriever(_windows);
-                evidence = _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window).ToList();
-            }
+
+            // The whole-transcript path's evidence is the recording tiled once, in the
+            // non-overlapping shape, because retrieval's overlap would send the transcript twice.
+            var evidence = whole
+                ? _coverWindows
+                : [.. _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window)];
 
             if (evidence.Count == 0)
             {
-                entry.AbstainWithoutAsking();
+                // The abstention is a claim about the recording — "it doesn't answer that" — and
+                // it is only honest when the tier that came up empty was the right one for the
+                // question. Where the router already judged retrieval the wrong tool and fell
+                // back to it on cost alone, its empty result says nothing about the recording,
+                // so the panel explains the situation instead of asserting a falsehood about it.
+                if (routed is { Basis: RoutingBasis.GlobalButTooLong })
+                {
+                    entry.Fail(
+                        "This looks like a question about the whole recording, and this one is "
+                        + "long enough that reading all of it is not started automatically. "
+                        + "Nothing in it matched your words closely enough to answer from parts "
+                        + "instead. To read the whole thing, switch answering to \"the whole "
+                        + "transcript\" in Settings.");
+                }
+                else
+                {
+                    entry.AbstainWithoutAsking();
+                }
+
                 return;
             }
 
-            // A character count standing in for the prompt: the evidence text, each line's id
-            // bracket, the question, and an allowance for the instruction. The provider turns
-            // it into the context the engine is built with.
-            var promptChars = 1_024 + question.Length;
-            foreach (var window in evidence)
-            {
-                promptChars += window.Text.Length + 16;
-            }
-
-            await EnsureEngineAsync(entry, promptChars, cancellation.Token).ConfigureAwait(true);
+            await EnsureEngineAsync(entry, PromptChars(question, evidence), cancellation.Token)
+                .ConfigureAwait(true);
 
             // The load await is the window a recording switch can slip through; its cancel may
             // land after the load completed without observing the token, so it is re-checked
@@ -326,6 +347,23 @@ public sealed partial class AskChatViewModel : ObservableObject
             _asking = null;
             IsAsking = false;
         }
+    }
+
+    /// <summary>
+    /// A character count standing in for the prompt: the evidence text, each line's id bracket,
+    /// the question, and an allowance for the instruction. Used twice — to size the engine, and
+    /// before that to ask whether reading the whole recording is affordable — so it lives in one
+    /// place rather than being estimated two ways.
+    /// </summary>
+    private static int PromptChars(string question, IReadOnlyList<TranscriptWindow> evidence)
+    {
+        var chars = 1_024 + question.Length;
+        foreach (var window in evidence)
+        {
+            chars += window.Text.Length + 16;
+        }
+
+        return chars;
     }
 
     private async Task EnsureEngineAsync(ChatEntryViewModel entry, int promptChars, CancellationToken ct)
@@ -422,6 +460,14 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _isThinking;
+
+    /// <summary>
+    /// Set when the router answered a whole-recording question from retrieval anyway, so a thin
+    /// answer is not read as the recording being thin. Null otherwise — the provenance line
+    /// already says which mode ran, and a notice on every question teaches nobody anything.
+    /// </summary>
+    [ObservableProperty]
+    private string? _routingNotice;
 
     [ObservableProperty]
     private string? _streamingText;

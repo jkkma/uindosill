@@ -18,10 +18,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _askThinking;
 
-    /// <summary>The Settings toggle: answers draw on the whole transcript instead of retrieval.
-    /// Off as shipped — retrieval is the fast path, and the laptop tier (decision 3).</summary>
+    /// <summary>The Settings picker: where answers are drawn from, or that the question decides.
+    /// Automatic as shipped — the register's decision 3 router.</summary>
     [ObservableProperty]
-    private bool _askWholeTranscript;
+    private AskModePreference _askMode;
 
     [ObservableProperty]
     private int _selectedTab;
@@ -51,7 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ?? ParakeetNativeLibrary.PreferredBackend(
                 backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
         _askThinking = loaded.AskThinking;
-        _askWholeTranscript = loaded.AskWholeTranscript;
+        _askMode = loaded.AskMode;
 
         Session = new ModelSession(engines);
 
@@ -86,7 +86,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Transcribe.Jobs,
             player ?? MediaPlayers.ForThisBuild(),
             Session,
-            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking, () => AskWholeTranscript),
+            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking, () => AskMode),
             () => Transcribe.IsRunning);
 
         // The output folder outlives the run — chosen once, restored at every launch — but only
@@ -277,9 +277,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnAskThinkingChanged(bool value) =>
         _settings.Update(current => current with { AskThinking = value });
 
+    /// <summary>Keeps the bound row in step when the mode is set from anywhere else.</summary>
+    partial void OnAskModeChanged(AskModePreference value)
+    {
+        OnPropertyChanged(nameof(SelectedAskMode));
+        PersistAskMode(value);
+    }
+
     /// <summary>Remembers the choice; the panel reads it at the next question.</summary>
-    partial void OnAskWholeTranscriptChanged(bool value) =>
-        _settings.Update(current => current with { AskWholeTranscript = value });
+    private void PersistAskMode(AskModePreference value) =>
+        _settings.Update(current => current with { AskMode = value });
 
     /// <summary>
     /// Re-reads the model directory whenever the Models tab is opened.
@@ -314,10 +321,38 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public IReadOnlyList<ComputeBackend> Backends { get; } =
         [ComputeBackend.Vulkan, ComputeBackend.Cuda, ComputeBackend.Cpu];
 
+    /// <summary>The ask-mode picker's rows. Plain names, not enum spellings: this list is read by
+    /// someone choosing, not by a developer reading code.</summary>
+    public IReadOnlyList<AskModeChoice> AskModes { get; } =
+    [
+        new(AskModePreference.Automatic, "Decide from my question"),
+        new(AskModePreference.Retrieval, "The parts that matched"),
+        new(AskModePreference.WholeTranscript, "The whole transcript"),
+    ];
+
+    /// <summary>The picker binds a row rather than the enum, and this keeps the two in step.</summary>
+    public AskModeChoice SelectedAskMode
+    {
+        get => AskModes.First(choice => choice.Mode == AskMode);
+        set => AskMode = value.Mode;
+    }
+
+    public string AskModeExplanation =>
+        "Deciding from your question sends summaries and \"what are the main topics\" through the "
+        + "whole recording, and everything else through the parts that matched — which is faster. "
+        + "A long recording is only read whole when you ask for it, because that can take a while.";
+
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
         "CUDA is used automatically when this build has it, and needs its own runtime files. " +
         "CPU always works and is the fallback. Whichever you pick is remembered.";
 
+}
+
+/// <summary>One row of the ask-mode picker: the setting, under the name a person reads.</summary>
+public sealed record AskModeChoice(AskModePreference Mode, string Label)
+{
+    /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
+    public override string ToString() => Label;
 }
 

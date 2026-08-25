@@ -110,10 +110,15 @@ so beside the opt-ins rather than failing when one is started.
   measurements do not cover are in [UNPROVEN.md](docs/UNPROVEN.md).
 - **v2 is asking questions about a transcript.** A chat panel beside the text, where every answer
   cites timestamps you can click. **The asking is built as of 2026-08-24, and it brings its own
-  honesty rules**: a local `llama-server` answers from retrieved parts of the transcript, the
+  honesty rules**: a local `llama-server` answers from the transcript, the
   model cites opaque segment ids the application resolves to times — it never writes a timestamp
   of its own — a claim it cannot anchor renders as unresolved, and every answer carries a line
-  saying it was generated, not transcribed. **Which model is still deliberately open**: nothing
+  saying it was generated, not transcribed. **Your question picks how much gets read, as of
+  2026-08-25**: "when did they mention X" searches the transcript and answers from the parts that
+  matched, which is fast; "give me a summary" reads the whole recording, because a summary is a
+  property of all of it and a search has nothing to rank on. A long recording is only read whole
+  when you ask for it in Settings, since that can take minutes, and the answer says which of the
+  two produced it. **Which model is still deliberately open**: nothing
   is recommended or downloaded until the measurements in
   [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) have been run, so the panel comes
   alive when you put a GGUF file of your own in the models folder, and until then it says what it
@@ -206,7 +211,7 @@ press the button, and the Updates tab has a switch that turns the check off.
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1327 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1354 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
