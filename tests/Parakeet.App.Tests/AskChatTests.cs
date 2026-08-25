@@ -450,7 +450,16 @@ public class AskChatTests
         copying.CopyCommand.Execute(null);
 
         Assert.NotNull(copied);
-        Assert.Contains("[unverified] This recording is about a budget", copied, StringComparison.Ordinal);
+
+        // In the lead's own words, not a bullet's — the maintainer's decision, 2026-08-25: an
+        // opening sentence that cites nothing failed no check, because there was none to fail.
+        // The marker stays (a lead can assert more than its bullets support); the wording says
+        // what is true of it. Screen and email read from the same constant so they cannot drift.
+        Assert.Contains(
+            ChatEntryViewModel.LeadUncitedNotice + " This recording is about a budget",
+            copied,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(ChatEntryViewModel.UncitedNotice, copied, StringComparison.Ordinal);
 
         // And a lead that does cite carries its times instead of the marker.
         var cited = AnswerParser.Parse(

@@ -74,15 +74,37 @@ public static class AnswerPromptBuilder
 
         if (whole)
         {
+            // "Answer the question directly" alone turns a summary request into "This is a
+            // summary of the recording", which answers it and says nothing — measured against
+            // the wording this replaces, which produced "…is a Thursday Product Sync for the
+            // mobile team covering budget, partnerships, app status and recent incidents". One
+            // instruction still, with the summary case spelled out.
+            builder.Append("If the question asks for a summary or an overview, that sentence ");
+            builder.Append("says what the recording is and what it covers.\n");
             builder.Append("Then write bullets, one point per line, starting with \"- \".\n");
             builder.Append("Give each bullet a short topic label followed by \": \".\n");
             builder.Append("Group related points under one bullet, and draw on the whole recording ");
             builder.Append("rather than its opening.\n");
+
+            // The topic-label instruction invites section headings, and a heading is a line that
+            // asserts nothing, cites nothing, and therefore renders as an unsupported claim —
+            // observed 2026-08-25, "Development costs:" and "Financial impact and industry
+            // context:" among real bullets. The maintainer's decision the same day: forbid them
+            // in the prompt rather than guess at them in the parser, since the labels already
+            // group what a heading would have grouped.
+            builder.Append("Do not write section headings: every line is either that opening ");
+            builder.Append("sentence or a bullet.\n");
         }
         else
         {
-            builder.Append("Then give short bullets, one claim per line, starting with \"- \".\n");
-            builder.Append("Say enough in each bullet for it to make sense on its own.\n");
+            // A question with one answer deserves one sentence. Forcing bullets under it made
+            // the panel restate its own opening — "Yes, they mentioned Kojima…" above two
+            // bullets saying where — where a paragraph would have read as an answer. The lead
+            // carries ids like anything else, so stopping there costs no citation.
+            builder.Append("If that sentence answers the question completely, write nothing more.\n");
+            builder.Append("Otherwise add short bullets, one claim per line, starting with \"- \", ");
+            builder.Append("each saying enough to make sense on its own, and each with a short ");
+            builder.Append("topic label followed by \": \" when the bullets are about different things.\n");
         }
 
         builder.Append("Every line ends with the ids of the ");

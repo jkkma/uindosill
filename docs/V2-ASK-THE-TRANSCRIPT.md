@@ -1084,17 +1084,22 @@ should make follow-up questions skip the re-prefill — the evidence prefix is i
 questions in this mode, which it never is under retrieval — expected from `cache_prompt`'s
 documented behaviour, not yet observed on a real run.
 
-**Two decisions taken with it, both on measured grounds, both open to the maintainer's
-reversal.** The **verbatim quote is dropped on this path**: a retrieval bullet answers a pointed
-question from one span, so a quote is a sentence really in it and the substring check is the
-strongest guarantee this project has, but an overview bullet is a synthesis across minutes, and
-forcing one sentence of it to be verbatim either misrepresents the claim or picks a line generic
-enough to verify against anything — a check that passes having checked nothing. Citation trust
-here is resolve-only: the id still names a real span the reader can click and hear. And the
-**recording's file name is offered to the prompt**, fenced to naming ("use it to name the
-recording, never as a fact about its contents"), because an overview that cannot say what it is
-describing opens with "this recording" — the name is provenance the application holds and the
-transcript does not.
+**Two decisions taken with it on measured grounds, and the first of them ratified 2026-08-25.**
+The **verbatim quote is dropped on this path** — proposed by a session, **ratified by the
+maintainer the same day**: a retrieval bullet answers a pointed question from one span, so a
+quote is a sentence really in it and the substring check is the strongest guarantee this project
+has, but an overview bullet is a synthesis across minutes, and forcing one sentence of it to be
+verbatim either misrepresents the claim or picks a line generic enough to verify against
+anything — a check that passes having checked nothing. Citation trust here is resolve-only: the
+id still names a real span the reader can click and hear. What the ratification had in front of
+it that the proposal did not: the check **earning its place on the path that kept it**, catching
+a retrieval bullet whose quote sat three seconds outside the span it cited (`docs/UNPROVEN.md`),
+and the same day's evidence that a quote would not have caught the wrong-span-right-claim class
+either, since a bullet's prose can drift while its quote verifies. The two modes ask for
+different things and get different checks. And the **recording's file name is offered to the
+prompt**, fenced to naming ("use it to name the recording, never as a fact about its contents"),
+because an overview that cannot say what it is describing opens with "this recording" — the name
+is provenance the application holds and the transcript does not.
 
 The shape was then read once, end to end: the 26B-A4B over a twelve-segment synthetic meeting
 produced a framing sentence and four labelled, multiply-cited bullets touching all three thirds
