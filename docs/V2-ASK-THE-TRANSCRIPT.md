@@ -364,6 +364,21 @@ than the software — on an axis that appears in no machine table in this reposi
 is used, RAM speed and channel count join the machine block in `docs/UNPROVEN.md` before any
 throughput figure is quoted.
 
+**Run on the second machine, 2026-08-24 — the offload works there, in exactly one form, and the
+row it asked for is in the machine block.** The form is `--cpu-moe` **with `--no-host`**
+(`LLAMA_ARG_CPU_MOE`, `LLAMA_ARG_NO_HOST` — both environment forms, so the engine's
+`Environment` pass-through can set them today, no code change owed). Two UMA-specific facts force
+it, and neither is visible from a discrete card: the laptop driver's Vulkan backend cannot host
+MXFP4 tensors at all — llama.cpp demotes all 144 expert tensors off-device on its own, so a
+partial `-ncmoe` split is impossible for that file there — and without `--no-host` a "CPU"
+override resolves to `Vulkan_Host`, the driver's pinned host-visible heap, whose 7.81 GiB budget
+10.3 GiB of experts overflows: `vk::Queue::submit: ErrorOutOfDeviceMemory` at load. With the pair
+set, gpt-oss-20b's experts land in true CPU memory (`CPU_REPACK`, 9,682 MiB), attention and the
+router hold 1,242 MiB on the device — the arithmetic above, measured — and the full-transcript
+run is in `docs/UNPROVEN.md`'s llama.cpp section: prefill 51.0 tok/s, decode 7.6 tok/s, against
+a ~94 tok/s theoretical ceiling on the machine block's quad-channel LPDDR5X-7500 — "real
+throughput well below its own ceiling", now with its number.
+
 Read from `SciSharp/LLamaSharp` at tag `v0.27.0` and from `ggml-org/llama.cpp` master on
 2026-08-15.
 
@@ -780,6 +795,17 @@ with no fix named) and #27007 (the 26B-A4B on Vulkan/RADV, a Radeon 890M — the
 — **open**, citing #24311 as the same class). Neither touches the desktop's CUDA path; both touch
 the laptop's, so on the laptop it stays out until reproduced or ruled out there. Read 2026-08-16.
 
+**Probed on the laptop, 2026-08-24: #24311's shape does not reproduce there, and a different one
+does.** At `-ngl 24` — partial offload, the reported-garbage configuration — output is clean and
+deterministic, on small asks and on the full transcript (prefill 25.2 tok/s, decode 3.2 tok/s at
+depth, `runs/20260824-194415-spike-vulkan`; CPU-only through the cpu drop, 20.1 and 3.1,
+`runs/20260824-204411-spike-cpu` — partial offload buys ~25 % of prefill and nothing measurable
+in deep decode for this split dense file). What does reproduce is new: **the Vulkan build exits
+`0xC0000409` on this model at `-ngl 0`**, twice, last log line the threadpool init — while the
+cpu drop serves the same file and the same Vulkan build serves gpt-oss at `-ngl 0`. Gemma-4-specific,
+zero-offload-specific, that build and driver. The "stays out" line above now reads against both
+facts: the reported failure is unreproduced, and the file gained a different laptop caveat.
+
 **The third file, and not before decision 3 has retrieval: `Qwen/Qwen3.6-35B-A3B` with the experts
 in system RAM.** `unsloth/Qwen3.6-35B-A3B-GGUF`, `UD-IQ4_XS` 17,730,509,792 bytes (16.51 GiB) first,
 `UD-Q4_K_M` 22,134,528,992 bytes (20.61 GiB) if it earns it; apache-2.0 on source and GGUF alike.
@@ -846,6 +872,17 @@ because it has none. Same session, same questions; `-ot exps=CPU` only if the AS
 loaded. The same repository ships EAGLE-3 draft GGUFs beside it for speculative decoding — noted,
 not checked.
 
+**Run on the laptop, 2026-08-24, and the harmony check this paragraph asked for is made.** With
+experts on CPU (decision 1's dated block) the full transcript prefills at 51.0 tok/s and decodes
+at 7.6 with 2,317 MiB on the device (`runs/20260824-183922-spike-vulkan`) — the offloaded shape
+works. Through a chat-template probe it was the session's most disciplined citer: three of three
+questions correct, correct ranges, clean abstention, 14.6–18.0 tok/s decode in the retrieval
+shape. **Through the product path — the raw `/completion` prompt plus grammar, no template, so
+the harmony channel has nowhere to go — it fails as this paragraph said it might**: one verified
+bullet, then grammar-legal filler to the token cap on one question, and a **false abstention** on
+a question it answers correctly under its template. As the engine ships, this file is not
+usable through it; the record is in `docs/UNPROVEN.md`'s product-path gauntlet block.
+
 **The fifth file: `google/gemma-4-26B-A4B-it` at `UD-IQ4_XS`, every expert on the card.**
 `unsloth/gemma-4-26B-A4B-it-GGUF`, 13,597,177,568 bytes (12.66 GiB); apache-2.0 on source and GGUF
 alike. Read from the hub on 2026-08-16; nothing run. 26,544M total with about 3.8B active, `gemma4`
@@ -865,7 +902,18 @@ Vulkan output corruption on a Radeon 890M was reported on `gemma-4-26B-A4B-it-qa
 the laptop it is out until that issue moves. Desktop, CUDA, same session, same questions; ASR
 unloaded first.
 
-**The sixth file, and the architecture control: `mistralai/Ministral-3-14B-Instruct-2512` at
+**Probed on the laptop, 2026-08-24: #27007 does not reproduce there, and the file ran the best
+retrieval shape of the session.** All experts on CPU (`--cpu-moe --no-host`): clean. Six expert
+layers deliberately on the device, through the fused-MMVQ path the issue's reporter isolates:
+byte-identical clean output. The report is RADV; the laptop runs AMD's proprietary Windows
+driver — so this bounds the issue rather than closing it, and "out until that issue moves" now
+reads: probed on this driver, not reproduced, small asks and a 160-token generation at 52,944
+tokens of depth alike (`runs/20260824-215419-spike-vulkan`: prefill 47.6 tok/s, decode 5.7 at
+depth, 4.7 GiB on the device, memory back to idle on the kill). In the retrieval shape it posted
+the session's best walls (17–23 s an ask) with the most precise citations of the four models
+run, and through the product path the strongest constrained answer of the day — eight bullets on
+the pointed question, seven of eight quote checks passing. It shares the raw-prompt degeneration
+recorded in the product-path gauntlet block; that finding is the engine's, not this file's. `mistralai/Ministral-3-14B-Instruct-2512` at
 Q4_K_M.** `mistralai/Ministral-3-14B-Instruct-2512-GGUF` — the vendor's own conversion —
 8,239,593,024 bytes (7.67 GiB); apache-2.0 on source and GGUF alike. Read from the hub on
 2026-08-16; nothing run. 13,945M dense, `mistral3`; **40 layers of full attention and nothing else**
@@ -1078,6 +1126,25 @@ On the desktop that idle number is **unknown**, so every both-resident figure in
 "~13 GiB plus whatever the desktop already holds", and that term is the largest unmeasured one in
 the arithmetic. One command puts it in `docs/UNPROVEN.md`'s machine block; until then, "fits" above
 means "fits if the desktop holds under about 2.5 GiB idle".
+
+**Put to the register, 2026-08-24, by the maintainer — an option question, not a decision: could
+the app offer three ask-tier models instead of one — `gpt-oss-20b` as the speed option,
+`gemma-4-26B-A4B` as the balanced option, `gemma-4-12b` as the quality option?** The lanes come
+from the laptop's measured retrieval-shape session (the runs-laptop gauntlet record, 2026-08-24):
+gpt-oss decoded 2–3× the Gemmas, the 26B posted the best walls with the most precise citations,
+the 12B wrote the richest answers at the slowest decode. What the question costs before it can be
+decided, named so the decision is not taken by drift: the catalogue would need per-model launch
+options (a partial-offload layer count for the 12B, the `--cpu-moe --no-host` environment pair
+for the two mixtures — per model, per machine tier); the "quality" and "balanced" labels are
+claims the labelled question set has not yet measured, and the per-model abstain dial triples;
+gpt-oss's mostly-English training against twenty-five transcription languages needs a measured
+look before it is the option users reach for; the lanes are laptop-shaped and invert on the
+desktop, where the 12B fits wholly in VRAM and the fifth file's every-expert-on-the-card
+hypothesis lives; and the lineup retires the 9B — the standing working candidate — without
+saying so, which is its own question. Blocking fact from the same session: **as the engine
+ships, its raw-prompt-plus-grammar pairing carries the Gemmas but not gpt-oss** (the fourth
+file's dated block), so the speed option is conditional on an engine change the register has
+not weighed. Decided after the labelled set runs; until then the working candidate stands.
 
 **The measurement exists, is vendor-neutral, and works on both machines.** Verified on the laptop
 2026-08-16 with `Get-Counter -ListSet`: `\GPU Process Memory(pid_<pid>_luid_…_phys_N)\Dedicated
