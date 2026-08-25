@@ -297,7 +297,9 @@ public sealed partial class AskChatViewModel : ObservableObject
                 entry.OnStreamed(text.ToString());
             }
 
-            var answer = AnswerParser.Parse(text.ToString(), allowLead: whole) with
+            // Both modes ask the model to open with a sentence answering the question, so both
+            // parse one — a lead is a claim either way, and carries citations either way.
+            var answer = AnswerParser.Parse(text.ToString(), allowLead: true) with
             {
                 ModelId = _engine.Capabilities.ModelId,
                 Quantisation = _engine.Capabilities.Quantisation,
@@ -687,7 +689,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
 
             if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
             {
-                text.Append(" [quoted words not found at the cited time]");
+                text.Append(" [the quoted words are not at the time cited]");
             }
 
             text.AppendLine();
@@ -753,10 +755,18 @@ public sealed class AnswerBulletViewModel
 
     public bool HasQuote => Quote is not null;
 
+    /// <summary>
+    /// What the quote check found, when it did not pass. The failing case says *cited time*
+    /// rather than *transcript*, because that is what was searched: the check runs against the
+    /// span the citation names, and the words are often really in the recording a few seconds
+    /// away — observed 2026-08-25, a real bullet quoting "Just Ship It mentality" from 09:57
+    /// under a citation covering 10:00 onwards. "Not in the transcript" would be a claim about
+    /// the recording that nothing here established.
+    /// </summary>
     public string? QuoteCaveat => Quote is null || QuoteVerified
         ? null
         : QuoteChecked
-            ? "quote not found in the transcript"
+            ? "the quoted words are not at the time cited"
             : "quote not checked — no place in the recording to check it against";
 }
 

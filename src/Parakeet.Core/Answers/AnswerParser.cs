@@ -25,10 +25,10 @@ public static class AnswerParser
     /// <param name="modelOutput">The engine's stream, concatenated.</param>
     /// <param name="allowLead">
     /// Take prose ahead of the first bullet as <see cref="AnswerDocument.Lead"/> rather than as
-    /// claims. On only where the prompt asked for a framing sentence — the whole-transcript
-    /// path — so that in every other mode stray prose keeps rendering as the uncited claim it
-    /// is. The lead is parsed as a bullet either way and carries citations either way; what this
-    /// switches is whether the shape was asked for.
+    /// a claim among the others. On wherever the prompt asked for an opening sentence, which
+    /// since 2026-08-25 is both answer modes; off leaves stray prose rendering as the uncited
+    /// claim it is. The lead goes through the citation machinery either way — what this switches
+    /// is only whether the shape was asked for.
     /// </param>
     public static AnswerDocument Parse(string modelOutput, bool allowLead = false)
     {
@@ -265,10 +265,19 @@ public static class AnswerParser
             }
 
             // A citation removed from between a comma and a full stop — "…on the PS2, [S1]." —
-            // leaves ",.", which is our own damage and is not punctuation in any of them.
-            if (ch == '.' && builder.Length > 0 && builder[^1] is ',' or ';')
+            // leaves ",.", which is our own damage and is not punctuation in any of them. A
+            // separated citation list — "…refunds, [S1], [S2], [S3]." — leaves a run of commas
+            // by the same mechanism.
+            if (builder.Length > 0 && builder[^1] is ',' or ';')
             {
-                builder.Length--;
+                if (ch == '.')
+                {
+                    builder.Length--;
+                }
+                else if (ch is ',' or ';')
+                {
+                    continue;
+                }
             }
 
             builder.Append(ch);

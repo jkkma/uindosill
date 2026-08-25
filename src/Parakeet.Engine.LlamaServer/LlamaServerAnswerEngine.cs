@@ -129,7 +129,11 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         // the check that passes then has checked nothing. Citation trust in this mode is
         // resolve-only: the id still names a real span the reader can click and hear.
         var requireQuote = _options.RequireQuote && request.Mode != AnswerMode.WholeTranscript;
-        var wantLead = request.Mode == AnswerMode.WholeTranscript;
+
+        // Both modes open with a sentence answering the question — see AnswerPromptBuilder for
+        // why retrieval gained one on 2026-08-25 — so the grammar admits one in both, since
+        // prompt and grammar are two statements of one contract.
+        const bool wantLead = true;
 
         var (instruction, userContent) =
             AnswerPromptBuilder.BuildMessages(request, _options.AllowAbstain, requireQuote);

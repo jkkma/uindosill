@@ -57,23 +57,39 @@ public static class AnswerPromptBuilder
             // from the opening minutes that reads exactly like an answer drawn from all of them.
             builder.Append("You are describing a recording. Below is its complete transcript, ");
             builder.Append("cut into numbered parts in the order they were spoken.\n");
-            builder.Append("Open with one sentence saying what the recording is and what it covers, ");
-            builder.Append("on its own line, with no \"- \" in front of it.\n");
-            builder.Append("Then write bullets, one point per line, starting with \"- \".\n");
-            builder.Append("Give each bullet a short topic label followed by \": \".\n");
-            builder.Append("Group related points under one bullet, and draw on the whole recording ");
-            builder.Append("rather than its opening.\n");
-            builder.Append("Every line ends with the ids of the parts that support it, in square brackets, ");
-            builder.Append("exactly as they appear below — for example [S12-S15]. ");
-            builder.Append("Cite every part where a point is discussed, not only the first.\n");
         }
         else
         {
             builder.Append("You are answering questions about a recording, from transcript evidence.\n");
-            builder.Append("Answer as short bullets, one claim per line, starting with \"- \".\n");
-            builder.Append("Every bullet ends with the ids of the evidence that supports it, in square brackets, ");
-            builder.Append("exactly as they appear below — for example [S12-S15].\n");
         }
+
+        // The opening sentence belongs to both modes, and the wording is one job in both: answer
+        // what was asked. For "give me a summary" that is what the recording is and covers; for
+        // "did they mention X" it is yes or no. Retrieval had no such line until 2026-08-25 and
+        // read the worse for it — a list of cited fragments never says the "yes" the question
+        // asked for, and a fragment lifted out of a digression reads as a non-sequitur with a
+        // timestamp on it.
+        builder.Append("Open with one sentence answering the question directly, on its own line, ");
+        builder.Append("with no \"- \" in front of it, ending with ids like every other line.\n");
+
+        if (whole)
+        {
+            builder.Append("Then write bullets, one point per line, starting with \"- \".\n");
+            builder.Append("Give each bullet a short topic label followed by \": \".\n");
+            builder.Append("Group related points under one bullet, and draw on the whole recording ");
+            builder.Append("rather than its opening.\n");
+        }
+        else
+        {
+            builder.Append("Then give short bullets, one claim per line, starting with \"- \".\n");
+            builder.Append("Say enough in each bullet for it to make sense on its own.\n");
+        }
+
+        builder.Append("Every line ends with the ids of the ");
+        builder.Append(whole ? "parts" : "evidence");
+        builder.Append(" that support it, in square brackets, ");
+        builder.Append("exactly as they appear below — for example [S12-S15].");
+        builder.Append(whole ? " Cite every part where a point is discussed, not only the first.\n" : "\n");
 
         builder.Append("Never write a timestamp, a time of day, or a duration.\n");
         if (requireQuote)

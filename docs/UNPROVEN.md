@@ -3907,6 +3907,36 @@ segments 23–24 would have verified while supporting nothing, and a quote of th
 line would have failed against the span the model chose. Neither outcome corrects the pointer;
 the reader does.
 
+#### Retrieval answers open with a sentence answering the question — added 2026-08-25
+
+Asked for by the maintainer on reading a real answer: *"did they mention kojima?"* came back as
+two cited fragments and never said **yes**, and one of them — a quotation lifted out of a
+digression about Castlevania — read as a non-sequitur with a timestamp on it. A list of evidence
+is not an answer to a question until something says what the evidence adds up to.
+
+Both modes now open with one sentence answering the question, on its own line, carrying ids like
+any other line; the wording is one instruction in both, because for *give me a summary* answering
+the question directly **is** saying what the recording covers. Retrieval also gained "say enough
+in each bullet for it to make sense on its own". Observed on the 26B over the real transcript:
+*"Yes, the speakers mentioned Kojima in relation to artwork and its conversion."* over two
+verified bullets, and the fragment that had read as a non-sequitur became *"The speakers compare
+a failure in art style realization to the «Castlevania like conversion of Kojima artwork» on the
+PS2."*
+
+**The explicit "ending with ids like every other line" is load-bearing and was added second.**
+Without it the model wrote good opening sentences and cited none of them, in both modes, so every
+answer led with a line the panel marked `[unverified]` — the discipline firing correctly on prose
+that deserved better. Strengthening the instruction was preferred to relaxing the rule. One run
+each is what that rests on.
+
+**A quote failed its check in the same run, and the wording of the failure was wrong.** A bullet
+quoting "Just Ship It mentality" cited a span beginning at 10:00; the phrase is at 09:57. The
+caveat said *"quote not found in the transcript"* — but the check runs against the cited span,
+not the transcript, and the words were three seconds outside it. It now reads *"the quoted words
+are not at the time cited"*, which is what was actually established. The failure itself is the
+same off-by-one-window class as the 01:51 citation recorded above, and remains uncaught by any
+mechanical check except this one.
+
 #### Turning the grammar off broke the parser's quote handling, and it took four questions to see — fixed 2026-08-25
 
 The bullets the maintainer read back from two retrieval answers were not sentences: *"The budget
