@@ -19,7 +19,7 @@ public sealed class TranslateVerbTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-translate-verb").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-translate-verb");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

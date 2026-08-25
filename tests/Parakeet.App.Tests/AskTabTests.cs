@@ -2299,7 +2299,7 @@ public class AskTabWindowTests
         FakeMediaPlayer? withPlayer = null)
     {
         var player = withPlayer ?? new FakeMediaPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
-        var directory = Directory.CreateTempSubdirectory("uindosill-ask").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-ask");
         var viewModel = new MainWindowViewModel(
             new FakeEngineProvider(),
             new LocalModelStore(directory),

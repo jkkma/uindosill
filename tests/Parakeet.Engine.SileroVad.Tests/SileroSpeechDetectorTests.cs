@@ -28,7 +28,7 @@ public sealed class SileroSpeechDetectorTests
     {
         // ONNX Runtime is the one that knows the file is not a model, so its sentence is the one a
         // reader gets — wrapped in the seam's own exception type so callers have one thing to catch.
-        var path = Path.Combine(Directory.CreateTempSubdirectory("uindosill-vad").FullName, "silero_vad.onnx");
+        var path = Path.Combine(TestTemp.NewDirectory("uindosill-vad"), "silero_vad.onnx");
         File.WriteAllText(path, "not a graph");
 
         var exception = Assert.Throws<SpeechDetectorException>(() => new SileroSpeechDetector(path));

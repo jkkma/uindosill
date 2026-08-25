@@ -51,31 +51,12 @@ internal static class TestUserData
         // Fresh per run, not a fixed name: a settings file surviving from the previous run would
         // make a test asserting a shipped default pass or fail on what the last one happened to
         // write. Per process rather than per assembly, so two assemblies running side by side —
-        // which is how the suite runs — cannot write each other's settings.
-        RootDirectory = Directory.CreateTempSubdirectory("uindosill-test-user-data-").FullName;
+        // which is how the suite runs — cannot write each other's settings. Allocated from
+        // TestTemp, which owns the run's one root and deletes it at exit.
+        RootDirectory = TestTemp.NewDirectory("user-data");
         Directory.CreateDirectory(ModelsDirectory);
 
         Environment.SetEnvironmentVariable("UINDOSILL_MODELS_DIR", ModelsDirectory);
         Environment.SetEnvironmentVariable("UINDOSILL_SETTINGS_PATH", SettingsPath);
-
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => Remove(RootDirectory);
-    }
-
-    /// <summary>
-    /// Best effort, and deliberately not a failure: a suite that cannot tidy up after itself has
-    /// still run, and the alternative to swallowing this is a red build over a locked file.
-    /// </summary>
-    private static void Remove(string directory)
-    {
-        try
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
     }
 }

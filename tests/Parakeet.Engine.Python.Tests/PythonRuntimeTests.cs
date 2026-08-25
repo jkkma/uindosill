@@ -46,7 +46,7 @@ public sealed class PythonRuntimeTests : IDisposable
     /// <summary>A directory laid out the way the installer lays the bundle out.</summary>
     private static string StageBundle()
     {
-        var root = Directory.CreateTempSubdirectory("uindosill-bundle").FullName;
+        var root = TestTemp.NewDirectory("uindosill-bundle");
         var interpreter = Path.Combine(root, "python", ExecutableName);
         Directory.CreateDirectory(Path.GetDirectoryName(interpreter)!);
         File.WriteAllText(interpreter, "not really an interpreter");
@@ -56,7 +56,7 @@ public sealed class PythonRuntimeTests : IDisposable
 
     /// <summary>A directory with no bundle in it, standing in for either of the two places.</summary>
     private static string StageNothing() =>
-        Directory.CreateTempSubdirectory("uindosill-empty").FullName;
+        TestTemp.NewDirectory("uindosill-empty");
 
     [Fact]
     public void TheBundleBesideTheApplicationIsWhatIsFoundWithoutAnOverride()

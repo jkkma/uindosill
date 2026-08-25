@@ -28,7 +28,7 @@ public class SidecarFailureTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-sidecar").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-sidecar");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

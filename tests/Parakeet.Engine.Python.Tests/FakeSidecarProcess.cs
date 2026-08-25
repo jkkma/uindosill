@@ -40,7 +40,7 @@ internal sealed class FakeSidecarProcess : IDisposable
     /// <summary>Writes a script and returns the resolution that runs it.</summary>
     public static FakeSidecarProcess Scripted(object script)
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-fake-sidecar").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-fake-sidecar");
 
         // The one thing PythonRuntime.Resolve insists on that this bypasses. Created anyway so the
         // staged directory is the shape the real one is, and so a test that decides to go through

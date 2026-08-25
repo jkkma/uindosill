@@ -158,7 +158,7 @@ public class AskTranslationPaneTests
     /// <summary>The window on the Ask tab, with one transcribed Spanish recording open.</summary>
     private static (MainWindow Window, MainWindowViewModel ViewModel) Open()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-pane").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-pane");
         var viewModel = new MainWindowViewModel(
             new FakeEngineProvider(),
             new LocalModelStore(directory),

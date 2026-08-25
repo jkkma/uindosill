@@ -249,7 +249,7 @@ public class OptionTabTests
     [AvaloniaFact]
     public void ARecordingPastTheEvidenceWarnsOnTheScreenWhereStartIs()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-warn").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-warn");
         var viewModel = new MainWindowViewModel(
             new FakeEngineProvider(speakers: new FakeSpeakerLabellerOptions
             {

@@ -10,7 +10,7 @@ public class LlamaServerLocatorTests
 {
     private static string Root(params string[] backendsWithServer)
     {
-        var root = Directory.CreateTempSubdirectory("uindosill-llm").FullName;
+        var root = TestTemp.NewDirectory("uindosill-llm");
         foreach (var backend in backendsWithServer)
         {
             var directory = Path.Combine(root, backend);

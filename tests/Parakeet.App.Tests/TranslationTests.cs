@@ -18,7 +18,7 @@ public class TranslationTests
 {
     private static (TranscribeViewModel ViewModel, string Directory) Create()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
@@ -312,7 +312,7 @@ public class TranslationTests
     public void WithoutTheTranslationModelTheOptInIsDisabledWithAReasonAUserCanActOn()
     {
         var viewModel = new TranscribeViewModel(
-            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-tr").FullName), () => true),
+            new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-tr")), () => true),
             () => new EngineSelection());
 
         Assert.False(viewModel.CanTranslate);
@@ -325,7 +325,7 @@ public class TranslationTests
     {
         // Nine files, all or nothing. A set missing its tokenizer loads until it does not, so the
         // question is asked of the whole entry rather than of whichever file arrived first.
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.TranslationModels);
 
@@ -352,7 +352,7 @@ public class TranslationTests
     {
         // A ticked box with nothing behind it would write the source transcript into files named
         // .en and report it as "Finished" — the silent failure the command line refuses.
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.TranslationModels);
 
@@ -379,7 +379,7 @@ public class TranslationTests
     {
         // The two tabs are siblings that do not know about each other, and each opt-in is wired to
         // its own model: one call for both would light a checkbox whose model is still missing.
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
         var translator = Assert.Single(
@@ -419,7 +419,7 @@ public class TranslationTests
     [AvaloniaFact]
     public void TheTranscribeTabCarriesTheEnglishOptIn()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.SelectedTab = 0;
 
@@ -443,7 +443,7 @@ public class TranslationTests
     [AvaloniaFact]
     public void TheSwitcherIsHiddenUntilThereIsEnglish()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         var window = new MainWindow { DataContext = main };
         window.Show();
@@ -461,7 +461,7 @@ public class TranslationTests
     [AvaloniaFact]
     public async Task TheSwitcherIsDrawnOnceARowHasEnglishAndItsPillsChangeThePane()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-tr").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-tr");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });

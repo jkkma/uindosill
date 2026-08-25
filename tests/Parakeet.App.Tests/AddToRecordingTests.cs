@@ -235,7 +235,7 @@ public class AddToRecordingTests
         var muxer = withMuxer ?? new FakeSubtitleMuxer();
         var vm = NewViewModel(muxer);
 
-        var directory = Directory.CreateTempSubdirectory("uindosill-mux").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-mux");
         var path = Path.Combine(directory, "talk.mp4");
         File.WriteAllText(path, "not really a video");
 

@@ -125,7 +125,7 @@ public class AudioSourcesTests
     [Fact]
     public async Task WaveFilesOpenOnEveryPlatform()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"uindosill-{Guid.NewGuid():N}.wav");
+        var path = TestTemp.NewPath("scratch.wav");
         try
         {
             WavWriter.WriteFile(path, new float[16_000], 16_000);
@@ -142,7 +142,7 @@ public class AudioSourcesTests
     [Fact]
     public void MissingFileIsReportedAsMissing()
     {
-        var missing = Path.Combine(Path.GetTempPath(), $"uindosill-{Guid.NewGuid():N}.wav");
+        var missing = TestTemp.NewPath("scratch.wav");
         Assert.Throws<FileNotFoundException>(() => AudioSources.Open(missing));
     }
 
@@ -151,7 +151,7 @@ public class AudioSourcesTests
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Media Foundation handles these on Windows.");
 
-        var path = Path.Combine(Path.GetTempPath(), $"uindosill-{Guid.NewGuid():N}.mp3");
+        var path = TestTemp.NewPath("scratch.mp3");
         try
         {
             File.WriteAllBytes(path, [0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0]);

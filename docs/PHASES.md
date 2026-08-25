@@ -4011,6 +4011,35 @@ the laptop's eventual answer for long recordings, where a whole-transcript prefi
 in tens of minutes. Answer quality in this mode is unmeasured and `docs/UNPROVEN.md` says so.
 **1314 tests, 1308 passed and 6 skipped, 0 warnings.**
 
+### Fixed 2026-08-25 — the suite gets one scratch root, and stops leaving 17,000 directories behind
+
+Found by looking where the settings leak pointed. `Directory.CreateTempSubdirectory` appeared at
+78 call sites across the tests and almost none deleted the result, for a structural reason
+rather than a careless one: a helper returning `(ViewModel, string Directory)` hands the
+directory out, so it outlives the method that made it and there is nowhere for a `using` to go.
+The three sites that did clean up are the three whose directory never left the test body. On the
+machine this was found on, `%TEMP%` held **17,140 such directories and 4.2 GiB**, the oldest nine
+days old, growing by several dozen per run.
+
+`tests/Shared/TestTemp.cs` takes one root per test process and hands out children of it —
+`NewDirectory(prefix)` for a directory, `NewPath(fileName)` for a file inside a fresh one — then
+deletes the root at process exit, so no test has to own a lifetime it is not shaped to own. All
+85 allocations moved over, including the four `Path.GetTempPath()`-and-a-GUID variants; the
+`TempDirectory` disposable stays for the tests that want a directory gone at a known point and
+now allocates from the same root, and `TestUserData` takes its redirect directory from it too, so
+there is one root and one cleanup rather than two conventions. Four paths stay unrouted on
+purpose — a missing interpreter, a missing model, a missing native directory, a missing GGUF —
+because a helper that creates what it names would turn each of those tests into a test of
+something else. Measured rather than asserted, since a test cannot watch its own process exit:
+the `%TEMP%` entries were compared **by name** across a full suite — not by count, because a
+second worktree was running the same suite on this machine and its directories land in the same
+place — and the set came back identical, nothing added. Suite unchanged at **1314 tests, 1308
+passed and 6 skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
+
+The 17,140 already there are not deleted by any of this. About 1.06 GiB of that is research
+output rather than test litter — an ONNX export run of 39,936 files, a premise-scoring directory
+and a link probe — so the sweep is the maintainer's to run and not a script's to guess at.
+
 ### The dictation seam
 
 The brief said push-to-talk dictation must not be built and must not be architected out. It is now

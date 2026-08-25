@@ -18,7 +18,7 @@ public class RetrieveCommandTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-retrieve").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-retrieve");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

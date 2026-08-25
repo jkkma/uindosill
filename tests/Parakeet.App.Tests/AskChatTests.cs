@@ -664,7 +664,7 @@ public class AskChatWindowTests
         FakeAnswerOptions? options = null)
     {
         var player = new FakeMediaPlayer { DurationToReport = TimeSpan.FromMinutes(2) };
-        var directory = Directory.CreateTempSubdirectory("uindosill-askchat").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-askchat");
         var viewModel = new MainWindowViewModel(
             new FakeEngineProvider(),
             new LocalModelStore(directory),

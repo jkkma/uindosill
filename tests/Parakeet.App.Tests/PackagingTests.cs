@@ -73,7 +73,7 @@ public class PackagingIdentityTests
         var installRelative = Path.GetRelativePath(localAppData, PackagingIdentity.InstallRootDirectory());
         var modelsRelative = Path.GetRelativePath(localAppData, LocalModelStore.DefaultRootDirectory());
 
-        var root = Path.Combine(Path.GetTempPath(), "uindosill-uninstall-tests", Guid.NewGuid().ToString("n"));
+        var root = TestTemp.NewDirectory("uindosill-uninstall-tests");
         try
         {
             var install = Path.Combine(root, installRelative);

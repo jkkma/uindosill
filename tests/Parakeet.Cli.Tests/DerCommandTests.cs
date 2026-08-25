@@ -17,7 +17,7 @@ public class DerCommandTests
     {
         public Harness(ModelCatalog? catalog = null)
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-der").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-der");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

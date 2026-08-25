@@ -43,7 +43,7 @@ public class UserDataIsolationTests
     [Fact]
     public void TheWindowSavesAChosenOutputFolderIntoTheRunsOwnSettingsFile()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-isolation").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-isolation");
         var settings = new AppSettingsStore(Path.Combine(directory, "settings.json"));
 
         // Given a store, the window saves the folder as it is chosen rather than at exit.
