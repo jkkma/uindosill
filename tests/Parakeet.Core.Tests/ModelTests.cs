@@ -357,11 +357,15 @@ public class LocalModelStoreTests
     [Fact]
     public void ModelsAreNotStoredInTheInstallDirectory()
     {
-        var store = new LocalModelStore();
-
+        // The default rather than a constructed store's answer: the suite redirects the override
+        // this store reads, so `new LocalModelStore().RootDirectory` would report the temporary
+        // directory and pass without ever asking the question.
         // Weights in the install directory are destroyed by every update and uninstall, which
         // turns each patch into a 670 MB re-download.
-        Assert.DoesNotContain(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), store.RootDirectory, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar),
+            LocalModelStore.DefaultRootDirectory(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
