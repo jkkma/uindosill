@@ -1745,6 +1745,81 @@ one episode, one language, two speakers, and one listener on one instance.
 annotations do — scored for attribution accuracy rather than for turns, with both tie-breaks run
 over it; or, failing that, a listening test over the 465 words that moved. Neither has been done.
 
+### A labelled podcast corpus exists after all — TAL, read and measured 2026-08-25, and it settles counts rather than DER
+
+**`docs/PHASES.md` says podcasts are ungated "for want of any labelled material", and that premise
+is now false in one direction and still true in the other.** This American Life — Mao, Li, McAuley
+and Cottrell 2020, `arXiv:2005.08072`, the corpus the Spotify sparse-optimisation paper reported its
+0.35 DER on — carries a human speaker reference for 663 episodes, and it is free. Two of its three
+splits were pulled through the Kaggle MCP server on 2026-08-25 and both match the sizes Kaggle
+lists to the byte: `test-transcripts-aligned.json` at 48,561,866 B (36 episodes, 9,356 turns) and
+`train-transcripts-aligned.json` at 807,495,867 B (593 episodes, 145,818 turns). The valid split,
+34 episodes, is unread. `scripts/make-tal-references.py` is what reads them; everything below is
+its output or a measurement beside it, not a figure quoted from the paper.
+
+**Episodes are unusable and acts are not, and the difference is the four-speaker cap.** Speakers per
+episode on the test split: **median 19, mean 19.4, minimum 3, maximum 41**. That is the arithmetic
+that removed VoxConverse from the gate on 2026-08-18. But the release carries an `act` field —
+along with `role`, `act_title` and per-word `alignments` — and TAL episodes hold a median of five
+acts, 175 across the 36 test episodes. Cut by act and filtered to at most four reference voices and
+at least 120 seconds:
+
+| split | episodes | stretches | hours | two-voice | longest |
+|---|---:|---:|---:|---:|---:|
+| test | 36 | 84 | 13.51 | 38 | 33.3 min |
+| train | 593 | 1,551 | 267.42 | 769 | 55.0 min |
+| **both** | **629** | **1,635** | **280.93** | **807** | **55.0 min** |
+
+Train's mix is 2 voices ×769, 3 ×408, 4 ×312, 1 ×62; its two-voice stretches alone are 129.2 hours,
+median 8.3 minutes. No turn in either split has a NaN `utterance_end` and none is missing a start,
+so nothing was dropped to produce any of it.
+
+**Three things disqualify it for DER, and the first is the one that was not expected.** *The
+reference claims nearly the whole cut is speech.* TAL's turns tile: one ends at 39.670 and the next
+begins at 39.670. Median speech coverage is **100.0%**, and **1,051 of train's 1,551 stretches and
+55 of test's 84 claim more than 99.9%** — only 105 fall under 95% and 47 under 90%, the lowest at
+67.7%. A diariser that correctly reports silence is therefore charged missed speech for it, and the
+metric rewards calling everything speech. *There is no overlap annotation anywhere*: apparent
+overlap is **0.00 s in all 1,635 stretches**, while this project's headline convention scores
+overlap. *And the word alignments do not rescue the convention* — that was checked rather than
+hoped. `alignments` is one span per word, and across **54,837 consecutive word pairs sampled from
+six test episodes, 100.0% touch exactly**, maximum gap 0.00 s; they tile the utterance rather than
+excluding silence, so summing them gives 34.68 h against the utterance spans' 34.73 h, a ratio of
+1.00. **There is no `only_words` equivalent obtainable from this release**, and the convention gap
+against AMI recorded above — 13.59 points on identical hypotheses — cannot be closed here.
+
+**What it does settle is the thing that has had no evidence at all: counts, in the duration range
+where this model is measured to fail.** The ladder above puts Sortformer right to fifty minutes and
+wrong from an hour, with 7 of 9 twenty-minute windows correct, 4 of 6 at thirty and 3 of 5 at fifty.
+Train holds **149 stretches over 20 minutes, 18 over 30 and one at 55.0**, and **59 of the
+two-voice stretches run past 20 minutes**, longest 42.4 — known truth of two, inside the band where
+a third label starts appearing. That is an evaluation set for the over-segmentation repair and for
+any automatic speaker-count estimate, and it needs no collar, no overlap convention and no decision
+about pauses, because a count depends on none of them. The natural protocol is the gate's own: tune
+on train, score held out on test.
+
+**What it does not reach.** Nothing past two hours, which is the regime where no window tested has
+ever been correct — only whole episodes are that long, and they carry a median of 19 speakers. The
+one stretch at 55.0 minutes is the whole of what exists above the fifty-minute bound.
+
+**Licensing, read at source in the release's own README.** *"All data is distributed exclusively for
+the purpose of non-commercial, research usage."* Audio is not distributed at all and is copyright
+This American Life; the annotations are copyright Shuyang Li & Henry Mao 2020. Measuring with it
+locally is a research use. **Nothing derived from it may be redistributed, the generated RTTMs
+included**, which is why this material cannot become a committed fixture the way the dev stretches
+did — those pin bytes in the working tree, and these may not be pinned anywhere.
+
+**What has not happened, and it is most of it.** **No audio has been fetched, no stretch has been
+cut, and nothing has been scored** — TAL ships no audio, and the episode MP3s named by
+`download_page_snapshot.html` have not been downloaded. So there is still **no DER on any podcast in
+this repository**, and the figures above describe a corpus rather than a result. The 84 and 1,551
+are what the slicer produced from the annotations at one setting; a different `--max-gap` or
+`--min-seconds` gives different ones, and neither has been chosen against anything. Whether the
+saturated reference could be repaired by intersecting it with a voice-activity pass is an idea, not
+a plan, and it would make the reference partly machine-derived — a decision for `docs/PHASES.md` if
+anyone takes it. **Adding a corpus to the speakers gate is likewise a decision and none has been
+made**; what is recorded here is that the material exists, what it can carry, and what it cannot.
+
 ### NPU offload — assessed 2026-08-16, nothing measured
 
 The second machine's XDNA 2 NPU is idle under this product, and that much is settled rather than
