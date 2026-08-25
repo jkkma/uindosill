@@ -231,11 +231,44 @@ public class AnswerParserTests
     [Fact]
     public void AQuoteIsExtractedAndTheTextKeepsReading()
     {
-        var answer = AnswerParser.Parse("- They were sure about it «we checked the numbers twice» [S7]\n");
+        // Read for the validator, and left where the model put it. Removing it was right while
+        // the grammar put every quote last; ungrammared a model writes it into the sentence, and
+        // cutting it out left holes — "The budget was allegedly." was a real bullet whose
+        // subject this parser had deleted (observed 2026-08-25).
+        var trailing = AnswerParser.Parse("- They were sure about it «we checked the numbers twice» [S7]\n");
 
-        var bullet = Assert.Single(answer.Bullets);
+        var bullet = Assert.Single(trailing.Bullets);
         Assert.Equal("we checked the numbers twice", bullet.Quote);
-        Assert.Equal("They were sure about it", bullet.Text);
+        Assert.Equal("They were sure about it “we checked the numbers twice”", bullet.Text);
+
+        // The shape that was being destroyed: a quote carrying the sentence's own subject.
+        var inline = AnswerParser.Parse("- The budget was allegedly «two hundred in outsourcing» [S7]\n");
+        Assert.Equal("two hundred in outsourcing", inline.Bullets[0].Quote);
+        Assert.Equal("The budget was allegedly “two hundred in outsourcing”", inline.Bullets[0].Text);
+
+        // And mid-sentence, which is where an ungrammared model most often puts it.
+        var middle = AnswerParser.Parse("- There was an «initial two hundred» that was not shaping up [S7]\n");
+        Assert.Equal("initial two hundred", middle.Bullets[0].Quote);
+        Assert.Equal("There was an “initial two hundred” that was not shaping up", middle.Bullets[0].Text);
+    }
+
+    [Fact]
+    public void ACitationRemovedFromBesidePunctuationDoesNotLeaveItsDebris()
+    {
+        // Our own damage, not the model's: a citation between a comma and a full stop leaves
+        // ",.", and one that ends the sentence leaves the comma before it dangling.
+        Assert.Equal(
+            "The speaker mentions the PS2.",
+            AnswerParser.Parse("- The speaker mentions the PS2, [S1].\n").Bullets[0].Text);
+
+        Assert.Equal(
+            "It was noted",
+            AnswerParser.Parse("- It was noted, [S1]\n").Bullets[0].Text);
+
+        // A semicolon before a stop goes the same way, and a legitimate comma stays put.
+        Assert.Equal(
+            "One thing, then another.",
+            AnswerParser.Parse("- One thing, then another [S1].\n").Bullets[0].Text);
     }
 
     [Fact]
