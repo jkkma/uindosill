@@ -3886,12 +3886,34 @@ pass overturned it** — the transcript states the figure as "another two hundre
 dropped, which a search keyed on "million" does not find. Recorded because it generalises: a
 spoken transcript drops units, currencies and digits that a written source would carry, so
 keyword-checking a figure against one is unsound unless the search is keyed on the number word
-too. What survives from that reading is the principle, which the run did not test either way:
-**a resolving citation says the span is real and says nothing about whether the sentence in
-front of it is.** That also bounds what the dropped verbatim quote would buy — a bullet's prose
-can drift while its quote verifies — so the quote anchors a reader to real words rather than
-proving a claim, and a person reading the cited span is what certifies one. On this run, that
-person found nothing to correct.
+too.
+
+**A second question on the same recording produced the instance that first one did not: a true
+claim under a citation that does not contain it.** Asked "when did they mention money?" in the
+same mode and session, the model wrote *"A report claimed the game cost $400 million due to a
+culture of toxic positivity"* and cited **01:51–01:59**. That span is segments 23–24 — "Uh now
+I am seeing a lot of people both here and in regards to that saying that / Colin Moriarty is a
+hack". The claim is true and the recording does carry it, one segment earlier, at 01:43–01:51:
+"quote unquote toxic positivity halted any negative feedback. Making it cost four hundred
+million dollars". Every other cited claim in that answer checked out — the split budget, the
+journalists disputing the figure, the aggressive upfront marketing spend, the ramifications for
+Sony, the Spider-Man and God of War comparison, the weekly CG and keep-it-online costs — so this
+is one bad pointer in eight, not a pattern, and it is exactly the failure the register's rule
+predicts and no mechanical check can catch: **a resolving citation says the span is real and
+says nothing about whether the sentence in front of it is.** Clicking that chip plays the wrong
+words, which is the one way a reader does catch it. It also bounds what the dropped verbatim
+quote would have bought here — a quote is checked against its cited span, so a quote lifted from
+segments 23–24 would have verified while supporting nothing, and a quote of the actual $400 m
+line would have failed against the span the model chose. Neither outcome corrects the pointer;
+the reader does.
+
+Two shape notes from the same answer, neither a defect: the model wrote section headers
+("Development costs:", "Financial impact and industry context:") as bullets, and with no
+citations on them they render `[unverified]` — honest, and odd on a line that asserts nothing.
+And the question was pointed rather than global, so the overview instruction applied to it and
+produced a framing sentence and headings around what is really a list of mentions. Both are the
+router's absence showing from the other direction: with the toggle on, every question is
+answered as an overview.
 
 **No whole-transcript answer has been scored** — one hand-checked answer is an observation, not
 a rate, and the labelled set's `global` questions are what will score them. Until then the
