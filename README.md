@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/uindosill-splash.png" alt="Uindosill" width="150">
+  <img src="brand/uindosill-mark.png" alt="Uindosill" width="128">
 </p>
 
 <h1 align="center">Uindosill</h1>
@@ -15,7 +15,8 @@
   <a href="https://github.com/jkkma/uindosill/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jkkma/uindosill/actions/workflows/ci.yml/badge.svg"></a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4">
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4">
-  <img alt="Licence" src="https://img.shields.io/badge/licence-MIT%20%28GPLv2%2B%20with%20libmpv%29-green">
+  <img alt="Source licence" src="https://img.shields.io/badge/source-MIT-green">
+  <img alt="Video build licence" src="https://img.shields.io/badge/builds%20with%20video-GPLv2%2B-green">
 </p>
 
 ---
@@ -315,20 +316,44 @@ The ten notes live in [`docs/`](docs/); the last two rows are at the repository 
 
 ## Licence
 
-**Two licences, and which one governs a copy depends on whether it carries the video player.** The
-source in this repository is MIT. **A build that vendors libmpv — the video player behind the Ask
-tab — is distributed under GPLv2-or-later**, because libmpv and the FFmpeg libraries linked into
-it are GPL and the GPL governs the combined work. A build without it contains no GPL component and
-is MIT throughout; the app's Licences pane lists libmpv only when it is there. The obligations
-that creates, including where the corresponding source lives, are in [LICENSE](LICENSE),
-[licences/mpv-WRITTEN-OFFER.txt](licences/mpv-WRITTEN-OFFER.txt) and
-[LICENSING.md](docs/LICENSING.md).
+**Which licence governs a copy depends on one thing: whether that copy carries the video player.**
 
-**The model weights are not MIT.** They are CC BY 4.0 from NVIDIA, which permits commercial
-redistribution and bundling but attaches a seven-element notice requirement, forbids DRM on the
-weights, and withholds patent and trademark rights. The notice is shown inside the application —
-the About window's Licences pane, and `uindosill notice` — not only in this repository. See
-[NOTICE.md](NOTICE.md) and [LICENSING.md](docs/LICENSING.md).
+| The copy you have | Licence | |
+|---|---|---|
+| This repository's source | **MIT** | |
+| `uindosill-cli-win-x64.zip` and the `uindosill-win-x64` CI artefact | **MIT** | neither vendors the player |
+| The two desktop installers | **GPLv2-or-later** | both carry it |
+
+libmpv, the player behind the Ask tab, is GPLv2-or-later and links FFmpeg-GPL. Putting it in the
+same distribution as this application makes the combined work a GPL distribution — so the binary
+that draws video is GPL and the binaries that do not are not. You can tell which kind of copy you
+have by looking: the About window's Licences pane lists libmpv only when it is there.
+
+**None of that revokes the MIT grant on the source**, and a recipient of a GPL build may take the
+Uindosill source under either set of terms. What cannot be separated from the GPL is the
+*combination* with libmpv. The alternatives were weighed on 2026-08-23 — ship no video, or
+maintain an LGPL mpv build, which exists as no prebuilt Windows binary — and this one was taken
+deliberately. The obligations it creates, including where the corresponding source lives, are in
+[LICENSE](LICENSE), [licences/mpv-WRITTEN-OFFER.txt](licences/mpv-WRITTEN-OFFER.txt) and
+[LICENSING.md](docs/LICENSING.md), which also says plainly that nobody with a professional opinion
+has read any of it.
+
+**The four sets of model weights carry four different licences, and none of them is the code's:**
+
+| Weights | Licence |
+|---|---|
+| Transcription — `parakeet-tdt-0.6b-v3` | CC BY 4.0 |
+| Speaker labelling — Sortformer | NVIDIA Open Model License |
+| Translation — Marian / OPUS-MT | Apache-2.0 |
+| Speech detection — Silero VAD | MIT |
+
+CC BY 4.0 permits commercial redistribution and bundling but attaches a seven-element notice
+requirement, forbids DRM on the weights, and withholds patent and trademark rights. The NVIDIA
+licence is **not** interchangeable with it: it makes the grant revocable where CC BY 4.0 is
+irrevocable, and incorporates terms naming biometric processing — and speaker diarisation is voice
+biometrics. Every notice is shown inside the application, through the About window's Licences pane
+and `uindosill notice`, not only in this repository. [NOTICE.md](NOTICE.md) carries them;
+[LICENSING.md](docs/LICENSING.md) carries what each obliges.
 
 `parakeet-tdt-0.6b-v3` covers 25 European languages. It does **not** cover Chinese, Japanese,
 Korean, Arabic, Hindi or Thai, and this product does not offer them.
