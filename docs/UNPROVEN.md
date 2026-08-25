@@ -4752,6 +4752,37 @@ the next release's first observation. The CLI zip no longer inherits the vendore
 rc.4 attempt shipped without that prune, measured 621.9 MB against rc.3's 60.7, and failed its
 400 MB size guard exactly as the guard was written to.
 
+#### The packages were finally built whole — 2026-08-25, and the projections become observations
+
+Run 32822700512, the release workflow's own dispatch mode at version `1.0.0-rc.5`: every step
+green, **"Publish the release" skipped**, nothing tagged and nothing published. What it produced
+is the first complete set of assets this project has measured rather than projected.
+
+| asset | bytes | |
+|---|---:|---|
+| `UindosillDesktop-win-Setup.exe` | 1,156,231,387 | cpu + vulkan, **llm/vulkan**, silero + sortformer |
+| `UindosillDesktop-win-cuda-Setup.exe` | **1,958,585,574** | cpu + cuda + vulkan, **llm/cuda**, silero only |
+| `uindosill-cli-win-x64.zip` | ~74 MB | under its 400 MB guard; `llm` dropped as intended |
+| `uindosill-python-win-x64.zip` | 419,612,478 | the third download |
+
+**The win-cuda asset clears GitHub's limit by 188,898,074 bytes** — about 180 MiB of headroom
+against the 2,147,483,648-byte ceiling that failed rc.4. The decision that bought it is visible
+in the read-back: the win-cuda package's weight list holds `silero-vad-v5.1.2` and **not**
+`sortformer-4spk-v2.1`, which is `NotInCudaChannelIds` doing exactly what it was added for.
+**The projection was optimistic by about 87 MB** — it put the result "near 1.87 GB", and the
+real figure is 1.959 GB — so the margin is real but thinner than the number the decision was
+taken against, and it is now a measured margin rather than arithmetic on a dev-machine build.
+
+**Both channels carry an ask tier, which no release has ever done**: `llm/vulkan` in the
+default, `llm/cuda` in win-cuda, per the 2026-08-24 channel decision. The 485.4 MB and 60.7 MB
+figures below are rc.3's and remain pre-ask-tier; the default installer has grown to 1.156 GB
+with the drops and the bundled weights inside it.
+
+What this still does not establish: that the assets **upload**, since the publish step was
+skipped by design — the 2 GiB limit is enforced at upload, and clearing it in a local read-back
+is a strong indication rather than the event itself. Deltas were seeded from rc.3 but no delta's
+applicability was tested. And nothing here is signed.
+
 **rc.4 was attempted twice and failed twice, and only the first failure was written down here.**
 Read from the workflow history on 2026-08-25: run 32702235974 at `acd3e19` failed on the CLI zip
 after 38 minutes, and run 32705531275 at `41ef482` — the retry, carrying the prune above — failed
