@@ -254,7 +254,6 @@ public class AnswerPromptBuilderTests
         var (instruction, userContent) = AnswerPromptBuilder.BuildMessages(whole, requireQuote: false);
 
         Assert.Contains("complete transcript", instruction, StringComparison.Ordinal);
-        Assert.Contains("Open with one sentence", instruction, StringComparison.Ordinal);
         Assert.Contains("short topic label", instruction, StringComparison.Ordinal);
         Assert.Contains("whole recording", instruction, StringComparison.Ordinal);
         Assert.Contains("Cite every part", instruction, StringComparison.Ordinal);
@@ -264,10 +263,32 @@ public class AnswerPromptBuilderTests
         Assert.Contains("Transcript:", userContent, StringComparison.Ordinal);
         Assert.Contains("[S1-S2] first stretch of speech second stretch", userContent, StringComparison.Ordinal);
 
-        // Retrieval keeps its own wording, and never asks for a lead.
+        // Retrieval keeps its own framing and its own grouping rules.
         var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
         Assert.Contains("from transcript evidence", retrieval, StringComparison.Ordinal);
-        Assert.DoesNotContain("Open with one sentence", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("short topic label", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cite every part", retrieval, StringComparison.Ordinal);
+        Assert.Contains("make sense on its own", retrieval, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BothModesOpenWithASentenceAnsweringTheQuestion()
+    {
+        // Added to retrieval 2026-08-25, on the maintainer reading a real answer: a list of
+        // cited fragments never says the "yes" a yes-or-no question asked for, and a fragment
+        // lifted out of a digression reads as a non-sequitur with a timestamp on it. The
+        // wording is one job in both modes — answer what was asked — because for "give me a
+        // summary" that is what the recording covers, and for "did they mention X" it is yes.
+        var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
+        var (whole, _) = AnswerPromptBuilder.BuildMessages(
+            Request() with { Mode = AnswerMode.WholeTranscript }, requireQuote: false);
+
+        Assert.Contains("Open with one sentence answering the question directly", retrieval, StringComparison.Ordinal);
+        Assert.Contains("Open with one sentence answering the question directly", whole, StringComparison.Ordinal);
+
+        // And the grammar admits one wherever the prompt asks for it — the two are one contract.
+        var grammar = AnswerPromptBuilder.BuildGrammar(Request().Evidence, wantLead: true)!;
+        Assert.Contains("lead ::=", grammar, StringComparison.Ordinal);
     }
 
     [Fact]

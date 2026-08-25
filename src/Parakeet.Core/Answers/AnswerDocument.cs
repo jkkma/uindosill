@@ -48,9 +48,9 @@ public sealed record AnswerDocument
     public required IReadOnlyList<AnswerBullet> Bullets { get; init; }
 
     /// <summary>
-    /// The framing sentence an overview opens with — what the recording is and what it covers —
-    /// before the claims below it. Null in retrieval mode, where prose ahead of the bullets is
-    /// not a shape the prompt asks for and stays an uncited claim.
+    /// The sentence an answer opens with, answering the question directly, above the claims that
+    /// support it — "this recording is about X" for a summary, "yes, they mention X" for a
+    /// pointed question. Null when the model wrote none.
     /// </summary>
     /// <remarks>
     /// An <see cref="AnswerBullet"/> rather than a string, and that is the whole point: a lead

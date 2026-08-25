@@ -269,6 +269,12 @@ public class AnswerParserTests
         Assert.Equal(
             "One thing, then another.",
             AnswerParser.Parse("- One thing, then another [S1].\n").Bullets[0].Text);
+
+        // A separated citation list leaves a run of commas by the same mechanism — this was a
+        // real lead reading "…and the concept of refunds,." (2026-08-25).
+        Assert.Equal(
+            "Costs and the concept of refunds.",
+            AnswerParser.Parse("- Costs and the concept of refunds, [S1], [S2], [S3].\n").Bullets[0].Text);
     }
 
     [Fact]

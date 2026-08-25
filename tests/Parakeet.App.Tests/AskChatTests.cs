@@ -809,14 +809,21 @@ public class AskChatTests
             CitationValidator.Validate(unanchored, transcript).Bullets[0], _ => { });
         Assert.False(unanchoredBullet.QuoteChecked);
         Assert.NotNull(unanchoredBullet.QuoteCaveat);
-        Assert.DoesNotContain("not found", unanchoredBullet.QuoteCaveat, StringComparison.Ordinal);
+        Assert.Contains("not checked", unanchoredBullet.QuoteCaveat, StringComparison.Ordinal);
 
         var wrongQuote = AnswerParser.Parse("- A wrong quote «entirely different words» [S1]\n");
         var wrongQuoteBullet = new AnswerBulletViewModel(
             CitationValidator.Validate(wrongQuote, transcript).Bullets[0], _ => { });
         Assert.True(wrongQuoteBullet.QuoteChecked);
         Assert.False(wrongQuoteBullet.QuoteVerified);
-        Assert.Contains("not found", wrongQuoteBullet.QuoteCaveat, StringComparison.Ordinal);
+
+        // And it says *at the time cited*, not *in the transcript*: the check runs against the
+        // span the citation names, and the words are often really in the recording seconds away
+        // — a real bullet quoted "Just Ship It mentality" from 09:57 under a citation covering
+        // 10:00 onwards (2026-08-25). Calling that absent from the transcript is a claim about
+        // the recording that this check never made.
+        Assert.Contains("at the time cited", wrongQuoteBullet.QuoteCaveat, StringComparison.Ordinal);
+        Assert.DoesNotContain("transcript", wrongQuoteBullet.QuoteCaveat, StringComparison.Ordinal);
     }
 
     [Fact]
