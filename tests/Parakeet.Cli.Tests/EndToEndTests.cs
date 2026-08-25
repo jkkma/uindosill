@@ -14,7 +14,7 @@ public class EndToEndTests
     {
         public Harness(ModelCatalog? catalog = null)
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-cli").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-cli");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

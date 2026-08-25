@@ -38,7 +38,7 @@ public class SpeakerCountTests
     private static (TranscribeViewModel ViewModel, string Directory) Create(
         FakeSpeakerLabellerOptions speakers)
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-spk").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-spk");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(speakers: speakers), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;

@@ -502,7 +502,7 @@ public sealed class SidecarEngineTests
         // A host killed mid-label never reaches the finally that deletes its staged WAV; until
         // 2026-08-22 nothing swept such a file, ever. The sweep takes only files too old to belong
         // to a live run, so a concurrent instance's staging is not touched.
-        var directory = Directory.CreateTempSubdirectory("uindosill-stale").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-stale");
         try
         {
             var stale = Path.Combine(directory, "uindosill-diarise-old.wav");

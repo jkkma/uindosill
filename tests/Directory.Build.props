@@ -26,10 +26,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <!-- Every test project, with no project able to opt out, because the leak it closes was a test
-       forgetting to pass a store rather than a test doing something exotic. See the file. -->
+  <!-- Every test project, with no project able to opt out, because both leaks these close were a
+       test forgetting rather than a test doing something exotic. See the files. -->
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Shared/TestUserData.cs" Link="TestUserData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Shared/*.cs" LinkBase="Shared" />
+    <Using Include="Parakeet.Tests" />
   </ItemGroup>
 
 </Project>

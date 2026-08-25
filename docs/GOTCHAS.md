@@ -704,3 +704,39 @@ redirect against the constants the product reads, and against a defaulted store'
 
 The general rule: **a product default that names a real user path is a hazard in a test process.**
 Give it an override, set the override for the whole test assembly, and do not rely on remembering.
+
+## 34. A test that returns a temporary directory's path has nowhere to put the cleanup
+
+`Directory.CreateTempSubdirectory` is the obvious way for a test to get a scratch directory, and 78
+call sites across this suite used it. Almost none deleted the result, and the reason is structural
+rather than careless: the directory is handed out by a helper —
+
+```csharp
+private static (TranscribeViewModel ViewModel, string Directory) Create()
+```
+
+— so it has to outlive the method that created it, and there is nowhere for a `using` to go. The
+three sites that did clean up were the three whose directory never left the test body.
+
+Nothing failed and nothing reported it, because a test that leaves a directory behind passes.
+Counted on a development machine on 2026-08-25: **17,140 directories and 4.2 GiB** under `%TEMP%`,
+the oldest nine days old, and a suite that added several dozen more on every run.
+
+**Here:** `tests/Shared/TestTemp.cs` gives the run one root under `%TEMP%` and hands out children of
+it — `TestTemp.NewDirectory(prefix)` for a directory, `TestTemp.NewPath(fileName)` for a file inside
+a fresh one — and deletes the whole root at process exit. No test owns a lifetime, so no test can
+fail to. `TempDirectory` is still there for the tests that want their directory gone at a known
+point rather than at the end, and it allocates from the same root, so a missed `Dispose` costs a
+directory until the process ends rather than for ever. A full run now leaves nothing behind, which
+is checked the only way it can be — a test cannot watch its own process exit — by comparing the
+`%TEMP%` entries **by name** across a run. By name rather than by count: two worktrees building the
+same suite on one machine write into the same `%TEMP%`, and a count silently adds the other one's
+directories to yours.
+
+Four paths are deliberately **not** routed through it — the ones naming a missing interpreter, a
+missing model, a missing native directory and a missing GGUF. Those tests prove that an absent path
+is handled, and a helper that creates what it names would quietly turn each of them into a test of
+something else.
+
+The general rule: **give the process one scratch root and delete it once**, rather than asking every
+test to remember a lifetime it is not shaped to own.

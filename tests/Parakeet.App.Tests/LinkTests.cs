@@ -146,7 +146,7 @@ public class LinkTests
         // The one place a string from the clipboard becomes an argument to a process. yt-dlp will
         // happily take a local path, and this is what stops one getting there.
         var fetcher = new YtDlpMediaUrlFetcher();
-        var root = Directory.CreateTempSubdirectory("uindosill-link").FullName;
+        var root = TestTemp.NewDirectory("uindosill-link");
 
         foreach (var bad in new[] { "file:///C:/Windows/System32/notepad.exe", "not a url", "ftp://example.com/x.mp3" })
         {
@@ -204,7 +204,7 @@ public class LinkTests
     public void TheLinkBoxAndItsButtonAreBoundRatherThanMerelyDrawn()
     {
         // Every interface defect this window has shipped was a control wired to nothing.
-        var directory = Directory.CreateTempSubdirectory("uindosill-link").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-link");
         var fetcher = new FakeMediaUrlFetcher();
         var main = new MainWindowViewModel(
             new FakeEngineProvider(),
@@ -237,7 +237,7 @@ public class LinkTests
         FakeMediaUrlFetcher? fetcher = null,
         FakeMediaPlayer? player = null)
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-link").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-link");
         var used = fetcher ?? new FakeMediaUrlFetcher();
 
         var main = new MainWindowViewModel(

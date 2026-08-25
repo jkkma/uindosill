@@ -71,7 +71,7 @@ internal sealed class FakeUpdater : IAppUpdater
 public class UpdatesViewModelTests
 {
     private static AppSettingsStore TempSettings() =>
-        new(Path.Combine(Path.GetTempPath(), "uindosill-update-tests", Guid.NewGuid().ToString("n"), "settings.json"));
+        new(TestTemp.NewPath("settings.json"));
 
     private static UpdatesViewModel New(FakeUpdater updater, Func<Task>? shutdown = null) =>
         new(updater, TempSettings(), shutdown);

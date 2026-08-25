@@ -18,7 +18,7 @@ public sealed class BundledModelsTests : IDisposable
         Environment.GetEnvironmentVariable(BundledModels.DirectoryEnvironmentVariable);
 
     private readonly string _bundle =
-        Directory.CreateTempSubdirectory("uindosill-bundled-models").FullName;
+        TestTemp.NewDirectory("uindosill-bundled-models");
 
     public void Dispose()
     {
@@ -91,7 +91,7 @@ public sealed class BundledModelsTests : IDisposable
         var model = ModelCatalog.Default.VoiceActivityModels.First();
         WriteBundled(model);
 
-        var store = new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-empty-store").FullName);
+        var store = new LocalModelStore(TestTemp.NewDirectory("uindosill-empty-store"));
         var provider = new EngineProvider(store, () => true);
 
         Assert.True(provider.SupportsNeuralSpeechDetection,
@@ -113,7 +113,7 @@ public sealed class BundledModelsTests : IDisposable
 
         // The store's copy is the one the Models tab updates and removes, and the one a user chose
         // to fetch. A bundle that quietly took precedence would make both of those do nothing.
-        var storeDirectory = Directory.CreateTempSubdirectory("uindosill-store").FullName;
+        var storeDirectory = TestTemp.NewDirectory("uindosill-store");
         var store = new LocalModelStore(storeDirectory);
         var downloaded = store.PathFor(model);
         Directory.CreateDirectory(Path.GetDirectoryName(downloaded)!);
@@ -130,7 +130,7 @@ public sealed class BundledModelsTests : IDisposable
     {
         Environment.SetEnvironmentVariable(BundledModels.DirectoryEnvironmentVariable, _bundle);
 
-        var store = new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-empty-store").FullName);
+        var store = new LocalModelStore(TestTemp.NewDirectory("uindosill-empty-store"));
         var provider = new EngineProvider(store, () => true);
 
         // A build from source carries no weights until the packaging script has run, and on one the

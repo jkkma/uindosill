@@ -34,7 +34,7 @@ public sealed class HandoffWavTests
         var throughPcm16 = samples.Select(s => (short)Math.Round(Math.Clamp(s, -1f, 1f) * 32767f) / 32768f);
         Assert.NotEqual(samples, throughPcm16);
 
-        var directory = Directory.CreateTempSubdirectory("uindosill-handoff");
+        var directory = new DirectoryInfo(TestTemp.NewDirectory("uindosill-handoff"));
         var source = Path.Combine(directory.FullName, "source.wav");
         WavWriter.WriteFloat32File(source, samples, 16_000);
 
@@ -97,7 +97,7 @@ public sealed class HandoffWavTests
                          * (0.6f + 0.4f * MathF.Sin(2 * MathF.PI * 0.7f * t));
         }
 
-        var directory = Directory.CreateTempSubdirectory("uindosill-staging");
+        var directory = new DirectoryInfo(TestTemp.NewDirectory("uindosill-staging"));
         var source = Path.Combine(directory.FullName, "source.wav");
         WavWriter.WriteFloat32File(source, samples, SourceRate);
 
@@ -154,7 +154,7 @@ public sealed class HandoffWavTests
             samples[i] = MathF.Sin(2 * MathF.PI * 440 * i / SourceRate) * 0.3f;
         }
 
-        var directory = Directory.CreateTempSubdirectory("uindosill-staging-cancel");
+        var directory = new DirectoryInfo(TestTemp.NewDirectory("uindosill-staging-cancel"));
         var source = Path.Combine(directory.FullName, "source.wav");
         WavWriter.WriteFloat32File(source, samples, SourceRate);
 

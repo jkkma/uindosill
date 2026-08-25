@@ -24,7 +24,7 @@ public class DiariseCommandTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-diarise").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-diarise");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

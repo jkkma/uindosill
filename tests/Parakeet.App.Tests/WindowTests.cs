@@ -280,7 +280,7 @@ public class WindowTests
         // — unload, release the backend — and only then closes. Asserted on the real window's
         // Closing path, not on the view model method it calls.
         var provider = new FakeEngineProvider();
-        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-app");
         var viewModel = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         await viewModel.Session.LoadAsync(new EngineSelection { Model = viewModel.Models.SelectedDescriptor });
 
@@ -306,13 +306,13 @@ public class WindowTests
 
     internal static MainWindowViewModel NewViewModel(out string directory)
     {
-        directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        directory = TestTemp.NewDirectory("uindosill-app");
         return new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
     }
 
     private static MainWindowViewModel NewViewModel(IAppUpdater updater)
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-app");
         return new MainWindowViewModel(
             new FakeEngineProvider(),
             new LocalModelStore(directory),
@@ -447,7 +447,7 @@ public class ShutdownTests
         // then disposes the session. Releasing the backend under a running decode would let the
         // decode recreate it, and the exit abort would come back.
         var provider = new OrderRecordingProvider();
-        var directory = Directory.CreateTempSubdirectory("uindosill-shutdown").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-shutdown");
         var main = new MainWindowViewModel(provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         provider.IsBatchRunning = () => main.Transcribe.IsRunning;
         main.Transcribe.OutputDirectory = directory;
@@ -486,7 +486,7 @@ public class TranscribeViewModelTests
 {
     private static (TranscribeViewModel ViewModel, string Directory) Create()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
 
@@ -566,7 +566,7 @@ public class TranscribeViewModelTests
         // end: it sat blank at "Waiting" for ever beside "Finished 1 file." — the silent dead row
         // that reconciliation was written to prevent, arriving by the one door it does not cover.
         // Adding is refused while a batch runs now, the way Clear already was, and says so.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var provider = new FakeEngineProvider(new FakeEngineOptions
         {
             PerSegmentDelay = TimeSpan.FromMilliseconds(100),
@@ -617,7 +617,7 @@ public class TranscribeViewModelTests
         // second button for a decision already made by pressing this one. It loads for itself now.
         // What it deliberately does NOT do is load at launch: a load fixes the compute backend for
         // the rest of the process, so it waits for somebody to actually ask for work.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var engines = new FakeEngineProvider { ModelAvailable = false };
         var main = new MainWindowViewModel(
             engines, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
@@ -665,7 +665,7 @@ public class TranscribeViewModelTests
         // go by Complete(). The streamed text went into LiveTranscript, which no view has ever bound
         // — `git log -S LiveTranscript -- '*.axaml'` finds nothing in any commit — so a file being
         // transcribed showed a progress bar and nothing to read, for as long as the decode took.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var provider = new FakeEngineProvider(new FakeEngineOptions
         {
             PerSegmentDelay = TimeSpan.FromMilliseconds(100),
@@ -721,7 +721,7 @@ public class TranscribeViewModelTests
         // a two-sentence phrase and reads the rows the moment they appear, before the rebuild can
         // have happened: a transcript that re-cut itself when the decode ended would read as a
         // defect, and nothing but this would see it.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var provider = new FakeEngineProvider(new FakeEngineOptions
         {
             PerSegmentDelay = TimeSpan.FromMilliseconds(100),
@@ -828,7 +828,7 @@ public class TranscribeViewModelTests
         // Four quantisations were withdrawn from the catalogue on 2026-08-20 and stayed on disk.
         // This tab names the model directory at the top of itself and then described only part of
         // its contents, so it sat beside gigabytes it would neither show nor remove.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         File.WriteAllText(Path.Combine(directory, "tdt-0.6b-v3-q8_0.gguf"), "withdrawn weights");
 
         var main = new MainWindowViewModel(
@@ -866,7 +866,7 @@ public class TranscribeViewModelTests
         // Load button underneath it, reading as that model's backend. It is neither: the diariser
         // picks its own provider inside the sidecar, and CanLoad has always required a
         // transcription entry. The panel moved out of the pane, and the button now says so.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
 
@@ -893,7 +893,7 @@ public class TranscribeViewModelTests
     {
         // Start loads the model itself as of 2026-08-23, so "Choose a model and press Load before
         // transcribing" was describing a refusal that no longer happens.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
 
@@ -908,7 +908,7 @@ public class TranscribeViewModelTests
         // Every fact on the tab was established once, at construction, and Refresh() existed with
         // nothing calling it — so weights arriving from anywhere but this window's own Download
         // button stayed invisible until a restart.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
 
@@ -1094,7 +1094,7 @@ public class TranscribeViewModelTests
         Assert.Contains(withLabeller.Formats, f => f.Id == "rttm");
 
         var without = new TranscribeViewModel(
-            new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => true),
+            new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-vm")), () => true),
             () => new EngineSelection());
         Assert.DoesNotContain(without.Formats, f => f.Id == "rttm");
     }
@@ -1104,7 +1104,7 @@ public class TranscribeViewModelTests
     {
         // The loaded engine is what runs, not whichever row is highlighted; a selection the engine
         // provider will not build must not be reported as "no model is installed".
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var main = new MainWindowViewModel(new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
         main.Transcribe.OutputDirectory = directory;
         await main.Session.LoadAsync(new EngineSelection { Model = main.Models.SelectedDescriptor });
@@ -1120,7 +1120,7 @@ public class TranscribeViewModelTests
     [Fact]
     public void WithoutTheDiarisationModelTheOptInIsDisabledWithAReasonAUserCanActOn()
     {
-        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => true), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-vm")), () => true), () => new EngineSelection());
 
         Assert.False(viewModel.CanLabelSpeakers);
         Assert.Contains("not installed", viewModel.SpeakerHint, StringComparison.Ordinal);
@@ -1133,7 +1133,7 @@ public class TranscribeViewModelTests
         // The third opt-in on the first two's terms — and with one reason rather than two, because
         // the detector runs in this process: a missing Python is not its problem and a hint that
         // mentioned one would send somebody to repair a thing that is not broken.
-        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-vm").FullName), () => false), () => new EngineSelection());
+        var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-vm")), () => false), () => new EngineSelection());
 
         Assert.False(viewModel.CanUseNeuralSpeechDetection);
         Assert.Contains("not installed", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
@@ -1147,7 +1147,7 @@ public class TranscribeViewModelTests
         // A file of the right name is enough here: nothing loads it until Start, and what is under
         // test is the wiring between the store and the checkbox — and the one case where the box is
         // live but inert, which the hint names instead of leaving a ticked box that changes nothing.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vad").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vad");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.VoiceActivityModels);
 
@@ -1178,7 +1178,7 @@ public class TranscribeViewModelTests
         // untick it, remove the model, install it again, and it comes back unticked rather than
         // reset to the default. The same in the other direction, because the answer is a choice
         // and not a ratchet.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vad").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vad");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.VoiceActivityModels);
         var path = store.PathFor(model);
@@ -1215,7 +1215,7 @@ public class TranscribeViewModelTests
         // The window's half of the detector contract: one detector per batch, created only when the
         // box is ticked and fixed windows are off, disposed with the batch — and the engine opens a
         // stream on it per file, at the file's rate, and closes each.
-        var directory = Directory.CreateTempSubdirectory("uindosill-vm").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-vm");
         var provider = new FakeEngineProvider();
         var main = new MainWindowViewModel(
             provider, new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
@@ -1252,7 +1252,7 @@ public class TranscribeViewModelTests
         // the rttm format come alive when the download finishes rather than at the next release.
         // A file of the right name is enough here: nothing loads it, and what is under test is the
         // wiring between the model store and the window.
-        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
 
@@ -1274,7 +1274,7 @@ public class TranscribeViewModelTests
         // The resolver knows what it looked for — two bundle directories, or an override that
         // points at nothing — and until 2026-08-22 the window threw that away and said "reinstall",
         // which is the wrong advice when UINDOSILL_PYTHON names a path that does not exist.
-        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
         File.WriteAllText(store.PathFor(model), "not really a graph");
@@ -1296,7 +1296,7 @@ public class TranscribeViewModelTests
         // constructor is a hint that reads "install it from the Models tab" for the rest of the
         // session after the user has done exactly that. Asserted on one instance across the change,
         // not on two instances either side of it.
-        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
         var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
@@ -1322,7 +1322,7 @@ public class TranscribeViewModelTests
         // protected there. A checkbox left ticked with nothing behind it produces a transcript with
         // no names and a zero-byte .rttm, reported as "Finished": exactly the silent failure the
         // command line refuses.
-        var directory = Directory.CreateTempSubdirectory("uindosill-diar").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
         var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
         File.WriteAllText(store.PathFor(model), "not really a graph");
@@ -1346,7 +1346,7 @@ public class TranscribeViewModelTests
         // The two tabs are siblings that do not know about each other, so the wiring lives in the
         // window's view model. Without it the checkbox never notices a download, which is what the
         // hint tells the user to go and do.
-        var directory = Directory.CreateTempSubdirectory("uindosill-app").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-app");
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
         // By task, not by "not transcription": there are two non-ASR entries now, and the one this
@@ -1474,7 +1474,7 @@ public class ModelsViewModelTests
     [Fact]
     public void UnverifiedEntriesAreLabelledAsSuch()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue());
 
         var model = viewModel.Models.First(m => !m.Descriptor.Verified);
@@ -1500,7 +1500,7 @@ public class ModelsViewModelTests
     [Fact]
     public async Task DownloadIsRefusedWithoutTheUnverifiedOptIn()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue())
         {
             AllowUnverified = false,
@@ -1524,7 +1524,7 @@ public class ModelsViewModelTests
         // it must be true for the checked case only: the other three each name something that was
         // never verified, and an unpinned entry saying "cannot be verified" in green would be the
         // same defect pointing the other way.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var unpinned = new ModelsViewModel(new LocalModelStore(directory), UnpinnedCatalogue());
 
         var unchecked_ = unpinned.Models.First(m => !m.Descriptor.Verified);
@@ -1552,7 +1552,7 @@ public class ModelsViewModelTests
     [Fact]
     public void ShippedEntriesAreAllPinnedAndSaySo()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
 
         // "and say so" is the half worth testing, so it is tested as a property of the pair of
@@ -1574,7 +1574,7 @@ public class ModelsViewModelTests
         // 1.34 GiB re-fetch of a file the store already had, next to a Remove button that was
         // correctly disabled on the opposite condition. Asserting on CanDownload, which is what
         // the binding and the command guard both read.
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
         var model = viewModel.Models.First();
 
@@ -1596,7 +1596,7 @@ public class ModelsViewModelTests
     [Fact]
     public async Task DownloadingAnInstalledModelDoesNothing()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
 
         viewModel.Selected = viewModel.Models.First();
@@ -1644,7 +1644,7 @@ public class ModelsViewModelTests
     [Fact]
     public async Task TheModelsTabReportsTheLoadedModelAndFlagsAFallback()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var session = new ModelSession(new FakeEngineProvider());
         var viewModel = new ModelsViewModel(
             new LocalModelStore(directory),
@@ -1687,7 +1687,7 @@ public class ModelsViewModelTests
     [Fact]
     public async Task LoadAndUnloadAreShutOffWhileATranscriptionIsRunning()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var session = new ModelSession(new FakeEngineProvider());
         var viewModel = new ModelsViewModel(
             new LocalModelStore(directory), ModelCatalog.Default, session: session);
@@ -1711,7 +1711,7 @@ public class ModelsViewModelTests
     [Fact]
     public async Task ALoadedModelCannotBeRemovedFromUnderTheEngine()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var session = new ModelSession(new FakeEngineProvider());
         var viewModel = new ModelsViewModel(
             new LocalModelStore(directory), ModelCatalog.Default, session: session);
@@ -1729,7 +1729,7 @@ public class ModelsViewModelTests
     [Fact]
     public void AttributionIsAvailableForDisplayNextToTheModels()
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-models").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-models");
         var viewModel = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
 
         Assert.Contains("NVIDIA", viewModel.Attribution, StringComparison.Ordinal);

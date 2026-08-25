@@ -24,7 +24,7 @@ public class OptInFailureTests
         FakeSpeakerLabellerOptions? speakers = null,
         FakeTranslatorOptions? translator = null)
     {
-        var directory = Directory.CreateTempSubdirectory("uindosill-optin").FullName;
+        var directory = TestTemp.NewDirectory("uindosill-optin");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(speakers: speakers, translator: translator),
             new LocalModelStore(directory),

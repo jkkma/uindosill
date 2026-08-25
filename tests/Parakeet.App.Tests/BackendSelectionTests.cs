@@ -25,12 +25,12 @@ namespace Parakeet.App.Tests;
 public class BackendSelectionTests
 {
     private static string TempSettingsPath() =>
-        Path.Combine(Path.GetTempPath(), "uindosill-backend-tests", Guid.NewGuid().ToString("n"), "settings.json");
+        TestTemp.NewPath("settings.json");
 
     private static MainWindowViewModel NewViewModel(
         AppSettingsStore settings, params ComputeBackend[] onDisk) =>
         new(new FakeEngineProvider(),
-            new LocalModelStore(Directory.CreateTempSubdirectory("uindosill-backend").FullName),
+            new LocalModelStore(TestTemp.NewDirectory("uindosill-backend")),
             ModelCatalog.Default,
             updater: null,
             settings: settings,

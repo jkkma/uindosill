@@ -14,7 +14,7 @@ public class WerCommandTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-wer").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-wer");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext

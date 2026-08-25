@@ -6,7 +6,7 @@ namespace Parakeet.App.Tests;
 public class AppSettingsStoreTests
 {
     private static string TempFile() =>
-        Path.Combine(Path.GetTempPath(), "uindosill-settings-tests", Guid.NewGuid().ToString("n"), "settings.json");
+        TestTemp.NewPath("settings.json");
 
     [Fact]
     public void AMissingFileIsTheShippedDefault()

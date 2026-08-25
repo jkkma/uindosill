@@ -24,7 +24,7 @@ public class PassFallbackTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-pass").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-pass");
             Error = new StringWriter();
             Context = new CliContext
             {

@@ -21,7 +21,7 @@ public class FormatAliasTests
     {
         public Harness()
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-alias").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-alias");
             Error = new StringWriter();
             Context = new CliContext
             {

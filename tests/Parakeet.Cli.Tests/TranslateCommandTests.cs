@@ -18,7 +18,7 @@ public class TranslateCommandTests
     {
         public Harness(ModelCatalog? catalog = null)
         {
-            Directory = System.IO.Directory.CreateTempSubdirectory("uindosill-translate").FullName;
+            Directory = TestTemp.NewDirectory("uindosill-translate");
             Out = new StringWriter();
             Error = new StringWriter();
             Context = new CliContext
