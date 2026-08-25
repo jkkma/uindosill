@@ -2,22 +2,34 @@
 
 The code is MIT — **except that a build carrying the video player is distributed under the GPL**, which is the first section below. The weights are neither, and their obligations are the ones worth reading twice.
 
-**Three model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
+**Four model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
 seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
 License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
 revocable and carry a use restriction about biometrics. The translation weights are Apache-2.0 and
 want a copy of the licence, a statement of what was changed, and the notices the source carried.
-Which entry has which licence is asserted by a test, so adding a fourth is a deliberate act rather
-than a drift.
+The speech-detection weights are MIT and want the copyright line and the permission notice, which
+is the whole of it — the fourth licence, added with Silero VAD on 2026-08-23, and the reason this
+paragraph counts four. Which entry has which licence is asserted by a test, so adding a fifth is a
+deliberate act rather than a drift.
 
-**And from 2026-08-21 the installer is built to carry a Python — though none has been built yet.**
-The diariser and the translator moved out of C# and into a bundled interpreter, and
-`scripts/bundle-python.ps1` assembles one and `scripts/package-windows.ps1` puts it in the publish;
-what has not happened is a packaging run. The obligation arrives with the decision rather than with
-the first release, because it turns fifty third-party wheels and a CPython from things this project
-*depends on* into things it *redistributes*. That is a different obligation and it is
-not discharged; the section below is the record of what will be owed, not a claim that anything has
-been done about it.
+**Two of the four are now distributed rather than downloaded, which changes who owes the notice.**
+Since the installer began carrying weights on 2026-08-23, every channel ships the speech-detection
+weights and the default channel ships the speaker-labelling weights as well (`BundledModels`;
+win-cuda excludes the latter for size). The transcription and translation weights are still fetched
+by the user on request. A downloaded weight is the user's copy; a bundled one is this project
+redistributing someone else's model, and the NVIDIA and MIT obligations above attach to the build
+rather than to the download.
+
+**And since 2026-08-23 an installer that carries a Python has shipped, so this obligation is live
+rather than pending.** The diariser and the translator moved out of C# and into a bundled
+interpreter on 2026-08-21; `scripts/bundle-python.ps1` assembles one and
+`scripts/package-windows.ps1` puts it in the publish. What was outstanding when this paragraph was
+first written — a packaging run — happened: `v1.0.0-rc.3` was published on 2026-08-23 as the first
+release packed with the bundle, which turns fifty third-party wheels and a CPython from things this
+project *depends on* into things it *redistributes*. **The obligation is not discharged.** The
+section below is the record of what is owed, and it is now owed against a release that exists
+rather than against a decision — a stronger claim on this project than the one this paragraph used
+to make. `NOTICE.md` says the same in its own words and does not pretend otherwise either.
 
 ## The video player is GPL, and it takes the distribution with it
 

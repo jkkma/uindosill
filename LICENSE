@@ -18,9 +18,19 @@ in licences/GPL-2.0.txt. See docs/LICENSING.md for what each obliges, and
 licences/mpv-WRITTEN-OFFER.txt for where the corresponding source lives.
 
 The model weights are covered by neither. They are separately licensed by their
-authors (CC BY 4.0, the NVIDIA Open Model License, and Apache-2.0), they are
-downloaded by the user rather than distributed with the application, and their
-notices are in NOTICE.md.
+authors — four entries under four licences — and their notices are in
+NOTICE.md:
+
+    Transcription     parakeet-tdt-0.6b-v3          CC BY 4.0
+    Speaker labelling sortformer-4spk-v2.1          NVIDIA Open Model License
+    Translation       opus-mt-tc-bible-big-mul-en   Apache-2.0
+    Speech detection  silero-vad-v5.1.2             MIT
+
+Some are distributed with the application and some are not. Every installer
+carries the speech-detection weights; the default channel carries the
+speaker-labelling weights as well, and the win-cuda channel does not. The
+transcription and translation weights are downloaded by the user on request and
+ship with no build.
 
 
 PART A — THE UINDOSILL SOURCE CODE
