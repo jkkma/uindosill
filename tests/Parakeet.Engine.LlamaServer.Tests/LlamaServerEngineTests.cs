@@ -108,6 +108,26 @@ public class LlamaServerArgumentTests
     }
 
     [Fact]
+    public void TheThinkingModeDecidesWhetherTheModelThinksAtAll()
+    {
+        // The defect this pins, measured 2026-08-25 and shipped until then: `--reasoning`
+        // defaults to `auto`, so the model's template decided and a thinking model thought
+        // whatever this setting said — `--reasoning-format` only chose where the thought text
+        // was filed, and under the default parse the engine dropped it, so the answer budget
+        // could be spent before one content token existed. The 26B-A4B produced nothing at all
+        // in 79.4 s under `auto` and a full cited overview in 45.5 s under `off`.
+        var off = Arguments(Options(), 1, "k");
+        Assert.Equal("off", off[off.IndexOf("--reasoning") + 1]);
+
+        var on = Arguments(Options() with { ThinkBeforeAnswer = true }, 1, "k");
+        Assert.Equal("on", on[on.IndexOf("--reasoning") + 1]);
+
+        // The grammar mode is a non-thinking mode too, and says so for the same reason.
+        var grammarMode = Arguments(Options() with { UseGrammar = true }, 1, "k");
+        Assert.Equal("off", grammarMode[grammarMode.IndexOf("--reasoning") + 1]);
+    }
+
+    [Fact]
     public void VulkanGetsTheBf16KnobUnlessTheCallerSaysOtherwise()
     {
         // The laptop's driver hangs at model load without the bf16 knob (measured 2026-08-16),
@@ -221,6 +241,81 @@ public class AnswerPromptBuilderTests
             "BCP-47 tag is: de",
             AnswerPromptBuilder.BuildPrompt(Request() with { Language = "de" }),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheOverviewPromptAsksForCoverageGroupingAndAFramingSentence()
+    {
+        // The whole-transcript instruction is a different job from the retrieval one, not a
+        // longer one: the model holds the recording rather than a shortlist already judged
+        // relevant, so what it needs told is coverage and grouping — and the framing sentence
+        // the panel renders above the claims.
+        var whole = Request() with { Mode = AnswerMode.WholeTranscript };
+        var (instruction, userContent) = AnswerPromptBuilder.BuildMessages(whole, requireQuote: false);
+
+        Assert.Contains("complete transcript", instruction, StringComparison.Ordinal);
+        Assert.Contains("Open with one sentence", instruction, StringComparison.Ordinal);
+        Assert.Contains("short topic label", instruction, StringComparison.Ordinal);
+        Assert.Contains("whole recording", instruction, StringComparison.Ordinal);
+        Assert.Contains("Cite every part", instruction, StringComparison.Ordinal);
+        Assert.Contains("Never write a timestamp", instruction, StringComparison.Ordinal);
+
+        // The evidence is the transcript here, and it says so.
+        Assert.Contains("Transcript:", userContent, StringComparison.Ordinal);
+        Assert.Contains("[S1-S2] first stretch of speech second stretch", userContent, StringComparison.Ordinal);
+
+        // Retrieval keeps its own wording, and never asks for a lead.
+        var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
+        Assert.Contains("from transcript evidence", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open with one sentence", retrieval, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRecordingsFileNameIsOfferedForNamingAndFencedFromEvidence()
+    {
+        // The file name is provenance the application holds and the transcript does not — it is
+        // how a person refers to the recording. Fenced on purpose: a claim sourced from a file
+        // name would be the one line in an answer with no segment behind it. The directory never
+        // travels; the prompt has no use for the user's folder structure.
+        var request = Request();
+        var named = request with
+        {
+            Mode = AnswerMode.WholeTranscript,
+            Transcript = request.Transcript with
+            {
+                SourceName = Path.Combine("C:", "Users", "someone", "Castle Super Beast 287.mp3"),
+            },
+        };
+
+        var (instruction, _) = AnswerPromptBuilder.BuildMessages(named, requireQuote: false);
+        Assert.Contains("\"Castle Super Beast 287\"", instruction, StringComparison.Ordinal);
+        Assert.Contains("never as a fact about its contents", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("someone", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain(".mp3", instruction, StringComparison.Ordinal);
+
+        // Nameless recordings simply do not get the line, and retrieval never does.
+        var (nameless, _) = AnswerPromptBuilder.BuildMessages(
+            request with { Mode = AnswerMode.WholeTranscript }, requireQuote: false);
+        Assert.DoesNotContain("file is named", nameless, StringComparison.Ordinal);
+
+        var (retrieval, _) = AnswerPromptBuilder.BuildMessages(named with { Mode = AnswerMode.Retrieval });
+        Assert.DoesNotContain("file is named", retrieval, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLeadHasAGrammarProductionExactlyWhereThePromptAsksForOne()
+    {
+        // This file's stated principle: prompt and grammar are two statements of one contract.
+        // An instruction to open with a framing sentence, under a grammar that cannot sample
+        // one, is the same defect as an abstain instruction with no abstain production.
+        var evidence = Request().Evidence;
+
+        var withLead = AnswerPromptBuilder.BuildGrammar(evidence, wantLead: true)!;
+        Assert.Contains("lead ::=", withLead, StringComparison.Ordinal);
+        Assert.Contains("root ::= abstain | lead bullet{1,8}", withLead, StringComparison.Ordinal);
+
+        var without = AnswerPromptBuilder.BuildGrammar(evidence)!;
+        Assert.DoesNotContain("lead", without, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -537,5 +632,93 @@ public sealed class LlamaServerIntegrationTests
 
         var answer = AnswerParser.Parse(text);
         Assert.True(answer.Abstained || answer.Bullets.Count > 0, $"nothing parsed out of:\n{text}");
+    }
+
+    [Fact]
+    public async Task TheWholeTranscriptModeAsksOverTheRecordingAndTerminates()
+    {
+        var model = Environment.GetEnvironmentVariable(ModelVariable);
+        var serverRoot = Environment.GetEnvironmentVariable(ServerRootVariable);
+        Assert.SkipWhen(
+            string.IsNullOrWhiteSpace(model) || string.IsNullOrWhiteSpace(serverRoot),
+            $"Set {ModelVariable} to a small GGUF and {ServerRootVariable} to a native/win-x64/llm directory to run the engine against the real server.");
+
+        var transcript = new TranscriptDocument
+        {
+            SourceName = "Quarterly Review Meeting.wav",
+            AudioDuration = TimeSpan.FromSeconds(40),
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "The meeting opened with the quarterly budget review." },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Text = "Maria presented the axolotl conservation project." },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(20), End = TimeSpan.FromSeconds(30), Text = "Then the team argued about the catering budget for an hour." },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(30), End = TimeSpan.FromSeconds(40), Text = "The team agreed to meet again on Friday." },
+            ],
+        };
+
+        var backend = Environment.GetEnvironmentVariable(BackendVariable) is { Length: > 0 } named
+            ? Enum.Parse<ComputeBackend>(named, ignoreCase: true)
+            : ComputeBackend.Cpu;
+
+        await using var engine = new LlamaServerAnswerEngine(new LlamaServerOptions
+        {
+            ModelPath = model!,
+            Backend = backend,
+            ServerRoot = serverRoot,
+            ContextSize = 4096,
+            MaxAnswerTokens = 256,
+        });
+
+        await engine.LoadAsync(TestContext.Current.CancellationToken);
+
+        // The whole-transcript path end to end against a real child: the evidence is the
+        // recording tiled once, the ask is global, and the stream has to stop on its own. What
+        // is asserted is the engine's and the parser's, never the model's judgement — a 0.6B's
+        // summary is not evidence about a 26B's, and coverage is what the labelled set will
+        // measure. The lead is not required: whether a model TAKES the framing sentence is a
+        // per-model behaviour, so this pins that when one is produced it parses as the lead and
+        // never as a claim, and that every resolving citation names a real span.
+        var chunks = new List<string>();
+        var request = new AskRequest
+        {
+            Question = "Give me a summary of this recording.",
+            Transcript = transcript,
+            Mode = AnswerMode.WholeTranscript,
+            Evidence = TranscriptWindowBuilder.Build(transcript, TranscriptWindowOptions.Cover),
+        };
+
+        await foreach (var chunk in engine.AskAsync(request, ct: TestContext.Current.CancellationToken))
+        {
+            chunks.Add(chunk);
+        }
+
+        var text = string.Concat(chunks);
+        Assert.NotEmpty(text);
+
+        var answer = AnswerParser.Parse(text, allowLead: true);
+        Assert.True(
+            answer.Abstained || answer.Bullets.Count > 0 || answer.Lead is not null,
+            $"nothing parsed out of:\n{text}");
+
+        // No forced quote on this path — an overview bullet is a synthesis across minutes, so
+        // the prompt does not ask for one and the model has no quote instruction to obey.
+        Assert.All(answer.Bullets, b => Assert.Null(b.Quote));
+
+        var validation = CitationValidator.Validate(answer, transcript);
+        var resolved = validation.Bullets.Concat(validation.Lead is { } lead ? [lead] : Array.Empty<ResolvedBullet>());
+        foreach (var citation in resolved.SelectMany(b => b.Citations))
+        {
+            if (citation.Citation.IsUncitedMarker || !citation.Check.Resolves)
+            {
+                // Ungrammared, an invented id is possible and renders unresolved — the post-hoc
+                // contract, not a failure of this test.
+                continue;
+            }
+
+            Assert.True(
+                citation.Check.NonEmpty && citation.Check.WithinDuration,
+                $"citation [{citation.Citation.Raw}] resolved to nothing usable, in:\n{text}");
+            Assert.NotNull(citation.Start);
+        }
     }
 }

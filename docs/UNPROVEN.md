@@ -3816,6 +3816,28 @@ environment gained the expert-offload pair as defaults after the app's first 26B
 without them; and the 26B at ~1.3 GB of free system RAM decodes at a paging crawl — the
 model's experts want ~10 GB of the 15.6 GB pool to themselves.
 
+#### "Think before answering: off" did not turn thinking off — measured and fixed 2026-08-25
+
+The shipped default was starting the child with the server's `--reasoning` at its `auto`
+default, which detects from the model's template: a thinking model thought whatever the setting
+said. `--reasoning-format` — the only reasoning flag the engine set, and only in the grammar
+mode — chooses where the thought text is *filed*, not whether it is produced, and under the
+default parse it is filed as `reasoning_content`, which the engine counts for progress and never
+yields. So the answer budget could be spent entirely on thinking the user never sees, and the
+panel's honest report of that is "The model produced no answer."
+
+Measured on the second machine, the shipped configuration against a twelve-segment overview
+prompt, 512 answer tokens, Vulkan, the 26B-A4B: **nothing at all in 79.4 s** under `auto`;
+**a framing sentence and four cited bullets in 45.5 s** under `--reasoning off`, same prompt,
+same model, same session. The engine now passes `--reasoning on|off` from
+`ThinkBeforeAnswer`, so the toggle decides what its label says. What this does **not** establish:
+how often the old behaviour bit in retrieval mode — the 0.6B's template opens no think block and
+the gated tests never saw it, and the register's 2026-08-24 thinking-cost figures were taken with
+`ThinkBeforeAnswer` explicitly on, so they measure what they claim. The repetition loops observed
+in the app on 2026-08-25 were diagnosed as greedy decoding inside the grammar's free-text spans
+and that finding is unchanged; whether some of them were think-loops instead is **not** something
+this measurement settles.
+
 #### The whole-transcript opt-in exists, and nothing about its answers is measured — built 2026-08-25
 
 The global-question gap above got its designed answer the same day: a Settings toggle sends the
@@ -3823,11 +3845,23 @@ ask over the recording tiled once (`TranscriptWindowOptions.Cover`, non-overlapp
 retrieval windows' half-overlap would send the transcript twice), with the child's context
 sized to the recording by `AnswerContextBudget` (floor 16,384, the retrieval tier's unchanged
 default) and the panel rebuilding the engine exactly when that figure changes. The register's
-decision 3 block carries the shape; what this file owes is the unproven list. **No
-whole-transcript answer has been scored** — the labelled set's `global` questions are what will
-score them, and until then the mode's only honest numbers are prefill costs measured elsewhere
-in this file (7.93 s for 47.7k tokens on the desktop's CUDA; 467.9–2,104.1 s for the same
-transcript on this machine's four placements). **The budget's chars-per-token margin is an
+decision 3 block carries the shape; what this file owes is the unproven list.
+
+**One overview has been read, on a toy transcript, and it is the only thing observed.** The
+26B-A4B over a twelve-segment synthetic meeting (Vulkan, the shipped decode, `--reasoning off`)
+produced a framing sentence and four labelled bullets in 45.5 s, every citation resolving,
+citations landing in all three thirds of the recording, and no bullet quoting — the shape the
+prompt asks for, end to end through the product's own path. That is a **shape** observation and
+nothing more: twelve segments is not a recording, one run is not a rate, and a synthetic meeting
+written to have separable topics is the easiest possible case for coverage. A 0.6B on the same
+prompt covered the topics and emitted **no citations at all** — ungrammared, the citation
+instruction is a per-model behaviour, which is the post-hoc contract working as specified rather
+than a surprise.
+
+**No whole-transcript answer has been scored** — the labelled set's `global` questions are what
+will score them, and until then the mode's only honest numbers are prefill costs measured
+elsewhere in this file (7.93 s for 47.7k tokens on the desktop's CUDA; 467.9–2,104.1 s for the
+same transcript on this machine's four placements). **The budget's chars-per-token margin is an
 estimate**: chars/4 plus a quarter covers the languages tried so far, but no tokenizer-density
 measurement exists across the 25 languages, and a transcript that tokenizes denser than the
 margin would hit the server's context error honestly rather than silently — the failure path

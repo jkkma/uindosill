@@ -174,6 +174,15 @@ public sealed class FakeAnswerEngine : IAnswerEngine
 
         var evidence = request.Evidence;
 
+        // The overview opens with the framing sentence its prompt asks for, cited to where the
+        // recording starts — so the panel's lead, its chips and its copy text are all exercised
+        // without a model, and a fake that skipped it would let the shape ship untested.
+        if (request.Mode == AnswerMode.WholeTranscript)
+        {
+            yield return "This recording covers several things ";
+            yield return $"[{evidence[0].CitationId}]\n";
+        }
+
         // One bullet per evidence window, citing the window's own run and quoting its first
         // words verbatim — so the quote check has something true to verify.
         var labels = new[] { "First", "Second", "Third", "Fourth", "Fifth" };

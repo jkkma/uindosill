@@ -276,7 +276,7 @@ public sealed partial class AskChatViewModel : ObservableObject
                 entry.OnStreamed(text.ToString());
             }
 
-            var answer = AnswerParser.Parse(text.ToString()) with
+            var answer = AnswerParser.Parse(text.ToString(), allowLead: whole) with
             {
                 ModelId = _engine.Capabilities.ModelId,
                 Quantisation = _engine.Capabilities.Quantisation,
@@ -450,6 +450,12 @@ public sealed partial class ChatEntryViewModel : ObservableObject
 
     public ObservableCollection<SourceRowViewModel> Sources { get; } = [];
 
+    /// <summary>The overview's framing sentence, chips and all, or null when there was none.</summary>
+    [ObservableProperty]
+    private AnswerBulletViewModel? _lead;
+
+    public bool HasLead => Lead is not null;
+
     public bool HasBullets => Bullets.Count > 0;
 
     public bool HasSources => Sources.Count > 0;
@@ -501,6 +507,11 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         IsThinking = false;
         Abstained = answer.Abstained;
 
+        if (validation.Lead is { } lead)
+        {
+            Lead = new AnswerBulletViewModel(lead, seekAndPlay);
+        }
+
         foreach (var bullet in validation.Bullets)
         {
             Bullets.Add(new AnswerBulletViewModel(bullet, seekAndPlay));
@@ -515,6 +526,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         _copyText = BuildCopyText(answer, validation, document);
         IsDone = true;
 
+        OnPropertyChanged(nameof(HasLead));
         OnPropertyChanged(nameof(HasBullets));
         OnPropertyChanged(nameof(HasSources));
         OnPropertyChanged(nameof(CanCopy));
@@ -582,6 +594,22 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         if (Abstained)
         {
             text.AppendLine(AbstainedText);
+        }
+
+        // The overview's framing sentence keeps its place at the top and its times with it: an
+        // email that opened with the claims would lose what the recording was.
+        if (validation.Lead is { } lead)
+        {
+            var leadTimes = lead.Citations.Where(c => c.Check.Resolves).ToList();
+            if (leadTimes.Count > 0)
+            {
+                text.Append('[')
+                    .Append(string.Join("; ", leadTimes.Select(c => Range(c.Start!.Value, c.End!.Value))))
+                    .Append("] ");
+            }
+
+            text.AppendLine(lead.Bullet.Text);
+            text.AppendLine();
         }
 
         foreach (var bullet in validation.Bullets)

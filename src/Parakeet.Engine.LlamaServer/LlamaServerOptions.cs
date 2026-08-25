@@ -52,13 +52,22 @@ public sealed record LlamaServerOptions
     public int MaxAnswerTokens { get; init; } = 1_024;
 
     /// <summary>
-    /// Let the model think before answering. On, the child's reasoning parser keeps the
-    /// thinking in <c>reasoning_content</c> where the answer stream never sees it, and the
-    /// engine sends no grammar: an eager grammar was measured shaping the think block itself
-    /// and filing the whole answer as reasoning (2026-08-16, re-measured 2026-08-24), so in
-    /// this mode citation trust is the parser's and validator's, post-hoc. Off, the grammar
-    /// constrains from the first sampled token and no thinking is possible.
+    /// Let the model think before answering, and — since 2026-08-25 — actually decide it: the
+    /// child is started with <c>--reasoning on|off</c> from this flag. On, the child's reasoning
+    /// parser keeps the thinking in <c>reasoning_content</c> where the answer stream never sees
+    /// it, and the engine sends no grammar: an eager grammar was measured shaping the think
+    /// block itself and filing the whole answer as reasoning (2026-08-16, re-measured
+    /// 2026-08-24), so in this mode citation trust is the parser's and validator's, post-hoc.
     /// </summary>
+    /// <remarks>
+    /// Off used to mean only "file the thinking elsewhere", which is not the same thing and was
+    /// a shipped defect: <c>--reasoning</c> defaults to <c>auto</c>, so a thinking model's
+    /// template thought anyway, the default parse filed it under <c>reasoning_content</c>, the
+    /// engine dropped it, and <see cref="MaxAnswerTokens"/> could be spent before one content
+    /// token existed — the 26B-A4B answered a twelve-segment overview with nothing at all in
+    /// 79.4 s, and with the same prompt under <c>off</c> produced a lead and four cited bullets
+    /// in 45.5 s (docs/UNPROVEN.md).
+    /// </remarks>
     /// <remarks>
     /// Off by default — the maintainer's decision, 2026-08-24, taken on the measured cost:
     /// thinking runs at decode speed, and on the second machine the 26B-A4B spent ~6 minutes

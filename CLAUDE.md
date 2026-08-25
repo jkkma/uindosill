@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1314 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1326 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,8 +36,8 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Six of those 1314 tests skip themselves.** One is the Media Foundation extension list, which is
-platform-specific. The other five are asked for by name, because a count that depends on what is
+**Seven of those 1326 tests skip themselves.** One is the Media Foundation extension list, which is
+platform-specific. The other six are asked for by name, because a count that depends on what is
 installed cannot be written into a document CI checks:
 
 ```bash
@@ -61,7 +61,7 @@ over a real file with the model installed beside them (it is the default detecto
 stderr line names it): the two tests say the graph loads and scores silence low at three sample
 rates, and nothing else in the suite runs the model.
 
-The fifth and sixth are the v2 answer engine's, in `Parakeet.Engine.LlamaServer.Tests`, which need
+The last three are the v2 answer engine's, in `Parakeet.Engine.LlamaServer.Tests`, which need
 the vendored `llama-server` drop and a small GGUF, and skip unless both are named:
 
 ```bash
@@ -69,9 +69,11 @@ UINDOSILL_LLM_SERVER_ROOT=<a native/win-x64/llm directory> UINDOSILL_LLM_TEST_MO
 ```
 
 **Run them after any change to `src/Parakeet.Engine.LlamaServer/`** — they drive a real child
-server end to end (load, health, an ask, parse, validate) on the CPU backend, one per mode:
-the grammar-constrained path and the think-before-answering path (the shipped default since
-2026-08-24). Nothing else in the suite starts the process.
+server end to end (load, health, an ask, parse, validate) on the CPU backend, one per mode: the
+grammar-constrained path, the think-before-answering path, and the whole-transcript path.
+`UINDOSILL_LLM_TEST_BACKEND=vulkan` (or `cuda`) runs the same three on a machine that has one,
+which is the only place a child-process argument change is really tested. Nothing else in the
+suite starts the process.
 
 **The seven checkpoint tests that used to sit beside it went to `attic/` on 2026-08-21** with the
 C# translator they exercised. Nothing in the suite now reads real translation weights, and nothing

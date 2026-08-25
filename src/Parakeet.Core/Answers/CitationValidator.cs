@@ -71,6 +71,14 @@ public sealed record AnswerValidation
     public required IReadOnlyList<ResolvedBullet> Bullets { get; init; }
 
     /// <summary>
+    /// The overview's framing sentence, resolved exactly as a bullet is, or null when the answer
+    /// had none. It goes through the same checks for the same reason it is modelled as a bullet:
+    /// it makes claims about the recording, so an unchecked lead would be the one paragraph in
+    /// the panel a reader could not verify.
+    /// </summary>
+    public ResolvedBullet? Lead { get; init; }
+
+    /// <summary>
     /// Whether the resolving citations step forward through the recording without overlapping,
     /// or null when the answer never claimed to follow it — chronology is a property of what was
     /// asked for, not something a validator can infer from prose.
@@ -84,10 +92,12 @@ public sealed record AnswerValidation
     /// not failed for quoting only one of the spans it cites.
     /// </summary>
     public bool AllCitationsPass =>
-        Bullets.All(b =>
-            b.Citations.All(c => c.Citation.IsUncitedMarker
-                || (c.Check.Resolves && c.Check.NonEmpty && c.Check.WithinDuration))
-            && b.QuoteFound != false);
+        (Lead is null || Passes(Lead)) && Bullets.All(Passes);
+
+    private static bool Passes(ResolvedBullet bullet) =>
+        bullet.Citations.All(c => c.Citation.IsUncitedMarker
+            || (c.Check.Resolves && c.Check.NonEmpty && c.Check.WithinDuration))
+        && bullet.QuoteFound != false;
 }
 
 /// <summary>
@@ -165,6 +175,19 @@ public static class CitationValidator
         };
     }
 
+    /// <summary>One bullet — or a lead, which is a bullet — with its citations resolved.</summary>
+    public static ResolvedBullet Resolve(AnswerBullet bullet, TranscriptDocument transcript)
+    {
+        ArgumentNullException.ThrowIfNull(bullet);
+        ArgumentNullException.ThrowIfNull(transcript);
+
+        return new ResolvedBullet
+        {
+            Bullet = bullet,
+            Citations = [.. bullet.Citations.Select(c => Resolve(c, transcript, bullet.Quote))],
+        };
+    }
+
     public static AnswerValidation Validate(
         AnswerDocument answer, TranscriptDocument transcript, bool expectChronological = false)
     {
@@ -174,16 +197,17 @@ public static class CitationValidator
         var bullets = new List<ResolvedBullet>(answer.Bullets.Count);
         foreach (var bullet in answer.Bullets)
         {
-            bullets.Add(new ResolvedBullet
-            {
-                Bullet = bullet,
-                Citations = [.. bullet.Citations.Select(c => Resolve(c, transcript, bullet.Quote))],
-            });
+            bullets.Add(Resolve(bullet, transcript));
         }
 
         return new AnswerValidation
         {
             Bullets = bullets,
+            Lead = answer.Lead is { } lead ? Resolve(lead, transcript) : null,
+
+            // The lead is left out of the chronology check on purpose: it frames the whole
+            // recording, so it cites wherever that is established and would fail an ordering
+            // the claims under it do keep.
             Monotone = expectChronological ? IsMonotone(bullets) : null,
         };
     }

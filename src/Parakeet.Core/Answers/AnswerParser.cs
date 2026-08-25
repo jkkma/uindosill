@@ -22,7 +22,15 @@ public static class AnswerParser
     /// <summary>The whole-answer abstention sentinel, exactly as the grammar spells it.</summary>
     public const string AbstainSentinel = "NOT_IN_TRANSCRIPT";
 
-    public static AnswerDocument Parse(string modelOutput)
+    /// <param name="modelOutput">The engine's stream, concatenated.</param>
+    /// <param name="allowLead">
+    /// Take prose ahead of the first bullet as <see cref="AnswerDocument.Lead"/> rather than as
+    /// claims. On only where the prompt asked for a framing sentence — the whole-transcript
+    /// path — so that in every other mode stray prose keeps rendering as the uncited claim it
+    /// is. The lead is parsed as a bullet either way and carries citations either way; what this
+    /// switches is whether the shape was asked for.
+    /// </param>
+    public static AnswerDocument Parse(string modelOutput, bool allowLead = false)
     {
         ArgumentNullException.ThrowIfNull(modelOutput);
 
@@ -37,6 +45,7 @@ public static class AnswerParser
         }
 
         var bullets = new List<AnswerBullet>();
+        AnswerBullet? lead = null;
         var abstained = false;
 
         foreach (var rawLine in output.Split('\n'))
@@ -54,16 +63,36 @@ public static class AnswerParser
             }
 
             var bullet = ParseBullet(line);
-            if (bullet is not null)
+            if (bullet is null)
             {
-                bullets.Add(bullet);
+                continue;
             }
+
+            // The lead is the prose before the claims begin, and only there: once a bullet has
+            // been seen, a later unmarked line is a claim the model forgot to mark, not a second
+            // framing sentence. Only the first such line is taken — a model that writes three
+            // paragraphs of preamble has written claims, and they are marked as claims.
+            if (allowLead
+                && lead is null
+                && bullets.Count == 0
+                && !line.StartsWith("- ", StringComparison.Ordinal))
+            {
+                lead = bullet;
+                continue;
+            }
+
+            bullets.Add(bullet);
         }
 
         // A sentinel beside claims is a contradiction no renderer should repeat: the claims are
         // the checkable half, so they stand and the abstention is dropped rather than the two
         // rendering together as "the recording doesn't answer that" above a list of answers.
-        return new AnswerDocument { Bullets = bullets, Abstained = abstained && bullets.Count == 0 };
+        return new AnswerDocument
+        {
+            Bullets = bullets,
+            Lead = lead,
+            Abstained = abstained && bullets.Count == 0 && lead is null,
+        };
     }
 
     /// <summary>
@@ -210,7 +239,16 @@ public static class AnswerParser
 
             if (pendingSpace)
             {
-                builder.Append(' ');
+                // A citation lifted from mid-sentence leaves the space that was in front of it:
+                // "…the staging environment [S1-S4]." becomes "…the staging environment ." on
+                // screen. Only the period and the comma are closed up — a space before ; : ! ?
+                // is correct French typography, and the twenty-five languages are the
+                // requirement.
+                if (ch is not ('.' or ','))
+                {
+                    builder.Append(' ');
+                }
+
                 pendingSpace = false;
             }
 

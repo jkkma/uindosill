@@ -1485,6 +1485,39 @@
                           <TextBlock TextWrapping="Wrap" Text="{Binding AbstainedText}"
                                      IsVisible="{Binding Abstained}" />
 
+                          <!-- The overview's framing sentence, above the claims it frames. It is
+                               a claim itself, so it carries the same chips and the same
+                               [unverified] marker — the only thing it does not carry is a
+                               bullet's topic label. -->
+                          <ContentControl Content="{Binding Lead}" IsVisible="{Binding HasLead}"
+                                          Margin="0,0,0,9">
+                            <ContentControl.ContentTemplate>
+                              <DataTemplate x:DataType="vm:AnswerBulletViewModel">
+                                <StackPanel Spacing="3">
+                                  <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
+                                  <TextBlock Classes="fine secondary" Text="[unverified]"
+                                             IsVisible="{Binding IsUncited}" />
+                                  <ItemsControl ItemsSource="{Binding Citations}"
+                                                IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
+                                    <ItemsControl.ItemsPanel>
+                                      <ItemsPanelTemplate>
+                                        <WrapPanel ItemSpacing="5" LineSpacing="5" />
+                                      </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate x:DataType="vm:CitationChipViewModel">
+                                        <Button Classes="chip" Content="{Binding Display}"
+                                                Command="{Binding SeekCommand}"
+                                                IsEnabled="{Binding IsResolved}"
+                                                ToolTip.Tip="{Binding Detail}" />
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
+                                </StackPanel>
+                              </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                          </ContentControl>
+
                           <ItemsControl ItemsSource="{Binding Bullets}" IsVisible="{Binding HasBullets}">
                             <ItemsControl.ItemTemplate>
                               <DataTemplate x:DataType="vm:AnswerBulletViewModel">
