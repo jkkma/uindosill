@@ -3858,10 +3858,31 @@ prompt covered the topics and emitted **no citations at all** — ungrammared, t
 instruction is a per-model behaviour, which is the post-hoc contract working as specified rather
 than a surprise.
 
-**No whole-transcript answer has been scored** — the labelled set's `global` questions are what
-will score them, and until then the mode's only honest numbers are prefill costs measured
-elsewhere in this file (7.93 s for 47.7k tokens on the desktop's CUDA; 467.9–2,104.1 s for the
-same transcript on this machine's four placements). **The budget's chars-per-token margin is an
+**The first real one was read on 2026-08-25, and one claim in it had drifted.** The maintainer
+asked "give me a summary" of a 16:50 podcast clip through the Ask tab on the laptop — the 26B-A4B
+on Vulkan, the shipped decode, whole-transcript mode. The answer opened with a framing sentence
+and gave five labelled bullets, each carrying two to four citations, spanning 00:57 to 15:55 of
+a 16:50 recording: coverage of the whole clip, in the shape the prompt asks for, and every
+citation resolving. Spot-checked against the source subtitles by hand, two specifics landed
+inside their cited spans exactly (*Marvel Rivals* at 13:30 and *Deadlock* at 13:37, both cited
+as 12:54–14:05) and the money discussion's three cited spans all really discuss the money.
+
+**And one detail was not in the recording.** The transcript says "two hundred in original
+development and then two hundred in outsourcing after the fact"; the answer rendered that as an
+initial $200 million "supplemented by another $200 million **from Sony** to finish the project".
+The topic is right, the citations resolve, the paraphrase invented an attribution. This is the
+honest measure of what resolve-only trust buys on this path: **a resolving citation says the
+span is real and says nothing about whether the sentence in front of it is**. Worth stating
+plainly, because it also bounds what the dropped quote would have bought — a verbatim quote is
+checked against its span, but a bullet's *prose* can drift while its quote verifies, so the
+quote anchors a reader to real words rather than proving the claim. Neither check catches this
+class; a person reading the cited span does, which is what the citation chips are for.
+
+**No whole-transcript answer has been scored** — one hand-checked answer is an observation, not
+a rate, and the labelled set's `global` questions are what will score them. Until then the
+mode's only honest numbers are prefill costs measured elsewhere in this file (7.93 s for 47.7k
+tokens on the desktop's CUDA; 467.9–2,104.1 s for the same transcript on this machine's four
+placements). **The budget's chars-per-token margin is an
 estimate**: chars/4 plus a quarter covers the languages tried so far, but no tokenizer-density
 measurement exists across the 25 languages, and a transcript that tokenizes denser than the
 margin would hit the server's context error honestly rather than silently — the failure path

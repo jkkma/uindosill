@@ -597,16 +597,17 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         }
 
         // The overview's framing sentence keeps its place at the top and its times with it: an
-        // email that opened with the claims would lose what the recording was.
+        // email that opened with the claims would lose what the recording was. It is marked
+        // exactly as a bullet is when it anchors nothing — the panel draws [unverified] on it,
+        // and an email that quietly dropped that would make the same sentence read more
+        // confident away from the application than inside it. Observed on the first real
+        // overview, 2026-08-25: the 26B wrote a good framing sentence and cited nothing.
         if (validation.Lead is { } lead)
         {
             var leadTimes = lead.Citations.Where(c => c.Check.Resolves).ToList();
-            if (leadTimes.Count > 0)
-            {
-                text.Append('[')
-                    .Append(string.Join("; ", leadTimes.Select(c => Range(c.Start!.Value, c.End!.Value))))
-                    .Append("] ");
-            }
+            text.Append(leadTimes.Count > 0
+                ? "[" + string.Join("; ", leadTimes.Select(c => Range(c.Start!.Value, c.End!.Value))) + "] "
+                : "[unverified] ");
 
             text.AppendLine(lead.Bullet.Text);
             text.AppendLine();

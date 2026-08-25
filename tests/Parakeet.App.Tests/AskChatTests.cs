@@ -422,6 +422,44 @@ public class AskChatTests
     }
 
     [Fact]
+    public void AnUncitedLeadIsMarkedInTheEmailExactlyAsItIsOnScreen()
+    {
+        // Observed on the first real overview, 2026-08-25: the 26B wrote a good framing sentence
+        // and cited nothing. The panel draws [unverified] on it; the copied form used to print
+        // it bare, so the same sentence read MORE confident in an email than in the application
+        // — the inverse of the rule the bullet marker exists for.
+        var transcript = new TranscriptDocument
+        {
+            SourceName = "/tmp/a.wav",
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved" }],
+        };
+
+        var answer = AnswerParser.Parse(
+            "This recording is about a budget\n- Budget: it was approved [S1]\n", allowLead: true);
+        var entry = new ChatEntryViewModel("give me a summary", _ => Task.CompletedTask);
+
+        string? copied = null;
+        var copying = new ChatEntryViewModel("give me a summary", text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        });
+
+        copying.Complete(answer, CitationValidator.Validate(answer, transcript), [], transcript, _ => { });
+        copying.CopyCommand.Execute(null);
+
+        Assert.NotNull(copied);
+        Assert.Contains("[unverified] This recording is about a budget", copied, StringComparison.Ordinal);
+
+        // And a lead that does cite carries its times instead of the marker.
+        var cited = AnswerParser.Parse(
+            "This recording is about a budget [S1]\n- Budget: it was approved [S1]\n", allowLead: true);
+        entry.Complete(cited, CitationValidator.Validate(cited, transcript), [], transcript, _ => { });
+        Assert.False(entry.Lead!.IsUncited);
+    }
+
+    [Fact]
     public async Task AShortRecordingKeepsItsEngineAcrossTheModeFlip()
     {
         // Unlike thinking, the mode is a per-request fact, not a child-process argument: on a
