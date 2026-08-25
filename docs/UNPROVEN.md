@@ -3926,8 +3926,17 @@ PS2."*
 **The explicit "ending with ids like every other line" is load-bearing and was added second.**
 Without it the model wrote good opening sentences and cited none of them, in both modes, so every
 answer led with a line the panel marked `[unverified]` — the discipline firing correctly on prose
-that deserved better. Strengthening the instruction was preferred to relaxing the rule. One run
-each is what that rests on.
+that deserved better. Strengthening the instruction was preferred to relaxing the rule.
+
+**It does not always take, and the next day's answers said so.** In the app, over the recording's
+own ASR transcript rather than the lab's subtitle parse, "when do they mention marvel?" led with a
+cited sentence and "did they mention kojima?" led with an uncited one — same model, same setting,
+same recording, different evidence windows. So `[unverified]` leads are a state a reader will
+meet, and whether that is right is an open question rather than a defect: the lead is a topic
+sentence over claims that do resolve, so the marker is arguably reporting on the wrong thing,
+and the alternative — treating a lead as carried by the cited bullets beneath it — would let a
+lead assert more than they do. **Nobody has decided it**; the marker stays until someone does,
+because over-marking is the safe direction.
 
 **A quote failed its check in the same run, and the wording of the failure was wrong.** A bullet
 quoting "Just Ship It mentality" cited a span beginning at 10:00; the phrase is at 09:57. The
