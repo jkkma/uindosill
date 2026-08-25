@@ -61,13 +61,20 @@ turns it back off.
 |---|---|---|---|
 | Word error rate | **10.21%** (f16, CUDA) | Earnings-22 subset — 11 h of accented English earnings calls, human transcripts | 13.40% against the same corpus's non-verbatim transcript style; all five quantisations land within **0.08 points** of one another |
 | Diarisation error rate | **16.33%** (collar 0, overlap scored) | AMI meeting corpus | The best published figure on the same audio is 18.8% |
-| Translation | chrF++ clears its per-language bar in **23 of 24** languages | FLEURS | Slovak misses by 0.74, and the human adequacy check has not been run |
+| Translation | chrF++ clears its per-language bar in **23 of 24** languages, with **zero collapses** | FLEURS `test` — all 8,149 sentences, beam 6 | Margins over each language's floor run +28.15 to +60.53, median +42.76; Slovak misses by 0.74 |
 
 The DER figure names its provider: 16.3319% on WebGPU, 16.3324% on the CPU, 0.0005 points apart.
 That agreement is *why* WebGPU is the default rather than CUDA's faster 16.1021% — a figure only
 one provider reproduces describes whoever measured it. The sidecar's translation decode was held
 to the same standard: it reproduced all 8,149 recorded hypotheses across 24 languages character
 for character.
+
+Slovak is the single language the translation gate fails, by 0.74 of a chrF++ point against
+margins that reach +60 — and it is the one language absent from the model card's source list, so
+the miss was predicted from the record before it was measured. The gate's other criterion, a human
+adequacy rating, was **declined with finality on 2026-08-23**: v1.0 ships with the gate unpassed by
+its own ratified definition rather than with the definition rewritten to fit. Both are the same
+choice, and it is why the 23-of-24 figure never travels without them.
 
 **Two machines and two ten-minute files is not a benchmark.** Every figure above carries its
 backend, its corpus and its caveats in **[UNPROVEN.md](docs/UNPROVEN.md)** — read that before
