@@ -3991,6 +3991,41 @@ Sony to “put another two hundred in to get it to the finish line”."* Two sma
 with it, both of our own making rather than the model's: a citation removed from between a comma
 and a full stop left `,.`, and one that ended the sentence left the comma before it dangling.
 
+#### All four candidates on one workload, and the quote convention is what separates them — measured 2026-08-25
+
+Three retrieval questions, the 16:50 transcript, the shipped configuration, Vulkan, one run each.
+The four models the register's lineup question names, plus the standing working candidate:
+
+| | three answers | decode | bullets | quote ok / failed / **absent** |
+|---|---:|---:|---:|---|
+| `Qwen3.5-9B` Q4_K_M | **64.8 s** | **8.6 tok/s** | 10 | 1 / 2 / **7** |
+| `gemma-4-26B-A4B-it` UD-IQ4_XS | 146.6 s | 3.7 tok/s | 11 | **11 / 0 / 0** |
+| `gemma-4-12b-it` Q6_K, `-ngl 24` | 210.4 s | 2.9 tok/s | 12 | 2 / — / — |
+| `gpt-oss-20b` MXFP4 | 222.9 s | — | 0 | one of three questions answered at all |
+
+**The 9B is 2.3× faster than the 26B and its answers read well** — correct leads, plausible
+bullets, citations in the right region. What separates them is not fluency: **seven of its ten
+bullets carried no `«…»` at all**, and every one of those seven used ordinary double quotes
+instead. So the model *did* quote the transcript, in the wrong marks, and this project's check
+never ran. The three that used the convention split 1 verified, 2 failed — one quote running
+past the end of its own cited range, one joined across a gap with an ellipsis. The 26B used the
+convention on 11 of 11 and all 11 verified.
+
+**That is a hole in this project's own rule, not only a fact about a model.** `AnswerParser`
+extracts a quote from `«…»` and nothing else, and `QuoteCaveat` is null when there is no quote —
+so a bullet reading `The speaker compares it to "the Castlevania like conversion of Kojima
+artwork"` renders as quoted text, beside a citation chip, with nothing anywhere saying it was
+never checked. The panel's stated promise is that it never shows unverified text dressed as
+transcript, and on a model that ignores the convention it does exactly that. **Undecided, and
+listed rather than fixed**: accept straight quotes as quote candidates and check them (risks
+falsely accusing a title or a scare-quote), or detect them and say only that they were not
+checked (honest, noisier), or leave the convention as a per-model quality signal. The 26B, which
+is what ships and what the maintainer runs, does not exhibit it.
+
+Nothing here is a quality ranking. Coverage, correctness and usefulness of the answers were not
+scored on any of the four; that is the labelled set's job, and three questions in one run is a
+sanity check.
+
 #### gpt-oss-20b does not work on the shipped path — measured 2026-08-25, and this closes an item open since 2026-08-24
 
 The register's lineup question names gpt-oss the **speed** option, and every earlier figure for it
