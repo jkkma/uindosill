@@ -27,7 +27,7 @@ Requires torch, numpy and librosa, plus a directory holding NeMo's `sortformer_m
 install. CI never runs this, for the same reason it never runs `validate-der.py`: the check it
 performs is committed, so the suite holds it without Python.
 
-    python scripts/make-diariser-fixtures.py --reference C:/Users/ayymanPC/spike-sortformer
+    python scripts/make-diariser-fixtures.py --reference <the spike directory holding nemostub/>
 
 Re-running it must be a no-op on a correct tree. It prints a diff summary and exits non-zero if
 anything changed, so a fixture that moved is a reviewable event rather than a silent one.
