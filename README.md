@@ -12,14 +12,10 @@
 </p>
 
 <p align="center">
-  <em>No cloud. No account. No API key. No Python to install.</em>
-</p>
-
-<p align="center">
   <a href="https://github.com/jkkma/uindosill/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jkkma/uindosill/actions/workflows/ci.yml/badge.svg"></a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4">
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4">
-  <img alt="Licence" src="https://img.shields.io/badge/licence-MIT%20or%20GPLv2%2B-green">
+  <img alt="Licence" src="https://img.shields.io/badge/licence-MIT%20%28GPLv2%2B%20with%20libmpv%29-green">
 </p>
 
 ---
