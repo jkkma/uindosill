@@ -2785,7 +2785,7 @@ below.
 | Host | the laptop — hostname withheld |
 | OS | Windows 11 Home (10.0.26200), x64, Spanish locale |
 | CPU | AMD Ryzen AI 9 365 w/ Radeon 880M — **10 cores, 20 threads**, 2.0 GHz base |
-| Memory | 24 GB across 4 modules, configured 7500 MT/s (rated 7500) — **of which the BIOS carves out 8 GB for the iGPU** (UMA frame buffer: the driver reports 8,589,934,592 bytes dedicated and Windows sees 15,994 MB of physical memory; the BIOS setting itself was not read, this is what the OS and driver report) |
+| Memory | 24 GB across 4 modules — **4 × 6 GB LPDDR5X on channels A–D, quad-channel** (read 2026-08-24, the row decision 1's MoE-offload arithmetic asked for), configured 7500 MT/s (rated 7500) — **of which the BIOS carves out 8 GB for the iGPU** (UMA frame buffer: the driver reports 8,589,934,592 bytes dedicated and Windows sees 15,994 MB of physical memory; the BIOS setting itself was not read, this is what the OS and driver report) |
 | GPU | AMD Radeon 880M (integrated), driver 32.0.13022.3006 dated **2025-01-22** (Vulkan `driverInfo` 24.30.22.03) — **no NVIDIA device**. Vulkan heaps, from `vulkaninfo` 2026-08-15: heap 0 device-local 7.75 GiB with a `VK_EXT_memory_budget` budget of **7.36 GiB** — that is the carve-out; heap 1 host-visible 7.81 GiB (budget 7.42 GiB); heap 2 device-local 256 MiB; `maxMemoryAllocationSize` 2 GiB; `VK_KHR_cooperative_matrix` revision 2 and **no bfloat16 extension** |
 | GPU memory held, idle | From the Windows performance counters on 2026-08-16, about 01:00 local, no model loaded, a browser and an editor open: **`\GPU Adapter Memory(*)\Dedicated Usage` 2,149 MiB, `Shared Usage` 191 MiB**; by process, `\GPU Process Memory(pid_*)\Dedicated Usage` has `dwm` at 2,548 MiB, `firefox` 1,087 MiB, `explorer` 166 MiB. The per-process figures are commitments and sum past the adapter's held total; the adapter figure is what the carve-out is holding. Since heap 0's 7.36 GiB budget above is `VK_EXT_memory_budget`'s moment-to-moment figure net of other holders, with 2.1 GiB held the budget is nearer 5.6 GiB (arithmetic) — a number that moves with what is open, not a constant of the machine |
 | Storage | 954 GB NVMe SSD |
@@ -3706,6 +3706,69 @@ observations survive that caveat, because they are about the mechanism:
   12–44 % on a 0.6B and 6.4 % on the same 9B at the same depth on the laptop's Vulkan, so the
   cost does not simply shrink with model size — it moves with backend, prompt and run, which is
   why the harness measures it per run rather than quoting any one of these.
+
+#### MoE offload on the second machine, and the product path's first four-model day — 2026-08-24
+
+The laptop session's record is `runs/20260824-moe-gauntlet/NOTES.md` (mirrored to the Drive's
+runs-laptop with the spike summaries); what follows is what it measured, backend named
+throughout (Vulkan on the 880M unless said otherwise; AC power, High performance scheme,
+release b10448 for the lab runs, the vendored b10603 for the product path).
+
+**Expert offload runs on this machine in exactly one form: `--cpu-moe --no-host`.** The driver's
+Vulkan backend cannot host MXFP4 tensors (llama.cpp demotes all 144 of gpt-oss-20b's expert
+tensors itself), and a "CPU" override without `--no-host` resolves to `Vulkan_Host` — the pinned
+host-visible heap, 7.81 GiB budget on this UMA split — which 10.3 GiB of experts overflows:
+`vk::Queue::submit: ErrorOutOfDeviceMemory` at load (`runs/20260824-183215-spike-vulkan`, kept
+for its stderr). With the pair set, experts land in `CPU_REPACK` (9,682 MiB of system RAM) and
+the device holds 1,242 MiB of attention and router. Both knobs have environment forms
+(`LLAMA_ARG_CPU_MOE`, `LLAMA_ARG_NO_HOST`), so `LlamaServerOptions.Environment` can drive this
+today — the product-path runs below did.
+
+**The whole transcript, four placements** (`CSB384.txt`, `-c 53248 -fa on`; the 9B row is
+2026-08-16, same machine and settings):
+
+| Model | Placement | Prefill | Decode after | Device held |
+|---|---|---|---|---|
+| Qwen3.5-9B Q4_K_M | all on iGPU | 467.9 s (110.7 tok/s) | 9.8 tok/s | 6,310 MiB |
+| gpt-oss-20b MXFP4 | experts on CPU | 889.6 s (51.0 tok/s) | 7.6 tok/s | 2,317 MiB |
+| gemma-4-26B-A4B IQ4_XS | experts on CPU | 1,112.6 s (47.6 tok/s) | 5.7 tok/s | 4,664 MiB |
+| gemma-4-12B Q6_K | 24/48 layers on iGPU | 2,104.1 s (25.2 tok/s) | 3.2 tok/s | 6,911 + 5,597 shared MiB |
+
+(`runs/20260824-183922-spike-vulkan`, `-215419-spike-vulkan`, `-194415-spike-vulkan`; the 12B
+CPU-only control, `-204411-spike-cpu`, read 20.1 and 3.1 — partial offload buys a split dense
+model ~25 % of prefill and nothing measurable in deep decode here.) Every decode sits far under
+the machine block's ~94 tok/s quad-channel LPDDR5X ceiling, as the register's arithmetic said it
+would. The laptop tier stays retrieval.
+
+**The two Gemma exclusions were probed.** #24311 (garbage on partial offload): not reproduced —
+`-ngl 24` clean and deterministic, small asks and full transcript alike. New instead: **the
+Vulkan build exits `0xC0000409` on the 12B at `-ngl 0`**, twice, while the cpu drop serves the
+same file and the same build serves gpt-oss at `-ngl 0`. #27007 (26B output corruption, reported
+on RADV): not reproduced on this proprietary driver — clean with every expert on CPU *and* with
+six expert layers on the device through the fused-MMVQ path the reporter isolates; bounded, not
+closed.
+
+**The product path ran four models in one day, and the finding is the engine's, not any
+model's.** `LlamaServerAnswerEngine` posts a raw prompt to `/completion` — no chat template —
+with the grammar and quote production on (the shipped defaults), over the vendored b10603 drop,
+evidence from `uindosill retrieve` at the panel's k = 8. Through their chat templates (probed
+first, same questions, same evidence) all three instruction-tuned newcomers answered cleanly and
+terminated; through the raw-prompt pairing **every model delivered its substance and then failed
+to stop**, filling the remaining token budget with grammar-legal filler. Within that shape the
+models separated: the 26B produced the day's best constrained answer (eight bullets on the
+pointed question, seven quote checks of eight passing — the one failure is a quote cited to the
+wrong span, which is the check working); the 12B put verified quotes on all eight bullets of the
+easy question and degenerated into special-token loops on the hard one; the 9B abstained
+correctly and cleanly on the adversarial question (11.3 s — the grammar did what no budget flag
+could) and dumped transcript into failing quote productions elsewhere; and **gpt-oss failed the
+harmony check the register's fourth file had pending: one verified bullet, then filler, and a
+false abstention on a question it answers correctly under its template.** Two mechanism notes
+for whatever the register decides: `grammar` on `/v1/chat/completions` was measured accepted at
+b10448 (2026-08-16), so a template-bearing variant of this path exists; and the whole-answer
+abstain being first-token-only showed again — both Gemmas smuggled the sentinel into bullets on
+the adversarial question, exactly the construction the 0.6B run recorded on 2026-08-23. Answer
+*quality* across all of this remains a person's judgement over three ad-hoc questions; the
+labelled set is still the measurement that decides anything.
 
 ### The confidence threshold is set by guess, and the first real data disagrees
 
