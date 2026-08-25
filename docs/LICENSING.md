@@ -412,7 +412,7 @@ way, for the same reason the ASR row is unconditional.
 **What is not claimed.** No lawyer has read this either. The zips also carry OpenMP runtime
 DLLs, covered by the same reading as the ASR tier's.
 
-## The bundled Python is fifty more redistributions, and none of them is discharged
+## The bundled Python is fifty more redistributions, and the notice half is now discharged
 
 **Depending on a package and shipping it are different obligations, and this is the change that
 crosses from one to the other.** `PythonRuntime.Resolve` looks for `<app>/python/python.exe` — an
@@ -424,6 +424,15 @@ packages and says why each version is the version it is; `scripts/bundle-python.
 pinned embeddable CPython and installs them into it. Resolved against the working venv on
 2026-08-21 and then verified against an assembled bundle the same day, the transitive closure of
 those nine is **fifty distributions**. The pins live in that file and are not repeated here.
+
+**The notices themselves are assembled, and they are in `NOTICE.md`.** Since 2026-08-25
+`scripts/collect-python-notices.py` reads the installed `METADATA` of every distribution in an
+assembled bundle and writes the table there between two markers, with `--check` failing when the
+document and the bundle disagree; the release workflow runs it after packing, which is the only
+point in CI where a bundle exists. **What stays here is what a generator cannot write** — what each
+licence *obliges*, which of them are not simply permissive, and what about all of it is still
+unresolved. That division is the point: the list of names belongs where notices travel, and the
+reading belongs where reasoning is recorded.
 
 **Every licence below was read off the installed `.dist-info/METADATA` on this machine**, not
 recalled. Grouped by what the metadata actually says, with the four that are not simply permissive

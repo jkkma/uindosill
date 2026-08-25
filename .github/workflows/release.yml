@@ -149,6 +149,28 @@ jobs:
         shell: pwsh
         run: ./scripts/package-windows.ps1 -Version "${{ steps.version.outputs.version }}"
 
+      # The bundled Python's notices in NOTICE.md are generated from an assembled bundle, and this
+      # is the only place in CI where one exists — the Linux build-and-test job cannot make one,
+      # since bundle-python.ps1 needs a Windows embeddable CPython and a matching host pip. So the
+      # guard runs here, after packing, against the bundle a user actually receives.
+      #
+      # It fails on two things: the table no longer matching the wheels (a pin moved and the notice
+      # did not), and a distribution shipping no licence text that is not already recorded as a gap.
+      # Both are licence breaches that nothing else in this pipeline would report, which is the same
+      # reasoning that puts the parakeet.dll LICENSE assertion in the step above.
+      - name: The bundled Python's notices match the bundle
+        shell: pwsh
+        run: |
+          $bundle = Get-ChildItem -Path packaging -Recurse -Directory -Filter python |
+            Where-Object { Test-Path (Join-Path $_.FullName 'Lib/site-packages') } |
+            Select-Object -First 1
+          if (-not $bundle) {
+            throw "No assembled Python bundle under packaging/. package-windows.ps1 ran with -SkipPython, or its layout moved."
+          }
+          Write-Host "checking NOTICE.md against $($bundle.FullName)"
+          python scripts/collect-python-notices.py --bundle $bundle.FullName --check
+          if ($LASTEXITCODE -ne 0) { throw 'NOTICE.md does not describe the bundle this run built.' }
+
       # The CLI is not in the installer — decision 3, 2026-08-16: Velopack has no PATH feature, so
       # bundling it would be custom code on install and on uninstall. It ships as the zip beside it,
       # which is the artefact CI has produced all along.
