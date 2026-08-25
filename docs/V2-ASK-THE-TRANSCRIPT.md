@@ -1248,6 +1248,15 @@ saying so, which is its own question. Blocking fact from the same session: **as 
 ships, its raw-prompt-plus-grammar pairing carries the Gemmas but not gpt-oss** (the fourth
 file's dated block), so the speed option is conditional on an engine change the register has
 not weighed. Decided after the labelled set runs; until then the working candidate stands.
+**One of the three lanes moved on 2026-08-25**, and against the question's assumption: asked
+whether the dense 12B would answer faster, a same-session measurement on the retrieval path put
+it **slower than the 26B mixture** — 210.4 s against 141.5 s for the same three questions, 2.9
+against 3.8 tok/s — because ~4B of the mixture's 26B are active per token with its experts in
+RAM, while the dense 9.1 GB model cannot fit the 7.36 GiB fast heap and runs partially offloaded.
+In the same run eleven of the 26B's eleven quoted bullets verified against their cited spans and
+two of the 12B's twelve did. Three questions in one run is not a rate, and `docs/UNPROVEN.md`
+says so; what it does mean is that "12B as the quality option, at the slowest decode" is now an
+assumption with a measurement pointing the other way on both halves.
 (Later the same day the engine change landed — `/v1/chat/completions` with the template,
 grammar in the default mode, and think-before-answering as a Settings toggle, off by default
 on its measured cost, UNPROVEN's dated block — so the blocking fact is retired in form;
