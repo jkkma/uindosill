@@ -26,4 +26,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Every test project, with no project able to opt out, because the leak it closes was a test
+       forgetting to pass a store rather than a test doing something exotic. See the file. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Shared/TestUserData.cs" Link="TestUserData.cs" />
+  </ItemGroup>
+
 </Project>

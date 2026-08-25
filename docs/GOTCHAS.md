@@ -676,3 +676,31 @@ drops the same three from the CLI zip, which cannot use any of them.
 
 The general rule: **an exclusion list fails safely, an inclusion list fails silently.** When the
 code deletes, enumerate what may be deleted — never what may stay.
+
+## 33. A constructor that defaults its store writes real user files, and the test suite is a user
+
+`MainWindowViewModel` and `UpdatesViewModel` both take an optional `AppSettingsStore` and turn a
+null one into `new AppSettingsStore()`, which resolves `%LOCALAPPDATA%\Uindosill\settings.json` —
+the file the installed application reads. That default is right for the application, which has
+exactly one settings file and no reason to name it. It is wrong for a test, and around thirty tests
+took it: every one that constructed the window's view model to reach the tab underneath.
+
+Nothing failed, which is the whole difficulty. The suite ran green while writing the maintainer's
+own settings file twice per construction — once as the view model started, because an output
+directory that no longer exists is cleared from the file there, and again for any test that chose
+an output folder. It was found on 2026-08-25 by reading the file: `"outputDirectory"` naming a
+`Directory.CreateTempSubdirectory("uindosill-vm")` path from a test helper that had exited weeks
+earlier. Both fingerprints of the same shape were present, hours apart, so it was still happening.
+
+**The fix that does not work is passing a store at each call site.** It repairs the call sites that
+exist and none of the ones written next month, and the defect is a test forgetting rather than a
+test misbehaving.
+
+**Here:** `tests/Shared/TestUserData.cs` is a `[ModuleInitializer]` compiled into every test project
+by `tests/Directory.Build.props`. Before a single test runs it creates a temporary directory for the
+process and points `UINDOSILL_SETTINGS_PATH` and `UINDOSILL_MODELS_DIR` at it, unconditionally, so a
+defaulted store lands there whatever the test does or forgets. `UserDataIsolationTests` holds the
+redirect against the constants the product reads, and against a defaulted store's answer.
+
+The general rule: **a product default that names a real user path is a hazard in a test process.**
+Give it an override, set the override for the whole test assembly, and do not rely on remembering.
