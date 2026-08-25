@@ -16,11 +16,13 @@ namespace Parakeet.Engine.LlamaServer;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The stream this yields is the model's raw text: <c>AnswerParser</c> stays the single place
-/// structure comes from, and the grammar built beside the prompt is what keeps that text inside
-/// the shape the parser reads — including keeping a thinking model's reasoning out of the answer
-/// channel, which the grammar was measured to do where <c>--reasoning-budget 0</c> alone was not
-/// (docs/UNPROVEN.md).
+/// The stream this yields is the model's answer text: <c>AnswerParser</c> stays the single place
+/// structure comes from. By default the grammar built beside the prompt constrains decoding from
+/// the first sampled token; in thinking mode (<see cref="LlamaServerOptions.ThinkBeforeAnswer"/>,
+/// off by default on its measured cost) the model reasons first, the server's reasoning parser
+/// keeps that thinking in <c>reasoning_content</c> where this stream never carries it, and
+/// citation trust is the validator's, post-hoc. The two never combine: an eager grammar was
+/// measured shaping the think block itself (docs/UNPROVEN.md).
 /// </para>
 /// <para>
 /// Ownership: disposing this is what ends the child while the host lives — there is no finalizer
@@ -116,15 +118,23 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             yield break;
         }
 
-        var prompt = AnswerPromptBuilder.BuildPrompt(request, _options.AllowAbstain, _options.RequireQuote);
-        var grammar = _options.UseGrammar
+        var (instruction, userContent) =
+            AnswerPromptBuilder.BuildMessages(request, _options.AllowAbstain, _options.RequireQuote);
+
+        // In thinking mode the grammar must stay home: an eager grammar constrains sampling
+        // wherever the stream happens to be, and it was measured shaping the think block itself
+        // — every grammar-legal token filed as reasoning, content empty (2026-08-16, re-measured
+        // 2026-08-24). Citation trust in this mode is the parser's and validator's, post-hoc.
+        var grammar = _options.UseGrammar && !_options.ThinkBeforeAnswer
             ? AnswerPromptBuilder.BuildGrammar(request.Evidence, _options.AllowAbstain, _options.RequireQuote)
             : null;
+        var maxTokens = _options.MaxAnswerTokens
+            + (_options.ThinkBeforeAnswer ? _options.ThinkingBudgetTokens : 0);
 
         // A prompt past the context would be truncated server-side in silence, leaving the
         // grammar's ids live for evidence the model never saw. Four characters per token is an
         // estimate and the message says so; the panel's ~2k-token evidence never comes near it.
-        var estimatedTokens = prompt.Length / 4;
+        var estimatedTokens = (instruction.Length + userContent.Length) / 4;
         if (estimatedTokens > _options.ContextSize)
         {
             throw new InvalidOperationException(
@@ -133,9 +143,15 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
                 + "fix; a silent truncation is not.");
         }
 
-        using var message = new HttpRequestMessage(HttpMethod.Post, new Uri("completion", UriKind.Relative))
+        // The chat endpoint, not /completion: the model's template supplies the turn structure
+        // end-of-turn was trained against. The raw-prompt path was measured on 2026-08-24
+        // leaving all four candidate models unable to stop — substance first, then grammar-legal
+        // filler to the token cap (docs/UNPROVEN.md, the product-path gauntlet). `grammar` and
+        // `return_progress` both work on this endpoint at the vendored build — probed before
+        // this change, prompt_progress frames and grammar-shaped output observed.
+        using var message = new HttpRequestMessage(HttpMethod.Post, new Uri("v1/chat/completions", UriKind.Relative))
         {
-            Content = new ByteArrayContent(BuildRequestBody(prompt, grammar, _options.MaxAnswerTokens)),
+            Content = new ByteArrayContent(BuildRequestBody(instruction, userContent, grammar, maxTokens)),
         };
         message.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
@@ -147,10 +163,11 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         {
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             throw new InvalidOperationException(
-                $"llama-server answered {(int)response.StatusCode} to /completion: {body}");
+                $"llama-server answered {(int)response.StatusCode} to /v1/chat/completions: {body}");
         }
 
         var generated = 0;
+        var thinking = 0;
         var prefillTokens = 0;
         int? prefillTotal = null;
         var endedCleanly = false;
@@ -228,26 +245,66 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
                     PrefillTokens = prefillTokens,
                     PrefillTotalTokens = prefillTotal,
                     GeneratedTokens = generated,
+                    ThinkingTokens = thinking,
                 });
             }
 
-            if (root.TryGetProperty("content", out var content)
-                && content.ValueKind == JsonValueKind.String
-                && content.GetString() is { Length: > 0 } text)
+            // Chat-completion chunks: the delta carries reasoning_content while the model
+            // thinks — counted for progress, never yielded, so the panel can show activity
+            // without the thinking ever reaching the parser — and content when it answers.
+            // A non-null finish_reason is the clean end; [DONE] follows it.
+            string? text = null;
+            if (root.TryGetProperty("choices", out var choices)
+                && choices.ValueKind == JsonValueKind.Array
+                && choices.GetArrayLength() > 0)
             {
-                generated++;
-                progress?.Report(new AskProgress
+                var choice = choices[0];
+                if (choice.TryGetProperty("delta", out var delta) && delta.ValueKind == JsonValueKind.Object)
                 {
-                    PrefillTokens = prefillTokens,
-                    PrefillTotalTokens = prefillTotal,
-                    GeneratedTokens = generated,
-                });
+                    if (delta.TryGetProperty("reasoning_content", out var thought)
+                        && thought.ValueKind == JsonValueKind.String
+                        && thought.GetString() is { Length: > 0 })
+                    {
+                        thinking++;
+                        progress?.Report(new AskProgress
+                        {
+                            PrefillTokens = prefillTokens,
+                            PrefillTotalTokens = prefillTotal,
+                            GeneratedTokens = generated,
+                            ThinkingTokens = thinking,
+                        });
+                    }
+
+                    if (delta.TryGetProperty("content", out var content)
+                        && content.ValueKind == JsonValueKind.String
+                        && content.GetString() is { Length: > 0 } piece)
+                    {
+                        generated++;
+                        progress?.Report(new AskProgress
+                        {
+                            PrefillTokens = prefillTokens,
+                            PrefillTotalTokens = prefillTotal,
+                            GeneratedTokens = generated,
+                            ThinkingTokens = thinking,
+                        });
+                        text = piece;
+                    }
+                }
+
+                if (choice.TryGetProperty("finish_reason", out var finish)
+                    && finish.ValueKind == JsonValueKind.String)
+                {
+                    endedCleanly = true;
+                }
+            }
+
+            if (text is not null)
+            {
                 yield return text;
             }
 
-            if (root.TryGetProperty("stop", out var stop) && stop.ValueKind == JsonValueKind.True)
+            if (endedCleanly)
             {
-                endedCleanly = true;
                 break;
             }
         }
@@ -283,18 +340,31 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
     }
 
     /// <summary>
-    /// The /completion request, written explicitly so the fields sent are the fields decided:
-    /// <c>cache_prompt</c> because a follow-up question re-uses the evidence prefix, and
-    /// <c>return_progress</c> because the prefill wait must be drawable.
+    /// The /v1/chat/completions request, written explicitly so the fields sent are the fields
+    /// decided: <c>messages</c> because the model's template supplies the end-of-turn the
+    /// raw-prompt path was measured to lack (2026-08-24), <c>cache_prompt</c> because a
+    /// follow-up question re-uses the evidence prefix, and <c>return_progress</c> because the
+    /// prefill wait must be drawable — its <c>prompt_progress</c> frames were probed working on
+    /// this endpoint at the vendored build before the endpoint moved.
     /// </summary>
-    internal static byte[] BuildRequestBody(string prompt, string? grammar, int maxAnswerTokens = 1_024)
+    internal static byte[] BuildRequestBody(
+        string instruction, string userContent, string? grammar, int maxTokens = 1_024)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
-            writer.WriteString("prompt", prompt);
-            writer.WriteNumber("n_predict", maxAnswerTokens);
+            writer.WriteStartArray("messages");
+            writer.WriteStartObject();
+            writer.WriteString("role", "system");
+            writer.WriteString("content", instruction);
+            writer.WriteEndObject();
+            writer.WriteStartObject();
+            writer.WriteString("role", "user");
+            writer.WriteString("content", userContent);
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteNumber("max_tokens", maxTokens);
             writer.WriteBoolean("stream", true);
             writer.WriteBoolean("cache_prompt", true);
             writer.WriteBoolean("return_progress", true);

@@ -28,6 +28,20 @@ public static class AnswerPromptBuilder
     /// </summary>
     public static string BuildPrompt(AskRequest request, bool allowAbstain = true, bool requireQuote = true)
     {
+        var (instruction, userContent) = BuildMessages(request, allowAbstain, requireQuote);
+        return instruction + "\n" + userContent + "Answer:\n";
+    }
+
+    /// <summary>
+    /// The same contract split for the chat endpoint: the instruction block as the system
+    /// message, evidence and question as the user message. The model's own template supplies the
+    /// turn structure — and with it the end-of-turn the raw-prompt path was measured to lack
+    /// (2026-08-24, docs/UNPROVEN.md) — so no "Answer:" cue is appended; the template's
+    /// assistant turn is that cue.
+    /// </summary>
+    public static (string Instruction, string UserContent) BuildMessages(
+        AskRequest request, bool allowAbstain = true, bool requireQuote = true)
+    {
         ArgumentNullException.ThrowIfNull(request);
 
         var builder = new StringBuilder();
@@ -54,15 +68,17 @@ public static class AnswerPromptBuilder
             builder.Append("Answer in the language whose BCP-47 tag is: ").Append(language).Append('\n');
         }
 
-        builder.Append("\nEvidence:\n");
+        var instruction = builder.ToString();
+
+        builder.Clear();
+        builder.Append("Evidence:\n");
         foreach (var window in request.Evidence)
         {
             builder.Append('[').Append(window.CitationId).Append("] ").Append(window.Text).Append('\n');
         }
 
         builder.Append("\nQuestion: ").Append(request.Question).Append('\n');
-        builder.Append("Answer:\n");
-        return builder.ToString();
+        return (instruction, builder.ToString());
     }
 
     /// <summary>

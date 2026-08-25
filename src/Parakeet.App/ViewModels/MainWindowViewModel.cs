@@ -13,6 +13,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private ComputeBackend _backend = ComputeBackend.Vulkan;
 
+    /// <summary>The Settings toggle: the ask model thinks before answering. Off as shipped —
+    /// the measured cost on integrated graphics is minutes per question.</summary>
+    [ObservableProperty]
+    private bool _askThinking;
+
     [ObservableProperty]
     private int _selectedTab;
 
@@ -36,9 +41,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         // The field, not the property: assigning the property here would fire OnBackendChanged and
         // write the file on every launch, including the launches where nothing was chosen.
-        _backend = _settings.Load().Backend
+        var loaded = _settings.Load();
+        _backend = loaded.Backend
             ?? ParakeetNativeLibrary.PreferredBackend(
                 backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
+        _askThinking = loaded.AskThinking;
 
         Session = new ModelSession(engines);
 
@@ -73,7 +80,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Transcribe.Jobs,
             player ?? MediaPlayers.ForThisBuild(),
             Session,
-            answerEngines ?? new LlamaAnswerEngineProvider(modelStore),
+            answerEngines ?? new LlamaAnswerEngineProvider(modelStore, () => AskThinking),
             () => Transcribe.IsRunning);
 
         // The output folder outlives the run — chosen once, restored at every launch — but only
@@ -259,6 +266,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     partial void OnBackendChanged(ComputeBackend value) =>
         _settings.Update(current => current with { Backend = value });
+
+    /// <summary>Remembers the choice; the engine picks it up at the next question.</summary>
+    partial void OnAskThinkingChanged(bool value) =>
+        _settings.Update(current => current with { AskThinking = value });
 
     /// <summary>
     /// Re-reads the model directory whenever the Models tab is opened.

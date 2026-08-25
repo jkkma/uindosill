@@ -1404,6 +1404,76 @@
                           <TextBlock Classes="fine secondary" Text="{Binding Status}"
                                      IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
+                          <!-- The model is thinking and no answer text exists yet: the typing
+                               dots, because a silent panel over a working model reads as a hang. -->
+                          <StackPanel Orientation="Horizontal" Spacing="5" Margin="2,4,0,2"
+                                      IsVisible="{Binding IsThinking}"
+                                      ToolTip.Tip="Thinking…">
+                            <StackPanel.Styles>
+                              <Style Selector="Ellipse.thinkingDot">
+                                <Setter Property="Width" Value="7" />
+                                <Setter Property="Height" Value="7" />
+                                <Setter Property="Fill" Value="{DynamicResource Taro400Brush}" />
+                                <Setter Property="Opacity" Value="0.3" />
+                                <Style.Animations>
+                                  <Animation Duration="0:0:1.2" IterationCount="INFINITE">
+                                    <KeyFrame Cue="0%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="25%">
+                                      <Setter Property="Opacity" Value="1" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="50%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="100%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                  </Animation>
+                                </Style.Animations>
+                              </Style>
+                              <Style Selector="Ellipse.thinkingDot.second">
+                                <Style.Animations>
+                                  <Animation Duration="0:0:1.2" IterationCount="INFINITE" Delay="0:0:0.2">
+                                    <KeyFrame Cue="0%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="25%">
+                                      <Setter Property="Opacity" Value="1" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="50%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="100%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                  </Animation>
+                                </Style.Animations>
+                              </Style>
+                              <Style Selector="Ellipse.thinkingDot.third">
+                                <Style.Animations>
+                                  <Animation Duration="0:0:1.2" IterationCount="INFINITE" Delay="0:0:0.4">
+                                    <KeyFrame Cue="0%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="25%">
+                                      <Setter Property="Opacity" Value="1" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="50%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                    <KeyFrame Cue="100%">
+                                      <Setter Property="Opacity" Value="0.3" />
+                                    </KeyFrame>
+                                  </Animation>
+                                </Style.Animations>
+                              </Style>
+                            </StackPanel.Styles>
+                            <Ellipse Classes="thinkingDot" />
+                            <Ellipse Classes="thinkingDot second" />
+                            <Ellipse Classes="thinkingDot third" />
+                          </StackPanel>
+
                           <!-- The stream, raw and visibly provisional; the parse replaces it. -->
                           <TextBlock Classes="fine secondary" TextWrapping="Wrap"
                                      Text="{Binding StreamingText}"
@@ -1632,6 +1702,25 @@
                  It would not have been a translation control either way: the translator behind
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
+
+            <Separator />
+
+            <!-- ── Asking ─────────────────────────────────────────────────────────────────────
+                 The one ask setting, and it reaches past this page's Transcribe data context to
+                 the window's, where the settings file is written. The engine reads it at each
+                 question, so the hint can promise "next question" honestly. -->
+            <StackPanel Spacing="9"
+                        DataContext="{Binding $parent[Window].DataContext}"
+                        x:DataType="vm:MainWindowViewModel">
+              <TextBlock Text="ASKING" Classes="section" />
+              <DockPanel LastChildFill="True">
+                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,9,0"
+                              Content="Think before answering"
+                              IsChecked="{Binding AskThinking}" />
+                <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
+                           Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
+              </DockPanel>
+            </StackPanel>
 
             <Separator />
 

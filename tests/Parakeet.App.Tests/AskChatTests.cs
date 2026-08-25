@@ -47,6 +47,31 @@ public class AskChatTests
         return job;
     }
 
+    [Fact]
+    public void ThinkingProgressShowsTheDotsAndTheFirstAnswerTextHidesThem()
+    {
+        // The typing indicator's contract: dots while the model reasons and nothing has
+        // streamed, gone the moment answer text exists — and never a stale Status line
+        // underneath them.
+        var entry = new ChatEntryViewModel("q", _ => Task.CompletedTask);
+
+        entry.OnProgress(new AskProgress { PrefillTokens = 5, PrefillTotalTokens = 10 });
+        Assert.False(entry.IsThinking);
+        Assert.NotNull(entry.Status);
+
+        entry.OnProgress(new AskProgress { PrefillTokens = 10, PrefillTotalTokens = 10, ThinkingTokens = 3 });
+        Assert.True(entry.IsThinking);
+        Assert.Null(entry.Status);
+
+        entry.OnStreamed("- a claim [S1]");
+        Assert.False(entry.IsThinking);
+
+        var failed = new ChatEntryViewModel("q", _ => Task.CompletedTask);
+        failed.OnProgress(new AskProgress { ThinkingTokens = 1 });
+        failed.Fail("boom");
+        Assert.False(failed.IsThinking);
+    }
+
     private static (AskChatViewModel Chat, FakeAnswerEngineProvider Provider, List<TimeSpan> Seeks) Chat(
         JobViewModel? job = null,
         ModelSession? session = null,
@@ -276,6 +301,22 @@ public class AskChatTests
         Assert.Contains("unloaded", chat.ResidencyNotice, StringComparison.Ordinal);
 
         await AskAsync(chat, "and the budget?");
+        Assert.Equal(2, provider.Created);
+    }
+
+    [Fact]
+    public async Task FlippingThinkingModeRebuildsTheEngineAtTheNextQuestion()
+    {
+        // The mode is a child-process argument, so the Settings toggle can only take effect
+        // through a fresh child — and the hint under the toggle promises the next question.
+        var (chat, provider, _) = Chat();
+
+        await AskAsync(chat, "what about the axolotl?");
+        await AskAsync(chat, "and the budget?");
+        Assert.Equal(1, provider.Created);
+
+        provider.ThinkingMode = true;
+        await AskAsync(chat, "who presented?");
         Assert.Equal(2, provider.Created);
     }
 

@@ -46,6 +46,7 @@ public sealed partial class AskChatViewModel : ObservableObject
     private readonly Action<TimeSpan> _seekAndPlay;
 
     private IAnswerEngine? _engine;
+    private bool _engineThinking;
     private JobViewModel? _recording;
     private TranscriptDocument? _document;
     private IReadOnlyList<TranscriptWindow>? _windows;
@@ -292,6 +293,15 @@ public sealed partial class AskChatViewModel : ObservableObject
 
     private async Task EnsureEngineAsync(ChatEntryViewModel entry, CancellationToken ct)
     {
+        // An engine built under the other thinking mode is dropped, not reused: the mode is a
+        // child-process argument, so the settings toggle can only take effect through a fresh
+        // child — at the next question, which is when a person expects a setting to matter.
+        if (_engine is not null && _engineThinking != _provider!.ThinkingMode)
+        {
+            await _engine.DisposeAsync().ConfigureAwait(true);
+            _engine = null;
+        }
+
         if (_engine is not null)
         {
             return;
@@ -307,7 +317,8 @@ public sealed partial class AskChatViewModel : ObservableObject
         }
 
         entry.Status = "Loading the model — a large one takes a while…";
-        var engine = _provider!.Create();
+        _engineThinking = _provider!.ThinkingMode;
+        var engine = _provider.Create();
         try
         {
             await engine.LoadAsync(ct).ConfigureAwait(true);
@@ -362,6 +373,13 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     [ObservableProperty]
     private string? _status;
 
+    /// <summary>
+    /// The model is reasoning and no answer text exists yet — the stretch the typing-indicator
+    /// dots cover, because a silent panel over a thinking model reads as a hang.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isThinking;
+
     [ObservableProperty]
     private string? _streamingText;
 
@@ -400,7 +418,21 @@ public sealed partial class ChatEntryViewModel : ObservableObject
 
     public void OnProgress(AskProgress progress)
     {
-        if (progress.PrefillFraction is { } fraction && progress.GeneratedTokens == 0)
+        if (progress.GeneratedTokens > 0)
+        {
+            // Answer text is arriving; the stream itself is the indicator now.
+            IsThinking = false;
+            return;
+        }
+
+        if (progress.ThinkingTokens > 0)
+        {
+            IsThinking = true;
+            Status = null;
+            return;
+        }
+
+        if (progress.PrefillFraction is { } fraction)
         {
             Status = string.Create(
                 CultureInfo.InvariantCulture, $"Reading the transcript… {fraction * 100:F0}%");
@@ -410,6 +442,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     public void OnStreamed(string textSoFar)
     {
         Status = null;
+        IsThinking = false;
         StreamingText = textSoFar;
     }
 
@@ -422,6 +455,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     {
         StreamingText = null;
         Status = null;
+        IsThinking = false;
         Abstained = answer.Abstained;
 
         foreach (var bullet in validation.Bullets)
@@ -448,6 +482,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     {
         StreamingText = null;
         Status = null;
+        IsThinking = false;
         Failure = message;
         IsDone = true;
         OnPropertyChanged(nameof(CanCopy));
@@ -462,6 +497,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     {
         StreamingText = null;
         Status = null;
+        IsThinking = false;
         Abstained = true;
         IsDone = true;
         OnPropertyChanged(nameof(CanCopy));

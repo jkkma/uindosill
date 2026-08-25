@@ -33,6 +33,23 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void AskThinkingIsOffAsShippedAndSurvivesARoundTrip()
+    {
+        var path = TempFile();
+        try
+        {
+            Assert.False(new AppSettingsStore(path).Load().AskThinking);
+
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { AskThinking = true }));
+            Assert.True(new AppSettingsStore(path).Load().AskThinking);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AFileThatIsNotJsonIsTheShippedDefaultRatherThanAThrow()
     {
         // Whatever a hand-edited or half-written settings file contains, the window opens.
