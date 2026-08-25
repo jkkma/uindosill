@@ -1248,7 +1248,20 @@ saying so, which is its own question. Blocking fact from the same session: **as 
 ships, its raw-prompt-plus-grammar pairing carries the Gemmas but not gpt-oss** (the fourth
 file's dated block), so the speed option is conditional on an engine change the register has
 not weighed. Decided after the labelled set runs; until then the working candidate stands.
-**One of the three lanes moved on 2026-08-25**, and against the question's assumption: asked
+**Two of the three lanes moved on 2026-08-25, both against the question's assumptions.** The
+**speed lane has no model in it**: gpt-oss was re-run under the shipped engine at last — the
+pairing this question named as the blocking fact — and it answered one of three questions,
+returning an empty stream on the other two at 73 seconds each, slower per question than the 26B
+that answered all three. The one answer it did give was correct and cited. `docs/UNPROVEN.md`
+carries the table and names the likely mechanism as a hypothesis: `--reasoning` says whether to
+reason, `--reasoning-format` says where the text goes, and this model's harmony analysis channel
+appears to be filed where the engine discards it. **The blocking fact the question named is
+therefore still blocking, in a new form** — no longer the raw prompt, now the reasoning routing —
+and the untried lever is `--reasoning-format none` per model, which the engine ties to the
+grammar mode and cannot set on its own. A catalogue carrying per-model launch options, which this
+question already lists as a cost, is where that would live.
+
+And the quality lane inverted: asked
 whether the dense 12B would answer faster, a same-session measurement on the retrieval path put
 it **slower than the 26B mixture** — 210.4 s against 141.5 s for the same three questions, 2.9
 against 3.8 tok/s — because ~4B of the mixture's 26B are active per token with its experts in

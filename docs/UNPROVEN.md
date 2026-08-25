@@ -3991,6 +3991,40 @@ Sony to “put another two hundred in to get it to the finish line”."* Two sma
 with it, both of our own making rather than the model's: a citation removed from between a comma
 and a full stop left `,.`, and one that ended the sentence left the comma before it dangling.
 
+#### gpt-oss-20b does not work on the shipped path — measured 2026-08-25, and this closes an item open since 2026-08-24
+
+The register's lineup question names gpt-oss the **speed** option, and every earlier figure for it
+was taken under the raw-prompt engine that no longer exists. Run under the shipped configuration —
+chat endpoint, template, temperature 0, no grammar, `--reasoning off`, the engine's own Vulkan
+expert-offload defaults, `-ngl 999` — over the same three retrieval questions as the two Gemmas:
+
+| | three answers | content tokens | usable answers |
+|---|---:|---:|---:|
+| `gemma-4-26B-A4B-it` | 141.5 s | 543 | **3 of 3**, 11 bullets, every quote verified |
+| `gpt-oss-20b` MXFP4, reasoning off | 222.9 s | 25 | **1 of 3** |
+| `gpt-oss-20b` MXFP4, reasoning on | 257.8 s | 102 | 0 of 3 — leads, no bullets |
+
+**The one that worked was correct**: *"Yes, they mentioned Kojima. [S185-S199] [S178-S191]
+[S192-S205]"* — a cited answer that then stopped, which is the new "if that sentence answers the
+question completely, write nothing more" instruction behaving exactly as written. **The other two
+returned an empty stream**, 73 seconds each, which the panel renders as "The model produced no
+answer."
+
+**The mechanism is named as a hypothesis, not a finding.** `--reasoning` is not
+`--reasoning-format`: the first says whether to reason, the second where the text is filed. This
+model's harmony format emits an analysis channel regardless, the server's default parse files it
+as `reasoning_content`, and the engine counts that for progress and never yields it — so a run
+that spends its budget in analysis and never opens a final channel arrives here as silence. That
+is consistent with 73 seconds producing nothing, and it is **not** demonstrated: the untried lever
+is `--reasoning-format none` for this model, which the engine currently ties to the grammar mode
+and cannot be set independently. **What is established is narrower and enough for the decision in
+front of it**: as the product ships today, on this machine, gpt-oss answers most questions with
+nothing and takes longer doing it than the model that answers all of them.
+
+Nothing here says gpt-oss is a poor model, and the 2026-08-24 decode figures are not overturned —
+what is measured is gpt-oss *through this engine*, where the answer channel does not reach the
+stream. The lineup's speed lane needs an engine change before it is a lane at all.
+
 #### The dense 12B is slower than the 26B mixture on this machine, and its quotes did not verify — measured 2026-08-25
 
 Asked directly by the maintainer — would the dense model answer faster? — and measured rather
