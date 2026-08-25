@@ -4752,6 +4752,19 @@ the next release's first observation. The CLI zip no longer inherits the vendore
 rc.4 attempt shipped without that prune, measured 621.9 MB against rc.3's 60.7, and failed its
 400 MB size guard exactly as the guard was written to.
 
+**rc.4 was attempted twice and failed twice, and only the first failure was written down here.**
+Read from the workflow history on 2026-08-25: run 32702235974 at `acd3e19` failed on the CLI zip
+after 38 minutes, and run 32705531275 at `41ef482` — the retry, carrying the prune above — failed
+after 34 minutes on `size must be less than 2147483648`. That is GitHub's per-asset limit, and
+the asset was the win-cuda installer. **So the 2 GiB overflow is not a projection: it has
+happened, in CI, to a real package.** The reason the retry did not clear it is a sequencing
+mistake rather than a wrong number — `BundledModels.NotInCudaChannelIds`, the diariser exclusion
+decided the same day precisely to buy that headroom, landed in `071de1a`, which is **newer than
+the commit rc.4 was tagged at**. The retry therefore ran with the decision recorded and the code
+not carrying it. **No release has been published since rc.3**, and the repository has carried
+"the next tag is the first observation" ever since without recording that two tags had already
+tried and lost.
+
 **The win-cuda asset projected past GitHub's limit, and the diariser's weight is what gives —
 decided 2026-08-24.** From this repository's own numbers: the python-less win-cuda Setup.exe
 measured 1,976,256,205 bytes on 2026-08-24 (dev version string, both bundled weights inside),
