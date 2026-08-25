@@ -3858,25 +3858,40 @@ prompt covered the topics and emitted **no citations at all** — ungrammared, t
 instruction is a per-model behaviour, which is the post-hoc contract working as specified rather
 than a surprise.
 
-**The first real one was read on 2026-08-25, and one claim in it had drifted.** The maintainer
-asked "give me a summary" of a 16:50 podcast clip through the Ask tab on the laptop — the 26B-A4B
-on Vulkan, the shipped decode, whole-transcript mode. The answer opened with a framing sentence
-and gave five labelled bullets, each carrying two to four citations, spanning 00:57 to 15:55 of
-a 16:50 recording: coverage of the whole clip, in the shape the prompt asks for, and every
-citation resolving. Spot-checked against the source subtitles by hand, two specifics landed
-inside their cited spans exactly (*Marvel Rivals* at 13:30 and *Deadlock* at 13:37, both cited
-as 12:54–14:05) and the money discussion's three cited spans all really discuss the money.
+**The first real one was read on 2026-08-25, and it held up to a full hand check.** The
+maintainer asked "give me a summary" of a 16:50 podcast clip through the Ask tab on the laptop —
+the 26B-A4B on Vulkan, the shipped decode, whole-transcript mode. The answer opened with a
+framing sentence and gave five labelled bullets, each carrying two to four citations, spanning
+00:57 to 15:55 of the recording: coverage of the whole clip, in the shape the prompt asks for,
+and every citation resolving.
 
-**And one detail was not in the recording.** The transcript says "two hundred in original
-development and then two hundred in outsourcing after the fact"; the answer rendered that as an
-initial $200 million "supplemented by another $200 million **from Sony** to finish the project".
-The topic is right, the citations resolve, the paraphrase invented an attribution. This is the
-honest measure of what resolve-only trust buys on this path: **a resolving citation says the
-span is real and says nothing about whether the sentence in front of it is**. Worth stating
-plainly, because it also bounds what the dropped quote would have bought — a verbatim quote is
-checked against its span, but a bullet's *prose* can drift while its quote verifies, so the
-quote anchors a reader to real words rather than proving the claim. Neither check catches this
-class; a person reading the cited span does, which is what the citation chips are for.
+**Every checkable specific in it was then read against the source subtitles by hand, and each
+one sat inside a span its bullet cited.** The verbatim anchors, by cue time: "toxic positivity
+halted any negative feedback" (01:43), "character designs being fucking whack" (05:10), "being a
+yes man" (05:46); "an initial two hundred bet budget… and then Sony came along… put another two
+hundred in to get it to the finish line" (02:46–02:58), reporters from "Kotaku, gameindustry.biz"
+calling the number inaccurate (03:34–03:54); "technically immaculate" (10:46), "no soul to it at
+all" (11:33), "the in-game models did not" (11:21); the art style "people couldn't get behind"
+(12:54), *Marvel Rivals* (13:30), *Deadlock* (13:37), "the ramifications are very likely to be
+felt by Sony for a while" (07:15), "the eight years of dev and then the extra money build up
+internally creates a pressure cooker situation" (15:28); "resigned to our fate, just ship it"
+(08:52) and "the Just Ship It mentality" (09:57). Two compressions are worth naming as the
+edge of what the check certifies: the "yes men keep their jobs" reading is the speaker
+generalising from a *Star Wars: Episode I* analogy rather than describing Concord directly, and
+the clearest free-to-play line (12:16) sits just outside the cited spans, with only an oblique
+one (13:25) inside.
+
+**A first, partial reading of this same run reported the Sony claim as unsupported, and a full
+pass overturned it** — the transcript states the figure as "another two hundred" with the unit
+dropped, which a search keyed on "million" does not find. Recorded because it generalises: a
+spoken transcript drops units, currencies and digits that a written source would carry, so
+keyword-checking a figure against one is unsound unless the search is keyed on the number word
+too. What survives from that reading is the principle, which the run did not test either way:
+**a resolving citation says the span is real and says nothing about whether the sentence in
+front of it is.** That also bounds what the dropped verbatim quote would buy — a bullet's prose
+can drift while its quote verifies — so the quote anchors a reader to real words rather than
+proving a claim, and a person reading the cited span is what certifies one. On this run, that
+person found nothing to correct.
 
 **No whole-transcript answer has been scored** — one hand-checked answer is an observation, not
 a rate, and the labelled set's `global` questions are what will score them. Until then the
