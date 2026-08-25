@@ -184,18 +184,23 @@ still unverified.
 
 ### The bundled Python is a redistribution whose notices are not written yet
 
-The diariser and the translator run out of process in an interpreter the installer will carry, so
-the packages they import stop being dependencies and become files a recipient receives. That set is
+The diariser and the translator run out of process in an interpreter the installer carries, so the
+packages they import stop being dependencies and become files a recipient receives. That set is
 a CPython 3.12.10 and the wheels `python/requirements-bundle.txt` pins — **fifty distributions** once
-the transitive set is resolved, counted 2026-08-21.
+the transitive set is resolved, counted 2026-08-21. **A release has now shipped with it**:
+`v1.0.0-rc.3`, published 2026-08-23, was the first packed with the bundle, so these files have
+reached recipients.
 
 **Their notices have not been assembled, and this file does not pretend otherwise.** What has been
 established is in `docs/LICENSING.md`: every licence read off the installed package metadata rather
 than recalled; the four that are not simply permissive (`soxr` LGPL-2.1-or-later, the LGPL-2.1
 `libsndfile` inside `soundfile`'s wheel, `certifi` MPL-2.0, `tqdm` MPL-2.0 AND MIT); the three that
 ship no licence text at all (`flatbuffers`, `sentencepiece`, `tokenizers`); and what remains unread.
-It is recorded there rather than here because a notice file should say what travels with the
-product, and until an installer carries a Python, none of it does.
+It was recorded there rather than here on the reasoning that a notice file should say what travels
+with the product, and that until an installer carried a Python none of it did. **That reason has
+expired**: since 2026-08-23 an installer does carry one, so this material now travels with the
+product and belongs in this file. It is still in `docs/LICENSING.md` because nobody has assembled
+it, which is a backlog and is recorded here as one rather than as a filing decision.
 
 ### NeMo is vendored as source, and it is deliberately not a rewrite
 
