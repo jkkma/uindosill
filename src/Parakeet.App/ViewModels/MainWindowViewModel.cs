@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Parakeet.App.Services;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.LlamaServer;
 using Parakeet.Engine.ParakeetCpp.Interop;
 
 namespace Parakeet.App.ViewModels;
@@ -31,6 +32,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>The .gguf chosen for asking, or null for "the largest one there".</summary>
     [ObservableProperty]
     private string? _askModelFileName;
+
+    /// <summary>The Settings picker: where a mixture's expert layers run. Automatic as shipped —
+    /// the Vulkan loader is asked which kind of graphics this is.</summary>
+    [ObservableProperty]
+    private MoeExpertPlacement _askExpertPlacement;
 
     [ObservableProperty]
     private int _selectedTab;
@@ -62,6 +68,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _askThinking = loaded.AskThinking;
         _askMode = loaded.AskMode;
         _askModelFileName = loaded.AskModelFileName;
+        _askExpertPlacement = loaded.AskExpertPlacement;
 
         Session = new ModelSession(engines);
 
@@ -98,7 +105,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (answerEngines is null)
         {
             _llamaAnswerEngines = new LlamaAnswerEngineProvider(
-                modelStore, () => AskThinking, () => AskMode, () => AskModelFileName);
+                modelStore,
+                () => AskThinking,
+                () => AskMode,
+                () => AskModelFileName,
+                () => AskExpertPlacement);
         }
 
         Ask = new AskViewModel(
@@ -307,6 +318,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnAskModelFileNameChanged(string? value) =>
         _settings.Update(current => current with { AskModelFileName = value });
 
+    /// <summary>
+    /// Keeps the bound row in step and remembers the choice. The panel drops an engine built
+    /// under the other placement, so this takes effect at the next question — the placement is
+    /// the child process's environment and cannot be changed under a running one.
+    /// </summary>
+    partial void OnAskExpertPlacementChanged(MoeExpertPlacement value)
+    {
+        OnPropertyChanged(nameof(SelectedAskExpertPlacement));
+        _settings.Update(current => current with { AskExpertPlacement = value });
+    }
+
     /// <summary>Remembers the choice; the panel reads it at the next question.</summary>
     private void PersistAskMode(AskModePreference value) =>
         _settings.Update(current => current with { AskMode = value });
@@ -370,6 +392,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// The expert-placement picker's rows. Named for what a person sees happen — where the work
+    /// runs — rather than for the two environment variables underneath.
+    /// </summary>
+    public IReadOnlyList<AskExpertPlacementChoice> AskExpertPlacements { get; } =
+    [
+        new(MoeExpertPlacement.Automatic, "Decide from my graphics"),
+        new(MoeExpertPlacement.Device, "On the graphics card"),
+        new(MoeExpertPlacement.SystemMemory, "In system memory"),
+    ];
+
+    /// <summary>The twin of <see cref="SelectedAskMode"/>, and for the same reason.</summary>
+    public AskExpertPlacementChoice SelectedAskExpertPlacement
+    {
+        get => AskExpertPlacements.First(choice => choice.Placement == AskExpertPlacement);
+        set => AskExpertPlacement = value.Placement;
+    }
+
+    /// <summary>
     /// The ask-model picker's rows: every .gguf in the models folder, largest first, under a
     /// row for letting the application choose. Re-read whenever the Settings page is opened,
     /// because the folder is not this application's alone to write.
@@ -414,6 +454,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         + "whole recording, and everything else through the parts that matched — which is faster. "
         + "A long recording is only read whole when you ask for it, because that can take a while.";
 
+    public string AskExpertPlacementExplanation =>
+        "Some models split their work into experts and run only a few of them for each word. They "
+        + "are fastest on a graphics card with room to hold them; where there is no room — "
+        + "graphics built into the processor, or a model bigger than the card — they run from "
+        + "system memory instead, and a model that tries anyway may fail to start. Automatic "
+        + "weighs the model against your graphics. Dense models are unaffected either way, and "
+        + "whichever you pick is used from your next question.";
+
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
         "CUDA is used automatically when this build has it, and needs its own runtime files. " +
@@ -431,6 +479,13 @@ public sealed record AskModeChoice(AskModePreference Mode, string Label)
 /// <summary>One row of the ask-model picker; a null file name is "let the application choose".</summary>
 public sealed record AskModelChoice(string? FileName, string Label)
 {
+    public override string ToString() => Label;
+}
+
+/// <summary>One row of the expert-placement picker: the setting, under the name a person reads.</summary>
+public sealed record AskExpertPlacementChoice(MoeExpertPlacement Placement, string Label)
+{
+    /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
     public override string ToString() => Label;
 }
 

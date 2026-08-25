@@ -11,6 +11,7 @@ using Parakeet.Core.Answers;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.LlamaServer;
 
 namespace Parakeet.App.Tests;
 
@@ -316,6 +317,27 @@ public class AskChatTests
         Assert.Equal(1, provider.Created);
 
         provider.ThinkingMode = true;
+        await AskAsync(chat, "who presented?");
+        Assert.Equal(2, provider.Created);
+    }
+
+    [Fact]
+    public async Task ChangingTheExpertPlacementRebuildsTheEngineAtTheNextQuestion()
+    {
+        // The placement is nothing but the child's environment, fixed when the process starts —
+        // the most literal case of the rule the thinking toggle follows above. A panel that kept
+        // its engine would leave the Settings picker doing nothing until the next transcription,
+        // which is a control that silently lies about when it takes effect.
+        var (chat, provider, _) = Chat();
+
+        await AskAsync(chat, "what about the axolotl?");
+        Assert.Equal(1, provider.Created);
+
+        provider.ExpertPlacement = MoeExpertPlacement.Device;
+        await AskAsync(chat, "and the budget?");
+        Assert.Equal(2, provider.Created);
+
+        // Unchanged between questions keeps the child, so an ask is not a reload.
         await AskAsync(chat, "who presented?");
         Assert.Equal(2, provider.Created);
     }

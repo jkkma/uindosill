@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.LlamaServer;
 
 namespace Parakeet.App.Services;
 
@@ -72,6 +73,21 @@ public sealed record AppSettings
     public string? AskModelFileName { get; init; }
 
     /// <summary>
+    /// Where a mixture-of-experts ask model's experts run.
+    /// <see cref="MoeExpertPlacement.Automatic"/> as shipped — the Vulkan loader is asked, and a
+    /// card holds its own experts where the processor's graphics cannot.
+    /// </summary>
+    /// <remarks>
+    /// A setting rather than a detected constant because only one end of it has been measured:
+    /// on the second machine, in system memory is the difference between a 26B-class mixture
+    /// running and not loading at all, and no machine here has a discrete card on the Vulkan ask
+    /// path to measure the other end on. Somebody whose card the automatic rule reads wrongly —
+    /// or whose driver the loader cannot answer for — needs a way to say so that does not
+    /// involve rebuilding.
+    /// </remarks>
+    public MoeExpertPlacement AskExpertPlacement { get; init; } = MoeExpertPlacement.Automatic;
+
+    /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
     /// files beside each input.
     /// </summary>
@@ -136,6 +152,7 @@ public sealed class AppSettingsStore
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 AskMode = ReadAskMode(root),
                 AskModelFileName = ReadString(root, "askModelFileName"),
+                AskExpertPlacement = ReadExpertPlacement(root),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
@@ -186,6 +203,11 @@ public sealed class AppSettingsStore
                 // reason: reordering the enum would silently turn one user's saved choice into
                 // another's.
                 ["askMode"] = settings.AskMode.ToString().ToLowerInvariant(),
+
+                // The name for the same reason again. Always written, never omitted: unlike the
+                // backend, "nobody has said" and the shipped default are the same behaviour here
+                // — automatic asks the loader either way — so there is no second shape to keep.
+                ["askExpertPlacement"] = settings.AskExpertPlacement.ToString().ToLowerInvariant(),
             };
 
             // Omitted rather than written as null when nobody has chosen, so "never chosen" and
@@ -284,6 +306,29 @@ public sealed class AppSettingsStore
         return ReadBool(root, "askWholeTranscript", false)
             ? AskModePreference.WholeTranscript
             : AppSettings.Default.AskMode;
+    }
+
+    /// <summary>
+    /// The stored expert placement. Absent, unreadable or a name this build does not know all
+    /// degrade to as-shipped, exactly as the backend and the ask mode do — a future name read by
+    /// an older build must not pin anyone to a placement they never chose.
+    /// </summary>
+    private static MoeExpertPlacement ReadExpertPlacement(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("askExpertPlacement", out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return AppSettings.Default.AskExpertPlacement;
+        }
+
+        return value.GetString()?.Trim().ToLowerInvariant() switch
+        {
+            "automatic" => MoeExpertPlacement.Automatic,
+            "device" => MoeExpertPlacement.Device,
+            "systemmemory" => MoeExpertPlacement.SystemMemory,
+            _ => AppSettings.Default.AskExpertPlacement,
+        };
     }
 
     private static string? ReadString(JsonElement root, string name) =>

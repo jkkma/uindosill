@@ -1,5 +1,7 @@
 using Parakeet.App.Services;
+using Parakeet.App.ViewModels;
 using Parakeet.Core.Models;
+using Parakeet.Engine.LlamaServer;
 
 namespace Parakeet.App.Tests;
 
@@ -100,6 +102,92 @@ public class AppSettingsStoreTests
             // An unreadable name degrades to as-shipped, like every other setting here.
             File.WriteAllText(path, "{\"askMode\":\"whatever\"}");
             Assert.Equal(AskModePreference.Automatic, new AppSettingsStore(path).Load().AskMode);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheExpertPlacementIsAutomaticAsShippedAndSurvivesARoundTrip()
+    {
+        // Automatic asks the Vulkan loader which kind of graphics this is. The two fixed rows are
+        // for a machine it reads wrongly, and both have to outlive a restart or the picker is a
+        // control somebody has to find again every launch.
+        var path = TempFile();
+        try
+        {
+            Assert.Equal(
+                MoeExpertPlacement.Automatic, new AppSettingsStore(path).Load().AskExpertPlacement);
+
+            foreach (var placement in new[]
+            {
+                MoeExpertPlacement.Device,
+                MoeExpertPlacement.SystemMemory,
+                MoeExpertPlacement.Automatic,
+            })
+            {
+                Assert.True(new AppSettingsStore(path).Save(
+                    new AppSettings { AskExpertPlacement = placement }));
+                Assert.Equal(placement, new AppSettingsStore(path).Load().AskExpertPlacement);
+            }
+
+            // The name, never the enum's number: reordering the enum must not turn one user's
+            // saved choice into another's.
+            Assert.Contains("\"askExpertPlacement\":\"automatic\"", File.ReadAllText(path), StringComparison.Ordinal);
+
+            // A name this build does not know — a future setting read by an older build, or a
+            // hand-edited file — degrades to as-shipped like every other setting here.
+            File.WriteAllText(path, "{\"askExpertPlacement\":\"somewhere-else\"}");
+            Assert.Equal(
+                MoeExpertPlacement.Automatic, new AppSettingsStore(path).Load().AskExpertPlacement);
+
+            // And a file written before the setting existed reads as automatic rather than as a
+            // failure to load.
+            File.WriteAllText(path, "{\"askThinking\":true}");
+            var older = new AppSettingsStore(path).Load();
+            Assert.True(older.AskThinking);
+            Assert.Equal(MoeExpertPlacement.Automatic, older.AskExpertPlacement);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EveryExpertPlacementHasAPickerRowAndChoosingOneWritesTheFile()
+    {
+        // The picker's getter finds the row for the current setting, so a placement with no row
+        // is a bind-time throw on the Settings tab rather than a missing line in a list. Cheap to
+        // hold here, and the kind of thing an enum gains a member without anyone noticing.
+        var path = TempFile();
+        try
+        {
+            var viewModel = new MainWindowViewModel(
+                new FakeEngineProvider(),
+                new LocalModelStore(TestTemp.NewDirectory("uindosill-placement")),
+                ModelCatalog.Default,
+                settings: new AppSettingsStore(path),
+                answerEngines: new FakeAnswerEngineProvider());
+
+            Assert.Equal(MoeExpertPlacement.Automatic, viewModel.AskExpertPlacement);
+
+            foreach (var placement in Enum.GetValues<MoeExpertPlacement>())
+            {
+                var row = Assert.Single(
+                    viewModel.AskExpertPlacements, choice => choice.Placement == placement);
+
+                // The label is what a person reads, so it is neither the enum's spelling nor
+                // either environment variable's name.
+                Assert.NotEqual(placement.ToString(), row.Label);
+
+                viewModel.SelectedAskExpertPlacement = row;
+                Assert.Equal(placement, viewModel.AskExpertPlacement);
+                Assert.Equal(row, viewModel.SelectedAskExpertPlacement);
+                Assert.Equal(placement, new AppSettingsStore(path).Load().AskExpertPlacement);
+            }
         }
         finally
         {

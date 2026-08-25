@@ -90,7 +90,20 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             start.ArgumentList.Add(argument);
         }
 
-        foreach (var (name, value) in BuildEnvironment(install.Backend, options.Environment))
+        // The loader is asked only when its answer decides something: on the Vulkan backend, with
+        // the placement left automatic. Creating an instance loads every installed driver, and a
+        // CUDA or CPU child has no reason to pay for that.
+        var automatic = install.Backend == ComputeBackend.Vulkan
+            && options.ExpertPlacement == MoeExpertPlacement.Automatic;
+        var graphics = automatic ? VulkanDeviceProbe.Describe() : null;
+
+        // The file on disk rather than anything the catalogue says about it: the models folder is
+        // not this application's alone to write, and a size read from the file is a size that is
+        // really there. Zero on a read that fails, which the rule treats as "does not fit".
+        var modelBytes = automatic ? SizeOrZero(options.ModelPath) : 0;
+
+        foreach (var (name, value) in BuildEnvironment(
+            install.Backend, options.Environment, options.ExpertPlacement, graphics, modelBytes))
         {
             start.Environment[name] = value;
         }
@@ -222,24 +235,46 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
     /// docs/UNPROVEN.md), and a hang on load is strictly worse than bf16 being unavailable.
     /// Stage 0.1 — a driver update and a re-run — is what retires this default.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The expert-offload pair is the conditional one. It was unconditional on Vulkan until
+    /// 2026-08-25, which was the second machine's answer applied to every machine: on that
+    /// laptop's UMA split a 26B-class mixture cannot load at all without it, and on a card with
+    /// memory of its own it parks in system RAM weights that would have fitted in VRAM. Those
+    /// are not the same cost — one is a model that does not run, the other is a model that runs
+    /// slowly — which is why <see cref="GpuClass.Unknown"/> resolves to system memory: the
+    /// unanswered question takes the failure that still starts.
+    /// </para>
+    /// <para>
+    /// Neither branch of the automatic rule has been measured against the other on one machine.
+    /// The card side has never been measured at all — no discrete-GPU Vulkan ask run exists —
+    /// and docs/UNPROVEN.md carries that as its own entry.
+    /// </para>
+    /// </remarks>
     internal static IReadOnlyDictionary<string, string> BuildEnvironment(
-        ComputeBackend backend, IReadOnlyDictionary<string, string> overrides)
+        ComputeBackend backend,
+        IReadOnlyDictionary<string, string> overrides,
+        MoeExpertPlacement placement = MoeExpertPlacement.Automatic,
+        VulkanGraphics? graphics = null,
+        long modelBytes = 0)
     {
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
         if (backend == ComputeBackend.Vulkan)
         {
             environment["GGML_VK_DISABLE_BFLOAT16"] = "1";
 
-            // Mixture-of-experts weights stay in system memory on Vulkan, and the pinned host
-            // buffer is bypassed — measured 2026-08-24 on the second machine (docs/UNPROVEN.md):
-            // a UMA driver splits its memory into two ~7.8 GiB heaps, "CPU" placement resolves
-            // to the pinned heap without --no-host and overflows it, and a 26B-class mixture
-            // that runs comfortably with these knobs cannot load at all without them. On a
-            // dense model the expert override matches no tensors; the unpinned-transfer cost
-            // on discrete-card Vulkan is unmeasured and marked so. Interim until the catalogue
-            // carries per-model launch options (the register's open lineup question).
-            environment["LLAMA_ARG_CPU_MOE"] = "1";
-            environment["LLAMA_ARG_NO_HOST"] = "1";
+            if (ExpertsGoToSystemMemory(placement, graphics, modelBytes))
+            {
+                // Mixture-of-experts weights stay in system memory, and the pinned host buffer is
+                // bypassed — measured 2026-08-24 on the second machine (docs/UNPROVEN.md): a UMA
+                // driver splits its memory into two ~7.8 GiB heaps, "CPU" placement resolves to
+                // the pinned heap without --no-host and overflows it, and a 26B-class mixture
+                // that runs comfortably with these knobs cannot load at all without them. Both
+                // or neither: --cpu-moe without --no-host is the overflow, which is the one
+                // combination measured to fail.
+                environment["LLAMA_ARG_CPU_MOE"] = "1";
+                environment["LLAMA_ARG_NO_HOST"] = "1";
+            }
         }
 
         foreach (var (name, value) in overrides)
@@ -249,6 +284,83 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
 
         return environment;
     }
+
+    /// <summary>
+    /// The automatic rule, and the two ways to overrule it. Pure and internal so the suite holds
+    /// it without a Vulkan loader: the probe answers <see cref="VulkanGraphics"/>, and everything
+    /// that turns on the answer is here.
+    /// </summary>
+    internal static bool ExpertsGoToSystemMemory(
+        MoeExpertPlacement placement, VulkanGraphics? graphics, long modelBytes) =>
+        placement switch
+        {
+            MoeExpertPlacement.Device => false,
+            MoeExpertPlacement.SystemMemory => true,
+
+            // Automatic: a card holds its own experts when they fit on it. Everything else — the
+            // processor's graphics, a machine that could not be asked, and a card too small for
+            // the model in front of it — does not.
+            _ => graphics is not { Class: GpuClass.Discrete } card
+                 || !FitsOnDevice(modelBytes, card.DeviceLocalBytes),
+        };
+
+    /// <summary>
+    /// Whether a model of <paramref name="modelBytes"/> belongs on a device with
+    /// <paramref name="deviceLocalBytes"/> of its own memory.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Keying the placement on the device's <i>type</i> alone was wrong on the machine that has a
+    /// card too small for the model: an 8 GiB card is a `DISCRETE_GPU`, and a 26B-class mixture at
+    /// IQ4_XS is about 14 GiB, so "is there a card" answered yes to a question that was really
+    /// "does this fit". Off by a whole model.
+    /// </para>
+    /// <para>
+    /// <b>The allowance is anchored to one measurement and is deliberately conservative.</b> The
+    /// 9B Q8_0 — an 8.87 GiB file — held about 11.7 GiB on the desktop's card at a 53,248-token
+    /// context (2026-08-24, docs/UNPROVEN.md): 2.83 GiB above the file, of which 1.63 GiB was KV
+    /// at that length. A quarter of the file plus a gibibyte is 3.2 GiB on that model, so the rule
+    /// asks for more room than the largest load in the record actually took. It has to be
+    /// conservative in that direction because the two errors are not equal: refusing a card that
+    /// would have fitted costs speed, and accepting one that does not costs a model that will not
+    /// load, since the engine runs with <c>--fit off</c> so nothing silently trims to fit.
+    /// </para>
+    /// <para>
+    /// <b>What it does not know:</b> the KV cost per token is a property of the architecture and
+    /// is not readable from the file, so the allowance does not grow with
+    /// <see cref="LlamaServerOptions.ContextSize"/> — a whole-transcript ask on a card at the
+    /// margin can still be a load this rule expected to fit. Unmeasured, and marked so.
+    /// A file size or a heap size of zero means "not known", and not-known does not fit.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// The model file's size, or zero when it cannot be read. Never throws: a placement decision
+    /// must not be the thing that stops a load, and zero is the answer that keeps the experts
+    /// where they are known to work.
+    /// </summary>
+    private static long SizeOrZero(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? file.Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    internal static bool FitsOnDevice(long modelBytes, long deviceLocalBytes) =>
+        modelBytes > 0
+        && deviceLocalBytes > 0
+        && modelBytes + (modelBytes / 4) + GibiByte <= deviceLocalBytes;
+
+    private const long GibiByte = 1L << 30;
 
     private async Task WaitHealthyAsync(TimeSpan timeout, CancellationToken ct)
     {

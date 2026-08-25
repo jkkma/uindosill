@@ -8,6 +8,7 @@ using Parakeet.Core.Answers;
 using Parakeet.Core.Formatting;
 using Parakeet.Core.Retrieval;
 using Parakeet.Core.Transcription;
+using Parakeet.Engine.LlamaServer;
 
 namespace Parakeet.App.ViewModels;
 
@@ -48,6 +49,7 @@ public sealed partial class AskChatViewModel : ObservableObject
     private IAnswerEngine? _engine;
     private bool _engineThinking;
     private int _engineContextTokens;
+    private MoeExpertPlacement _enginePlacement;
     private JobViewModel? _recording;
     private TranscriptDocument? _document;
     private IReadOnlyList<TranscriptWindow>? _windows;
@@ -376,9 +378,13 @@ public sealed partial class AskChatViewModel : ObservableObject
         // The context is the same kind of fact: one too small cannot hold this ask's prompt,
         // and a whole-transcript context kept past its ask is a KV cache the machine feels for
         // nothing — retrieval's need is the budget's floor, so leaving the mode shrinks it back.
+        // The expert placement is a third fact of that same kind, and the most literally so: it
+        // is nothing but the child's environment, fixed at the moment the process starts.
         var contextTokens = AnswerContextBudget.ContextTokensFor(promptChars);
         if (_engine is not null
-            && (_engineThinking != _provider!.ThinkingMode || _engineContextTokens != contextTokens))
+            && (_engineThinking != _provider!.ThinkingMode
+                || _engineContextTokens != contextTokens
+                || _enginePlacement != _provider.ExpertPlacement))
         {
             await _engine.DisposeAsync().ConfigureAwait(true);
             _engine = null;
@@ -401,6 +407,7 @@ public sealed partial class AskChatViewModel : ObservableObject
         entry.Status = "Loading the model — a large one takes a while…";
         _engineThinking = _provider!.ThinkingMode;
         _engineContextTokens = contextTokens;
+        _enginePlacement = _provider.ExpertPlacement;
         var engine = _provider.Create(promptChars);
         try
         {
