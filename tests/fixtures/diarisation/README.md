@@ -64,7 +64,7 @@ own `FilterbankFeatures` — and commits what they returned. It needs torch, num
 `nemostub/`-shaped tree; CI never runs it, for the same reason it never runs `validate-der.py`.
 
 ```
-python scripts/make-diariser-fixtures.py --reference C:/Users/ayymanPC/spike-sortformer
+python scripts/make-diariser-fixtures.py --reference <the spike directory holding nemostub/>
 ```
 
 | file | what it holds |
