@@ -248,6 +248,10 @@ foreach ($required in @(
     'uindosill_engines/serve.py',
     'uindosill_engines/protocol.py',
     'uindosill_engines/diariser/parity-reference.npy',
+    # The mel filterbank, committed 2026-08-26 when the `librosa.filters.mel` call that built it
+    # was replaced by its own output. Without this file the diariser raises on construction, so a
+    # bundle missing it is a bundle whose speaker labelling does not start.
+    'uindosill_engines/diariser/mel-filterbank.npy',
     'uindosill_engines/translator/parity-reference.json',
     'uindosill_engines/translator/parity-sources.json',
     'uindosill_engines/_vendor/nemo/collections/asr/modules/sortformer_modules.py')) {

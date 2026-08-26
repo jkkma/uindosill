@@ -247,15 +247,17 @@ def render(rows: list[dict], bundle: Path) -> str:
         " literal `UNKNOWN` with a classifier alone claiming MIT. Upstream's omission in every"
         " case, recorded rather than papered over.",
         "",
-        "**Four of these are not simply permissive, and they are the rows to read twice.**"
-        " `soxr` is LGPL-2.1-or-later and **its libsoxr is statically linked into"
-        " `soxr/soxr_ext.pyd`** — there is no libsoxr DLL in the bundle, which is what makes it the"
-        " harder of the two to discharge. `soundfile` is BSD-3-Clause but carries an LGPL-2.1"
-        " `libsndfile` as a *separate, dynamically loaded* DLL, whose `COPYING` ships at"
+        "**Three of these are not simply permissive, and they are the rows to read twice.**"
+        " `soundfile` is BSD-3-Clause but carries an LGPL-2.1 `libsndfile` as a *separate,"
+        " dynamically loaded and replaceable* DLL, whose `COPYING` ships at"
         " `_soundfile_data/COPYING` — which this table does not show because it belongs to no"
         " `.dist-info`. `certifi` and `tqdm` are MPL-2.0, file-level copyleft."
-        " `docs/LICENSING.md` reads what each obliges and records that the LGPL obligation is live"
-        " and not yet discharged.",
+        " **`soxr` was a fourth until 2026-08-26**, and it was the difficult one: its libsoxr was"
+        " statically linked into `soxr/soxr_ext.pyd`, where LGPL-2.1 §6(b) could not reach it. It"
+        " arrived only because librosa declared it, and librosa left when the one call it was here"
+        " for became a committed matrix. **Nothing statically linked in this product is under the"
+        " LGPL.** `licences/LGPL-WRITTEN-OFFER.txt` discharges what remains and"
+        " `docs/LICENSING.md` reads it.",
         "",
         "Re-running against a bundle built from the same pins must produce this section unchanged;"
         " `--check` is what holds it, and a changed pin is expected to change this table. The"
