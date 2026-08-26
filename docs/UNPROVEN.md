@@ -1951,9 +1951,90 @@ which point the CPU, SoC and iGPU power limits move too, and the incumbent figur
 compared against was not taken under that condition. **A joules-per-minute-of-audio comparison is
 therefore not a measurement anyone has an instrument for on this machine**, absent an external meter.
 
-**Still unproven, and now more precisely.** Whether any execution-provider build accepts driver
-32.0.20102.3930 — the study found AMD and Microsoft publishing inconsistent compatibility rules for
-the same provider, and this driver's branch named by neither. What BF16 costs against f16 on the WER
+**The two no-install probes ran the same day, and they are the first NPU numbers this project has.**
+`xrt-smi validate` from the driver-store copy: **68.0 µs** average end-to-end submission latency,
+**60,837 op/s** throughput, and **51.3 TOPS** on INT8 GEMM — all at `Power Mode : Performance`, which
+the tool sets for a run and restores afterwards, so none of them describes a default-mode session and
+that gap is unmeasured. Two of the three change something. The 68.0 µs settles the speech detector by
+arithmetic rather than analogy: its whole budget is about 144 µs per inference, so a dispatch round
+trip is 47% of it before any multiply. And 51.3 TOPS replaces the figure the study's roofline used —
+38.05 from a paper that names no SKU, no power mode and no op-counting convention — with one measured
+on this machine, which *widens* the gap between what the silicon does on a GEMM and what AMD's
+compiled Conformer achieves. The conclusion is unchanged and better supported: nobody has benchmarked
+this route in a state anyone would ship.
+
+**The Windows ML catalogue lists the provider for this device, and that softens the step-zero
+blocker.** `ExecutionProviderCatalog.GetDefault().FindAllProviders()`, enumeration only with
+`EnsureReadyAsync()` never called, returns exactly two entries on this machine —
+`VitisAIExecutionProvider` and `MIGraphXExecutionProvider`, both `NotPresent`. **The list is filtered
+to this silicon**: no NVIDIA, OpenVINO or Qualcomm entry appears, so it is what Windows ML considers
+applicable here rather than everything it knows. `MIGraphXExecutionProvider` is a free second
+finding — an AMD GPU provider this project has never tried, on a machine whose iGPU has only run
+WebGPU and Vulkan, and a candidate for the diariser and translator that involves no NPU at all.
+
+**The provider was then installed and models were run, and the driver question is settled: it
+accepts this driver.** `EnsureReadyAsync()` returned `Success` for both AMD providers on driver
+32.0.20102.3930 — the Vitis AI NPU provider at 1.8.68.0 in 156.1 s and MIGraphX at 1.8.57.0 in
+88.8 s, both `Certified`, both registering into ONNX Runtime, with the NPU enumerating as an
+`OrtEpDevice` of hardware type NPU at device id 6128 (`0x17F0`). Synthetic graphs then compiled and
+**ran on the array**: `xrt-smi` reported this process holding a hardware context across all eight
+columns with 9,538 completed submissions and zero errors, which is the check that separates real
+execution from silent CPU fallback. **The "blocked at step zero" verdict the study led with is
+therefore refuted**, and so is the acquisition cost it priced: no AMD account, no conda, no cmake,
+no Visual Studio, and — because the packages are Microsoft-signed MSIX delivered by the OS —
+**nothing for this application to redistribute**, which retires the unread-licence question for this
+route while leaving it live for the SDK route. The cost moved rather than vanished: 660 MB and
+396 MB installed per machine, on demand, outside the installer.
+
+**Three things were measured that had been reasoned.** Bfloat16 matmul is emulated with Block FP16,
+by the compiler's own `-DAIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16=1`, which answers what "BF16" maps
+to on this part. Numeric divergence is real and large: the same two-layer convolution returns a
+checksum of 5149.238770 on the NPU against 5137.804199 on the CPU, 0.22% apart in aggregate with no
+quantisation requested — **three orders of magnitude past the 8.143e-04 that kept CUDA out of the
+diariser's `auto` against a 1e-4 fixture**, so an NPU provider is opt-in by name at best and that is
+now measured rather than derived. And on the one graph that ran, the NPU took **584.7 µs against the
+CPU's 154.8 µs**, 3.78x slower — a small-graph result where the 68.0 µs dispatch latency is 12% of
+the total, so it indicts small graphs rather than the silicon.
+
+**What replaces the old blocker is worse for this project.** Both ONNX graphs it actually ships
+crash both AMD providers. `silero_vad.onnx` takes an access violation inside `vaiml.dll` and
+`sortformer-default.onnx` one inside `InferenceSession.Init`; both **kill the host process**, exit
+139, with no catchable exception and no fallback. On MIGraphX the same two fail differently — Silero
+builds and then fails at run naming `If_0_then_branch__Inline_0__/decoder/rnn/Squeeze_output_0`,
+Sortformer fails at initialisation. Four attempts, two providers, two real graphs, no working
+session; the synthetic graphs built from primitive operators all worked, so this is not a broken
+install. The named node points at control flow wrapped around recurrent state as the likely common
+cause — **which is the same structural feature that blocks the translator, discounts the diariser,
+and describes v3's streaming ASR and end-of-utterance models.** Still unproven: whether that
+hypothesis is right, which one synthetic `If`-around-RNN graph would establish.
+
+**The obvious confound was checked and eliminated.** This laptop had a Windows debloat script run on
+it after a reinstall, which would make any of the above an artefact of one machine rather than a
+result. `Get-WindowsOptionalFeature` reports two features with payload removed — `NetFx3` and
+**`Recall`**, which is indeed the Windows feature that runs on the NPU — and nothing else in the AI
+surface suppressed: no `WindowsAI`, `WindowsCopilot`, `WindowsStore` or `CloudContent` policy key
+exists, `WSAIFabricSvc` runs automatically, and every AMD service is running. Recall is a consumer
+of the NPU rather than the inference path, and there is no Windows ML optional feature to disable —
+the providers arrive as MSIX packages, which is how they arrived. The positive evidence settles it
+regardless: in the same session the Store delivered both providers, the compiler compiled and the
+array executed thousands of submissions without error, so what fails is the graphs rather than the
+machine.
+
+**A side effect of that audit, worth recording because it closes a question this file never asked.**
+The same machine has the `MediaPlayback` optional feature disabled and `wmplayer.exe` absent, which
+would be a plausible explanation for a decode failure if one ever appeared. It is not one. Every
+Media Foundation codec is present, the Windows Media set included, and driving `AudioSources.Open`
+over every real file on the machine decoded **eight files and about fifteen hours of audio with
+declared duration matching decoded duration exactly on each**, at real amplitude — five multi-hour
+MP3s, two AAC/M4A, one WAV. Synthesised samples then covered the rest of the accepted extension
+list: `.aac`, `.asf`, `.m4b`, `.mp4` and `.wma` all decode, and **WMA and ASF are the ones Media
+Features actually supplies**. What the removal took is the player application, which this product
+never used. The single absence is `msaud32.acm`, a legacy ACM codec Media Foundation cannot reach
+from this path; it is untested and would matter only to a `.wav` carrying a compressed codec.
+
+**Unchanged: the energy question.** Nothing here measured watts, `Estimated Power` still reads `N/A`,
+and there is now nothing worth measuring the energy of until a graph this project cares about can
+run at all. What BF16 costs against f16 on the WER
 corpus, which the study re-scoped: the per-operator-fallback worry the record raised is retired for
 the Conformer, which compiles as one kernel, and is live and unmeasured for the diariser's and
 translator's graphs. Whether the compiler emits plain bfloat16 or Block FP16, which this laptop
