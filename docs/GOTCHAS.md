@@ -784,3 +784,51 @@ naming is part of your configuration.* Renaming a downloaded artefact is normall
 silently changes which code path loads it. Nothing type-checks it and nothing fails until the model
 is actually constructed — which is why this was found by running the shipping engine against a real
 directory rather than by reading it.
+
+## 36. An `AttributeError` is not an `ImportError`, so an optional dependency stops being optional
+
+`pyannote.audio` treats speechbrain as optional and says so in the ordinary way:
+
+```python
+try:
+    from speechbrain.pretrained import EncoderClassifier as SpeechBrain_EncoderClassifier
+    SPEECHBRAIN_IS_AVAILABLE = True
+except ImportError:
+    SPEECHBRAIN_IS_AVAILABLE = False
+```
+
+That guard holds when speechbrain is *absent*. It does not hold when speechbrain is **present and
+broken against its own dependencies**, which is what happens on the version of torch this project
+pins: speechbrain 0.5.16 imports `speechbrain.dataio.dataio`, which calls `check_torchaudio_backend()`,
+which calls `torchaudio.set_audio_backend` — removed in torchaudio 2.11. The result is an
+`AttributeError` raised *during* the import, and `except ImportError` does not catch it. An
+optional dependency took the whole process down.
+
+speechbrain 1.0.3 fails the same way one line further on, at `torchaudio.list_audio_backends`.
+**1.1.0 dropped the check** and imports cleanly; its own `speechbrain.pretrained` shim then fails as
+a genuine `ImportError`, which *is* caught, leaving `SPEECHBRAIN_IS_AVAILABLE = False`. That costs
+nothing here — this project uses the pyannote embedder, not the speechbrain one — and the package
+stays present and usable at `speechbrain.inference`.
+
+**Why this is worth a number rather than a comment.** The failure looks like a missing package and
+is not one; the traceback names `torchaudio`, the fix is a `speechbrain` version, and the guard that
+was supposed to make the whole question moot is three frames above the crash and did nothing. The
+first instinct — uninstall the optional dependency, since the code says it is optional — does
+"work", which is worse: it makes the symptom disappear while removing something the maintainer
+wanted kept.
+
+**The general rule.** *A `try/except ImportError` around a third-party import is only as good as
+that package's own import-time health.* Any package that touches a fast-moving dependency at import
+time can fail with something else — `AttributeError`, `OSError`, `RuntimeError` — and the narrow
+guard will not hold. When an import guard has to survive a dependency *upgrade* rather than a
+dependency *absence*, it needs `except Exception`, or the dependency needs pinning to a version
+whose import is known to be clean. This project chose the pin, and
+`python/requirements-bundle.txt` records why the number matters.
+
+**Related.** The same upgrade removed two more things this stack reaches for — `torchaudio.AudioMetaData`
+(gone entirely) and `torchaudio.load`'s built-in decoding (now delegated to TorchCodec) — and flipped
+`torch.load`'s `weights_only` default. All three are repaired in `diariser/diarizen.py`'s
+`_prepare_imports`, deliberately from this project's own code rather than by editing the vendored
+fork, so the vendored copy stays byte-identical to the source the published figures describe. They
+surface strictly one at a time, each only after the previous is fixed, which is why they were
+enumerated by running rather than by reading.

@@ -63,3 +63,68 @@ sentencepiece==0.2.2
 librosa==1.0.0
 soundfile==0.14.0
 numpy==2.5.2
+
+# The second diariser (DiariZen), added 2026-08-26. **About 242 MiB of site-packages**, measured as
+# the set this stack adds over the one above rather than as a venv total — comparing venv totals
+# conflates two different torch builds and overstates it by more than double.
+#
+# **Two of its packages are not here, and cannot be.** `diarizen` is not published on PyPI at all,
+# and its `pyannote-audio` is a genuine fork — 3,996 changed lines across 45 of upstream 3.1.1's 82
+# files — so the released wheel is not a substitute. `bundle-python.ps1` installs `--only-binary=:all:`
+# on purpose, so neither can be a line in this file. They are vendored instead, under
+# `python/uindosill_engines/_vendor/`, exactly as NVIDIA's Sortformer modules already are, and they
+# travel because the bundler copies `uindosill_engines` wholesale.
+#
+# **Nothing below moves numpy or torch, and that was checked rather than hoped.** pyannote-audio
+# 3.1.1 predates the numpy 2 ABI break and upstream's own `constraints.txt` pins numpy 1.26.4 and
+# torch 2.1.1. Installed against the pins above instead — numpy 2.5.2, torch 2.13.0 — it resolves,
+# and with the three compatibility shims in `diariser/diarizen.py` it produces **turn-for-turn
+# identical labels** to the stack upstream specifies: 19 turns, 3 speakers, same clip. Had it not,
+# the translator's 8,149-sentence gate and the diariser's 16.3324% would have been the price.
+#
+# **speechbrain is 1.1.0 and the version is load-bearing.** pyannote imports it inside a
+# `try/except ImportError`, so it is optional to the code — but 0.5.16 and 1.0.3 do not *fail*
+# cleanly here: they raise `AttributeError` from `check_torchaudio_backend`, calling
+# `torchaudio.set_audio_backend` and `list_audio_backends`, both removed in torchaudio 2.11. An
+# AttributeError is not an ImportError, so the guard does not catch it and the whole import dies.
+# 1.1.0 dropped that check. Its own `speechbrain.pretrained` alias then fails as an *ImportError* —
+# which is caught, leaving `SPEECHBRAIN_IS_AVAILABLE = False`, which costs nothing: this project
+# uses the pyannote embedder, not the speechbrain one. The package is present and reachable at
+# `speechbrain.inference` for anything that wants it.
+speechbrain==1.1.0
+
+# torchaudio must match torch 2.13.0 above; 2.11.0 is what that pairs with, and it is pinned like
+# everything else here rather than left to the resolver. It is reached only through the shims in
+# `diariser/diarizen.py` — its `load` delegates to a TorchCodec this bundle does not carry.
+torchaudio==2.11.0
+
+# The pyannote namespace's other four halves, from PyPI. The vendored fork supplies `pyannote.audio`
+# and these supply the rest; `_prepare_imports` is what makes one namespace out of the two sources.
+pyannote.core==5.0.0
+pyannote.database==5.1.3
+pyannote.metrics==3.2.1
+pyannote.pipeline==3.0.1
+
+# **huggingface_hub is held under 1.0 by the translator, not by DiariZen.** transformers 4.57.6
+# above requires `huggingface-hub<1.0,>=0.34.0`; DiariZen's stack is happy with either and
+# resolved to 1.28.0 when tested on its own, which is a resolution the real bundle refuses.
+# The compatibility spike that missed this had no transformers in it -- an environment that is
+# not the bundle will not find the bundle's conflicts, which is what `--dry-run` against this
+# whole file is for.
+# What the fork imports at module scope. None of it is optional and none of it is prunable: pandas,
+# matplotlib, optuna and pyannote.metrics are all reached on the inference path — checked by reading
+# `sys.modules` after a real `label()` call rather than by reading the imports.
+lightning==2.6.5
+torchmetrics==1.9.0
+asteroid-filterbanks==0.4.0
+torch-audiomentations==0.12.0
+pytorch-metric-learning==2.9.0
+tensorboardX==2.6.5
+omegaconf==2.3.1
+einops==0.8.2
+huggingface_hub==0.36.2
+rich==15.0.0
+semver==3.0.4
+accelerate==1.14.0
+psutil==7.2.2
+toml==0.10.2

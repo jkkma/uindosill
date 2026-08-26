@@ -81,6 +81,89 @@ EMBEDDING_FILE = "pyannote-wespeaker-voxceleb-resnet34-LM.bin"
 REQUIRED_FILES = (CONFIG_FILE, WEIGHTS_FILE, EMBEDDING_FILE, *PLDA_FILES)
 
 
+def _prepare_imports() -> None:
+    """Put the vendored fork on the path and restore the three APIs torch 2.13 took away.
+
+    **Both halves exist so that the vendored copy can stay byte-identical to upstream.** DiariZen's
+    published figures describe *that* source; a patched copy would be a different artefact needing
+    its own measurement, which is the same rule `diariser/engine.py` follows for NVIDIA's modules.
+    So nothing under `_vendor/` is edited and every incompatibility is repaired from here, where it
+    is named, dated and testable.
+
+    **The namespace half.** `pyannote` is a namespace shared with the PyPI `pyannote.core`,
+    `.database`, `.metrics` and `.pipeline` distributions, and those ship an `nspkg.pth` that fixes
+    `pyannote.__path__` at interpreter start-up -- *before* any `sys.path` entry this module could
+    add. So a vendored `pyannote/audio` is simply never looked for, and the failure is a bare
+    `ModuleNotFoundError: No module named 'pyannote.audio'` with the directory sitting right there.
+    Appending to the package's own `__path__` is what makes the two halves of the namespace meet;
+    the four PyPI ones keep resolving out of site-packages, which was checked rather than assumed.
+
+    **The torch half.** pyannote-audio 3.1.1 was written against torchaudio 2.1 and this project's
+    bundle pins torch 2.13, whose torchaudio is 2.11. Three things it reaches for are gone, and they
+    surface one at a time -- each only after the previous is fixed:
+
+      * ``torchaudio.AudioMetaData`` was deleted outright (no mention anywhere in the 2.11 wheel).
+      * ``torch.load`` flipped its ``weights_only`` default to True in torch 2.6, and the DiariZen
+        checkpoint is a pickle carrying a ``TorchVersion``. It is forced rather than defaulted here
+        because Lightning passes the argument explicitly, so a ``setdefault`` is ignored.
+      * ``torchaudio.load`` now delegates to TorchCodec, which the bundle does not carry and which
+        wants FFmpeg shared libraries of its own. `soundfile` is already a bundle dependency and the
+        host always writes 16 kHz mono PCM, so it reads everything this engine is handed.
+
+    **Measured, not assumed:** with these three in place and speechbrain 1.1.0, the engine produced
+    turn-for-turn identical labels on numpy 2.5.2 / torch 2.13.0 to the spike's numpy 1.26.4 /
+    torch 2.5.1 -- 19 turns and 3 speakers on the same clip. `docs/UNPROVEN.md` records it.
+    """
+    import os
+    import sys
+
+    vendor = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "_vendor"))
+    if vendor not in sys.path:
+        sys.path.insert(0, vendor)
+
+    import pyannote
+
+    vendored_pyannote = os.path.join(vendor, "pyannote")
+    if vendored_pyannote not in pyannote.__path__:
+        pyannote.__path__.append(vendored_pyannote)
+
+    import numpy as np
+    import soundfile as sf_io
+    import torch
+    import torchaudio
+
+    if not hasattr(torchaudio, "AudioMetaData"):
+        from dataclasses import dataclass
+
+        @dataclass
+        class AudioMetaData:
+            sample_rate: int
+            num_frames: int
+            num_channels: int
+            bits_per_sample: int
+            encoding: str
+
+        torchaudio.AudioMetaData = AudioMetaData
+
+    if not getattr(torch.load, "_uindosill_weights_only_off", False):
+        _real_load = torch.load
+
+        def _load(*args, **kwargs):
+            kwargs["weights_only"] = False
+            return _real_load(*args, **kwargs)
+
+        _load._uindosill_weights_only_off = True
+        torch.load = _load
+
+    if not getattr(torchaudio.load, "_uindosill_via_soundfile", False):
+        def _audio_load(path, *args, **kwargs):
+            data, rate = sf_io.read(str(path), dtype="float32", always_2d=True)
+            return torch.from_numpy(np.ascontiguousarray(data.T)), rate
+
+        _audio_load._uindosill_via_soundfile = True
+        torchaudio.load = _audio_load
+
+
 class DiarizenEngine:
     """One loaded DiariZen pipeline, held for the life of the sidecar.
 
@@ -105,6 +188,8 @@ class DiarizenEngine:
         torch.set_num_threads(threads or DEFAULT_THREADS)
 
         from pathlib import Path
+
+        _prepare_imports()
 
         from diarizen.pipelines.inference import DiariZenPipeline
 

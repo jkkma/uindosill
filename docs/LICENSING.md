@@ -15,13 +15,23 @@ are the first here to restrict *use* rather than only paperwork. They are downlo
 bundled, precisely so that no build of this project redistributes non-commercial material; that
 entry's own section below is the record.
 
-**Two of the four are now distributed rather than downloaded, which changes who owes the notice.**
-Since the installer began carrying weights on 2026-08-23, every channel ships the speech-detection
-weights and the default channel ships the speaker-labelling weights as well (`BundledModels`;
-win-cuda excludes the latter for size). The transcription and translation weights are still fetched
-by the user on request. A downloaded weight is the user's copy; a bundled one is this project
-redistributing someone else's model, and the NVIDIA and MIT obligations above attach to the build
-rather than to the download.
+**One of the five is distributed rather than downloaded, which changes who owes the notice.**
+Since the installer began carrying weights on 2026-08-23 every channel ships the speech-detection
+graph, which is 2.2 MiB and would otherwise be a dead checkbox on a fresh install. Everything else
+is fetched by the user on request. A downloaded weight is the user's copy; a bundled one is this
+project redistributing someone else's model, so it is the **MIT** obligation — Silero's copyright
+line and permission notice — that attaches to the build. The other four attach to the download.
+
+**The diarisation weights stopped being bundled on 2026-08-26, and that lightened an obligation
+rather than only a package.** Until then the default channel carried Sortformer, so this project
+was redistributing NVIDIA Open Model License material and owed §3.1's verbatim notice and a copy of
+the Agreement *with every build*. Both still ship — the notice is rendered wherever the others are
+and `licences/NVIDIA-Open-Model-License-2025-10-24.txt` still travels — because a user who downloads
+those weights is owed them all the same, and because a revocable grant is one this project would
+rather over-notice than under-notice. What changed is that the obligation now follows the file to
+the person who fetched it. The reason for the change was not licensing: speaker labelling has two
+models and neither is better, so bundling one would have made it the answer on every fresh install
+by default rather than by choice. `docs/PHASES.md` § *Decided 2026-08-26* records it.
 
 **And since 2026-08-23 an installer that carries a Python has shipped, so this obligation is live
 rather than pending.** The diariser and the translator moved out of C# and into a bundled
@@ -391,8 +401,10 @@ the installer; this one may only be the first. A bundled NC weight would make ea
 redistribution of non-commercial material inside an otherwise MIT/GPL distribution, and would hand
 every commercial recipient a file they may not use. Downloaded, the copy is the user's, the
 obligation to stay non-commercial is theirs, and this project ships nothing under NC terms at all.
-`BundledModels` therefore does not list it, and Sortformer remains the diariser the default channel
-carries.
+`BundledModels` therefore does not list it — and **as of 2026-08-26 it lists no diariser at all**:
+Sortformer left the installer the same day, so a fresh install downloads whichever of the two the
+user picks. That makes the non-commercial rule easy to state and impossible to breach by accident:
+no build of this project carries speaker-labelling weights of any licence.
 
 **Four upstream licences meet in one catalogue entry, and the entry owes all four.**
 
@@ -482,6 +494,22 @@ way, for the same reason the ASR row is unconditional.
 DLLs, covered by the same reading as the ASR tier's.
 
 ## The bundled Python is fifty more redistributions, and the notice half is now discharged
+
+> **Fifty is a 2026-08-21 number and the requirements have grown since.** Everything below was
+> verified against a bundle assembled that day, and it is left as it was because it says what
+> was actually checked. On 2026-08-26 the second diariser added its stack to
+> `python/requirements-bundle.txt`; a `--dry-run` resolve of the whole file now reports **112
+> distributions**. That is pip's count, not a licence enumeration: the closure below was
+> established by assembling a bundle and reading every `.dist-info`, and **that has not been
+> redone**. So what is owed before the next release is one run of `scripts/bundle-python.ps1`
+> and one re-enumeration — the notice half is discharged for fifty, and for sixty-two of them
+> nobody has looked yet. `docs/PHASES.md` § *Decided 2026-08-26* records the change that caused
+> it.
+>
+> Two of the new ones are installed from source rather than as wheels — `docopt` and
+> `antlr4-python3-runtime`, neither of which has ever published one — through a named allowlist
+> in the packaging script. Both are pure Python, so a source build produces the same artefact
+> anywhere; a package with an extension module may not join that list.
 
 **Depending on a package and shipping it are different obligations, and this is the change that
 crosses from one to the other.** `PythonRuntime.Resolve` looks for `<app>/python/python.exe` — an
