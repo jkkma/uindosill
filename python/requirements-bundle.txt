@@ -82,16 +82,25 @@ numpy==2.5.2
 # identical labels** to the stack upstream specifies: 19 turns, 3 speakers, same clip. Had it not,
 # the translator's 8,149-sentence gate and the diariser's 16.3324% would have been the price.
 #
-# **speechbrain is 1.1.0 and the version is load-bearing.** pyannote imports it inside a
-# `try/except ImportError`, so it is optional to the code — but 0.5.16 and 1.0.3 do not *fail*
-# cleanly here: they raise `AttributeError` from `check_torchaudio_backend`, calling
-# `torchaudio.set_audio_backend` and `list_audio_backends`, both removed in torchaudio 2.11. An
-# AttributeError is not an ImportError, so the guard does not catch it and the whole import dies.
-# 1.1.0 dropped that check. Its own `speechbrain.pretrained` alias then fails as an *ImportError* —
-# which is caught, leaving `SPEECHBRAIN_IS_AVAILABLE = False`, which costs nothing: this project
-# uses the pyannote embedder, not the speechbrain one. The package is present and reachable at
-# `speechbrain.inference` for anything that wants it.
-speechbrain==1.1.0
+# **speechbrain is deliberately NOT here, and that is a decision rather than an omission.**
+# pyannote imports it inside a `try/except ImportError` for a speechbrain-hosted embedder this
+# project does not use -- it uses the pyannote one -- so its absence costs nothing and sets
+# `SPEECHBRAIN_IS_AVAILABLE = False`, which is the path upstream wrote for exactly this case.
+#
+# **Every version of it is unusable here, and the two failure modes are different.** 0.5.16 and
+# 1.0.3 raise `AttributeError` at import from `check_torchaudio_backend`, calling
+# `torchaudio.set_audio_backend` and `list_audio_backends` -- both removed in torchaudio 2.11 --
+# and an AttributeError is not an ImportError, so pyannote's guard does not catch it (gotcha 36).
+# 1.1.0 dropped that check and imports cleanly in a virtualenv, which is why it was pinned here
+# first. **Measured 2026-08-26 against the assembled bundle, it fails there instead**: importing
+# `pytorch_lightning` walks `sys.modules` through `inspect`, meets speechbrain's lazy-module
+# machinery -- `__getattr__` -> `ensure_module` -> `getframeinfo` -> `getsourcefile` ->
+# `getmodule` -> `__getattr__` -- and recurses until the stack ends. DiariZen cannot load at all.
+# It does not reproduce in a virtualenv; it needs the bundle's `._pth` import configuration, which
+# is why the bundle had to be assembled and driven before this was visible.
+#
+# Removing it was checked, not assumed: with speechbrain absent the engine loads from the bundle
+# and returns the reference labels for the clip -- 19 turns, 3 speakers.
 
 # torchaudio must match torch 2.13.0 above; 2.11.0 is what that pairs with, and it is pinned like
 # everything else here rather than left to the resolver. It is reached only through the shims in

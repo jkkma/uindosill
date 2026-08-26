@@ -277,15 +277,33 @@ lines = [l for l in out.splitlines() if l.strip()]
 if not lines:
     sys.exit("the bundle produced no protocol output.\n" + err[-4000:])
 hello = json.loads(lines[0])
-if hello.get("protocol") != 1:
-    sys.exit(f"the bundle speaks protocol {hello.get('protocol')}.\n" + err[-4000:])
+expected = int(sys.argv[2])
+if hello.get("protocol") != expected:
+    sys.exit(f"the bundle speaks protocol {hello.get('protocol')}, not {expected}.\n" + err[-4000:])
 print(json.dumps(hello))
 '@
 
 $handshakeScript = Join-Path ([System.IO.Path]::GetTempPath()) 'uindosill-bundle-handshake.py'
 Set-Content -LiteralPath $handshakeScript -Value $handshake -Encoding utf8
 
-$reply = & $HostPython $handshakeScript (Resolve-Path -LiteralPath $Destination).Path
+# **The expected protocol number is read from the source, never written here.** It was a literal
+# 1 in the handshake until 2026-08-26, when the diariser gained a second engine and
+# PROTOCOL_VERSION became 2: the bundle assembled correctly, started correctly, answered "2", and
+# this script rejected it for not being the number a second copy of the fact still said. That copy
+# is the one nobody would remember to bump, which is why there is no longer one.
+#
+# Read from python/uindosill_engines/protocol.py rather than from the assembled bundle: the bundle
+# is built from this repository moments earlier, so asking it would only ever agree with itself.
+# What this check is worth catching is a stale bundle at $Destination that the copy did not
+# overwrite, and only the repository can say what the number should have been.
+$protocolSource = Get-Content -LiteralPath (Join-Path $repo 'python/uindosill_engines/protocol.py') -Raw
+if ($protocolSource -notmatch '(?m)^PROTOCOL_VERSION\s*=\s*(\d+)\s*$') {
+    throw "PROTOCOL_VERSION was not found in protocol.py; the handshake has nothing to check against."
+}
+$expectedProtocol = [int] $Matches[1]
+Write-Note "expecting protocol $expectedProtocol"
+
+$reply = & $HostPython $handshakeScript (Resolve-Path -LiteralPath $Destination).Path $expectedProtocol
 if ($LASTEXITCODE -ne 0) { throw "The assembled bundle did not answer the handshake." }
 Write-Note $reply
 

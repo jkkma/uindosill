@@ -30,7 +30,9 @@ public sealed class PythonSidecarTests
         await using var child = sidecar;
 
         Assert.NotNull(sidecar.Hello);
-        Assert.Equal(1, sidecar.Hello!.Value.GetProperty("protocol").GetInt32());
+        // The constant, not a literal: this asserts that the handshake reply is kept, which is
+        // about plumbing, and a number written here would be a third copy of the protocol version.
+        Assert.Equal(PythonSidecar.ProtocolVersion, sidecar.Hello!.Value.GetProperty("protocol").GetInt32());
         Assert.Equal("3.12.10", sidecar.Hello!.Value.GetProperty("python").GetString());
     }
 

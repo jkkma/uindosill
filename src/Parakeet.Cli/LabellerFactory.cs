@@ -229,7 +229,7 @@ internal static class LabellerFactory
     {
         if (request.ModelPath is { Length: > 0 } explicitPath)
         {
-            if (!File.Exists(explicitPath))
+            if (!Exists(explicitPath))
             {
                 throw new CliUsageException($"Diarisation model file not found: {explicitPath}");
             }

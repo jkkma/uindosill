@@ -817,6 +817,22 @@ first instinct — uninstall the optional dependency, since the code says it is 
 "work", which is worse: it makes the symptom disappear while removing something the maintainer
 wanted kept.
 
+**And the version that fixed it broke something else, which is how speechbrain left the bundle
+entirely.** 1.1.0 imports cleanly in a virtualenv and the pipeline ran. In the *assembled
+bundle* it does not: importing `pytorch_lightning` walks `sys.modules` through `inspect`, meets
+speechbrain's lazy-module machinery — `__getattr__` → `ensure_module` → `getframeinfo` →
+`getsourcefile` → `getmodule` → `__getattr__` — and recurses until the stack ends, so DiariZen
+cannot load at all. It needs the bundle's `._pth` import configuration to reproduce; no
+virtualenv shows it. Since pyannote treats speechbrain as optional and this project uses the
+pyannote embedder, the resolution was to stop shipping it — verified by loading and labelling
+from the bundle with it absent.
+
+**Both halves of this entry share one lesson, and it is not about speechbrain.** *A dependency
+that is optional in a virtualenv is not thereby optional in the artefact you ship.* The guard
+that makes it optional runs in whatever import environment it finds, and the bundle's is not the
+developer's. Neither failure was visible until the bundle was assembled **and driven** — the
+handshake alone passes, because it never loads a model.
+
 **The general rule.** *A `try/except ImportError` around a third-party import is only as good as
 that package's own import-time health.* Any package that touches a fast-moving dependency at import
 time can fail with something else — `AttributeError`, `OSError`, `RuntimeError` — and the narrow

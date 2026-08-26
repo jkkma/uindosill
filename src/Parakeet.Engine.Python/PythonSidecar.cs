@@ -33,7 +33,18 @@ namespace Parakeet.Engine.Python;
 public sealed class PythonSidecar : IAsyncDisposable
 {
     /// <summary>The protocol number this host speaks. Must match the sidecar's.</summary>
-    public const int ProtocolVersion = 1;
+    /// <remarks>
+    /// <b>This is a second copy of <c>PROTOCOL_VERSION</c> in
+    /// <c>python/uindosill_engines/protocol.py</c>, and it is the load-bearing one.</b> The host
+    /// refuses a sidecar whose number differs, so a stale value here does not degrade anything --
+    /// it rejects the sidecar outright at <c>hello</c>, taking diarisation and translation with it.
+    /// It went stale exactly once, on 2026-08-26, when the diariser gained a second engine and the
+    /// Python side moved to 2: the suite stayed green because the fake sidecar answers whatever this
+    /// constant says, so nothing in CI could see it. <c>ProtocolVersionTests</c> now reads the Python
+    /// constant out of the source and asserts it against this one, which is the check that would
+    /// have caught it.
+    /// </remarks>
+    public const int ProtocolVersion = 2;
 
     private const int StandardErrorLinesKept = 200;
 

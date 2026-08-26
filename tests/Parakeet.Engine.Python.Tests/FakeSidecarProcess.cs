@@ -30,8 +30,18 @@ namespace Parakeet.Engine.Python.Tests;
 internal sealed class FakeSidecarProcess : IDisposable
 {
     /// <summary>A reply that satisfies the handshake, so a test that is about something else can ignore it.</summary>
-    public const string Handshake =
-        """{"id":{id},"type":"result","protocol":1,"python":"3.12.10","engines":["diariser","translator"]}""";
+    /// <remarks>
+    /// <b>The protocol number is interpolated from <see cref="PythonSidecar.ProtocolVersion"/> and is
+    /// never a literal here.</b> It was a literal 1 until 2026-08-26, and that is what let a real
+    /// mismatch ship: the Python side moved to 2, the host constant did not, and every test in this
+    /// suite kept passing because this reply agreed with whatever the host believed. A fake that
+    /// answers the host back cannot disagree with it, so it cannot report the one thing the
+    /// handshake exists to find. The tests that exercise a *mismatch* name their own wrong numbers
+    /// (99, -1) and are unaffected; <c>ProtocolVersionTests</c> is what checks the constant itself
+    /// against the sidecar source.
+    /// </remarks>
+    public static readonly string Handshake =
+        $$"""{"id":{id},"type":"result","protocol":{{PythonSidecar.ProtocolVersion}},"python":"3.12.10","engines":["diariser","translator"]}""";
 
     private readonly string _directory;
 
