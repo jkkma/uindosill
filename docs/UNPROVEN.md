@@ -1925,6 +1925,69 @@ uneven. And the whole approach still costs a second model in the catalogue with 
 which nothing here has done. The artefacts are `runs/spike-relink/` on the desktop and travel no
 further; `runs/` is gitignored and machine-local, as `runs/spike-sherpa/` is.
 
+### That rule failed held-out validation the same day — 2026-08-25, on 47 files, and the route is closed
+
+**The entry above says its rule is fitted rather than validated and should not be shipped. It has
+now been validated, and it does not survive.** Scored on 47 files under the gate's own protocol —
+thresholds chosen on one set, applied unchanged to another, scored once — **the rule lands on
+16 of 26 held-out files, 61.5%, which is exactly the majority-class baseline of 61.5%. It adds
+nothing.** Nine of the ten held-out positives are missed and one negative fires.
+
+**The evidence was widened from 15 files to 47.** Thirty-one windows cut from the two podcasts —
+durations from 10 minutes to a whole 175-minute episode, so that both classes come from the same
+hosts and the same microphone — plus all sixteen AMI test meetings, every one diarised on the CPU
+reference path. A file is a *positive* when its substantial labels outnumber the recording's people,
+so at least one pair must be one voice.
+
+**What fifteen files hid, forty-seven show: the two classes overlap completely.**
+
+| held out | n | highest-pair ratio |
+|---|---:|---|
+| positive (a same-person pair exists) | 10 | 0.941 – 1.032 |
+| negative (every pair is two people) | 16 | 0.896 – **1.108** |
+
+**`TS3003c` is the file that ends it.** A clean AMI meeting, four genuinely different speakers,
+scoring **1.108** — higher than every positive in the set. It fails from the other side too: real
+over-segmentation reaches down to 0.966 (`TH-1200-4000`) and 0.987 (`TH-2700-4000`), which sit among
+the negatives rather than above them, the held-out negatives' median being 0.955. The earlier band of
+1.004–1.017 across four positives was a small-sample accident — seven more positives spread it from
+0.941 to 1.032.
+
+**An oracle cannot rescue it either, and that is the number that closes the route.** Fitting both
+thresholds *directly on the held-out set* — which is cheating, and is quoted only as a ceiling —
+reaches **80.8%**, with **2 false fires and 3 misses in 26 files**. A repair that fires wrongly
+merges two real speakers, and the property that makes `FoldDownTo` safe against a passed gate is
+that it is a no-op wherever the model was already right. **Two false fires in sixteen negatives is
+disqualifying at any threshold**, so the ceiling is not "needs more tuning", it is the ceiling.
+
+**One flaw in the design is owned rather than blamed.** Splitting by source put
+`two-hosts-one-guest` in the tuning set, and that episode almost never over-segments — so the
+tuning set held **one** positive, and two thresholds were chosen against a single example. That is a
+bad split and a better one would have mixed episodes across both sides. It does not change the
+verdict: the oracle above is computed with no such handicap and still fails.
+
+**What this does not overturn.** The signal is not absent — an oracle beating the baseline by 19
+points is real, and the two same-domain controls in the entry above still separate. What is refuted
+is that *this statistic*, a pooled-centroid cosine ratio with a margin condition, can carry a
+decision. A calibrated same/different backend scoring per file rather than against a fixed
+threshold is a different proposition and is untested; nothing here says it would work, and this
+result is a reason to price it before building it rather than after. The corrected localisation
+finding and the offline-model reading in the entry above are unaffected — both were measured
+independently of the rule.
+
+**SPoRC does not supply what is missing, checked the same day.** `blitt/SPoRC` v1.1 — 1.1 million
+episodes, 228,000 podcasts, **731,113 episodes carrying speaker turns** and 185 million turns — is
+the largest podcast corpus with diarisation there is, and it cannot score a diariser for two
+independent reasons. **Its speaker labels are machine-produced**: turns are `SPEAKER_00`,
+`SPEAKER_01`, produced by matching diarizer output against transcript timestamps, so scoring against
+them measures agreement with that pipeline rather than with the truth — and the corpus's own
+1.0-to-1.1 rebuild moved **16% of word-speaker assignments**, which is how much those labels shift
+on implementation alone. **And no audio is distributed**: the trees are transcripts, turns and
+eGeMAPS features, with audio present only as a `mp3_url` from May–June 2020, so nothing in this
+product could be run against it. Its licence is `research-use-only`, the same restriction class as
+TAL. The artefacts for all of the above are `runs/spike-relink/` on the desktop and travel no
+further.
+
 ### NPU offload — assessed 2026-08-16, studied 2026-08-25, no inference run
 
 **A research workflow ran on 2026-08-25** — `npu-offload-research-2026-08-25` on the Drive — and it
