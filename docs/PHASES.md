@@ -4663,10 +4663,23 @@ because the study widened it: the record scoped this to Parakeet ASR and the esc
 of the five workloads this product runs already sit on ONNX Runtime, which is the Vitis AI execution
 provider's native input, and the study covers all five.
 
-**The answer is no, on the evidence that exists, and not today.** One workload — the ASR encoder —
-has a plausible route, and it is blocked at step zero: the execution provider's supported-driver
-list does not name the branch this machine's driver sits on, and AMD and Microsoft publish
-inconsistent compatibility rules for the same provider. The translator is excluded by a growing KV
+**The answer is no, and the reason changed the same day.** The study's own blocker did not survive
+contact: on 2026-08-25 the provider was installed and models were run, and it accepts this driver.
+`EnsureReadyAsync()` succeeded for both AMD providers, the NPU enumerated as an ONNX Runtime device,
+synthetic graphs compiled and executed across all eight columns with zero errors, and none of the
+acquisition cost the study priced was needed — no AMD account, no conda, no cmake, no Visual Studio,
+and nothing to redistribute, the packages being Microsoft-signed MSIX the OS fetches on demand.
+**What blocks it instead is that both ONNX graphs this product ships crash both AMD providers**, and
+the NPU crash is an uncatchable access violation inside the vendor's compiler that kills the host
+process. A provider that declines a graph is a fallback; one that segfaults is not something an
+application can degrade around. Beside that, two numbers settle old arguments: the NPU ran the one
+working graph 3.78x slower than the CPU, and its output diverged from the CPU's by 0.22% with no
+quantisation asked for — three orders of magnitude past what excluded CUDA from the diariser's
+`auto`, so an NPU backend could only ever be opt-in by name. Details in
+`docs/UNPROVEN.md` § *NPU offload*. The paragraph that follows was the study's verdict before any of
+it ran, and the ASR route it describes is blocked at step zero: the execution provider's
+supported-driver list does not name the branch this machine's driver sits on, and AMD and Microsoft
+publish inconsistent compatibility rules for the same provider. The translator is excluded by a growing KV
 cache against a static-shape compiler, the speech detector by a per-inference budget of about 144 µs,
 and the v2 answer engine by a context limit an order of magnitude under a three-hour transcript.
 **On speed there is no case in the vendor's published configuration** — its own two figures for its
