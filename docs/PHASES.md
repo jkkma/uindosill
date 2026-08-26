@@ -4924,24 +4924,29 @@ carries rc.3's Python delta, which predates this stack: **the next win-cuda tag 
 it**, and the 474.6 MB the diariser's weights no longer occupy is the room it has to spend.
 
 
-**The LGPL obligation in the bundled Python is live, undischarged, and now has a name and two
-exits.** Read 2026-08-26 against an assembled bundle — `docs/LICENSING.md` carries the reading. Two
-components are LGPL-2.1 and they are not alike: **libsndfile is a separate DLL that `soundfile`
-loads with `dlopen` at run time and a user can replace**, which is the mechanism §6(b) asks for even
-if 6(b)(1)'s "already present on the user's system" does not describe a shipped copy; **libsoxr is
-statically linked into `soxr/soxr_ext.pyd`**, verified from its import table, which closes §6(b)
-outright. Three of §6's conditions are already met by construction — the licence texts travel, the
-notice names both, and nothing in this product forbids modification or reverse engineering. **None
-of §6(a) to §6(e) has been done**, and that is the gap.
+**The LGPL obligation in the bundled Python is discharged, and the cheaper exit is now evidenced
+and still open.** Read and closed 2026-08-26; `docs/LICENSING.md` carries the reading and
+`licences/LGPL-WRITTEN-OFFER.txt` is the instrument. Two components are LGPL-2.1 and they are not
+alike: **libsndfile is a separate DLL `soundfile` loads with `dlopen` and a user can replace**, so
+§6(b) plausibly covers it; **libsoxr is statically linked into `soxr/soxr_ext.pyd`**, verified from
+its import table, which closes §6(b) outright. A §6(c) written offer covers both rather than resting
+on the reading that a shipped copy is "already present on the user's system", and
+`scripts/package-windows.ps1` refuses a publish without it.
 
-**Two exits, and one of them is nearly free.** Either a written offer under §6(c), for which
-`licences/mpv-WRITTEN-OFFER.txt` is this project's own precedent, or stop shipping the exposure.
-**`soxr` is never loaded**: `uindosill_engines` does not import it and `librosa` does not reach it
-for the one call this project makes, checked by running it and reading `sys.modules`. It is present
-only because `librosa` declares it, and `librosa` is present for `librosa.filters.mel` alone —
-which `python/requirements-bundle.txt` already flags as replaceable by a committed filterbank, for
-size. Doing that removes the only statically-linked LGPL binary in the product and about 330 MB with
-it. **Not decided here**; what is recorded is that the question is answered and the choice is not.
+**Removing `soxr` altogether is the second exit, and the two things that blocked it are now
+measured.** *Fidelity*: `librosa.filters.mel` at this project's parameters gives a `(128, 257)`
+float32 matrix that is deterministic, round-trips through `.npy` bit-for-bit, and produces **mel
+features bit-identical to the current code on sixty seconds of real audio** — so committing it pins
+the exact array the 16.3324% figure was produced with rather than depending on a library to keep
+producing it. *Reachability*: **DiariZen does not need librosa** — removed from an assembled bundle
+along with `soxr`, the engine still returned the reference 19 turns and 3 speakers, because
+`torchmetrics` guards its own import behind an availability check. So the one call in
+`diariser/feats.py` is the only thing keeping librosa, `soxr`, the only statically-linked LGPL
+binary and about 330 MB in this product.
+
+**Not decided.** It changes the file the Sortformer figure was produced by, and this project's rule
+is that such a change is a decision taken deliberately rather than a tidy-up. What has changed is
+that the objection to it is now answered with a measurement instead of an argument.
 
 **The second diariser has no GPU path, and closing that is the highest-value follow-up it leaves.** Queued 2026-08-26, not started. DiariZen costs about thirty times Sortformer's compute on this laptop and runs entirely on the CPU, because **WebGPU is an ONNX Runtime execution provider and DiariZen is torch** — verified, not assumed: torch 2.13.0+cpu exposes no `vulkan` and no `webgpu` backend, and this machine has no CUDA. `torch-directml` is the obvious alternative and is blocked by a pin: it requires `torch==2.4.1`, and moving the bundle off 2.13.0 would invalidate the translator's 8,149-sentence gate and the diariser's 16.3324% together.
 
