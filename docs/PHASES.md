@@ -4655,8 +4655,45 @@ release. What the run has to carry is already known from the AMI work — the ga
 reopen the diariser question with the product already shipped, which is the risk this deferral
 accepts and names.
 
-**A research workflow on offloading to the NPU — asked for 2026-08-16, deferred until it is
-relevant.** The second machine carries an XDNA 2 NPU (`NPU Compute Accelerator Device`, PCI
+**~~A research workflow on offloading to the NPU — asked for 2026-08-16, deferred until it is
+relevant.~~ Run 2026-08-25, ahead of its own triggers, at the maintainer's request.** The study is
+`npu-offload-research-2026-08-25` on the Drive, and what follows below it was written before any of
+it. Left readable because the framing below is the question the study was sent to answer, and
+because the study widened it: the record scoped this to Parakeet ASR and the escape hatch, but three
+of the five workloads this product runs already sit on ONNX Runtime, which is the Vitis AI execution
+provider's native input, and the study covers all five.
+
+**The answer is no, on the evidence that exists, and not today.** One workload — the ASR encoder —
+has a plausible route, and it is blocked at step zero: the execution provider's supported-driver
+list does not name the branch this machine's driver sits on, and AMD and Microsoft publish
+inconsistent compatibility rules for the same provider. The translator is excluded by a growing KV
+cache against a static-shape compiler, the speech detector by a per-inference budget of about 144 µs,
+and the v2 answer engine by a context limit an order of magnitude under a three-hour transcript.
+**On speed there is no case in the vendor's published configuration** — its own two figures for its
+Parakeet demo disagree by about 1.5× and bracket this laptop's measured Vulkan tier rather than
+beating it — but that establishes no ceiling in either direction, because no configuration of the
+route has been benchmarked in a state anyone would ship. **What the case actually rests on is watts,
+and that is unmeasured on both sides**: the vendor's own tool reports `Estimated Power : N/A` on this
+driver, Windows exposes no NPU performance counter on this build, and the one working power
+instrument reads zero on AC. A gate the record never drew now stands in front of all of it — this
+project's rule is that what it picks unasked reproduces the figure it publishes, and a whole-graph
+BF16 encoder cannot meet a 1e-4 parity tolerance by construction, so an NPU backend could at best be
+reachable by name and never the unasked default, exactly as CUDA was ruled out of the diariser's
+`auto` on 2026-08-22.
+
+**Nothing was installed and no inference was run.** What was measured is the machine's own state,
+read-only: the NPU is present, healthy and idle, the array is 8 columns, the driver already ships the
+Vitis runtime and the array overlays but **not** the ONNX Runtime provider — which narrows the
+redistribution question to the provider alone — and the 24 GB installed is 15.62 GB visible after
+the iGPU carve-out, so anything on the NPU competes for the same memory as everything else. Four
+cheap next steps are named in the study's § 9, ordered to be abandoned early; the two that need
+neither an install nor a download are a provider enumeration through Windows ML and
+`xrt-smi validate --run latency`, which would settle the dispatch-latency question every always-on
+argument depends on. **The v3 tier was re-aimed and got weaker, not stronger**: v3 runs a streaming
+checkpoint that carries caches across feeds, which is the graph shape that blocks the other
+workloads, so a chunk-length sweep on the vendor's batch demo answers a question v3 will not ask.
+
+The second machine carries an XDNA 2 NPU (`NPU Compute Accelerator Device`, PCI
 `VEN_1022&DEV_17F0`, driver 32.0.20102.3930 of 2026-05-06), and nothing this product runs can
 reach it: parakeet.cpp is ggml, and ggml's backend list, read at source that day, is cpu, blas,
 cuda, hip, musa, vulkan, opencl, metal, sycl, openvino, cann, hexagon, zdnn, zendnn, rpc, webgpu,
