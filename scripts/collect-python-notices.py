@@ -248,10 +248,14 @@ def render(rows: list[dict], bundle: Path) -> str:
         " case, recorded rather than papered over.",
         "",
         "**Four of these are not simply permissive, and they are the rows to read twice.**"
-        " `soxr` is LGPL-2.1-or-later and its wheel bundles libsoxr and PFFFT; `soundfile` carries"
-        " an LGPL-2.1 `libsndfile` whose `COPYING` ships at `_soundfile_data/COPYING`, which the"
-        " table does not show because it belongs to no `.dist-info`; and `certifi` and `tqdm` are"
-        " MPL-2.0, file-level copyleft. `docs/LICENSING.md` records what each obliges.",
+        " `soxr` is LGPL-2.1-or-later and **its libsoxr is statically linked into"
+        " `soxr/soxr_ext.pyd`** — there is no libsoxr DLL in the bundle, which is what makes it the"
+        " harder of the two to discharge. `soundfile` is BSD-3-Clause but carries an LGPL-2.1"
+        " `libsndfile` as a *separate, dynamically loaded* DLL, whose `COPYING` ships at"
+        " `_soundfile_data/COPYING` — which this table does not show because it belongs to no"
+        " `.dist-info`. `certifi` and `tqdm` are MPL-2.0, file-level copyleft."
+        " `docs/LICENSING.md` reads what each obliges and records that the LGPL obligation is live"
+        " and not yet discharged.",
         "",
         "Re-running against a bundle built from the same pins must produce this section unchanged;"
         " `--check` is what holds it, and a changed pin is expected to change this table. The"
