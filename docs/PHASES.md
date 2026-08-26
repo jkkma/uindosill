@@ -4924,6 +4924,25 @@ carries rc.3's Python delta, which predates this stack: **the next win-cuda tag 
 it**, and the 474.6 MB the diariser's weights no longer occupy is the room it has to spend.
 
 
+**The LGPL obligation in the bundled Python is live, undischarged, and now has a name and two
+exits.** Read 2026-08-26 against an assembled bundle — `docs/LICENSING.md` carries the reading. Two
+components are LGPL-2.1 and they are not alike: **libsndfile is a separate DLL that `soundfile`
+loads with `dlopen` at run time and a user can replace**, which is the mechanism §6(b) asks for even
+if 6(b)(1)'s "already present on the user's system" does not describe a shipped copy; **libsoxr is
+statically linked into `soxr/soxr_ext.pyd`**, verified from its import table, which closes §6(b)
+outright. Three of §6's conditions are already met by construction — the licence texts travel, the
+notice names both, and nothing in this product forbids modification or reverse engineering. **None
+of §6(a) to §6(e) has been done**, and that is the gap.
+
+**Two exits, and one of them is nearly free.** Either a written offer under §6(c), for which
+`licences/mpv-WRITTEN-OFFER.txt` is this project's own precedent, or stop shipping the exposure.
+**`soxr` is never loaded**: `uindosill_engines` does not import it and `librosa` does not reach it
+for the one call this project makes, checked by running it and reading `sys.modules`. It is present
+only because `librosa` declares it, and `librosa` is present for `librosa.filters.mel` alone —
+which `python/requirements-bundle.txt` already flags as replaceable by a committed filterbank, for
+size. Doing that removes the only statically-linked LGPL binary in the product and about 330 MB with
+it. **Not decided here**; what is recorded is that the question is answered and the choice is not.
+
 **The second diariser has no GPU path, and closing that is the highest-value follow-up it leaves.** Queued 2026-08-26, not started. DiariZen costs about thirty times Sortformer's compute on this laptop and runs entirely on the CPU, because **WebGPU is an ONNX Runtime execution provider and DiariZen is torch** — verified, not assumed: torch 2.13.0+cpu exposes no `vulkan` and no `webgpu` backend, and this machine has no CUDA. `torch-directml` is the obvious alternative and is blocked by a pin: it requires `torch==2.4.1`, and moving the bundle off 2.13.0 would invalidate the translator's 8,149-sentence gate and the diariser's 16.3324% together.
 
 **The route is an ONNX export of the two neural stages.** Segmentation is pruned WavLM-large plus a Conformer; embedding is a wespeaker ResNet34, and **pyannote already ships an ONNX path for that one** (`ONNXWeSpeakerPretrainedSpeakerEmbedding`), so half of it exists upstream. VBx clustering is numpy and stays on the CPU, where it is cheap. What the export would owe is what every provider here owes: a committed parity fixture, a placement check — `get_providers()` reports registration rather than placement — and a re-measure, because a provider that does not reproduce the CPU's answer does not enter `auto`. **Feasibility first**: whether the pruned WavLM and Conformer trace cleanly with a dynamic time axis is the question that decides whether any of the rest is worth building. It runs under `CLAUDE.md`'s convention — the study to a dated Drive folder, the decision and the unproven markers here.

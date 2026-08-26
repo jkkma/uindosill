@@ -532,9 +532,87 @@ Every one of the 108 stated licences was scanned for a copyleft family; the addi
 4. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
 
 The LGPL is the one with a shape this product has to think about: it attaches conditions about
-relinking to a binary a recipient receives, and both arrive as prebuilt DLLs inside wheels.
-**Whether shipping them in an installer satisfies those conditions has not been worked out here**,
-and sixty more distributions have not changed that.
+relinking to a binary a recipient receives. **That question is now read rather than deferred, and
+the answer is below.** One correction it forces on the sentence this paragraph used to carry: only
+one of the two arrives as a DLL. libsoxr is inside a `.pyd`.
+
+### The LGPL question, read against what actually ships — 2026-08-26
+
+The paragraph above used to end by saying this had not been worked out. It has now been read, against
+the binaries in an assembled bundle rather than against the idea of them, and **the two LGPL
+components turn out to be in different positions.** What follows is a careful reading by the people
+writing the code, which is the standing of every licence reading in this file; no lawyer has seen it.
+
+**Neither library is linked by this project.** Both arrive as prebuilt binaries inside wheels that
+`pip` installs unmodified, and `scripts/bundle-python.ps1` copies the tree whole. So the act being
+performed is *redistribution of the Library in object form* — LGPL-2.1 §4 — and, for the application
+that calls it, distribution of a "work that uses the Library" combined with it — §6. Nothing here
+compiles, patches or statically incorporates either library by its own hand.
+
+**libsndfile is dynamically loaded and replaceable, and that is the good case.** `soundfile` is
+BSD-3-Clause Python; `_soundfile_data/libsndfile_x64.dll` is LGPL-2.1 and `soundfile.py` reaches it
+with `_ffi.dlopen(_full_path)` at run time — and falls back to `_ffi.dlopen(_libname)`, a system
+copy, when the packaged file is absent. That is a shared library mechanism in the sense §6(b)(2)
+asks for: **a user can drop an interface-compatible libsndfile into `_soundfile_data/` and the
+product will use it**, which was verified by reading the loader rather than assumed. What §6(b) does
+*not* cleanly cover is its own clause (1) — "uses at run time a copy of the library **already present
+on the user's computer system**, rather than copying library functions into the executable" — and
+this installer ships the DLL rather than finding one. The mechanism is right and the provenance of
+the copy is not what 6(b)(1) describes, so **6(b) is arguable here and is not relied on below.**
+
+**libsoxr is statically linked, and that is the harder case.** `soxr` ships as
+`soxr/soxr_ext.pyd` — 354,304 bytes, and its import table names only `KERNEL32`, the MSVC runtime,
+the `api-ms-win-crt-*` stubs and `python3.dll`. **There is no libsoxr DLL anywhere in the bundle**,
+so the library is inside that binary. §6(b) is therefore unavailable outright: nothing is being
+shared-linked and library functions *are* copied into the executable. The wrapper is itself
+LGPL-2.1 (Python-SoXR, Copyright (c) 2021 Myungchul Keum), so the `.pyd` is a work under the LGPL
+rather than a proprietary work that merely uses one — which simplifies the question rather than
+complicating it.
+
+**Three of §6's conditions are already met, by construction rather than by intent.**
+
+- *A copy of the License, supplied.* `soxr-1.1.0.dist-info/licenses/COPYING.LGPL` and
+  `_soundfile_data/COPYING` both ship, because `pip install --target` keeps `.dist-info` and the
+  packaging step copies the tree whole. libsoxr's and PFFFT's own notices ship beside them.
+- *Prominent notice that the Library is used and is covered by this License.* `NOTICE.md` names
+  both, and now says which is static and which is dynamic.
+- *Terms that permit modification for the customer's own use and reverse engineering for debugging
+  those modifications.* This product imposes no terms that forbid either: the source is MIT, there
+  is no EULA, and `docs/LICENSING.md` already records that no technological measure restricts the
+  weights. **An LGPL component inside a product whose own licence forbade reverse engineering would
+  be the breach; this one does not.**
+
+**What is not met is the one that matters: none of §6(a) to §6(e) has been done.** No corresponding
+source accompanies a release, no written offer exists, and no equivalent source access is offered
+from the place the releases are distributed. For libsndfile that gap is arguable, because 6(b) may
+carry it. **For libsoxr it is not arguable at all** — the static link closes 6(b), and nothing else
+has been provided.
+
+**The cheapest correct discharge is a written offer, and this repository already knows the shape.**
+`licences/mpv-WRITTEN-OFFER.txt` satisfies GPLv2 §3(b) for libmpv by naming exact revisions of
+everything GPL in the distribution. §6(c) is the same instrument for the LGPL: an offer valid three
+years to supply the §6(a) materials — for each library, its complete corresponding source, and for
+`soxr_ext.pyd` the "work that uses the Library" in a form allowing relink, which is Python-SoXR's own
+C++ wrapper and is public. §6(d) is the alternative and is *narrower* than it looks: it wants
+equivalent access **"from the same place"**, so pointing at upstream's site would not be 6(d) while
+attaching a source archive to the same GitHub release would.
+
+**The alternative is to stop shipping them, and for one of the two that is nearly free.**
+**`soxr` is never loaded.** `uindosill_engines` does not import it, and `librosa` does not pull it at
+import or for the single call this project makes — `librosa.filters.mel` — which was checked by
+running it and reading `sys.modules`. It is in the bundle only because `librosa` declares it as a
+hard dependency, and `librosa` is here for that one call. **`python/requirements-bundle.txt` already
+records replacing that call with a committed filterbank as an open question, for size**; doing it
+would also remove the only statically-linked LGPL binary in the product and about 330 MB. libsndfile
+is a real dependency by comparison — `soundfile` reads every WAV the host writes — though those are
+16-bit PCM mono, which the standard library's `wave` module can also read.
+
+**So the position is:** the obligation is live, it is not currently discharged, the exposure is
+`soxr` rather than `soundfile`, and there are two ways out — a written offer under §6(c), or
+removing a dependency that ships without ever being called. **Neither has been done, and this
+paragraph is the record that the choice is open rather than the record that the question is.**
+
+
 
 **Five ship no licence text anywhere, up from three, and the two new ones are the weakest claims in
 the bundle.** `flatbuffers`, `sentencepiece` and `tokenizers` are the originals and all name Apache,
