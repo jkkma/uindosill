@@ -74,7 +74,7 @@ public sealed record ParityResult
 /// </remarks>
 public static class DiariserKinds
 {
-    /// <summary>Streaming ONNX, four speaker slots, the entry the installer bundles.</summary>
+    /// <summary>Streaming ONNX, four speaker slots. Downloaded, like the other; see BundledModels.</summary>
     public const string Sortformer = "sortformer";
 
     /// <summary>Offline torch, clusters rather than tracks, no total speaker cap, downloaded only.</summary>
