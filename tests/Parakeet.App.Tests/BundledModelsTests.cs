@@ -52,12 +52,24 @@ public sealed class BundledModelsTests : IDisposable
         // A GitHub release asset must be under 2 GiB, and the llm/cuda decision spent win-cuda's
         // room: the python-less Setup.exe measured 1,976,256,205 bytes on 2026-08-24 with both
         // weights inside, and rc.3's observed Python delta (+369.3 MB) projected the release
-        // asset ~200 MB past the limit. The maintainer's decision, same day: the diariser's
-        // weight leaves the win-cuda bundle (BundledModels.NotInCudaChannelIds), which this
-        // arithmetic projects back under the limit — treating weights as incompressible, with
-        // the next win-cuda tag as the observation (docs/UNPROVEN.md § the shipped ask tier).
-        // Growing either list re-runs this sum, so adding a weight is a decision taken against
-        // recorded numbers rather than a change that fails on the upload at the end of a release.
+        // asset ~200 MB past the limit. Growing the bundle re-runs this sum, so adding a weight
+        // is a decision taken against recorded numbers rather than a change that fails on the
+        // upload at the end of a release.
+        //
+        // **2026-08-26: both diarisers are now downloads, so what this guards has changed.**
+        // The 474.6 MB weight is out of every channel — for the reason in docs/PHASES.md, which
+        // is that neither of the two models is a default and the installer should not pick one,
+        // not for size — and the sum below therefore carries only the 2.2 MiB detector. The
+        // pressure moved rather than went away: **the DiariZen stack adds roughly 242 MiB of
+        // site-packages to the bundled Python**, whose packaged cost is not this measurement's
+        // to know, since the constant below is rc.3's observed delta and predates it. So this
+        // now passes with room it did not earn, and **the next win-cuda tag is what re-measures
+        // ObservedPythonDeltaBytes**. Until it does, this test bounds the weights and not the
+        // interpreter.
+        //
+        // The exclusion guard below is deliberately kept against an empty list: an exclusion of
+        // nothing is the decision quietly not applying, and NotInCudaChannelIds being empty is a
+        // state this asserts is consistent rather than one it stops noticing.
         var bundled = ModelCatalog.Default.Models.Where(m => BundledModels.BundledIds.Contains(m.Id)).ToList();
         long BytesOf(string id) => bundled.Single(m => m.Id == id).Files.Sum(f =>
             f.SizeBytes ?? throw new InvalidOperationException($"'{id}' has a file without a pinned size."));

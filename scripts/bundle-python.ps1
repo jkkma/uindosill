@@ -198,10 +198,36 @@ else {
     Write-Step 'Packages'
     Write-Note "installing $requirements into $sitePackages"
 
-    # --only-binary=:all: rather than allowing a source distribution. A wheel that had to be built
-    # would be built by and for the HOST, and a bundle is not the machine that built it.
-    & $HostPython -m pip install --disable-pip-version-check --only-binary=:all: `
-        --target $sitePackages -r $requirements
+    # --only-binary rather than allowing source distributions generally. A wheel that had to be
+    # built would be built by and for the HOST, and a bundle is not the machine that built it.
+    #
+    # **Two packages are exempt, by name, and the list is the point.** Both arrive with the second
+    # diariser and neither has ever published a wheel:
+    #
+    #   * `docopt` -- one module, MIT, untouched since 2014, declared by `pyannote.metrics`.
+    #   * `antlr4-python3-runtime` -- `omegaconf` pins `==4.9.*`, and antlr4's wheels start at 4.11.
+    #     Every omegaconf release from 2.2.2 to 2.3.1 pins the same range, so there is no version of
+    #     it that avoids this.
+    #
+    # **Both are pure Python, which is what makes the exemption safe rather than merely necessary.**
+    # The rule above exists because a wheel built here would be built *for this host* -- an ABI, a
+    # Python version, a compiler. Neither of these compiles anything, so the artefact a source build
+    # produces is the same on every machine. A package with an extension module must not be added to
+    # this list; it would need a wheel, or it does not ship.
+    #
+    # Found by resolving rather than by asking PyPI which packages look wheel-less: pip reports one
+    # missing wheel at a time, and the first attempt at this checked each package's *latest* release
+    # and missed antlr4 entirely, because what matters is the version the resolver settles on.
+    $sdistAllowed = @('docopt', 'antlr4-python3-runtime')
+
+    # `--only-binary :all:` demands wheels for everything; `--no-binary <name>` then names the ones
+    # to build from source instead. pip applies the narrower flag to those packages, which is how
+    # "wheels for all but these" is expressed -- the two cannot be combined the other way round.
+    $pipArgs = @('-m', 'pip', 'install', '--disable-pip-version-check', '--only-binary', ':all:')
+    foreach ($name in $sdistAllowed) { $pipArgs += @('--no-binary', $name) }
+    $pipArgs += @('--target', $sitePackages, '-r', $requirements)
+
+    & $HostPython @pipArgs
     if ($LASTEXITCODE -ne 0) { throw 'pip install failed; the bundle is incomplete.' }
 }
 

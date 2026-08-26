@@ -10,19 +10,27 @@ namespace Parakeet.App.Services;
 /// The catalogue's rule was that the installer carries no weights and the Models tab downloads
 /// them. That is right for the two biggest entries and was absurd for the smallest: the
 /// speech-detection graph is <b>2.2 MiB</b>, and asking a user to visit a tab and download it
-/// bought nothing but a dead checkbox on a fresh install. Since 2026-08-23 the installer carries
-/// what fits — the speech detector and the speaker labeller — and
-/// <c>scripts/package-windows.ps1</c> fetches each against the digest the catalogue already pins.
+/// bought nothing but a dead checkbox on a fresh install. Since 2026-08-23 the installer has
+/// carried what fits, and <c>scripts/package-windows.ps1</c> fetches each against the digest the
+/// catalogue already pins.
 /// </para>
 /// <para>
 /// <b>What does not fit, and why the rule survives.</b> A GitHub release asset must be under 2 GiB.
 /// The recogniser is 1.34 GiB and the translator 1.34 GiB, so either one pushes the CUDA channel
 /// past that limit and both together push every channel past it. Those two stay downloads because
-/// of arithmetic, not principle — and since the llm/cuda decision the same arithmetic reaches the
-/// speaker labeller in one channel: see <see cref="NotInCudaChannelIds"/>.
+/// of arithmetic, not principle.
 /// </para>
 /// <para>
-/// The catalogue entries stay for all four: a machine that already downloaded one keeps using its
+/// <b>The diariser left the installer on 2026-08-26, and not for size.</b> Speaker labelling has
+/// two models now and neither is better than the other — one is quick and stops at four voices,
+/// the other has no such limit, costs about thirty times the compute and is licensed for
+/// non-commercial use only. Carrying one of them would have made it the answer on every fresh
+/// install for no reason except that it fit, which is a choice being made by the packaging
+/// script instead of by the person whose recording it is. Both are downloads; the Models tab is
+/// where the choice is made and <c>AppSettings.DiarisationModelId</c> is where it is kept.
+/// </para>
+/// <para>
+/// The catalogue entries stay for every one of them: a machine that already downloaded one keeps using its
 /// own copy, the entry is what pins the digest, and the Models tab is still where a fresh copy
 /// comes from. The store always wins over the bundle — see
 /// <c>StandardEngineProvider.PathForInstalledOrBundled</c> — because a user who downloaded one
@@ -50,21 +58,21 @@ public static class BundledModels
     public static readonly string[] BundledIds =
     [
         "silero-vad-v5.1.2",
-        "sortformer-4spk-v2.1",
     ];
 
     /// <summary>
-    /// Bundled entries the win-cuda channel leaves out — the maintainer's decision, 2026-08-24:
-    /// with llm/cuda inside, the measured python-less win-cuda package plus rc.3's observed
-    /// Python delta projected past GitHub's 2 GiB asset limit, and the diariser's 474.6 MB
-    /// weight is what gives. A fresh CUDA install downloads it from the Models tab; nothing else
-    /// changes, because absence is already an answer here. The packaging script reads this list
-    /// exactly as it reads the one above, and the arithmetic lives in <c>BundledModelsTests</c>.
+    /// Bundled entries a particular channel leaves out. **Empty since 2026-08-26**, and kept
+    /// rather than deleted because the packaging script reads it and the arithmetic that filled
+    /// it can recur.
     /// </summary>
-    public static readonly string[] NotInCudaChannelIds =
-    [
-        "sortformer-4spk-v2.1",
-    ];
+    /// <remarks>
+    /// It held the diariser, for the maintainer's 2026-08-24 decision: with llm/cuda inside, the
+    /// win-cuda package projected past GitHub's 2 GiB asset limit and its 474.6 MB weight was what
+    /// gave. That is moot now the diariser is not bundled in any channel at all -- and the reason
+    /// is no longer size. Speaker labelling has two models and neither is a default; bundling one
+    /// of them would have made it the answer on every fresh install for no reason but that it fit.
+    /// </remarks>
+    public static readonly string[] NotInCudaChannelIds = [];
 
     /// <summary>
     /// The bundled copy of <paramref name="model"/>, or null when this build carries none.

@@ -3452,6 +3452,12 @@ developer would ever see a build without the tools. The packaging defect above t
 assumption into a sentence telling every user to run a PowerShell script from a clone they do not
 have. Both now say what is missing in plain words and that reinstalling restores it.
 
+**Superseded in part on 2026-08-26 — the speaker weights left the installer again.** What
+follows is the 2026-08-23 decision as it was taken and is kept for its reasoning; the diariser
+half of it no longer holds. Speaker labelling now has two models and neither is better, so
+bundling either would pick for the user; both are downloads. The speech-detection half stands.
+See *Decided 2026-08-26* below.
+
 **Two of the four models now ship inside the installer.** Speech detection is 2.2 MiB and MIT, and
 its licence notice was already in every publish — the installer shipped the notice for a file it did
 not ship. Speaker labelling is 452.6 MiB, and `docs/LICENSING.md` had already established that the
@@ -4827,6 +4833,23 @@ matter of degree.
   laptop has no CUDA. The bundle's torch is the CPU build deliberately; a CUDA build is about 2 GB
   of libraries. Where Sortformer's `auto` reaches WebGPU, this reaches nothing.
 
+**And Sortformer left the installer the same day, so neither diariser is bundled now.** That is
+a second decision and it is not about size: the win-cuda channel had already excluded the
+diariser for the 2 GiB asset limit, and the default channel had room. It is about what a
+default means. With two models and no ranking between them, whichever one the installer
+carried would be the answer on every fresh install — chosen by the packaging script rather
+than by the person whose recording it is, and chosen permanently, because a working checkbox
+is not something most people go looking to replace. Both are downloads; the Models tab is
+where the choice is made. `BundledModels.BundledIds` now names only the 2.2 MiB speech
+detector, and `NotInCudaChannelIds` is empty, its 2026-08-24 arithmetic moot.
+
+**It also lightens a licence obligation, which was not the reason but is worth recording.**
+A bundled Sortformer made every build a redistribution of NVIDIA Open Model License material,
+owing §3.1's verbatim notice and a copy of the Agreement with the binary. Both still ship — a
+user who downloads the weights is owed them, and a revocable grant is one to over-notice
+rather than under-notice — but the obligation now follows the file to whoever fetched it.
+`docs/LICENSING.md` carries the reading.
+
 **The weights are CC BY-NC 4.0 — non-commercial — and they are downloaded, never bundled.** That is
 the licence decision and the reason the entry has the shape it does: a bundled NC weight would make
 every build a redistribution of non-commercial material inside an otherwise MIT/GPL distribution.
@@ -4855,13 +4878,42 @@ speaker embedder's CC BY 4.0 — which is what `ModelDescriptor.AttributionIds` 
 - **The post-processing knobs do not reach it.** DiariZen binarises internally at parameters its own
   published figures describe, so the host's tuned Sortformer set is reported as not honoured rather
   than quietly applied; `honoursPostProcessing` is how the sidecar says so.
-- **The dependency cost of shipping it is priced but not paid.** The engine needs a *fork* of
-  pyannote-audio 3.1.1 — upstream plus a `VBxClustering` class, and coupled back to `diarizen`'s own
-  package — which pulls lightning, speechbrain, torchaudio and torch_audiomentations. The spike
-  environment is 1.8 GB of site-packages against the bundle-pinned stack's 1.2 GB. Nothing has been
-  added to `python/requirements-bundle.txt` and `scripts/bundle-python.ps1` has not been run, so
-  **the feature is reachable from source and is not yet in any installer.** That is the next step,
-  and it is a packaging decision rather than a measurement.
+**The packaging half was done the same day, and it took four blockers to get there.** The stack is
+in `python/requirements-bundle.txt` now, every line exact-pinned, and none of it was straightforward:
+
+1. **Neither `diarizen` nor its pyannote-audio can be a pinned wheel.** The first is not on PyPI at
+   all; the second is a real fork — **3,996 changed lines across 45 of upstream 3.1.1's 82 files** —
+   so the released wheel is not a substitute, and `bundle-python.ps1` installs `--only-binary` on
+   purpose. Both are **vendored** under `python/uindosill_engines/_vendor/`, beside NVIDIA's
+   Sortformer modules and for the same reason, and travel because the bundler copies
+   `uindosill_engines` wholesale. 114 files, 3.1 MB, both MIT, both licence texts beside them.
+2. **pyannote-audio 3.1.1 does not run on torch 2.13 unaided**, and the breaks surface strictly one
+   at a time. `torchaudio.AudioMetaData` is gone; `torch.load` flipped its `weights_only` default in
+   2.6; `torchaudio.load` now delegates to a TorchCodec the bundle does not carry. All three are
+   repaired in `diariser/diarizen.py`'s `_prepare_imports` — **from this project's own code, so the
+   vendored copy stays byte-identical to the source the published figures describe.** speechbrain is
+   1.1.0 for the same reason: 0.5.16 and 1.0.3 fail with an `AttributeError` that pyannote's
+   `except ImportError` does not catch, which is gotcha 36.
+3. **`huggingface_hub` had to come down under 1.0**, because `transformers 4.57.6` requires it. The
+   compatibility spike missed this by not having the translator installed — an environment that is
+   not the bundle does not find the bundle's conflicts.
+4. **Two packages have no wheel and never have** — `docopt` and `antlr4-python3-runtime`, the latter
+   pinned by every `omegaconf` release. They go in through a named allowlist in the packaging
+   script. Both are pure Python, which is what makes the exemption safe: the rule exists to stop a
+   wheel being built *for this host*, and neither compiles anything.
+
+**Measured, not assumed:** on the bundle's own pins — numpy 2.5.2, torch 2.13.0 — the engine
+produces **turn-for-turn identical labels** to the stack upstream specifies, and does so with
+`pyannote.audio` and `diarizen` uninstalled, out of the vendored copies alone. That is one
+sixty-second clip rather than the five stretches, so it says the stack does not change the answer
+and does not re-establish the counts.
+
+**What is still owed before a release.** `scripts/bundle-python.ps1` has **not been run**, so no
+installer carries any of this yet, and the licence enumeration behind `docs/LICENSING.md`'s "fifty
+distributions" is a 2026-08-21 number against a file that now resolves to **112**. Sixty-two of them
+have had no notice read. And the win-cuda channel's 2 GiB arithmetic in `BundledModelsTests` still
+carries rc.3's Python delta, which predates this stack: **the next win-cuda tag is what re-measures
+it**, and the 474.6 MB the diariser's weights no longer occupy is the room it has to spend.
 
 
 **Pinning the model digests used to head this list** and is done: all five entries carry the exact
