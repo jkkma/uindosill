@@ -1925,7 +1925,53 @@ uneven. And the whole approach still costs a second model in the catalogue with 
 which nothing here has done. The artefacts are `runs/spike-relink/` on the desktop and travel no
 further; `runs/` is gitignored and machine-local, as `runs/spike-sherpa/` is.
 
-### NPU offload — assessed 2026-08-16, nothing measured
+### NPU offload — assessed 2026-08-16, studied 2026-08-25, no inference run
+
+**A research workflow ran on 2026-08-25** — `npu-offload-research-2026-08-25` on the Drive — and it
+moved several of the entries below from unknown to settled without running a single inference on the
+NPU. What it settled is the machine's own state, read off it that day with read-only queries; what
+it did not settle is every question that needs the provider installed, because it was not.
+
+**Settled, and measured on this laptop 2026-08-25.** The NPU is present, healthy and idle — `xrt-smi`
+reports `NPU Strix` at `[0064:00:01.1]`, XRT 2.21.0, firmware 1.1.2.64, `Total Columns : 8`, and no
+hardware contexts running, so "idle under this product" is now confirmed rather than inferred. The
+driver package already carries `vitis-ai-runtime.dll` and the array overlays, and carries **no ONNX
+Runtime, no execution-provider component and no licence file at all** — so the redistribution
+question is about the provider alone, not the runtime the user's driver already installed. The
+machine has 24 GB fitted and 15.62 GB visible, the rest being the iGPU carve-out, so an NPU workload
+competes for the same memory as everything else and does not get its own.
+
+**Settled, and it is a negative result about instrumentation.** The quantity this whole question
+exists for cannot currently be measured here. `xrt-smi examine --report platform` prints
+`Estimated Power : N/A` — the vendor's own tool has the field and does not populate it on this
+driver. Windows exposes **no** NPU performance counter set on build 26200 (`Get-Counter -ListSet
+'*NPU*'` returns nothing, while every GPU set exists). The ACPI battery counter works and reads
+`DischargeRate` in mW, but returns zero on AC, so any energy comparison has to run on battery — at
+which point the CPU, SoC and iGPU power limits move too, and the incumbent figure it would be
+compared against was not taken under that condition. **A joules-per-minute-of-audio comparison is
+therefore not a measurement anyone has an instrument for on this machine**, absent an external meter.
+
+**Still unproven, and now more precisely.** Whether any execution-provider build accepts driver
+32.0.20102.3930 — the study found AMD and Microsoft publishing inconsistent compatibility rules for
+the same provider, and this driver's branch named by neither. What BF16 costs against f16 on the WER
+corpus, which the study re-scoped: the per-operator-fallback worry the record raised is retired for
+the Conformer, which compiles as one kernel, and is live and unmeasured for the diariser's and
+translator's graphs. Whether the compiler emits plain bfloat16 or Block FP16, which this laptop
+cannot check locally because its iGPU exposes no bfloat16 extension at all and the product ships with
+bfloat16 disabled to make Vulkan load. And a new one the record never drew: **what parity tolerance
+would admit an NPU provider to `auto`.** BF16 cannot meet the 1e-4 the diariser's fixture uses — that
+is arithmetic, not a defect — so under the rule that what this project picks unasked reproduces the
+figure it publishes, an NPU backend could at best be selectable by name. That has to be decided
+before a measurement is taken, not after.
+
+**What the study did not do: run anything on the NPU.** No provider was installed, no model was
+compiled, no inference was executed, and no RTF, WER, DER or watt figure for an NPU path exists in
+this repository or anywhere in that folder. The speed discussion there rests on the vendor's own two
+published figures, which disagree by about 1.5× and bracket this laptop's measured Vulkan tier rather
+than beating it — and the study is explicit that this establishes no ceiling in either direction,
+because nobody has benchmarked the route in a state anyone would ship.
+
+The paragraph below is the 2026-08-16 assessment, left as written.
 
 The second machine's XDNA 2 NPU is idle under this product, and that much is settled rather than
 unproven: ggml has no backend for it (its `ggml/src` listing read at source 2026-08-16), so
