@@ -1070,11 +1070,12 @@ Drive, outside this repository the way research does per `CLAUDE.md` — surveye
 licences, gates and routes, with every load-bearing claim re-read at its primary source that day. What it did not and could not
 produce is a single number of this project's own: every DER and RTF in that document is an
 external benchmark on external material, named with its dataset and scoring convention, and none
-of it is podcast audio. Until the dev/held-out podcast set exists and the spike runs on these
-machines, this project knows nothing measured about diarisation quality or cost — not the
-sherpa-onnx pipeline's DER on overlapping speech, not Sortformer's CPU real-time factor on either
-machine, not the int8 export's cost against fp32, not even the labelling effort per stretch. The
-study's remaining unknowns are marked inline in that document where each claim stands.
+of it is podcast audio. **On that date** this project knew nothing measured about diarisation quality
+or cost — not the sherpa-onnx pipeline's DER on overlapping speech, not Sortformer's CPU real-time
+factor on either machine, not the int8 export's cost against fp32, not even the labelling effort per
+stretch. **The meeting half of that list closed on 2026-08-18 and the entries below carry the
+numbers; the podcast half has not, and no DER of podcast audio exists.** The study's remaining
+unknowns are marked inline in that document where each claim stands.
 
 **What changed on 2026-08-17 is the instrument, not the evidence.** `uindosill der` now exists and
 is validated: on ten committed RTTM fixture pairs (`tests/fixtures/diarisation/scorer/`) it
@@ -1106,27 +1107,68 @@ canned labeller scores badly by construction (it hears nothing), which is a smok
 harness and not a number about anything; and the second decode the opt-in costs — a whole extra
 read of the file — has a real-time-factor cost nobody has timed on either machine.
 
-**The first candidate number exists as of 2026-08-18, it is on meeting audio, and it is not a
-verdict.** sherpa-onnx 1.13.5 through its C# NuGet — pyannote segmentation-3.0 (MIT) with 3D-Speaker
-CAM++ English embeddings, CPU only — was scored by `uindosill der` at the headline convention
-against the pyannote AMI-diarization-setup reference for ES2004a, seventeen and a half minutes of
-four-speaker meeting audio with 15.8% of its union speech overlapped. **DER 54.04% with the speaker
-count supplied** (miss 9.70%, false alarm 3.11%, confusion 41.23%), and **62.69% with the count left
-unknown**, where it resolved 35 speakers. Real-time factor 0.0355–0.0417 on CPU. For scale, pyannote
-3.1 publishes 18.8 on AMI Mix-Headset at its own stated convention, which is not this one.
+**The first candidate was scored on 2026-08-18, it is on meeting audio, and it fails the gate.**
+sherpa-onnx 1.13.5 through its Python API — pyannote segmentation-3.0 (MIT) with NeMo and
+3D-Speaker embeddings, CPU only, GPU idle throughout — scored by `uindosill der` against the
+pyannote AMI-diarization-setup `only_words` references. Hyperparameters were chosen entirely on the
+18 AMI dev meetings and applied unchanged to the 16 AMI test meetings, which were touched once per
+model. Collar 0 with overlap included, the gate's own convention:
 
-What that establishes is narrow and worth stating exactly: the scorer scores a real candidate on
-real audio end to end; the failure is in speaker identity rather than segmentation, because miss and
-false alarm hold at roughly 9.7% and 3.1% across every configuration tried while confusion carries
-the rest; and the caller is not the cause, since the same models and parameters through
-sherpa-onnx's own Python API produce byte-identical RTTM, same SHA-256.
+| | NeMo TitaNet-L | 3D-Speaker ERes2Net |
+|---|---|---|
+| chosen on dev | threshold 1.10, `min_on` 0.10, `min_off` 0.00 | threshold 1.20, 0.10, 0.00 |
+| dev DER @ collar 0 | 24.27% | 25.88% |
+| **test DER @ collar 0 — the gate** | **25.05%** | **25.77%** |
+| test DER @ collar 0.25 | 20.75% | 21.90% |
+| miss / false alarm / confusion | 9.36% / 3.79% / 11.90% | 9.33% / 3.80% / 12.64% |
+| **against ≤ 23.8%** | **FAIL by 1.25** | **FAIL by 1.97** |
 
-**What it does not establish is that sherpa-onnx is unfit.** One meeting of the sixteen in the test
-split, one embedding model of the ten in the zoo, the int8 segmentation model untried, and an
-unswept hyperparameter space — no clustering threshold tried produced four clusters, and
-`MinDurationOn`/`MinDurationOff` were never moved off the example defaults. It says nothing whatever
-about podcast audio. The artifacts are `runs/spike-sherpa/` on the desktop and travel no further:
-`runs/` is gitignored and machine-local.
+For scale, pyannote 3.1 publishes 18.8 on AMI Mix-Headset at its own stated convention, which is not
+this one, and the gate's margin was ratified 2026-08-18 before any candidate had been scored at this
+convention. Dev and test agree to a tenth of a point on ERes2Net, so the tuning generalised: this
+measures the configuration rather than a lucky split. Nor is the binding the cause — the same models
+and parameters through the C# NuGet caller this product would use produce byte-identical RTTM, same
+SHA-256, established 2026-08-17 and re-confirmed on the day. Real-time factor stayed within
+0.033–0.063 on CPU throughout, which is a range observed and not a timing measurement: the sweeps
+ran 16 threads under other load.
+
+**It fails the second criterion too, and by a wider margin than the first.** Mean
+|speakers found − reference| over the 16 test meetings is **10.88** for TitaNet-L and **1.75** for
+ERes2Net against a criterion of ≤ 1.0 — computed 2026-08-26 from the per-meeting counts in the
+spike's own `final-result.json` and `final-result-titanet.json`, because the criterion entered the
+gate on 2026-08-18 after these runs and the spike therefore never reported it. TitaNet-L reports a
+mean of 14.8 speakers (range 9–26, 174 surplus clusters over 16 meetings) against a reference mean of
+3.9, and **scores better on DER while doing it**: surplus clusters are slivers and the optimal
+one-to-one mapping absorbs the rest, so a DER-only selection picks the model that ships a transcript
+showing 26 speakers on a four-speaker meeting. That observation is what the speaker criterion was
+added for, and `docs/PHASES.md` carries the decision.
+
+**The knob space is exhausted, which is what makes this a verdict rather than a data point.**
+Threshold provably cannot beat oracle-k: `FastClustering` builds one complete-linkage dendrogram over
+cosine dissimilarity and `cutree_cdist` resolves the distance to a count, so thresholds 1.07, 1.08
+and 1.09 each reproduce the oracle k=4 run byte for byte, same SHA-256. `min_duration_on` and
+`min_duration_off` are applied after clustering, cannot touch confusion, and over 180 dev grid points
+are worth 0.45 points against the example defaults. Six of the zoo's embedding models were tried and
+the best two taken to the held-out pass. int8 segmentation was tried and eliminated.
+
+**An earlier figure on this material is superseded and should not be quoted.** The 2026-08-17 run
+scored ES2004a alone — seventeen and a half minutes of four-speaker meeting audio, 15.8% of its union
+speech overlapped — at **54.04%** with 3D-Speaker CAM++ English embeddings, and concluded that the
+clustering collapses. Both of that day's embedders were CAM++ variants, and CAM++ is the worst
+architecture in this zoo on this material: on identical audio, identical segmentation and identical
+clustering code, swapping only the embedder moves confusion from 38.98% to 3.93%. **The diagnosis was wrong, and so was ranking
+anything on one meeting** — ES2004a said ERes2Net beat TitaNet-L by 12 points, where pooled over the
+18 dev meetings TitaNet-L wins by 1.61. The int8 anomaly from the same day went the same way:
+ES2004a claimed int8 segmentation moved TitaNet-L 32.04% → 22.80%, and pooled over the dev meetings
+int8 is **28.69% against fp32's 24.27%**, 4.42 points *worse*. The sign flips, a 13.7-point swing;
+it was noise, it is resolved, and it should not be re-opened.
+
+**What the failure does not establish.** It is one corpus, and the two properties below bound what any
+AMI number can mean. The per-meeting spread on ERes2Net runs 12.99% to 47.45%, a factor of 3.7, and
+six of the sixteen meetings land inside the gate individually where the pooled figure does not.
+NOTSOFAR-1, the gate's crosstalk corpus, was never run against this candidate. Nothing here says
+anything whatever about podcast audio. The artifacts are `runs/spike-sherpa/` on the desktop and
+travel no further: `runs/` is gitignored and machine-local.
 
 **Two properties of AMI bound what any AMI number can mean**, both recomputed from the references on
 this machine rather than quoted. It is effectively a **four-speaker corpus** — 15 of the 16 test
