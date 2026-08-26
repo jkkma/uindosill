@@ -1,0 +1,98 @@
+CORRESPONDING SOURCE FOR THE LGPL COMPONENTS OF UINDOSILL
+=========================================================
+
+Uindosill carries a Python interpreter, and two of the libraries inside it are
+covered by the GNU Lesser General Public License, version 2.1 or later. The full
+text of that licence travels with the product: it is at
+
+  python/Lib/site-packages/soxr-1.1.0.dist-info/licenses/COPYING.LGPL
+  python/Lib/site-packages/_soundfile_data/COPYING
+
+in an installed copy. This file is the written offer that LGPL-2.1 section 6(c)
+asks for, and it also serves section 4 for the redistribution of those binaries
+in object form.
+
+Neither library is linked by this project. Both arrive as prebuilt binaries
+inside Python wheels that are installed unmodified. See docs/LICENSING.md in the
+source repository for the full reading of what each obliges.
+
+
+THE TWO COMPONENTS, AND WHY THEY ARE NOT ALIKE
+----------------------------------------------
+
+  libsndfile, inside python-soundfile 0.14.0
+      Licence:  LGPL-2.1
+      Shipped:  python/Lib/site-packages/_soundfile_data/libsndfile_x64.dll
+                2,364,416 bytes
+                sha256 22518c16f9d13eda5ae5adf999c4740d7d16cc2d6b178b36dd4ac2f759a38559
+      Linking:  a separate shared library, loaded at run time. python-soundfile
+                calls it through cffi's dlopen, and falls back to a copy found
+                on the system when the packaged file is absent. **You may replace
+                this DLL with your own interface-compatible build of libsndfile
+                and the product will use it.**
+      Upstream: https://github.com/libsndfile/libsndfile
+                The wrapper, which is BSD-3-Clause and not LGPL, is at
+                https://github.com/bastibe/python-soundfile
+
+  libsoxr, inside python-soxr 1.1.0
+      Licence:  LGPL-2.1-or-later, both the library and the Python wrapper
+                (Python-SoXR, Copyright (c) 2021 Myungchul Keum)
+      Shipped:  python/Lib/site-packages/soxr/soxr_ext.pyd
+                354,304 bytes
+                sha256 17850a2a3af1c7f317a13ab5065711e9e40ac3a92ca17fefb6e4bda58b7ad908
+      Linking:  **statically linked.** libsoxr is inside that binary; there is no
+                separate libsoxr library in this product. Section 6(b)'s shared
+                library mechanism therefore does not apply to it, which is the
+                reason this offer exists rather than a claim that 6(b) covers
+                everything.
+      Upstream: https://github.com/dofuuz/python-soxr  (the wrapper)
+                https://sourceforge.net/projects/soxr/  (libsoxr itself,
+                Copyright (c) 2007-18 robs@users.sourceforge.net)
+
+  Neither library is called by Uindosill's own code. libsndfile is reached
+  through python-soundfile when reading audio; libsoxr is not reached at all —
+  it is present because librosa declares it as a dependency.
+
+
+THE OFFER
+---------
+
+For a period of three years from the date you received this copy of Uindosill,
+the maintainer of this project will give any third party, for a charge no more
+than the cost of physically performing the distribution, a complete
+machine-readable copy of:
+
+  (a) the complete corresponding source code of libsndfile and of libsoxr, at
+      the exact versions shipped in the copy you received, including any changes
+      used to build them; and
+
+  (b) for libsoxr, whose library is statically linked into soxr_ext.pyd, the
+      complete machine-readable "work that uses the Library" — the Python-SoXR
+      wrapper source and its build configuration — as source code, so that you
+      can modify libsoxr and relink to produce a modified soxr_ext.pyd.
+
+Requests go to the project's issue tracker at
+
+  https://github.com/jkkma/uindosill/issues
+
+All of the source named above is also public today, at the upstream addresses
+listed for each component. This offer exists because section 6(c) asks for an
+offer rather than for a link, and it stands independently of those addresses
+remaining reachable.
+
+
+WHAT ELSE THE LICENCE ASKS, AND WHERE IT IS MET
+-----------------------------------------------
+
+  A copy of the licence, supplied.
+      Both COPYING files ship inside the product at the paths above.
+
+  Prominent notice that the Library is used and is covered by this licence.
+      NOTICE.md, distributed with the source and listed in the application's
+      Licences pane, names both components and says which is static.
+
+  Terms permitting modification for your own use, and reverse engineering for
+  debugging those modifications.
+      Uindosill's own source is MIT. There is no end-user licence agreement, no
+      restriction on reverse engineering, and no technological measure applied
+      to any part of this product. Nothing here forbids either activity.

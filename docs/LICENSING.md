@@ -607,10 +607,35 @@ would also remove the only statically-linked LGPL binary in the product and abou
 is a real dependency by comparison — `soundfile` reads every WAV the host writes — though those are
 16-bit PCM mono, which the standard library's `wave` module can also read.
 
-**So the position is:** the obligation is live, it is not currently discharged, the exposure is
-`soxr` rather than `soundfile`, and there are two ways out — a written offer under §6(c), or
-removing a dependency that ships without ever being called. **Neither has been done, and this
-paragraph is the record that the choice is open rather than the record that the question is.**
+**Discharged 2026-08-26 by a written offer under §6(c).**
+`licences/LGPL-WRITTEN-OFFER.txt` names both components at the exact versions shipped, with the
+SHA-256 and byte count of each binary, says which is statically linked and which is replaceable,
+and offers the §6(a) materials for three years — including, for `soxr_ext.pyd`, the "work that uses
+the Library" in a form allowing relink, which is Python-SoXR's own wrapper source. It travels
+through `Licences.targets` like every other notice, and `scripts/package-windows.ps1` now **refuses
+a publish without it**, on the same terms as the NVIDIA Agreement: a build that silently stopped
+copying it would produce a package that looks complete.
+
+That is the whole obligation for libsndfile too. §6(b) may well have carried it — the DLL is
+separate and replaceable — but the offer covers both, so nothing here rests on a reading of
+6(b)(1) that a shipped copy is "already present on the user's computer system".
+
+**The second exit is still open and is now evidenced.** Removing `soxr` would leave nothing
+statically linked, and the measurement that was missing is done: `librosa.filters.mel` at this
+project's parameters produces a `(128, 257)` float32 matrix that is deterministic across calls,
+round-trips through `.npy` bit-for-bit, and — the test that matters — **yields mel features
+bit-identical to the current code on sixty seconds of real audio**. Committing that matrix is
+therefore not a loss of the fidelity `python/requirements-bundle.txt` protects but a strengthening
+of it: it pins the exact array the 16.3324% figure was produced with, where the present code
+depends on a library continuing to produce it.
+
+**And DiariZen does not need librosa**, which was checked by removing librosa and `soxr` from an
+assembled bundle and running the engine: 19 turns and 3 speakers, the reference result. `torchmetrics`
+guards its own `import librosa` behind an availability check and simply does not expose `dnsmos`
+when it is absent. So the only thing keeping librosa in this product is the one call in
+`diariser/feats.py`. Replacing it removes librosa, `soxr`, the only statically-linked LGPL binary,
+and about 330 MB. **Not done here**, because it changes the file the Sortformer figure was produced
+by and that is a decision rather than a measurement; `docs/PHASES.md` carries it as open.
 
 
 
