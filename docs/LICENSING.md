@@ -493,11 +493,12 @@ way, for the same reason the ASR row is unconditional.
 **What is not claimed.** No lawyer has read this either. The zips also carry OpenMP runtime
 DLLs, covered by the same reading as the ASR tier's.
 
-## The bundled Python is 108 more redistributions, and the notice half is discharged again
+## The bundled Python is 99 more redistributions, and the notice half is discharged again
 
-**Re-enumerated 2026-08-26 against a bundle assembled that day**, after the second diariser's stack
-entered `python/requirements-bundle.txt`. The previous count was fifty, verified the same way on
-2026-08-21; everything below describes the 108 and the reading has been redone rather than scaled.
+**Re-enumerated twice on 2026-08-26**, each time against a bundle assembled that day. The second
+diariser's stack took it from the fifty verified on 2026-08-21 to 108; removing librosa later the
+same day took it to **99**, and 1.40 GB to 1.26 GB. Everything below describes the 99, and the
+reading has been redone rather than scaled.
 
 **108 and not the 112 a resolve predicted**, and the difference is worth stating because it is the
 kind of gap that makes a projected number untrustworthy. A `--dry-run` of the requirements reported
@@ -519,22 +520,22 @@ merely existing: it refused to write until `antlr4-python3-runtime` and `primePy
 shipping no licence text at all — were named with their reasons. What stays here is what a generator
 cannot write: what each licence *obliges*, which are not simply permissive, and what is unresolved.
 
-**The four that are not simply permissive are still four, and that was checked rather than assumed.**
-Every one of the 108 stated licences was scanned for a copyleft family; the additions brought none.
+**Three are not simply permissive, and every stated licence was scanned for a copyleft family
+rather than the four being assumed.** Sixty new distributions brought no new one, and the removal of
+librosa took the hardest of the old ones with it.
 
-1. **soxr is LGPL-2.1-or-later**, and its wheel bundles libsoxr (LGPL-2.1) and PFFFT. Nothing here
-   imports it; librosa declares it, and librosa is here for one call.
-2. **soundfile is BSD-3-Clause and its wheel is not.** `_soundfile_data/libsndfile_x64.dll` ships
+1. **soundfile is BSD-3-Clause and its wheel is not.** `_soundfile_data/libsndfile_x64.dll` ships
    with a `COPYING` beside it that is the **LGPL-2.1** — confirmed still present in this bundle. A
    table that read package metadata and stopped there would record this one as BSD and miss it,
    which is why the check walks the tree.
-3. **certifi is MPL-2.0** — file-level copyleft, weaker than the LGPL and still not MIT.
-4. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
+2. **certifi is MPL-2.0** — file-level copyleft, weaker than the LGPL and still not MIT.
+3. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
 
 The LGPL is the one with a shape this product has to think about: it attaches conditions about
 relinking to a binary a recipient receives. **That question is now read rather than deferred, and
-the answer is below.** One correction it forces on the sentence this paragraph used to carry: only
-one of the two arrives as a DLL. libsoxr is inside a `.pyd`.
+the answer is below.** The reading is kept in the present tense it was written in, because it is
+what justified the removal that followed; where it says "two components", one of them left the
+bundle the same day and the closing paragraphs say so.
 
 ### The LGPL question, read against what actually ships — 2026-08-26
 
@@ -560,22 +561,23 @@ on the user's computer system**, rather than copying library functions into the 
 this installer ships the DLL rather than finding one. The mechanism is right and the provenance of
 the copy is not what 6(b)(1) describes, so **6(b) is arguable here and is not relied on below.**
 
-**libsoxr is statically linked, and that is the harder case.** `soxr` ships as
-`soxr/soxr_ext.pyd` — 354,304 bytes, and its import table names only `KERNEL32`, the MSVC runtime,
-the `api-ms-win-crt-*` stubs and `python3.dll`. **There is no libsoxr DLL anywhere in the bundle**,
-so the library is inside that binary. §6(b) is therefore unavailable outright: nothing is being
-shared-linked and library functions *are* copied into the executable. The wrapper is itself
+**libsoxr was statically linked, and that was the harder case — and the reason it is gone.**
+`soxr` shipped as `soxr/soxr_ext.pyd` — 354,304 bytes, and its import table named only `KERNEL32`,
+the MSVC runtime, the `api-ms-win-crt-*` stubs and `python3.dll`. **There was no libsoxr DLL
+anywhere in the bundle**, so the library was inside that binary. §6(b) was therefore unavailable outright: nothing was
+shared-linked and library functions *were* copied into the executable. The wrapper is itself
 LGPL-2.1 (Python-SoXR, Copyright (c) 2021 Myungchul Keum), so the `.pyd` is a work under the LGPL
 rather than a proprietary work that merely uses one — which simplifies the question rather than
 complicating it.
 
 **Three of §6's conditions are already met, by construction rather than by intent.**
 
-- *A copy of the License, supplied.* `soxr-1.1.0.dist-info/licenses/COPYING.LGPL` and
-  `_soundfile_data/COPYING` both ship, because `pip install --target` keeps `.dist-info` and the
-  packaging step copies the tree whole. libsoxr's and PFFFT's own notices ship beside them.
-- *Prominent notice that the Library is used and is covered by this License.* `NOTICE.md` names
-  both, and now says which is static and which is dynamic.
+- *A copy of the License, supplied.* `_soundfile_data/COPYING` ships, because `pip install
+  --target` keeps what the wheel carries and the packaging step copies the tree whole. While `soxr`
+  was here, `soxr-1.1.0.dist-info/licenses/COPYING.LGPL` and libsoxr's and PFFFT's own notices
+  shipped beside it.
+- *Prominent notice that the Library is used and is covered by this License.* `NOTICE.md` names it
+  and says how it is linked.
 - *Terms that permit modification for the customer's own use and reverse engineering for debugging
   those modifications.* This product imposes no terms that forbid either: the source is MIT, there
   is no EULA, and `docs/LICENSING.md` already records that no technological measure restricts the
@@ -597,45 +599,55 @@ C++ wrapper and is public. §6(d) is the alternative and is *narrower* than it l
 equivalent access **"from the same place"**, so pointing at upstream's site would not be 6(d) while
 attaching a source archive to the same GitHub release would.
 
-**The alternative is to stop shipping them, and for one of the two that is nearly free.**
-**`soxr` is never loaded.** `uindosill_engines` does not import it, and `librosa` does not pull it at
-import or for the single call this project makes — `librosa.filters.mel` — which was checked by
-running it and reading `sys.modules`. It is in the bundle only because `librosa` declares it as a
-hard dependency, and `librosa` is here for that one call. **`python/requirements-bundle.txt` already
-records replacing that call with a committed filterbank as an open question, for size**; doing it
-would also remove the only statically-linked LGPL binary in the product and about 330 MB. libsndfile
-is a real dependency by comparison — `soundfile` reads every WAV the host writes — though those are
-16-bit PCM mono, which the standard library's `wave` module can also read.
+**The alternative was to stop shipping them, and for one of the two that turned out to be nearly
+free.** **`soxr` was never loaded.** `uindosill_engines` did not import it, and `librosa` did not
+pull it at import or for the single call this project made — `librosa.filters.mel` — which was
+checked by running it and reading `sys.modules`. It was in the bundle only because `librosa`
+declared it as a hard dependency, and `librosa` was here for that one call, which
+`python/requirements-bundle.txt` already recorded as replaceable by a committed filterbank, for
+size. libsndfile is a real dependency by comparison — `soundfile` reads every WAV the host writes —
+though those are 16-bit PCM mono, which the standard library's `wave` module can also read.
+
+**Both exits were taken, in that order.** `soxr` is gone — see below — so the statically-linked
+half of this problem no longer exists, and what remains is libsndfile, the replaceable half. The
+written offer stays, because a replaceable DLL is still an LGPL binary this project distributes and
+because §6(b)(1)'s "already present on the user's computer system" does not describe a copy the
+installer ships.
 
 **Discharged 2026-08-26 by a written offer under §6(c).**
-`licences/LGPL-WRITTEN-OFFER.txt` names both components at the exact versions shipped, with the
-SHA-256 and byte count of each binary, says which is statically linked and which is replaceable,
-and offers the §6(a) materials for three years — including, for `soxr_ext.pyd`, the "work that uses
-the Library" in a form allowing relink, which is Python-SoXR's own wrapper source. It travels
-through `Licences.targets` like every other notice, and `scripts/package-windows.ps1` now **refuses
-a publish without it**, on the same terms as the NVIDIA Agreement: a build that silently stopped
-copying it would produce a package that looks complete.
+`licences/LGPL-WRITTEN-OFFER.txt` names libsndfile at the exact version shipped, with the SHA-256
+and byte count of the binary, says how it is linked and that it is replaceable, and offers the
+§6(a) materials for three years. **It extends the same offer to libsoxr for anyone holding a copy
+that contained it** — including the "work that uses the Library" in a form allowing relink, which is
+Python-SoXR's own wrapper source — because a recipient of an older release is owed the offer that
+applied to their copy, and a removal does not reach backwards. It travels through `Licences.targets`
+like every other notice, and `scripts/package-windows.ps1` now **refuses a publish without it**, on
+the same terms as the NVIDIA Agreement: a build that silently stopped copying it would produce a
+package that looks complete.
 
 That is the whole obligation for libsndfile too. §6(b) may well have carried it — the DLL is
 separate and replaceable — but the offer covers both, so nothing here rests on a reading of
 6(b)(1) that a shipped copy is "already present on the user's computer system".
 
-**The second exit is still open and is now evidenced.** Removing `soxr` would leave nothing
-statically linked, and the measurement that was missing is done: `librosa.filters.mel` at this
-project's parameters produces a `(128, 257)` float32 matrix that is deterministic across calls,
-round-trips through `.npy` bit-for-bit, and — the test that matters — **yields mel features
-bit-identical to the current code on sixty seconds of real audio**. Committing that matrix is
-therefore not a loss of the fidelity `python/requirements-bundle.txt` protects but a strengthening
-of it: it pins the exact array the 16.3324% figure was produced with, where the present code
-depends on a library continuing to produce it.
+**The second exit was taken the same day.** `librosa.filters.mel` in `diariser/feats.py` is now a
+committed `mel-filterbank.npy`, librosa left `python/requirements-bundle.txt`, and **`soxr` left with
+it** — along with numba, llvmlite, pooch and audioread. An assembled bundle went from 108
+distributions and 1.40 GB to **99 and 1.26 GB**, and **nothing statically linked in this product is
+under the LGPL any more.**
 
-**And DiariZen does not need librosa**, which was checked by removing librosa and `soxr` from an
-assembled bundle and running the engine: 19 turns and 3 speakers, the reference result. `torchmetrics`
-guards its own `import librosa` behind an availability check and simply does not expose `dnsmos`
-when it is absent. So the only thing keeping librosa in this product is the one call in
-`diariser/feats.py`. Replacing it removes librosa, `soxr`, the only statically-linked LGPL binary,
-and about 330 MB. **Not done here**, because it changes the file the Sortformer figure was produced
-by and that is a decision rather than a measurement; `docs/PHASES.md` carries it as open.
+**Two things had to be true first, and both were measured rather than argued.** *That the features
+do not move*: `librosa.filters.mel` at this project's parameters produces a `(128, 257)` float32
+matrix that is deterministic across calls and round-trips through `.npy` bit-for-bit, and the old
+code and the new produce **the same 12,016 x 128 mel array to the last bit over two minutes of real
+audio**, with librosa hard-blocked at `sys.meta_path` so the new path could not quietly fall back to
+it. That check was run before the edit on sixty seconds and again after it on two minutes, because a
+proof of the version you are about to write is not a proof of the version you wrote. Committing the
+matrix is therefore not a loss of the fidelity `python/requirements-bundle.txt` protects but a
+strengthening of it: it pins the exact array the 16.3324% figure was produced with, where the
+present code depended on a library continuing to produce it. *And that nothing else wanted librosa*:
+removed from an assembled bundle together with `soxr`, the engine still returned 19 turns and 3
+speakers, the reference result, because `torchmetrics` guards its own `import librosa` behind an
+availability check and simply stops exposing `dnsmos`. `docs/PHASES.md` carries the decision.
 
 
 

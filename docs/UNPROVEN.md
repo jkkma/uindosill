@@ -3054,6 +3054,12 @@ torch at 0.48 and missed the transitive set. Where the difference goes is measur
 for exactly one call, `librosa.filters.mel`; about **95 MB** more is `sympy` and `networkx`, which
 are torch's.
 
+**Both the figure and the librosa sentence are superseded, and the newer numbers are also measured.**
+The diariser's stack took the bundle to **108 distributions and 1.40 GB** on 2026-08-26; removing
+librosa the same day — its one call is now a committed `mel-filterbank.npy` — took it to **99 and
+1.26 GB**, with `soxr`, numba, llvmlite, pooch and audioread leaving with it. The installer questions
+in the rest of this entry are unaffected and still open; only the size and the composition moved.
+
 **The assembled bundle was driven end to end the same day**: it answered the handshake, loaded the
 real translation checkpoint on WebGPU in 5.5 s, passed the translation parity fixture 6 of 6, and
 translated a sentence in 0.15 s — and the shipping CLI drove it through `UINDOSILL_PYTHON` and

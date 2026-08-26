@@ -1575,6 +1575,10 @@ call, `librosa.filters.mel`, which builds the mel filterbank matrix. It is paid 
 16.3324% describe this code; replacing the call with a committed filterbank is a different artefact
 needing its own measurement. About 95 MB more is `sympy` and `networkx`, which are torch's.
 
+**That measurement was made on 2026-08-26 and the librosa half of this paragraph is now history**:
+the filterbank is committed, the features are bit-identical, and librosa is gone along with `soxr`,
+numba, llvmlite, pooch and audioread. The entry dated that day below has it.
+
 **The CLI zip does not carry it, and as of 2026-08-21 the bundle is its own download.** The
 installer bundles the interpreter into the desktop application's publish, where `PythonRuntime`
 looks for it; the CLI ships as a separate ~250 MB zip (decision 3, 2026-08-16 — Velopack has no PATH
@@ -4924,29 +4928,39 @@ carries rc.3's Python delta, which predates this stack: **the next win-cuda tag 
 it**, and the 474.6 MB the diariser's weights no longer occupy is the room it has to spend.
 
 
-**The LGPL obligation in the bundled Python is discharged, and the cheaper exit is now evidenced
-and still open.** Read and closed 2026-08-26; `docs/LICENSING.md` carries the reading and
-`licences/LGPL-WRITTEN-OFFER.txt` is the instrument. Two components are LGPL-2.1 and they are not
-alike: **libsndfile is a separate DLL `soundfile` loads with `dlopen` and a user can replace**, so
-§6(b) plausibly covers it; **libsoxr is statically linked into `soxr/soxr_ext.pyd`**, verified from
-its import table, which closes §6(b) outright. A §6(c) written offer covers both rather than resting
-on the reading that a shipped copy is "already present on the user's system", and
+**The LGPL obligation in the bundled Python is discharged twice over: by a written offer, and then
+by removing most of what it covered.** Both on 2026-08-26; `docs/LICENSING.md` carries the reading.
+
+**The reading first.** Two components were LGPL-2.1 and they were not alike. **libsndfile is a
+separate DLL `soundfile` loads with `dlopen`**, and a user can replace it — the mechanism §6(b)(2)
+asks for, though 6(b)(1)'s "already present on the user's computer system" does not describe a copy
+the installer ships. **libsoxr was statically linked into `soxr/soxr_ext.pyd`**, verified from its
+import table, which closed §6(b) outright. Three of §6's conditions were already met by
+construction — the texts travel, the notice names them, and nothing here forbids modification or
+reverse engineering — and none of §6(a)–(e) had been done.
+`licences/LGPL-WRITTEN-OFFER.txt` is the §6(c) instrument that closes that, and
 `scripts/package-windows.ps1` refuses a publish without it.
 
-**Removing `soxr` altogether is the second exit, and the two things that blocked it are now
-measured.** *Fidelity*: `librosa.filters.mel` at this project's parameters gives a `(128, 257)`
-float32 matrix that is deterministic, round-trips through `.npy` bit-for-bit, and produces **mel
-features bit-identical to the current code on sixty seconds of real audio** — so committing it pins
-the exact array the 16.3324% figure was produced with rather than depending on a library to keep
-producing it. *Reachability*: **DiariZen does not need librosa** — removed from an assembled bundle
-along with `soxr`, the engine still returned the reference 19 turns and 3 speakers, because
-`torchmetrics` guards its own import behind an availability check. So the one call in
-`diariser/feats.py` is the only thing keeping librosa, `soxr`, the only statically-linked LGPL
-binary and about 330 MB in this product.
+**Then the removal, which was the better answer where it was available.** `librosa.filters.mel` in
+`diariser/feats.py` is now a committed `mel-filterbank.npy`, and librosa left the pins — taking
+`soxr`, numba, llvmlite, pooch and audioread with it. An assembled bundle went from **108
+distributions and 1.40 GB to 99 and 1.26 GB**, and **nothing statically linked in this product is
+under the LGPL any more.** libsndfile stays, because `soundfile` genuinely reads every WAV the host
+writes, and it is the replaceable half; the offer covers it.
 
-**Not decided.** It changes the file the Sortformer figure was produced by, and this project's rule
-is that such a change is a decision taken deliberately rather than a tidy-up. What has changed is
-that the objection to it is now answered with a measurement instead of an argument.
+**Changing `feats.py` is the part that needed the evidence, and it has it.** That file was the
+spike's byte for byte so the measured 16.3324% AMI figure would describe it. The committed matrix
+*is* that call's output from the pinned librosa 1.0.0 at the same parameters, and the mel features
+were compared old code against new: **identical to the last bit over two minutes of real audio,
+12,016 × 128, with librosa hard-blocked at `sys.meta_path`**. So the figure still describes this
+code, and describes it more tightly — a committed array cannot drift where a library call can. Both
+engines were then run from the rebuilt bundle: Sortformer on the CPU and DiariZen at its reference
+19 turns and 3 speakers.
+
+**What this does not settle.** The AMI figure was not re-scored; it does not need to be, because the
+input to the model is bit-identical, but that is an argument from the mel array rather than a fresh
+DER. If anything downstream of `feats.py` ever changes, the argument does not carry and the score
+does.
 
 **The second diariser has no GPU path, and closing that is the highest-value follow-up it leaves.** Queued 2026-08-26, not started. DiariZen costs about thirty times Sortformer's compute on this laptop and runs entirely on the CPU, because **WebGPU is an ONNX Runtime execution provider and DiariZen is torch** — verified, not assumed: torch 2.13.0+cpu exposes no `vulkan` and no `webgpu` backend, and this machine has no CUDA. `torch-directml` is the obvious alternative and is blocked by a pin: it requires `torch==2.4.1`, and moving the bundle off 2.13.0 would invalidate the translator's 8,149-sentence gate and the diariser's 16.3324% together.
 
