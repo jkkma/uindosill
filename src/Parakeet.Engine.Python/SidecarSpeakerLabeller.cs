@@ -66,10 +66,41 @@ public sealed record ParityResult
         : SpeakerLabelling.DescribeParityFailure(MaxAbsoluteDifference, Tolerance);
 }
 
+/// <summary>The two diarisers the sidecar can load, and the strings it is told them by.</summary>
+/// <remarks>
+/// Constants rather than an enum because these cross a JSON boundary verbatim: the sidecar switches
+/// on the same two strings, and an enum here would need a converter whose only job is to produce
+/// them. Kept together so the pair is greppable from both sides.
+/// </remarks>
+public static class DiariserKinds
+{
+    /// <summary>Streaming ONNX, four speaker slots, the entry the installer bundles.</summary>
+    public const string Sortformer = "sortformer";
+
+    /// <summary>Offline torch, clusters rather than tracks, no total speaker cap, downloaded only.</summary>
+    public const string Diarizen = "diarizen";
+}
+
 /// <summary>How the sidecar's diariser is loaded and driven.</summary>
 public sealed record SidecarLabellerOptions
 {
-    /// <summary>Path to <c>sortformer-default.onnx</c>. Required; there is no default location.</summary>
+    /// <summary>
+    /// Which of the two diarisers this is: <see cref="DiariserKinds.Sortformer"/> or
+    /// <see cref="DiariserKinds.Diarizen"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>It decides what <see cref="ModelPath"/> means</b> — a <c>.onnx</c> file for Sortformer, a
+    /// directory of five files for DiariZen — and it is passed to the sidecar rather than inferred
+    /// there, because the host is what resolved the catalogue entry and a sidecar sniffing the path
+    /// would be a second place the answer lives. Several other members of this record apply to only
+    /// one of the two; each says so.
+    /// </remarks>
+    public string Kind { get; init; } = DiariserKinds.Sortformer;
+
+    /// <summary>
+    /// Where the weights are: <c>sortformer-default.onnx</c> for Sortformer, the model directory for
+    /// DiariZen. Required; there is no default location.
+    /// </summary>
     public required string ModelPath { get; init; }
 
     /// <summary>Catalogue id carried into the transcript's provenance beside the ASR model's.</summary>
@@ -218,6 +249,41 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         ReliableUpTo = TimeSpan.FromMinutes(50),
     };
 
+    /// <summary>
+    /// DiariZen's declared limits, and every one of them is a null or a false on purpose.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b><see cref="SpeakerLabellerLimits.MaxSpeakers"/> is null because there is no cap</b>, not
+    /// because nobody looked. The pipeline clusters rather than tracking, and the clustering is
+    /// never given a count: <c>VBxClustering</c> accepts <c>min_clusters</c> and
+    /// <c>max_clusters</c> and its own comment says "not used but kept for compatibility". The four
+    /// in this checkpoint's config is <c>max_speakers_per_chunk</c> — voices talking at once inside
+    /// one sixteen-second window — and reporting that here would be reporting Sortformer's kind of
+    /// limit for a model that does not have one.
+    /// </para>
+    /// <para>
+    /// <b><see cref="SpeakerLabellerLimits.ReliableUpTo"/> is null because nothing has been
+    /// measured</b>, which the window renders as "no bound established" rather than as "any
+    /// length". Sortformer's fifty minutes is a figure this project produced; there is no
+    /// equivalent for this model and inventing one from upstream's benchmark table would be
+    /// quoting somebody else's corpus as this project's evidence.
+    /// </para>
+    /// </remarks>
+    public static SpeakerLabellerLimits DiarizenDeclaredLimits { get; } = new()
+    {
+        Name = "diarizen-torch-python",
+        SupportsFixedSpeakerCount = false,
+        MaxSpeakers = null,
+        ReliableUpTo = null,
+    };
+
+    /// <summary>The declared limits of one of the two diarisers, by kind.</summary>
+    public static SpeakerLabellerLimits DeclaredLimitsFor(string kind) =>
+        string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal)
+            ? DiarizenDeclaredLimits
+            : DeclaredLimits;
+
     public async ValueTask LoadAsync(CancellationToken ct = default)
     {
         if (_capabilities is not null)
@@ -249,6 +315,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             var reply = await _sidecar.SendAsync("load", writer =>
             {
                 writer.WriteString("engine", "diariser");
+                writer.WriteString("kind", _options.Kind);
                 writer.WriteString("path", _options.ModelPath);
                 writer.WriteString("modelId", _options.ModelId);
                 writer.WriteNumber("threads", _options.IntraOpThreads);
@@ -266,7 +333,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // batch, where one labeller serves every file and a per-file failure does not stop the
             // run, that turns a refusal into a warning that fires once and is then never seen again.
             var capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
-            CheckDeclaredLimits(capabilities);
+            CheckDeclaredLimits(capabilities, _options.Kind);
             FellBackFrom = ExecutionProviders.ReadFellBackFrom(reply.GetProperty("capabilities"));
 
             // Every backend but the CPU is checked against the committed reference before it is
@@ -662,18 +729,28 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// the same failure the protocol-version check guards against and it gets the same treatment:
     /// the two halves are out of step, so say so rather than run.
     /// </remarks>
-    private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported)
+    /// <summary>
+    /// Holds the sidecar's reported limits against the ones this build has been warning from.
+    /// </summary>
+    /// <remarks>
+    /// <b>Per kind, because the two diarisers declare different limits and both are right.</b>
+    /// Comparing a DiariZen load against Sortformer's four-speaker cap would fail every load of
+    /// a model whose whole point is not having one.
+    /// </remarks>
+    private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported, string kind)
     {
+        var declared = DeclaredLimitsFor(kind);
+
         // Name is not compared: it is the catalogue's id where there is one, and the two sides get
         // it from different places by design. The numbers are the claim.
-        if (reported.MaxSpeakers != DeclaredLimits.MaxSpeakers
-            || reported.ReliableUpTo != DeclaredLimits.ReliableUpTo
-            || reported.SupportsFixedSpeakerCount != DeclaredLimits.SupportsFixedSpeakerCount)
+        if (reported.MaxSpeakers != declared.MaxSpeakers
+            || reported.ReliableUpTo != declared.ReliableUpTo
+            || reported.SupportsFixedSpeakerCount != declared.SupportsFixedSpeakerCount)
         {
             throw new PythonSidecarException(
                 $"The bundled Python's diariser reports a cap of {Describe(reported.MaxSpeakers)} speakers and " +
                 $"labels established to {Describe(reported.ReliableUpTo)}, and this build has been saying " +
-                $"{Describe(DeclaredLimits.MaxSpeakers)} and {Describe(DeclaredLimits.ReliableUpTo)}. Those " +
+                $"{Describe(declared.MaxSpeakers)} and {Describe(declared.ReliableUpTo)}. Those " +
                 "numbers are what the warnings before a run are written from, so the two halves are out of step — " +
                 "reinstall rather than mixing them.");
         }

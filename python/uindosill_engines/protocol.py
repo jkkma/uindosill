@@ -41,7 +41,14 @@ from typing import Any, Callable, Iterator
 
 #: Bumped when a field changes meaning or disappears. The host refuses a sidecar whose number it
 #: does not know, which is what stops a stale bundled Python from being driven by a newer host.
-PROTOCOL_VERSION = 1
+#:
+#: **2 — the diariser gained a second engine, and `path` changed meaning with it.** A `load` for
+#: `engine: "diariser"` now carries `kind`, and `path` is a `.onnx` file when that is `sortformer`
+#: and a directory of five files when it is `diarizen`. A version-1 sidecar ignores `kind`, reads
+#: the directory as a file and fails on a message about a model that is plainly there — which is
+#: precisely the confusing failure several megabytes in that this number exists to turn into a
+#: refusal at `hello`.
+PROTOCOL_VERSION = 2
 
 
 class RequestError(Exception):

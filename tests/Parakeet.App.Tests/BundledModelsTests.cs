@@ -149,6 +149,50 @@ public sealed class BundledModelsTests : IDisposable
         Assert.Null(BundledModels.PathFor(translation));
     }
 
+    [Fact]
+    public void NonCommercialWeightsAreNeverCarriedByTheInstaller()
+    {
+        // **A licence obligation asserted as code, because it is the whole of the decision.**
+        // DiariZen's weights are CC BY-NC 4.0 and every other model here permits redistribution.
+        // Bundling them would make each Uindosill build a redistribution of non-commercial material
+        // inside an otherwise MIT/GPL distribution, and would hand every commercial recipient a file
+        // they may not use. Downloaded, the copy is the user's and this project ships nothing under
+        // NC terms at all -- so the exclusion is not a packaging preference that a later size
+        // decision may quietly reverse. docs/LICENSING.md is the record; this is the guard.
+        //
+        // Written over the licence rather than over the id, so that a sixth entry arriving under a
+        // non-commercial licence is caught by a test nobody remembered to update.
+        var nonCommercial = ModelCatalog.Default.Models
+            .Where(m => m.License.Contains("NC", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(nonCommercial);
+        foreach (var model in nonCommercial)
+        {
+            Assert.DoesNotContain(model.Id, BundledModels.BundledIds);
+            Assert.Null(BundledModels.PathFor(model));
+        }
+    }
+
+    [Fact]
+    public void TheChosenDiariserSurvivesBeingSavedAndReadBack()
+    {
+        // Save() writes an explicit dictionary of keys rather than serialising the record, so a new
+        // property is stored only if somebody adds it in two places. One that is added to the record
+        // and to neither compiles, round-trips as null, and loses the user's choice on the next
+        // write of any *other* setting -- silently, and only on their machine.
+        var path = Path.Combine(TestTemp.NewDirectory("uindosill-settings"), "settings.json");
+        var store = new AppSettingsStore(path);
+
+        Assert.Null(store.Load().DiarisationModelId);
+        Assert.True(store.Update(current => current with { DiarisationModelId = "diarizen-wavlm-large-s80-md-v2" }));
+        Assert.Equal("diarizen-wavlm-large-s80-md-v2", store.Load().DiarisationModelId);
+
+        // And it survives a write that is about something else, which is the failure above.
+        Assert.True(store.Update(current => current with { CheckForUpdatesOnLaunch = false }));
+        Assert.Equal("diarizen-wavlm-large-s80-md-v2", store.Load().DiarisationModelId);
+    }
+
     private void WriteBundled(ModelDescriptor model)
     {
         Environment.SetEnvironmentVariable(BundledModels.DirectoryEnvironmentVariable, _bundle);

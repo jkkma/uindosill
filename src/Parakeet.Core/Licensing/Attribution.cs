@@ -221,6 +221,91 @@ public sealed record ApacheAttribution : IModelAttribution
     }
 }
 
+/// <summary>
+/// A CC BY-NC 4.0 notice package: CC BY's seven elements, plus the term that makes it NC.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>The fourth shape, and the first whose licence restricts what the weights may be used for.</b>
+/// The BY half is identical to <see cref="CcByAttribution"/> — §3(a) asks the same seven elements of
+/// both — so this record could have been that one with a flag. It is not, and the reason is the
+/// reason <see cref="IModelAttribution"/> was extracted in the first place: a licence gets a record
+/// shaped like its own obligations. A boolean on the CC BY record would make the non-commercial term
+/// something a caller could forget to set, and a notice that omits it is not a smaller notice, it is
+/// a wrong one.
+/// </para>
+/// <para>
+/// <b><see cref="NonCommercialNotice"/> is required and is rendered unmissably.</b> "NonCommercial"
+/// appears in the licence's name, and a name is not a notice: somebody reading a licences pane
+/// should learn that these weights may not be used commercially without having to know what the
+/// letters mean. So the term is carried as prose, in a required field, and rendered on its own line
+/// under a heading that says what it is rather than what licence it came from.
+/// </para>
+/// <para>
+/// <b>What it does not carry, and both absences are deliberate.</b> There is no agreement path:
+/// CC BY-NC 4.0 asks for a link to the licence, not a copy of it, exactly as CC BY does — the copy
+/// that <see cref="OpenModelLicenceAttribution"/> ships is that licence's own requirement and not a
+/// house style. And there is no revocation note: unlike the NVIDIA Open Model License, a Creative
+/// Commons grant is not revocable while its terms are met. <c>docs/LICENSING.md</c> records both
+/// comparisons rather than leaving them to be re-derived.
+/// </para>
+/// </remarks>
+public sealed record CcByNcAttribution : IModelAttribution
+{
+    /// <summary>Element 1: identification of the creator(s).</summary>
+    public required string Creator { get; init; }
+
+    /// <summary>Element 2: the copyright notice.</summary>
+    public required string CopyrightNotice { get; init; }
+
+    /// <summary>Element 3: a notice referring to the licence.</summary>
+    public required string LicenceNotice { get; init; }
+
+    /// <summary>Element 4: a notice referring to the disclaimer of warranties.</summary>
+    public required string WarrantyDisclaimerNotice { get; init; }
+
+    /// <summary>Element 5: a URI to the material.</summary>
+    public required Uri MaterialUri { get; init; }
+
+    /// <summary>Element 6: an indication that the material was modified, and how.</summary>
+    public required string ModificationNotice { get; init; }
+
+    /// <summary>Element 7: the statement of the licence, with a link to its text.</summary>
+    public required string LicenceStatement { get; init; }
+
+    public required Uri LicenceUri { get; init; }
+
+    /// <summary>
+    /// The NonCommercial term, in words a reader can act on rather than as a licence abbreviation.
+    /// Required, because a CC BY-NC notice that does not say "not for commercial use" has left out
+    /// the only part of this licence that changes what somebody may do.
+    /// </summary>
+    public required string NonCommercialNotice { get; init; }
+
+    /// <summary>Human title of the work, for display.</summary>
+    public required string Title { get; init; }
+
+    /// <summary>
+    /// Renders every element in a fixed order, with the non-commercial term directly under the
+    /// licence line — where a reader scanning for what they may do will meet it — rather than last,
+    /// which is where an appended field would naturally land and where it would be missed.
+    /// </summary>
+    public string ToPlainText(string newLine = "\n")
+    {
+        var builder = new StringBuilder();
+        builder.Append(Title).Append(newLine);
+        builder.Append("Creator: ").Append(Creator).Append(newLine);
+        builder.Append(CopyrightNotice).Append(newLine);
+        builder.Append(LicenceNotice).Append(newLine);
+        builder.Append("Licence: ").Append(LicenceStatement).Append(' ').Append(LicenceUri).Append(newLine);
+        builder.Append("Not for commercial use: ").Append(NonCommercialNotice).Append(newLine);
+        builder.Append("Source: ").Append(MaterialUri).Append(newLine);
+        builder.Append("Modifications: ").Append(ModificationNotice).Append(newLine);
+        builder.Append("Warranties: ").Append(WarrantyDisclaimerNotice).Append(newLine);
+        return builder.ToString();
+    }
+}
+
 /// <summary>A third-party component and the licence it ships under.</summary>
 public sealed record ComponentLicence
 {
@@ -248,6 +333,16 @@ public static class Attributions
     public const string OpenModelLicencePath = "licences/NVIDIA-Open-Model-License-2025-10-24.txt";
 
     public const string SileroVad = "silero-vad";
+
+    /// <summary>The DiariZen checkpoint: the second diariser's segmentation weights, CC BY-NC 4.0.</summary>
+    public const string DiarizenWavlmLargeS80V2 = "but-fit-diarizen-wavlm-large-s80-md-v2";
+
+    /// <summary>
+    /// The speaker embedding model DiariZen clusters, CC BY 4.0. A second attribution on the same
+    /// catalogue entry rather than an entry of its own: the pipeline does not run without both files,
+    /// and two entries would let a user install half a diariser. See <c>docs/LICENSING.md</c>.
+    /// </summary>
+    public const string WespeakerVoxcelebResnet34Lm = "pyannote-wespeaker-voxceleb-resnet34-lm";
 
     /// <summary>Where the Silero VAD MIT notice lives, relative to the repository root and the build output.</summary>
     public const string SileroVadLicencePath = "licences/silero-vad-LICENSE.txt";
@@ -375,6 +470,49 @@ public static class Attributions
                 "Unmodified: the ONNX graph is installed by URL from the upstream repository at commit "
                 + "6478567951ae5c9979ad7b234185b5515f4be7a1 (tag v5.1.2) and driven as published. Uindosill "
                 + "hosts no copy of it.",
+        },
+
+        [DiarizenWavlmLargeS80V2] = new CcByNcAttribution
+        {
+            Title = "DiariZen WavLM-Large s80 md v2 (speaker diarisation model weights, pytorch_model.bin)",
+            Creator = "Jiangyu Han, Federico Landini, Johan Rohdin, Anna Silnova, Mireia Diez, Lukáš Burget "
+                + "(Brno University of Technology, Speech@FIT)",
+            CopyrightNotice = "Copyright (c) 2024 BUT Speech@FIT",
+            LicenceNotice = "Licensed under the Creative Commons Attribution-NonCommercial 4.0 International "
+                + "License (CC BY-NC 4.0).",
+            WarrantyDisclaimerNotice =
+                "Provided as-is and without warranties or conditions of any kind, to the extent possible under law.",
+            MaterialUri = new Uri("https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2"),
+            ModificationNotice =
+                "Unmodified: the checkpoint, its config.toml and its two PLDA files are installed by URL from the "
+                + "upstream repository and driven as published. The two PLDA files are stored beside the checkpoint "
+                + "rather than in the upstream 'plda/' subdirectory; their bytes are unchanged. Uindosill hosts no "
+                + "copy of any of them.",
+            LicenceStatement = "Creative Commons Attribution-NonCommercial 4.0 International",
+            LicenceUri = new Uri("https://creativecommons.org/licenses/by-nc/4.0/legalcode"),
+            NonCommercialNotice =
+                "These speaker-labelling weights may not be used for commercial purposes. The authors state the "
+                + "reason: some of the datasets they were trained on are research-only or non-commercial. Uindosill "
+                + "itself carries no such restriction, and it never ships these weights — they are downloaded "
+                + "on request, so the copy is yours and this term is yours to honour.",
+        },
+
+        [WespeakerVoxcelebResnet34Lm] = new CcByAttribution
+        {
+            Title = "wespeaker-voxceleb-resnet34-LM (speaker embedding model weights)",
+            Creator = "Hervé Bredin and the pyannote authors; model trained by the WeSpeaker authors",
+            CopyrightNotice = "Copyright (c) pyannote contributors",
+            LicenceNotice = "Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0).",
+            WarrantyDisclaimerNotice =
+                "Provided as-is and without warranties or conditions of any kind, to the extent possible under law.",
+            MaterialUri = new Uri("https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM"),
+            ModificationNotice =
+                "Renamed, not altered: installed by URL from the upstream repository as "
+                + "'pyannote-wespeaker-voxceleb-resnet34-LM.bin' rather than upstream's 'pytorch_model.bin', because it shares "
+                + "a directory with the DiariZen checkpoint of the same upstream name. The bytes are unchanged and "
+                + "the SHA-256 in the catalogue is upstream's file. Uindosill hosts no copy of it.",
+            LicenceStatement = "Creative Commons Attribution 4.0 International",
+            LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/legalcode"),
         },
     };
 

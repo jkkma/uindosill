@@ -17,21 +17,30 @@ public class ModelCatalogTests
         Assert.NotEmpty(catalog.Models);
         Assert.NotNull(catalog.Recommended);
 
-        // Three licences ship, and which entry has which is not incidental: the transcription
-        // weights are CC BY 4.0, the diariser is under the NVIDIA Open Model License — whose notice
-        // is a different shape and whose grant is revocable where CC BY's is not — and the
-        // translator is Apache-2.0, whose section 4(a) wants a copy of the licence rather than a
-        // link. Asserting the exact set rather than "some licence is present" is what makes adding
-        // a fourth a deliberate act.
+        // Which entry has which licence is not incidental: the transcription weights are CC BY 4.0,
+        // the translator is Apache-2.0, whose section 4(a) wants a copy of the licence rather than a
+        // link, and the two diarisers do not agree with each other. Asserting the exact set rather
+        // than "some licence is present" is what makes adding another a deliberate act.
         Assert.All(
             catalog.TranscriptionModels,
             m => Assert.Equal("CC-BY-4.0", m.License));
         Assert.All(
-            catalog.DiarisationModels,
-            m => Assert.Equal("NVIDIA-Open-Model-License", m.License));
-        Assert.All(
             catalog.TranslationModels,
             m => Assert.Equal("Apache-2.0", m.License));
+
+        // **The diarisers are asserted by id, because the two are under different licences and the
+        // difference is the point.** Sortformer is the NVIDIA Open Model License — a notice of a
+        // different shape, and a grant that is revocable where CC BY's is not. DiariZen is
+        // CC BY-NC 4.0, the only licence here that restricts what the weights may be used for, and
+        // the reason that entry is downloaded rather than bundled. An `Assert.All` over the task
+        // would have to name one of them and would pass while the other drifted.
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["sortformer-4spk-v2.1"] = "NVIDIA-Open-Model-License",
+                ["diarizen-wavlm-large-s80-md-v2"] = "CC-BY-NC-4.0",
+            },
+            catalog.DiarisationModels.ToDictionary(m => m.Id, m => m.License));
     }
 
     [Fact]
@@ -41,9 +50,15 @@ public class ModelCatalogTests
         // so the catalogue and the notices are checked against each other rather than trusted.
         foreach (var model in ModelCatalog.Default.Models)
         {
-            Assert.True(
-                Attributions.ById.ContainsKey(model.AttributionId),
-                $"model '{model.Id}' names attribution '{model.AttributionId}', which is not registered");
+            // Every notice the entry owes, not just its first. An entry can carry two upstream
+            // works under two licences, and the unchecked one is the one that goes missing.
+            Assert.NotEmpty(model.AttributionIds);
+            foreach (var attributionId in model.AttributionIds)
+            {
+                Assert.True(
+                    Attributions.ById.ContainsKey(attributionId),
+                    $"model '{model.Id}' names attribution '{attributionId}', which is not registered");
+            }
         }
     }
 
@@ -234,15 +249,21 @@ public class ModelCatalogTests
     [Fact]
     public void TheDiariserTheTranslatorAndTheSpeechDetectorAreTheOnlyEntriesThatDoNotTranscribe()
     {
-        // The manifest carries exactly one diarisation entry, one translation entry and one
+        // The manifest carries two diarisation entries, one translation entry and one
         // speech-detection entry, and every other entry is an ASR model. Both halves are asserted:
         // an entry that lost its `task` field would surface as a transcription model and be offered
         // to `transcribe`, which is the failure the discriminator exists to prevent.
         var catalog = ModelCatalog.Default;
 
-        var diariser = Assert.Single(catalog.DiarisationModels);
-        Assert.Equal("sortformer-4spk-v2.1", diariser.Id);
-        Assert.False(diariser.Recommended);
+        // **Two diarisers since 2026-08-26, and neither is Recommended.** They are a choice the
+        // user makes rather than a ranking: Sortformer is bundled, fast and capped at four voices;
+        // DiariZen is a download with no cap, licensed non-commercially and far slower. Recommended
+        // picks the default *ASR* model, so a diariser carrying it would be the failure the
+        // discriminator exists to stop -- which is why it is asserted on both.
+        Assert.Equal(
+            new[] { "sortformer-4spk-v2.1", "diarizen-wavlm-large-s80-md-v2" },
+            catalog.DiarisationModels.Select(m => m.Id));
+        Assert.All(catalog.DiarisationModels, m => Assert.False(m.Recommended));
 
         // And one translation entry, added 2026-08-20 once there was a decode loop to read it.
         // None of these may be Recommended: that property picks the default ASR model, and a model
@@ -484,7 +505,7 @@ public class ModelInstallerTests
         Files = files,
         DirectoryName = directory,
         License = "CC-BY-4.0",
-        AttributionId = Attributions.ParakeetTdt06BV3,
+        AttributionIds = [Attributions.ParakeetTdt06BV3],
     };
 
     private static string Sha256Of(byte[] data) => Convert.ToHexStringLower(SHA256.HashData(data));

@@ -13,6 +13,7 @@ public sealed partial class ModelViewModel : ObservableObject
 {
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanDownload))]
+    [NotifyPropertyChangedFor(nameof(CanUseForSpeakers))]
     private bool _isInstalled;
 
     [ObservableProperty]
@@ -32,6 +33,19 @@ public sealed partial class ModelViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanDownload))]
     private bool _isBusy;
+
+    /// <summary>
+    /// True for the diariser speaker labelling will actually use. Meaningless on every other entry.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="IsLoaded"/> for the second task that has more than one model:
+    /// two diarisers can be installed at once and only one of them runs, and without this the list
+    /// says "Installed" against both and nothing about which. Set by the tab rather than read from
+    /// the descriptor — it is a choice, not a property of the weights.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanUseForSpeakers))]
+    private bool _isActiveDiariser;
 
     public ModelViewModel(ModelDescriptor descriptor, bool installed)
     {
@@ -69,6 +83,15 @@ public sealed partial class ModelViewModel : ObservableObject
     /// the engine.
     /// </summary>
     public bool IsTranscriptionModel => Descriptor.Task == ModelTask.Transcription;
+
+    /// <summary>True for an entry that labels speakers, which is the one task with a choice to make.</summary>
+    public bool IsDiarisationModel => Descriptor.Task == ModelTask.Diarisation;
+
+    /// <summary>
+    /// Whether "Use for speakers" is offered on this entry: a diariser, installed, not already the
+    /// one in use.
+    /// </summary>
+    public bool CanUseForSpeakers => IsDiarisationModel && IsInstalled && !IsActiveDiariser;
 
     /// <summary>
     /// The badge on an entry that is not the ASR weights. Named per task rather than "not
@@ -170,6 +193,7 @@ public sealed partial class ModelsViewModel : ObservableObject
     private readonly Func<ModelInstaller> _installerFactory;
     private readonly ModelSession? _session;
     private readonly Func<ComputeBackend>? _backend;
+    private readonly AppSettingsStore _settings;
     private CancellationTokenSource? _cancellation;
 
     [ObservableProperty]
@@ -201,7 +225,8 @@ public sealed partial class ModelsViewModel : ObservableObject
         ModelCatalog catalog,
         Func<ModelInstaller>? installerFactory = null,
         ModelSession? session = null,
-        Func<ComputeBackend>? backend = null)
+        Func<ComputeBackend>? backend = null,
+        AppSettingsStore? settings = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(catalog);
@@ -211,17 +236,80 @@ public sealed partial class ModelsViewModel : ObservableObject
         _installerFactory = installerFactory ?? (() => new ModelInstaller(store));
         _session = session;
         _backend = backend;
+        _settings = settings ?? new AppSettingsStore();
 
         Models = [.. catalog.Models.Select(m => new ModelViewModel(m, store.IsInstalled(m)))];
         Selected = Models.FirstOrDefault(m => m.IsInstalled && m.IsTranscriptionModel)
             ?? Models.FirstOrDefault(m => m.IsTranscriptionModel)
             ?? Models.FirstOrDefault();
 
+        SyncActiveDiariser();
+
         Refresh();
 
         if (_session is not null)
         {
             _session.Changed += (_, _) => SyncSession();
+        }
+    }
+
+
+    /// <summary>
+    /// Makes one installed diariser the one speaker labelling uses, and remembers it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two entries do this job and neither is simply better: one is bundled, fast and stops at four
+    /// voices; the other has no such limit, is a download, is licensed for non-commercial use only
+    /// and takes about as long again as the recording. So the tab asks rather than deciding, and
+    /// this is where the asking happens.
+    /// </para>
+    /// <para>
+    /// <b>The choice is written before the list is updated</b>, and the list is only updated when
+    /// the write succeeded. A tab showing a tick against a model that a read-only settings file
+    /// rejected would be telling the user their next run will use something it will not.
+    /// </para>
+    /// </remarks>
+    [RelayCommand]
+    private void UseForSpeakers(ModelViewModel? model)
+    {
+        if (model is not { CanUseForSpeakers: true })
+        {
+            return;
+        }
+
+        if (!_settings.Update(current => current with { DiarisationModelId = model.Id }))
+        {
+            StatusMessage = $"That choice could not be saved to {_settings.Path}, so speaker labelling "
+                + "will keep using the model it was using.";
+            return;
+        }
+
+        SyncActiveDiariser();
+        StatusMessage = $"{model.DisplayName} will label speakers from now on.";
+    }
+
+    /// <summary>
+    /// Marks the diariser a run would actually pick, which is not always the one that was chosen.
+    /// </summary>
+    /// <remarks>
+    /// It resolves the same way <c>EngineProvider.DiarisationModel</c> does — the stored id when its
+    /// entry is installed, otherwise the first installed diariser — because a tab that showed the
+    /// stored choice rather than the effective one would put a tick beside a model that has been
+    /// removed, while a different one did the work.
+    /// </remarks>
+    private void SyncActiveDiariser()
+    {
+        var installed = Models.Where(m => m.IsDiarisationModel && m.IsInstalled).ToList();
+        var stored = _settings.Load().DiarisationModelId;
+
+        var active = installed.FirstOrDefault(
+                m => string.Equals(m.Id, stored, StringComparison.OrdinalIgnoreCase))
+            ?? installed.FirstOrDefault();
+
+        foreach (var model in Models.Where(m => m.IsDiarisationModel))
+        {
+            model.IsActiveDiariser = ReferenceEquals(model, active);
         }
     }
 
@@ -483,6 +571,9 @@ public sealed partial class ModelsViewModel : ObservableObject
                 _cancellation.Token).ConfigureAwait(true);
 
             model.IsInstalled = true;
+            // A first diariser becoming installed makes it the active one; a second does not
+            // displace the first. SyncActiveDiariser resolves both without a special case.
+            SyncActiveDiariser();
             model.Status = "Installed";
             model.Progress = 100;
             StatusMessage = model.Descriptor.IsFullyPinned
@@ -531,6 +622,8 @@ public sealed partial class ModelsViewModel : ObservableObject
 
         var removed = _store.Remove(model.Descriptor);
         model.IsInstalled = false;
+        // Removing the active diariser hands the job to whatever is left, or to nothing.
+        SyncActiveDiariser();
         model.Progress = 0;
         model.Status = "Not installed";
         StatusMessage = removed ? $"Removed {model.Id}." : $"{model.Id} was not installed.";

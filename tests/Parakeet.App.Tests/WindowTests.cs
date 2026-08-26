@@ -1254,7 +1254,11 @@ public class TranscribeViewModelTests
         // wiring between the model store and the window.
         var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        // Named rather than taken as the only one. Two entries label speakers since DiariZen
+        // was added, and this test is about the opt-in coming alive rather than about how many
+        // there are -- so it names the single-file entry, whose weights a test can fake with one
+        // File.WriteAllText.
+        var model = ModelCatalog.Default.Get("sortformer-4spk-v2.1");
 
         var before = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
         Assert.False(before.CanLabelSpeakers);
@@ -1276,7 +1280,11 @@ public class TranscribeViewModelTests
         // which is the wrong advice when UINDOSILL_PYTHON names a path that does not exist.
         var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        // Named rather than taken as the only one. Two entries label speakers since DiariZen
+        // was added, and this test is about the opt-in coming alive rather than about how many
+        // there are -- so it names the single-file entry, whose weights a test can fake with one
+        // File.WriteAllText.
+        var model = ModelCatalog.Default.Get("sortformer-4spk-v2.1");
         File.WriteAllText(store.PathFor(model), "not really a graph");
 
         var provider = new EngineProvider(
@@ -1298,7 +1306,11 @@ public class TranscribeViewModelTests
         // not on two instances either side of it.
         var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        // Named rather than taken as the only one. Two entries label speakers since DiariZen
+        // was added, and this test is about the opt-in coming alive rather than about how many
+        // there are -- so it names the single-file entry, whose weights a test can fake with one
+        // File.WriteAllText.
+        var model = ModelCatalog.Default.Get("sortformer-4spk-v2.1");
         var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
 
         var notified = new List<string?>();
@@ -1324,7 +1336,11 @@ public class TranscribeViewModelTests
         // command line refuses.
         var directory = TestTemp.NewDirectory("uindosill-diar");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.DiarisationModels);
+        // Named rather than taken as the only one. Two entries label speakers since DiariZen
+        // was added, and this test is about the opt-in coming alive rather than about how many
+        // there are -- so it names the single-file entry, whose weights a test can fake with one
+        // File.WriteAllText.
+        var model = ModelCatalog.Default.Get("sortformer-4spk-v2.1");
         File.WriteAllText(store.PathFor(model), "not really a graph");
 
         var viewModel = new TranscribeViewModel(new EngineProvider(store, () => true), () => new EngineSelection());
@@ -1349,10 +1365,10 @@ public class TranscribeViewModelTests
         var directory = TestTemp.NewDirectory("uindosill-app");
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
-        // By task, not by "not transcription": there are two non-ASR entries now, and the one this
-        // wires up is the diariser.
-        var diariser = Assert.Single(
-            main.Models.Models, m => m.Descriptor.Task == ModelTask.Diarisation);
+        // By id, not by task: two entries label speakers since DiariZen was added, and this test is
+        // about the wiring between the tabs rather than about which diariser is doing it. The
+        // single-file entry is the one whose weights the line below can fake with a File.WriteAllText.
+        var diariser = main.Models.Models.Single(m => m.Id == "sortformer-4spk-v2.1");
 
         File.WriteAllText(store.PathFor(diariser.Descriptor), "not really a graph");
 

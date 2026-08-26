@@ -142,8 +142,13 @@ internal static class ModelsCommand
             return ExitCodes.UsageError;
         }
 
-        var attribution = Attributions.Get(model.AttributionId);
-        context.WriteLine(attribution.ToPlainText());
+        // Every notice the entry owes, not the first one. An entry can carry two upstream works
+        // under two licences — the second diariser does — and printing one of them before a
+        // download is how the other goes unread.
+        foreach (var attribution in model.AttributionIds.Select(Attributions.Get))
+        {
+            context.WriteLine(attribution.ToPlainText());
+        }
 
         using var installer = new ModelInstaller(context.Store);
         var options = new ModelInstallOptions

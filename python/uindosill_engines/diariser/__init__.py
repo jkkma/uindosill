@@ -16,6 +16,13 @@ from typing import Any, Callable
 
 from ..protocol import RequestError
 
+#: The two diarisers this sidecar can load, named by the host on `load`. Everything below the
+#: `kind` switch in :meth:`Diariser.load` belongs to exactly one of them: Sortformer is a streaming
+#: ONNX graph with four speaker slots, DiariZen is an offline torch pipeline that clusters and has
+#: no total cap. They share this class, the protocol and nothing else.
+SORTFORMER = "sortformer"
+DIARIZEN = "diarizen"
+
 #: The cap is architectural: the graph has four speaker slots. A fifth voice is merged into one of
 #: the four rather than reported, and the host says so rather than presenting labels as complete.
 MAX_SPEAKERS = 4
@@ -88,10 +95,16 @@ class Diariser:
         self._model_id: str = ""
         self._model_path: str = ""
         self._fell_back_from: list[str] = []
+        self._kind: str = SORTFORMER
 
     @property
     def loaded(self) -> bool:
         return self._engine is not None
+
+    @property
+    def kind(self) -> str:
+        """Which of the two is loaded, for the handlers that must not treat them alike."""
+        return self._kind
 
     def load(
         self,
@@ -101,7 +114,20 @@ class Diariser:
         provider: str = "cpu",
         graph_optimization: str | None = None,
         profile: bool = False,
+        kind: str = SORTFORMER,
     ) -> dict[str, Any]:
+        """Loads one of the two diarisers. `kind` decides which, and the host decides `kind`.
+
+        **Asked for rather than sniffed.** The two are distinguishable by shape — Sortformer is one
+        `.onnx` file and DiariZen is a directory of five — and guessing from that would work until
+        the day a third entry looked like either. The host already knows which catalogue entry it
+        resolved, so it says; a sidecar that inferred it would be a second place the answer lives.
+        """
+        if kind == DIARIZEN:
+            return self._load_diarizen(path, model_id, threads)
+        if kind != SORTFORMER:
+            raise RequestError("request", f"unknown diariser kind '{kind}'")
+
         if not path or not os.path.isfile(path):
             raise RequestError("model", f"the diarisation model is not at {path}")
 
@@ -142,9 +168,33 @@ class Diariser:
 
         self._model_id = model_id or os.path.splitext(os.path.basename(path))[0]
         self._model_path = path
+        self._kind = SORTFORMER
+        return self.capabilities()
+
+    def _load_diarizen(self, path: str, model_id: str, threads: int) -> dict[str, Any]:
+        """The DiariZen arm of :meth:`load`.
+
+        Shorter than the Sortformer arm by everything to do with execution providers: there is no
+        provider list to walk, nothing to fall back from and no graph optimisation to set, because
+        this pipeline is torch and the bundle's torch is the CPU build. Reporting an empty
+        `fellBackFrom` is therefore the truth rather than a stub.
+        """
+        if not path or not os.path.isdir(path):
+            raise RequestError("model", f"the DiariZen model directory is not at {path}")
+
+        from .diarizen import DiarizenEngine
+
+        self._engine = DiarizenEngine(model_dir=path, threads=threads)
+        self._model_id = model_id or os.path.basename(os.path.normpath(path))
+        self._model_path = path
+        self._kind = DIARIZEN
+        self._fell_back_from = []
         return self.capabilities()
 
     def capabilities(self) -> dict[str, Any]:
+        if self._kind == DIARIZEN:
+            return self._diarizen_capabilities()
+
         # The backend is reported rather than assumed, and it travels into the transcript's
         # provenance beside the model id. Two providers give this graph different probabilities,
         # so a diarisation that cannot say which one produced it is one nobody can re-examine.
@@ -164,6 +214,35 @@ class Diariser:
             "fellBackFrom": list(self._fell_back_from),
         }
 
+    def _diarizen_capabilities(self) -> dict[str, Any]:
+        """What DiariZen can do, in the same vocabulary and with the same refusals to guess.
+
+        Three fields differ from the Sortformer arm and each difference is load-bearing:
+        `maxSpeakers` is null because there is no total cap rather than because nobody looked;
+        `reliableUpToSeconds` is null because nothing has been measured, which the host renders as
+        "no bound established" rather than as "any length"; and `honoursPostProcessing` is false
+        because this pipeline binarizes internally at parameters its published figures describe.
+        """
+        from . import diarizen as engine_module
+
+        engine = self._engine
+        return {
+            "engineName": "diarizen-torch-python",
+            "modelId": self._model_id,
+            "backend": getattr(engine, "backend", "cpu"),
+            "graphOptimization": None,
+            # VBxClustering takes num_clusters, min_clusters and max_clusters and its own comment
+            # says "not used but kept for compatibility". A count cannot reach this model, so the
+            # host is told so and reports that it folded one afterwards rather than honoured it.
+            "supportsFixedSpeakerCount": False,
+            "maxSpeakers": engine_module.MAX_SPEAKERS,
+            "maxConcurrentSpeakers": engine_module.MAX_CONCURRENT_SPEAKERS,
+            "reliableUpToSeconds": engine_module.RELIABLE_UP_TO_SECONDS,
+            "honoursPostProcessing": False,
+            # Nothing to fall back from: torch, one device, no provider negotiation.
+            "fellBackFrom": [],
+        }
+
     def label(
         self,
         wav_path: str,
@@ -174,6 +253,12 @@ class Diariser:
             raise RequestError("model", "label was asked for before load")
         if not wav_path or not os.path.isfile(wav_path):
             raise RequestError("audio", f"no audio at {wav_path}")
+
+        if self._kind == DIARIZEN:
+            # post_processing is deliberately dropped rather than applied. See
+            # `diarizen.py`'s module docstring: this pipeline's binarisation is internal, and the
+            # host's Sortformer defaults would merge turns the published figures keep apart.
+            return self._engine.label(wav_path, progress=progress)
 
         import numpy as np
         import soundfile as sf_io

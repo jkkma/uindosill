@@ -73,6 +73,28 @@ public sealed record AppSettings
     public string? AskModelFileName { get; init; }
 
     /// <summary>
+    /// The catalogue id of the model that labels speakers, or null when nobody has chosen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two entries do this job and they are not ranked: Sortformer is fast, ships with the
+    /// installer and stops at four voices; DiariZen has no such limit, is downloaded rather than
+    /// bundled, is licensed for non-commercial use only and takes about as long again as the
+    /// recording. Which is better depends on the recording and on who is doing the recording, so
+    /// this is a choice rather than a default with an override.
+    /// </para>
+    /// <para>
+    /// <b>Null keeps meaning "nobody has said", and it has to.</b> A stored id whose entry is not
+    /// installed — removed from the Models tab, or carried over from another machine — resolves as
+    /// if nothing had been chosen rather than turning speaker labelling off, because a setting that
+    /// silently disables a feature is worse than one that is ignored. The same reasoning as
+    /// <see cref="AskModelFileName"/>, and for the same reason: the id is stable where a path
+    /// is not.
+    /// </para>
+    /// </remarks>
+    public string? DiarisationModelId { get; init; }
+
+    /// <summary>
     /// Where a mixture-of-experts ask model's experts run.
     /// <see cref="MoeExpertPlacement.Automatic"/> as shipped — the Vulkan loader is asked, and a
     /// card holds its own experts where the processor's graphics cannot.
@@ -152,6 +174,7 @@ public sealed class AppSettingsStore
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 AskMode = ReadAskMode(root),
                 AskModelFileName = ReadString(root, "askModelFileName"),
+                DiarisationModelId = ReadString(root, "diarisationModelId"),
                 AskExpertPlacement = ReadExpertPlacement(root),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
@@ -230,6 +253,13 @@ public sealed class AppSettingsStore
             if (settings.AskModelFileName is { Length: > 0 } askModel)
             {
                 values["askModelFileName"] = askModel;
+            }
+
+            // Same shape again: absent means nobody has chosen a diariser, which is not the
+            // same as choosing none. EngineProvider reads it that way.
+            if (settings.DiarisationModelId is { Length: > 0 } diarisationModel)
+            {
+                values["diarisationModelId"] = diarisationModel;
             }
 
             var json = JsonSerializer.Serialize(values);
