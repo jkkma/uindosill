@@ -91,6 +91,12 @@ internal static class LabellerFactory
             var (path, descriptor) = ResolveModel(context, request);
             labeller = new SidecarSpeakerLabeller(new SidecarLabellerOptions
             {
+                // A catalogue entry states its engine; a path given with --speaker-model-path has no
+                // entry to state one, and a directory there can only be the one engine that
+                // installs a directory.
+                Kind = descriptor?.Engine is { Length: > 0 } engine
+                    ? engine
+                    : Directory.Exists(path) ? DiariserKinds.Diarizen : DiariserKinds.Sortformer,
                 ModelPath = path,
                 ModelId = descriptor?.Id ?? Path.GetFileNameWithoutExtension(path),
                 IntraOpThreads = request.Threads,
@@ -251,18 +257,34 @@ internal static class LabellerFactory
         }
         else
         {
-            descriptor = context.Catalog.DiarisationModels.Count switch
+            // **Resolved over what is installed, not over the catalogue.** Two entries label
+            // speakers and neither is a default: one is bundled and capped at four voices, the
+            // other is a download with no cap, licensed non-commercially and far slower. Choosing
+            // between them on the user's behalf is the window's job, where the choice is
+            // remembered and visible; here, the one that is present wins, and a machine with both
+            // is asked. Counting catalogue entries instead would have made `--speakers` start
+            // failing on every machine the moment a second entry was added, including the ones
+            // with only the original installed.
+            var installed = context.Catalog.DiarisationModels
+                .Where(m => Exists(context.Store.PathFor(m)))
+                .ToList();
+
+            descriptor = installed.Count switch
             {
-                0 => throw new CliUsageException("The model catalogue has no diarisation model."),
-                1 => context.Catalog.DiarisationModels[0],
+                1 => installed[0],
+                > 1 => throw new CliUsageException(
+                    "More than one diarisation model is installed; name one with --speaker-model. Installed: " +
+                    string.Join(", ", installed.Select(m => m.Id))),
+                _ when context.Catalog.DiarisationModels.Count == 0 =>
+                    throw new CliUsageException("The model catalogue has no diarisation model."),
                 _ => throw new CliUsageException(
-                    "The catalogue has more than one diarisation model; name one. Candidates: " +
+                    "No diarisation model is installed. Run 'uindosill models download <id>' first. Candidates: " +
                     string.Join(", ", context.Catalog.DiarisationModels.Select(m => m.Id))),
             };
         }
 
         var path = context.Store.PathFor(descriptor);
-        if (!File.Exists(path))
+        if (!Exists(path))
         {
             throw new CliUsageException(
                 $"The diarisation model '{descriptor.Id}' is not installed. Run " +
@@ -271,4 +293,14 @@ internal static class LabellerFactory
 
         return (path, descriptor);
     }
+
+    /// <summary>
+    /// Whether a resolved model path is there — as a file or as a directory.
+    /// </summary>
+    /// <remarks>
+    /// A bare <see cref="File.Exists(string)"/> was right while every diariser was one
+    /// <c>.onnx</c>. DiariZen installs a directory of five files, and against one of those the file
+    /// check answers "not installed" about weights that are sitting on the disk.
+    /// </remarks>
+    private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 }

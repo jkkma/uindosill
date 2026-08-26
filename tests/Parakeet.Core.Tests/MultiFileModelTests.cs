@@ -98,10 +98,19 @@ public class MultiFileModelTests
     {
         // This replaces a tripwire that asserted every shipped entry was still a single file, whose
         // whole job was to fail the day one was not. It failed on 2026-08-20. What is asserted now
-        // is the thing that tripwire was protecting: the schema has exactly one real user, and that
-        // user is well formed — because until this entry landed, twenty-four tests held the shape
-        // up against nothing but hand-written JSON.
-        var multiFile = Assert.Single(ModelCatalog.Default.Models, m => m.IsMultiFile);
+        // is the thing that tripwire was protecting: the schema's users are well formed — because
+        // until the translation entry landed, twenty-four tests held the shape up against nothing
+        // but hand-written JSON.
+        //
+        // **Two users since 2026-08-26**, the second being DiariZen, whose own shape is asserted
+        // below rather than here. This half stays about the translation entry because its nine
+        // files are what the schema was built for.
+        // Manifest order: DiariZen sits beside the other diariser, ahead of the translator.
+        Assert.Equal(
+            new[] { "diarizen-wavlm-large-s80-md-v2", "opus-mt-tc-bible-big-mul-en-fp32" },
+            ModelCatalog.Default.Models.Where(m => m.IsMultiFile).Select(m => m.Id));
+
+        var multiFile = ModelCatalog.Default.Get("opus-mt-tc-bible-big-mul-en-fp32");
 
         Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", multiFile.Id);
         Assert.Equal(ModelTask.Translation, multiFile.Task);
@@ -510,7 +519,7 @@ public class MultiFileModelTests
             DirectoryName = "multi-model",
             Verified = true,
             License = "Apache-2.0",
-            AttributionId = Attributions.ParakeetTdt06BV3,
+            AttributionIds = [Attributions.ParakeetTdt06BV3],
         };
     }
 

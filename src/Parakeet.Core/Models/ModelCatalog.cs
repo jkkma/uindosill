@@ -189,9 +189,10 @@ public sealed class ModelCatalog
             DirectoryName = directory,
             Verified = element.TryGetProperty("verified", out var verified) && verified.ValueKind == JsonValueKind.True,
             License = RequireString(element, "license"),
-            AttributionId = RequireString(element, "attributionId"),
+            AttributionIds = ParseAttributionIds(element, id),
             Languages = ParseStringArray(element, "languages"),
             Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
+            Engine = OptionalString(element, "engine"),
             Notes = OptionalString(element, "notes"),
         };
     }
@@ -214,6 +215,59 @@ public sealed class ModelCatalog
     /// does not load.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The notices an entry owes: <c>attributionId</c> for one, <c>attributionIds</c> for several.
+    /// </summary>
+    /// <remarks>
+    /// The same either/or as <see cref="ParseFiles"/>, refused together for the same reason — two
+    /// spellings of one fact is how the two come to disagree. The plural form exists because one
+    /// download can carry two upstream works under two licences; see
+    /// <see cref="ModelDescriptor.AttributionIds"/>. Order is preserved, and it is the order the
+    /// notices render in.
+    /// </remarks>
+    private static IReadOnlyList<string> ParseAttributionIds(JsonElement element, string id)
+    {
+        var hasInline = element.TryGetProperty("attributionId", out _);
+        var hasArray = element.TryGetProperty("attributionIds", out var array);
+
+        if (hasInline && hasArray)
+        {
+            throw new InvalidDataException(
+                $"Model '{id}' has both an 'attributionId' and an 'attributionIds' array. Use one: an entry " +
+                "owing a single notice names it inline, an entry owing several lists them.");
+        }
+
+        if (!hasArray)
+        {
+            return [RequireString(element, "attributionId")];
+        }
+
+        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() == 0)
+        {
+            throw new InvalidDataException($"Model '{id}' has an 'attributionIds' that is not a non-empty array.");
+        }
+
+        var ids = new List<string>();
+        foreach (var entry in array.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.String || entry.GetString() is not { Length: > 0 } value)
+            {
+                throw new InvalidDataException($"Model '{id}' has an 'attributionIds' entry that is not a non-empty string.");
+            }
+
+            if (ids.Contains(value, StringComparer.OrdinalIgnoreCase))
+            {
+                // A repeated key would render the same notice twice, which reads as though two
+                // separate works happened to carry identical terms.
+                throw new InvalidDataException($"Model '{id}' names attribution '{value}' more than once.");
+            }
+
+            ids.Add(value);
+        }
+
+        return ids;
+    }
+
     private static (IReadOnlyList<ModelFile> Files, string? Directory) ParseFiles(JsonElement element, string id)
     {
         var hasInline = element.TryGetProperty("fileName", out _);

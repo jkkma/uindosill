@@ -169,11 +169,31 @@ public sealed class EngineProvider : IEngineProvider
     /// is missing says what the resolver found rather than a sentence written before it looked.
     /// </summary>
     public EngineProvider(IModelStore? store, Func<(bool Found, string? Reason)>? python)
+        : this(store, python, null)
+    {
+    }
+
+    /// <summary>
+    /// The same, plus which diariser the user picked in the Models tab.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than a stored id because the setting can change while the window is open —
+    /// picking a diariser is one click on a tab the user is already looking at — and a value read
+    /// once at construction would go stale exactly then. Null, and a delegate returning null, both
+    /// mean "nobody has chosen"; see <see cref="AppSettings.DiarisationModelId"/>.
+    /// </remarks>
+    public EngineProvider(
+        IModelStore? store,
+        Func<(bool Found, string? Reason)>? python,
+        Func<string?>? preferredDiarisationModelId)
     {
         _store = store ?? new LocalModelStore();
         _python = new Lazy<(bool Found, string? Reason)>(python ?? (() =>
             PythonRuntime.TryResolve(out _, out var reason) ? (true, null) : (false, reason)));
+        _preferredDiarisationModelId = preferredDiarisationModelId ?? (() => null);
     }
+
+    private readonly Func<string?> _preferredDiarisationModelId;
 
     public bool IsModelAvailable(EngineSelection selection)
     {
@@ -240,11 +260,38 @@ public sealed class EngineProvider : IEngineProvider
     /// </remarks>
     private bool HasBundledPython => _python.Value.Found;
 
-    private ModelDescriptor? DiarisationModel =>
-        ModelCatalog.Default.DiarisationModels.FirstOrDefault() is { } model
-        && PathForInstalledOrBundled(model) is not null
-            ? model
-            : null;
+    /// <summary>
+    /// The diariser a run would use: the one the user picked when it is installed, otherwise the
+    /// first installed entry, otherwise null.
+    /// </summary>
+    /// <remarks>
+    /// <b>A picked entry that is not installed falls through rather than winning.</b> The id can
+    /// outlive its files — removed from the Models tab, or a settings file carried to another
+    /// machine — and honouring it then would turn speaker labelling off with no way for the user to
+    /// see why. Falling through to whatever is installed keeps the feature working and leaves the
+    /// stored choice intact for when its model comes back.
+    /// </remarks>
+    private ModelDescriptor? DiarisationModel
+    {
+        get
+        {
+            var installed = ModelCatalog.Default.DiarisationModels
+                .Where(m => PathForInstalledOrBundled(m) is not null)
+                .ToList();
+
+            if (_preferredDiarisationModelId() is { Length: > 0 } preferred)
+            {
+                var chosen = installed.FirstOrDefault(
+                    m => string.Equals(m.Id, preferred, StringComparison.OrdinalIgnoreCase));
+                if (chosen is not null)
+                {
+                    return chosen;
+                }
+            }
+
+            return installed.FirstOrDefault();
+        }
+    }
 
     /// <summary>
     /// True when the speech-detection graph is there to be loaded. One question only, unlike the
@@ -289,6 +336,7 @@ public sealed class EngineProvider : IEngineProvider
         return new SidecarSpeakerLabeller(new SidecarLabellerOptions
         {
             // The same order as everywhere else: the user's own copy, then the installer's.
+            Kind = KindOf(model),
             ModelPath = PathForInstalledOrBundled(model)!,
             ModelId = model.Id,
 
@@ -343,9 +391,14 @@ public sealed class EngineProvider : IEngineProvider
     {
         (bool Installed, string? MissingModel) resolved = task switch
         {
+            // Two entries do this job, so the sentence describes the choice rather than one of
+            // them. It is only ever read when neither is installed, which is exactly the moment a
+            // reader needs to know there is a choice waiting.
             ModelTask.Diarisation => (DiarisationModel is not null,
-                "Speaker labelling needs its own model, which is not installed yet. Install it from the Models tab; "
-                + "it is a 453 MiB download and tells apart up to four speakers."),
+                "Speaker labelling needs its own model, which is not installed yet. Install one from the Models "
+                + "tab. There are two: a 453 MiB one that is quick but tells apart at most four voices, and a "
+                + "291 MiB one with no limit on the number of voices, which takes about as long again as the "
+                + "recording and is for personal use only."),
             ModelTask.Translation => (TranslationModel is not null,
                 "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
                 + "it is a 1.34 GiB download and reads 25 languages into English only."),
@@ -428,8 +481,16 @@ public sealed class EngineProvider : IEngineProvider
     /// </remarks>
     public SpeakerLabellerLimits? SpeakerLimits =>
         SupportsSpeakerLabelling && DiarisationModel is { } model
-            ? SidecarSpeakerLabeller.DeclaredLimits with { Name = model.Id }
+            ? SidecarSpeakerLabeller.DeclaredLimitsFor(KindOf(model)) with { Name = model.Id }
             : null;
+
+    /// <summary>Which sidecar engine a diarisation entry is driven by.</summary>
+    /// <remarks>
+    /// Read off the entry rather than guessed from its id, and defaulted to Sortformer so that
+    /// an entry written before the field existed keeps meaning what it always meant.
+    /// </remarks>
+    private static string KindOf(ModelDescriptor model) =>
+        model.Engine is { Length: > 0 } engine ? engine : DiariserKinds.Sortformer;
 
     /// <summary>
     /// True when the translation checkpoint is installed, and false with a reason when it is not.

@@ -2,15 +2,18 @@
 
 The code is MIT — **except that a build carrying the video player is distributed under the GPL**, which is the first section below. The weights are neither, and their obligations are the ones worth reading twice.
 
-**Four model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
+**Five model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
 seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
 License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
 revocable and carry a use restriction about biometrics. The translation weights are Apache-2.0 and
 want a copy of the licence, a statement of what was changed, and the notices the source carried.
 The speech-detection weights are MIT and want the copyright line and the permission notice, which
-is the whole of it — the fourth licence, added with Silero VAD on 2026-08-23, and the reason this
-paragraph counts four. Which entry has which licence is asserted by a test, so adding a fifth is a
-deliberate act rather than a drift.
+is the whole of it — the fourth licence, added with Silero VAD on 2026-08-23. Which entry has which
+licence is asserted by a test, so a fifth was always going to be a deliberate act rather than a
+drift, and it was: **the second diariser's weights are CC BY-NC 4.0**, added with DiariZen, and they
+are the first here to restrict *use* rather than only paperwork. They are downloaded and never
+bundled, precisely so that no build of this project redistributes non-commercial material; that
+entry's own section below is the record.
 
 **Two of the four are now distributed rather than downloaded, which changes who owes the notice.**
 Since the installer began carrying weights on 2026-08-23, every channel ships the speech-detection
@@ -369,6 +372,72 @@ the open item it was.
 **What is not claimed.** No lawyer has read this either. Upstream's repository root was read at the
 pinned commit for a NOTICE file and carries none, so there is nothing under that heading to
 reproduce; the MIT text is the whole of the obligation as far as it was read.
+
+## The second diariser is CC BY-NC 4.0 (DiariZen), and it is the first non-commercial licence here
+
+`diarizen-wavlm-large-s80-md-v2` — the speaker-labelling alternative added beside Sortformer — is
+the **fifth** model licence, and the first one that restricts *use* rather than only paperwork. That
+makes it the entry to read twice, so this section states the restriction before anything else:
+
+> **The weights may not be used commercially.** CC BY-NC 4.0, upstream's own `MODEL_LICENSE`:
+> *"The pre-trained model weights released in this repository ('the Models') are licensed under the
+> Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)."*
+> Upstream states the reason: *"some training datasets are research-only or non-commercial, so the
+> released weights cannot be used commercially."*
+
+**Decided: it is downloaded, never bundled — and that decision is what keeps the restriction off
+this project's distribution.** Every other model here is either fetched by the user or carried in
+the installer; this one may only be the first. A bundled NC weight would make each Uindosill build a
+redistribution of non-commercial material inside an otherwise MIT/GPL distribution, and would hand
+every commercial recipient a file they may not use. Downloaded, the copy is the user's, the
+obligation to stay non-commercial is theirs, and this project ships nothing under NC terms at all.
+`BundledModels` therefore does not list it, and Sortformer remains the diariser the default channel
+carries.
+
+**Four upstream licences meet in one catalogue entry, and the entry owes all four.**
+
+| Artefact | Licence | Where it is stated |
+|---|---|---|
+| DiariZen source (`diarizen/`) | MIT, *Copyright (c) 2024 BUT Speech@FIT* | `LICENSE` at the repository root |
+| Its `pyannote-audio` fork (3.1.1 + `VBxClustering`) | MIT, *Copyright (c) 2020 CNRS* | `pyannote-audio/LICENSE` in-tree |
+| `diarizen/clustering/VBx.py` | Apache-2.0 (BUT Speech@FIT) | the file's own header |
+| **`pytorch_model.bin` (the checkpoint)** | **CC BY-NC 4.0** | `MODEL_LICENSE` and the model card's frontmatter |
+| `pyannote-wespeaker-voxceleb-resnet34-LM.bin` (the embedder) | CC BY 4.0 (pyannote) | the model card's frontmatter |
+
+The last two are the ones that ship as *weights*, and they are **not the same licence** — which is
+why the entry carries two attribution records rather than one. The embedder is plain CC BY 4.0, the
+shape `CcByAttribution` already renders for the transcription weights; the checkpoint is the new
+`CcByNcAttribution`, which is CC BY's notice package plus the non-commercial term stated in the
+user's own words rather than left implicit in a licence name. **A record that could be constructed
+without saying "non-commercial" would be the whole failure mode of this section**, so it cannot be.
+
+**Why the entry is one and not two.** The pipeline does not run without both files: DiariZen supplies
+segmentation, the wespeaker model supplies the embeddings VBx clusters. Split across two catalogue
+entries, the Models tab would offer a user two "SPEAKERS" rows either of which alone installs half a
+diariser, and there is no dependency concept in the catalogue to stop that. One entry, two notices,
+is the shape that matches what is actually being installed. `docs/MODELS.md` records the same in the
+catalogue's own terms.
+
+**The embedder is renamed on download and that is deliberate.** Both upstream repositories call their
+weights `pytorch_model.bin`; one directory cannot hold two. It arrives as
+`pyannote-wespeaker-voxceleb-resnet34-LM.bin`, which also means the file says whose it is without reference to
+a manifest — and renaming is a "change" under CC BY 4.0 §3(a)(1)(B), so the attribution record says
+that the file was renamed and nothing inside it altered.
+
+**What CC BY-NC asks that CC BY does not.** The BY half is the same seven-element package the
+transcription weights already discharge. The NC half is a use restriction, and it reaches surfaces
+rather than files: `uindosill notice` and the About window state it, and the Models tab states it
+before the download rather than after, because a user who learns of it afterwards has already
+fetched it. It is **not** revocable the way the NVIDIA Open Model License is, and it carries no
+biometrics term — the two things that made the Sortformer entry's shape what it is do not apply
+here.
+
+**What is not claimed.** No lawyer has read this. Neither HuggingFace repository ships a `LICENSE`
+file — for both, the licence exists as card frontmatter, `cc-by-nc-4.0` and `cc-by-4.0`
+respectively — and for DiariZen the `MODEL_LICENSE` in the GitHub repository is the fuller statement
+and the one quoted above. Whether "non-commercial" reaches a user transcribing their own work
+recordings is a question this project does not answer for them; it states the term and leaves it
+there.
 
 ## The ask engine is MIT (llama.cpp), and its notice is fetched rather than found
 

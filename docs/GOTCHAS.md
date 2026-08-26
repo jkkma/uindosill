@@ -740,3 +740,47 @@ something else.
 
 The general rule: **give the process one scratch root and delete it once**, rather than asking every
 test to remember a lifetime it is not shaped to own.
+
+## 35. pyannote picks a speaker-embedding loader by substring-matching the file path, and the first match wins
+
+`PretrainedSpeakerEmbedding` — the factory DiariZen's pipeline calls to build its embedder — decides
+which of four loaders to use like this:
+
+```python
+if isinstance(embedding, str) and "pyannote" in embedding:      # torch checkpoint
+elif isinstance(embedding, str) and "speechbrain" in embedding:
+elif isinstance(embedding, str) and "nvidia" in embedding:
+elif isinstance(embedding, str) and "wespeaker" in embedding:   # ONNX graph
+else:                                                            # falls back to pyannote
+```
+
+It matches the **whole path string**, not the file name, not the file's contents, and not its
+extension. So which loader a checkpoint gets depends on words that happen to appear anywhere in the
+path it is handed — including directory names the caller never thought of as meaningful.
+
+**Why this bites here.** The DiariZen entry installs `pyannote/wespeaker-voxceleb-resnet34-LM`, whose
+weights are a torch checkpoint and want the *first* branch. Upstream never notices the trap, because
+upstream hands over a HuggingFace cache path — `models--pyannote--wespeaker-...\pytorch_model.bin` —
+which contains **both** words, and `"pyannote"` is tested first. This project installs the file into
+a model directory of its own, where only the name survives. Named for the model it is, as
+`wespeaker-voxceleb-resnet34-LM.bin`, it matches only `"wespeaker"`, takes the ONNX branch, and dies
+with:
+
+```
+ImportError: 'onnxruntime' must be installed to use '...\wespeaker-voxceleb-resnet34-LM.bin' embeddings.
+```
+
+— a message about a missing package, for a file that is not an ONNX graph and never needed one.
+
+**The fix is the file name, and it is deliberate rather than cosmetic.** It installs as
+`pyannote-wespeaker-voxceleb-resnet34-LM.bin`; `EMBEDDING_FILE` in
+`python/uindosill_engines/diariser/diarizen.py` says why, and the catalogue entry, the attribution
+record and `docs/LICENSING.md` all name it that way. The prefix is also simply true — the file comes
+from the `pyannote` organisation — which is what makes it a name worth keeping rather than a
+workaround to be tidied away by the next person who reads it as redundant.
+
+**The general shape.** *A dependency that dispatches on a string you control is a dependency whose
+naming is part of your configuration.* Renaming a downloaded artefact is normally free; here it
+silently changes which code path loads it. Nothing type-checks it and nothing fails until the model
+is actually constructed — which is why this was found by running the shipping engine against a real
+directory rather than by reading it.

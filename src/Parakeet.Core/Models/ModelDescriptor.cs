@@ -160,8 +160,37 @@ public sealed record ModelDescriptor
     /// <summary>SPDX-style licence identifier of the weights.</summary>
     public required string License { get; init; }
 
-    /// <summary>Key into <see cref="Licensing.Attributions"/> for the required notice.</summary>
-    public required string AttributionId { get; init; }
+    /// <summary>
+    /// Keys into <see cref="Licensing.Attributions"/> for the notices this entry owes. Never empty.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A list rather than a key, because an entry can be one download and more than one upstream
+    /// work. The second diariser is the case that forced it: DiariZen's checkpoint is CC BY-NC 4.0
+    /// and the speaker-embedding model it clusters with is CC BY 4.0, the pipeline does not run
+    /// without both, and there is no dependency concept here that would let two entries express
+    /// "install these together". One entry, two notices.
+    /// </para>
+    /// <para>
+    /// <b>Order is the order they are rendered in</b>, so the licence that constrains what a user
+    /// may do goes first. The manifest writes either <c>attributionId</c> for the single case or
+    /// <c>attributionIds</c> for the plural one — the same either/or the file already uses for
+    /// <c>fileName</c> against <c>files</c>, and refused together for the same reason.
+    /// </para>
+    /// </remarks>
+    public required IReadOnlyList<string> AttributionIds { get; init; }
+
+    /// <summary>
+    /// Which engine drives these weights, when a task has more than one. Null when the task has
+    /// only ever had a single engine, which is every entry but the two diarisers.
+    /// </summary>
+    /// <remarks>
+    /// Stated by the entry rather than derived from its id. The alternative was matching on an id
+    /// prefix, which works until an entry is renamed and then routes weights to the wrong loader
+    /// - a failure that would surface as a model-load error several hundred megabytes in, with
+    /// nothing pointing at the rename that caused it.
+    /// </remarks>
+    public string? Engine { get; init; }
 
     /// <summary>BCP-47 language tags the model claims. Empty when unconstrained or unknown.</summary>
     public IReadOnlyList<string> Languages { get; init; } = [];

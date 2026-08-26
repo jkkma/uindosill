@@ -67,8 +67,9 @@ conventional guesses — are confirmed by the same listing.
 | `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
 | `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
+| `diarizen-wavlm-large-s80-md-v2` | five files, 304,985,829 | per file; see `models.json` |
 
-**Four entries, and all four are unquantised.** The catalogue offered f16 plus four quantisations
+**Five entries, and all five are unquantised.** The catalogue offered f16 plus four quantisations
 of it until 2026-08-20, when the four were withdrawn — a product decision recorded in
 `docs/PHASES.md`, not a quality finding. Their digests are kept here because a pin that was once
 shipped is worth not re-deriving, and because the measurements below are about these exact files:

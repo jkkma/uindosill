@@ -147,6 +147,7 @@
     },
     {
       "id": "sortformer-4spk-v2.1",
+      "engine": "sortformer",
       "task": "diarisation",
       "family": "diar_streaming_sortformer_4spk-v2.1",
       "displayName": "Speaker labelling",
@@ -161,6 +162,56 @@
       "recommended": false,
       "languages": [],
       "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time, so it roughly doubles how long a file takes.\n\nIt can tell apart four voices at most. A fifth person does not get their own label; they are folded in with somebody else.\n\nIt was tested on English meeting recordings, where it does well. On long recordings it drifts: past about an hour it starts splitting one person into several. Other languages have not been tested."
+    },
+    {
+      "id": "diarizen-wavlm-large-s80-md-v2",
+      "engine": "diarizen",
+      "task": "diarisation",
+      "family": "diarizen-wavlm-large-s80-md-v2",
+      "displayName": "Speaker labelling (any number of voices)",
+      "quantisation": "fp32",
+      "directory": "diarizen-wavlm-large-s80-md-v2",
+      "files": [
+        {
+          "fileName": "config.toml",
+          "url": "https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2/resolve/f27b9ffbedcf422856d104ecee9b94be37ea578e/config.toml",
+          "sizeBytes": 657,
+          "sha256": "6eb3dab9c3892efc4a271ef5f88b5453e6e96789961084a15e88ca352de98503"
+        },
+        {
+          "fileName": "pytorch_model.bin",
+          "url": "https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2/resolve/f27b9ffbedcf422856d104ecee9b94be37ea578e/pytorch_model.bin",
+          "sizeBytes": 278071526,
+          "sha256": "689a10f0cbde6345b4bf9b1670cf3196488634b34e5b07bea0fe40d508e1196b"
+        },
+        {
+          "fileName": "plda.npz",
+          "url": "https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2/resolve/f27b9ffbedcf422856d104ecee9b94be37ea578e/plda/plda.npz",
+          "sizeBytes": 133852,
+          "sha256": "9b77bcd840692710dd3496f62ecfeed8d8e5f002fd991b785079b244eab7d255"
+        },
+        {
+          "fileName": "xvec_transform.npz",
+          "url": "https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2/resolve/f27b9ffbedcf422856d104ecee9b94be37ea578e/plda/xvec_transform.npz",
+          "sizeBytes": 134376,
+          "sha256": "325f1ce8e48f7e55e9c8aa47e05d2766b7c48c4b25b8de8dd751e7a4cc5fbe8f"
+        },
+        {
+          "fileName": "pyannote-wespeaker-voxceleb-resnet34-LM.bin",
+          "url": "https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM/resolve/837717ddb9ff5507820346191109dc79c958d614/pytorch_model.bin",
+          "sizeBytes": 26645418,
+          "sha256": "366edf44f4c80889a3eb7a9d7bdf02c4aede3127f7dd15e274dcdb826b143c56"
+        }
+      ],
+      "verified": true,
+      "license": "CC-BY-NC-4.0",
+      "attributionIds": [
+        "but-fit-diarizen-wavlm-large-s80-md-v2",
+        "pyannote-wespeaker-voxceleb-resnet34-lm"
+      ],
+      "recommended": false,
+      "languages": [],
+      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part. The other speaker option stops at four.\n\nIt is slow. Expect it to take about as long again as the recording lasts, so a two-hour episode is roughly another two hours of work after the words are done.\n\nNot for commercial use — the people who trained it allow personal and research use only. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n291 MiB to download, in five files."
     },
     {
       "id": "opus-mt-tc-bible-big-mul-en-fp32",

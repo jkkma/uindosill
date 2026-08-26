@@ -16,7 +16,7 @@ import platform
 import sys
 from typing import Any
 
-from .diariser import Diariser
+from .diariser import DIARIZEN, SORTFORMER, Diariser
 from .protocol import PROTOCOL_VERSION, Channel, RequestError, claim_stdout, serve
 from .translator import Translator
 
@@ -104,6 +104,11 @@ class Session:
                 provider=message.get("provider", "cpu"),
                 graph_optimization=message.get("graphOptimization"),
                 profile=bool(message.get("profile", False)),
+                # Which of the two diarisers, named by the host because the host is what resolved
+                # the catalogue entry. Defaulted rather than required so that the field reads the
+                # same as every other optional one here; the protocol number is what actually stops
+                # a stale sidecar being asked for the engine it does not have.
+                kind=message.get("kind", SORTFORMER),
             )
             return {"capabilities": capabilities}
         if engine == "translator":
@@ -194,6 +199,20 @@ class Session:
         if name == "diariser":
             if not self.diariser.loaded:
                 raise RequestError("model", "parity was asked for before the diariser was loaded")
+
+            # **Refused rather than run for DiariZen, and refused with the reason.** The fixture is
+            # Sortformer's — two chunks of synthetic mel and the probabilities that graph returns —
+            # so running it against a torch pipeline that takes a WAV path would fail somewhere
+            # inside on a missing attribute, reported as an internal error, which reads as a bug in
+            # this project rather than as a question that does not apply. The check exists to catch
+            # an execution provider that changes the answer; DiariZen negotiates no provider and
+            # reports the CPU, so the host never asks, and a caller that asks anyway is told why.
+            if self.diariser.kind == DIARIZEN:
+                raise RequestError(
+                    "request",
+                    "the parity fixture is the Sortformer graph's and does not describe DiariZen, which runs "
+                    "on torch and chooses no execution provider",
+                )
 
             from .diariser import parity as diariser_parity
 

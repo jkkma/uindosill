@@ -1865,6 +1865,75 @@ a plan, and it would make the reference partly machine-derived — a decision fo
 anyone takes it. **Adding a corpus to the speakers gate is likewise a decision and none has been
 made**; what is recorded here is that the material exists, what it can carry, and what it cannot.
 
+### DiariZen counts the voices Sortformer cannot — measured 2026-08-26 on the laptop, and it is a count rather than a rate
+
+**What this is and what it is not.** The second diariser landed on 2026-08-26 (`docs/PHASES.md`
+records the decision). This is the measurement behind it, and its scope is narrow on purpose: it is
+**speaker counts and real-time factors on the five development stretches**, both arms run on this
+laptop's CPU at 12 threads, on the same audio, on the same day. **No diarisation error rate appears
+here for either system, because the five stretches are still unlabelled.** Nothing below is a gate
+result and nothing below may be quoted as one.
+
+**Both arms are this machine's own runs.** Sortformer through `uindosill_engines.diariser` — the
+shipping class, defaults untouched, `--provider cpu` because that is the reference path every
+published Sortformer figure was taken on. DiariZen through
+`DiariZenPipeline.from_pretrained("BUT-FIT/diarizen-wavlm-large-s80-md-v2")` at revision
+`f27b9ffbedcf422856d104ecee9b94be37ea578e`, torch 2.5.1+cpu. The Sortformer arm reproduced the
+hypothesis RTTMs already sitting in `runs/der/stretches/` segment for segment, which is what
+established that those files were its output rather than references.
+
+| stretch | episode voices | Sortformer | DiariZen | Sortformer RTF | DiariZen RTF |
+|---|---:|---:|---:|---:|---:|
+| `two-hosts-a` | 2 | 2 | 2 | 0.024 | 1.010 |
+| `two-hosts-b` | 2 | **3 — over** | 2 | 0.023 | 0.969 |
+| `two-hosts-one-guest-a` | 3 | 3 | 3 | 0.034 | 1.080 |
+| `two-hosts-three-guests-a` | 5 | 4 — at its ceiling | **5** | 0.042 | 1.196 |
+| `two-hosts-five-guests-a` | 7 | 4 — at its ceiling | **5** | 0.032 | 0.994 |
+
+**`nominalVoices` is the episode's total, so it bounds a ten-minute window rather than describing
+it.** A count at or under it is *consistent*, not correct — a ten-minute window need not contain
+every voice in the episode. Only an over-count is a demonstrable error, which is what makes
+`two-hosts-b` the one failing cell here and makes the two ceiling rows a statement about Sortformer's
+geometry rather than about its accuracy.
+
+**The counts are de-slivered at a stated floor, and the raw ones are given so the floor can be
+checked.** A cluster counts as a voice above **five seconds** of speech — chosen once, applied to
+both systems identically, never adjusted. Raw, Sortformer reports 3 on `two-hosts-a` and DiariZen 3
+on `two-hosts-b`; the extra cluster holds **0.4 s** and **0.6 s** respectively. The floor exists
+because this document already records what happens without one: the sherpa-onnx candidate reported a
+mean of 14.8 speakers against a reference mean of 3.9 and **scored better on DER while doing it**,
+because surplus clusters are slivers the optimal one-to-one mapping absorbs. Reporting raw counts
+alone would have been unfair to Sortformer on one row and flattering to DiariZen on another.
+
+**Where DiariZen's extra clusters are not slivers, and this is the result.** On
+`two-hosts-three-guests-a` — episode total exactly five — its five clusters carry 229.7, 190.3,
+160.8, 51.1 and 50.4 seconds. On `two-hosts-five-guests-a` they carry 182.5, 161.2, 128.7, 90.7 and
+67.0. Every one is sustained speech. Sortformer returns four on both because four is the width of
+its graph.
+
+**The cost is about thirty times the compute, and it is not close.** RTF 0.97–1.20 against
+0.023–0.042 on identical files and thread counts. Peak working set reached **7.25 GB private,
+8.5 GB working set** on a ten-minute file, on a 16 GB machine; it is driven by `batch_size = 32`
+over a WavLM retaining all 25 layer outputs, so it is tunable and **untuned**. There is **no GPU
+path for it on this machine at all** — DiariZen is torch, torch has no Vulkan backend, and this
+laptop has no CUDA — where Sortformer's `auto` reaches WebGPU.
+
+**What stays unproven, and it is most of what matters.**
+
+- **No DER for either system on any podcast.** The stretches carry no reference labels; this
+  document's earlier entries already say so and that has not changed. A count is a strictly weaker
+  claim than a rate: getting the number of voices right says nothing about where the boundaries
+  fall, and DiariZen's boundaries have never been scored against anything.
+- **DiariZen has not been scored on AMI and has not been through the speakers gate.** No AMI corpus
+  is on this machine. Upstream's published 14.0 is AMI-**SDM** at collar 0 — a different microphone
+  condition, a different reference and somebody else's normaliser — and is recorded here as a prior
+  rather than adopted as a figure.
+- **Nothing was run past ten minutes.** Sortformer's recorded failure is a long-recording failure,
+  right to fifty minutes and wrong from an hour. Ten-minute stretches cannot speak to it, so whether
+  DiariZen holds a count across a three-hour episode — the case the swap is for — is untested.
+- **One machine, one backend, five files, one day.** Both arms share every one of those, which is
+  what makes them comparable to each other and nothing else.
+
 ### The over-segmented labels do sound like one person — measured 2026-08-25, and the rule that separates them is fitted rather than validated
 
 **`SpeakerTurns.FoldDownTo` repairs over-segmentation and needs the user to supply the count;
