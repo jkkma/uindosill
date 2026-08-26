@@ -100,6 +100,7 @@ class Diariser:
         threads: int,
         provider: str = "cpu",
         graph_optimization: str | None = None,
+        profile: bool = False,
     ) -> dict[str, Any]:
         if not path or not os.path.isfile(path):
             raise RequestError("model", f"the diarisation model is not at {path}")
@@ -125,6 +126,7 @@ class Diariser:
                     threads=threads or DEFAULT_THREADS,
                     provider=candidate,
                     graph_optimization=graph_optimization,
+                    profile=profile,
                 )
                 break
             except Exception as exc:  # noqa: BLE001

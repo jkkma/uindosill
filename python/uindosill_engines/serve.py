@@ -103,6 +103,7 @@ class Session:
                 threads=int(message.get("threads", 0) or 0),
                 provider=message.get("provider", "cpu"),
                 graph_optimization=message.get("graphOptimization"),
+                profile=bool(message.get("profile", False)),
             )
             return {"capabilities": capabilities}
         if engine == "translator":
@@ -112,6 +113,7 @@ class Session:
                 threads=int(message.get("threads", 0) or 0),
                 provider=message.get("provider", "cpu"),
                 graph_optimization=message.get("graphOptimization"),
+                profile=bool(message.get("profile", False)),
             )
             return {"capabilities": capabilities}
         raise RequestError("request", f"unknown engine {engine!r}")
@@ -132,6 +134,60 @@ class Session:
         result = module.check(engine._engine)
         result["backend"] = engine.capabilities()["backend"]
         return result
+
+    def placement(self, message: dict[str, Any], channel: Channel) -> dict[str, Any]:
+        """Where the graph actually ran, for an engine loaded with `profile: true`.
+
+        **The other half of `parity`, and the half nothing checked until 2026-08-25.** Parity asks
+        whether a provider reproduces the published figure; this asks whether it ran the graph at
+        all. The two are independent, and the gap between them is not hypothetical: a provider that
+        registers, builds a session and then owns no node — everything it declined placed on the CPU
+        without a word — passes parity *because* it is the CPU. Measured on an NPU that day, six of
+        eight graphs did exactly that, at CPU speed, with nothing in any log to say so.
+
+        Runs the engine's own parity check first, because ONNX Runtime's profile records executions
+        rather than the partition plan: a session that has not run yields nothing to count. That is
+        also why this is cheap — the check is two chunks of mel or six short sentences, which is what
+        `parity` already costs.
+
+        **No threshold is asserted.** A healthy accelerated session legitimately leaves shape
+        operators on the CPU, so what counts as a good share is a per-graph question this side cannot
+        answer; the counts go to the host with `ranThere` — the one unambiguous signal — beside them.
+        Profiling ends here, so the cost does not follow the run.
+        """
+        from . import placement as placement_mod
+
+        name = message.get("engine", "diariser")
+        engine, module = self._engine_for(name)
+        module.check(engine._engine)
+
+        inner = engine._engine
+        wanted = engine.capabilities()["backend"]
+        sessions = (
+            inner.sessions_by_part() if hasattr(inner, "sessions_by_part") else {"model": inner.sess}
+        )
+
+        parts = {part: placement_mod.end(session) for part, session in sessions.items()}
+        if not any(parts.values()):
+            raise RequestError(
+                "request",
+                f"the {name} reported no profile, which is what happens when it was loaded without "
+                "`profile: true`. Placement cannot be measured after the fact — ONNX Runtime reads "
+                "the setting when the session is built — so reload with it set.")
+
+        from .translator.engine import PROVIDERS as TRANSLATOR_PROVIDERS
+        from .diariser.engine import PROVIDERS as DIARISER_PROVIDERS
+        table = DIARISER_PROVIDERS if name == "diariser" else TRANSLATOR_PROVIDERS
+        provider_name = table[wanted][0]
+
+        return {
+            "engine": name,
+            "backend": wanted,
+            "parts": {
+                part: placement_mod.summarise(counts, provider_name)
+                for part, counts in parts.items()
+            },
+        }
 
     def _engine_for(self, name: str) -> tuple[Any, Any]:
         """The loaded engine and its parity module, or the reason there is not one."""
@@ -246,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             "label": session.label,
             "translate": session.translate,
             "parity": session.parity,
+            "placement": session.placement,
             "writeParityReference": session.write_parity_reference,
         },
     )

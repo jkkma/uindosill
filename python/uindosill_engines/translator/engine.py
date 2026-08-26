@@ -110,7 +110,7 @@ class MarianEngine:
     """One loaded checkpoint: two graphs, a tokenizer, and the decode that was measured over them."""
 
     def __init__(self, model_dir: str, threads: int = 0, provider: str = "cpu",
-                 graph_optimization: str | None = None):
+                 graph_optimization: str | None = None, profile: bool = False):
         if provider not in PROVIDERS:
             raise ValueError(f"unknown provider {provider!r}; choose one of {sorted(PROVIDERS)}")
 
@@ -127,6 +127,13 @@ class MarianEngine:
             options.intra_op_num_threads = threads
         if graph_optimization:
             options.graph_optimization_level = getattr(ort.GraphOptimizationLevel, graph_optimization)
+
+        if profile:
+            # Off unless the host asks. `optimum` hands these options to every session it builds, so
+            # one flag covers the encoder and the decoder alike — which is what makes a per-session
+            # answer possible below.
+            from .. import placement
+            placement.enable(options)
 
         from optimum.onnxruntime import ORTModelForSeq2SeqLM
         from transformers import AutoTokenizer
@@ -145,6 +152,11 @@ class MarianEngine:
         # error anywhere. That is indistinguishable from success except in the timings, and during
         # the 2026-08-21 study a mistyped option did exactly this and reported flawless parity.
         # `optimum` builds one session per graph, so every one of them is asked.
+        #
+        # **Registration is not placement.** A provider can pass this check and own no node of the
+        # graph, everything it declined placed on the CPU without a word — measured on an NPU
+        # 2026-08-25. Parity would still pass, because a provider that is secretly the CPU
+        # reproduces the CPU. `uindosill_engines.placement` answers the other half.
         self.sessions = self._registered_providers()
         if not self.sessions:
             # An empty dict makes the comparison below vacuously true, which is the day `optimum`
@@ -181,13 +193,27 @@ class MarianEngine:
         self.model_dir = model_dir
 
     def _registered_providers(self) -> dict[str, list[str]]:
-        """What each of `optimum`'s sessions was actually given."""
+        """What each of `optimum`'s sessions was actually given.
+
+        Registration, not placement — see :mod:`uindosill_engines.placement` and :meth:`sessions_by_part`.
+        """
         found: dict[str, list[str]] = {}
+        for name, session in self.sessions_by_part().items():
+            found[name] = list(session.get_providers())
+        return found
+
+    def sessions_by_part(self) -> dict[str, Any]:
+        """The underlying ONNX Runtime sessions `optimum` built, by the part each drives.
+
+        The merged export legitimately yields two rather than three — `decoder_with_past` is folded
+        into `decoder` — so a caller must not assume a count.
+        """
+        found: dict[str, Any] = {}
         for name in ("encoder", "decoder", "decoder_with_past"):
             part = getattr(self.model, name, None)
             session = getattr(part, "session", None) if part is not None else None
             if session is not None:
-                found[name] = list(session.get_providers())
+                found[name] = session
         return found
 
     @property

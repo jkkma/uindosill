@@ -29,6 +29,7 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "_vendor"))
 from nemo.collections.asr.modules.sortformer_modules import SortformerModules  # noqa: E402
 
+from .. import placement  # noqa: E402
 from .feats import MelFeaturizer  # noqa: E402
 
 SUBSAMPLING = 8
@@ -145,7 +146,7 @@ def torch_threads(count):
 
 class SortformerEngine:
     def __init__(self, onnx_path="model/sortformer-default.onnx", threads=12,
-                 provider="cpu", graph_optimization=None):
+                 provider="cpu", graph_optimization=None, profile=False):
         if provider not in PROVIDERS:
             raise ValueError(f"unknown provider {provider!r}; choose one of {sorted(PROVIDERS)}")
 
@@ -182,12 +183,22 @@ class SortformerEngine:
             so.enable_mem_pattern = False
             so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
+        if profile:
+            # Off unless the host asks. See uindosill_engines.placement for why the answer it buys
+            # needs profiling and why it has to be switched on before the session exists.
+            placement.enable(so)
+
         self.sess = ort.InferenceSession(onnx_path, so, providers=PROVIDERS[provider])
 
         # A provider that failed to initialise is dropped and the session runs on the CPU with no
         # error anywhere. That is indistinguishable from success except in the timings, and a
         # mistyped option during the 2026-08-21 study did exactly this and reported a *perfect*
         # result. Refusing here is the difference between a slow run and a wrong belief.
+        #
+        # **This proves registration, not placement, and the difference is not academic.** A
+        # provider can pass the check below and own no part of the graph, with everything it
+        # declined placed on the CPU and nothing said about it — measured on an NPU 2026-08-25.
+        # `uindosill_engines.placement` is the other half, and the `placement` op is how it is asked.
         registered = self.sess.get_providers()
         wanted = PROVIDERS[provider][0]
         if wanted not in registered:

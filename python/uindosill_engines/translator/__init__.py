@@ -48,6 +48,7 @@ class Translator:
         threads: int,
         provider: str = "cpu",
         graph_optimization: str | None = None,
+        profile: bool = False,
     ) -> dict[str, Any]:
         if not path or not os.path.isdir(path):
             raise RequestError("model", f"the translation checkpoint is not at {path}")
@@ -79,6 +80,7 @@ class Translator:
                     threads=threads or 0,
                     provider=candidate,
                     graph_optimization=graph_optimization,
+                    profile=profile,
                 )
                 break
             except Exception as exc:  # noqa: BLE001
