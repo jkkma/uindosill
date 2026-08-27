@@ -95,7 +95,7 @@ internal static class LabellerFactory
             // directory.
             var kind = descriptor?.Engine is { Length: > 0 } engine
                 ? engine
-                : Directory.Exists(path) ? DiariserKinds.Diarizen : DiariserKinds.Sortformer;
+                : Directory.Exists(path) ? DiariserKinds.Pyannote : DiariserKinds.Sortformer;
             var provider = ResolveBackend(request);
 
             // `torch` names the second diariser's own runtime and the first has none. The sidecar
@@ -103,12 +103,26 @@ internal static class LabellerFactory
             // no subprocess and produces a usage error with a usage exit code, which is what a
             // mistyped flag deserves.
             if (string.Equals(provider, "torch", StringComparison.Ordinal)
-                && !string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal))
+                && !string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal))
             {
                 throw new CliUsageException(
                     $"{request.BackendOption} torch names the second diariser's runtime, and this model is an ONNX " +
                     $"graph with no torch path. Choose cpu, cuda or webgpu, or select a model whose engine is " +
-                    $"'{DiariserKinds.Diarizen}'.");
+                    $"'{DiariserKinds.Pyannote}'.");
+            }
+
+            // **The other half of the same rule**, which was missing until an adversarial review
+            // found the guard above was one-sided. `webgpu` and `dml` are ONNX Runtime execution
+            // providers and the second diariser is torch on both stages with no ONNX route, so it
+            // refuses them — correctly, since silently giving somebody the CPU tells them nothing.
+            // Refused here for the same reason as above: no subprocess, and a usage exit code.
+            if (string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal)
+                && provider is "webgpu" or "dml")
+            {
+                throw new CliUsageException(
+                    $"{request.BackendOption} {provider} names an ONNX Runtime execution provider, and this model is " +
+                    "a torch pipeline with no ONNX route for one to select. Choose cpu or cuda, or select the " +
+                    $"'{DiariserKinds.Sortformer}' model, which is an ONNX graph.");
             }
 
             labeller = new SidecarSpeakerLabeller(new SidecarLabellerOptions
@@ -151,8 +165,15 @@ internal static class LabellerFactory
         // down — which does not quote a DER, because it does not have one.
         // Read off the loaded engine's own name rather than the requested kind: it is what actually
         // answered, and a labeller that reports its own identity cannot disagree with itself.
+        //
+        // **Matched positively, on the engine that owns the figures.** This tested `!StartsWith
+        // ("diarizen")` until 2026-08-27, which named the *other* engine — so when the second
+        // diariser was replaced and began reporting `pyannote-torch-python`, the negation silently
+        // flipped to true and these sentences would have quoted Sortformer's AMI numbers about a
+        // model that has none. Naming the engine whose measurements these are cannot fail that way:
+        // a third diariser is excluded by default rather than included by default.
         var quotesSortformerFigures =
-            !labeller.Capabilities.EngineName.StartsWith("diarizen", StringComparison.Ordinal);
+            labeller.Capabilities.EngineName.StartsWith("sortformer", StringComparison.Ordinal);
         if (quotesSortformerFigures
             && SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend) is { } finding)
         {
@@ -351,7 +372,8 @@ internal static class LabellerFactory
     /// </summary>
     /// <remarks>
     /// A bare <see cref="File.Exists(string)"/> was right while every diariser was one
-    /// <c>.onnx</c>. DiariZen installs a directory of five files, and against one of those the file
+    /// <c>.onnx</c>. The second diariser installs a directory — five files, in subdirectories since
+    /// the pyannote pipeline replaced DiariZen on 2026-08-27 — and against one of those the file
     /// check answers "not installed" about weights that are sitting on the disk.
     /// </remarks>
     private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);

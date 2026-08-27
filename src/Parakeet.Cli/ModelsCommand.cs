@@ -150,7 +150,13 @@ internal static class ModelsCommand
             context.WriteLine(attribution.ToPlainText());
         }
 
-        using var installer = new ModelInstaller(context.Store);
+        // **The CLI takes its token from the environment only**, where the app also reads the
+        // settings file. A command line is echoed into shell history and into process listings, so
+        // there is no `--token` flag to type a credential into; `HF_TOKEN` is the variable Hugging
+        // Face's own tooling reads, so a machine set up for the hub needs nothing extra.
+        using var installer = new ModelInstaller(
+            context.Store,
+            huggingFaceToken: () => HuggingFaceToken.Resolve());
         var options = new ModelInstallOptions
         {
             AllowUnverified = parsed.HasFlag("allow-unverified"),

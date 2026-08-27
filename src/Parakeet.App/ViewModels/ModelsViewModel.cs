@@ -233,10 +233,19 @@ public sealed partial class ModelsViewModel : ObservableObject
 
         _store = store;
         _catalog = catalog;
-        _installerFactory = installerFactory ?? (() => new ModelInstaller(store));
         _session = session;
         _backend = backend;
         _settings = settings ?? new AppSettingsStore();
+
+        // The token is read per request rather than captured here, so that pasting one into
+        // Settings makes the gated entry installable without restarting the app — and so that
+        // clearing it takes effect just as immediately. `_settings` is assigned above because this
+        // closure reads it.
+        _installerFactory = installerFactory ?? DefaultInstaller;
+
+        ModelInstaller DefaultInstaller() => new(
+            store,
+            huggingFaceToken: () => HuggingFaceToken.Resolve(_settings.Load().HuggingFaceToken));
 
         Models = [.. catalog.Models.Select(m => new ModelViewModel(m, store.IsInstalled(m)))];
         Selected = Models.FirstOrDefault(m => m.IsInstalled && m.IsTranscriptionModel)
@@ -260,9 +269,9 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// <remarks>
     /// <para>
     /// Two entries do this job and neither is simply better: one is bundled, fast and stops at four
-    /// voices; the other has no such limit, is a download, is licensed for non-commercial use only
-    /// and takes about as long again as the recording. So the tab asks rather than deciding, and
-    /// this is where the asking happens.
+    /// voices; the other has no such limit but is a download, needs a Hugging Face token because
+    /// its repository is gated, and has had none of its speed or accuracy measured. So the tab asks
+    /// rather than deciding, and this is where the asking happens.
     /// </para>
     /// <para>
     /// <b>The choice is written before the list is updated</b>, and the list is only updated when
@@ -576,10 +585,27 @@ public sealed partial class ModelsViewModel : ObservableObject
             SyncActiveDiariser();
             model.Status = "Installed";
             model.Progress = 100;
-            StatusMessage = model.Descriptor.IsFullyPinned
-                ? "Installed and verified."
-                : "Installed. Pin these in the catalogue so the next install is checked — " +
-                  string.Join("; ", result.Files.Select(f => $"{f.FileName} {f.Sha256}"));
+            // **The unpinned branch became a normal outcome on 2026-08-27**, when a catalogue entry
+            // arrived whose repository is gated and whose digests therefore cannot be published in
+            // the manifest. It had been unreachable in shipped builds, so it carried a sentence
+            // written for whoever maintains the catalogue — "Pin these in the catalogue" followed by
+            // a list of hashes — which is not something to put in front of somebody who has just
+            // downloaded a model. The digests still matter to the maintainer, so they move to a
+            // developer build rather than disappearing.
+            if (model.Descriptor.IsFullyPinned)
+            {
+                StatusMessage = "Installed and verified.";
+            }
+            else
+            {
+#if DEBUG
+                StatusMessage = "Installed. Not checked against a published digest — pin these in the catalogue: " +
+                                string.Join("; ", result.Files.Select(f => $"{f.FileName} {f.Sha256}"));
+#else
+                StatusMessage = "Installed. This one could not be checked against a published fingerprint, "
+                                + "because the people who publish it do not list one.";
+#endif
+            }
         }
         catch (OperationCanceledException)
         {

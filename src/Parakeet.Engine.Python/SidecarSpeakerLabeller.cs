@@ -78,7 +78,15 @@ public static class DiariserKinds
     public const string Sortformer = "sortformer";
 
     /// <summary>Offline torch, clusters rather than tracks, no total speaker cap, downloaded only.</summary>
-    public const string Diarizen = "diarizen";
+    /// <remarks>
+    /// <b>This was <c>diarizen</c> until 2026-08-27, and the old name is not an alias.</b> The two
+    /// are different weights under different licences — CC BY 4.0 here against DiariZen's
+    /// CC BY-NC 4.0 — reached through releases of <c>pyannote.audio</c> that cannot share an
+    /// interpreter, so a host that said the old word and silently got this one would be reporting a
+    /// model it had not loaded. <see cref="PythonSidecar.ProtocolVersion"/> went to 4 with it, which
+    /// is what turns the mismatch into a refusal at <c>hello</c>.
+    /// </remarks>
+    public const string Pyannote = "pyannote";
 }
 
 /// <summary>How the sidecar's diariser is loaded and driven.</summary>
@@ -86,20 +94,22 @@ public sealed record SidecarLabellerOptions
 {
     /// <summary>
     /// Which of the two diarisers this is: <see cref="DiariserKinds.Sortformer"/> or
-    /// <see cref="DiariserKinds.Diarizen"/>.
+    /// <see cref="DiariserKinds.Pyannote"/>.
     /// </summary>
     /// <remarks>
     /// <b>It decides what <see cref="ModelPath"/> means</b> — a <c>.onnx</c> file for Sortformer, a
-    /// directory of five files for DiariZen — and it is passed to the sidecar rather than inferred
-    /// there, because the host is what resolved the catalogue entry and a sidecar sniffing the path
-    /// would be a second place the answer lives. Several other members of this record apply to only
-    /// one of the two; each says so.
+    /// directory tree for pyannote — and it is passed to the sidecar rather than inferred there,
+    /// because the host is what resolved the catalogue entry and a sidecar sniffing the path would
+    /// be a second place the answer lives. Several other members of this record apply to only one
+    /// of the two; each says so.
     /// </remarks>
     public string Kind { get; init; } = DiariserKinds.Sortformer;
 
     /// <summary>
     /// Where the weights are: <c>sortformer-default.onnx</c> for Sortformer, the model directory for
-    /// DiariZen. Required; there is no default location.
+    /// pyannote — which keeps the upstream repository's subdirectory layout rather than being
+    /// flattened, because the pipeline resolves its parts through its own <c>config.yaml</c>.
+    /// Required; there is no default location.
     /// </summary>
     public required string ModelPath { get; init; }
 
@@ -129,8 +139,8 @@ public sealed record SidecarLabellerOptions
     public string? GraphOptimization { get; init; }
 
     /// <summary>
-    /// Windows of audio the second diariser batches together, or null for the checkpoint's own
-    /// value. <b>DiariZen only</b> — the other arm refuses it.
+    /// Windows of audio the second diariser batches together, or null for the pipeline's own
+    /// value. <b>pyannote only</b> — the other arm refuses it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -278,29 +288,30 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     };
 
     /// <summary>
-    /// DiariZen's declared limits, and every one of them is a null or a false on purpose.
+    /// pyannote's declared limits, and every one of them is a null or a false on purpose.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b><see cref="SpeakerLabellerLimits.MaxSpeakers"/> is null because there is no cap</b>, not
     /// because nobody looked. The pipeline clusters rather than tracking, and the clustering is
-    /// never given a count: <c>VBxClustering</c> accepts <c>min_clusters</c> and
-    /// <c>max_clusters</c> and its own comment says "not used but kept for compatibility". The four
-    /// in this checkpoint's config is <c>max_speakers_per_chunk</c> — voices talking at once inside
-    /// one sixteen-second window — and reporting that here would be reporting Sortformer's kind of
-    /// limit for a model that does not have one.
+    /// never given a count: upstream's <c>VBxClustering</c> declares
+    /// <c>expects_num_clusters = False</c>, so a count accepted by the pipeline's call does not
+    /// reach the thing that decides how many speakers there are.
     /// </para>
     /// <para>
     /// <b><see cref="SpeakerLabellerLimits.ReliableUpTo"/> is null because nothing has been
     /// measured</b>, which the window renders as "no bound established" rather than as "any
     /// length". Sortformer's fifty minutes is a figure this project produced; there is no
     /// equivalent for this model and inventing one from upstream's benchmark table would be
-    /// quoting somebody else's corpus as this project's evidence.
+    /// quoting somebody else's corpus as this project's evidence. That applies with more force
+    /// here than it did to the arm this replaced: upstream publishes DER figures for
+    /// <c>community-1</c> on several corpora, and not one of them was produced on this project's
+    /// material through this project's audio path.
     /// </para>
     /// </remarks>
-    public static SpeakerLabellerLimits DiarizenDeclaredLimits { get; } = new()
+    public static SpeakerLabellerLimits PyannoteDeclaredLimits { get; } = new()
     {
-        Name = "diarizen-torch-python",
+        Name = "pyannote-torch-python",
         SupportsFixedSpeakerCount = false,
         MaxSpeakers = null,
         ReliableUpTo = null,
@@ -308,8 +319,8 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
 
     /// <summary>The declared limits of one of the two diarisers, by kind.</summary>
     public static SpeakerLabellerLimits DeclaredLimitsFor(string kind) =>
-        string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal)
-            ? DiarizenDeclaredLimits
+        string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal)
+            ? PyannoteDeclaredLimits
             : DeclaredLimits;
 
     public async ValueTask LoadAsync(CancellationToken ct = default)
@@ -378,23 +389,20 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // 16.33% while emitting speaker turns that read as perfectly ordinary. Two chunks of
             // synthetic mel is all it costs, and it is the only thing standing between a user and
             // a transcript that is wrong in a way nothing in it reveals.
-            // <b>DiariZen's ONNX embedder is checked even when it reports the CPU; its torch
-            // embedder is not checked at all.</b> One rule, applied to two references: never
-            // compare the reference against itself. Sortformer's reference IS ONNX Runtime's CPU
-            // provider, so <c>cpu</c> is exempt there. DiariZen's reference is its <i>torch</i>
-            // embedder, and ONNX Runtime's CPU provider is a different runtime that also reports
-            // <see cref="ComputeBackend.Cpu"/> — so the provider word cannot decide this one and
-            // <see cref="SpeakerLabellerCapabilities.EmbeddingBackend"/> does.
+            // <b>The pyannote arm has no fixture and is never asked for one.</b> Parity compares
+            // two paths to the same answer, and that arm has one: torch on both stages, no ONNX
+            // route, so the only comparison available would be a tensor against itself. The sidecar
+            // refuses the <c>parity</c> op for it by name, so asking anyway would surface as a
+            // request error on an otherwise good load. The arm this replaced did have one — an ONNX
+            // speaker embedder against torch — and the fixture left with the engine it measured.
             //
-            // <b>Checking torch here would be a cross-machine reproducibility test rather than a
-            // parity test</b>, and a differently-shaped risk: the committed reference is one
-            // laptop's torch output, so gating the default path on it would put every other
-            // machine's torch build, thread count and instruction set behind a 1e-4 tolerance whose
-            // headroom for torch-versus-torch variation nobody has measured. This briefly did
-            // exactly that when the DiariZen arm was first widened on 2026-08-26.
-            var embedderIsOnnx = capabilities.EmbeddingBackend
-                .StartsWith("onnxruntime:", StringComparison.Ordinal);
-            if (capabilities.Backend != ComputeBackend.Cpu || embedderIsOnnx)
+            // <b>Sortformer is checked on every backend but the CPU</b>, because the failure this
+            // catches is silent: measured 2026-08-21, DirectML at ONNX Runtime's default settings
+            // scores 53.15% diarisation error against the CPU's 16.33% while emitting speaker turns
+            // that read as perfectly ordinary. Its reference IS ONNX Runtime's CPU provider, which
+            // is why <c>cpu</c> is exempt: never compare the reference against itself.
+            var isPyannote = string.Equals(_options.Kind, DiariserKinds.Pyannote, StringComparison.Ordinal);
+            if (!isPyannote && capabilities.Backend != ComputeBackend.Cpu)
             {
                 Parity = await CheckParityAsync(ct).ConfigureAwait(false);
             }
@@ -786,7 +794,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// </summary>
     /// <remarks>
     /// <b>Per kind, because the two diarisers declare different limits and both are right.</b>
-    /// Comparing a DiariZen load against Sortformer's four-speaker cap would fail every load of
+    /// Comparing a pyannote load against Sortformer's four-speaker cap would fail every load of
     /// a model whose whole point is not having one.
     /// </remarks>
     private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported, string kind)

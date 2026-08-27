@@ -144,14 +144,35 @@ public sealed class ModelInstaller : IDisposable
     /// <summary>Suffix for both a half-written file and a half-assembled directory.</summary>
     private const string PartSuffix = ".part";
 
+    /// <summary>
+    /// The one host a Hugging Face access token is ever sent to.
+    /// </summary>
+    /// <remarks>
+    /// <b>A token is a credential and a catalogue is data</b>, so the two must not be allowed to
+    /// meet on the say-so of a URL in a manifest. Attaching the header to whatever host an entry
+    /// happens to name would mean that anyone who could get a URL into <c>models.json</c> — or into
+    /// a redirect from one — could collect the user's token. So the check is against this constant
+    /// and its subdomains rather than against the entry.
+    /// </remarks>
+    private const string HuggingFaceHost = "huggingface.co";
+
     private readonly IModelStore _store;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
+    private readonly Func<string?>? _huggingFaceToken;
 
-    public ModelInstaller(IModelStore store, HttpClient? http = null)
+    public ModelInstaller(
+        IModelStore store,
+        HttpClient? http = null,
+        Func<string?>? huggingFaceToken = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
+
+        // <b>A callback rather than a string</b>, so that a token entered or cleared after this
+        // installer was constructed is the one used, and so that nothing here holds a credential
+        // alive for longer than the request that needs it.
+        _huggingFaceToken = huggingFaceToken;
 
         if (http is null)
         {
@@ -296,7 +317,16 @@ public sealed class ModelInstaller : IDisposable
         for (var index = 0; index < model.Files.Count; index++)
         {
             var file = model.Files[index];
-            var stagedPath = Path.Combine(stagingDirectory, file.FileName);
+
+            // <b>A file name may be a relative path since 2026-08-27</b>, so the directory it lands
+            // in is not necessarily the staging root. Created here rather than assumed: the
+            // catalogue guarantees the path cannot climb out of the staging directory
+            // (<c>ModelCatalog.IsSafeRelativeFileName</c>), and the <see cref="Directory.Move"/>
+            // that promotes the staging tree at the end carries subdirectories with it unchanged.
+            var stagedPath = Path.Combine(
+                stagingDirectory,
+                file.FileName.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
 
             var fetched = await FetchAsync(model, file, stagedPath, total, completedBytes, index, progress, ct)
                 .ConfigureAwait(false);
@@ -401,6 +431,16 @@ public sealed class ModelInstaller : IDisposable
             request.Headers.Range = new RangeHeaderValue(resumeOffset, null);
         }
 
+        // <b>Gated entries need the user's own token, and only Hugging Face ever sees it.</b>
+        // Everything in the catalogue downloads anonymously except the pyannote pipeline, whose
+        // repository requires an accepted user agreement — an unauthenticated fetch of it returns
+        // 401 rather than the file. See <see cref="HuggingFaceHost"/> for why the host is checked
+        // here rather than trusted from the entry.
+        if (IsHuggingFace(file.Url) && _huggingFaceToken?.Invoke() is { Length: > 0 } token)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
         using var response = await SendAsync(request, model, file, ct).ConfigureAwait(false);
 
         long total;
@@ -489,6 +529,29 @@ public sealed class ModelInstaller : IDisposable
         return Convert.ToHexStringLower(hash);
     }
 
+    /// <summary>Whether a URL is Hugging Face itself, and so may carry the user's token.</summary>
+    /// <remarks>
+    /// <para>
+    /// Matched on the host rather than with <c>StartsWith</c> on the string, because
+    /// <c>https://huggingface.co.example.com/</c> starts with the same characters and is somebody
+    /// else's server. The subdomain arm is a suffix test against <c>.huggingface.co</c>, which
+    /// cannot be satisfied by a host that merely contains it.
+    /// </para>
+    /// <para>
+    /// <b>The redirect to the CDN is not this method's problem, and that is worth knowing rather
+    /// than rediscovering.</b> Hugging Face answers a file request with a redirect to a signed URL
+    /// on another host. <b>.NET's redirect handler clears <c>Authorization</c> on every automatic
+    /// redirect it follows, not only cross-origin ones</b> — stated precisely because the weaker
+    /// "cross-origin only" version was written here first and would matter if it were relied on:
+    /// the token reaches the first request and nothing after it. That is the safe direction, and it
+    /// is why the CDN leg works anyway — the signature in the redirect target authorises it.
+    /// </para>
+    /// </remarks>
+    internal static bool IsHuggingFace(Uri url) =>
+        url.Scheme == Uri.UriSchemeHttps
+        && (string.Equals(url.Host, HuggingFaceHost, StringComparison.OrdinalIgnoreCase)
+            || url.Host.EndsWith("." + HuggingFaceHost, StringComparison.OrdinalIgnoreCase));
+
     private async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, ModelDescriptor model, ModelFile file, CancellationToken ct)
     {
@@ -516,6 +579,24 @@ public sealed class ModelInstaller : IDisposable
                 $"{file.Url} returned 404 for '{model.Id}'. This catalogue entry is marked unverified: its file name " +
                 "and URL were never checked against the live repository. Fix the entry in models.json (docs/MODELS.md " +
                 "explains how) rather than retrying.");
+        }
+
+        // <b>A gated repository answers 401 or 403, and a bare status code sends the reader looking
+        // in the wrong place.</b> Neither number means "this download is broken": they mean the user
+        // has not accepted the model's terms, or has no token, or has one without access. None of
+        // that is fixable by retrying, and the remedy is three steps on a website rather than
+        // anything in this application — so the message names them.
+        if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && IsHuggingFace(file.Url))
+        {
+            var hasToken = _huggingFaceToken?.Invoke() is { Length: > 0 };
+            throw new ModelInstallException(
+                $"{file.Url} returned {(int)status} {status} for '{model.Id}'. This model is only handed out to " +
+                "people who have accepted its terms. Open the model's page, accept them, then " +
+                (hasToken
+                    ? "check that the access token in Settings belongs to that account and can read gated repositories."
+                    : "create a read-only access token on your Hugging Face account and paste it into Settings " +
+                      $"(or set {HuggingFaceToken.PrimaryVariable} in the environment).") +
+                " Retrying without doing that will fail the same way.");
         }
 
         throw new ModelInstallException($"{file.Url} returned {(int)status} {status} for '{model.Id}'.");

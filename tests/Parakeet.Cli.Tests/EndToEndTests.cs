@@ -409,12 +409,14 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task NoShippedEntryIsFlaggedAsUnverified()
+    public async Task OnlyTheGatedEntryIsFlaggedAsUnverified()
     {
-        // Every shipped entry pins a digest per file, so nothing here can say "no digest" — and as
-        // of 2026-08-20 every one of them is verified too. The translation entry was the last
-        // exception: its nine files were published that day, and every LFS oid the repository
-        // publishes matched the digest the gate run recorded, so the listing carries no warning.
+        // Every shipped entry pinned a digest per file between 2026-08-20 and 2026-08-27, and one
+        // no longer does. `pyannote/speaker-diarization-community-1` is a gated repository:
+        // Hugging Face publishes its file sizes but masks the LFS object ids behind the user
+        // agreement, so no digest can be recorded from here until somebody with an accepted token
+        // downloads it. The entry says so in the listing rather than carrying a digest nobody
+        // checked, and **that warning appearing is this test passing**.
         //
         // This is deliberately a claim about the DATA. The claim about the FLAG — that it appears
         // when it should — is the test below, against a catalogue built for the purpose, because a
@@ -426,8 +428,16 @@ public class EndToEndTests
         await harness.RunAsync("models", "list");
         var output = harness.Out.ToString();
 
-        Assert.DoesNotContain("no digest", output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("unverified catalogue entry", output, StringComparison.Ordinal);
+        // Exactly one entry carries each warning, and it is the gated one. Counted rather than
+        // merely searched for: "does the string appear" would pass just as well with a second
+        // unpinned entry beside it, which is the drift this test exists to catch.
+        Assert.Equal(1, CountOccurrences(output, "unverified catalogue entry"));
+        Assert.Equal(1, CountOccurrences(output, "no pinned digest"));
+        Assert.Contains("pyannote-speaker-diarization-community-1", output, StringComparison.Ordinal);
+
+        // Five files, none of them pinned — the wording carries the ratio, and a change that pinned
+        // some but not all would read differently here.
+        Assert.Contains("no pinned digest for 5 of 5 files", output, StringComparison.Ordinal);
 
         // Still listed — listed without a warning is the point, not listed at all. The id is the
         // durable half of that: the display name was "OPUS-MT Bible-Big multilingual to English -
@@ -585,5 +595,26 @@ public class EndToEndTests
         Assert.Contains("cold load", output, StringComparison.Ordinal);
         Assert.Contains("RTF", output, StringComparison.Ordinal);
         Assert.Contains("not settable", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// How many times <paramref name="needle"/> appears in <paramref name="haystack"/>.
+    /// </summary>
+    /// <remarks>
+    /// Counting rather than searching is what makes a listing assertion hold as the catalogue
+    /// grows: <c>Assert.Contains</c> on a warning passes just as happily when a second entry has
+    /// started carrying the same warning, which is the drift worth catching.
+    /// </remarks>
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var i = haystack.IndexOf(needle, StringComparison.Ordinal);
+             i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 }

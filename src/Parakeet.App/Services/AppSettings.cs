@@ -78,10 +78,10 @@ public sealed record AppSettings
     /// <remarks>
     /// <para>
     /// Two entries do this job and they are not ranked: Sortformer is fast, ships with the
-    /// installer and stops at four voices; DiariZen has no such limit, is downloaded rather than
-    /// bundled, is licensed for non-commercial use only and takes about as long again as the
-    /// recording. Which is better depends on the recording and on who is doing the recording, so
-    /// this is a choice rather than a default with an override.
+    /// installer and stops at four voices; the pyannote pipeline has no such limit and is
+    /// downloaded rather than bundled, needing a Hugging Face token because its repository is
+    /// gated. How long it takes has not been measured. Which is better depends on the recording and
+    /// on who is doing the recording, so this is a choice rather than a default with an override.
     /// </para>
     /// <para>
     /// <b>Null keeps meaning "nobody has said", and it has to.</b> A stored id whose entry is not
@@ -93,6 +93,36 @@ public sealed record AppSettings
     /// </para>
     /// </remarks>
     public string? DiarisationModelId { get; init; }
+
+    /// <summary>
+    /// A Hugging Face access token, for the one catalogue entry whose repository is gated, or null
+    /// when the user has not supplied one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Every other entry downloads anonymously, and this exists for exactly one that cannot.</b>
+    /// `pyannote/speaker-diarization-community-1` requires an accepted user agreement; an
+    /// unauthenticated fetch returns 401 rather than the file. There is no token this product could
+    /// ship on the user's behalf — the agreement is between them and the model's authors — so the
+    /// entry is uninstallable until they paste one in.
+    /// </para>
+    /// <para>
+    /// <b>It is stored in the settings file as written, which is worth knowing rather than
+    /// discovering.</b> Uindosill does not encrypt it: the file already sits under the user's
+    /// profile with their own ACL, and a key derived from something on the same machine would look
+    /// like protection while adding none. A token pasted here should be a read-only one scoped to
+    /// the model repositories, which is what Hugging Face's own guidance recommends and what its
+    /// token page offers by default. <see cref="ModelInstaller"/> sends it to
+    /// <c>huggingface.co</c> and to nowhere else.
+    /// </para>
+    /// <para>
+    /// <b>The environment wins where it is set.</b> <c>HF_TOKEN</c> is the name Hugging Face's own
+    /// tooling reads, so a machine that already exports one should not need it pasted a second
+    /// time — and a token that only ever lives in the environment never reaches a file this product
+    /// writes. See <c>HuggingFaceToken.Resolve</c>.
+    /// </para>
+    /// </remarks>
+    public string? HuggingFaceToken { get; init; }
 
     /// <summary>
     /// Which execution provider labels speakers, or null for <c>auto</c> — the choice this project
@@ -220,6 +250,7 @@ public sealed class AppSettingsStore
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 AskMode = ReadAskMode(root),
                 AskModelFileName = ReadString(root, "askModelFileName"),
+                HuggingFaceToken = ReadString(root, "huggingFaceToken"),
                 DiarisationModelId = ReadString(root, "diarisationModelId"),
                 DiarisationProvider = ReadDiarisationProvider(root),
                 DiarisationBatchSize = ReadDiarisationBatchSize(root),
@@ -301,6 +332,15 @@ public sealed class AppSettingsStore
             if (settings.AskModelFileName is { Length: > 0 } askModel)
             {
                 values["askModelFileName"] = askModel;
+            }
+
+            // Absent means "not supplied", which is what `HuggingFaceToken.Resolve` treats as no
+            // token at all rather than as an empty bearer credential. Written only when there is
+            // something to write, like every other optional key here — so clearing the box removes
+            // the key rather than leaving `""` behind for the next reader to puzzle over.
+            if (settings.HuggingFaceToken is { Length: > 0 } huggingFaceToken)
+            {
+                values["huggingFaceToken"] = huggingFaceToken;
             }
 
             // Same shape again: absent means nobody has chosen a diariser, which is not the

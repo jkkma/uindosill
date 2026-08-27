@@ -30,15 +30,15 @@ public class ModelCatalogTests
 
         // **The diarisers are asserted by id, because the two are under different licences and the
         // difference is the point.** Sortformer is the NVIDIA Open Model License — a notice of a
-        // different shape, and a grant that is revocable where CC BY's is not. DiariZen is
-        // CC BY-NC 4.0, the only licence here that restricts what the weights may be used for, and
-        // the reason that entry is downloaded rather than bundled. An `Assert.All` over the task
-        // would have to name one of them and would pass while the other drifted.
+        // different shape, and a grant that is revocable where CC BY's is not. The pyannote
+        // pipeline is CC BY 4.0, and since 2026-08-27 it is why this product has no non-commercial
+        // component at all: the DiariZen checkpoint it replaced was CC BY-NC 4.0. An `Assert.All`
+        // over the task would have to name one of them and would pass while the other drifted.
         Assert.Equal(
             new Dictionary<string, string>
             {
                 ["sortformer-4spk-v2.1"] = "NVIDIA-Open-Model-License",
-                ["diarizen-wavlm-large-s80-md-v2"] = "CC-BY-NC-4.0",
+                ["pyannote-speaker-diarization-community-1"] = "CC-BY-4.0",
             },
             catalog.DiarisationModels.ToDictionary(m => m.Id, m => m.License));
     }
@@ -81,16 +81,28 @@ public class ModelCatalogTests
         // download.
         Assert.NotEmpty(ModelCatalog.Default.Models);
 
-        Assert.All(ModelCatalog.Default.Models, model =>
+        // **One entry cannot be pinned from here, and it is named rather than pattern-matched.**
+        // `pyannote/speaker-diarization-community-1` is a gated repository: Hugging Face serves its
+        // file listing with real sizes but masks every LFS object id behind the user agreement, so
+        // there is no digest to record until somebody with an accepted token downloads the files
+        // and takes one off the bytes. Naming the id — rather than excusing "any entry without a
+        // digest" — is what keeps this test failing for the next entry that arrives unpinned by
+        // accident. **Fill the digests in and delete this exemption**; nothing else about the entry
+        // has to change.
+        const string gated = "pyannote-speaker-diarization-community-1";
+
+        var pinnable = ModelCatalog.Default.Models.Where(m => m.Id != gated).ToList();
+        Assert.NotEmpty(pinnable);
+
+        Assert.All(pinnable, model =>
         {
             Assert.NotEmpty(model.Files);
 
             // Verified means the URL was checked against a live repository, which is a different
-            // claim from "the digest is right". Every entry is now both: the translation entry was
-            // the last exception here, and on 2026-08-20 its nine files were published and every
-            // one of the published LFS oids matched the digest taken off the bytes the gate was
-            // scored against. There is no longer an entry to excuse, so nothing is excused — a new
-            // unverified entry fails this outright.
+            // claim from "the digest is right". Every entry here is now both: the translation entry
+            // was the last exception, and on 2026-08-20 its nine files were published and every one
+            // of the published LFS oids matched the digest taken off the bytes the gate was scored
+            // against.
             Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
 
             // Per file, not per entry. An entry of nine files where eight are pinned is not a
@@ -105,6 +117,20 @@ public class ModelCatalogTests
             Assert.True(model.IsFullyPinned, $"'{model.Id}' is not fully pinned");
             Assert.True(model.TotalSizeBytes > 0, $"'{model.Id}' has no total size");
         });
+
+        // The gated entry still has to be described even though it cannot be checked: every file
+        // carries a size, so a truncated download fails on the byte count, and the entry declares
+        // itself unverified rather than claiming a provenance nobody established.
+        var unpinnable = ModelCatalog.Default.Get(gated);
+        Assert.NotEmpty(unpinnable.Files);
+        Assert.False(unpinnable.Verified, $"'{gated}' cannot be verified from here and must not claim to be");
+        Assert.False(unpinnable.IsFullyPinned);
+        Assert.All(unpinnable.Files, file =>
+        {
+            Assert.Null(file.Sha256);
+            Assert.True(file.SizeBytes > 0, $"'{gated}/{file.FileName}' has no pinned size to compare against");
+        });
+        Assert.True(unpinnable.TotalSizeBytes > 0);
     }
 
     [Fact]
@@ -186,8 +212,13 @@ public class ModelCatalogTests
         // which would then reject whichever was downloaded second with a corruption error.
         // Across every file of every entry, not just entry to entry: two files of one multi-file
         // model sharing a digest is the same copy-paste slip one directory further down.
+        // Unpinned files are skipped rather than grouped: since 2026-08-27 the gated pyannote entry
+        // carries five of them, and five nulls in one group is not five files sharing a digest —
+        // it is five files with nothing to compare. Grouping them would fail this test for the one
+        // reason it is not about.
         var duplicate = ModelCatalog.Default.Models
             .SelectMany(m => m.Files.Select(f => (Model: m, File: f)))
+            .Where(x => x.File.Sha256 is not null)
             .GroupBy(x => x.File.Sha256, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(g => g.Count() > 1);
 
@@ -257,11 +288,12 @@ public class ModelCatalogTests
 
         // **Two diarisers since 2026-08-26, and neither is Recommended.** They are a choice the
         // user makes rather than a ranking: Sortformer is bundled, fast and capped at four voices;
-        // DiariZen is a download with no cap, licensed non-commercially and far slower. Recommended
-        // picks the default *ASR* model, so a diariser carrying it would be the failure the
-        // discriminator exists to stop -- which is why it is asserted on both.
+        // the pyannote pipeline is a download with no cap, and it needs a Hugging Face token
+        // because its repository is gated. Recommended picks the default *ASR* model, so a diariser
+        // carrying it would be the failure the discriminator exists to stop -- which is why it is
+        // asserted on both.
         Assert.Equal(
-            new[] { "sortformer-4spk-v2.1", "diarizen-wavlm-large-s80-md-v2" },
+            new[] { "sortformer-4spk-v2.1", "pyannote-speaker-diarization-community-1" },
             catalog.DiarisationModels.Select(m => m.Id));
         Assert.All(catalog.DiarisationModels, m => Assert.False(m.Recommended));
 
@@ -705,6 +737,162 @@ public class ModelInstallerTests
             () => installer.InstallAsync(Descriptor(sha256: null), new ModelInstallOptions { AllowUnverified = true }));
 
         Assert.Contains("marked unverified", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // Bare names and honest subpaths, which is what the pyannote entry needs.
+    [InlineData("pytorch_model.bin", true)]
+    [InlineData("segmentation/pytorch_model.bin", true)]
+    [InlineData("plda/xvec_transform.npz", true)]
+    // Traversal, in every spelling that reaches a JSON manifest.
+    [InlineData("../escape.bin", false)]
+    [InlineData("segmentation/../../escape.bin", false)]
+    [InlineData("./here.bin", false)]
+    [InlineData("a/./b.bin", false)]
+    // Separators that are not '/', so one manifest reads the same on every platform and `..\`
+    // cannot arrive spelled differently from `../`.
+    [InlineData(@"segmentation\pytorch_model.bin", false)]
+    [InlineData(@"..\escape.bin", false)]
+    // Rooted, absolute and drive-relative.
+    [InlineData("/etc/passwd", false)]
+    [InlineData("C:/Windows/System32/x.dll", false)]
+    [InlineData("C:x.bin", false)]
+    // The volume separator on its own: `a:b` names an alternate data stream of `a` on Windows, not
+    // a file called `a:b`, and `Path.GetFileName` does not split on ':' so it passes the shape test
+    // that catches the others. This is the case the guard grew an explicit check for.
+    [InlineData("a:b", false)]
+    [InlineData("segmentation/model.bin:stream", false)]
+    // Empty segments, which also covers a trailing or doubled separator.
+    [InlineData("", false)]
+    [InlineData("/", false)]
+    [InlineData("segmentation//model.bin", false)]
+    [InlineData("segmentation/", false)]
+    public void AFileNameIsABareNameOrASafeRelativePath(string candidate, bool expected)
+    {
+        // **This validation is the only thing between a JSON manifest and an arbitrary file
+        // write**, and it was widened from "bare name only" to "relative subpath" on 2026-08-27 so
+        // that the pyannote entry could keep its upstream directory layout. It shipped that day
+        // with no test of its own — the traversal cases were covered only through the parser, which
+        // exercises a fraction of them — which an adversarial review caught.
+        Assert.Equal(expected, ModelCatalog.IsSafeRelativeFileName(candidate));
+    }
+
+    [Fact]
+    public void ASingleFileEntryStillHasToCarryABareName()
+    {
+        // The widening applies to entries with a `directory` to be beneath. A single-file entry
+        // lands in the store root and its name becomes its `StorageName`, so a subpath there would
+        // have the store looking for the entry under a name that is not the one it wrote.
+        var json = """
+        {
+          "models": [
+            {
+              "id": "single-file", "family": "f", "displayName": "d", "quantisation": "q",
+              "fileName": "nested/model.gguf", "url": "https://example.invalid/model.gguf",
+              "license": "CC-BY-4.0", "attributionIds": ["nvidia-parakeet-tdt-0.6b-v3"]
+            }
+          ]
+        }
+        """;
+
+        var exception = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
+        Assert.Contains("single-file entry", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheHuggingFaceTokenIsSentToHuggingFaceAndNowhereElse()
+    {
+        // **The security property of the gated entry, asserted rather than reasoned about.** A
+        // token is a credential and a catalogue is data, so if the header followed whatever host an
+        // entry happened to name, anyone who could get a URL into models.json — or a redirect out
+        // of one — could collect it. The check is against the host, so this drives both cases
+        // through the same installer and reads back what each request carried.
+        using var temp = new TempDirectory();
+        var payload = Encoding.UTF8.GetBytes("weights");
+        var handler = new AuthRecordingHandler(payload);
+
+        using var installer = new ModelInstaller(
+            new LocalModelStore(temp.Path),
+            new HttpClient(handler),
+            huggingFaceToken: () => "hf_secret");
+
+        await installer.InstallAsync(Descriptor(
+        [
+            new ModelFile
+            {
+                FileName = "elsewhere.bin",
+                Url = new Uri("https://example.invalid/elsewhere.bin"),
+                Sha256 = Sha256Of(payload),
+            },
+            new ModelFile
+            {
+                FileName = "gated.bin",
+                Url = new Uri("https://huggingface.co/owner/repo/resolve/main/gated.bin"),
+                Sha256 = Sha256Of(payload),
+            },
+        ], directory: "two-hosts"));
+
+        Assert.Null(handler.AuthorizationFor("https://example.invalid/elsewhere.bin"));
+        Assert.Equal("Bearer hf_secret", handler.AuthorizationFor("https://huggingface.co/owner/repo/resolve/main/gated.bin"));
+
+        // A host that merely *starts with* the right characters is somebody else's server, and a
+        // prefix check would hand them the token. Asserted separately because it is the mistake
+        // this is written to be immune to rather than a variant of the case above.
+        Assert.False(ModelInstaller.IsHuggingFace(new Uri("https://huggingface.co.example.invalid/x")));
+        Assert.True(ModelInstaller.IsHuggingFace(new Uri("https://cdn-lfs.huggingface.co/x")));
+    }
+
+    [Fact]
+    public void AnAbsentOrBlankHuggingFaceTokenIsNullRatherThanEmpty()
+    {
+        // An empty bearer credential is answered with a 401 that reads as "your token is wrong"
+        // rather than as "you have not set one", which sends the reader looking in the wrong place.
+        var saved = (
+            Primary: Environment.GetEnvironmentVariable(HuggingFaceToken.PrimaryVariable),
+            Legacy: Environment.GetEnvironmentVariable(HuggingFaceToken.LegacyVariable));
+        try
+        {
+            Environment.SetEnvironmentVariable(HuggingFaceToken.PrimaryVariable, null);
+            Environment.SetEnvironmentVariable(HuggingFaceToken.LegacyVariable, null);
+
+            Assert.Null(HuggingFaceToken.Resolve(null));
+            Assert.Null(HuggingFaceToken.Resolve("   "));
+            Assert.Equal("hf_stored", HuggingFaceToken.Resolve("  hf_stored  "));
+
+            // The environment wins, so a machine already set up for the hub needs nothing pasted —
+            // and the legacy name is honoured only when the current one is unset.
+            Environment.SetEnvironmentVariable(HuggingFaceToken.LegacyVariable, "hf_legacy");
+            Assert.Equal("hf_legacy", HuggingFaceToken.Resolve("hf_stored"));
+
+            Environment.SetEnvironmentVariable(HuggingFaceToken.PrimaryVariable, "hf_current");
+            Assert.Equal("hf_current", HuggingFaceToken.Resolve("hf_stored"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(HuggingFaceToken.PrimaryVariable, saved.Primary);
+            Environment.SetEnvironmentVariable(HuggingFaceToken.LegacyVariable, saved.Legacy);
+        }
+    }
+
+    /// <summary>Serves one payload for every URL and remembers what each request authorised with.</summary>
+    private sealed class AuthRecordingHandler : HttpMessageHandler
+    {
+        private readonly byte[] _payload;
+        private readonly Dictionary<string, string?> _authorization = new(StringComparer.Ordinal);
+
+        public AuthRecordingHandler(byte[] payload) => _payload = payload;
+
+        public string? AuthorizationFor(string url) => _authorization[url];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            _authorization[request.RequestUri!.ToString()] = request.Headers.Authorization?.ToString();
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(_payload),
+            });
+        }
     }
 
     private sealed class StubHandler : HttpMessageHandler

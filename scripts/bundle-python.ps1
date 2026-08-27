@@ -248,11 +248,14 @@ foreach ($required in @(
     'uindosill_engines/serve.py',
     'uindosill_engines/protocol.py',
     'uindosill_engines/diariser/parity-reference.npy',
-    # The second diariser's speaker embedder has its own reference and its own gate, on the same
-    # terms as the three beside it: without the file the check reports "no reference committed" and
-    # a run continues on an unverified embedder. Added 2026-08-27 — it shipped for a day on neither
-    # this list nor package-windows.ps1's, which an adversarial review caught.
-    'uindosill_engines/diariser/embedding-parity-reference.npy',
+    # The second diariser's speaker embedder had its own reference and its own gate here until
+    # 2026-08-27, when DiariZen — the only engine with a negotiable embedder — moved to
+    # `attic/diarizen/` and took the fixture with it. The pyannote pipeline that replaced it is
+    # torch on both stages with no ONNX route, so it has no second path to compare against and no
+    # reference to ship. **Removed rather than made optional**: this list throws on a missing entry,
+    # which is the whole point of it, and a name that can never be present would make every bundle
+    # fail. If an ONNX embedder is built for the new engine, its reference belongs back on this list
+    # and on package-windows.ps1's.
     # The mel filterbank, committed 2026-08-26 when the `librosa.filters.mel` call that built it
     # was replaced by its own output. Without this file the diariser raises on construction, so a
     # bundle missing it is a bundle whose speaker labelling does not start.

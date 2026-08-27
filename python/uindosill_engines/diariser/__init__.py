@@ -18,10 +18,16 @@ from ..protocol import RequestError
 
 #: The two diarisers this sidecar can load, named by the host on `load`. Everything below the
 #: `kind` switch in :meth:`Diariser.load` belongs to exactly one of them: Sortformer is a streaming
-#: ONNX graph with four speaker slots, DiariZen is an offline torch pipeline that clusters and has
+#: ONNX graph with four speaker slots, pyannote is an offline torch pipeline that clusters and has
 #: no total cap. They share this class, the protocol and nothing else.
+#:
+#: **`pyannote` replaced `diarizen` on 2026-08-27**, and the old name is not an alias for it. The
+#: two are different weights under different licences — CC BY 4.0 against CC BY-NC 4.0 — reached
+#: through incompatible releases of the same package, so a host that asked for `diarizen` and
+#: silently got this would be told it had loaded something it had not. Protocol 4 is what turns
+#: that into a refusal at `hello`; see :data:`..protocol.PROTOCOL_VERSION`.
 SORTFORMER = "sortformer"
-DIARIZEN = "diarizen"
+PYANNOTE = "pyannote"
 
 #: The cap is architectural: the graph has four speaker slots. A fifth voice is merged into one of
 #: the four rather than reported, and the host says so rather than presenting labels as complete.
@@ -120,18 +126,18 @@ class Diariser:
         """Loads one of the two diarisers. `kind` decides which, and the host decides `kind`.
 
         **Asked for rather than sniffed.** The two are distinguishable by shape — Sortformer is one
-        `.onnx` file and DiariZen is a directory of five — and guessing from that would work until
-        the day a third entry looked like either. The host already knows which catalogue entry it
+        `.onnx` file and pyannote is a directory tree — and guessing from that would work until the
+        day a third entry looked like either. The host already knows which catalogue entry it
         resolved, so it says; a sidecar that inferred it would be a second place the answer lives.
 
-        **`batch_size` belongs to DiariZen alone**, and is refused rather than ignored on the other
+        **`batch_size` belongs to pyannote alone**, and is refused rather than ignored on the other
         arm. Sortformer's batching is its exported graph's geometry — a fixed streaming chunk loop
         the host cannot resize — so a number arriving for it means the two sides disagree about what
         the setting is, and silently dropping it would leave somebody believing they had changed
-        something. `None` means the model's own value, which for DiariZen is the checkpoint's.
+        something. `None` means the model's own value, which for pyannote is its config's.
         """
-        if kind == DIARIZEN:
-            return self._load_diarizen(path, model_id, threads, provider, profile, batch_size)
+        if kind == PYANNOTE:
+            return self._load_pyannote(path, model_id, threads, provider, profile, batch_size)
         if kind != SORTFORMER:
             raise RequestError("request", f"unknown diariser kind '{kind}'")
 
@@ -198,7 +204,7 @@ class Diariser:
         self._kind = SORTFORMER
         return self.capabilities()
 
-    def _load_diarizen(
+    def _load_pyannote(
         self,
         path: str,
         model_id: str,
@@ -207,82 +213,42 @@ class Diariser:
         profile: bool = False,
         batch_size: int | None = None,
     ) -> dict[str, Any]:
-        """The DiariZen arm of :meth:`load`.
+        """The pyannote arm of :meth:`load`.
 
-        **`provider` selects the embedder's execution provider and nothing else.** This pipeline has
-        two neural stages and only one of them is negotiable. Segmentation is torch on the CPU on
-        every machine: measured 2026-08-26 it exports faithfully and gains nothing anywhere, so
-        there is no choice to offer. Embedding is a wespeaker ResNet34, half the pipeline's time,
-        and that is what the provider names.
+        **`provider` names a torch device here, not an execution provider.** This pipeline has two
+        neural stages and both are torch on the same device, so unlike the arm this replaced there
+        is no half to negotiate separately: `auto` is the CPU, `cuda` is reachable by name on a
+        machine whose torch build has it, and `webgpu` and `dml` are refused rather than quietly
+        treated as the CPU. The engine's `_resolve_device` is where that refusal lives.
 
-        **`auto` is `torch`, and it does not mean what it means on the Sortformer arm.** There it is
-        a shortlist tried in order. Here it is one name, because the alternative was measured and
-        moves the answer — 222 speaker turns against torch's 225 on `two-hosts-three-guests-a`,
-        0.19% of the timeline — and this project's `auto` reproduces the published path rather than
-        picking the fastest. See the comment at the call below for the whole reasoning. The fast
-        path is reachable by name.
+        **`auto` is the CPU, and it is not a shortlist.** On the Sortformer arm `auto` is candidates
+        tried in order, because only ONNX Runtime knows which will build a session. Nothing is
+        negotiable here — the bundled torch is the CPU build — so `auto` resolves to one device and
+        `fellBackFrom` is empty by construction rather than by luck.
 
-        **A named provider is never fallen back from**, exactly as on the Sortformer arm, which is
-        why this raises rather than quietly returning a torch engine to somebody who typed
-        `webgpu`. `torch` itself is a valid name and is what `auto` resolves to.
+        **Nothing about this engine has been measured**, which is why no comparison appears in this
+        docstring where the previous arm's carried three. `docs/UNPROVEN.md` records the gap.
         """
         if not path or not os.path.isdir(path):
-            raise RequestError("model", f"the DiariZen model directory is not at {path}")
+            raise RequestError("model", f"the pyannote model directory is not at {path}")
 
-        from .diarizen import DiarizenEngine
+        from .pyannote_engine import PyannoteEngine
 
-        # Built once with the embedder in torch, then the candidates are tried against that one
-        # loaded pipeline — see `DiarizenEngine.install_embedding_provider` for why it is not
-        # rebuilt per candidate.
-        engine = DiarizenEngine(
-            model_dir=path, threads=threads, provider="torch", profile=profile,
+        engine = PyannoteEngine(
+            model_dir=path, threads=threads, provider=provider, profile=profile,
             batch_size=batch_size,
         )
-
-        # **`auto` means torch here, because the ONNX embedder changes the answer.** It is faster and
-        # it reproduces the torch embedding *vectors* to 1.9e-07 — three orders inside the parity
-        # gate — and the labels still move: measured 2026-08-26 on `two-hosts-three-guests-a`, torch
-        # returns 225 speaker turns and both ONNX providers return 222, which as time is 565 of
-        # 300,000 frames, 0.19% of the timeline. Deterministic on both sides: four torch runs gave
-        # 225, and ORT's CPU and WebGPU providers gave the identical 222 as each other. The
-        # speech/silence split is byte-identical, so the whole difference is in speaker grouping,
-        # which follows from segmentation never leaving torch.
-        #
-        # **Which of the two is closer to the truth is not known, and that does not matter here.**
-        # The rule this project applies is that what it picks unasked reproduces the figure it
-        # publishes — CUDA is excluded from the Sortformer arm's `auto` while scoring *better*
-        # (16.1021% against 16.3324%), so "changes the answer" has always been the criterion rather
-        # than "scores worse". `auto` therefore stays on the path the published figures describe.
-        #
-        # **A DER comparison was attempted and withdrawn on 2026-08-27**, because the RTTMs beside
-        # the stretches are a previous run's hypothesis output rather than ground truth — they cap
-        # at four speakers on episodes with two, five and seven, and `stretches.json` marks the
-        # stretch `"labelled": false`. What would settle which embedder is better is a corpus that
-        # has references: the AMI test set, which the speaker gate is already defined on.
-        candidates = ["torch"] if provider == "auto" else [provider]
-        failures = engine.install_embedding_provider(candidates)
-
-        # **A named provider is never fallen back from, exactly as on the Sortformer arm.** Only
-        # `auto` promised a choice, so only `auto` gets to make a second one; somebody who typed
-        # `webgpu` and silently got torch has been told nothing. `auto` may end on torch, which is
-        # the point of it — a machine with no usable adapter keeps the feature and loses the
-        # speed-up — and `fellBackFrom` carries what it passed over.
-        if provider not in ("auto", "torch") and engine.embedding_fallback_reason:
-            raise RequestError(
-                "model",
-                f"could not put the speaker embedder on {provider}: {engine.embedding_fallback_reason}",
-            )
 
         self._engine = engine
         self._model_id = model_id or os.path.basename(os.path.normpath(path))
         self._model_path = path
-        self._kind = DIARIZEN
-        self._fell_back_from = [failure[:300] for failure in failures]
+        self._kind = PYANNOTE
+        self._fell_back_from = []
         return self.capabilities()
 
     def capabilities(self) -> dict[str, Any]:
-        if self._kind == DIARIZEN:
-            return self._diarizen_capabilities()
+        if self._kind == PYANNOTE:
+            return self._pyannote_capabilities()
 
         # The backend is reported rather than assumed, and it travels into the transcript's
         # provenance beside the model id. Two providers give this graph different probabilities,
@@ -303,8 +269,8 @@ class Diariser:
             "fellBackFrom": list(self._fell_back_from),
         }
 
-    def _diarizen_capabilities(self) -> dict[str, Any]:
-        """What DiariZen can do, in the same vocabulary and with the same refusals to guess.
+    def _pyannote_capabilities(self) -> dict[str, Any]:
+        """What pyannote can do, in the same vocabulary and with the same refusals to guess.
 
         Three fields differ from the Sortformer arm and each difference is load-bearing:
         `maxSpeakers` is null because there is no total cap rather than because nobody looked;
@@ -312,37 +278,51 @@ class Diariser:
         "no bound established" rather than as "any length"; and `honoursPostProcessing` is false
         because this pipeline binarizes internally at parameters its published figures describe.
         """
-        from . import diarizen as engine_module
+        from . import pyannote_engine as engine_module
 
         engine = self._engine
         return {
-            "engineName": "diarizen-torch-python",
+            "engineName": "pyannote-torch-python",
             "modelId": self._model_id,
             "backend": getattr(engine, "backend", "cpu"),
             "graphOptimization": None,
-            # VBxClustering takes num_clusters, min_clusters and max_clusters and its own comment
-            # says "not used but kept for compatibility". A count cannot reach this model, so the
-            # host is told so and reports that it folded one afterwards rather than honoured it.
+            # **False because this engine does not pass a count, not because the model cannot take
+            # one — and the difference was stated backwards here until a review checked upstream.**
+            # `VBxClustering.expects_num_clusters = False` means a count is not *required*, not that
+            # it is ignored: 4.0.7's `VBxClustering.__call__` clamps to `min_clusters`/`max_clusters`
+            # and, when `num_clusters` disagrees with what VBx derived, re-clusters the normalised
+            # embeddings with `KMeans(n_clusters=num_clusters)`. So the capability is genuinely
+            # available upstream.
+            #
+            # It is reported False anyway because :meth:`PyannoteEngine.label` calls the pipeline
+            # with no `num_speakers`, so no count reaches it on this path — which is a true
+            # statement about what this build does. Claiming True would promise a behaviour nothing
+            # here has ever exercised, on an engine that has never been run at all. Wiring the host's
+            # `--speaker-count` through is the obvious next thing to want; `docs/UNPROVEN.md` carries
+            # it as a gap rather than this comment carrying it as a limitation of the model.
             "supportsFixedSpeakerCount": False,
             "maxSpeakers": engine_module.MAX_SPEAKERS,
-            "maxConcurrentSpeakers": engine_module.MAX_CONCURRENT_SPEAKERS,
             "reliableUpToSeconds": engine_module.RELIABLE_UP_TO_SECONDS,
             "honoursPostProcessing": False,
-            # **This pipeline has two neural stages on two runtimes, and `backend` above is only
-            # half the answer.** It reports the embedder's provider, because that is the half that
-            # is chosen and therefore the half the host must check against the reference.
-            # Segmentation is torch on the CPU on every machine: measured 2026-08-26 it exports
-            # faithfully and is no faster anywhere, so there is nothing to negotiate. These two say
-            # so outright rather than leaving one word to carry a claim it cannot.
+            # **Both stages, both torch, both on the device named here.** On the arm this replaced
+            # the two carried different answers — segmentation was pinned to torch while the
+            # embedder took an execution provider — so one word could not be the whole truth. Here
+            # they agree by construction, and a future ONNX embedder is what would separate them.
+            #
+            # `embeddingBackend` is read by the host; **`segmentationBackend` is read by nothing**,
+            # on either side, and is sent so that the two arms report the same shape and so that a
+            # capabilities dump says which runtime ran the half nobody chose. Reported rather than
+            # claimed to be consumed: an earlier version of this comment said the host read both.
             "segmentationBackend": getattr(engine, "segmentation_backend", "torch:cpu"),
             "embeddingBackend": getattr(engine, "embedding_backend", "torch:cpu"),
             # **Read off the loaded pipeline, not echoed back from the request.** The host may have
-            # sent nothing, in which case this is the checkpoint's own value and the host has no
-            # other way to learn it; and when the host did send one, this is what confirms it
-            # reached all three of the pipeline's batch attributes rather than merely arriving.
+            # sent nothing, in which case this is the config's own value and the host has no other
+            # way to learn it; and when the host did send one, this is what confirms it reached the
+            # pipeline's batch attributes rather than merely arriving.
             "batchSize": getattr(engine, "batch_size", None),
-            # The providers `auto` passed over before the one that built, each with its reason.
-            # Empty when the first candidate built or when a provider was named.
+            # Empty by construction on this arm rather than by luck: `auto` resolves to one torch
+            # device and there is no session-build to fail over from. Sent anyway so that the two
+            # arms report the same shape and the host needs no special case.
             "fellBackFrom": list(self._fell_back_from),
         }
 
@@ -357,9 +337,9 @@ class Diariser:
         if not wav_path or not os.path.isfile(wav_path):
             raise RequestError("audio", f"no audio at {wav_path}")
 
-        if self._kind == DIARIZEN:
+        if self._kind == PYANNOTE:
             # post_processing is deliberately dropped rather than applied. See
-            # `diarizen.py`'s module docstring: this pipeline's binarisation is internal, and the
+            # `pyannote_engine.py`'s module docstring: this pipeline's binarisation is internal, and the
             # host's Sortformer defaults would merge turns the published figures keep apart.
             return self._engine.label(wav_path, progress=progress)
 

@@ -36,6 +36,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string? _askModelFileName;
 
+    /// <summary>
+    /// The Hugging Face access token, for the one model whose repository is gated, or null when
+    /// nobody has supplied one.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is a credential in a settings file, so the box that edits it says so rather than
+    /// looking like any other field.</b> It is stored as written — see
+    /// <see cref="AppSettings.HuggingFaceToken"/> for why nothing here pretends to encrypt it — and
+    /// it is sent to <c>huggingface.co</c> and to nowhere else. <c>HF_TOKEN</c> in the environment
+    /// wins over whatever is stored here, so a machine already set up for the hub needs this box at
+    /// all only if it is not.
+    /// </remarks>
+    [ObservableProperty]
+    private string? _huggingFaceToken;
+
     /// <summary>The Settings picker: where a mixture's expert layers run. Automatic as shipped —
     /// the Vulkan loader is asked which kind of graphics this is.</summary>
     [ObservableProperty]
@@ -83,6 +98,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _askThinking = loaded.AskThinking;
         _askMode = loaded.AskMode;
         _askModelFileName = loaded.AskModelFileName;
+        _huggingFaceToken = loaded.HuggingFaceToken;
         _askExpertPlacement = loaded.AskExpertPlacement;
         _diarisationProvider = loaded.DiarisationProvider;
         _diarisationBatchSize = loaded.DiarisationBatchSize;
@@ -336,6 +352,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Remembers the model; the panel builds a fresh engine at the next question.</summary>
     partial void OnAskModelFileNameChanged(string? value) =>
         _settings.Update(current => current with { AskModelFileName = value });
+
+    /// <summary>
+    /// Remembers the token. Whitespace is stored as nothing, so clearing the box removes the key
+    /// rather than persisting a blank that would be sent as an empty bearer credential — which the
+    /// hub answers with a 401 that reads as "your token is wrong" rather than "you have not set one".
+    /// </summary>
+    /// <remarks>
+    /// Read at each download rather than captured, so pasting a token makes the gated entry
+    /// installable without restarting, and clearing it takes effect just as immediately. See
+    /// <c>ModelsViewModel</c>'s installer factory.
+    /// </remarks>
+    partial void OnHuggingFaceTokenChanged(string? value) =>
+        _settings.Update(current => current with
+        {
+            HuggingFaceToken = string.IsNullOrWhiteSpace(value) ? null : value.Trim(),
+        });
 
     /// <summary>
     /// Keeps the bound row in step and remembers the choice. The panel drops an engine built
@@ -611,6 +643,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
+            // **The torch pipeline's vocabulary is not ONNX Runtime's, so the registration list
+            // cannot filter it.** That list says what the ONNX diariser could run on; the pyannote
+            // one is torch on both stages and refuses `webgpu` and `dml` by name rather than
+            // falling back, so a row offered from ORT's registration is a row whose only outcome is
+            // a failed load. Filtered before the registration test rather than after, because the
+            // two answers are about different engines and the wrong one must not narrow the right
+            // one. `cuda` stays on offer: it is a real torch device, and whether this machine's
+            // torch build has one is what the sidecar answers.
+            if (_engines.DiariserRunsInTorch)
+            {
+                return AllDiarisationProviders
+                    .Where(row => row.Provider is null or "cpu" or "cuda")
+                    .ToList();
+            }
+
             if (RegisteredDiariserProviders is not { } registered)
             {
                 return AllDiarisationProviders;
@@ -642,10 +689,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// The batch-size picker's rows. The model's own value first, which is the shipped choice.
     /// </summary>
     /// <remarks>
-    /// Three sizes rather than a free number, because these are the only ones anything has been
-    /// observed at, and what was observed — the same speaker labels at all three — is what makes
-    /// choosing between them safe. "Windows" rather than "batch" because the thing being counted is
-    /// sixteen-second windows of the recording, which is something a person can picture.
+    /// Three sizes rather than a free number, because these are the only ones anything was ever
+    /// observed at — on DiariZen, which is not the engine this control now drives. **Nothing has
+    /// been observed on the pyannote pipeline at any of them**, including whether the labels are
+    /// invariant to the choice, which is what used to make choosing between them safe. The rows are
+    /// kept because they are still plausible window counts and because removing the control would
+    /// hide a setting the sidecar accepts; the explanation beside them no longer promises anything.
+    /// "Windows" rather than "batch" because the thing being counted is sixteen-second windows of
+    /// the recording, which is something a person can picture.
     /// </remarks>
     public IReadOnlyList<DiarisationBatchSizeChoice> DiarisationBatchSizes { get; } =
     [
@@ -703,7 +754,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (offered.Contains("cuda"))
             {
-                text += " CUDA runs on an NVIDIA card and changes the labels in the same way.";
+                // **"changes the labels in the same way" is Sortformer's measurement**, taken on
+                // AMI test, and it does not describe the torch pipeline — where nothing has been
+                // measured on any provider. Saying it there would put one model's finding in front
+                // of somebody choosing for another.
+                text += _engines.DiariserRunsInTorch
+                    ? " CUDA runs on an NVIDIA card. Whether it changes the labels has not been checked."
+                    : " CUDA runs on an NVIDIA card and changes the labels in the same way.";
             }
 
             text += RegisteredDiariserProviders is null
@@ -714,12 +771,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    // **The 11 GB figure and the "same labels either way" assurance were DiariZen's**, measured on
+    // the engine this setting used to belong to. That engine was shelved on 2026-08-27 and this
+    // control now applies to the pyannote pipeline, on which neither has been measured — so both
+    // sentences left rather than being re-pointed at a model they were never about.
     public string DiarisationBatchSizeExplanation =>
-        "How much of the recording the speaker model holds at once. Fewer windows need "
-        + "substantially less memory, which is worth choosing if labelling a long recording runs "
-        + "the machine out of it; more windows need a great deal — the largest setting has reached "
-        + "roughly 11 GB on a ten-minute recording. The speaker labels come out the same either "
-        + "way. Takes effect at your next recording.";
+        "How much of the recording the speaker model holds at once. Fewer windows need less memory, "
+        + "which is worth choosing if labelling a long recording runs the machine out of it; more "
+        + "windows need more. How much either costs on this model, and whether the setting changes "
+        + "the labels, has not been measured. Takes effect at your next recording.";
 
 }
 

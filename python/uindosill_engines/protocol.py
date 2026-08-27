@@ -56,7 +56,16 @@ from typing import Any, Callable, Iterator
 #: who had made it, both believing a number was in force that was not. That is the class of failure
 #: this constant exists to convert into a refusal at `hello`, and an optional field whose absence
 #: is indistinguishable from acceptance is exactly the case where it earns its keep.
-PROTOCOL_VERSION = 3
+#:
+#: **4 — the second diariser's `kind` is now `pyannote`, and `diarizen` is gone rather than
+#: renamed.** The two are different weights under different licences reached through incompatible
+#: releases of the same package: `pyannote.audio` 4.x floors four `pyannote.*` distributions above
+#: the versions DiariZen's 3.1.1 fork needs, so one bundle cannot hold both and this one now holds
+#: the second. A version-3 sidecar meeting a `pyannote` kind raises `unknown diariser kind`, which
+#: is survivable; the dangerous direction is a version-4 sidecar meeting a version-3 *host* that
+#: still says `diarizen` and would be told its non-commercial model had loaded when a differently
+#: licensed one had. Neither happens once the numbers disagree at `hello`.
+PROTOCOL_VERSION = 4
 
 
 class RequestError(Exception):

@@ -444,10 +444,17 @@ public static class SpeakerLabelling
     /// <remarks>
     /// <para>
     /// <b>Separate from <see cref="DescribeBackend"/> because the thing it warns about is invisible
-    /// to a <see cref="ComputeBackend"/>.</b> DiariZen runs segmentation in torch and negotiates a
+    /// to a <see cref="ComputeBackend"/>.</b> DiariZen ran segmentation in torch and negotiated a
     /// provider only for the embedder, and both the torch embedder and ONNX Runtime's CPU provider
     /// report <see cref="ComputeBackend.Cpu"/> — so the one word that reaches
-    /// <see cref="DescribeBackend"/> cannot distinguish the reference path from a departure to it.
+    /// <see cref="DescribeBackend"/> could not distinguish the reference path from a departure to it.
+    /// </para>
+    /// <para>
+    /// <b>Nothing reaches this since 2026-08-27, and it is kept rather than deleted.</b> DiariZen
+    /// was the only engine with a negotiable embedder; the pyannote pipeline that replaced it is
+    /// torch on both stages and reports <c>torch:</c>, which this returns null for. So the warning
+    /// is dormant, not wrong — and an ONNX embedder for the new engine is the obvious next thing
+    /// to want, at which point the reasoning below is what it has to satisfy again.
     /// </para>
     /// <para>
     /// <b>What is measured is that the two disagree, not that either is worse.</b> On

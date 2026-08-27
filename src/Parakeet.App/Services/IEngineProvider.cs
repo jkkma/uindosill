@@ -80,6 +80,23 @@ public interface IEngineProvider
     bool SupportsDiariserBatchSize { get; }
 
     /// <summary>
+    /// True when the chosen diariser is the torch pipeline, whose execution-provider vocabulary is
+    /// torch devices rather than ONNX Runtime providers.
+    /// </summary>
+    /// <remarks>
+    /// <b>The picker asks this because the two diarisers do not accept the same words.</b>
+    /// Sortformer is an ONNX graph and takes <c>cpu</c>, <c>cuda</c>, <c>webgpu</c> or <c>dml</c>;
+    /// the pyannote pipeline is torch on both stages with no ONNX route at all and <i>refuses</i>
+    /// <c>webgpu</c> and <c>dml</c> outright rather than falling back — deliberately, because
+    /// somebody who picked one and silently got the CPU has been told nothing. Filtering the rows
+    /// on what ONNX Runtime registered is therefore not enough: that answers a question about the
+    /// wrong engine, and offering a WebGPU row for this one is offering a row whose only outcome is
+    /// a failed load. Added 2026-08-27 after a review found exactly that, one commit after the same
+    /// picker was corrected for offering a CUDA row no machine could use.
+    /// </remarks>
+    bool DiariserRunsInTorch { get; }
+
+    /// <summary>
     /// The execution providers this machine's ONNX Runtime registered, as protocol names, or null
     /// when that could not be established.
     /// </summary>
@@ -401,7 +418,7 @@ public sealed class EngineProvider : IEngineProvider
             // **Second diariser only, and null unless somebody chose.** The other arm refuses the
             // field rather than ignoring it — its batching is its exported graph's geometry — so
             // sending one for it would turn a setting that does not apply into a failed load.
-            BatchSize = string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal)
+            BatchSize = string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal)
                 ? batchSize
                 : null,
         });
@@ -455,8 +472,8 @@ public sealed class EngineProvider : IEngineProvider
             ModelTask.Diarisation => (DiarisationModel is not null,
                 "Speaker labelling needs its own model, which is not installed yet. Install one from the Models "
                 + "tab. There are two: a 453 MiB one that is quick but tells apart at most four voices, and a "
-                + "291 MiB one with no limit on the number of voices, which takes about as long again as the "
-                + "recording and is for personal use only."),
+                + "31 MiB one with no limit on the number of voices, which needs a free Hugging Face account "
+                + "before it can be downloaded."),
             ModelTask.Translation => (TranslationModel is not null,
                 "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
                 + "it is a 1.34 GiB download and reads 25 languages into English only."),
@@ -562,7 +579,12 @@ public sealed class EngineProvider : IEngineProvider
     public bool SupportsDiariserBatchSize =>
         SupportsSpeakerLabelling
         && DiarisationModel is { } batchModel
-        && string.Equals(KindOf(batchModel), DiariserKinds.Diarizen, StringComparison.Ordinal);
+        && string.Equals(KindOf(batchModel), DiariserKinds.Pyannote, StringComparison.Ordinal);
+
+    /// <inheritdoc />
+    public bool DiariserRunsInTorch =>
+        DiarisationModel is { } torchModel
+        && string.Equals(KindOf(torchModel), DiariserKinds.Pyannote, StringComparison.Ordinal);
 
     /// <summary>Which sidecar engine a diarisation entry is driven by.</summary>
     /// <remarks>
@@ -674,6 +696,9 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// that offered the control would be offering a setting that reaches nothing.
     /// </summary>
     public bool SupportsDiariserBatchSize => false;
+
+    /// <summary>False: the canned labeller is neither diariser and runs on no runtime at all.</summary>
+    public bool DiariserRunsInTorch => false;
 
     /// <summary>
     /// Null — "not established". The canned engine runs on no execution provider at all, and

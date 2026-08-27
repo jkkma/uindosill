@@ -102,12 +102,12 @@ public class MultiFileModelTests
         // until the translation entry landed, twenty-four tests held the shape up against nothing
         // but hand-written JSON.
         //
-        // **Two users since 2026-08-26**, the second being DiariZen, whose own shape is asserted
-        // below rather than here. This half stays about the translation entry because its nine
-        // files are what the schema was built for.
-        // Manifest order: DiariZen sits beside the other diariser, ahead of the translator.
+        // **Two users since 2026-08-26**, the second being the pyannote diariser — DiariZen until
+        // 2026-08-27 — whose own shape is asserted below rather than here. This half stays about
+        // the translation entry because its nine files are what the schema was built for.
+        // Manifest order: the second diariser sits beside the other one, ahead of the translator.
         Assert.Equal(
-            new[] { "diarizen-wavlm-large-s80-md-v2", "opus-mt-tc-bible-big-mul-en-fp32" },
+            new[] { "pyannote-speaker-diarization-community-1", "opus-mt-tc-bible-big-mul-en-fp32" },
             ModelCatalog.Default.Models.Where(m => m.IsMultiFile).Select(m => m.Id));
 
         var multiFile = ModelCatalog.Default.Get("opus-mt-tc-bible-big-mul-en-fp32");
