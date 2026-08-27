@@ -394,6 +394,8 @@ public class ShutdownTests
 
         public Parakeet.Core.Diarisation.SpeakerLabellerLimits? SpeakerLimits => _inner.SpeakerLimits;
 
+        public bool SupportsDiariserBatchSize => _inner.SupportsDiariserBatchSize;
+
         public string? DescribeLabeller(Parakeet.Core.Diarisation.ISpeakerLabeller labeller) =>
             _inner.DescribeLabeller(labeller);
 

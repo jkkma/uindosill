@@ -95,6 +95,52 @@ public sealed record AppSettings
     public string? DiarisationModelId { get; init; }
 
     /// <summary>
+    /// Which execution provider labels speakers, or null for <c>auto</c> — the choice this project
+    /// makes when nobody has, which on both diarisers reproduces the path their published figures
+    /// describe.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Separate from <see cref="Backend"/>, and it cannot be folded into it.</b> That one is the
+    /// recogniser's, whose backends are parakeet.cpp's — Vulkan, CUDA, CPU. The diarisers run on
+    /// ONNX Runtime and torch, whose providers are <c>webgpu</c>, <c>cuda</c>, <c>cpu</c> and, for
+    /// the second diariser, <c>torch</c>. The two sets overlap only in the word "CPU" and mean
+    /// different runtimes even there. One control offering the union would offer Vulkan to a
+    /// diariser that has no Vulkan path and WebGPU to a recogniser that has none, which is why the
+    /// window went without a diariser picker until this setting existed.
+    /// </para>
+    /// <para>
+    /// <b>Null means auto, and auto is not "the fastest".</b> On the second diariser it resolves to
+    /// <c>torch</c> even though ONNX Runtime is measurably faster, because the ONNX embedder moves
+    /// the labels — 222 speaker turns against 225 — and this project's rule is that what it picks
+    /// unasked reproduces the figure it publishes. Naming a provider is how somebody takes the
+    /// other trade knowingly, and the window says so when they have.
+    /// </para>
+    /// </remarks>
+    public string? DiarisationProvider { get; init; }
+
+    /// <summary>
+    /// Windows of audio the second diariser batches together, or null for the checkpoint's own
+    /// value. Ignored by the first, whose batching is fixed by its exported graph.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A memory setting, and it must not be presented as anything else.</b> Peak working set on
+    /// a ten-minute recording was roughly 3.9, 6.8 and 11.7 GB at batch 8, 16 and 32, and the labels
+    /// were identical at all three — 225 turns, 5 speakers. A speed difference was published
+    /// alongside those and withdrawn on 2026-08-27: the sweep ran the three sizes once each, in one
+    /// process, ascending, on a machine that cannot hold the largest resident, so batch size and
+    /// paging were the same condition.
+    /// </para>
+    /// <para>
+    /// <b>Null is the shipped value and is not a number.</b> It means the checkpoint's own 32, which
+    /// is what makes running the published artefact's configuration the thing a person gets by not
+    /// touching this. A default here would be this project choosing for every machine again.
+    /// </para>
+    /// </remarks>
+    public int? DiarisationBatchSize { get; init; }
+
+    /// <summary>
     /// Where a mixture-of-experts ask model's experts run.
     /// <see cref="MoeExpertPlacement.Automatic"/> as shipped — the Vulkan loader is asked, and a
     /// card holds its own experts where the processor's graphics cannot.
@@ -175,6 +221,8 @@ public sealed class AppSettingsStore
                 AskMode = ReadAskMode(root),
                 AskModelFileName = ReadString(root, "askModelFileName"),
                 DiarisationModelId = ReadString(root, "diarisationModelId"),
+                DiarisationProvider = ReadDiarisationProvider(root),
+                DiarisationBatchSize = ReadDiarisationBatchSize(root),
                 AskExpertPlacement = ReadExpertPlacement(root),
                 Backend = ReadBackend(root),
                 OutputDirectory = ReadString(root, "outputDirectory"),
@@ -262,6 +310,20 @@ public sealed class AppSettingsStore
                 values["diarisationModelId"] = diarisationModel;
             }
 
+            // Absent means auto, and auto is a real choice rather than a missing one — so writing
+            // "auto" here would be a second spelling of the same state for Load to reconcile.
+            if (settings.DiarisationProvider is { Length: > 0 } diarisationProvider)
+            {
+                values["diarisationProvider"] = diarisationProvider;
+            }
+
+            // Absent means the checkpoint's own batch, which is the shipped behaviour and not a
+            // number — so there is nothing to write when nobody has chosen.
+            if (settings.DiarisationBatchSize is { } diarisationBatch)
+            {
+                values["diarisationBatchSize"] = diarisationBatch;
+            }
+
             var json = JsonSerializer.Serialize(values);
 
             // Written beside the target and moved into place, rather than over it.
@@ -306,6 +368,70 @@ public sealed class AppSettingsStore
             "cuda" => ComputeBackend.Cuda,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The diariser provider names this window offers, lowercase, <c>auto</c> first.
+    /// </summary>
+    /// <remarks>
+    /// <b>A presentation subset, not the protocol's vocabulary.</b> The sidecar is the authority and
+    /// accepts more than this — <c>dml</c>, which the command line refuses outright for scoring 53%
+    /// diarisation error at ONNX Runtime's own defaults, and <c>torch</c>, which is what
+    /// <c>auto</c> already resolves to on the second diariser and would be a second spelling of the
+    /// same choice in a menu. Neither belongs in a list a person picks from. A name arriving here
+    /// that is not in this list is refused by the sidecar rather than silently accepted, so the
+    /// cost of this list being short is a clear failure and never a wrong answer.
+    /// </remarks>
+    public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "webgpu", "cuda"];
+
+    /// <summary>
+    /// The batch sizes this window offers for the second diariser. Empty entry is the model's own.
+    /// </summary>
+    /// <remarks>
+    /// The three the sweep of 2026-08-26 covered, and the reason not to offer arbitrary numbers:
+    /// these are the only sizes at which anything has been observed at all, and the observation that
+    /// survives — identical labels at all three — is what makes choosing between them safe.
+    /// </remarks>
+    public static IReadOnlyList<int> DiarisationBatchSizes { get; } = [8, 16, 32];
+
+    /// <summary>The stored diariser provider, or null for absent, unreadable or unrecognised.</summary>
+    /// <remarks>
+    /// <c>auto</c> in the file reads back as null, because absent and "automatic" are the same
+    /// state and this file keeps one shape per state — the rule <see cref="Save"/> follows when it
+    /// omits the key rather than writing the word.
+    /// </remarks>
+    private static string? ReadDiarisationProvider(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("diarisationProvider", out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var name = value.GetString()?.Trim().ToLowerInvariant();
+        return name is not null && name is not "auto" && DiarisationProviders.Contains(name)
+            ? name
+            : null;
+    }
+
+    /// <summary>The stored diariser batch size, or null for absent, unreadable or out of range.</summary>
+    /// <remarks>
+    /// Checked against the offered sizes rather than merely against "is a positive number": a
+    /// hand-edited 512 would be accepted by the sidecar and would ask a 16 GB machine for a working
+    /// set it cannot produce, which fails somewhere far less legible than here.
+    /// </remarks>
+    private static int? ReadDiarisationBatchSize(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("diarisationBatchSize", out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt32(out var size))
+        {
+            return null;
+        }
+
+        return DiarisationBatchSizes.Contains(size) ? size : null;
     }
 
     /// <summary>

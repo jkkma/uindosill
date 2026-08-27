@@ -48,7 +48,15 @@ from typing import Any, Callable, Iterator
 #: the directory as a file and fails on a message about a model that is plainly there — which is
 #: precisely the confusing failure several megabytes in that this number exists to turn into a
 #: refusal at `hello`.
-PROTOCOL_VERSION = 2
+#:
+#: **3 — a `load` for `engine: "diariser"` may carry `batchSize`.** Absent it means the model's own
+#: value, which is the checkpoint's for `diarizen` and the exported graph's geometry for
+#: `sortformer` — the latter refuses the field rather than ignoring it. A version-2 sidecar has no
+#: such field and would drop it silently, leaving a host that had offered the choice, and a person
+#: who had made it, both believing a number was in force that was not. That is the class of failure
+#: this constant exists to convert into a refusal at `hello`, and an optional field whose absence
+#: is indistinguishable from acceptance is exactly the case where it earns its keep.
+PROTOCOL_VERSION = 3
 
 
 class RequestError(Exception):

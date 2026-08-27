@@ -128,6 +128,34 @@ public sealed record SidecarLabellerOptions
     /// <summary>ONNX Runtime graph optimisation level, or null for the provider's safe default.</summary>
     public string? GraphOptimization { get; init; }
 
+    /// <summary>
+    /// Windows of audio the second diariser batches together, or null for the checkpoint's own
+    /// value. <b>DiariZen only</b> — the other arm refuses it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Null is not a number this could have defaulted to.</b> It means "whatever the model
+    /// ships", which is what makes running the published artefact's configuration the thing you get
+    /// by not choosing. Any default here would be this project picking a number for every machine,
+    /// which is what it did until 2026-08-27 and withdrew.
+    /// </para>
+    /// <para>
+    /// <b>Its established effect is on peak memory, not on the labels.</b> Batch 8, 16 and 32 each
+    /// returned 225 turns and 5 speakers on <c>two-hosts-three-guests-a</c>; peak working set over
+    /// the same three was roughly 3.9, 6.8 and 11.7 GB. A real-time-factor difference was also
+    /// published and is <b>withdrawn</b>: the sweep ran the three sizes once each in one process in
+    /// ascending order, on a machine that cannot hold the largest arm resident, so batch size and
+    /// memory pressure were one condition. Nothing here may be presented to a user as a speed
+    /// setting.
+    /// </para>
+    /// <para>
+    /// Sortformer refuses this rather than ignoring it, because its batching is its exported
+    /// graph's geometry: a host that sent one and had it dropped would be operating on a wrong
+    /// belief about what it configured.
+    /// </para>
+    /// </remarks>
+    public int? BatchSize { get; init; }
+
     /// <summary>The tuned post-processing. Changing it invalidates the measured DER.</summary>
     public SortformerPostProcessing PostProcessing { get; init; } = SortformerPostProcessing.Default;
 }
@@ -323,6 +351,14 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                 if (_options.GraphOptimization is { Length: > 0 } level)
                 {
                     writer.WriteString("graphOptimization", level);
+                }
+
+                // Omitted rather than sent as null when nobody has chosen, so that "the model's
+                // own" is the absence of the field rather than a second shape the sidecar has to
+                // agree about — the same rule the settings file follows for the backend.
+                if (_options.BatchSize is { } batchSize)
+                {
+                    writer.WriteNumber("batchSize", batchSize);
                 }
             }, null, ct).ConfigureAwait(false);
 
@@ -790,6 +826,9 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                            && embedding.ValueKind == JsonValueKind.String
             ? embedding.GetString() ?? ""
             : "",
+        BatchSize = element.TryGetProperty("batchSize", out var batch) && batch.ValueKind == JsonValueKind.Number
+            ? batch.GetInt32()
+            : null,
         SupportsFixedSpeakerCount = element.TryGetProperty("supportsFixedSpeakerCount", out var fixedCount)
                                     && fixedCount.ValueKind == JsonValueKind.True,
         MaxSpeakers = element.TryGetProperty("maxSpeakers", out var max) && max.ValueKind == JsonValueKind.Number
