@@ -1792,6 +1792,21 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
 
+              <!-- The access token for the speaker model whose download is gated. Here rather than
+                   on the Models tab because this is where the settings file is written, and beside
+                   the other speaker settings because it belongs to one of those models.
+
+                   PasswordChar so it is not left on screen or in a screenshot; RevealPassword is
+                   deliberately not offered, because the value can always be pasted again and a
+                   reveal toggle is one more place for it to be shown by accident. -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Hugging Face token" Classes="secondary" VerticalAlignment="Center" />
+                <TextBox Text="{Binding HuggingFaceToken}" MinWidth="260" PasswordChar="•"
+                         Watermark="hf_…" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="One of the speaker models is only handed out to people who have accepted its terms. Open its page from the Models tab, accept them, then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
+
               <!-- Disabled with the reason beside it rather than hidden, on the speech-detection
                    row's terms: a control that vanishes when a different model is picked reads as a
                    bug, and the reason is one a person can act on from the Models tab. -->

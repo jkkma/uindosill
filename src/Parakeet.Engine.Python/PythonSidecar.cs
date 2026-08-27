@@ -44,7 +44,7 @@ public sealed class PythonSidecar : IAsyncDisposable
     /// constant out of the source and asserts it against this one, which is the check that would
     /// have caught it.
     /// </remarks>
-    public const int ProtocolVersion = 3;
+    public const int ProtocolVersion = 4;
 
     private const int StandardErrorLinesKept = 200;
 

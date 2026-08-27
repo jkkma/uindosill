@@ -6110,3 +6110,115 @@ took the worst of it.
   `.dist-info` enumeration redone.
 - **Nothing is measured on the desktop**, where CUDA exists, is reachable by name and is not in
   `auto`. CUDA's record on the other diariser is that it does not reproduce the CPU.
+
+## pyannote replaced DiariZen — landed 2026-08-27, and nothing about it has been run
+
+**This is the largest unproven entry in this document, and it is deliberately at the end rather
+than folded into the section above.** The second diariser was swapped whole: DiariZen's WavLM +
+Conformer checkpoint and its vendored fork of pyannote-audio 3.1.1 went to `attic/diarizen/`, and
+`pyannote/speaker-diarization-community-1` on `pyannote.audio` 4.0.7 took its place. The code
+builds, the suite is green at 1395, and **no part of the new engine has been executed once.**
+
+**Why the swap could not be an addition.** `pyannote.audio` 4.0.7 floors `pyannote.core>=6.0.1`,
+`pyannote.database>=6.1.1`, `pyannote.metrics>=4.0.0` and `pyannote.pipeline>=4.0.0`; DiariZen's
+fork needs 5.0.0, 5.1.3, 3.2.1 and 3.0.1 of the same four import names, plus its own
+`pyannote.audio`. Five shared names, five incompatible floors — one interpreter cannot hold both.
+That part is read off the published metadata and is not in doubt.
+
+### What is unproven, in the order it will break
+
+- **The model directory's layout has never been seen.** `pyannote/speaker-diarization-community-1`
+  is gated: `config.yaml` returns HTTP 401 unauthenticated. The five files and their exact sizes
+  come from the repository's tree API, which answers for gated repos; **the config's contents do
+  not**, so nothing here has confirmed that `Pipeline.from_pretrained` on a directory of those five
+  files loads, or that the config does not name a sixth thing that has to be fetched.
+- **No digests are pinned, and they cannot be from here.** The tree API masks every LFS object id
+  behind the user agreement — `oid` comes back as asterisks where an ungated repository returns the
+  SHA-256. So the catalogue entry pins **sizes only**, is marked `verified: false`, and needs the
+  installer's unverified opt-in. `ModelTests.EveryShippedEntryIsPinned` exempts it **by exact id**
+  with instructions to delete the exemption once the digests exist. **First authenticated install
+  should record them.**
+- **No accuracy figure, and upstream's must not be borrowed.** pyannote publishes DER for
+  `community-1` on several corpora. None was produced on this project's material, through this
+  project's audio path, so none of them is this engine's number. `maxSpeakers` and
+  `reliableUpToSeconds` are both null, and the host renders that as "no bound established".
+- **No speed figure at all.** DiariZen's rough "about as long again as the recording" was its own
+  and does not transfer; the catalogue entry's user-facing note says the timing has not been
+  measured rather than guessing. The weights are 31.3 MiB against DiariZen's 291 MiB, which says
+  nothing about runtime.
+- **The bundle has never been resolved, let alone assembled.** `requirements-bundle.txt` swaps four
+  pinned `pyannote.*` distributions for one `pyannote.audio==4.0.7`, whose dependency closure —
+  `lightning`, `matplotlib`, `rich`, three `opentelemetry` packages, `torch-audiomentations`,
+  `pytorch-metric-learning`, `asteroid-filterbanks`, `pyannoteai-sdk`, `torchcodec` — has not been
+  run through a resolver against the translator's `huggingface-hub<1.0` pin. **The bundle's
+  distribution count and size are unknown**, and the 99/1.26 GB figure elsewhere is now stale.
+- **The two suppressions are read off upstream's source, not observed.**
+  - *Telemetry.* `pyannote/audio/telemetry/config.yaml` ships `metrics_enabled: true` pointing at
+    `https://otel.pyannote.ai/v1/traces`, and `track_pipeline_apply` sends each processed file's
+    **duration** with a session id. `_silence_telemetry()` sets `PYANNOTE_METRICS_ENABLED=false`
+    before the import, which upstream's module-level guard respects because it only fills the
+    variable in when absent. **Verify with a packet capture, not by reading this paragraph again.**
+  - *TorchCodec.* The engine hands the pipeline `{"waveform", "sample_rate"}`, which upstream's own
+    import guard names as the route when TorchCodec is missing, so no decode path should reach
+    FFmpeg. Whether some helper inside pyannote 4 still calls `torchaudio.load` on a path is why the
+    soundfile shim is kept; **that it is never needed has not been shown.**
+- **`supportsFixedSpeakerCount` is false on a reading, not a trial.** Upstream's `VBxClustering`
+  declares `expects_num_clusters = False`, so a count accepted by the pipeline's call does not reach
+  the clustering. That the pipeline does not clamp somewhere else on the way has not been checked.
+- **Progress reporting is a guess at a shape.** pyannote's hook fires for more than two named steps
+  and this engine reports each step's own completion rather than weighting them, so the bar restarts
+  per step. What the steps actually are, and how many, has not been observed.
+- **Nothing has been run on the desktop**, where CUDA exists. The engine maps `cuda` to a torch
+  device and refuses `webgpu` and `dml` outright; the bundled torch is the CPU build, so `cuda` is
+  reachable only in an environment that installed a CUDA one.
+
+### What the swap does settle
+
+**The product has no non-commercial component for the first time.** DiariZen's CC BY-NC 4.0
+checkpoint was the only one, and `community-1` is CC BY 4.0.
+`BundledModelsTests.NonCommercialWeightsAreNeverCarriedByTheInstaller` now asserts the set is
+*empty* rather than merely unbundled. **This is a licence reading, and the entry it describes has
+never been downloaded** — if the repository's own terms differ from the `cc-by-4.0` its metadata
+declares, that is found on first install and not before.
+
+### What an adversarial review of the swap found — 2026-08-27, same day
+
+Eight reviewers over the uncommitted change, three batched skeptics, one synthesiser. 74 findings,
+73 after deduplication, 64 surviving refutation — a ratio that says more about a lenient refutation
+pass than about 64 distinct defects; the same handful of user-facing problems were reported by three
+or four reviewers each, and `false-claim` accounted for 30 of them, mostly comment prose. What it
+caught that mattered, all now fixed:
+
+- **`scripts/bundle-python.ps1` and `scripts/package-windows.ps1` still required
+  `embedding-parity-reference.npy`**, which the swap moved to `attic/`. Both lists throw on a
+  missing entry, so bundle assembly and Windows packaging were both broken. The swap grepped
+  `src/`, `tests/`, `python/` and `docs/` — and not `scripts/`.
+- **The Hugging Face token setting was inert.** `AppSettings` has a hand-rolled reader and writer;
+  `huggingFaceToken` appeared in neither, so `Load()` always returned null and the app had no
+  control to set it anyway — while the catalogue entry's user-facing note told people to paste one
+  into Settings. Reader, writer and a Settings field now exist.
+- **The provider picker still offered WebGPU and DirectML**, which the torch pipeline refuses
+  outright, so choosing one was a guaranteed failed load. This broke the invariant d7ae59f had
+  established one commit earlier. `IEngineProvider.DiariserRunsInTorch` now filters the rows.
+- **Shipped end-user copy still described DiariZen** — 291 MiB, "about as long again as the
+  recording", "personal use only", WebGPU "finishes sooner", an 11 GB batch-size memory figure —
+  all of it measured on an engine that had left, and none of it true of the one that replaced it.
+
+### Still unproven after the fixes
+
+- **`supportsFixedSpeakerCount` is reported false, and the reason given for it was wrong.**
+  `VBxClustering.expects_num_clusters = False` means a count is not *required*, not that it is
+  ignored: upstream's `__call__` clamps to `min_clusters`/`max_clusters` and re-clusters with
+  `KMeans(n_clusters=num_clusters)` when a requested count disagrees with what VBx derived. So the
+  capability exists upstream and this engine simply does not pass one — `label()` calls the pipeline
+  with no `num_speakers`. **Wiring the host's `--speaker-count` through is untested work nobody has
+  done**, and reporting `true` before doing it would promise a behaviour never exercised.
+- **An installed DiariZen directory is now orphaned.** Anyone who installed
+  `diarizen-wavlm-large-s80-md-v2` before the swap has ~291 MiB in their model store under an id no
+  longer in the catalogue, so it is invisible to the Models tab, to `uindosill models` and to
+  `uindosill doctor`, and there is no surface that will delete it. Nothing in this change addresses
+  that; a store-orphan sweep is the feature it would need.
+- **Every claim about the new engine's runtime remains a reading of upstream's source**, including
+  the two the licensing note rests on: that telemetry stays off, and that no decode path reaches
+  TorchCodec. The review checked both against the 4.0.7 sources and neither against a running
+  process, because the weights are gated.

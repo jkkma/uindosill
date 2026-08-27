@@ -281,62 +281,29 @@ public sealed class SidecarEngineTests
     // -- the diariser --------------------------------------------------------------------------
 
     [Fact]
-    public async Task DiarizensOnnxEmbedderIsParityCheckedEvenWhenItReportsTheCpu()
+    public async Task ThePyannoteDiariserIsNeverParityChecked()
     {
-        // The companion to the translator test above, and the exception to it. Sortformer's
-        // reference *is* ONNX Runtime's CPU provider, so checking the CPU against itself would
-        // measure nothing. DiariZen's reference is its torch embedder, so ORT's CPU provider is a
-        // different runtime from the thing it is compared against and is checked like any other —
-        // and the backend word cannot tell them apart, because both report `cpu`. A parity rule is
-        // scripted below; if the check were skipped the assertion on Parity would fail.
+        // **Parity compares two paths to one answer, and this arm has one.** pyannote's pipeline is
+        // torch on both stages with no ONNX route, so the only comparison available would be a
+        // tensor against itself — and the sidecar refuses the `parity` op for this kind by name, so
+        // asking anyway would surface as a request error on a load that was otherwise fine.
+        //
+        // **Asserted on a non-CPU backend, because that is where the rule could go wrong.** The
+        // Sortformer arm checks everything but the CPU, so a kind-blind implementation would send a
+        // parity request here the moment somebody ran this diariser on CUDA. No `parity` reply is
+        // scripted below: if the check were attempted, the fake sidecar would have nothing to
+        // answer with and the load would not complete.
+        //
+        // The arm this replaced had the opposite rule and its own test — DiariZen's ONNX speaker
+        // embedder was checked even when it reported the CPU, because its reference was torch. Both
+        // the fixture and that test left with the engine they measured, on 2026-08-27.
         using var fake = FakeSidecarProcess.Scripted(Script(
             new
             {
                 op = "load",
                 emit = new[]
                 {
-                    """{"id":{id},"type":"result","capabilities":{"engineName":"diarizen-torch-python","modelId":"diarizen","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"onnxruntime:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"maxConcurrentSpeakers":4,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":[]}}""",
-                },
-            },
-            new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":true,"passed":true,"maxAbsDiff":1.21e-07,"tolerance":1.0e-04}""" } }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions
-            {
-                ModelPath = "unread-directory",
-                Provider = "auto",
-                Kind = DiariserKinds.Diarizen,
-            },
-            sidecar);
-
-        await labeller.LoadAsync();
-
-        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
-
-        // Asserted rather than merely scripted: this is the field the whole warning path keys on,
-        // and without an assertion a rename of the JSON key would ship in silence.
-        Assert.Equal("onnxruntime:cpu", labeller.Capabilities.EmbeddingBackend);
-
-        Assert.NotNull(labeller.Parity);
-        Assert.True(labeller.Parity!.Passed);
-    }
-
-    [Fact]
-    public async Task DiarizensTorchEmbedderIsNotParityCheckedBecauseItIsTheReference()
-    {
-        // The negative companion, and the more important of the pair. Checking torch against the
-        // committed reference would not be a parity check at all — it would ask whether this
-        // machine's torch build reproduces the one that generated the fixture, which is a
-        // cross-machine reproducibility question nobody has measured headroom for. No parity rule
-        // is scripted, so if the check ran it would come back as an error and fail this test.
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new
-            {
-                op = "load",
-                emit = new[]
-                {
-                    """{"id":{id},"type":"result","capabilities":{"engineName":"diarizen-torch-python","modelId":"diarizen","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"torch:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"maxConcurrentSpeakers":4,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":[]}}""",
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"pyannote-torch-python","modelId":"pyannote","backend":"cuda","segmentationBackend":"torch:cuda","embeddingBackend":"torch:cuda","supportsFixedSpeakerCount":false,"maxSpeakers":null,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":[]}}""",
                 },
             }));
 
@@ -345,14 +312,65 @@ public sealed class SidecarEngineTests
             new SidecarLabellerOptions
             {
                 ModelPath = "unread-directory",
-                Provider = "auto",
-                Kind = DiariserKinds.Diarizen,
+                Provider = "cuda",
+                Kind = DiariserKinds.Pyannote,
             },
             sidecar);
 
         await labeller.LoadAsync();
 
-        Assert.Equal("torch:cpu", labeller.Capabilities.EmbeddingBackend);
+        Assert.Equal(ComputeBackend.Cuda, labeller.Capabilities.Backend);
+
+        // Asserted rather than merely scripted: this is the field the warning path keys on, and a
+        // rename of the JSON key would otherwise ship in silence. On this arm both stages report
+        // the same runtime, so it also stands for segmentation.
+        Assert.Equal("torch:cuda", labeller.Capabilities.EmbeddingBackend);
+
+        Assert.Null(labeller.Parity);
+    }
+
+    [Fact]
+    public async Task SortformerOnTheCpuIsNotParityCheckedBecauseTheCpuIsItsReference()
+    {
+        // **The exemption that survives, and it belongs to the ONNX diariser.** Sortformer's
+        // committed reference *is* ONNX Runtime's CPU provider, so checking the CPU against it
+        // would compare the reference with itself and measure nothing. Every other backend it can
+        // reach is checked — see the DirectML figure in `SidecarSpeakerLabeller`.
+        //
+        // This test was DiariZen's until 2026-08-27, asserting that its *torch* embedder was
+        // exempt. When the engine was replaced, only the `Kind` constant here was updated, which
+        // left a test whose name, reason and scripted payload all still described an engine that
+        // had left the tree — and which passed under either rule, because a scripted `cpu` backend
+        // satisfies both. An adversarial review caught it. It is re-pointed at Sortformer rather
+        // than deleted, because the CPU exemption is a real rule that otherwise loses its only
+        // test: the pyannote arm's exemption is covered by the sibling above, which scripts `cuda`.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"cpu","graphOptimization":null,"supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000,"fellBackFrom":[]}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions
+            {
+                ModelPath = "unread.onnx",
+                Provider = "auto",
+                Kind = DiariserKinds.Sortformer,
+            },
+            sidecar);
+
+        await labeller.LoadAsync();
+
+        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
+
+        // No `parity` reply is scripted: if the check ran, the fake sidecar would have nothing to
+        // answer with and the load would not complete. That is what makes this an assertion about
+        // the rule rather than about the null.
         Assert.Null(labeller.Parity);
     }
 

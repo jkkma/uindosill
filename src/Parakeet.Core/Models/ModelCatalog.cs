@@ -283,7 +283,11 @@ public sealed class ModelCatalog
         if (!hasArray)
         {
             // Inline. No directory: these land in the store root, exactly where they always have.
-            return ([ParseFile(element, id, "fileName")], null);
+            // <b>A single-file entry keeps the bare-name rule.</b> It has no directory of its own,
+            // so it lands in the store root and its name becomes <c>StorageName</c> — a subpath there
+            // would mean the store looking for the entry under a name that is not the one it wrote.
+            // The widening of 2026-08-27 is for entries that DO have a directory to be beneath.
+            return ([ParseFile(element, id, "fileName", allowSubpath: false)], null);
         }
 
         if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() == 0)
@@ -294,7 +298,7 @@ public sealed class ModelCatalog
         var files = new List<ModelFile>();
         foreach (var file in array.EnumerateArray())
         {
-            files.Add(ParseFile(file, id, "fileName"));
+            files.Add(ParseFile(file, id, "fileName", allowSubpath: true));
         }
 
         var duplicate = files
@@ -325,7 +329,7 @@ public sealed class ModelCatalog
         return (files, directory);
     }
 
-    private static ModelFile ParseFile(JsonElement element, string id, string fileNameKey)
+    private static ModelFile ParseFile(JsonElement element, string id, string fileNameKey, bool allowSubpath)
     {
         var url = RequireString(element, "url");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
@@ -340,11 +344,16 @@ public sealed class ModelCatalog
         }
 
         var fileName = RequireString(element, fileNameKey);
-        if (fileName.Contains('/', StringComparison.Ordinal)
-            || fileName.Contains('\\', StringComparison.Ordinal)
-            || fileName != Path.GetFileName(fileName))
+        if (!IsSafeRelativeFileName(fileName) || (!allowSubpath && fileName.Contains('/', StringComparison.Ordinal)))
         {
-            throw new InvalidDataException($"Model '{id}' has a fileName that is not a bare file name.");
+            throw new InvalidDataException(
+                allowSubpath
+                    ? $"Model '{id}' has a fileName that is not a bare file name or a safe relative " +
+                      "path under the entry's directory. Separators must be '/', no segment may be " +
+                      "empty, '.', '..' or rooted, and no segment may contain ':'."
+                    : $"Model '{id}' is a single-file entry, so its fileName must be a bare file " +
+                      "name: it is stored in the store root under that name, with no directory of " +
+                      "its own to be beneath.");
         }
 
         return new ModelFile
@@ -382,6 +391,61 @@ public sealed class ModelCatalog
             _ => throw new InvalidDataException(
                 $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation, translation and voice-activity."),
         };
+    }
+
+    /// <summary>
+    /// Whether a catalogue <c>fileName</c> is a bare name or a safe relative path beneath the
+    /// entry's directory.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Bare names were the only shape until 2026-08-27</b>, and widening this is the security-
+    /// sensitive part of adding an entry whose upstream layout has subdirectories: a
+    /// <c>fileName</c> comes out of a JSON manifest and ends up as the target of a file write, so
+    /// anything this accepts is somewhere the installer can be made to write. The pyannote entry
+    /// needs <c>segmentation/pytorch_model.bin</c> because its pipeline resolves its parts through
+    /// its own <c>config.yaml</c>; flattening them would mean rewriting a config the installer
+    /// pinned. (Its digest is not pinned — the repository is gated and Hugging Face masks the LFS
+    /// object ids — but its size is, and rewriting a config would change that too.)
+    /// </para>
+    /// <para>
+    /// <b>What is refused is everything that could leave the directory or mean two things.</b>
+    /// Backslashes are out so that one manifest reads the same on every platform and so that
+    /// <c>..\</c> cannot arrive spelled differently from <c>../</c>. A rooted path is out, an empty
+    /// segment is out — which also rejects a trailing slash and a doubled one — and <c>.</c> and
+    /// <c>..</c> are out as whole segments, which is what stops traversal. Each surviving segment
+    /// must additionally be its own bare file name, so a segment carrying a drive letter or any
+    /// other separator the runtime recognises is refused rather than normalised.
+    /// </para>
+    /// </remarks>
+    internal static bool IsSafeRelativeFileName(string value)
+    {
+        if (value.Length == 0
+            || value.Contains('\\', StringComparison.Ordinal)
+            || Path.IsPathRooted(value))
+        {
+            return false;
+        }
+
+        foreach (var segment in value.Split('/'))
+        {
+            // <b><c>:</c> is refused explicitly, because <see cref="Path.GetFileName(string)"/> does
+            // not catch it.</b> That method splits on directory separators only, so <c>"a:b"</c>
+            // comes back unchanged and passes the equality test below — and on Windows <c>a:b</c>
+            // names an alternate data stream of <c>a</c>, not a file called <c>a:b</c>. The
+            // installer would create the parent, write a stream nothing later looks for, and the
+            // digest check would then fail on a file it could not find. <c>"C:x"</c> is the same
+            // hazard spelled as a drive-relative path.
+            if (segment.Length == 0
+                || segment is "." or ".."
+                || segment.Contains(':', StringComparison.Ordinal)
+                || segment != Path.GetFileName(segment))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal static bool IsSha256Hex(string value)

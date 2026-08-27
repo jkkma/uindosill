@@ -334,15 +334,17 @@ public static class Attributions
 
     public const string SileroVad = "silero-vad";
 
-    /// <summary>The DiariZen checkpoint: the second diariser's segmentation weights, CC BY-NC 4.0.</summary>
-    public const string DiarizenWavlmLargeS80V2 = "but-fit-diarizen-wavlm-large-s80-md-v2";
-
     /// <summary>
-    /// The speaker embedding model DiariZen clusters, CC BY 4.0. A second attribution on the same
-    /// catalogue entry rather than an entry of its own: the pipeline does not run without both files,
-    /// and two entries would let a user install half a diariser. See <c>docs/LICENSING.md</c>.
+    /// The pyannote speaker diarisation pipeline: the second diariser, CC BY 4.0.
     /// </summary>
-    public const string WespeakerVoxcelebResnet34Lm = "pyannote-wespeaker-voxceleb-resnet34-lm";
+    /// <remarks>
+    /// <b>One attribution where the arm it replaced needed two.</b> DiariZen's entry carried a
+    /// CC BY-NC 4.0 checkpoint and a CC BY 4.0 embedder from two different upstreams, and both
+    /// notices had to be shown because the pipeline ran on both files. This pipeline publishes its
+    /// segmentation model, its embedder and its PLDA matrices as one repository under one licence,
+    /// so one notice covers what is installed. See <c>docs/LICENSING.md</c>.
+    /// </remarks>
+    public const string PyannoteSpeakerDiarizationCommunity1 = "pyannote-speaker-diarization-community-1";
 
     /// <summary>Where the Silero VAD MIT notice lives, relative to the repository root and the build output.</summary>
     public const string SileroVadLicencePath = "licences/silero-vad-LICENSE.txt";
@@ -472,45 +474,32 @@ public static class Attributions
                 + "hosts no copy of it.",
         },
 
-        [DiarizenWavlmLargeS80V2] = new CcByNcAttribution
+        [PyannoteSpeakerDiarizationCommunity1] = new CcByAttribution
         {
-            Title = "DiariZen WavLM-Large s80 md v2 (speaker diarisation model weights, pytorch_model.bin)",
-            Creator = "Jiangyu Han, Federico Landini, Johan Rohdin, Anna Silnova, Mireia Diez, Lukáš Burget "
-                + "(Brno University of Technology, Speech@FIT)",
-            CopyrightNotice = "Copyright (c) 2024 BUT Speech@FIT",
-            LicenceNotice = "Licensed under the Creative Commons Attribution-NonCommercial 4.0 International "
-                + "License (CC BY-NC 4.0).",
-            WarrantyDisclaimerNotice =
-                "Provided as-is and without warranties or conditions of any kind, to the extent possible under law.",
-            MaterialUri = new Uri("https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2"),
-            ModificationNotice =
-                "Unmodified: the checkpoint, its config.toml and its two PLDA files are installed by URL from the "
-                + "upstream repository and driven as published. The two PLDA files are stored beside the checkpoint "
-                + "rather than in the upstream 'plda/' subdirectory; their bytes are unchanged. Uindosill hosts no "
-                + "copy of any of them.",
-            LicenceStatement = "Creative Commons Attribution-NonCommercial 4.0 International",
-            LicenceUri = new Uri("https://creativecommons.org/licenses/by-nc/4.0/legalcode"),
-            NonCommercialNotice =
-                "These speaker-labelling weights may not be used for commercial purposes. The authors state the "
-                + "reason: some of the datasets they were trained on are research-only or non-commercial. Uindosill "
-                + "itself carries no such restriction, and it never ships these weights — they are downloaded "
-                + "on request, so the copy is yours and this term is yours to honour.",
-        },
-
-        [WespeakerVoxcelebResnet34Lm] = new CcByAttribution
-        {
-            Title = "wespeaker-voxceleb-resnet34-LM (speaker embedding model weights)",
-            Creator = "Hervé Bredin and the pyannote authors; model trained by the WeSpeaker authors",
+            Title = "pyannote speaker-diarization-community-1 (speaker diarisation pipeline: segmentation "
+                + "and embedding model weights, PLDA matrices and pipeline configuration)",
+            // **The model card designates the credits CC BY 4.0 §3(a)(1)(A) asks for, and this
+            // card is behind a gate.** An unauthenticated read of it returns 401, so the names it
+            // designates have not been read. What is stated here is therefore only what a public
+            // source supports: the repository is published by the pyannote project, and
+            // pyannote.audio's own 4.0 release notes credit the VBx clustering the pipeline uses to
+            // Petr Pálka and Jiangyu Han of BUT Speech@FIT. An earlier version of this line named
+            // Hervé Bredin as the creator of the weights, which the release notes do not say.
+            // **Read the card on first authenticated install and correct this to what it designates.**
+            Creator = "The pyannote authors (pyannote/speaker-diarization-community-1); the VBx "
+                + "clustering it uses was contributed by Petr Pálka and Jiangyu Han "
+                + "(Brno University of Technology, Speech@FIT) per pyannote.audio's 4.0 release notes",
             CopyrightNotice = "Copyright (c) pyannote contributors",
             LicenceNotice = "Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0).",
             WarrantyDisclaimerNotice =
                 "Provided as-is and without warranties or conditions of any kind, to the extent possible under law.",
-            MaterialUri = new Uri("https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM"),
+            MaterialUri = new Uri("https://huggingface.co/pyannote/speaker-diarization-community-1"),
             ModificationNotice =
-                "Renamed, not altered: installed by URL from the upstream repository as "
-                + "'pyannote-wespeaker-voxceleb-resnet34-LM.bin' rather than upstream's 'pytorch_model.bin', because it shares "
-                + "a directory with the DiariZen checkpoint of the same upstream name. The bytes are unchanged and "
-                + "the SHA-256 in the catalogue is upstream's file. Uindosill hosts no copy of it.",
+                "Unmodified: the pipeline configuration, both model checkpoints and both PLDA files are installed "
+                + "by URL from the upstream repository at commit 3533c8cf8e369892e6b79ff1bf80f7b0286a54ee, keeping "
+                + "that repository's directory layout, and driven as published. Uindosill hosts no copy of any of "
+                + "them. Upstream ships usage reporting enabled, and Uindosill switches it off before the "
+                + "package is loaded so that it sends nothing.",
             LicenceStatement = "Creative Commons Attribution 4.0 International",
             LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/legalcode"),
         },

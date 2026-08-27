@@ -50,7 +50,17 @@ public enum ModelTask
 /// </remarks>
 public sealed record ModelFile
 {
-    /// <summary>Bare file name on disk. Never a path: the store decides which directory.</summary>
+    /// <summary>
+    /// Where this file goes, relative to the entry's directory: a bare name, or a <c>/</c>-separated
+    /// path beneath it. Never absolute and never able to climb out — see
+    /// <c>ModelCatalog.IsSafeRelativeFileName</c>, which is what the manifest is held to.
+    /// </summary>
+    /// <remarks>
+    /// A bare name was the only shape until 2026-08-27. The pyannote entry is what widened it: its
+    /// pipeline finds its segmentation model, its embedder and its PLDA matrices through paths
+    /// written in its own <c>config.yaml</c>, and that config is pinned by digest — so the layout
+    /// has to survive installation rather than be flattened and patched back up.
+    /// </remarks>
     public required string FileName { get; init; }
 
     public required Uri Url { get; init; }

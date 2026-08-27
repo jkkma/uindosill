@@ -50,3 +50,42 @@ The two test projects' fixture paths point into `tests/fixtures/`, which is stil
 used: `tests/fixtures/translation/marian-tokenizer.json` is the source of the six sentences in the
 sidecar's own translation parity fixture, and is held against it by
 `Parakeet.Engine.Python.Tests.ParityFixtureTests`.
+
+## `diarizen/` — the second diariser, shelved 2026-08-27
+
+Not a C# project like the two above, and shelved for a different reason: nothing was wrong with it.
+It was **displaced by a version conflict it could not survive**.
+
+DiariZen runs on a fork of `pyannote-audio` 3.1.1 — which adds `VBxClustering`, among other
+changes — and pyannote's own release line is at 4.x. (A "3,996 changed lines across 45 of
+upstream's 82 files" figure travelled with this note from `requirements-bundle.txt` and is not
+reproduced here: nothing in this session diffed the fork against upstream 3.1.1, and the number is
+not needed to make the point.) The two cannot share an
+interpreter: `pyannote.audio` 4.0.7 floors `pyannote.core>=6.0.1`, `pyannote.database>=6.1.1`,
+`pyannote.metrics>=4.0.0` and `pyannote.pipeline>=4.0.0`, against the 5.0.0, 5.1.3, 3.2.1 and 3.0.1
+the fork needs. Five shared import names, five incompatible floors. So the second diariser could be
+DiariZen or it could be pyannote, and it became pyannote — which had by then upstreamed the VBx
+clustering BUT Speech@FIT contributed, so the capability that mattered came along.
+
+The move also removed this product's only non-commercial licence: the DiariZen checkpoint is
+CC BY-NC 4.0 and `pyannote/speaker-diarization-community-1` is CC BY 4.0.
+
+### What is here
+
+| | what it was |
+|---|---|
+| `uindosill_engines/diariser/diarizen.py` | The engine: pipeline construction, the three torch-2.13 compatibility shims, the progress hooks that wrapped two bound methods because upstream's `__call__` passed none |
+| `uindosill_engines/diariser/embedding_onnx.py` | The ONNX speaker embedder, exported from the vendored wespeaker ResNet34, and its `GRAPH_VERSION` cache marker |
+| `uindosill_engines/diariser/embedding_parity.py` + `embedding-parity-reference.npy` | Its parity fixture — ONNX against torch at 1e-4, passing at 1.9e-07 |
+| `uindosill_engines/_vendor/diarizen/` | DiariZen's own source, MIT (c) 2024 BUT Speech@FIT, with `clustering/VBx.py` Apache-2.0 under its own header |
+| `uindosill_engines/_vendor/pyannote/` | The 3.1.1 fork, MIT (c) 2020 CNRS. It is DiariZen's fork rather than upstream's release, and it was carried unedited — which is why every incompatibility was repaired from `diarizen.py` instead. "Unedited" means this project changed nothing in it; it is emphatically **not** identical to upstream 3.1.1, which is the whole reason it had to be vendored |
+
+**It will rot exactly as the two above will**, and faster in one respect: the vendored fork is
+pinned to a torch and numpy the bundle will move off. The last commit where it ran as part of the
+product is the one before this line was written.
+
+**What went with it, and is not here.** The `SidecarEngineTests` case asserting that its ONNX
+embedder was parity-checked even when it reported the CPU — the new engine has no ONNX route, so it
+has no fixture and the sidecar refuses the `parity` op for it by name. Its measurements stay in
+`docs/UNPROVEN.md`, which is where the record of a thing that was measured belongs whether or not
+the thing still ships.

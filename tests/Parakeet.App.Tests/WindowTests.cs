@@ -396,6 +396,8 @@ public class ShutdownTests
 
         public bool SupportsDiariserBatchSize => _inner.SupportsDiariserBatchSize;
 
+        public bool DiariserRunsInTorch => _inner.DiariserRunsInTorch;
+
         public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
             _inner.AvailableDiariserProvidersAsync(ct);
 
@@ -1551,23 +1553,28 @@ public class ModelsViewModelTests
         var unchecked_ = unpinned.Models.First(m => !m.Descriptor.Verified);
         Assert.False(unchecked_.ProvenanceIsVerified);
 
-        // On the shipped catalogue the property still has to track the descriptor exactly, and as of
-        // 2026-08-20 every shipped entry is verified: the translation entry was the last one that
-        // was not, and its nine files were published that day with every LFS oid matching the digest
-        // the gate run recorded. The negative case is the constructed catalogue above, which is
-        // where it belongs — a flag exercised only by whatever the shipped manifest happens to
-        // contain stops being exercised the moment the manifest changes.
+        // On the shipped catalogue the property still has to track the descriptor exactly. The
+        // negative case is the constructed catalogue above, which is where it belongs — a flag
+        // exercised only by whatever the shipped manifest happens to contain stops being exercised
+        // the moment the manifest changes.
         var shipped = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
-        Assert.All(shipped.Models, model =>
-        {
-            Assert.Equal(model.Descriptor.Verified, model.ProvenanceIsVerified);
+        Assert.All(shipped.Models, model => Assert.Equal(model.Descriptor.Verified, model.ProvenanceIsVerified));
 
-            // The text has to distinguish the two states without this test dictating which words
-            // do it: a checked entry must not be handed the sentence an unchecked one gets.
-            Assert.NotEqual(unchecked_.Provenance, model.Provenance);
-        });
+        // **Every shipped entry was verified between 2026-08-20 and 2026-08-27, and one is not
+        // now.** The gated pyannote repository publishes file sizes but masks its LFS object ids,
+        // so its digests cannot be recorded from here and the entry says "not checked" rather than
+        // claiming a provenance nobody established. That is the flag working, not a regression —
+        // and it is asserted by exact id so a second unverified entry could not join it quietly.
+        var unverified = shipped.Models.Where(m => !m.ProvenanceIsVerified).Select(m => m.Descriptor.Id);
+        Assert.Equal(["pyannote-speaker-diarization-community-1"], unverified);
 
-        Assert.All(shipped.Models, model => Assert.True(model.ProvenanceIsVerified));
+        // The text has to distinguish the two states without this test dictating which words do
+        // it: a *checked* entry must not be handed the sentence an unchecked one gets. Applied to
+        // the verified entries only, because the gated one is legitimately in the same state as
+        // the constructed catalogue's and may well share its wording.
+        Assert.All(
+            shipped.Models.Where(m => m.ProvenanceIsVerified),
+            model => Assert.NotEqual(unchecked_.Provenance, model.Provenance));
     }
 
     [Fact]
@@ -1580,12 +1587,33 @@ public class ModelsViewModelTests
         // states rather than as a search for the phrase "digest pinned". These lines are read by
         // people deciding whether to download a gigabyte, so they get rewritten; a test that
         // spells the wording makes rewriting them look like a regression.
-        Assert.All(viewModel.Models, model =>
+        //
+        // **One entry is exempt since 2026-08-27, and the exemption is named rather than widened.**
+        // `pyannote/speaker-diarization-community-1` is a gated repository: Hugging Face publishes
+        // its file sizes but masks the LFS object ids behind the user agreement, so there is no
+        // digest to pin until somebody with an accepted token downloads it and records one. The
+        // entry therefore ships honestly unpinned — the listing says so, and the installer demands
+        // the unverified opt-in — rather than carrying a digest nobody checked. Asserted as an
+        // exact id rather than as "any unpinned entry" so that a *second* one cannot slip in.
+        const string gated = "pyannote-speaker-diarization-community-1";
+
+        var pinned = viewModel.Models.Where(m => m.Descriptor.Id != gated).ToList();
+        Assert.NotEmpty(pinned);
+        Assert.All(pinned, model =>
         {
             Assert.False(model.NeedsUnverifiedOptIn);
             Assert.True(model.ProvenanceIsVerified);
             Assert.NotEmpty(model.Provenance);
         });
+
+        var unpinned = Assert.Single(viewModel.Models, m => m.Descriptor.Id == gated);
+        Assert.True(unpinned.NeedsUnverifiedOptIn);
+        Assert.False(unpinned.ProvenanceIsVerified);
+        Assert.NotEmpty(unpinned.Provenance);
+
+        // Sizes are pinned even though digests are not, and that is the difference between "not
+        // checked" and "not described": a truncated download still fails on the byte count.
+        Assert.All(unpinned.Descriptor.Files, file => Assert.True(file.SizeBytes > 0));
     }
 
     [Fact]

@@ -55,11 +55,20 @@ it has not measured.
 `src/Parakeet.Core/Models/models.json` is an embedded resource, not code, so pinning a digest is a
 reviewable data change rather than a code change.
 
-**Every entry is pinned.** File name, byte size and SHA-256 were read from the
+**Every entry is pinned but one.** File name, byte size and SHA-256 were read from the
 `mudler/parakeet-cpp-gguf` file listing, where the LFS `oid` *is* the SHA-256 of the blob.
 `ModelInstaller` compares both the digest and the exact byte count, and moves nothing into place
-that disagrees. No entry requires `--allow-unverified`, and the file names — which had been
-conventional guesses — are confirmed by the same listing.
+that disagrees. The file names — which had been conventional guesses — are confirmed by the same
+listing.
+
+**The exception is `pyannote-speaker-diarization-community-1`, added 2026-08-27.** Its repository is
+gated: Hugging Face serves the file listing with real byte sizes but **masks every LFS `oid`** behind
+the user agreement, so there is no digest to record until somebody with an accepted token downloads
+the files and takes one off the bytes. That entry therefore pins **sizes only**, is marked
+`"verified": false`, shows "no pinned digest for 5 of 5 files" in `uindosill models list`, and
+**does** require the unverified opt-in. `ModelTests.EveryShippedEntryIsPinned` exempts it by exact
+id so that a *second* unpinned entry still fails; fill the digests in on first authenticated install
+and delete the exemption.
 
 | Entry | Bytes | SHA-256 |
 |---|---|---|
@@ -67,7 +76,7 @@ conventional guesses — are confirmed by the same listing.
 | `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
 | `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
-| `diarizen-wavlm-large-s80-md-v2` | five files, 304,985,829 | per file; see `models.json` |
+| `pyannote-speaker-diarization-community-1` | five files, 32,821,421 | **none — gated repository, see above**; sizes per file in `models.json` |
 
 **Five entries, and all five are unquantised.** The catalogue offered f16 plus four quantisations
 of it until 2026-08-20, when the four were withdrawn — a product decision recorded in

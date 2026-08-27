@@ -16,7 +16,7 @@ import platform
 import sys
 from typing import Any
 
-from .diariser import DIARIZEN, SORTFORMER, Diariser
+from .diariser import PYANNOTE, SORTFORMER, Diariser
 from .protocol import PROTOCOL_VERSION, Channel, RequestError, claim_stdout, serve
 from .translator import Translator
 
@@ -143,8 +143,24 @@ class Session:
         The two engines' checks are not the same instrument, and their modules say so — one compares
         probabilities with three orders of magnitude of daylight, the other compares strings with
         none. The host's question is the same either way, so it is one op.
+
+        **The second diariser has no fixture and is refused here**, rather than in
+        :meth:`_engine_for`, which `placement` and `write_parity_reference` also go through. Parity
+        compares two paths to one answer and the pyannote pipeline has one: torch on both stages,
+        no ONNX route, so the only comparison available would be a tensor against itself. Refused by
+        name rather than by running Sortformer's fixture, which would fail somewhere inside on a
+        missing attribute and read as a bug here rather than as the wrong question.
         """
-        engine, module = self._engine_for(message.get("engine", "diariser"))
+        name = message.get("engine", "diariser")
+        if name == "diariser" and self.diariser.loaded and self.diariser.kind == PYANNOTE:
+            raise RequestError(
+                "request",
+                "this diariser has no parity fixture: it is torch on both stages with no ONNX "
+                "route, so there is no second path to compare against. Parity applies to the "
+                "other diariser, whose execution provider is chosen.",
+            )
+
+        engine, module = self._engine_for(name)
         result = module.check(engine._engine)
         result["backend"] = engine.capabilities()["backend"]
         return result
@@ -222,19 +238,18 @@ class Session:
             if not self.diariser.loaded:
                 raise RequestError("model", "parity was asked for before the diariser was loaded")
 
-            # **The two diarisers have different fixtures, because they are different instruments.**
-            # Sortformer's is two chunks of synthetic mel through the streaming loop, comparing the
-            # probabilities one ONNX graph returns against the same graph on the CPU. DiariZen's is
-            # a batch of synthetic waveforms through the embedder, comparing against **torch** —
-            # the path that shipped before the ONNX embedder existed and the one its published
-            # figures describe. Running Sortformer's against DiariZen would fail somewhere inside on
-            # a missing attribute and read as a bug in this project rather than as the wrong
-            # question. Until 2026-08-26 there was no second fixture and this refused instead.
-            if self.diariser.kind == DIARIZEN:
-                from .diariser import embedding_parity
-
-                return self.diariser, embedding_parity
-
+            # **Only one of the two diarisers has a fixture, because only one has two paths to
+            # compare.** Sortformer's is two chunks of synthetic mel through the streaming loop,
+            # comparing the probabilities one ONNX graph returns against the same graph on the CPU —
+            # a question that exists because a provider can be chosen there. pyannote's pipeline is
+            # torch on both stages with no ONNX route, so there is no second answer to check the
+            # first against, and a parity number for it would be a tensor compared with itself.
+            #
+            # **The refusal for the pyannote arm is not here, and that is the point.** This helper
+            # serves `parity`, `placement` and `write_parity_reference` alike, so a parity-shaped
+            # refusal in it answers a `placement` request with a sentence about fixtures — which is
+            # what it did for the few minutes between the swap landing and a review catching it.
+            # Each caller refuses on its own terms; see :meth:`parity`.
             from .diariser import parity as diariser_parity
 
             return self.diariser, diariser_parity
@@ -258,6 +273,17 @@ class Session:
         machine.
         """
         name = message.get("engine", "diariser")
+
+        # Refused on the same terms as `parity`, and for the same reason: there is no fixture for
+        # this arm, so there is no reference to write. Without this the call would reach Sortformer's
+        # `compute` with a pyannote pipeline and fail inside on a missing attribute.
+        if name == "diariser" and self.diariser.loaded and self.diariser.kind == PYANNOTE:
+            raise RequestError(
+                "request",
+                "this diariser has no parity fixture, so there is no reference to write: it is "
+                "torch on both stages with no ONNX route to compare against.",
+            )
+
         engine, module = self._engine_for(name)
 
         capabilities = engine.capabilities()
@@ -268,12 +294,14 @@ class Session:
                 f"the parity reference must be produced on the cpu, not {backend}: a reference taken "
                 "from a provider that diverges would bless its divergence and fail every faithful machine.")
 
-        # **`backend == "cpu"` is not sufficient for the second diariser, and the gap is exactly the
-        # one this guard exists to close.** Its reference is the *torch* embedder, and ONNX Runtime's
-        # CPU provider also reports `cpu` — so without this, a maintenance run made while an ONNX
-        # embedder was installed would overwrite the committed reference with ONNX output and bless
-        # the very divergence the fixture is there to detect. Every later machine would then be
-        # judged against it, including the torch path, which would start failing its own gate.
+        # **Dormant since 2026-08-27, and kept rather than deleted.** It closed a gap that only the
+        # second diariser had: DiariZen's reference was its *torch* embedder while ONNX Runtime's CPU
+        # provider also reported `cpu`, so a maintenance run made with an ONNX embedder installed
+        # would have overwritten the committed reference with ONNX output and blessed the very
+        # divergence the fixture existed to detect. No engine here now has a negotiable embedder —
+        # the arm above refuses pyannote outright and Sortformer reports no `embeddingBackend` — so
+        # nothing reaches it. An ONNX embedder for the new engine is what would wake it up, and this
+        # is the reasoning it would have to satisfy again.
         embedding_backend = capabilities.get("embeddingBackend", "")
         if embedding_backend and not embedding_backend.startswith("torch:"):
             raise RequestError(

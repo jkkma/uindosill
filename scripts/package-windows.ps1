@@ -612,7 +612,9 @@ foreach ($channel in $Channels) {
             'python.exe',
             'uindosill_engines/serve.py',
             'uindosill_engines/diariser/parity-reference.npy',
-            'uindosill_engines/diariser/embedding-parity-reference.npy',
+            # The second diariser's embedder reference left with DiariZen on 2026-08-27; the
+            # pyannote pipeline that replaced it is torch on both stages and has no ONNX path to
+            # check against, so there is no fixture to require. See bundle-python.ps1's list.
             'uindosill_engines/translator/parity-reference.json',
             'Lib/site-packages/onnxruntime')) {
             $path = Join-Path $bundleDir $required

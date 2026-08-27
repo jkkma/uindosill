@@ -2,7 +2,8 @@
 
 The code is MIT — **except that a build carrying the video player is distributed under the GPL**, which is the first section below. The weights are neither, and their obligations are the ones worth reading twice.
 
-**Five model licences ship, not one.** The transcription weights are CC BY 4.0 and want a
+**Four model licences ship, not one** — five until 2026-08-27, when the only non-commercial one
+left with DiariZen. The transcription weights are CC BY 4.0 and want a
 seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
 License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
 revocable and carry a use restriction about biometrics. The translation weights are Apache-2.0 and
@@ -10,10 +11,16 @@ want a copy of the licence, a statement of what was changed, and the notices the
 The speech-detection weights are MIT and want the copyright line and the permission notice, which
 is the whole of it — the fourth licence, added with Silero VAD on 2026-08-23. Which entry has which
 licence is asserted by a test, so a fifth was always going to be a deliberate act rather than a
-drift, and it was: **the second diariser's weights are CC BY-NC 4.0**, added with DiariZen, and they
-are the first here to restrict *use* rather than only paperwork. They are downloaded and never
-bundled, precisely so that no build of this project redistributes non-commercial material; that
-entry's own section below is the record.
+drift, and it was: **the second diariser's weights were CC BY-NC 4.0**, added with DiariZen on
+2026-08-26, and they were the first here to restrict *use* rather than only paperwork.
+
+**That licence left the product on 2026-08-27, and nothing replaced it.** DiariZen was shelved to
+`attic/diarizen/` and `pyannote/speaker-diarization-community-1` took the second diariser's place
+under **CC BY 4.0** — attribution only, commercial use permitted. So this product now has **no
+non-commercial component at all**, rather than one it was careful not to bundle, and the test that
+used to assert "any NC entry is unbundled" asserts the stronger thing: that the set is empty. That
+entry's own section below is the record, and it keeps the NC history because a licence that was
+once carried is worth being able to find again.
 
 **One of the five is distributed rather than downloaded, which changes who owes the notice.**
 Since the installer began carrying weights on 2026-08-23 every channel ships the speech-detection
@@ -383,11 +390,53 @@ the open item it was.
 pinned commit for a NOTICE file and carries none, so there is nothing under that heading to
 reproduce; the MIT text is the whole of the obligation as far as it was read.
 
-## The second diariser is CC BY-NC 4.0 (DiariZen), and it is the first non-commercial licence here
+## The second diariser is CC BY 4.0 (pyannote), and the non-commercial licence is gone — 2026-08-27
 
-`diarizen-wavlm-large-s80-md-v2` — the speaker-labelling alternative added beside Sortformer — is
-the **fifth** model licence, and the first one that restricts *use* rather than only paperwork. That
-makes it the entry to read twice, so this section states the restriction before anything else:
+`pyannote-speaker-diarization-community-1` replaced `diarizen-wavlm-large-s80-md-v2` as the
+speaker-labelling alternative beside Sortformer. **It is CC BY 4.0**: attribution, no use
+restriction, the same shape the transcription weights already ship under and the same
+`CcByAttribution` record renders. There is nothing in this section a commercial user must refuse.
+
+**Why it changed, in one paragraph.** `pyannote.audio` 4.x floors four `pyannote.*` distributions
+above the versions DiariZen's 3.1.1 fork needs, so one bundle cannot hold both engines — the swap
+was forced by packaging rather than chosen for licensing. The licence improvement came with it:
+pyannote 4 upstreamed the VBx clustering that BUT Speech@FIT contributed, which is the algorithm
+DiariZen's own pipeline used, so the capability that mattered — clustering rather than tracking, no
+total speaker cap — survived the move. `docs/UNPROVEN.md` carries what has and has not been run.
+
+**One artefact, one licence, one notice.**
+
+| Artefact | Licence | Where it is stated |
+|---|---|---|
+| `pyannote.audio` (the package, from PyPI) | MIT, *Copyright (c) 2020- CNRS* | the wheel's own `LICENSE` |
+| **The `community-1` pipeline: both checkpoints, both PLDA files, `config.yaml`** | **CC BY 4.0** | the model card's frontmatter |
+
+**Two upstream behaviours are switched off, and both are licensing-adjacent enough to record here.**
+
+- **Usage reporting ships enabled.** `pyannote/audio/telemetry/config.yaml` carries
+  `metrics_enabled: true` and an endpoint at `https://otel.pyannote.ai/v1/traces`, and
+  `track_pipeline_apply` reports the **duration of every file processed** with a per-process session
+  id. For a product whose claim is that audio never leaves the machine, inheriting that default
+  would make the claim false. The engine sets `PYANNOTE_METRICS_ENABLED=false` before importing the
+  package. **Unverified by observation** — see `docs/UNPROVEN.md`.
+- **TorchCodec is a required dependency and decodes through FFmpeg**, the LGPL component this
+  product removed in 1702d9e. It does **not** redistribute one: its own PyPI description says
+  *"TorchCodec uses the version of FFmpeg you already have installed"*, so the wheel carries no
+  FFmpeg binary and installing it adds no LGPL object to this distribution. The engine feeds the
+  pipeline in-memory waveforms — upstream's own documented route when TorchCodec is absent — so no
+  decode path reaches it. **The LGPL exit stands**, on the strength of that description and a read
+  of upstream's `core/io.py`; neither an assembled wheel nor a running pipeline has been inspected,
+  and `docs/UNPROVEN.md` carries the gap.
+
+### The history: DiariZen was CC BY-NC 4.0, and it was the first non-commercial licence here
+
+Kept because a licence this product once carried is worth being able to find, and because the
+weights are still installable by anyone who fetches the shelved engine out of `attic/diarizen/`.
+
+`diarizen-wavlm-large-s80-md-v2` — the speaker-labelling alternative added beside Sortformer on
+2026-08-26 and shelved on 2026-08-27 — was the **fifth** model licence, and the first one that
+restricted *use* rather than only paperwork. That made it the entry to read twice, so this section
+stated the restriction before anything else:
 
 > **The weights may not be used commercially.** CC BY-NC 4.0, upstream's own `MODEL_LICENSE`:
 > *"The pre-trained model weights released in this repository ('the Models') are licensed under the
@@ -395,12 +444,13 @@ makes it the entry to read twice, so this section states the restriction before 
 > Upstream states the reason: *"some training datasets are research-only or non-commercial, so the
 > released weights cannot be used commercially."*
 
-**Decided: it is downloaded, never bundled — and that decision is what keeps the restriction off
-this project's distribution.** Every other model here is either fetched by the user or carried in
-the installer; this one may only be the first. A bundled NC weight would make each Uindosill build a
-redistribution of non-commercial material inside an otherwise MIT/GPL distribution, and would hand
-every commercial recipient a file they may not use. Downloaded, the copy is the user's, the
-obligation to stay non-commercial is theirs, and this project ships nothing under NC terms at all.
+**Decided at the time: it was downloaded, never bundled — and that decision is what kept the
+restriction off this project's distribution.** Every other model here is either fetched by the user
+or carried in the installer; that one could only ever be the first. A bundled NC weight would make
+each Uindosill build a redistribution of non-commercial material inside an otherwise MIT/GPL
+distribution, and would hand every commercial recipient a file they may not use. Downloaded, the
+copy was the user's and the obligation to stay non-commercial was theirs, so this project shipped
+nothing under NC terms even then; since 2026-08-27 it carries no NC entry to be careful about.
 `BundledModels` therefore does not list it — and **as of 2026-08-26 it lists no diariser at all**:
 Sortformer left the installer the same day, so a fresh install downloads whichever of the two the
 user picks. That makes the non-commercial rule easy to state and impossible to breach by accident:

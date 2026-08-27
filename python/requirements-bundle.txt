@@ -74,55 +74,58 @@ sentencepiece==0.2.2
 soundfile==0.14.0
 numpy==2.5.2
 
-# The second diariser (DiariZen), added 2026-08-26. **About 242 MiB of site-packages**, measured as
-# the set this stack adds over the one above rather than as a venv total — comparing venv totals
-# conflates two different torch builds and overstates it by more than double.
+# The second diariser (pyannote.audio), which replaced DiariZen on 2026-08-27. **Its size on disk
+# has not been measured**; the number that stood here for the arm it replaced was 242 MiB of
+# site-packages and it does not transfer, because this stack's dependency set is a different one.
 #
-# **Two of its packages are not here, and cannot be.** `diarizen` is not published on PyPI at all,
-# and its `pyannote-audio` is a genuine fork — 3,996 changed lines across 45 of upstream 3.1.1's 82
-# files — so the released wheel is not a substitute. `bundle-python.ps1` installs `--only-binary=:all:`
-# on purpose, so neither can be a line in this file. They are vendored instead, under
-# `python/uindosill_engines/_vendor/`, exactly as NVIDIA's Sortformer modules already are, and they
-# travel because the bundler copies `uindosill_engines` wholesale.
+# **Why a replacement and not an addition.** DiariZen vendors a fork of pyannote-audio 3.1.1 and
+# pyannote's own release line is at 4.x, and the two cannot share an interpreter. It is not only
+# the `pyannote.audio` name: 4.0.7 floors `pyannote.core>=6.0.1`, `pyannote.database>=6.1.1`,
+# `pyannote.metrics>=4.0.0` and `pyannote.pipeline>=4.0.0`, against the 5.0.0, 5.1.3, 3.2.1 and
+# 3.0.1 the fork needs. Five shared import names, five incompatible floors, one environment. The
+# vendored fork and DiariZen's own source moved to `attic/diarizen/` with the engine.
 #
-# **Nothing below moves numpy or torch, and that was checked rather than hoped.** pyannote-audio
-# 3.1.1 predates the numpy 2 ABI break and upstream's own `constraints.txt` pins numpy 1.26.4 and
-# torch 2.1.1. Installed against the pins above instead — numpy 2.5.2, torch 2.13.0 — it resolves,
-# and with the three compatibility shims in `diariser/diarizen.py` it produces **turn-for-turn
-# identical labels** to the stack upstream specifies: 19 turns, 3 speakers, same clip. Had it not,
-# the translator's 8,149-sentence gate and the diariser's 16.3324% would have been the price.
+# **What is gained is a licence, and it is the reason the swap is worth making.** DiariZen's weights
+# are CC BY-NC 4.0 — the only non-commercial licence this product carried. `speaker-diarization-community-1`
+# is CC BY 4.0. The algorithm is the same family either way: pyannote 4 clusters with VBx,
+# contributed by the same BUT Speech@FIT researchers who publish DiariZen.
 #
-# **speechbrain is deliberately NOT here, and that is a decision rather than an omission.**
-# pyannote imports it inside a `try/except ImportError` for a speechbrain-hosted embedder this
-# project does not use -- it uses the pyannote one -- so its absence costs nothing and sets
-# `SPEECHBRAIN_IS_AVAILABLE = False`, which is the path upstream wrote for exactly this case.
+# **torchcodec comes with it and should never be called — read off upstream's source, not observed.**
+# `pyannote.audio` requires `torchcodec>=0.7.0` for decoding, and TorchCodec decodes through FFmpeg
+# — the LGPL component this product removed in 1702d9e. It does **not** bundle one: its own PyPI
+# description says "TorchCodec uses the version of FFmpeg you already have installed", so the wheel
+# carries no FFmpeg binary and installing it redistributes no LGPL object. On a machine without
+# FFmpeg its import raises, `pyannote/audio/core/io.py` catches that in its own guard, and the
+# waveform route is the only one left — which is the route `diariser/pyannote_engine.py` uses
+# unconditionally anyway. `docs/LICENSING.md` carries the finding.
 #
-# **Every version of it is unusable here, and the two failure modes are different.** 0.5.16 and
-# 1.0.3 raise `AttributeError` at import from `check_torchaudio_backend`, calling
-# `torchaudio.set_audio_backend` and `list_audio_backends` -- both removed in torchaudio 2.11 --
-# and an AttributeError is not an ImportError, so pyannote's guard does not catch it (gotcha 36).
-# 1.1.0 dropped that check and imports cleanly in a virtualenv, which is why it was pinned here
-# first. **Measured 2026-08-26 against the assembled bundle, it fails there instead**: importing
-# `pytorch_lightning` walks `sys.modules` through `inspect`, meets speechbrain's lazy-module
-# machinery -- `__getattr__` -> `ensure_module` -> `getframeinfo` -> `getsourcefile` ->
-# `getmodule` -> `__getattr__` -- and recurses until the stack ends. DiariZen cannot load at all.
-# It does not reproduce in a virtualenv; it needs the bundle's `._pth` import configuration, which
-# is why the bundle had to be assembled and driven before this was visible.
+# **speechbrain is still deliberately NOT here.** pyannote imports it inside a `try/except
+# ImportError` for a speechbrain-hosted embedder this project does not use -- it uses the pyannote
+# one -- so its absence costs nothing and sets `SPEECHBRAIN_IS_AVAILABLE = False`, which is the path
+# upstream wrote for exactly this case. The two failure modes that made it unusable under the
+# previous stack are recorded in `docs/GOTCHAS.md`; nothing about 4.x invites revisiting it.
 #
-# Removing it was checked, not assumed: with speechbrain absent the engine loads from the bundle
-# and returns the reference labels for the clip -- 19 turns, 3 speakers.
+# **Nothing here has been resolved against the other pins, and that is the open risk.** The
+# translator holds `huggingface-hub<1.0` through transformers 4.57.6 and pins numpy 2.5.2 and torch
+# 2.13.0; `pyannote.audio` 4.0.7 floors `torch>=2.8.0` and `huggingface-hub>=0.28.1`, which is
+# compatible on its face and has **not** been run through a resolver here. Assembling the bundle is
+# what settles it, and `docs/UNPROVEN.md` carries the gap until it does.
 
 # torchaudio must match torch 2.13.0 above; 2.11.0 is what that pairs with, and it is pinned like
-# everything else here rather than left to the resolver. It is reached only through the shims in
-# `diariser/diarizen.py` — its `load` delegates to a TorchCodec this bundle does not carry.
+# everything else here rather than left to the resolver. **pyannote.audio uses it for resampling and
+# for `compliance.kaldi` features, both pure torch**; its `load` is not on any path this project
+# reaches, which is why no shim replaces it — see `diariser/pyannote_engine.py` for why the one that
+# used to be there was removed rather than carried over. The comment here named
+# `diariser/diarizen.py` until 2026-08-27, which is a file that has moved to `attic/`.
 torchaudio==2.11.0
 
-# The pyannote namespace's other four halves, from PyPI. The vendored fork supplies `pyannote.audio`
-# and these supply the rest; `_prepare_imports` is what makes one namespace out of the two sources.
-pyannote.core==5.0.0
-pyannote.database==5.1.3
-pyannote.metrics==3.2.1
-pyannote.pipeline==3.0.1
+# The second diariser, whole, from PyPI. **One line where there used to be four plus a vendored
+# tree**: 4.x is a released wheel this project can pin rather than a fork it has to carry, so
+# `pyannote.core`, `.database`, `.metrics` and `.pipeline` come in as its dependencies at the
+# versions it floors, and no `__path__` graft is needed to make one namespace out of two sources.
+#
+# Pinned exactly, like everything else here. 4.0.7 is the release current on 2026-08-27.
+pyannote.audio==4.0.7
 
 # **huggingface_hub is held under 1.0 by the translator, not by DiariZen.** transformers 4.57.6
 # above requires `huggingface-hub<1.0,>=0.34.0`; DiariZen's stack is happy with either and
@@ -148,24 +151,18 @@ accelerate==1.14.0
 psutil==7.2.2
 toml==0.10.2
 
-# The speaker embedder's ONNX export, added 2026-08-26. `diariser/embedding_onnx.py` derives a graph
-# from the wespeaker checkpoint the catalogue downloads, and `torch.onnx.export(dynamo=True)` is
-# built on onnxscript.
+# **These two were the speaker embedder's ONNX exporter, and its only importer left on 2026-08-27.**
+# `diariser/embedding_onnx.py` derived a graph from the wespeaker checkpoint through
+# `torch.onnx.export(dynamo=True)`, which is built on onnxscript; it moved to `attic/diarizen/` with
+# DiariZen, and the pyannote pipeline that replaced it is torch on both stages with no ONNX route.
+# **Nothing under `python/` imports either name any more** — `diariser/engine.py` imports
+# `onnxruntime`, which is a different distribution and pinned above.
 #
-# **Without it, `--speaker-backend webgpu` fails the load outright** — a named provider is never
-# fallen back from, so the missing import surfaces as a refusal naming onnxscript rather than as a
-# silent downgrade. The default is unaffected: `auto` resolves to torch and never attempts an
-# export, so a bundle missing these two would diarise correctly and only refuse the fast path. An
-# earlier version of this comment had it the other way round and described a silent fallback that
-# does not exist.
-#
-# **Derived here rather than downloaded, which is what puts an exporter in a shipping bundle.**
-# pyannote publishes a `speaker-embedding.onnx`, but its loader computes a different function —
-# it binarises the speaker mask and drops the weighted pooling entirely — so it does not reproduce
-# the figures this project publishes. Exporting from the pinned checkpoint keeps one artefact with
-# one digest instead of redistributing a second copy of a CC BY 4.0 model.
-#
-# `onnx` was already here transitively, through optimum-onnx. It is pinned now because this stack
-# imports it directly, and an unpinned line in this file is the hole its header warns about.
+# `onnx` stays because it is a transitive dependency of optimum-onnx regardless, and an unpinned
+# transitive line is the hole this file's header warns about; pinning it costs nothing and keeps the
+# resolver honest. **`onnxscript` is a floor rather than a need**: it is kept pinned so that the
+# graph an exporter would produce stays reproducible if one returns, and because dropping it is a
+# resolver change that cannot be verified without assembling the bundle — which has not been done
+# since the swap. Drop it deliberately at the next bundle rebuild, or keep it and say why here.
 onnx==1.22.0
 onnxscript==0.7.1
