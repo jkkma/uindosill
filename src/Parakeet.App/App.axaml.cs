@@ -21,7 +21,15 @@ public partial class App : Application
     /// the store each time for the same reason.
     /// </remarks>
     public static IEngineProvider EngineProvider { get; set; } =
-        new EngineProvider(null, null, () => new AppSettingsStore().Load().DiarisationModelId);
+        new EngineProvider(
+            null,
+            null,
+            () => new AppSettingsStore().Load().DiarisationModelId,
+            () =>
+            {
+                var settings = new AppSettingsStore().Load();
+                return (settings.DiarisationProvider, settings.DiarisationBatchSize);
+            });
 
     /// <summary>
     /// Update source, replaceable for the same reason. The default reaches no network at all, so a

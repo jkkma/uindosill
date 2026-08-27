@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1382 tests, no weights, no display, no network — **1375 passed and 7 skipped**, and
+**Status:** met. 1386 tests, no weights, no display, no network — **1379 passed and 7 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2763,9 +2763,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** `CLAUDE.md`'s second
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1382 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1386 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2849,7 +2849,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2893,7 +2893,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -2950,7 +2950,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3040,7 +3040,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** Two of the four
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** Two of the four
 by-name skips are the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run
 against it on this machine they pass.
 
@@ -3080,7 +3080,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3097,7 +3097,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3145,7 +3145,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** The C# suite does
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3236,7 +3236,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** Twenty-two new, and
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3266,7 +3266,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** The
+page instead. **1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3301,7 +3301,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1382 tests, 1375 passed and 7 skipped, the count unchanged**: the file-writing
+assertion. **1386 tests, 1379 passed and 7 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3358,7 +3358,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3491,7 +3491,7 @@ design; an interactive installer with a directory picker would mean a different 
 different update story. What it gets instead is the icon and the splash, so the one window a user
 sees during an install is branded rather than bare.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** Six of the new ones
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** Six of the new ones
 are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
 that they are single-file entries the catalogue actually has, that the sum still fits under the
 asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
@@ -3582,7 +3582,7 @@ publish is a few dozen files. They size the executable instead: about 98 MB with
 against a couple of megabytes without, which is the thing that actually differs. Trimming and
 NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.** No test changed: the
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.** No test changed: the
 suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
 changes is the shape of a deployment rather than the behaviour of any code.
 
@@ -3666,7 +3666,7 @@ can actually verify, and keeps one `[?]` bullet so a renderer's uncited state ca
 unbuilt. The suite drives the whole seam end to end with no model: fake stream → the parser →
 the validator → every citation resolves against the transcript it was asked about.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped**, up from 1144;
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped**, up from 1144;
 `check-test-counts.py` agrees with every document that quotes a count.
 
 ### Built 2026-08-23, later — the second native stack is vendored and the engine runs on it
@@ -3718,7 +3718,7 @@ smuggled into prose when the first-token abstain window is missed, is in `docs/U
 pinned and unvendored, its `sm_120` reading is a scan of the b10448 build, and the desktop's
 first run remains the corroboration the register has been waiting for since 2026-08-16.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Decided 2026-08-24 — the model sees the English pane
 
@@ -3799,7 +3799,7 @@ machine is the exit criterion itself: a human asking three questions of a real t
 Windows and following a citation into the audio. `docs/UNPROVEN.md` says so where the tab's
 other unlooked-at work is recorded.
 
-**1382 tests, no weights, no display, no network — 1375 passed and 7 skipped.**
+**1386 tests, no weights, no display, no network — 1379 passed and 7 skipped.**
 
 ### Built 2026-08-24 — the ask tier ships: Stage 5, and the second stack joins the channels
 
@@ -3913,8 +3913,8 @@ needle plant, the abstain row and the new summary block all exercised against a 
 CUDA). What the verb does not change: the recall *number* still waits on the thirty labelled
 questions, which are a person's session. Eight new CLI tests hold the seam — the top hit
 carrying the term's segment, order preserved across questions, the wide variant's shape, empty
-retrieval as success, and the three refusals. **1382 tests, no weights, no display, no network —
-1375 passed and 7 skipped**, up from 1262; 179 CLI tests.
+retrieval as success, and the three refusals. **1386 tests, no weights, no display, no network —
+1379 passed and 7 skipped**, up from 1262; 179 CLI tests.
 
 ### Decided 2026-08-24 — four decisions close the sitting
 
@@ -3979,8 +3979,8 @@ the product reads, that a store given nothing answers inside the redirect, and t
 construction which leaked now saves where it should — and one existing test was reading the
 override where it meant the default, so `ModelsAreNotStoredInTheInstallDirectory` now asks
 `LocalModelStore.DefaultRootDirectory()` the question it was written to ask. Proved by the run:
-the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1382 tests, no
-weights, no display, no network — 1375 passed and 7 skipped.** `docs/GOTCHAS.md` gotcha 33
+the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1386 tests, no
+weights, no display, no network — 1379 passed and 7 skipped.** `docs/GOTCHAS.md` gotcha 33
 carries the shape.
 
 Two 7-byte files, `decoy-a.gguf` and `decoy-b.onnx`, were found beside the weights in the same
@@ -4136,7 +4136,7 @@ reproduces the old behaviour on the only machine that has ever run an ask — so
 no-op everywhere it can be checked. No discrete-GPU Vulkan ask run exists with the pair off; the RTX 5080's Vulkan figures
 were taken on the lab script with a dense model, where `--cpu-moe` matches no tensors and the
 pair is a no-op either way. The two spike runs that would settle the other branch are named in
-`docs/UNPROVEN.md`. **1382 tests, 1375 passed and 7 skipped, 0 warnings**, and the gated engine
+`docs/UNPROVEN.md`. **1386 tests, 1379 passed and 7 skipped, 0 warnings**, and the gated engine
 trio green on cpu and vulkan against a real child with the probe in the start path.
 
 ### Fixed 2026-08-25 — "think before answering: off" did not turn thinking off
@@ -4155,7 +4155,7 @@ are unaffected — they were taken with the flag explicitly on — and the same 
 cosmetic the overview path made common: a citation lifted from mid-sentence left the space in
 front of it, so "…the staging environment [S1-S4]." rendered as "…the staging environment .".
 Only the period and comma close up; a space before ; : ! ? is correct French typography.
-**1382 tests, 1375 passed and 7 skipped, 0 warnings**, the gated engine trio green on cpu and
+**1386 tests, 1379 passed and 7 skipped, 0 warnings**, the gated engine trio green on cpu and
 vulkan against a real child.
 
 ### Fixed 2026-08-25 — the suite gets one scratch root, and stops leaving 17,000 directories behind
@@ -4181,7 +4181,7 @@ something else. Measured rather than asserted, since a test cannot watch its own
 the `%TEMP%` entries were compared **by name** across a full suite — not by count, because a
 second worktree was running the same suite on this machine and its directories land in the same
 place — and the set came back identical, nothing added. That run's suite was unchanged by the
-change, and the count this document quotes is the current one — **1382 tests, 1375 passed and 7
+change, and the count this document quotes is the current one — **1386 tests, 1379 passed and 7
 skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
 
 The 17,140 already there are not deleted by any of this. About 1.06 GiB of that is research
@@ -4966,7 +4966,7 @@ does.
 
 - **Segmentation exports cleanly and gains nothing, so it did not move.** The pruned WavLM-large and Conformer go through `torch.onnx.export(dynamo=True)` in 25 s to a 282 MB, 1520-node opset-18 graph, and ORT's CPU provider reproduces torch to **1.7166e-05**, inside the 1e-4 gate. **The dynamic time axis the plan worried about is not needed**: `Inference.slide` zero-pads the final chunk, so every call is exactly 256,000 samples and only batch varies. But torch CPU, ORT CPU and ORT WebGPU all land **within about 10% of each other** — this laptop's own run-to-run variance — and WebGPU scales linearly from batch 1 to 4, so it is bandwidth-bound and there is no dispatch overhead for graph capture to recover.
 - **On WebGPU it is also wrong on this checkpoint, for a reason worth reporting upstream.** One node diverges: the feature-extractor convolution that reads **153 channels**, one of the widths structured pruning left behind (1 → 512 → 153 → 224 → 255 → 302 → 368 → 211). Reduced to a **one-node `Conv` graph containing none of this project's code**, onnxruntime-webgpu 1.27.0 on a Radeon 880M returns ~100% relative error at input widths 150, 153 and 159 while adjacent widths are correct to 1e-06 — deterministically, `0.000e+00` spread over four fresh sessions of eight runs each. Zero-padding the input channels fixes it exactly, bit-identical on the CPU.
-- **And it could not hold the configured batch.** At batch 8 the WebGPU device is lost, reproduced twice at 5.2 s, contained inside the Dawn device rather than a Windows TDR. The mechanism is total working set, not one buffer and not submission length: a single 1536 MB buffer allocates fine and a 9.78 s single submission survives. The pipeline was configured at batch 32 when this was measured and runs **8** now, which makes the point sharper rather than softer: the batch at which the segmentation graph loses the WebGPU device is the batch the product uses. The embedder is unaffected — it ran to batch 32 on WebGPU without incident — so what this closes is the segmentation half, which was not going there anyway.
+- **And it could not hold the configured batch.** At batch 8 the WebGPU device is lost, reproduced twice at 5.2 s, contained inside the Dawn device rather than a Windows TDR. The mechanism is total working set, not one buffer and not submission length: a single 1536 MB buffer allocates fine and a 9.78 s single submission survives. The pipeline was configured at batch 32 when this was measured and is configured at 32 again, the `BATCH_SIZE = 8` deviation of 2026-08-26 having been withdrawn the following day — and the device is lost at 8 as well, so a batch four times smaller is not an escape from it. The embedder is unaffected — it ran to batch 32 on WebGPU without incident — so what this closes is the segmentation half, which was not going there anyway.
 - **The wespeaker embedder does move, and it is half the pipeline.** Measured stage split: segmentation 50.5%, embedding 48.9%, clustering 0.0%. The ResNet34 exports to a 26.7 MB graph dynamic in batch *and* both frame axes, and reproduces the torch embedder to **1.21e-07 on ORT CPU** and **1.94e-07 on WebGPU** at batch 32 — three orders inside the parity gate. Placement confirms it: **192 of 206 executed nodes on WebGPU, 93.2%**, so the graph runs where it says it does.
 
 **And it still moves the answer, which is why `auto` is torch.** On `two-hosts-three-guests-a`, idle machine, torch returns **225 speaker turns** and both ONNX providers return **222** — as time, **565 of 300,000 frames, 0.19% of the timeline and 0.82% of speech**, with the speech/silence split byte-identical at 682.3 s because segmentation never left torch. The two ONNX providers return the identical answer to each other, so this is torch-versus-ONNX-Runtime and not CPU-versus-GPU. **The rule this project applies is that what it picks unasked reproduces the figure it publishes** — CUDA is excluded from the first diariser's `auto` while scoring *better*, 16.1021% against 16.3324%, so "changes the answer" has always been the criterion rather than "scores worse". `auto` therefore resolves to `torch`; `--speaker-backend webgpu` reaches the fast path, warns, and trades a difference nobody has priced for about a third of the wall clock.
@@ -4984,6 +4984,16 @@ does.
 3. **Its parity reference is torch, not the CPU provider, and it is checked on the CPU too.** Sortformer's reference *is* ORT's CPU provider, so checking the CPU against itself would measure nothing. DiariZen's reference is the torch embedder, so ORT's CPU provider is a different runtime from the thing it is compared against and earns its place the same way WebGPU does. The fixture is `diariser/embedding-parity-reference.npy`, three synthetic chunks through the embedder's own entry point at the pipeline's real geometry — 1598 fbank frames against a 799-frame mask, deliberately unequal, because an export that tied those axes together would pass a fixture built with matching sizes and fail on the first real chunk. **Three chunks and not two, because two is what the export traces at**: `torch.export` specialises a dimension to its traced size, and a fixture running at that size cannot tell a dynamic batch axis from a frozen one — it would pass and the first real batch would fail inside the pipeline. **The fixture passes at 1e-07 on a path whose labels move**, which is a limit of the instrument rather than a fault in it: it catches a graph that is *wrong*, and cannot catch one that is merely *divergent enough to matter downstream*, because clustering is a step function and no elementwise tolerance sees a threshold being crossed. What would catch that is a corpus with references, which is what the AMI run is for.
 
 **What would promote it to `auto` is the measurement it has not had**: the AMI test set, sixteen meetings, the corpus the speaker gate is actually defined on. One ten-minute stretch is what excluded it, and one ten-minute stretch is not enough to let it back in. **What is still owed besides that**: `scripts/bundle-python.ps1` has not been run with the two new pins, so no installer carries `onnxscript` and the derivation has never been exercised from a `._pth` bundle; and transcription and diarisation have not been driven together in one run. `docs/UNPROVEN.md` has all of it.
+
+**The window can reach both of them now, which it could not on 2026-08-27 morning.** The Settings tab gained a SPEAKER LABELS section with two controls, and the second diariser's fast path stopped being command-line-only. What made it unreachable was one line: `EngineProvider.CreateSpeakerLabeller` passed a hardcoded `"auto"`, and the comment above it gave the reason — the Models tab's backend row is parakeet.cpp's, Vulkan/CUDA/CPU, so binding the diariser to it would have offered backends it has no path to and hidden the one it wants. That reasoning was right and the conclusion was not: what it argued for is a **separate** control, not the absence of one. The two runtimes overlap only in the word "CPU" and mean different things by it, so the diariser's provider is now its own setting rather than a widening of the recogniser's.
+
+- **`auto` is still the shipped choice and still means the published path** — `torch` on the second diariser, where ONNX Runtime is measurably faster and moves the labels. Naming a provider is how somebody takes that trade knowingly, and `SpeakerLabelling.DescribeEmbeddingBackend` has always had the sentence for it; until now the window called it and could never trigger it, which its own comment said outright.
+- **Batch size is the user's, and its default is the absence of a choice.** `BATCH_SIZE = 8` was withdrawn the same day (below), so the pipeline runs the checkpoint's 32 unless somebody says otherwise. The picker offers 8, 16 and 32 — the only sizes anything has been observed at — and the copy calls it a memory setting and not a speed one, because the timing half of that sweep is withdrawn and the peak-memory half is not.
+- **It is refused on the first diariser rather than ignored.** Sortformer's batching is its exported graph's streaming geometry, so `SidecarSpeakerLabeller` never sends the field for it and the sidecar raises if one arrives. The control draws disabled with the reason beside it, on the neural-speech-detection row's terms. A setting silently dropped is a person believing they configured something they did not.
+- **The protocol went to 3 for exactly that reason.** An optional field whose absence is indistinguishable from acceptance is the case the version number earns its keep on: a version-2 sidecar would drop `batchSize` and leave both the window and the person believing a number was in force. `ProtocolVersionTests` holds the two copies together.
+- **Verified where CI cannot reach.** The suite drives a fake sidecar, so the real path was driven by hand against the bundle's pins: no field gives 32, `batchSize` 8 and 16 give 8 and 16 read back off the loaded pipeline, `webgpu` moves the embedder while segmentation stays torch, and both the Sortformer refusal and a nonsense size raise `request`. Compiled bindings are on, so the new XAML is type-checked against the view model at build.
+
+**What is still owed for it to work on an installed copy**, and it is the same debt the entry above records: `scripts/bundle-python.ps1` has not been run with the two new pins. The bundle in `%LOCALAPPDATA%\Uindosill\python` carries `onnx` 1.22.0 and `onnxruntime-webgpu` 1.27.0 and **not `onnxscript`**, which `torch.onnx.export(dynamo=True)` needs — so on a shipped install today, choosing WebGPU derives no graph and stops with a refusal naming the missing module. That is the correct failure and not a silent fallback, but it is a failure: the feature is complete in a development tree and blocked on a packaging step everywhere else.
 
 **Pinning the model digests used to head this list** and is done: all five entries carry the exact
 byte size and the SHA-256 read from the repository's LFS listing, `"verified": true`, and no entry

@@ -65,25 +65,33 @@ RELIABLE_UP_TO_SECONDS = None
 #: between the two is a comparison of models rather than of thread counts.
 DEFAULT_THREADS = 12
 
-#: Windows of audio the segmentation and embedding passes batch together. **Upstream's config
-#: says 32 and this project runs 8**, which is a deviation from the published artefact and so is
-#: measured rather than asserted. Swept 2026-08-26 over the ten-minute `two-hosts-three-guests-a`
-#: on the shipping stack, three arms:
-#:
-#:     batch  8   peak 3,936 MiB   RTF 0.8486   225 turns   5 speakers
-#:     batch 16   peak 6,825 MiB   RTF 0.9275   225 turns   5 speakers
-#:     batch 32   peak 11,740 MiB  RTF 0.9860   225 turns   5 speakers
-#:
-#: **The labels do not move** -- identical turns and speakers at every size -- which is what makes
-#: this a free choice rather than a trade, and what would have stopped it had they moved. The
-#: default is worse on both axes: a third of the memory and about 14% faster at 8, because the
-#: largest batch peaks near 11.7 GB on a 16 GB machine and the slowdown is what that costs.
-#:
-#: Applied here rather than by editing the installed `config.toml`, deliberately: that file is the
-#: upstream artefact the catalogue pins by digest, and a copy this project had rewritten would no
-#: longer be the thing the entry's SHA-256 describes. The deviation belongs in this project's own
-#: code, next to the three torch shims, where a reader looking for what differs will find it.
-BATCH_SIZE = 8
+# Windows of audio the segmentation and embedding passes batch together: **the checkpoint's own
+# `batch_size = 32`, which this project does not override.** `DiariZenPipeline` passes that value
+# to both halves at construction, so leaving it alone is what makes this the published artefact's
+# configuration rather than one of this project's.
+#
+# **A `BATCH_SIZE = 8` deviation stood here from 2026-08-26 to 2026-08-27 and was withdrawn**, on
+# the ground that the sweep behind it could not support it. That sweep ran 8, 16 and 32 **once
+# each, in a single process, in ascending order**, on a machine whose 16 GB cannot hold the largest
+# arm's 11.7 GB peak beside everything else running. Batch size, position in the order, and the
+# state of a heap that had already built and torn down two pipelines were therefore one condition:
+# "batch 32 is 14% slower" and "batch 32 ran last, under memory pressure" are the same observation,
+# and nothing in the design separates them. Restoring the upstream value needs no measurement,
+# which is why it was preferred to a retest.
+#
+# **The one part of that sweep that survives is the invariance**: 8, 16 and 32 each returned 225
+# turns and 5 speakers on `two-hosts-three-guests-a`, and `docs/PHASES.md` rests the stack-swap
+# gate on exactly that. So batch size is not known to move the labels. What it moves is peak
+# memory — near 11.7 GB on a ten-minute file — which `docs/UNPROVEN.md` records as tunable and
+# **untuned**, and which is the real reason someone may want to revisit this.
+#
+# **It is the host's to choose now, per run, rather than this file's to fix for everyone.** The
+# `load` request carries an optional `batchSize`; absent, the checkpoint's own value stands, which
+# is what makes "as published" the thing you get by not choosing. That is the right shape for a
+# knob whose only established effect is on peak memory — a machine with 16 GB and one with 64 GB
+# do not want the same answer, and neither wants one this project picked for them on a measurement
+# it has withdrawn. `DiarizenEngine.__init__` applies it to all three attributes and reads the
+# result back, and the capabilities report it so the host never has to assume it landed.
 
 #: The files a model directory must hold. `plda.npz` and `xvec_transform.npz` sit beside the rest
 #: rather than in the `plda/` subdirectory the upstream repository uses: the model catalogue refuses
@@ -207,6 +215,7 @@ class DiarizenEngine:
         threads: int,
         provider: str = "torch",
         profile: bool = False,
+        batch_size: int | None = None,
     ) -> None:
         missing = [name for name in REQUIRED_FILES if not os.path.isfile(os.path.join(model_dir, name))]
         if missing:
@@ -237,12 +246,27 @@ class DiarizenEngine:
         # at construction, so overriding it here is enough and there is no re-instantiate to do.
         self._pipeline.clustering.plda_dir = model_dir
 
-        # Both passes, because `SpeakerDiarization.__init__` takes them as two arguments and bakes
-        # the segmentation one into its `Inference`. Setting only the attribute would change the
-        # embedding half and silently not the other, which is the failure this line's shape avoids.
-        self._pipeline.segmentation_batch_size = BATCH_SIZE
-        self._pipeline.embedding_batch_size = BATCH_SIZE
-        self._pipeline._segmentation.batch_size = BATCH_SIZE
+        # **Left alone unless the host asks.** `DiariZenPipeline` has already given both halves the
+        # checkpoint's own `batch_size`, so the default path is the published artefact's
+        # configuration and this project adds nothing to it — see the module comment on batch size
+        # for the override that stood until 2026-08-27 and why it was withdrawn.
+        #
+        # When the host does ask, **all three attributes have to move together**:
+        # `SpeakerDiarization.__init__` bakes the segmentation one into its `Inference`, so setting
+        # the two public attributes alone changes the embedding half and silently not the other.
+        # That is the failure this three-line shape exists to avoid, and it is why the value is
+        # applied here rather than by rewriting the installed `config.toml`, which the catalogue
+        # pins by digest.
+        if batch_size is not None:
+            if batch_size < 1:
+                raise RequestError("request", f"batch size must be at least 1, got {batch_size}")
+            self._pipeline.segmentation_batch_size = batch_size
+            self._pipeline.embedding_batch_size = batch_size
+            self._pipeline._segmentation.batch_size = batch_size
+
+        # Read back rather than remembered, so what the engine reports is what the pipeline will
+        # actually use — including when nobody asked and the number came from the checkpoint.
+        self.batch_size = int(self._pipeline._segmentation.batch_size)
 
         self.threads = threads or DEFAULT_THREADS
         self.device = str(next(self._pipeline._segmentation.model.parameters()).device)

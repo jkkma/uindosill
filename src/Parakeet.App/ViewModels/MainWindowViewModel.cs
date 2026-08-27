@@ -16,6 +16,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// but for its automatic row.</summary>
     private readonly LlamaAnswerEngineProvider? _llamaAnswerEngines;
 
+    /// <summary>Asked which diariser is chosen, for the settings that apply to only one of them.</summary>
+    private readonly IEngineProvider _engines;
+
     [ObservableProperty]
     private ComputeBackend _backend = ComputeBackend.Vulkan;
 
@@ -37,6 +40,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// the Vulkan loader is asked which kind of graphics this is.</summary>
     [ObservableProperty]
     private MoeExpertPlacement _askExpertPlacement;
+
+    /// <summary>The Settings picker: which execution provider labels speakers, or null for
+    /// automatic. Separate from <see cref="Backend"/>, which is the recogniser's and whose
+    /// backends are a different runtime's.</summary>
+    [ObservableProperty]
+    private string? _diarisationProvider;
+
+    /// <summary>The Settings picker: how much audio the second diariser holds at once, or null
+    /// for the model's own value. A memory setting; see <see cref="AppSettings.DiarisationBatchSize"/>
+    /// for why it is not a speed one.</summary>
+    [ObservableProperty]
+    private int? _diarisationBatchSize;
 
     [ObservableProperty]
     private int _selectedTab;
@@ -69,6 +84,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _askMode = loaded.AskMode;
         _askModelFileName = loaded.AskModelFileName;
         _askExpertPlacement = loaded.AskExpertPlacement;
+        _diarisationProvider = loaded.DiarisationProvider;
+        _diarisationBatchSize = loaded.DiarisationBatchSize;
+
+        _engines = engines;
 
         Session = new ModelSession(engines);
 
@@ -329,6 +348,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _settings.Update(current => current with { AskExpertPlacement = value });
     }
 
+    /// <summary>
+    /// Keeps the bound row in step and remembers the choice. Takes effect at the next recording:
+    /// the provider is fixed when the sidecar loads the model, and a labeller already loaded under
+    /// another one is not re-negotiated under this.
+    /// </summary>
+    partial void OnDiarisationProviderChanged(string? value)
+    {
+        OnPropertyChanged(nameof(SelectedDiarisationProvider));
+        OnPropertyChanged(nameof(DiarisationProviderExplanation));
+        _settings.Update(current => current with { DiarisationProvider = value });
+    }
+
+    /// <summary>The twin of the above, and for the same reason.</summary>
+    partial void OnDiarisationBatchSizeChanged(int? value)
+    {
+        OnPropertyChanged(nameof(SelectedDiarisationBatchSize));
+        _settings.Update(current => current with { DiarisationBatchSize = value });
+    }
+
     /// <summary>Remembers the choice; the panel reads it at the next question.</summary>
     private void PersistAskMode(AskModePreference value) =>
         _settings.Update(current => current with { AskMode = value });
@@ -360,6 +398,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // And the same again for the model picker, which lists files on that same disk.
             OnPropertyChanged(nameof(AskModels));
             OnPropertyChanged(nameof(SelectedAskModel));
+
+            // The batch setting belongs to one of the two diarisers, and which one is chosen is
+            // changed on the Models tab — so the control's enabled state is stale exactly when
+            // somebody has just been there. Opening this page is when they are about to read it.
+            OnPropertyChanged(nameof(CanSetDiarisationBatchSize));
+            OnPropertyChanged(nameof(DiarisationBatchSizeHint));
         }
     }
 
@@ -467,6 +511,102 @@ public sealed partial class MainWindowViewModel : ObservableObject
         "CUDA is used automatically when this build has it, and needs its own runtime files. " +
         "CPU always works and is the fallback. Whichever you pick is remembered.";
 
+    /// <summary>
+    /// The speaker-provider picker's rows. Automatic first, and it is the shipped choice.
+    /// </summary>
+    /// <remarks>
+    /// The names are <see cref="AppSettings.DiarisationProviders"/>'s, which is the list this
+    /// window offers rather than everything the sidecar accepts; that property says what is left
+    /// out and why.
+    /// </remarks>
+    public IReadOnlyList<DiarisationProviderChoice> DiarisationProviders { get; } =
+    [
+        new(null, "Automatic"),
+        new("cpu", "CPU"),
+        new("webgpu", "WebGPU"),
+        new("cuda", "CUDA (NVIDIA)"),
+    ];
+
+    /// <summary>The twin of <see cref="SelectedAskExpertPlacement"/>, and for the same reason.</summary>
+    public DiarisationProviderChoice SelectedDiarisationProvider
+    {
+        get => DiarisationProviders.FirstOrDefault(choice => choice.Provider == DiarisationProvider)
+               ?? DiarisationProviders[0];
+        set => DiarisationProvider = value.Provider;
+    }
+
+    /// <summary>
+    /// The batch-size picker's rows. The model's own value first, which is the shipped choice.
+    /// </summary>
+    /// <remarks>
+    /// Three sizes rather than a free number, because these are the only ones anything has been
+    /// observed at, and what was observed — the same speaker labels at all three — is what makes
+    /// choosing between them safe. "Windows" rather than "batch" because the thing being counted is
+    /// sixteen-second windows of the recording, which is something a person can picture.
+    /// </remarks>
+    public IReadOnlyList<DiarisationBatchSizeChoice> DiarisationBatchSizes { get; } =
+    [
+        new(null, "The model's own setting"),
+        new(8, "8 windows — least memory"),
+        new(16, "16 windows"),
+        new(32, "32 windows — most memory"),
+    ];
+
+    /// <summary>The twin of the above.</summary>
+    public DiarisationBatchSizeChoice SelectedDiarisationBatchSize
+    {
+        get => DiarisationBatchSizes.FirstOrDefault(choice => choice.Size == DiarisationBatchSize)
+               ?? DiarisationBatchSizes[0];
+        set => DiarisationBatchSize = value.Size;
+    }
+
+    /// <summary>
+    /// True when the chosen speaker model has a batch size to set. Drawn disabled otherwise, with
+    /// the reason beside it, on the same terms as the neural speech detection box.
+    /// </summary>
+    public bool CanSetDiarisationBatchSize => _engines.SupportsDiariserBatchSize;
+
+    /// <summary>Why the batch picker is disabled, or null when it is not.</summary>
+    public string? DiarisationBatchSizeHint =>
+        CanSetDiarisationBatchSize
+            ? null
+            : "Only the downloadable speaker model has this setting. The built-in one works in a "
+              + "fixed way that cannot be changed.";
+
+    public string DiarisationProviderExplanation =>
+        "Automatic uses the path each speaker model was checked on, and is the right choice unless "
+        + "you have a reason. WebGPU moves part of the work onto your graphics and finishes sooner, "
+        + "but it groups voices slightly differently, so the labels will not match the automatic "
+        + "ones exactly — which of the two is closer to the truth has not been established. CUDA "
+        + "needs an NVIDIA card and its runtime files. If you pick one this machine cannot use, "
+        + "labelling stops with an error rather than quietly using something else. Takes effect at "
+        + "your next recording.";
+
+    public string DiarisationBatchSizeExplanation =>
+        "How much of the recording the speaker model holds at once. Fewer windows need "
+        + "substantially less memory, which is worth choosing if labelling a long recording runs "
+        + "the machine out of it; more windows need a great deal — the largest setting has reached "
+        + "roughly 11 GB on a ten-minute recording. The speaker labels come out the same either "
+        + "way. Takes effect at your next recording.";
+
+}
+
+/// <summary>One row of the speaker-provider picker: the stored name, under the name a person reads.</summary>
+/// <remarks>
+/// Null is "Automatic" and is a real row rather than a missing value — the same shape the settings
+/// file uses, where absent means automatic.
+/// </remarks>
+public sealed record DiarisationProviderChoice(string? Provider, string Label)
+{
+    /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
+    public override string ToString() => Label;
+}
+
+/// <summary>One row of the speaker batch-size picker.</summary>
+public sealed record DiarisationBatchSizeChoice(int? Size, string Label)
+{
+    /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
+    public override string ToString() => Label;
 }
 
 /// <summary>One row of the ask-mode picker: the setting, under the name a person reads.</summary>

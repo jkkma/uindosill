@@ -258,6 +258,158 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void TheDiariserProviderIsAutomaticAsShippedAndSurvivesARoundTrip()
+    {
+        // Null is automatic, and automatic reproduces the path each diariser's published figures
+        // describe. The window passed a hardcoded "auto" until this setting existed, which is what
+        // made WebGPU unreachable from it, so "it round-trips" is the whole feature working.
+        var path = TempFile();
+        try
+        {
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+
+            foreach (var provider in new[] { "webgpu", "cpu", "cuda" })
+            {
+                Assert.True(new AppSettingsStore(path).Save(
+                    new AppSettings { DiarisationProvider = provider }));
+                Assert.Equal(provider, new AppSettingsStore(path).Load().DiarisationProvider);
+            }
+
+            // Automatic is written as an absent key rather than the word, so that "never chosen"
+            // and "chose automatic" are one shape in the file rather than two Load must reconcile.
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { DiarisationProvider = null }));
+            Assert.DoesNotContain("diarisationProvider", File.ReadAllText(path), StringComparison.Ordinal);
+
+            // And the word itself, if a hand-edited file carries it, reads back as the same null.
+            File.WriteAllText(path, "{\"diarisationProvider\":\"auto\"}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+
+            // A name this window does not offer degrades to automatic rather than being passed to
+            // the sidecar. dml is the case that matters: the sidecar would accept it, and it scores
+            // 53% diarisation error at ONNX Runtime's own defaults.
+            File.WriteAllText(path, "{\"diarisationProvider\":\"dml\"}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+
+            // A file written before the setting existed reads as automatic, not as a failed load.
+            File.WriteAllText(path, "{\"askThinking\":true}");
+            var older = new AppSettingsStore(path).Load();
+            Assert.True(older.AskThinking);
+            Assert.Null(older.DiarisationProvider);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheDiariserBatchSizeIsTheModelsOwnAsShippedAndSurvivesARoundTrip()
+    {
+        // Null means the checkpoint's own value, which is what makes running the published
+        // artefact's configuration the thing a person gets by not touching this.
+        var path = TempFile();
+        try
+        {
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationBatchSize);
+
+            foreach (var size in AppSettingsStore.DiarisationBatchSizes)
+            {
+                Assert.True(new AppSettingsStore(path).Save(
+                    new AppSettings { DiarisationBatchSize = size }));
+                Assert.Equal(size, new AppSettingsStore(path).Load().DiarisationBatchSize);
+            }
+
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { DiarisationBatchSize = null }));
+            Assert.DoesNotContain("diarisationBatchSize", File.ReadAllText(path), StringComparison.Ordinal);
+
+            // A size this window does not offer degrades to the model's own rather than reaching
+            // the pipeline. A hand-edited 512 would be accepted by the sidecar and would ask a
+            // 16 GB machine for a working set it cannot produce, failing far less legibly.
+            File.WriteAllText(path, "{\"diarisationBatchSize\":512}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationBatchSize);
+
+            File.WriteAllText(path, "{\"diarisationBatchSize\":\"eight\"}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationBatchSize);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EveryDiariserSettingHasAPickerRowAndChoosingOneWritesTheFile()
+    {
+        // The getters find the row for the current setting, so a stored value with no row is a
+        // bind-time throw on the Settings tab rather than a quietly missing selection.
+        var path = TempFile();
+        try
+        {
+            var viewModel = new MainWindowViewModel(
+                new FakeEngineProvider(),
+                new LocalModelStore(TestTemp.NewDirectory("uindosill-diariser")),
+                ModelCatalog.Default,
+                settings: new AppSettingsStore(path),
+                answerEngines: new FakeAnswerEngineProvider());
+
+            Assert.Null(viewModel.DiarisationProvider);
+            Assert.Null(viewModel.SelectedDiarisationProvider.Provider);
+            Assert.Null(viewModel.SelectedDiarisationBatchSize.Size);
+
+            foreach (var row in viewModel.DiarisationProviders)
+            {
+                viewModel.SelectedDiarisationProvider = row;
+                Assert.Equal(row.Provider, viewModel.DiarisationProvider);
+                Assert.Equal(row.Provider, new AppSettingsStore(path).Load().DiarisationProvider);
+            }
+
+            foreach (var row in viewModel.DiarisationBatchSizes)
+            {
+                viewModel.SelectedDiarisationBatchSize = row;
+                Assert.Equal(row.Size, viewModel.DiarisationBatchSize);
+                Assert.Equal(row.Size, new AppSettingsStore(path).Load().DiarisationBatchSize);
+            }
+
+            // Every offered provider is one the settings reader will accept back. The two lists
+            // are separate declarations and would otherwise drift into a picker whose choices do
+            // not survive a restart.
+            foreach (var row in viewModel.DiarisationProviders.Where(row => row.Provider is not null))
+            {
+                Assert.Contains(row.Provider, AppSettingsStore.DiarisationProviders);
+            }
+
+            foreach (var row in viewModel.DiarisationBatchSizes.Where(row => row.Size is not null))
+            {
+                Assert.Contains(row.Size!.Value, AppSettingsStore.DiarisationBatchSizes);
+            }
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheBatchSizePickerIsDisabledWhenTheChosenDiariserHasNoBatchToSet()
+    {
+        // False is a real answer rather than a missing one: the first diariser's batching is its
+        // exported graph's geometry and the sidecar refuses the field outright, so a control left
+        // enabled for it would offer a setting that turns every load into an error. The canned
+        // provider is neither diariser and has no pipeline at all.
+        var viewModel = new MainWindowViewModel(
+            new FakeEngineProvider(),
+            new LocalModelStore(TestTemp.NewDirectory("uindosill-nobatch")),
+            ModelCatalog.Default,
+            settings: new AppSettingsStore(TempFile()),
+            answerEngines: new FakeAnswerEngineProvider());
+
+        Assert.False(viewModel.CanSetDiarisationBatchSize);
+
+        // Disabled with a reason beside it rather than hidden, on the speech-detection row's terms.
+        Assert.NotNull(viewModel.DiarisationBatchSizeHint);
+    }
+
+    [Fact]
     public void TheSettingsFileSitsBesideTheWeightsAndNotInTheInstallDirectory()
     {
         // Same reason as the weights: a settings file under the install root is destroyed by every

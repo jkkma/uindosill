@@ -6060,15 +6060,26 @@ took the worst of it.
 - **Which embedder is better is unknown**, and there is now no cheap way to find out: it needs a
   corpus with references. The AMI test set is the obvious one, is what the speaker gate is already
   defined on, and has not been run. **This is the single largest gap in this section.**
-- **Every figure above was taken at embedding batch 32, and the pipeline now runs 8.** That was the
-  batch when they were measured; `BATCH_SIZE = 8` landed on master at 19:56 the same evening, with
-  its own memory-and-RTF sweep behind it, and merged into this work afterwards. **So none of the
-  real-time factors above describes the shipping configuration.** Master's sweep puts torch at
-  RTF 0.8486 at batch 8 against the 0.920 recorded here at 32; **the ONNX embedder has not been
-  timed at 8 at all**, so the speed advantage is unmeasured at the batch the product actually uses.
-  The parity figures are the exception and survive — the committed fixture runs at its own batch of
-  3 and passes there, and the graph is dynamic in batch by construction — as does the turn-count
-  comparison, which master's own sweep confirms is batch-independent at 225 turns on torch.
+- **Every figure above was taken at embedding batch 32, which is the shipping batch again.** This
+  bullet said the opposite for a day. `BATCH_SIZE = 8` landed on master at 19:56 on 2026-08-26 and
+  was **withdrawn on 2026-08-27**, so the real-time factors above describe the shipping
+  configuration once more and no re-timing is owed. The deviation was withdrawn rather than
+  re-measured because the sweep behind it could not support it: it ran 8, 16 and 32 **once each, in
+  one process, in ascending order**, which makes batch size inseparable from position in that order
+  and from a heap that had already built and torn down two pipelines. The largest arm peaks at
+  11,740 MiB on a machine with 15,994 MiB total and roughly 9,600 MiB free, so that arm could not
+  have been resident; "batch 32 is 14% slower" and "batch 32 ran last, paging" are one observation
+  in that design. Restoring upstream's value needs no measurement, which is why it was preferred.
+  The parity figures were never affected — the committed fixture runs at its own batch of 3 and
+  passes there, and the graph is dynamic in batch by construction — nor was the turn-count
+  comparison, which is batch-independent at 225 turns on torch across all three sizes.
+- **The memory question the withdrawn sweep was reaching for is still open, and it is the real
+  one.** Peak working set near 11.7 GB on a ten-minute file, on a 16 GB machine, is recorded
+  earlier in this document as tunable and **untuned**, and that has not changed. A sweep that
+  isolates batch size — one fresh interpreter per arm, ascending and descending passes so order
+  cancels, repeats for variance, and page-fault counters so paging is measured rather than inferred
+  — was designed on 2026-08-27 and **not run**. Until it is, no claim about what batch size costs
+  in time may be quoted from this project, in either direction.
 - **One stretch, one corpus, and not the one the gate is defined on.** The other four stretches are
   unmeasured. No figure here may be compared with the 16.33% Sortformer number, which is AMI.
 - **The bundle has not been rebuilt.** `scripts/bundle-python.ps1` has not run with the two new

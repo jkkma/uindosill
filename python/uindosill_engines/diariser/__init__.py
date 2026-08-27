@@ -115,6 +115,7 @@ class Diariser:
         graph_optimization: str | None = None,
         profile: bool = False,
         kind: str = SORTFORMER,
+        batch_size: int | None = None,
     ) -> dict[str, Any]:
         """Loads one of the two diarisers. `kind` decides which, and the host decides `kind`.
 
@@ -122,11 +123,27 @@ class Diariser:
         `.onnx` file and DiariZen is a directory of five — and guessing from that would work until
         the day a third entry looked like either. The host already knows which catalogue entry it
         resolved, so it says; a sidecar that inferred it would be a second place the answer lives.
+
+        **`batch_size` belongs to DiariZen alone**, and is refused rather than ignored on the other
+        arm. Sortformer's batching is its exported graph's geometry — a fixed streaming chunk loop
+        the host cannot resize — so a number arriving for it means the two sides disagree about what
+        the setting is, and silently dropping it would leave somebody believing they had changed
+        something. `None` means the model's own value, which for DiariZen is the checkpoint's.
         """
         if kind == DIARIZEN:
-            return self._load_diarizen(path, model_id, threads, provider, profile)
+            return self._load_diarizen(path, model_id, threads, provider, profile, batch_size)
         if kind != SORTFORMER:
             raise RequestError("request", f"unknown diariser kind '{kind}'")
+
+        # Refused rather than dropped, for the reason the docstring gives: this arm is one ONNX
+        # graph whose streaming geometry is fixed at export, so there is no batch to set and a host
+        # that sent one is a host operating on a wrong belief about what it just configured.
+        if batch_size is not None:
+            raise RequestError(
+                "request",
+                "this diariser's batching is fixed by its exported graph and cannot be set; "
+                "'batchSize' applies to the second diariser only.",
+            )
 
         # `torch` is the second diariser's runtime, not an execution provider, and this arm has no
         # torch path at all — it is one ONNX graph. Said here rather than left to a `KeyError` out
@@ -188,6 +205,7 @@ class Diariser:
         threads: int,
         provider: str = "auto",
         profile: bool = False,
+        batch_size: int | None = None,
     ) -> dict[str, Any]:
         """The DiariZen arm of :meth:`load`.
 
@@ -217,7 +235,8 @@ class Diariser:
         # loaded pipeline — see `DiarizenEngine.install_embedding_provider` for why it is not
         # rebuilt per candidate.
         engine = DiarizenEngine(
-            model_dir=path, threads=threads, provider="torch", profile=profile
+            model_dir=path, threads=threads, provider="torch", profile=profile,
+            batch_size=batch_size,
         )
 
         # **`auto` means torch here, because the ONNX embedder changes the answer.** It is faster and
@@ -317,6 +336,11 @@ class Diariser:
             # so outright rather than leaving one word to carry a claim it cannot.
             "segmentationBackend": getattr(engine, "segmentation_backend", "torch:cpu"),
             "embeddingBackend": getattr(engine, "embedding_backend", "torch:cpu"),
+            # **Read off the loaded pipeline, not echoed back from the request.** The host may have
+            # sent nothing, in which case this is the checkpoint's own value and the host has no
+            # other way to learn it; and when the host did send one, this is what confirms it
+            # reached all three of the pipeline's batch attributes rather than merely arriving.
+            "batchSize": getattr(engine, "batch_size", None),
             # The providers `auto` passed over before the one that built, each with its reason.
             # Empty when the first candidate built or when a provider was named.
             "fellBackFrom": list(self._fell_back_from),

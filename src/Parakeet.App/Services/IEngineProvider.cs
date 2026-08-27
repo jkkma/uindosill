@@ -67,6 +67,19 @@ public interface IEngineProvider
     SpeakerLabellerLimits? SpeakerLimits { get; }
 
     /// <summary>
+    /// True when the chosen diariser's batch size can be set, which is the second one only.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the provider rather than decided in the view model, on the same reasoning as
+    /// <see cref="SupportsSpeakerLabelling"/>: which diariser is chosen is a fact about the
+    /// catalogue entry and the model store, and a window that worked it out from an id would be a
+    /// second place that answer lives. False is a real answer — the first diariser's batching is
+    /// its exported graph's geometry, and the sidecar refuses the field rather than ignoring it, so
+    /// a control left enabled for it would offer a setting that turns every load into an error.
+    /// </remarks>
+    bool SupportsDiariserBatchSize { get; }
+
+    /// <summary>
     /// What this run's labeller means for the numbers this project publishes, or null when there is
     /// nothing to say. The window's half of what <c>LabellerFactory</c> prints on the command line.
     /// </summary>
@@ -182,18 +195,29 @@ public sealed class EngineProvider : IEngineProvider
     /// once at construction would go stale exactly then. Null, and a delegate returning null, both
     /// mean "nobody has chosen"; see <see cref="AppSettings.DiarisationModelId"/>.
     /// </remarks>
+    /// <remarks>
+    /// <paramref name="diariserSettings"/> is a delegate for the same reason as
+    /// <paramref name="preferredDiarisationModelId"/>: both live in the settings file, both can
+    /// change while the window is open, and both are read at the moment a labeller is built rather
+    /// than stored here. <c>(null, null)</c> is the shipped state — automatic provider, the model's
+    /// own batch size — and is what a null delegate returns.
+    /// </remarks>
     public EngineProvider(
         IModelStore? store,
         Func<(bool Found, string? Reason)>? python,
-        Func<string?>? preferredDiarisationModelId)
+        Func<string?>? preferredDiarisationModelId,
+        Func<(string? Provider, int? BatchSize)>? diariserSettings = null)
     {
         _store = store ?? new LocalModelStore();
         _python = new Lazy<(bool Found, string? Reason)>(python ?? (() =>
             PythonRuntime.TryResolve(out _, out var reason) ? (true, null) : (false, reason)));
         _preferredDiarisationModelId = preferredDiarisationModelId ?? (() => null);
+        _diariserSettings = diariserSettings ?? (() => (null, null));
     }
 
     private readonly Func<string?> _preferredDiarisationModelId;
+
+    private readonly Func<(string? Provider, int? BatchSize)> _diariserSettings;
 
     public bool IsModelAvailable(EngineSelection selection)
     {
@@ -333,19 +357,32 @@ public sealed class EngineProvider : IEngineProvider
             return null;
         }
 
+        var (provider, batchSize) = _diariserSettings();
+        var kind = KindOf(model);
+
         return new SidecarSpeakerLabeller(new SidecarLabellerOptions
         {
             // The same order as everywhere else: the user's own copy, then the installer's.
-            Kind = KindOf(model),
+            Kind = kind,
             ModelPath = PathForInstalledOrBundled(model)!,
             ModelId = model.Id,
 
-            // Chosen inside the sidecar, and no picker for it. The Models tab's backend list is
-            // parakeet.cpp's — Vulkan, CUDA, CPU — and has no WebGPU entry, so binding the diariser
-            // to it would offer backends it does not have and hide the one it wants; dml is refused
-            // outright on the command line, which leaves a picker with nothing to say. This is a
-            // design choice rather than a measurement.
-            Provider = "auto",
+            // The Settings tab's own control, not the Models tab's backend list. That one is
+            // parakeet.cpp's — Vulkan, CUDA, CPU — and naming it here would offer the diariser
+            // backends it has no path to and hide WebGPU, which is the one it wants; the two
+            // runtimes overlap only in the word "CPU". This window passed a hardcoded `auto` until
+            // the separate setting existed, which is why WebGPU was unreachable from it.
+            //
+            // Null still means `auto`, and `auto` still reproduces the published path on both
+            // diarisers rather than picking the fastest.
+            Provider = provider ?? "auto",
+
+            // **Second diariser only, and null unless somebody chose.** The other arm refuses the
+            // field rather than ignoring it — its batching is its exported graph's geometry — so
+            // sending one for it would turn a setting that does not apply into a failed load.
+            BatchSize = string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal)
+                ? batchSize
+                : null,
         });
     }
 
@@ -490,6 +527,12 @@ public sealed class EngineProvider : IEngineProvider
             ? SidecarSpeakerLabeller.DeclaredLimitsFor(KindOf(model)) with { Name = model.Id }
             : null;
 
+    /// <inheritdoc />
+    public bool SupportsDiariserBatchSize =>
+        SupportsSpeakerLabelling
+        && DiarisationModel is { } batchModel
+        && string.Equals(KindOf(batchModel), DiariserKinds.Diarizen, StringComparison.Ordinal);
+
     /// <summary>Which sidecar engine a diarisation entry is driven by.</summary>
     /// <remarks>
     /// Read off the entry rather than guessed from its id, and defaulted to Sortformer so that
@@ -594,6 +637,12 @@ public sealed class FakeEngineProvider : IEngineProvider
     public ISpeakerLabeller? CreateSpeakerLabeller() => new FakeSpeakerLabeller(_speakers);
 
     public SpeakerLabellerLimits? SpeakerLimits => CreateSpeakerLabeller()?.Capabilities.Limits;
+
+    /// <summary>
+    /// False: the canned labeller is neither diariser and has no pipeline to batch. A demo mode
+    /// that offered the control would be offering a setting that reaches nothing.
+    /// </summary>
+    public bool SupportsDiariserBatchSize => false;
 
     /// <summary>Nothing to say: the canned labeller runs nowhere and reproduces no published figure.</summary>
     public string? DescribeLabeller(ISpeakerLabeller labeller) => null;

@@ -1710,7 +1710,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="How a recording is cut up before it is decoded. Speaker labels and translation are on the Transcribe tab." />
+                       Text="How a recording is cut up before it is decoded, and how speaker labelling runs. Switching speaker labels and translation on is on the Transcribe tab." />
 
             <!-- ── How the audio is cut ────────────────────────────────────────────────────── -->
             <StackPanel Spacing="9">
@@ -1765,6 +1765,48 @@
                  It would not have been a translation control either way: the translator behind
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
+
+            <Separator />
+
+            <!-- ── Speaker labels ─────────────────────────────────────────────────────────────
+                 Two settings that belong to the diariser rather than to the recogniser, which is
+                 why they are here and not on the backend row above: that row is parakeet.cpp's —
+                 Vulkan, CUDA, CPU — and the speaker models run on a different runtime whose
+                 providers are WebGPU, CUDA and CPU. The two lists overlap only in the word "CPU"
+                 and mean different things by it, so one control for both would offer each half
+                 backends it has no path to. Until these existed the window passed a fixed
+                 "automatic" and WebGPU was unreachable from it.
+
+                 Reaching the window's data context for the same reason the ask block below does:
+                 this is where the settings file is written. -->
+            <StackPanel Spacing="9"
+                        DataContext="{Binding $parent[Window].DataContext}"
+                        x:DataType="vm:MainWindowViewModel">
+              <TextBlock Text="SPEAKER LABELS" Classes="section" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Run on" Classes="secondary" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding DiarisationProviders}"
+                          SelectedItem="{Binding SelectedDiarisationProvider}" MinWidth="200" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding DiarisationProviderExplanation}" />
+
+              <!-- Disabled with the reason beside it rather than hidden, on the speech-detection
+                   row's terms: a control that vanishes when a different model is picked reads as a
+                   bug, and the reason is one a person can act on from the Models tab. -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Audio held at once" Classes="secondary" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding DiarisationBatchSizes}"
+                          SelectedItem="{Binding SelectedDiarisationBatchSize}" MinWidth="220"
+                          IsEnabled="{Binding CanSetDiarisationBatchSize}" />
+                <TextBlock Text="{Binding DiarisationBatchSizeHint}" Classes="meta" TextWrapping="Wrap"
+                           VerticalAlignment="Center" MaxWidth="300"
+                           IsVisible="{Binding DiarisationBatchSizeHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding DiarisationBatchSizeExplanation}" />
+            </StackPanel>
 
             <Separator />
 

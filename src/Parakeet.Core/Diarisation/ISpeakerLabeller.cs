@@ -121,6 +121,20 @@ public sealed record SpeakerLabellerCapabilities
     /// </remarks>
     public string EmbeddingBackend { get; init; } = "";
 
+    /// <summary>
+    /// How many windows of audio the model batches together, for a diariser whose batching can be
+    /// set. Null for one whose cannot.
+    /// </summary>
+    /// <remarks>
+    /// <b>Read off the loaded model, never echoed back from the request.</b> The caller may have
+    /// asked for nothing, in which case this is the model's own value and there is no other way to
+    /// learn it; and when the caller did ask, this is what confirms the number reached the pipeline
+    /// rather than merely arriving at the sidecar. The second diariser has three batch attributes
+    /// that must move together, so "it was sent" and "it is in force" are genuinely different
+    /// claims. Null on the first diariser, whose batching is its exported graph's geometry.
+    /// </remarks>
+    public int? BatchSize { get; init; }
+
     /// <summary>True when <see cref="SpeakerLabellingOptions.SpeakerCount"/> reaches the model.</summary>
     public bool SupportsFixedSpeakerCount { get; init; }
 

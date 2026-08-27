@@ -109,6 +109,15 @@ class Session:
                 # same as every other optional one here; the protocol number is what actually stops
                 # a stale sidecar being asked for the engine it does not have.
                 kind=message.get("kind", SORTFORMER),
+                # Absent means "the model's own", which is not the same as any number this could
+                # default to — so it stays None rather than acquiring a value here. The second
+                # diariser reads it as the checkpoint's `batch_size`; the first refuses it outright,
+                # because its batching is its exported graph's geometry.
+                batch_size=(
+                    int(message["batchSize"])
+                    if message.get("batchSize") is not None
+                    else None
+                ),
             )
             return {"capabilities": capabilities}
         if engine == "translator":
