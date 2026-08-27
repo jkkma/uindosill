@@ -390,6 +390,73 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void TheProviderPickerOffersOnlyWhatTheRuntimeRegistered()
+    {
+        // The bundle pins onnxruntime-webgpu, whose wheel has no CUDA provider — so a CUDA row
+        // offered on the strength of an NVIDIA card fails on every machine including one with the
+        // card. Shipped on 2026-08-27 and corrected the same day; this is the correction.
+        var viewModel = new MainWindowViewModel(
+            new FakeEngineProvider(),
+            new LocalModelStore(TestTemp.NewDirectory("uindosill-providers")),
+            ModelCatalog.Default,
+            settings: new AppSettingsStore(TempFile()),
+            answerEngines: new FakeAnswerEngineProvider());
+
+        // Before the probe answers, every row stays on offer: a control emptied by a probe that
+        // could not run is worse than one that briefly offers too much.
+        Assert.Null(viewModel.RegisteredDiariserProviders);
+        Assert.Contains(viewModel.DiarisationProviders, row => row.Provider == "cuda");
+
+        viewModel.RegisteredDiariserProviders = ["cpu", "webgpu"];
+
+        var offered = viewModel.DiarisationProviders.Select(row => row.Provider).ToList();
+        Assert.Equal(new List<string?> { null, "cpu", "webgpu" }, offered);
+        Assert.DoesNotContain("cuda", offered);
+
+        // And the explanation stops describing a control that is not there.
+        Assert.DoesNotContain("CUDA", viewModel.DiarisationProviderExplanation, StringComparison.Ordinal);
+        Assert.Contains("WebGPU", viewModel.DiarisationProviderExplanation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoredProviderTheRuntimeNoLongerHasStaysVisibleRatherThanVanishing()
+    {
+        // Dropping it would leave the combo reading "Automatic" while the settings file said cuda —
+        // a disagreement nobody can diagnose from the window. Rewriting the file to match would be
+        // the window discarding a choice it was not asked to change. So it is shown, and marked.
+        var path = TempFile();
+        try
+        {
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings { DiarisationProvider = "cuda" }));
+
+            var viewModel = new MainWindowViewModel(
+                new FakeEngineProvider(),
+                new LocalModelStore(TestTemp.NewDirectory("uindosill-stale-provider")),
+                ModelCatalog.Default,
+                settings: new AppSettingsStore(path),
+                answerEngines: new FakeAnswerEngineProvider());
+
+            Assert.Equal("cuda", viewModel.DiarisationProvider);
+
+            viewModel.RegisteredDiariserProviders = ["cpu", "webgpu"];
+
+            var stale = Assert.Single(
+                viewModel.DiarisationProviders, row => row.Provider == "cuda");
+            Assert.Contains("not available", stale.Label, StringComparison.OrdinalIgnoreCase);
+
+            // The selection still resolves to it, so the window and the file agree.
+            Assert.Equal("cuda", viewModel.SelectedDiarisationProvider.Provider);
+
+            // And the file is untouched by merely looking at the page.
+            Assert.Equal("cuda", new AppSettingsStore(path).Load().DiarisationProvider);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void TheBatchSizePickerIsDisabledWhenTheChosenDiariserHasNoBatchToSet()
     {
         // False is a real answer rather than a missing one: the first diariser's batching is its

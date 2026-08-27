@@ -396,6 +396,9 @@ public class ShutdownTests
 
         public bool SupportsDiariserBatchSize => _inner.SupportsDiariserBatchSize;
 
+        public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
+            _inner.AvailableDiariserProvidersAsync(ct);
+
         public string? DescribeLabeller(Parakeet.Core.Diarisation.ISpeakerLabeller labeller) =>
             _inner.DescribeLabeller(labeller);
 
