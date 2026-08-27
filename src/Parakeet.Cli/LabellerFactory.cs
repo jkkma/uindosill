@@ -332,7 +332,10 @@ internal static class LabellerFactory
         {
             // **Resolved over what is installed, not over the catalogue.** Two entries label
             // speakers and neither is a default: one is bundled and capped at four voices, the
-            // other is a download with no cap, licensed non-commercially and far slower. Choosing
+            // other is a download with no cap, gated on its authors' user agreement and far
+            // slower. **Non-commercially licensed until 2026-08-27, and no longer** — that clause
+            // described DiariZen, and the pyannote pipeline that replaced it is CC BY 4.0, which
+            // is the whole reason the swap was worth making. Choosing
             // between them on the user's behalf is the window's job, where the choice is
             // remembered and visible; here, the one that is present wins, and a machine with both
             // is asked. Counting catalogue entries instead would have made `--speakers` start

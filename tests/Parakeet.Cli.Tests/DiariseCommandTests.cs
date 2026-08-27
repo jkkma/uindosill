@@ -299,6 +299,13 @@ public class DiariseCommandTests
 
         var help = harness.Out.ToString();
         Assert.Contains("--id", help, StringComparison.Ordinal);
-        Assert.Contains("four speakers", help, StringComparison.Ordinal);
+
+        // **Both engines, not one.** This asserted "four speakers" until 2026-08-27, when the
+        // second diariser became a clustering pipeline with no ceiling at all — a help text that
+        // still described the cap as the command's would have been wrong for whichever model the
+        // reader had installed. Naming each engine is what keeps the text honest about which of
+        // the two a sentence is about.
+        Assert.Contains("four speaker slots", help, StringComparison.Ordinal);
+        Assert.Contains("pyannote pipeline has no such ceiling", help, StringComparison.Ordinal);
     }
 }

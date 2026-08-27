@@ -55,20 +55,30 @@ it has not measured.
 `src/Parakeet.Core/Models/models.json` is an embedded resource, not code, so pinning a digest is a
 reviewable data change rather than a code change.
 
-**Every entry is pinned but one.** File name, byte size and SHA-256 were read from the
+**Every entry is pinned.** File name, byte size and SHA-256 were read from the
 `mudler/parakeet-cpp-gguf` file listing, where the LFS `oid` *is* the SHA-256 of the blob.
 `ModelInstaller` compares both the digest and the exact byte count, and moves nothing into place
 that disagrees. The file names — which had been conventional guesses — are confirmed by the same
 listing.
 
-**The exception is `pyannote-speaker-diarization-community-1`, added 2026-08-27.** Its repository is
-gated: Hugging Face serves the file listing with real byte sizes but **masks every LFS `oid`** behind
-the user agreement, so there is no digest to record until somebody with an accepted token downloads
-the files and takes one off the bytes. That entry therefore pins **sizes only**, is marked
-`"verified": false`, shows "no pinned digest for 5 of 5 files" in `uindosill models list`, and
-**does** require the unverified opt-in. `ModelTests.EveryShippedEntryIsPinned` exempts it by exact
-id so that a *second* unpinned entry still fails; fill the digests in on first authenticated install
-and delete the exemption.
+**`pyannote-speaker-diarization-community-1` was the exception until 2026-08-27, and what ended it
+is worth recording.** Its repository is gated, and an *unauthenticated* read serves the file listing
+with real byte sizes but **masks every LFS `oid`** — so the entry shipped pinning sizes only, marked
+`"verified": false`, and `ModelTests.EveryShippedEntryIsPinned` exempted it by exact id so that a
+*second* unpinned entry would still fail.
+
+Accepting the agreement turns out to lift more than the download. **With an accepted token the hub
+serves the object ids like any other repository's**, so the digests did not have to rest on one
+machine's download: four of the five files' SHA-256 are upstream's own `lfs.oid`, and they match the
+bytes that arrived. The fifth, `config.yaml`, is 444 bytes and is stored as a plain git blob rather
+than an LFS object, so it has no `oid` to compare — it was corroborated instead against the **git
+blob id** the same listing publishes, `4022db43960736338378fdb6b5a85cfdae198910`, recomputed from
+the installed bytes. The entry is therefore pinned on the same footing as every other one, is
+marked `"verified": true`, needs no unverified opt-in, and the test's exemption is gone.
+
+What is *not* claimed by that: the digests say these five files are the ones upstream published at
+commit `3533c8cf`, not that the pipeline they describe scores anything in particular. That is a
+separate question and `docs/UNPROVEN.md` holds it.
 
 | Entry | Bytes | SHA-256 |
 |---|---|---|
@@ -76,7 +86,7 @@ and delete the exemption.
 | `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
 | `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
-| `pyannote-speaker-diarization-community-1` | five files, 32,821,421 | **none — gated repository, see above**; sizes per file in `models.json` |
+| `pyannote-speaker-diarization-community-1` | five files, 32,821,421 | per file; see `models.json` — four from upstream LFS `oid`s, `config.yaml` from its git blob id (see above) |
 
 **Five entries, and all five are unquantised.** The catalogue offered f16 plus four quantisations
 of it until 2026-08-20, when the four were withdrawn — a product decision recorded in
