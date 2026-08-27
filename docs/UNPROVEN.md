@@ -5981,3 +5981,111 @@ were never in question. **Both were replaced the same day** — `#966C13` at 4.7
 the third defect beside them, a verified provenance line painted in the warning colour. All three
 are recorded in `docs/PHASES.md` with how they closed. Nothing about the ratios above is unproven;
 they are kept here because a defect recorded as unfixed is a defect that gets fixed twice.
+
+## The DiariZen ONNX embedder — built and measured 2026-08-26, corrected 2026-08-27, and kept out of `auto`
+
+The evidence behind the decision in `docs/PHASES.md` to **build the ONNX speaker embedder, leave
+segmentation in torch, and leave `auto` on torch as well**. The feasibility study is on the Drive in
+its dated folder.
+
+**Read the retraction below before quoting any figure from this section.** A first version published
+a diarisation error rate. It was wrong, and it was wrong in the direction that flatters a decision
+already taken.
+
+Machine: Ryzen AI 9 365, Radeon 880M (4 GB carve-out), Windows 11 10.0.26200, 15.6 GB RAM, AMD
+driver 32.0.13022.3006. Stack: the bundle's pins — CPython 3.12.0, torch 2.13.0+cpu, numpy 2.5.2,
+onnxruntime-webgpu 1.27.0 — plus `onnx` 1.22.0 and `onnxscript` 0.7.1, which the derivation needs.
+Weights at `f27b9ff` and `837717d`. **One machine, one date, one driver, one ten-minute recording.**
+
+### Retracted: the DER figures published here on 2026-08-26
+
+This section carried a table reading "torch 16.39% DER, ORT CPU 16.65%, ORT WebGPU 16.65%" and a
+conclusion that the ONNX embedder is "0.26 points worse". **Both are withdrawn.** They were scored
+against `runs/der/stretches/two-hosts-three-guests-a.rttm`, which is not a reference:
+
+- `tests/fixtures/diarisation/dev/stretches.json` marks that stretch **`"labelled": false`** and
+  gives its episode `"nominalVoices": 5`.
+- The file has **four** speakers. So does `two-hosts-five-guests-a.rttm`, whose episode has **seven**.
+  Every stretch's file caps at four, which is Sortformer's slot count and the behaviour
+  `docs/PHASES.md` already records — "all four episodes returned four labels whether there were 2, 3,
+  5 or 7".
+- The five files are timestamped within thirty seconds of each other on 2026-08-21: a batch run's
+  output, sitting in `runs/`, where harness output goes.
+
+So the numbers measured **agreement with a previous run's hypothesis**, not correctness, and "torch
+is closer to it" is not evidence that torch is better. **No diarisation error rate exists for
+DiariZen in this project, on any backend.** The mistake was assuming a `.rttm` beside the audio was
+ground truth without reading `labelled`; the four-speaker count on a five-voice recording was visible
+in the first scorer output and was read as the diariser over-counting rather than as the reference
+being a hypothesis.
+
+### Measured, and not affected by the retraction
+
+| | |
+|---|---|
+| Embedding export | 26.7 MB, dynamic in batch **and both frame axes**, `feats` + `weights` → `[batch, 256]` |
+| Embedding parity at batch 32, ORT CPU vs **torch** | **1.2107e-07** |
+| Embedding parity at batch 32, ORT WebGPU vs **torch** | **1.9372e-07** |
+| Embedding parity on the committed fixture (batch 3) | ORT CPU **1.3784e-07**, WebGPU **1.8626e-07** |
+| WebGPU placement | **192 of 206 executed nodes, 93.2%** — the graph ran where it said it did |
+| Stage split, 60 s, torch cpu, 12 threads | segmentation 50.5%, embedding 48.9%, clustering 0.0% |
+| Segmentation export, ORT CPU vs torch | 1.7166e-05 — faithful, and left in torch anyway |
+
+**The labels differ, which is the finding the decision rests on.** On ninety seconds all three
+backends return 31 turns and 3 speakers with identical labels and boundaries identical to
+0.00e+00 s. On the full ten minutes torch returns **225 turns** and both ONNX paths **222** — as
+time, **565 of 300,000 frames, 0.19% of the timeline and 0.82% of speech**. Speech totals are
+byte-identical at 682.3 s on all three, so the whole difference is speaker grouping, which follows
+from segmentation never leaving torch. The ninety-second result does not generalise.
+
+**It is the embedder, and the pipeline is deterministic.** Four torch runs returned 225; two
+unseeded torch runs differ by **0 of 300,000 frames**; ORT CPU and WebGPU return the identical
+answer to each other, the same 565 frames. So this is torch-versus-ONNX-Runtime rather than
+CPU-versus-GPU. (Two control runs were done to rule out the clustering's apparently unseeded
+initialisation. They were unnecessary: that branch never executes — gotcha 37.)
+
+**Real-time factor**, idle machine: **0.920 torch, 0.688 ORT CPU, 0.625 WebGPU** over ten minutes;
+0.832 / 0.630 / 0.556 over ninety seconds. An earlier ten-minute set was discarded rather than
+quoted — it ran while the same machine was building and running the test suite, and the torch pass
+took the worst of it.
+
+### Not proven
+
+- **Which embedder is better is unknown**, and there is now no cheap way to find out: it needs a
+  corpus with references. The AMI test set is the obvious one, is what the speaker gate is already
+  defined on, and has not been run. **This is the single largest gap in this section.**
+- **Every figure above was taken at embedding batch 32**, which was the pipeline's batch when they
+  were measured. `master` set `BATCH_SIZE = 8` on 2026-08-26 at 19:56 with its own sweep behind it,
+  and this branch does not have that commit. **On merge, none of these numbers describes the
+  shipping configuration** — the parity figures are shape-independent enough to survive, the RTFs
+  are not, and master's own sweep puts batch 8 at RTF 0.8486 on torch.
+- **One stretch, one corpus, and not the one the gate is defined on.** The other four stretches are
+  unmeasured. No figure here may be compared with the 16.33% Sortformer number, which is AMI.
+- **The bundle has not been rebuilt.** `scripts/bundle-python.ps1` has not run with the two new
+  pins, so no installer carries `onnxscript`, and the derivation has never been exercised from a
+  `._pth` bundle — the configuration that broke speechbrain in a way no virtualenv reproduced.
+- **Transcription and diarisation have not been driven together** with the ONNX embedder. Reading
+  the code says they cannot interact — Silero VAD is CPU-only, single-threaded, in a different
+  process, and diarisation is a separate second pass that re-reads the file and ignores VAD's
+  output — but that is a code reading and not a run.
+- **The derived graph's cache key is the checkpoint's size and mtime plus a version constant.** It
+  does not cover the vendored pooling code the export wrapper calls directly, nor the torch, onnx
+  and onnxscript versions the graph is a function of. Bump `GRAPH_VERSION` by hand when any of those
+  changes. It also assumes the model directory is writable, which holds for a downloaded model and
+  would not for a bundled one.
+- **The parity fixture cannot catch a graph that is merely different.** It compares embedding
+  vectors at 1e-4 and passes at 1e-07 on a path whose labels move — which is the whole finding
+  above. It catches a *wrong* graph, not a *divergent* one, because clustering is a step function
+  and no elementwise tolerance sees a threshold being crossed.
+- **The derived graph is invisible to every size the product reports.** `ListInstalled` sizes a
+  multi-file model from the catalogue manifest, so the ~26.7 MB graph and its `.key` marker written
+  into the DiariZen directory are counted by neither the Models tab, `uindosill models` nor
+  `uindosill doctor`. They are removed with the model, so this is an under-report rather than a
+  leak — but a user comparing the folder on disk against the figure the app shows will find them
+  about 27 MB apart on that entry.
+- **The licence enumeration is behind by two top-level pins.** `docs/LICENSING.md`'s "112
+  distributions, sixty-two unread" predates `onnx` and `onnxscript`, which bring `onnx_ir` and
+  `ml_dtypes` with them. Both figures are floors until `scripts/bundle-python.ps1` is run and the
+  `.dist-info` enumeration redone.
+- **Nothing is measured on the desktop**, where CUDA exists, is reachable by name and is not in
+  `auto`. CUDA's record on the other diariser is that it does not reproduce the CPU.

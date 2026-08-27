@@ -275,6 +275,14 @@ public static class SpeakerLabelling
             // value any caller could have supplied.
             SpeakerBackend = labeller.Capabilities.Backend,
 
+            // The runtime beside the provider, because for the second diariser the provider alone is
+            // ambiguous: torch and ONNX Runtime's CPU provider both report `cpu` and they do not
+            // produce the same labels. Null-ed rather than stored when the labeller has one runtime,
+            // so nothing is written into a transcript that has no question to answer.
+            SpeakerEmbeddingBackend = labeller.Capabilities.EmbeddingBackend is { Length: > 0 } embedding
+                ? embedding
+                : null,
+
             // The count as asked for, and what honouring it cost. Both, because they answer
             // different questions and neither implies the other: a count that folded nothing still
             // constrained the run, and folds cannot occur without a count.
@@ -429,6 +437,50 @@ public static class SpeakerLabelling
             "turns that look entirely normal. Treat these labels as unverified.",
         _ => null,
     };
+
+    /// <summary>
+    /// What it means that the second diariser's embedder left torch, or null when it did not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Separate from <see cref="DescribeBackend"/> because the thing it warns about is invisible
+    /// to a <see cref="ComputeBackend"/>.</b> DiariZen runs segmentation in torch and negotiates a
+    /// provider only for the embedder, and both the torch embedder and ONNX Runtime's CPU provider
+    /// report <see cref="ComputeBackend.Cpu"/> — so the one word that reaches
+    /// <see cref="DescribeBackend"/> cannot distinguish the reference path from a departure to it.
+    /// </para>
+    /// <para>
+    /// <b>What is measured is that the two disagree, not that either is worse.</b> On
+    /// <c>two-hosts-three-guests-a</c>, 2026-08-26, on an idle machine, the ONNX embedder changed
+    /// the labels: 222 speaker turns against torch's 225, which as time is 565 of 300,000 frames —
+    /// 0.19% of the timeline and 0.82% of speech — with the speech/silence split byte-identical,
+    /// since segmentation never leaves torch. The difference is deterministic and reproducible: four
+    /// torch runs returned 225 and both ONNX providers returned exactly the same 222.
+    /// </para>
+    /// <para>
+    /// <b>No diarisation error rate exists for either.</b> A first attempt to score one was withdrawn
+    /// on 2026-08-27: it used <c>runs/der/stretches/*.rttm</c> as a reference, and those files are a
+    /// previous run's hypothesis output rather than ground truth — every one caps at four speakers on
+    /// episodes with two, five and seven, and <c>tests/fixtures/diarisation/dev/stretches.json</c>
+    /// marks the stretch <c>"labelled": false</c>. So this warning says the labels differ and does
+    /// not say which is better, because nothing has established that.
+    /// </para>
+    /// <para>
+    /// <b>That is still enough to keep it out of <c>auto</c>.</b> This project's rule is that what it
+    /// picks unasked reproduces the figure it publishes, and CUDA is excluded from the other
+    /// diariser's automatic choice while scoring <i>better</i> — so "changes the answer" has always
+    /// been the criterion, and it does not need a DER to apply. Reaching this embedder takes naming
+    /// a provider, and naming one earns this sentence.
+    /// </para>
+    /// </remarks>
+    public static string? DescribeEmbeddingBackend(string embeddingBackend) =>
+        embeddingBackend.StartsWith("onnxruntime:", StringComparison.Ordinal)
+            ? "Speaker labelling used the ONNX Runtime speaker embedder rather than the torch one the published "
+              + "figures describe, in exchange for running about a third faster. On the one ten-minute recording "
+              + "where both were run it labelled 0.19% of the timeline differently — 222 speaker turns against "
+              + "225 — and which of the two is closer to the truth has not been established. These labels are "
+              + "this machine's result rather than the published one."
+            : null;
 
     /// <summary>
     /// What a failed parity check means, given how far the probabilities were off.

@@ -14,9 +14,13 @@ host renders as "no such limit" rather than as a number nobody measured.
 
 **Three things this engine does not share with the Sortformer one, all of them structural:**
 
-* **It is torch, not ONNX Runtime.** There is no execution-provider choice to make, no parity
-  fixture in the ONNX sense and nothing for :mod:`..placement` to count nodes in. The backend it
-  reports is the torch device, and on the shipping bundle that is the CPU.
+* **It is torch by default, and half of it can be ONNX Runtime.** Segmentation is always torch;
+  the speaker embedder takes an execution provider, has its own parity fixture
+  (:mod:`.embedding_parity`) and gives :mod:`..placement` a session to count nodes in. **`auto`
+  resolves to torch**, because the ONNX embedder reproduces the embedding vectors to 1e-07 and
+  still moves the labels — see `diariser/__init__.py`'s `_load_diarizen`. The backend reported is
+  therefore the *embedder's* provider, and on the shipping default that is the torch CPU path.
+  This bullet said the opposite until 2026-08-27, which is how an adversarial review found it.
 * **It is offline, not streaming.** Sortformer walks the file in chunks with a speaker cache;
   this reads the whole file, embeds every chunk, then clusters globally. That is why it has no
   duration drift to bound — and equally why it holds the whole embedding set in memory.
@@ -48,8 +52,13 @@ MAX_SPEAKERS = None
 #: simultaneous talker in one window is not separated there; it says nothing about the file's total.
 MAX_CONCURRENT_SPEAKERS = 4
 
-#: Where the evidence stops. Nothing about this model's output has been measured by this project on
-#: any recording, so there is no bound to state — which is not the same as "any length".
+#: Where the evidence stops. **No accuracy figure exists for this model on any recording**, so
+#: there is no bound to state — which is not the same as "any length". Its output has been *looked
+#: at* since: turn and speaker counts over the ten-minute dev stretches, and a backend comparison on
+#: 2026-08-26. None of that is an accuracy measurement, because the stretches carry no reference
+#: labels — `stretches.json` marks them `"labelled": false`, and a DER scored against the RTTMs
+#: beside them was withdrawn on 2026-08-27 when those turned out to be a previous run's output.
+#: A bound here needs a corpus with references, which means AMI.
 RELIABLE_UP_TO_SECONDS = None
 
 #: What `threads: 0` means here. The same 12 the Sortformer engine uses, so that a CPU comparison
@@ -172,7 +181,13 @@ class DiarizenEngine:
     session.
     """
 
-    def __init__(self, model_dir: str, threads: int) -> None:
+    def __init__(
+        self,
+        model_dir: str,
+        threads: int,
+        provider: str = "torch",
+        profile: bool = False,
+    ) -> None:
         missing = [name for name in REQUIRED_FILES if not os.path.isfile(os.path.join(model_dir, name))]
         if missing:
             raise RequestError(
@@ -205,15 +220,167 @@ class DiarizenEngine:
         self.threads = threads or DEFAULT_THREADS
         self.device = str(next(self._pipeline._segmentation.model.parameters()).device)
 
+        # The segmentation half never moves. Measured 2026-08-26: exported to ONNX it is faithful on
+        # ORT's CPU provider (1.7e-05) and no faster anywhere — torch CPU, ORT CPU and ORT WebGPU
+        # all land within about 10% of each other, which is this machine's own run-to-run variance —
+        # and on WebGPU it is additionally wrong on this checkpoint and loses the device at a batch
+        # of 8 against the pipeline's configured 32. See `embedding_onnx` for the whole finding.
+        self.segmentation_backend = f"torch:{self.device}"
+        self.embedding_backend = "torch:cpu"
+        self._embedding_session: Any = None
+        self._torch_embedder = self._pipeline._embedding
+        self._model_dir = model_dir
+        self._profile = profile
+        self.embedding_fallback_reason = ""
+
+        if provider != "torch":
+            self.install_embedding_provider([provider])
+
+    def install_embedding_provider(self, candidates: list[str]) -> list[str]:
+        """Try each provider in order and keep the first that builds; return those passed over.
+
+        The pipeline is not rebuilt between attempts. Only the embedder differs, and re-reading a
+        265 MiB checkpoint to change which execution provider a 26 MiB graph runs on would be the
+        expensive half of the work done for none of the benefit.
+
+        Falls back to torch when the list runs out, which is why this returns reasons rather than
+        raising — see :meth:`_install_onnx_embedder`.
+        """
+        failures: list[str] = []
+        for candidate in candidates:
+            if candidate == "torch":
+                self.embedding_fallback_reason = ""
+                return failures
+            reason = self._install_onnx_embedder(candidate)
+            if not reason:
+                self.embedding_fallback_reason = ""
+                return failures
+            failures.append(reason)
+        self.embedding_fallback_reason = failures[-1] if failures else ""
+        return failures
+
+    def _install_onnx_embedder(self, provider: str) -> str:
+        """Put the wespeaker embedder on ONNX Runtime; return "" or the reason it stayed in torch.
+
+        **This returns a reason rather than raising, and the caller decides what that means.** As
+        the code stands the caller always turns a non-empty reason into a `RequestError`, because
+        the only way to reach here is to *name* a provider — `auto` resolves to `torch` and never
+        attempts an export — and a named provider is never fallen back from: somebody who typed
+        `webgpu` and silently got torch has been told nothing.
+
+        The two-step shape is kept anyway because it is what lets `install_embedding_provider` walk
+        a list, which is what `auto` would need the day the ONNX embedder earns its place in it. An
+        earlier revision of this docstring claimed the fall-back-to-torch outcome was live behaviour;
+        it was not reachable in any configuration, and an adversarial review said so on 2026-08-27.
+
+        Either way the engine is left consistent: on failure the torch embedder is restored, the
+        session dropped and :attr:`embedding_backend` set back to `torch:cpu`, so a caller that
+        chooses to continue gets a working pipeline rather than a half-installed one.
+        """
+        from . import embedding_onnx
+
+        try:
+            import onnxruntime as ort
+
+            from .engine import PROVIDERS
+
+            if provider not in PROVIDERS:
+                raise ValueError(f"unknown provider '{provider}'")
+
+            graph_path = embedding_onnx.ensure_graph(
+                self._model_dir,
+                os.path.join(self._model_dir, EMBEDDING_FILE),
+                self._torch_embedder.model_,
+            )
+
+            # onnxruntime-gpu links CUDA and cuDNN DLLs it does not ship. Without this the session
+            # falls back to the CPU with the failure written only to stderr — which is the silent
+            # fallback the registration assertion below exists to catch. The sibling engine does
+            # this for the same provider table and this path did not until 2026-08-27, so
+            # `--speaker-backend cuda` could fail here while working there.
+            if provider != "cpu":
+                ort.preload_dlls()
+
+            options = ort.SessionOptions()
+
+            # Set for every provider, not only the CPU one. A non-CPU session still runs its
+            # CPU-resident nodes — ONNX Runtime places shape operators there deliberately — and
+            # leaving those at ORT's machine default is exactly the "a default that varies by
+            # machine makes two runs incomparable" problem `DEFAULT_THREADS` exists to prevent.
+            options.intra_op_num_threads = self.threads
+
+            if self._profile:
+                from .. import placement
+
+                placement.enable(options)
+
+            session = ort.InferenceSession(graph_path, options, providers=PROVIDERS[provider])
+
+            # The same assertion the Sortformer engine makes: a session that quietly fell back to
+            # the CPU is indistinguishable from success except in the timings.
+            wanted = PROVIDERS[provider][0]
+            if wanted not in session.get_providers():
+                raise RuntimeError(
+                    f"{wanted} did not register; ONNX Runtime built the session with "
+                    f"{session.get_providers()}"
+                )
+
+            self._embedding_session = session
+            self._pipeline._embedding = embedding_onnx.OnnxSpeakerEmbedding(
+                self._torch_embedder, session, provider
+            )
+            self.embedding_backend = f"onnxruntime:{provider}"
+            return ""
+        except Exception as exc:  # noqa: BLE001
+            # Leave the pipeline exactly as it was. A half-installed embedder — a session that built
+            # but a graph that will not run — would be worse than none, because it would fail later,
+            # per file, inside the pipeline.
+            self._pipeline._embedding = self._torch_embedder
+            self._embedding_session = None
+            self.embedding_backend = "torch:cpu"
+            return f"{provider}: {exc}"[:300]
+
+    #: Set when an ONNX embedder was asked for and could not be built; empty otherwise.
+    embedding_fallback_reason: str = ""
+
+    def sessions_by_part(self) -> dict[str, Any]:
+        """The ONNX sessions this engine owns, for `placement` to count nodes in.
+
+        Empty when the embedder is in torch, which is what tells `placement` there is nothing to
+        measure rather than leaving it to fail on a missing attribute.
+        """
+        return {"embedding": self._embedding_session} if self._embedding_session else {}
+
+    def embed_for_parity(self, waveforms: Any, masks: Any) -> Any:
+        """Runs the fixture's batch through whichever embedder is installed.
+
+        Lives here rather than in `embedding_parity` so that the fixture never has to know which of
+        the two paths it is measuring — that is the engine's business, and the point of the check is
+        that both answer the same.
+        """
+        import numpy as np
+        import torch
+
+        return self._pipeline._embedding(
+            torch.from_numpy(np.asarray(waveforms, dtype="float32")),
+            masks=torch.from_numpy(np.asarray(masks, dtype="float32")),
+        )
+
     @property
     def backend(self) -> str:
-        """The torch device the graph is on, reported rather than assumed.
+        """Where the work happens, as one name the host can parse.
 
-        The same rule the ONNX engines follow for their execution provider: a run that cannot say
-        where it happened is a run nobody can re-examine. There is no provider negotiation here —
-        the bundle's torch is the CPU build — so this is a statement of fact rather than of choice.
+        **It reports the embedder's provider, and that is a choice worth stating.** This pipeline has
+        two neural stages on two different runtimes now, so no single word is the whole truth; the
+        fields :attr:`segmentation_backend` and :attr:`embedding_backend` carry the whole truth and
+        the capabilities send both. What this returns is the half that is *chosen* — segmentation is
+        torch on the CPU on every machine and always will be — because the host's question when it
+        reads `backend` is which execution provider needs checking against the reference, and the
+        answer is only ever this one.
         """
-        return self.device
+        if self._embedding_session is None:
+            return "cpu"
+        return self.embedding_backend.split(":", 1)[1]
 
     def label(
         self,

@@ -80,6 +80,23 @@ public sealed record TranscriptDocument
     public ComputeBackend? SpeakerBackend { get; init; }
 
     /// <summary>
+    /// Which runtime ran the speaker embedder, as <c>runtime:provider</c> — <c>torch:cpu</c> or
+    /// <c>onnxruntime:webgpu</c>. Null when the labeller has only one runtime, which is every
+    /// labeller but the second diariser.
+    /// </summary>
+    /// <remarks>
+    /// <b><see cref="SpeakerBackend"/> cannot carry this, which is the whole reason for a second
+    /// field.</b> The second diariser runs segmentation in torch and negotiates a provider only for
+    /// its embedder, and the torch embedder and ONNX Runtime's CPU provider both report
+    /// <see cref="ComputeBackend.Cpu"/> — so a transcript recording only that word cannot say which
+    /// of the two produced its labels. They are not interchangeable: measured 2026-08-26, the ONNX
+    /// embedder returns 222 speaker turns where torch returns 225 on the same ten-minute recording,
+    /// differing over 0.19% of the timeline. Recording the provider and not the runtime would be
+    /// the same half-provenance this field's neighbour exists to prevent.
+    /// </remarks>
+    public string? SpeakerEmbeddingBackend { get; init; }
+
+    /// <summary>
     /// The speaker count the caller asked for, when one was asked for at all. Null means the
     /// labeller's own estimate was taken as it came.
     /// </summary>

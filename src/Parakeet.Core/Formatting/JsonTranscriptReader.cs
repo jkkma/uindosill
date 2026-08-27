@@ -60,6 +60,7 @@ public static class JsonTranscriptReader
             SpeechDetector = OptionalString(root, "speechDetector"),
             SpeakerModelId = OptionalString(root, "speakerModel"),
             SpeakerBackend = OptionalBackend(root, "speakerBackend"),
+            SpeakerEmbeddingBackend = OptionalString(root, "speakerEmbeddingBackend"),
             RequestedSpeakerCount = OptionalInt(root, "requestedSpeakerCount"),
             SpeakerFolds = ReadSpeakerFolds(root),
             SpeakerTurns = ReadSpeakerTurns(root),

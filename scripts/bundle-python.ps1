@@ -248,12 +248,17 @@ foreach ($required in @(
     'uindosill_engines/serve.py',
     'uindosill_engines/protocol.py',
     'uindosill_engines/diariser/parity-reference.npy',
+    # The second diariser's speaker embedder has its own reference and its own gate, on the same
+    # terms as the three beside it: without the file the check reports "no reference committed" and
+    # a run continues on an unverified embedder. Added 2026-08-27 — it shipped for a day on neither
+    # this list nor package-windows.ps1's, which an adversarial review caught.
+    'uindosill_engines/diariser/embedding-parity-reference.npy',
     'uindosill_engines/translator/parity-reference.json',
     'uindosill_engines/translator/parity-sources.json',
     'uindosill_engines/_vendor/nemo/collections/asr/modules/sortformer_modules.py')) {
     $path = Join-Path $Destination $required
     if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
-        # The two parity references are on this list on purpose. Without one, the check that stands
+        # The parity references are on this list on purpose. Without one, the check that stands
         # between a user and a silently wrong execution provider reports "not available" and the run
         # proceeds — which is the failure looking exactly like success again.
         throw "$required is missing or empty in the bundle."

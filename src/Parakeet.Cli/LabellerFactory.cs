@@ -89,18 +89,35 @@ internal static class LabellerFactory
         else
         {
             var (path, descriptor) = ResolveModel(context, request);
+
+            // A catalogue entry states its engine; a path given with --speaker-model-path has no
+            // entry to state one, and a directory there can only be the one engine that installs a
+            // directory.
+            var kind = descriptor?.Engine is { Length: > 0 } engine
+                ? engine
+                : Directory.Exists(path) ? DiariserKinds.Diarizen : DiariserKinds.Sortformer;
+            var provider = ResolveBackend(request);
+
+            // `torch` names the second diariser's own runtime and the first has none. The sidecar
+            // refuses it too — it must, since nothing stops a host asking — but refusing here costs
+            // no subprocess and produces a usage error with a usage exit code, which is what a
+            // mistyped flag deserves.
+            if (string.Equals(provider, "torch", StringComparison.Ordinal)
+                && !string.Equals(kind, DiariserKinds.Diarizen, StringComparison.Ordinal))
+            {
+                throw new CliUsageException(
+                    $"{request.BackendOption} torch names the second diariser's runtime, and this model is an ONNX " +
+                    $"graph with no torch path. Choose cpu, cuda or webgpu, or select a model whose engine is " +
+                    $"'{DiariserKinds.Diarizen}'.");
+            }
+
             labeller = new SidecarSpeakerLabeller(new SidecarLabellerOptions
             {
-                // A catalogue entry states its engine; a path given with --speaker-model-path has no
-                // entry to state one, and a directory there can only be the one engine that
-                // installs a directory.
-                Kind = descriptor?.Engine is { Length: > 0 } engine
-                    ? engine
-                    : Directory.Exists(path) ? DiariserKinds.Diarizen : DiariserKinds.Sortformer,
+                Kind = kind,
                 ModelPath = path,
                 ModelId = descriptor?.Id ?? Path.GetFileNameWithoutExtension(path),
                 IntraOpThreads = request.Threads,
-                Provider = ResolveBackend(request),
+                Provider = provider,
             });
         }
 
@@ -126,11 +143,31 @@ internal static class LabellerFactory
         // every run about a backend that agrees would train people to ignore the line that matters.
         // The finding itself lives in Parakeet.Core, where the window reads the same one; what this
         // side adds is the remedy, which is a flag the window does not have.
-        if (SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend) is { } finding)
+        // **Those figures are Sortformer's, and until this session no other diariser could reach
+        // this line.** The second diariser reported `cpu` unconditionally; now that its embedder
+        // negotiates a provider it can report cuda or dml too, and the sentences below would then
+        // assert one model's AMI numbers about another. So the AMI-figure warnings are scoped to
+        // the diariser they were measured on, and the second one gets its own sentence further
+        // down — which does not quote a DER, because it does not have one.
+        // Read off the loaded engine's own name rather than the requested kind: it is what actually
+        // answered, and a labeller that reports its own identity cannot disagree with itself.
+        var quotesSortformerFigures =
+            !labeller.Capabilities.EngineName.StartsWith("diarizen", StringComparison.Ordinal);
+        if (quotesSortformerFigures
+            && SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend) is { } finding)
         {
             context.WriteError(labeller.Capabilities.Backend == ComputeBackend.Cuda
                 ? finding + $" {request.BackendOption} webgpu is the one that transfers."
                 : finding);
+        }
+
+        // The second diariser's embedder, which the line above cannot see: torch and ONNX Runtime's
+        // CPU provider both report `cpu`, and only one of them is the path the published figures
+        // describe. Reached only by naming a provider — `auto` is torch — so this fires on a
+        // deliberate choice and names the flag that undoes it.
+        if (SpeakerLabelling.DescribeEmbeddingBackend(labeller.Capabilities.EmbeddingBackend) is { } embedder)
+        {
+            context.WriteError(embedder + $" {request.BackendOption} torch is the published path.");
         }
 
         // What the machine itself found, which outranks anything measured elsewhere. A backend can
@@ -152,9 +189,18 @@ internal static class LabellerFactory
             // Three failing shapes and one sentence per shape, from the result itself: a magnitude
             // past the tolerance, a reason the sidecar gave instead of one, and a check that could
             // not run — which until 2026-08-22 was reported as nothing at all.
+            // **The remedy differs by diariser, because "the reference path" is a different flag for
+            // each.** For Sortformer the reference IS ONNX Runtime's CPU provider, so `cpu` is the
+            // answer by definition. For the second diariser the reference is its torch embedder, and
+            // `cpu` names ONNX Runtime's CPU provider there too — the very kind of path under
+            // suspicion when a parity check fails. Pointing a user at it at the moment a fault is
+            // detected would send them off the reference rather than onto it.
             if (sidecar.Parity?.Describe() is { } parityLine)
             {
-                context.WriteError(parityLine + $" {request.BackendOption} cpu is the one that does.");
+                context.WriteError(parityLine
+                    + (quotesSortformerFigures
+                        ? $" {request.BackendOption} cpu is the one that does."
+                        : $" {request.BackendOption} torch is the one that does."));
             }
         }
 
@@ -211,7 +257,12 @@ internal static class LabellerFactory
         var backend = asked.Trim().ToLowerInvariant();
         return backend switch
         {
-            "auto" or "cpu" or "cuda" or "webgpu" => backend,
+            // `torch` names the second diariser's own runtime rather than an execution provider,
+            // because that diariser has one: its embedder can run in torch or on ONNX Runtime, and
+            // torch is the path its figures describe. It is what `auto` resolves to there, so
+            // naming it is a way to be explicit rather than a way to change anything. The first
+            // diariser has no torch path and refuses it at load with that as the reason.
+            "auto" or "cpu" or "cuda" or "webgpu" or "torch" => backend,
             "dml" or "directml" when request.AllowUnverifiedBackend => "dml",
             "dml" or "directml" => throw new CliUsageException(
                 $"{request.BackendOption} dml is refused. At ONNX Runtime's default settings DirectML scores " +
@@ -221,7 +272,8 @@ internal static class LabellerFactory
                 $"{request.BackendOption} webgpu, which measured faithful at every optimisation level and scores " +
                 "16.33% — the CPU's own figure."),
             _ => throw new CliUsageException(
-                $"Unknown diariser backend '{asked}' for {request.BackendOption}. Choose cpu, cuda, webgpu or dml."),
+                $"Unknown diariser backend '{asked}' for {request.BackendOption}. Choose cpu, cuda, webgpu, dml, " +
+                "or torch for the second diariser's own runtime."),
         };
     }
 
