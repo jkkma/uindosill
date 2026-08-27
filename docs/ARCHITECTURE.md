@@ -226,9 +226,10 @@ is a figure nobody can reproduce.
 newline, because every payload on it is small — audio arrives as a path and a diarisation result is
 a few thousand numbers. Nothing streams bytes over this channel on purpose.
 
-**stdout belongs to the protocol and to nothing else.** `torch`, `librosa` and `numba` all print to
-stdout given the right provocation, and a single stray line of theirs lands in the middle of a JSON
-stream and desynchronises the host for the rest of the run. `protocol.claim_stdout` therefore takes
+**stdout belongs to the protocol and to nothing else.** `torch`, `pyannote` and `transformers` all
+print to stdout given the right provocation — a progress bar, a deprecation notice, a "model loaded"
+line — and a single stray line of theirs lands in the middle of a JSON stream and desynchronises the
+host for the rest of the run. `protocol.claim_stdout` therefore takes
 a duplicate of the real handle for the channel and points file descriptor 1 itself at stderr, not
 only `sys.stdout` — so an `os.write`, a C extension's `printf` through the interpreter's C runtime
 and a child process the sidecar spawns all land on stderr too — before any model library is

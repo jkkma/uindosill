@@ -65,6 +65,26 @@ RELIABLE_UP_TO_SECONDS = None
 #: between the two is a comparison of models rather than of thread counts.
 DEFAULT_THREADS = 12
 
+#: Windows of audio the segmentation and embedding passes batch together. **Upstream's config
+#: says 32 and this project runs 8**, which is a deviation from the published artefact and so is
+#: measured rather than asserted. Swept 2026-08-26 over the ten-minute `two-hosts-three-guests-a`
+#: on the shipping stack, three arms:
+#:
+#:     batch  8   peak 3,936 MiB   RTF 0.8486   225 turns   5 speakers
+#:     batch 16   peak 6,825 MiB   RTF 0.9275   225 turns   5 speakers
+#:     batch 32   peak 11,740 MiB  RTF 0.9860   225 turns   5 speakers
+#:
+#: **The labels do not move** -- identical turns and speakers at every size -- which is what makes
+#: this a free choice rather than a trade, and what would have stopped it had they moved. The
+#: default is worse on both axes: a third of the memory and about 14% faster at 8, because the
+#: largest batch peaks near 11.7 GB on a 16 GB machine and the slowdown is what that costs.
+#:
+#: Applied here rather than by editing the installed `config.toml`, deliberately: that file is the
+#: upstream artefact the catalogue pins by digest, and a copy this project had rewritten would no
+#: longer be the thing the entry's SHA-256 describes. The deviation belongs in this project's own
+#: code, next to the three torch shims, where a reader looking for what differs will find it.
+BATCH_SIZE = 8
+
 #: The files a model directory must hold. `plda.npz` and `xvec_transform.npz` sit beside the rest
 #: rather than in the `plda/` subdirectory the upstream repository uses: the model catalogue refuses
 #: a `fileName` that is not a bare file name, and `vbx_setup` reads both by name from whatever
@@ -216,6 +236,13 @@ class DiarizenEngine:
         # The flattening described at PLDA_FILES. `plda_dir` is read at clustering time rather than
         # at construction, so overriding it here is enough and there is no re-instantiate to do.
         self._pipeline.clustering.plda_dir = model_dir
+
+        # Both passes, because `SpeakerDiarization.__init__` takes them as two arguments and bakes
+        # the segmentation one into its `Inference`. Setting only the attribute would change the
+        # embedding half and silently not the other, which is the failure this line's shape avoids.
+        self._pipeline.segmentation_batch_size = BATCH_SIZE
+        self._pipeline.embedding_batch_size = BATCH_SIZE
+        self._pipeline._segmentation.batch_size = BATCH_SIZE
 
         self.threads = threads or DEFAULT_THREADS
         self.device = str(next(self._pipeline._segmentation.model.parameters()).device)

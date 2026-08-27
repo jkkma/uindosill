@@ -38,7 +38,7 @@ rather than pending.** The diariser and the translator moved out of C# and into 
 interpreter on 2026-08-21; `scripts/bundle-python.ps1` assembles one and
 `scripts/package-windows.ps1` puts it in the publish. What was outstanding when this paragraph was
 first written — a packaging run — happened: `v1.0.0-rc.3` was published on 2026-08-23 as the first
-release packed with the bundle, which turns fifty third-party wheels and a CPython from things this
+release packed with the bundle, which turned fifty third-party wheels and a CPython from things this
 project *depends on* into things it *redistributes*. **The obligation is not discharged.** The
 section below is the record of what is owed, and it is now owed against a release that exists
 rather than against a decision — a stronger claim on this project than the one this paragraph used
@@ -493,112 +493,215 @@ way, for the same reason the ASR row is unconditional.
 **What is not claimed.** No lawyer has read this either. The zips also carry OpenMP runtime
 DLLs, covered by the same reading as the ASR tier's.
 
-## The bundled Python is fifty more redistributions, and the notice half is now discharged
+## The bundled Python is 99 more redistributions, and the notice half is discharged again
 
-> **Fifty is a 2026-08-21 number and the requirements have grown since.** Everything below was
-> verified against a bundle assembled that day, and it is left as it was because it says what
-> was actually checked. On 2026-08-26 the second diariser added its stack to
-> `python/requirements-bundle.txt`; a `--dry-run` resolve of the whole file now reports **112
-> distributions**. That is pip's count, not a licence enumeration: the closure below was
-> established by assembling a bundle and reading every `.dist-info`, and **that has not been
-> redone**. So what is owed before the next release is one run of `scripts/bundle-python.ps1`
-> and one re-enumeration — the notice half is discharged for fifty, and for sixty-two of them
-> nobody has looked yet. `docs/PHASES.md` § *Decided 2026-08-26* records the change that caused
-> it.
->
-> **112 is itself now behind.** On 2026-08-27 the speaker embedder's ONNX export added `onnx` and
-> `onnxscript` as top-level pins, and those two pull `onnx_ir` and `ml_dtypes` in behind them. The
-> resolve has not been re-run, so the true figure is 112 plus at most four and the sixty-two
-> unread is at least sixty-two; both are floors rather than counts until the one run above happens.
-> Recorded rather than estimated, because a licence enumeration that guesses is not one.
->
-> Two of the new ones are installed from source rather than as wheels — `docopt` and
-> `antlr4-python3-runtime`, neither of which has ever published one — through a named allowlist
-> in the packaging script. Both are pure Python, so a source build produces the same artefact
-> anywhere; a package with an extension module may not join that list.
+**Re-enumerated twice on 2026-08-26**, each time against a bundle assembled that day. The second
+diariser's stack took it from the fifty verified on 2026-08-21 to 108; removing librosa later the
+same day took it to **99**, and 1.40 GB to 1.26 GB. Everything below describes the 99, and the
+reading has been redone rather than scaled.
+
+**108 and not the 112 a resolve predicted**, and the difference is worth stating because it is the
+kind of gap that makes a projected number untrustworthy. A `--dry-run` of the requirements reported
+112 while speechbrain was still pinned. Dropping it — it makes DiariZen unloadable in the bundle,
+`docs/GOTCHAS.md` #36 — took `hyperpyyaml` and `ruamel.yaml` with it, because nothing else wanted
+them. **A resolver's count is not an enumeration**, and the number here is the one an assembled
+`Lib/site-packages` actually holds.
+
+**99 is behind by two pins as of 2026-08-27.** The speaker embedder's ONNX export added `onnx` and
+`onnxscript`, which bring `onnx_ir` and `ml_dtypes` with them. No bundle has been assembled since,
+so the enumeration has not been redone and the paragraph above describes a `Lib/site-packages` that
+no longer matches the requirements. The figure is a floor until one is — stated rather than
+adjusted, because a count arrived at by adding to a verified one is exactly the projected number
+the paragraph above declines to trust.
 
 **Depending on a package and shipping it are different obligations, and this is the change that
 crosses from one to the other.** `PythonRuntime.Resolve` looks for `<app>/python/python.exe` — an
 interpreter beside the application, so a user installs nothing and no system Python is consulted.
-What that interpreter is made of is now something this project hands to people.
+What that interpreter is made of is something this project hands to people.
 
-**The set is pinned and it is not small.** `python/requirements-bundle.txt` names nine top-level
-packages and says why each version is the version it is; `scripts/bundle-python.ps1` unpacks a
-pinned embeddable CPython and installs them into it. Resolved against the working venv on
-2026-08-21 and then verified against an assembled bundle the same day, the transitive closure of
-those nine is **fifty distributions**. The pins live in that file and are not repeated here.
-
-**The notices themselves are assembled, and they are in `NOTICE.md`.** Since 2026-08-25
+**The notices themselves are assembled, and they are in `NOTICE.md`.**
 `scripts/collect-python-notices.py` reads the installed `METADATA` of every distribution in an
 assembled bundle and writes the table there between two markers, with `--check` failing when the
-document and the bundle disagree; the release workflow runs it after packing, which is the only
-point in CI where a bundle exists. **What stays here is what a generator cannot write** — what each
-licence *obliges*, which of them are not simply permissive, and what about all of it is still
-unresolved. That division is the point: the list of names belongs where notices travel, and the
-reading belongs where reasoning is recorded.
+document and the bundle disagree. **That guard did its job on this re-enumeration** rather than
+merely existing: it refused to write until `antlr4-python3-runtime` and `primePy` — two newcomers
+shipping no licence text at all — were named with their reasons. What stays here is what a generator
+cannot write: what each licence *obliges*, which are not simply permissive, and what is unresolved.
 
-**Every licence below was read off the installed `.dist-info/METADATA` on this machine**, not
-recalled. Grouped by what the metadata actually says, with the four that are not simply permissive
-held back for the paragraph after:
+**Three are not simply permissive, and every stated licence was scanned for a copyleft family
+rather than the four being assumed.** Sixty new distributions brought no new one, and the removal of
+librosa took the hardest of the old ones with it.
 
-- **MIT** — charset-normalizer, filelock, narwhals, onnxruntime-webgpu, platformdirs, pyyaml,
-  setuptools, urllib3; **MIT-0** — cffi.
-- **BSD-3-Clause** — fsspec, idna, joblib, lazy-loader, markupsafe, networkx, pooch, protobuf,
-  pycparser, scikit-learn, soundfile, threadpoolctl; **BSD-2-Clause** — decorator.
-- **Apache-2.0** — flatbuffers, ml-dtypes, msgpack, onnx, optimum-onnx, requests, sentencepiece,
-  transformers.
-- **ISC** — librosa. **PSF-2.0** — typing-extensions.
-- **Compound, where the expression is the licence** — numpy is *BSD-3-Clause AND 0BSD AND MIT AND
-  Zlib AND CC0-1.0*; torch is *Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND
-  BSD-3-Clause AND BSL-1.0 AND MIT*; llvmlite is *BSD-2-Clause AND Apache-2.0 WITH LLVM-exception*;
-  regex is *Apache-2.0 AND CNRI-Python*; packaging is *Apache-2.0 OR BSD-2-Clause*.
-- **A family without a version** — mpmath, numba and sympy say only "BSD"; huggingface-hub and
-  optimum say only "Apache"; scipy's `License` field is a copyright line rather than an identifier.
-  Their classifiers name the same family and nothing narrower. BSD-2 and BSD-3 differ by a clause
-  and there is more than one Apache licence, so these are recorded as read rather than resolved.
-- **No `License` field at all** — colorama, jinja2, safetensors and tokenizers. All that is known
-  about them here is a trove classifier naming a family: BSD for the first two, Apache for the other
-  two. **That is a weaker check than the rest of this file and is marked rather than tidied away.**
-
-**Four of the fifty are not simply permissive, and they are the ones to read twice.**
-
-1. **soxr is LGPL-2.1-or-later**, and its wheel bundles libsoxr (LGPL-2.1) and PFFFT. Nothing in
-   this project imports it; librosa declares it, and librosa is here for one call.
-2. **soundfile is BSD-3-Clause and its wheel is not.** `_soundfile_data/libsndfile_x64.dll` ships
-   with a `COPYING` beside it that is the **LGPL-2.1**. A table that read the package metadata and
-   stopped there would have recorded this one as BSD and missed it.
-3. **certifi is MPL-2.0** — file-level copyleft, weaker than the LGPL and still not MIT.
-4. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
+1. **soundfile is BSD-3-Clause and its wheel is not.** `_soundfile_data/libsndfile_x64.dll` ships
+   with a `COPYING` beside it that is the **LGPL-2.1** — confirmed still present in this bundle. A
+   table that read package metadata and stopped there would record this one as BSD and miss it,
+   which is why the check walks the tree.
+2. **certifi is MPL-2.0** — file-level copyleft, weaker than the LGPL and still not MIT.
+3. **tqdm is MPL-2.0 AND MIT** — the same shape, and an `AND` rather than an `OR`: both apply.
 
 The LGPL is the one with a shape this product has to think about: it attaches conditions about
-relinking to a binary a recipient receives, and both of these arrive as prebuilt DLLs inside wheels.
-**Whether shipping them in an installer satisfies those conditions has not been worked out here.**
+relinking to a binary a recipient receives. **That question is now read rather than deferred, and
+the answer is below.** The reading is kept in the present tense it was written in, because it is
+what justified the removal that followed; where it says "two components", one of them left the
+bundle the same day and the closing paragraphs say so.
 
-**Most of the notice texts already travel, by accident of how wheels are built.** Forty-six of the
-fifty carry a `LICENSE`, `COPYING` or `NOTICE` inside their `.dist-info`, and `pip install --target`
-copies that directory, so those texts land in the bundle without anyone deciding they should.
-`onnxruntime-webgpu` is a forty-seventh by another route — its texts are in the package directory
-rather than the metadata. torch's wheel carries thirty-four third-party licence directories of its
-own and ONNX Runtime's carries 331 KB in one file; **nobody here has read either.**
+### The LGPL question, read against what actually ships — 2026-08-26
 
-**Three ship no licence text anywhere: `flatbuffers`, `sentencepiece` and `tokenizers`.** All three
-are Apache — the first two say so in their metadata and the third only by classifier — and
-Apache-2.0 §4(a) wants a copy rather than a link, which is the same condition the translation weights
-already put on this repository. Those three texts have to be supplied by hand or the bundle does not
-meet them.
+The paragraph above used to end by saying this had not been worked out. It has now been read, against
+the binaries in an assembled bundle rather than against the idea of them, and **the two LGPL
+components turn out to be in different positions.** What follows is a careful reading by the people
+writing the code, which is the standing of every licence reading in this file; no lawyer has seen it.
 
-**The closure was checked against an assembled bundle, and it is fifty.** The worry was general and
-sound — a set resolved from an existing virtual environment can differ from the one `pip` produces
-against `python/requirements-bundle.txt`, and `hf-xet` was the named candidate, since
-`huggingface-hub` declares it for x86_64 and amd64 without an extra. A bundle was assembled on
-2026-08-21 by `scripts/bundle-python.ps1` and its `Lib/site-packages` enumerated: **exactly the fifty
-above, and no `hf-xet`.** So the list is the shipped list rather than an approximation of it.
+**Neither library is linked by this project.** Both arrive as prebuilt binaries inside wheels that
+`pip` installs unmodified, and `scripts/bundle-python.ps1` copies the tree whole. So the act being
+performed is *redistribution of the Library in object form* — LGPL-2.1 §4 — and, for the application
+that calls it, distribution of a "work that uses the Library" combined with it — §6. Nothing here
+compiles, patches or statically incorporates either library by its own hand.
 
-**What that check does not settle** is that it stays fifty. It is one resolution, on one day, on
-Windows on x86-64, against an index that moves; `pip` is free to bring in a new transitive dependency
-the next time this runs. Nothing re-enumerates the bundle automatically and nothing compares a fresh
-enumeration against this list, so a fifty-first arriving silently is the failure mode that remains —
-and `scripts/bundle-python.ps1` is where a check for it would go.
+**libsndfile is dynamically loaded and replaceable, and that is the good case.** `soundfile` is
+BSD-3-Clause Python; `_soundfile_data/libsndfile_x64.dll` is LGPL-2.1 and `soundfile.py` reaches it
+with `_ffi.dlopen(_full_path)` at run time — and falls back to `_ffi.dlopen(_libname)`, a system
+copy, when the packaged file is absent. That is a shared library mechanism in the sense §6(b)(2)
+asks for: **a user can drop an interface-compatible libsndfile into `_soundfile_data/` and the
+product will use it**, which was verified by reading the loader rather than assumed. What §6(b) does
+*not* cleanly cover is its own clause (1) — "uses at run time a copy of the library **already present
+on the user's computer system**, rather than copying library functions into the executable" — and
+this installer ships the DLL rather than finding one. The mechanism is right and the provenance of
+the copy is not what 6(b)(1) describes, so **6(b) is arguable here and is not relied on below.**
+
+**libsoxr was statically linked, and that was the harder case — and the reason it is gone.**
+`soxr` shipped as `soxr/soxr_ext.pyd` — 354,304 bytes, and its import table named only `KERNEL32`,
+the MSVC runtime, the `api-ms-win-crt-*` stubs and `python3.dll`. **There was no libsoxr DLL
+anywhere in the bundle**, so the library was inside that binary. §6(b) was therefore unavailable outright: nothing was
+shared-linked and library functions *were* copied into the executable. The wrapper is itself
+LGPL-2.1 (Python-SoXR, Copyright (c) 2021 Myungchul Keum), so the `.pyd` is a work under the LGPL
+rather than a proprietary work that merely uses one — which simplifies the question rather than
+complicating it.
+
+**Three of §6's conditions are already met, by construction rather than by intent.**
+
+- *A copy of the License, supplied.* `_soundfile_data/COPYING` ships, because `pip install
+  --target` keeps what the wheel carries and the packaging step copies the tree whole. While `soxr`
+  was here, `soxr-1.1.0.dist-info/licenses/COPYING.LGPL` and libsoxr's and PFFFT's own notices
+  shipped beside it.
+- *Prominent notice that the Library is used and is covered by this License.* `NOTICE.md` names it
+  and says how it is linked.
+- *Terms that permit modification for the customer's own use and reverse engineering for debugging
+  those modifications.* This product imposes no terms that forbid either: the source is MIT, there
+  is no EULA, and `docs/LICENSING.md` already records that no technological measure restricts the
+  weights. **An LGPL component inside a product whose own licence forbade reverse engineering would
+  be the breach; this one does not.**
+
+**What is not met is the one that matters: none of §6(a) to §6(e) has been done.** No corresponding
+source accompanies a release, no written offer exists, and no equivalent source access is offered
+from the place the releases are distributed. For libsndfile that gap is arguable, because 6(b) may
+carry it. **For libsoxr it is not arguable at all** — the static link closes 6(b), and nothing else
+has been provided.
+
+**The cheapest correct discharge is a written offer, and this repository already knows the shape.**
+`licences/mpv-WRITTEN-OFFER.txt` satisfies GPLv2 §3(b) for libmpv by naming exact revisions of
+everything GPL in the distribution. §6(c) is the same instrument for the LGPL: an offer valid three
+years to supply the §6(a) materials — for each library, its complete corresponding source, and for
+`soxr_ext.pyd` the "work that uses the Library" in a form allowing relink, which is Python-SoXR's own
+C++ wrapper and is public. §6(d) is the alternative and is *narrower* than it looks: it wants
+equivalent access **"from the same place"**, so pointing at upstream's site would not be 6(d) while
+attaching a source archive to the same GitHub release would.
+
+**The alternative was to stop shipping them, and for one of the two that turned out to be nearly
+free.** **`soxr` was never loaded.** `uindosill_engines` did not import it, and `librosa` did not
+pull it at import or for the single call this project made — `librosa.filters.mel` — which was
+checked by running it and reading `sys.modules`. It was in the bundle only because `librosa`
+declared it as a hard dependency, and `librosa` was here for that one call, which
+`python/requirements-bundle.txt` already recorded as replaceable by a committed filterbank, for
+size. libsndfile is a real dependency by comparison — `soundfile` reads every WAV the host writes —
+though those are 16-bit PCM mono, which the standard library's `wave` module can also read.
+
+**Both exits were taken, in that order.** `soxr` is gone — see below — so the statically-linked
+half of this problem no longer exists, and what remains is libsndfile, the replaceable half. The
+written offer stays, because a replaceable DLL is still an LGPL binary this project distributes and
+because §6(b)(1)'s "already present on the user's computer system" does not describe a copy the
+installer ships.
+
+**Discharged 2026-08-26 by a written offer under §6(c).**
+`licences/LGPL-WRITTEN-OFFER.txt` names libsndfile at the exact version shipped, with the SHA-256
+and byte count of the binary, says how it is linked and that it is replaceable, and offers the
+§6(a) materials for three years. **It extends the same offer to libsoxr for anyone holding a copy
+that contained it** — including the "work that uses the Library" in a form allowing relink, which is
+Python-SoXR's own wrapper source — because a recipient of an older release is owed the offer that
+applied to their copy, and a removal does not reach backwards. It travels through `Licences.targets`
+like every other notice, and `scripts/package-windows.ps1` now **refuses a publish without it**, on
+the same terms as the NVIDIA Agreement: a build that silently stopped copying it would produce a
+package that looks complete.
+
+That is the whole obligation for libsndfile too. §6(b) may well have carried it — the DLL is
+separate and replaceable — but the offer covers both, so nothing here rests on a reading of
+6(b)(1) that a shipped copy is "already present on the user's computer system".
+
+**The second exit was taken the same day.** `librosa.filters.mel` in `diariser/feats.py` is now a
+committed `mel-filterbank.npy`, librosa left `python/requirements-bundle.txt`, and **`soxr` left with
+it** — along with numba, llvmlite, pooch and audioread. An assembled bundle went from 108
+distributions and 1.40 GB to **99 and 1.26 GB**, and **nothing statically linked in this product is
+under the LGPL any more.**
+
+**Two things had to be true first, and both were measured rather than argued.** *That the features
+do not move*: `librosa.filters.mel` at this project's parameters produces a `(128, 257)` float32
+matrix that is deterministic across calls and round-trips through `.npy` bit-for-bit, and the old
+code and the new produce **the same 12,016 x 128 mel array to the last bit over two minutes of real
+audio**, with librosa hard-blocked at `sys.meta_path` so the new path could not quietly fall back to
+it. That check was run before the edit on sixty seconds and again after it on two minutes, because a
+proof of the version you are about to write is not a proof of the version you wrote. Committing the
+matrix is therefore not a loss of the fidelity `python/requirements-bundle.txt` protects but a
+strengthening of it: it pins the exact array the 16.3324% figure was produced with, where the
+present code depended on a library continuing to produce it. *And that nothing else wanted librosa*:
+removed from an assembled bundle together with `soxr`, the engine still returned 19 turns and 3
+speakers, the reference result, because `torchmetrics` guards its own `import librosa` behind an
+availability check and simply stops exposing `dnsmos`. `docs/PHASES.md` carries the decision.
+
+
+
+**Five ship no licence text anywhere, up from three, and the two new ones are the weakest claims in
+the bundle.** `flatbuffers`, `sentencepiece` and `tokenizers` are the originals and all name Apache,
+whose text travels several times over in this bundle — so a recipient has the licence even without
+a copy attached. The newcomers do not have that luxury:
+
+- **`antlr4-python3-runtime` says only `BSD`.** That names a family, not a licence: BSD-2 and BSD-3
+  differ by a clause, and nothing in the wheel says which. It arrives because every `omegaconf`
+  release pins `==4.9.*`, and it is one of two packages built from source through the allowlist in
+  `scripts/bundle-python.ps1`.
+- **`primePy`'s `License` field is the literal `UNKNOWN`**, with a trove classifier alone claiming
+  MIT. It reaches the bundle transitively, through `torch-pitch-shift` under `torch-audiomentations`.
+  **This is the least-established licence claim in the product**, and it is recorded here rather
+  than rounded up to MIT.
+
+**Three groups are read rather than resolved, and the newcomers enlarged the middle one.** Where a
+wheel gives a PEP 639 `License-Expression` the identifier is exact; where it gives the legacy field
+or a classifier it is often a family. `mpmath`, `numba`, `sympy` and now `antlr4-python3-runtime`
+say only "BSD"; `accelerate`, `huggingface_hub` and `optimum` say only "Apache"; `python-dateutil`
+says the literal **"Dual License"**, which states that there are two and names neither. Ten more
+arrive with a classifier and no field at all — `Jinja2`, `colorama`, `contourpy`, `cycler`,
+`kiwisolver`, `omegaconf`, `pandas`, `scipy`, `semver` and `torchaudio` among them. **These are
+recorded as read**, and that is a weaker check than an SPDX expression.
+
+**Two large bodies of third-party notice ship inside this bundle and nobody here has read either.**
+`torch`'s wheel carries **107 licence files** in its `.dist-info` — its own plus the vendored
+projects its SPDX expression is a summary of — and `onnxruntime-webgpu` ships a
+**331 KB `ThirdPartyNotices.txt`** in the package directory — 331,175 bytes, the same file the
+section above compares against the committed 1.29.0 copy, quoted there in the same decimal kB
+so the two readings cannot look like a disagreement. Both travel with the product, so the
+texts reach a recipient; what has not happened is anyone reading them to find out whether any
+imposes a condition beyond attribution. That is the same unresolved item the previous enumeration
+recorded, restated against this bundle: the earlier note said "thirty-four third-party licence
+directories" for torch, which does not describe the 2.13.0 wheel — its licences live in the
+`.dist-info` and there are 107 of them. **Counts about someone else's wheel go stale when the wheel
+does**, which is the argument for the generated table doing the counting.
+
+**What this re-enumeration does not settle** is that it stays 108. It is one resolution, on one day,
+on Windows on x86-64, against an index that moves, and `pip` is free to bring in a new transitive
+dependency next time. What has changed since the fifty is that the failure mode is now caught rather
+than merely described: `--check` compares a fresh enumeration against `NOTICE.md` and fails on a
+mismatch, and an unlisted textless distribution fails the run outright. **A hundred-and-ninth
+arriving silently is no longer the risk; a hundred-and-ninth arriving and nobody running the script
+is.** The release workflow runs it after packing, which is the only point in CI where a bundle
+exists.
 
 **CPython is the PSF License Agreement, and the Windows build adds a second party.** Version 2 of
 the Agreement, read from the installed CPython 3.12.10 on this machine on 2026-08-21: §2 permits

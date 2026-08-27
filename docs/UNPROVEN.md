@@ -3054,6 +3054,12 @@ torch at 0.48 and missed the transitive set. Where the difference goes is measur
 for exactly one call, `librosa.filters.mel`; about **95 MB** more is `sympy` and `networkx`, which
 are torch's.
 
+**Both the figure and the librosa sentence are superseded, and the newer numbers are also measured.**
+The diariser's stack took the bundle to **108 distributions and 1.40 GB** on 2026-08-26; removing
+librosa the same day — its one call is now a committed `mel-filterbank.npy` — took it to **99 and
+1.26 GB**, with `soxr`, numba, llvmlite, pooch and audioread leaving with it. The installer questions
+in the rest of this entry are unaffected and still open; only the size and the composition moved.
+
 **The assembled bundle was driven end to end the same day**: it answered the handshake, loaded the
 real translation checkpoint on WebGPU in 5.5 s, passed the translation parity fixture 6 of 6, and
 translated a sentence in 0.15 s — and the shipping CLI drove it through `UINDOSILL_PYTHON` and
@@ -6054,11 +6060,15 @@ took the worst of it.
 - **Which embedder is better is unknown**, and there is now no cheap way to find out: it needs a
   corpus with references. The AMI test set is the obvious one, is what the speaker gate is already
   defined on, and has not been run. **This is the single largest gap in this section.**
-- **Every figure above was taken at embedding batch 32**, which was the pipeline's batch when they
-  were measured. `master` set `BATCH_SIZE = 8` on 2026-08-26 at 19:56 with its own sweep behind it,
-  and this branch does not have that commit. **On merge, none of these numbers describes the
-  shipping configuration** — the parity figures are shape-independent enough to survive, the RTFs
-  are not, and master's own sweep puts batch 8 at RTF 0.8486 on torch.
+- **Every figure above was taken at embedding batch 32, and the pipeline now runs 8.** That was the
+  batch when they were measured; `BATCH_SIZE = 8` landed on master at 19:56 the same evening, with
+  its own memory-and-RTF sweep behind it, and merged into this work afterwards. **So none of the
+  real-time factors above describes the shipping configuration.** Master's sweep puts torch at
+  RTF 0.8486 at batch 8 against the 0.920 recorded here at 32; **the ONNX embedder has not been
+  timed at 8 at all**, so the speed advantage is unmeasured at the batch the product actually uses.
+  The parity figures are the exception and survive — the committed fixture runs at its own batch of
+  3 and passes there, and the graph is dynamic in batch by construction — as does the turn-count
+  comparison, which master's own sweep confirms is batch-independent at 225 turns on torch.
 - **One stretch, one corpus, and not the one the gate is defined on.** The other four stretches are
   unmeasured. No figure here may be compared with the 16.33% Sortformer number, which is AMI.
 - **The bundle has not been rebuilt.** `scripts/bundle-python.ps1` has not run with the two new
