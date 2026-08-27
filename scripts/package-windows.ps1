@@ -607,12 +607,13 @@ foreach ($channel in $Channels) {
             'python.exe',
             'uindosill_engines/serve.py',
             'uindosill_engines/diariser/parity-reference.npy',
+            'uindosill_engines/diariser/embedding-parity-reference.npy',
             'uindosill_engines/translator/parity-reference.json',
             'Lib/site-packages/onnxruntime')) {
             $path = Join-Path $bundleDir $required
             if (-not (Test-Path -LiteralPath $path)) {
                 throw "python/$required is missing from the publish. Two of this product's three models run in " +
-                      "that bundle, and both parity references are what stand between a user and a silently " +
+                      "that bundle, and the parity references are what stand between a user and a silently " +
                       "wrong execution provider."
             }
         }

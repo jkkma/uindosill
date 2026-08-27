@@ -281,6 +281,83 @@ public sealed class SidecarEngineTests
     // -- the diariser --------------------------------------------------------------------------
 
     [Fact]
+    public async Task DiarizensOnnxEmbedderIsParityCheckedEvenWhenItReportsTheCpu()
+    {
+        // The companion to the translator test above, and the exception to it. Sortformer's
+        // reference *is* ONNX Runtime's CPU provider, so checking the CPU against itself would
+        // measure nothing. DiariZen's reference is its torch embedder, so ORT's CPU provider is a
+        // different runtime from the thing it is compared against and is checked like any other —
+        // and the backend word cannot tell them apart, because both report `cpu`. A parity rule is
+        // scripted below; if the check were skipped the assertion on Parity would fail.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"diarizen-torch-python","modelId":"diarizen","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"onnxruntime:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"maxConcurrentSpeakers":4,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":[]}}""",
+                },
+            },
+            new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":true,"passed":true,"maxAbsDiff":1.21e-07,"tolerance":1.0e-04}""" } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions
+            {
+                ModelPath = "unread-directory",
+                Provider = "auto",
+                Kind = DiariserKinds.Diarizen,
+            },
+            sidecar);
+
+        await labeller.LoadAsync();
+
+        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
+
+        // Asserted rather than merely scripted: this is the field the whole warning path keys on,
+        // and without an assertion a rename of the JSON key would ship in silence.
+        Assert.Equal("onnxruntime:cpu", labeller.Capabilities.EmbeddingBackend);
+
+        Assert.NotNull(labeller.Parity);
+        Assert.True(labeller.Parity!.Passed);
+    }
+
+    [Fact]
+    public async Task DiarizensTorchEmbedderIsNotParityCheckedBecauseItIsTheReference()
+    {
+        // The negative companion, and the more important of the pair. Checking torch against the
+        // committed reference would not be a parity check at all — it would ask whether this
+        // machine's torch build reproduces the one that generated the fixture, which is a
+        // cross-machine reproducibility question nobody has measured headroom for. No parity rule
+        // is scripted, so if the check ran it would come back as an error and fail this test.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"diarizen-torch-python","modelId":"diarizen","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"torch:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"maxConcurrentSpeakers":4,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":[]}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions
+            {
+                ModelPath = "unread-directory",
+                Provider = "auto",
+                Kind = DiariserKinds.Diarizen,
+            },
+            sidecar);
+
+        await labeller.LoadAsync();
+
+        Assert.Equal("torch:cpu", labeller.Capabilities.EmbeddingBackend);
+        Assert.Null(labeller.Parity);
+    }
+
+
+    [Fact]
     public async Task TheDiarisersDeclaredLimitsAreTheOnesItReportsAfterLoading()
     {
         using var fake = FakeSidecarProcess.Scripted(Script(

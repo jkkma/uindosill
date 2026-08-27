@@ -342,7 +342,23 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // 16.33% while emitting speaker turns that read as perfectly ordinary. Two chunks of
             // synthetic mel is all it costs, and it is the only thing standing between a user and
             // a transcript that is wrong in a way nothing in it reveals.
-            if (capabilities.Backend != ComputeBackend.Cpu)
+            // <b>DiariZen's ONNX embedder is checked even when it reports the CPU; its torch
+            // embedder is not checked at all.</b> One rule, applied to two references: never
+            // compare the reference against itself. Sortformer's reference IS ONNX Runtime's CPU
+            // provider, so <c>cpu</c> is exempt there. DiariZen's reference is its <i>torch</i>
+            // embedder, and ONNX Runtime's CPU provider is a different runtime that also reports
+            // <see cref="ComputeBackend.Cpu"/> — so the provider word cannot decide this one and
+            // <see cref="SpeakerLabellerCapabilities.EmbeddingBackend"/> does.
+            //
+            // <b>Checking torch here would be a cross-machine reproducibility test rather than a
+            // parity test</b>, and a differently-shaped risk: the committed reference is one
+            // laptop's torch output, so gating the default path on it would put every other
+            // machine's torch build, thread count and instruction set behind a 1e-4 tolerance whose
+            // headroom for torch-versus-torch variation nobody has measured. This briefly did
+            // exactly that when the DiariZen arm was first widened on 2026-08-26.
+            var embedderIsOnnx = capabilities.EmbeddingBackend
+                .StartsWith("onnxruntime:", StringComparison.Ordinal);
+            if (capabilities.Backend != ComputeBackend.Cpu || embedderIsOnnx)
             {
                 Parity = await CheckParityAsync(ct).ConfigureAwait(false);
             }
@@ -770,6 +786,10 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         Backend = element.TryGetProperty("backend", out var backend)
             ? ExecutionProviders.Parse(backend.GetString())
             : ComputeBackend.Cpu,
+        EmbeddingBackend = element.TryGetProperty("embeddingBackend", out var embedding)
+                           && embedding.ValueKind == JsonValueKind.String
+            ? embedding.GetString() ?? ""
+            : "",
         SupportsFixedSpeakerCount = element.TryGetProperty("supportsFixedSpeakerCount", out var fixedCount)
                                     && fixedCount.ValueKind == JsonValueKind.True,
         MaxSpeakers = element.TryGetProperty("maxSpeakers", out var max) && max.ValueKind == JsonValueKind.Number

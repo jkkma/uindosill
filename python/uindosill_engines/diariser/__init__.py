@@ -124,9 +124,19 @@ class Diariser:
         resolved, so it says; a sidecar that inferred it would be a second place the answer lives.
         """
         if kind == DIARIZEN:
-            return self._load_diarizen(path, model_id, threads)
+            return self._load_diarizen(path, model_id, threads, provider, profile)
         if kind != SORTFORMER:
             raise RequestError("request", f"unknown diariser kind '{kind}'")
+
+        # `torch` is the second diariser's runtime, not an execution provider, and this arm has no
+        # torch path at all — it is one ONNX graph. Said here rather than left to a `KeyError` out
+        # of the provider table, which would reach the host as an internal error and read as a bug.
+        if provider == "torch":
+            raise RequestError(
+                "request",
+                "this diariser is an ONNX graph and has no torch path; 'torch' names the second "
+                "diariser's runtime. Choose cpu, cuda, webgpu or dml.",
+            )
 
         if not path or not os.path.isfile(path):
             raise RequestError("model", f"the diarisation model is not at {path}")
@@ -171,24 +181,84 @@ class Diariser:
         self._kind = SORTFORMER
         return self.capabilities()
 
-    def _load_diarizen(self, path: str, model_id: str, threads: int) -> dict[str, Any]:
+    def _load_diarizen(
+        self,
+        path: str,
+        model_id: str,
+        threads: int,
+        provider: str = "auto",
+        profile: bool = False,
+    ) -> dict[str, Any]:
         """The DiariZen arm of :meth:`load`.
 
-        Shorter than the Sortformer arm by everything to do with execution providers: there is no
-        provider list to walk, nothing to fall back from and no graph optimisation to set, because
-        this pipeline is torch and the bundle's torch is the CPU build. Reporting an empty
-        `fellBackFrom` is therefore the truth rather than a stub.
+        **`provider` selects the embedder's execution provider and nothing else.** This pipeline has
+        two neural stages and only one of them is negotiable. Segmentation is torch on the CPU on
+        every machine: measured 2026-08-26 it exports faithfully and gains nothing anywhere, so
+        there is no choice to offer. Embedding is a wespeaker ResNet34, half the pipeline's time,
+        and that is what the provider names.
+
+        **`auto` is `torch`, and it does not mean what it means on the Sortformer arm.** There it is
+        a shortlist tried in order. Here it is one name, because the alternative was measured and
+        moves the answer — 222 speaker turns against torch's 225 on `two-hosts-three-guests-a`,
+        0.19% of the timeline — and this project's `auto` reproduces the published path rather than
+        picking the fastest. See the comment at the call below for the whole reasoning. The fast
+        path is reachable by name.
+
+        **A named provider is never fallen back from**, exactly as on the Sortformer arm, which is
+        why this raises rather than quietly returning a torch engine to somebody who typed
+        `webgpu`. `torch` itself is a valid name and is what `auto` resolves to.
         """
         if not path or not os.path.isdir(path):
             raise RequestError("model", f"the DiariZen model directory is not at {path}")
 
         from .diarizen import DiarizenEngine
 
-        self._engine = DiarizenEngine(model_dir=path, threads=threads)
+        # Built once with the embedder in torch, then the candidates are tried against that one
+        # loaded pipeline — see `DiarizenEngine.install_embedding_provider` for why it is not
+        # rebuilt per candidate.
+        engine = DiarizenEngine(
+            model_dir=path, threads=threads, provider="torch", profile=profile
+        )
+
+        # **`auto` means torch here, because the ONNX embedder changes the answer.** It is faster and
+        # it reproduces the torch embedding *vectors* to 1.9e-07 — three orders inside the parity
+        # gate — and the labels still move: measured 2026-08-26 on `two-hosts-three-guests-a`, torch
+        # returns 225 speaker turns and both ONNX providers return 222, which as time is 565 of
+        # 300,000 frames, 0.19% of the timeline. Deterministic on both sides: four torch runs gave
+        # 225, and ORT's CPU and WebGPU providers gave the identical 222 as each other. The
+        # speech/silence split is byte-identical, so the whole difference is in speaker grouping,
+        # which follows from segmentation never leaving torch.
+        #
+        # **Which of the two is closer to the truth is not known, and that does not matter here.**
+        # The rule this project applies is that what it picks unasked reproduces the figure it
+        # publishes — CUDA is excluded from the Sortformer arm's `auto` while scoring *better*
+        # (16.1021% against 16.3324%), so "changes the answer" has always been the criterion rather
+        # than "scores worse". `auto` therefore stays on the path the published figures describe.
+        #
+        # **A DER comparison was attempted and withdrawn on 2026-08-27**, because the RTTMs beside
+        # the stretches are a previous run's hypothesis output rather than ground truth — they cap
+        # at four speakers on episodes with two, five and seven, and `stretches.json` marks the
+        # stretch `"labelled": false`. What would settle which embedder is better is a corpus that
+        # has references: the AMI test set, which the speaker gate is already defined on.
+        candidates = ["torch"] if provider == "auto" else [provider]
+        failures = engine.install_embedding_provider(candidates)
+
+        # **A named provider is never fallen back from, exactly as on the Sortformer arm.** Only
+        # `auto` promised a choice, so only `auto` gets to make a second one; somebody who typed
+        # `webgpu` and silently got torch has been told nothing. `auto` may end on torch, which is
+        # the point of it — a machine with no usable adapter keeps the feature and loses the
+        # speed-up — and `fellBackFrom` carries what it passed over.
+        if provider not in ("auto", "torch") and engine.embedding_fallback_reason:
+            raise RequestError(
+                "model",
+                f"could not put the speaker embedder on {provider}: {engine.embedding_fallback_reason}",
+            )
+
+        self._engine = engine
         self._model_id = model_id or os.path.basename(os.path.normpath(path))
         self._model_path = path
         self._kind = DIARIZEN
-        self._fell_back_from = []
+        self._fell_back_from = [failure[:300] for failure in failures]
         return self.capabilities()
 
     def capabilities(self) -> dict[str, Any]:
@@ -239,8 +309,17 @@ class Diariser:
             "maxConcurrentSpeakers": engine_module.MAX_CONCURRENT_SPEAKERS,
             "reliableUpToSeconds": engine_module.RELIABLE_UP_TO_SECONDS,
             "honoursPostProcessing": False,
-            # Nothing to fall back from: torch, one device, no provider negotiation.
-            "fellBackFrom": [],
+            # **This pipeline has two neural stages on two runtimes, and `backend` above is only
+            # half the answer.** It reports the embedder's provider, because that is the half that
+            # is chosen and therefore the half the host must check against the reference.
+            # Segmentation is torch on the CPU on every machine: measured 2026-08-26 it exports
+            # faithfully and is no faster anywhere, so there is nothing to negotiate. These two say
+            # so outright rather than leaving one word to carry a claim it cannot.
+            "segmentationBackend": getattr(engine, "segmentation_backend", "torch:cpu"),
+            "embeddingBackend": getattr(engine, "embedding_backend", "torch:cpu"),
+            # The providers `auto` passed over before the one that built, each with its reason.
+            # Empty when the first candidate built or when a provider was named.
+            "fellBackFrom": list(self._fell_back_from),
         }
 
     def label(

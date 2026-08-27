@@ -101,6 +101,26 @@ public sealed record SpeakerLabellerCapabilities
 
     public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
 
+    /// <summary>
+    /// Which runtime the speaker embedder ran on, as <c>runtime:provider</c> — <c>torch:cpu</c> or
+    /// <c>onnxruntime:webgpu</c>. Empty for a diariser that has only one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b><see cref="Backend"/> cannot answer this, which is why it exists.</b> The second diariser
+    /// has two neural stages on two runtimes: segmentation is always torch, and only the embedder
+    /// negotiates a provider. Both the torch embedder and ONNX Runtime's CPU provider report
+    /// <see cref="ComputeBackend.Cpu"/>, so that one word cannot tell them apart — and they are not
+    /// interchangeable. Measured 2026-08-26 on <c>two-hosts-three-guests-a</c>, the ONNX embedder
+    /// returns <b>222</b> speaker turns where torch returns <b>225</b>, differing over 0.19% of the
+    /// timeline. Which is closer to the truth is unknown — a DER published for this on 2026-08-26
+    /// was withdrawn the next day, having been scored against a previous run's output rather than
+    /// ground truth. The reference is torch, so an ONNX embedder is a departure from the published
+    /// path however fast it is, and a caller that cannot see which one ran cannot say so.
+    /// </para>
+    /// </remarks>
+    public string EmbeddingBackend { get; init; } = "";
+
     /// <summary>True when <see cref="SpeakerLabellingOptions.SpeakerCount"/> reaches the model.</summary>
     public bool SupportsFixedSpeakerCount { get; init; }
 

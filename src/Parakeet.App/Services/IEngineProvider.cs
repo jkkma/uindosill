@@ -459,13 +459,19 @@ public sealed class EngineProvider : IEngineProvider
             : null;
         var backend = SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend);
 
+        // The second diariser's embedder can leave torch while `Backend` still reads cpu, so the
+        // line above cannot see it. This window never asks for that — it passes `auto`, which is
+        // torch — so in practice this is silent; it is here because "the window cannot reach it"
+        // is a property of one line in this file rather than a guarantee.
+        var embedder = SpeakerLabelling.DescribeEmbeddingBackend(labeller.Capabilities.EmbeddingBackend);
+
         // The result describes its own three failing shapes, including the check that could not
         // run — which used to be reported as nothing.
         var parity = sidecar?.Parity?.Describe();
 
         // This window chooses the backend itself, so none of these gets the command line's
         // "use --speaker-backend cpu" remedy: there is no flag here to follow the advice with.
-        return Join(fellBack, backend, parity);
+        return Join(fellBack, backend, embedder, parity);
     }
 
     /// <summary>

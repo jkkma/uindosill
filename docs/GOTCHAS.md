@@ -848,3 +848,45 @@ whose import is known to be clean. This project chose the pin, and
 fork, so the vendored copy stays byte-identical to the source the published figures describe. They
 surface strictly one at a time, each only after the previous is fixed, which is why they were
 enumerated by running rather than by reading.
+
+## 37. The second diariser's clustering contains an unseeded RNG that never runs, and it costs an hour to find that out
+
+`_vendor/diarizen/clustering/VBx.py` initialises its variational EM from a flat Dirichlet prior drawn
+from numpy's **global, unseeded** generator:
+
+```python
+if gamma is None:
+    # initialize gamma from flat Dirichlet prior with
+    # concentration parameter alphaQInit
+    gamma = np.random.gamma(alphaQInit, size=(X.shape[0], len(pi)))
+```
+
+Nothing in `uindosill_engines` seeds that generator — the two parity fixtures build their own
+`np.random.default_rng(...)`, which is a separate generator and deliberately does not touch global
+state. Read on its own, that says the diariser is nondeterministic.
+
+**It is not, because the branch is dead on this pipeline's path.** Forty lines below, `cluster_vbx`
+builds `qinit` deterministically from the AHC assignment and passes it in:
+
+```python
+qinit = np.zeros((len(ahc_init), ahc_init.max() + 1))
+qinit[range(len(ahc_init)), ahc_init.astype(int)] = 1.0
+qinit = qinit if init_smoothing < 0 else softmax(qinit * init_smoothing, axis=1)
+gamma, pi, _, _, _ = VBx(fea, Phi, ..., gamma=qinit, ...)
+```
+
+`gamma` is never `None`, so `np.random.gamma` never executes. The pipeline is deterministic:
+measured 2026-08-26, two unseeded runs of the same build over the same ten-minute stretch differ by
+**0 of 300,000 frames**, and four runs all returned 225 turns.
+
+**Why this is worth a gotcha rather than a shrug.** When the ONNX speaker embedder changed the turn
+count from 225 to 222, this RNG was the obvious suspect, and ruling it out took two control runs of
+ten minutes of audio each — a seeded comparison and an unseeded self-comparison — before anyone read
+forty lines further down and found the branch unreachable. Both controls were sound but neither was
+necessary: on a deterministic pipeline, *any* difference between two runs that change one component
+is that component, and no control is needed to establish it. **Check whether the suspicious code
+path executes before designing an experiment around it** — the reading takes a minute and the
+experiment took an hour.
+
+The first version of this entry, written the same evening, asserted the clustering was unseeded and
+scoped it as a "latent risk"; an adversarial review found the dead branch on 2026-08-27.

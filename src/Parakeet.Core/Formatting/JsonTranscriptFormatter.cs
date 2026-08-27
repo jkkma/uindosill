@@ -80,6 +80,14 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                     writer.WriteString("speakerBackend", speakerBackend.ToString().ToLowerInvariant());
                 }
 
+                // And which runtime, when the labeller has more than one. The second diariser's
+                // torch embedder and ONNX Runtime's CPU provider both write "cpu" above and do not
+                // produce the same labels, so the line before this one is ambiguous without it.
+                if (document.SpeakerEmbeddingBackend is { Length: > 0 } speakerEmbeddingBackend)
+                {
+                    writer.WriteString("speakerEmbeddingBackend", speakerEmbeddingBackend);
+                }
+
                 // What the caller asked for, beside what produced it — and present even when it
                 // changed nothing, because that is the case it exists for. A run made with
                 // --speaker-count 2 that the model had already satisfied merges nothing, and

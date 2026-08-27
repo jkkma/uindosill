@@ -137,3 +137,25 @@ semver==3.0.4
 accelerate==1.14.0
 psutil==7.2.2
 toml==0.10.2
+
+# The speaker embedder's ONNX export, added 2026-08-26. `diariser/embedding_onnx.py` derives a graph
+# from the wespeaker checkpoint the catalogue downloads, and `torch.onnx.export(dynamo=True)` is
+# built on onnxscript.
+#
+# **Without it, `--speaker-backend webgpu` fails the load outright** — a named provider is never
+# fallen back from, so the missing import surfaces as a refusal naming onnxscript rather than as a
+# silent downgrade. The default is unaffected: `auto` resolves to torch and never attempts an
+# export, so a bundle missing these two would diarise correctly and only refuse the fast path. An
+# earlier version of this comment had it the other way round and described a silent fallback that
+# does not exist.
+#
+# **Derived here rather than downloaded, which is what puts an exporter in a shipping bundle.**
+# pyannote publishes a `speaker-embedding.onnx`, but its loader computes a different function —
+# it binarises the speaker mask and drops the weighted pooling entirely — so it does not reproduce
+# the figures this project publishes. Exporting from the pinned checkpoint keeps one artefact with
+# one digest instead of redistributing a second copy of a CC BY 4.0 model.
+#
+# `onnx` was already here transitively, through optimum-onnx. It is pinned now because this stack
+# imports it directly, and an unpinned line in this file is the hole its header warns about.
+onnx==1.22.0
+onnxscript==0.7.1

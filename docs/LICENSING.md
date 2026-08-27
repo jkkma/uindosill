@@ -506,6 +506,12 @@ DLLs, covered by the same reading as the ASR tier's.
 > nobody has looked yet. `docs/PHASES.md` § *Decided 2026-08-26* records the change that caused
 > it.
 >
+> **112 is itself now behind.** On 2026-08-27 the speaker embedder's ONNX export added `onnx` and
+> `onnxscript` as top-level pins, and those two pull `onnx_ir` and `ml_dtypes` in behind them. The
+> resolve has not been re-run, so the true figure is 112 plus at most four and the sixty-two
+> unread is at least sixty-two; both are floors rather than counts until the one run above happens.
+> Recorded rather than estimated, because a licence enumeration that guesses is not one.
+>
 > Two of the new ones are installed from source rather than as wheels — `docopt` and
 > `antlr4-python3-runtime`, neither of which has ever published one — through a named allowlist
 > in the packaging script. Both are pure Python, so a source build produces the same artefact

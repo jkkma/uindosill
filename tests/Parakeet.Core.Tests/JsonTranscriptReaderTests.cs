@@ -19,6 +19,12 @@ public class JsonTranscriptReaderTests
         SpeechDetector = "energy gate",
         SpeakerModelId = "sortformer-4spk-v2.1",
         SpeakerBackend = ComputeBackend.WebGpu,
+
+        // Deliberately a runtime whose provider half does NOT match SpeakerBackend above. The field
+        // exists because `cpu` is ambiguous for the second diariser — its torch embedder and ONNX
+        // Runtime's CPU provider both report it and do not produce the same labels — so a round-trip
+        // that only ever saw the two agree would not notice the field being dropped or aliased.
+        SpeakerEmbeddingBackend = "onnxruntime:cpu",
         RequestedSpeakerCount = 2,
         SpeakerFolds =
         [
@@ -78,6 +84,7 @@ public class JsonTranscriptReaderTests
         Assert.Equal(original.SpeechDetector, read.SpeechDetector);
         Assert.Equal(original.SpeakerModelId, read.SpeakerModelId);
         Assert.Equal(original.SpeakerBackend, read.SpeakerBackend);
+        Assert.Equal(original.SpeakerEmbeddingBackend, read.SpeakerEmbeddingBackend);
         Assert.Equal(original.RequestedSpeakerCount, read.RequestedSpeakerCount);
         Assert.Equal(original.TranslatedTo, read.TranslatedTo);
         Assert.Equal(original.TranslationModelId, read.TranslationModelId);

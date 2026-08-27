@@ -172,6 +172,19 @@ class Session:
             inner.sessions_by_part() if hasattr(inner, "sessions_by_part") else {"model": inner.sess}
         )
 
+        # **"No sessions" and "sessions that recorded nothing" are different failures and only one
+        # of them is about profiling.** The second diariser runs its segmentation in torch and, on
+        # the default `auto`, its embedder too — so it owns no ONNX session at all, and answering
+        # that with "reload with `profile: true`" prescribes a fix that cannot work no matter how
+        # many times it is tried. Separated 2026-08-27, after a review pointed out that the default
+        # configuration of one engine hits the wrong branch.
+        if not sessions:
+            raise RequestError(
+                "request",
+                f"the {name} has no ONNX Runtime session to measure: it is running entirely in "
+                "torch, which `placement` cannot see into because there are no graph nodes for "
+                "ONNX Runtime to have placed. Load with an execution provider first.")
+
         parts = {part: placement_mod.end(session) for part, session in sessions.items()}
         if not any(parts.values()):
             raise RequestError(
@@ -200,19 +213,18 @@ class Session:
             if not self.diariser.loaded:
                 raise RequestError("model", "parity was asked for before the diariser was loaded")
 
-            # **Refused rather than run for DiariZen, and refused with the reason.** The fixture is
-            # Sortformer's — two chunks of synthetic mel and the probabilities that graph returns —
-            # so running it against a torch pipeline that takes a WAV path would fail somewhere
-            # inside on a missing attribute, reported as an internal error, which reads as a bug in
-            # this project rather than as a question that does not apply. The check exists to catch
-            # an execution provider that changes the answer; DiariZen negotiates no provider and
-            # reports the CPU, so the host never asks, and a caller that asks anyway is told why.
+            # **The two diarisers have different fixtures, because they are different instruments.**
+            # Sortformer's is two chunks of synthetic mel through the streaming loop, comparing the
+            # probabilities one ONNX graph returns against the same graph on the CPU. DiariZen's is
+            # a batch of synthetic waveforms through the embedder, comparing against **torch** —
+            # the path that shipped before the ONNX embedder existed and the one its published
+            # figures describe. Running Sortformer's against DiariZen would fail somewhere inside on
+            # a missing attribute and read as a bug in this project rather than as the wrong
+            # question. Until 2026-08-26 there was no second fixture and this refused instead.
             if self.diariser.kind == DIARIZEN:
-                raise RequestError(
-                    "request",
-                    "the parity fixture is the Sortformer graph's and does not describe DiariZen, which runs "
-                    "on torch and chooses no execution provider",
-                )
+                from .diariser import embedding_parity
+
+                return self.diariser, embedding_parity
 
             from .diariser import parity as diariser_parity
 
@@ -239,12 +251,27 @@ class Session:
         name = message.get("engine", "diariser")
         engine, module = self._engine_for(name)
 
-        backend = engine.capabilities()["backend"]
+        capabilities = engine.capabilities()
+        backend = capabilities["backend"]
         if backend != "cpu":
             raise RequestError(
                 "request",
                 f"the parity reference must be produced on the cpu, not {backend}: a reference taken "
                 "from a provider that diverges would bless its divergence and fail every faithful machine.")
+
+        # **`backend == "cpu"` is not sufficient for the second diariser, and the gap is exactly the
+        # one this guard exists to close.** Its reference is the *torch* embedder, and ONNX Runtime's
+        # CPU provider also reports `cpu` — so without this, a maintenance run made while an ONNX
+        # embedder was installed would overwrite the committed reference with ONNX output and bless
+        # the very divergence the fixture is there to detect. Every later machine would then be
+        # judged against it, including the torch path, which would start failing its own gate.
+        embedding_backend = capabilities.get("embeddingBackend", "")
+        if embedding_backend and not embedding_backend.startswith("torch:"):
+            raise RequestError(
+                "request",
+                f"the diariser's parity reference must be produced by the torch embedder, not "
+                f"{embedding_backend}: it is what every ONNX embedder is judged against, and taking "
+                "it from one of them would bless that one's divergence. Load with provider 'torch'.")
 
         produced = module.compute(engine._engine)
         path = module.reference_path()
