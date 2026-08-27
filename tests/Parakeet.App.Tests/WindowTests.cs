@@ -1560,18 +1560,19 @@ public class ModelsViewModelTests
         var shipped = new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default);
         Assert.All(shipped.Models, model => Assert.Equal(model.Descriptor.Verified, model.ProvenanceIsVerified));
 
-        // **Every shipped entry was verified between 2026-08-20 and 2026-08-27, and one is not
-        // now.** The gated pyannote repository publishes file sizes but masks its LFS object ids,
-        // so its digests cannot be recorded from here and the entry says "not checked" rather than
-        // claiming a provenance nobody established. That is the flag working, not a regression —
-        // and it is asserted by exact id so a second unverified entry could not join it quietly.
+        // **Every shipped entry is verified again as of 2026-08-27.** The gated pyannote entry
+        // was the one exception for a day: its LFS object ids are masked from an unauthenticated
+        // reader, so no digest could be recorded and it said "not checked" rather than claiming a
+        // provenance nobody established. An accepted agreement makes those ids readable, and the
+        // entry is pinned from them. Asserted as an empty set rather than deleted, because the
+        // property this names — that nothing ships claiming a provenance it does not have — is the
+        // same one either way.
         var unverified = shipped.Models.Where(m => !m.ProvenanceIsVerified).Select(m => m.Descriptor.Id);
-        Assert.Equal(["pyannote-speaker-diarization-community-1"], unverified);
+        Assert.Empty(unverified);
 
         // The text has to distinguish the two states without this test dictating which words do
-        // it: a *checked* entry must not be handed the sentence an unchecked one gets. Applied to
-        // the verified entries only, because the gated one is legitimately in the same state as
-        // the constructed catalogue's and may well share its wording.
+        // it: a *checked* entry must not be handed the sentence an unchecked one gets. Every
+        // shipped entry is checked now, so this covers all of them rather than a subset.
         Assert.All(
             shipped.Models.Where(m => m.ProvenanceIsVerified),
             model => Assert.NotEqual(unchecked_.Provenance, model.Provenance));
@@ -1588,32 +1589,23 @@ public class ModelsViewModelTests
         // people deciding whether to download a gigabyte, so they get rewritten; a test that
         // spells the wording makes rewriting them look like a regression.
         //
-        // **One entry is exempt since 2026-08-27, and the exemption is named rather than widened.**
-        // `pyannote/speaker-diarization-community-1` is a gated repository: Hugging Face publishes
-        // its file sizes but masks the LFS object ids behind the user agreement, so there is no
-        // digest to pin until somebody with an accepted token downloads it and records one. The
-        // entry therefore ships honestly unpinned — the listing says so, and the installer demands
-        // the unverified opt-in — rather than carrying a digest nobody checked. Asserted as an
-        // exact id rather than as "any unpinned entry" so that a *second* one cannot slip in.
-        const string gated = "pyannote-speaker-diarization-community-1";
-
-        var pinned = viewModel.Models.Where(m => m.Descriptor.Id != gated).ToList();
-        Assert.NotEmpty(pinned);
-        Assert.All(pinned, model =>
+        // **No entry is exempt, and the exemption that sat here for one day is gone.**
+        // `pyannote/speaker-diarization-community-1` is gated, and an unauthenticated reader sees
+        // its file sizes but not its LFS object ids — so for a day it shipped honestly unpinned,
+        // demanding the unverified opt-in rather than carrying a digest nobody checked. Accepting
+        // the agreement makes the ids readable and the entry is pinned from them, so every shipped
+        // entry is back to being checked and none of them asks for the opt-in.
+        Assert.NotEmpty(viewModel.Models);
+        Assert.All(viewModel.Models, model =>
         {
             Assert.False(model.NeedsUnverifiedOptIn);
             Assert.True(model.ProvenanceIsVerified);
             Assert.NotEmpty(model.Provenance);
         });
 
-        var unpinned = Assert.Single(viewModel.Models, m => m.Descriptor.Id == gated);
-        Assert.True(unpinned.NeedsUnverifiedOptIn);
-        Assert.False(unpinned.ProvenanceIsVerified);
-        Assert.NotEmpty(unpinned.Provenance);
-
-        // Sizes are pinned even though digests are not, and that is the difference between "not
-        // checked" and "not described": a truncated download still fails on the byte count.
-        Assert.All(unpinned.Descriptor.Files, file => Assert.True(file.SizeBytes > 0));
+        // Sizes are pinned alongside the digests, and that matters independently: a truncated
+        // download fails on the byte count before a digest is ever computed.
+        Assert.All(viewModel.Models, model => Assert.All(model.Descriptor.Files, file => Assert.True(file.SizeBytes > 0)));
     }
 
     [Fact]

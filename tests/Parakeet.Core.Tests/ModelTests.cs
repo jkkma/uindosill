@@ -81,28 +81,26 @@ public class ModelCatalogTests
         // download.
         Assert.NotEmpty(ModelCatalog.Default.Models);
 
-        // **One entry cannot be pinned from here, and it is named rather than pattern-matched.**
-        // `pyannote/speaker-diarization-community-1` is a gated repository: Hugging Face serves its
-        // file listing with real sizes but masks every LFS object id behind the user agreement, so
-        // there is no digest to record until somebody with an accepted token downloads the files
-        // and takes one off the bytes. Naming the id — rather than excusing "any entry without a
-        // digest" — is what keeps this test failing for the next entry that arrives unpinned by
-        // accident. **Fill the digests in and delete this exemption**; nothing else about the entry
-        // has to change.
-        const string gated = "pyannote-speaker-diarization-community-1";
-
-        var pinnable = ModelCatalog.Default.Models.Where(m => m.Id != gated).ToList();
-        Assert.NotEmpty(pinnable);
-
-        Assert.All(pinnable, model =>
+        // **The last exemption left on 2026-08-27, and what removed it is worth recording.**
+        // `pyannote/speaker-diarization-community-1` is a gated repository, and an unauthenticated
+        // read of its file listing carries real sizes but masks every LFS object id — so until
+        // somebody accepted the agreement there was no digest to record, and this test named that
+        // one id to let it through. Accepting it does not only permit the download: the hub then
+        // serves the object ids like any other repository's. Four of the five files' digests are
+        // upstream's own `lfs.oid`, matching the bytes that arrived; `config.yaml`, at 444 bytes,
+        // is stored as a plain git blob rather than an LFS object and was corroborated by its git
+        // blob id instead. So the entry is pinned on the same footing as every other one, and
+        // nothing here is excused any more.
+        Assert.All(ModelCatalog.Default.Models, model =>
         {
             Assert.NotEmpty(model.Files);
 
             // Verified means the URL was checked against a live repository, which is a different
-            // claim from "the digest is right". Every entry here is now both: the translation entry
-            // was the last exception, and on 2026-08-20 its nine files were published and every one
+            // claim from "the digest is right". Every entry here is now both. The translation entry
+            // was the exception until 2026-08-20, when its nine files were published and every one
             // of the published LFS oids matched the digest taken off the bytes the gate was scored
-            // against.
+            // against; the gated pyannote entry was the last one, and it stopped being an exception
+            // on 2026-08-27 for the reason above.
             Assert.True(model.Verified, $"'{model.Id}' pins a digest but is not marked verified");
 
             // Per file, not per entry. An entry of nine files where eight are pinned is not a
@@ -117,20 +115,6 @@ public class ModelCatalogTests
             Assert.True(model.IsFullyPinned, $"'{model.Id}' is not fully pinned");
             Assert.True(model.TotalSizeBytes > 0, $"'{model.Id}' has no total size");
         });
-
-        // The gated entry still has to be described even though it cannot be checked: every file
-        // carries a size, so a truncated download fails on the byte count, and the entry declares
-        // itself unverified rather than claiming a provenance nobody established.
-        var unpinnable = ModelCatalog.Default.Get(gated);
-        Assert.NotEmpty(unpinnable.Files);
-        Assert.False(unpinnable.Verified, $"'{gated}' cannot be verified from here and must not claim to be");
-        Assert.False(unpinnable.IsFullyPinned);
-        Assert.All(unpinnable.Files, file =>
-        {
-            Assert.Null(file.Sha256);
-            Assert.True(file.SizeBytes > 0, $"'{gated}/{file.FileName}' has no pinned size to compare against");
-        });
-        Assert.True(unpinnable.TotalSizeBytes > 0);
     }
 
     [Fact]

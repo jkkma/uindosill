@@ -6111,13 +6111,20 @@ took the worst of it.
 - **Nothing is measured on the desktop**, where CUDA exists, is reachable by name and is not in
   `auto`. CUDA's record on the other diariser is that it does not reproduce the CPU.
 
-## pyannote replaced DiariZen — landed 2026-08-27, and nothing about it has been run
+## pyannote replaced DiariZen — landed 2026-08-27, and first ran the same day
 
-**This is the largest unproven entry in this document, and it is deliberately at the end rather
+**This was the largest unproven entry in this document, and it is deliberately at the end rather
 than folded into the section above.** The second diariser was swapped whole: DiariZen's WavLM +
 Conformer checkpoint and its vendored fork of pyannote-audio 3.1.1 went to `attic/diarizen/`, and
-`pyannote/speaker-diarization-community-1` on `pyannote.audio` 4.0.7 took its place. The code
-builds, the suite is green at 1395, and **no part of the new engine has been executed once.**
+`pyannote/speaker-diarization-community-1` on `pyannote.audio` 4.0.7 took its place. It landed with
+the code building, the suite green, and **no part of the new engine executed once** — and it was
+executed for the first time hours later on the same day, on the desktop.
+
+**Most of this entry is still open, which is why it is edited rather than deleted.** One session
+moved five claims and left the rest exactly where they were, and a record of *which* claims a first
+run settles is worth more than a shorter document. The suite stood at 1407 passed and 7 skipped
+when this entry was edited — a dated record like the other counts here, not a live figure;
+`check-test-counts.py` does not scan this file.
 
 **Why the swap could not be an addition.** `pyannote.audio` 4.0.7 floors `pyannote.core>=6.0.1`,
 `pyannote.database>=6.1.1`, `pyannote.metrics>=4.0.0` and `pyannote.pipeline>=4.0.0`; DiariZen's
@@ -6125,33 +6132,62 @@ fork needs 5.0.0, 5.1.3, 3.2.1 and 3.0.1 of the same four import names, plus its
 `pyannote.audio`. Five shared names, five incompatible floors — one interpreter cannot hold both.
 That part is read off the published metadata and is not in doubt.
 
+### What the first run settled — 2026-08-27, desktop
+
+**The machine and the environment, because every number below is theirs.** AMD Ryzen 9 9950X
+(16 cores, 32 threads), Windows 11, CPython 3.12.10 in a venv installed straight from
+`python/requirements-bundle.txt`. Not the shipped bundle — see below. The diarisation runs were
+driven through `uindosill diarise` with no Hugging Face token in the environment, which bounds what
+a load could have fetched: nothing gated, since the gate answers 401 without one.
+
+- **The layout loads, and the five files are enough.** `Pipeline.from_pretrained` on a directory of
+  exactly those five files loads and labels. The config that was invisible behind the gate names
+  `$model/segmentation`, `$model/embedding` and `$model/plda` — the three subdirectories the entry
+  installs — and **no sixth artefact**. It declares `pyannote.audio: 4.0.0` as its dependency
+  against the 4.0.7 that ran it, and carries `VBxClustering` at `threshold 0.6, Fa 0.07, Fb 0.8`,
+  `segmentation_batch_size` and `embedding_batch_size` both 32, `embedding_exclude_overlap: true`
+  and `min_duration_off: 0.0`. Those last are upstream's binarisation parameters, which the engine
+  deliberately does not override; they are recorded here because until now nobody could read them.
+- **The digests are pinned, and the gate was the only thing hiding them.** Accepting the agreement
+  turns out to unmask the object ids as well as permit the download, so the digests did not have to
+  rest on one machine's bytes: four of the five are upstream's own `lfs.oid`. The fifth,
+  `config.yaml` at 444 bytes, is a plain git blob with no `oid` and was corroborated against the git
+  blob id the same listing publishes. The entry is `verified: true`, needs no unverified opt-in, and
+  `ModelTests.EveryShippedEntryIsPinned` has no exemption left. `docs/MODELS.md` carries the detail.
+- **One meeting has a DER, and one meeting is not the test set.** AMI **ES2004a** alone — 17.5
+  minutes, one of the sixteen test meetings — scored by `uindosill der` against the
+  `only_words` reference at collar 0.25 with overlap included: **DER 14.38%**, of which 10.09%
+  missed, 2.09% false alarm and 2.21% confusion. At collar 0 it is 18.76%. Over the 21.6% of
+  reference speech that is crosstalk it is 35.27%, missing 28.74% of it. It returned **5 speakers
+  against the reference's 4**, `spk1` unmatched — it over-split, and the headline is good anyway.
+  **This number must not be set beside Sortformer's 16.33%**, which is a sixteen-meeting mean over
+  the whole test set; a single meeting is not a corpus and the two are not comparable. What would
+  make them comparable is `scripts/measure-der.ps1` over AMI test, which has not been run.
+  `maxSpeakers` and `reliableUpToSeconds` are still null, and still correctly so.
+- **A speed figure exists, for one machine and one file.** 200.7 s of wall clock for 1049.4 s of
+  audio, or **5.2× realtime**, on the CPU at the default 12 threads; a three-minute excerpt of the
+  same meeting ran at 5.4× and 5.9× on two passes. For scale, Sortformer on that same excerpt took
+  0.6 s — **280× realtime** on WebGPU, about fifty times faster. That gap is structural rather than
+  a misconfiguration: the pipeline is torch on both stages with no ONNX route, and its `auto` is
+  the CPU. It is one file on one machine and no RTF is claimed beyond it.
+- **The bundle resolves and installs; the *shipped* bundle still does not exist.** The closure
+  resolves with no conflict, and `huggingface_hub` lands on the pinned 0.36.2, satisfying
+  transformers' `<1.0` and `pyannote.audio`'s `>=0.28.1` at once — which was the specific risk named
+  in `requirements-bundle.txt`. The resolver picked `pyannote.metrics` **4.1** against the file's
+  4.0.0 floor, and pulled in `pyannoteai-sdk 0.4.0` and `torchcodec 0.16.0+cpu`. Installed, that is
+  **110 distributions and about 1.5 GiB of site-packages** (pip and setuptools included) for the
+  *whole* requirements file. **That is not comparable to the 242 MiB `requirements-bundle.txt`
+  records for the arm this replaced**, which was one arm's share rather than every engine's — the
+  pyannote closure's own cost was not isolated and remains unmeasured. **This was a venv, not
+  `bundle-python.ps1`** — the embedded bundle has still never been assembled, and its packaged size
+  is still unknown.
+
 ### What is unproven, in the order it will break
 
-- **The model directory's layout has never been seen.** `pyannote/speaker-diarization-community-1`
-  is gated: `config.yaml` returns HTTP 401 unauthenticated. The five files and their exact sizes
-  come from the repository's tree API, which answers for gated repos; **the config's contents do
-  not**, so nothing here has confirmed that `Pipeline.from_pretrained` on a directory of those five
-  files loads, or that the config does not name a sixth thing that has to be fetched.
-- **No digests are pinned, and they cannot be from here.** The tree API masks every LFS object id
-  behind the user agreement — `oid` comes back as asterisks where an ungated repository returns the
-  SHA-256. So the catalogue entry pins **sizes only**, is marked `verified: false`, and needs the
-  installer's unverified opt-in. `ModelTests.EveryShippedEntryIsPinned` exempts it **by exact id**
-  with instructions to delete the exemption once the digests exist. **First authenticated install
-  should record them.**
-- **No accuracy figure, and upstream's must not be borrowed.** pyannote publishes DER for
-  `community-1` on several corpora. None was produced on this project's material, through this
-  project's audio path, so none of them is this engine's number. `maxSpeakers` and
-  `reliableUpToSeconds` are both null, and the host renders that as "no bound established".
-- **No speed figure at all.** DiariZen's rough "about as long again as the recording" was its own
-  and does not transfer; the catalogue entry's user-facing note says the timing has not been
-  measured rather than guessing. The weights are 31.3 MiB against DiariZen's 291 MiB, which says
-  nothing about runtime.
-- **The bundle has never been resolved, let alone assembled.** `requirements-bundle.txt` swaps four
-  pinned `pyannote.*` distributions for one `pyannote.audio==4.0.7`, whose dependency closure —
-  `lightning`, `matplotlib`, `rich`, three `opentelemetry` packages, `torch-audiomentations`,
-  `pytorch-metric-learning`, `asteroid-filterbanks`, `pyannoteai-sdk`, `torchcodec` — has not been
-  run through a resolver against the translator's `huggingface-hub<1.0` pin. **The bundle's
-  distribution count and size are unknown**, and the 99/1.26 GB figure elsewhere is now stale.
+- **There is no corpus-level accuracy figure**, only the single meeting above, and upstream's must
+  still not be borrowed. pyannote publishes DER for `community-1` on several corpora; none was
+  produced on this project's material through this project's audio path, so none of them is this
+  engine's number.
 - **The two suppressions are read off upstream's source, not observed.**
   - *Telemetry.* `pyannote/audio/telemetry/config.yaml` ships `metrics_enabled: true` pointing at
     `https://otel.pyannote.ai/v1/traces`, and `track_pipeline_apply` sends each processed file's
@@ -6168,18 +6204,22 @@ That part is read off the published metadata and is not in doubt.
 - **Progress reporting is a guess at a shape.** pyannote's hook fires for more than two named steps
   and this engine reports each step's own completion rather than weighting them, so the bar restarts
   per step. What the steps actually are, and how many, has not been observed.
-- **Nothing has been run on the desktop**, where CUDA exists. The engine maps `cuda` to a torch
-  device and refuses `webgpu` and `dml` outright; the bundled torch is the CPU build, so `cuda` is
-  reachable only in an environment that installed a CUDA one.
+- **Nothing has been run on CUDA.** The first run was on the desktop, where a CUDA device exists,
+  but on the CPU: the engine maps `cuda` to a torch device and refuses `webgpu` and `dml` outright,
+  and the pinned torch is the CPU build, so `cuda` stays reachable only from an environment that
+  installed a CUDA one. Whether the labels or the speed differ there is unmeasured.
 
 ### What the swap does settle
 
 **The product has no non-commercial component for the first time.** DiariZen's CC BY-NC 4.0
 checkpoint was the only one, and `community-1` is CC BY 4.0.
 `BundledModelsTests.NonCommercialWeightsAreNeverCarriedByTheInstaller` now asserts the set is
-*empty* rather than merely unbundled. **This is a licence reading, and the entry it describes has
-never been downloaded** — if the repository's own terms differ from the `cc-by-4.0` its metadata
-declares, that is found on first install and not before.
+*empty* rather than merely unbundled. **The entry has now been downloaded, on 2026-08-27**, and the
+gate's terms did not contradict the `cc-by-4.0` its metadata declares — which is what the earlier
+version of this paragraph said would be found on first install and not before. What the download
+does not establish is anything about the *weights'* provenance beyond the digests: that they are
+the files upstream published at commit `3533c8cf`, not that upstream's licence claim over them is
+sound.
 
 ### What an adversarial review of the swap found — 2026-08-27, same day
 
@@ -6218,7 +6258,10 @@ caught that mattered, all now fixed:
   longer in the catalogue, so it is invisible to the Models tab, to `uindosill models` and to
   `uindosill doctor`, and there is no surface that will delete it. Nothing in this change addresses
   that; a store-orphan sweep is the feature it would need.
-- **Every claim about the new engine's runtime remains a reading of upstream's source**, including
-  the two the licensing note rests on: that telemetry stays off, and that no decode path reaches
-  TorchCodec. The review checked both against the 4.0.7 sources and neither against a running
-  process, because the weights are gated.
+- **The two claims the licensing note rests on are still readings of upstream's source** — that
+  telemetry stays off, and that no decode path reaches TorchCodec. The excuse for that has gone: the
+  weights are no longer gated to this project and the pipeline has now run end to end, with the
+  `opentelemetry` packages and `torchcodec 0.16.0+cpu` both installed beside it. Neither was
+  observed during that run. **Telemetry needs a packet capture and TorchCodec needs the call
+  watched**, and a run that produced a DER is exactly the run either check should have ridden along
+  with.

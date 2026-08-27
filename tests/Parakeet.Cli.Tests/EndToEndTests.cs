@@ -409,14 +409,14 @@ public class EndToEndTests
     }
 
     [Fact]
-    public async Task OnlyTheGatedEntryIsFlaggedAsUnverified()
+    public async Task NoShippedEntryIsFlaggedAsUnverified()
     {
-        // Every shipped entry pinned a digest per file between 2026-08-20 and 2026-08-27, and one
-        // no longer does. `pyannote/speaker-diarization-community-1` is a gated repository:
-        // Hugging Face publishes its file sizes but masks the LFS object ids behind the user
-        // agreement, so no digest can be recorded from here until somebody with an accepted token
-        // downloads it. The entry says so in the listing rather than carrying a digest nobody
-        // checked, and **that warning appearing is this test passing**.
+        // Every shipped entry pins a digest per file. `pyannote/speaker-diarization-community-1`
+        // was the exception for one day — a gated repository whose LFS object ids are masked from
+        // an unauthenticated reader, so no digest could be recorded from here — and on 2026-08-27
+        // an accepted agreement made those ids readable, four of the five digests came straight
+        // off them, and the fifth was corroborated against its git blob id. So the listing now
+        // carries no warning at all, and **the absence of one is this test passing**.
         //
         // This is deliberately a claim about the DATA. The claim about the FLAG — that it appears
         // when it should — is the test below, against a catalogue built for the purpose, because a
@@ -428,16 +428,15 @@ public class EndToEndTests
         await harness.RunAsync("models", "list");
         var output = harness.Out.ToString();
 
-        // Exactly one entry carries each warning, and it is the gated one. Counted rather than
-        // merely searched for: "does the string appear" would pass just as well with a second
-        // unpinned entry beside it, which is the drift this test exists to catch.
-        Assert.Equal(1, CountOccurrences(output, "unverified catalogue entry"));
-        Assert.Equal(1, CountOccurrences(output, "no pinned digest"));
-        Assert.Contains("pyannote-speaker-diarization-community-1", output, StringComparison.Ordinal);
+        // No entry carries either warning. Counted rather than merely searched for, in the same
+        // spirit as before: asserting zero occurrences is what catches an entry arriving unpinned,
+        // which is the drift this test exists to catch and is now the only direction it can drift.
+        Assert.Equal(0, CountOccurrences(output, "unverified catalogue entry"));
+        Assert.Equal(0, CountOccurrences(output, "no pinned digest"));
 
-        // Five files, none of them pinned — the wording carries the ratio, and a change that pinned
-        // some but not all would read differently here.
-        Assert.Contains("no pinned digest for 5 of 5 files", output, StringComparison.Ordinal);
+        // Still listed, and now listed clean — the entry that used to carry both warnings is the
+        // one worth naming here.
+        Assert.Contains("pyannote-speaker-diarization-community-1", output, StringComparison.Ordinal);
 
         // Still listed — listed without a warning is the point, not listed at all. The id is the
         // durable half of that: the display name was "OPUS-MT Bible-Big multilingual to English -
