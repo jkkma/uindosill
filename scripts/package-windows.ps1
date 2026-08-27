@@ -582,7 +582,12 @@ foreach ($channel in $Channels) {
         'licences/NVIDIA-Open-Model-License-2025-10-24.txt',
         'licences/onnxruntime-LICENSE.txt',
         'licences/onnxruntime-ThirdPartyNotices.txt',
-        'licences/silero-vad-LICENSE.txt')) {
+        'licences/silero-vad-LICENSE.txt',
+        # The LGPL written offer, added 2026-08-26. Two libraries inside the bundled Python are
+        # LGPL-2.1 and one of them -- libsoxr, inside `soxr/soxr_ext.pyd` -- is statically linked,
+        # which closes section 6(b) and leaves the 6(c) offer as what discharges it. A publish
+        # without this file is a distribution of LGPL binaries with none of 6(a)-(e) done.
+        'licences/LGPL-WRITTEN-OFFER.txt')) {
         $path = Join-Path $publishDir $required
         if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
             throw "$required is missing or empty in the publish. The diarisation weights are under the NVIDIA " +

@@ -253,6 +253,10 @@ foreach ($required in @(
     # a run continues on an unverified embedder. Added 2026-08-27 — it shipped for a day on neither
     # this list nor package-windows.ps1's, which an adversarial review caught.
     'uindosill_engines/diariser/embedding-parity-reference.npy',
+    # The mel filterbank, committed 2026-08-26 when the `librosa.filters.mel` call that built it
+    # was replaced by its own output. Without this file the diariser raises on construction, so a
+    # bundle missing it is a bundle whose speaker labelling does not start.
+    'uindosill_engines/diariser/mel-filterbank.npy',
     'uindosill_engines/translator/parity-reference.json',
     'uindosill_engines/translator/parity-sources.json',
     'uindosill_engines/_vendor/nemo/collections/asr/modules/sortformer_modules.py')) {

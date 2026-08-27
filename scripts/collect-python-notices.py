@@ -60,6 +60,18 @@ KNOWN_TEXTLESS = {
     "flatbuffers": "METADATA says `Apache 2.0`; the wheel carries no licence file.",
     "sentencepiece": "METADATA says `Apache-2.0`; the wheel carries no licence file.",
     "tokenizers": "Classifier says `Apache Software License`; the wheel carries no licence file.",
+    # Added 2026-08-26 with the second diariser's stack. Neither is Apache, which is why the
+    # paragraph this list feeds no longer says they all are.
+    "antlr4-python3-runtime": (
+        "METADATA says `BSD` with no version; the sdist carries no licence file. Built from source "
+        "because it publishes no wheel — see the allowlist in `scripts/bundle-python.ps1`. Reached "
+        "through `omegaconf`, which pins `==4.9.*`."
+    ),
+    "primePy": (
+        "**The weakest provenance in the bundle.** METADATA's `License` field is the literal "
+        "`UNKNOWN` and only a trove classifier claims MIT; the wheel carries no licence file. "
+        "Reached transitively through `torch-pitch-shift` under `torch-audiomentations`."
+    ),
 }
 
 # Files that look like a licence when they are sitting at a dist-info root. PEP 639 wheels put the
@@ -226,17 +238,26 @@ def render(rows: list[dict], bundle: Path) -> str:
         "",
         f"**{len(textless)} of the {len(rows)} ship no licence text of their own**: "
         + ", ".join(f"`{n}`" for n in textless)
-        + ". Each names Apache-2.0 or the Apache Software License in its metadata, and the"
-        " Apache-2.0 text does travel in this bundle several times over — `onnx`, `optimum` and"
-        " `transformers` each carry a copy — so a recipient has the licence. What they do not get"
-        " is a copy attached to these three, which is upstream's omission and is recorded here"
-        " rather than papered over.",
+        + ". What each claims instead is in `KNOWN_TEXTLESS` in the script that writes this, with"
+        " the route by which it arrives. Most name Apache, and the Apache-2.0 text travels in this"
+        " bundle several times over — `onnx`, `optimum` and `transformers` each carry a copy — so"
+        " for those a recipient has the licence even without one attached. **That is not true of"
+        " all of them**: `antlr4-python3-runtime` says only `BSD`, which names a family rather than"
+        " one of two licences that differ by a clause, and `primePy`'s `License` field is the"
+        " literal `UNKNOWN` with a classifier alone claiming MIT. Upstream's omission in every"
+        " case, recorded rather than papered over.",
         "",
-        "**Four of these are not simply permissive, and they are the rows to read twice.**"
-        " `soxr` is LGPL-2.1-or-later and its wheel bundles libsoxr and PFFFT; `soundfile` carries"
-        " an LGPL-2.1 `libsndfile` whose `COPYING` ships at `_soundfile_data/COPYING`, which the"
-        " table does not show because it belongs to no `.dist-info`; and `certifi` and `tqdm` are"
-        " MPL-2.0, file-level copyleft. `docs/LICENSING.md` records what each obliges.",
+        "**Three of these are not simply permissive, and they are the rows to read twice.**"
+        " `soundfile` is BSD-3-Clause but carries an LGPL-2.1 `libsndfile` as a *separate,"
+        " dynamically loaded and replaceable* DLL, whose `COPYING` ships at"
+        " `_soundfile_data/COPYING` — which this table does not show because it belongs to no"
+        " `.dist-info`. `certifi` and `tqdm` are MPL-2.0, file-level copyleft."
+        " **`soxr` was a fourth until 2026-08-26**, and it was the difficult one: its libsoxr was"
+        " statically linked into `soxr/soxr_ext.pyd`, where LGPL-2.1 §6(b) could not reach it. It"
+        " arrived only because librosa declared it, and librosa left when the one call it was here"
+        " for became a committed matrix. **Nothing statically linked in this product is under the"
+        " LGPL.** `licences/LGPL-WRITTEN-OFFER.txt` discharges what remains and"
+        " `docs/LICENSING.md` reads it.",
         "",
         "Re-running against a bundle built from the same pins must produce this section unchanged;"
         " `--check` is what holds it, and a changed pin is expected to change this table. The"

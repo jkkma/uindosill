@@ -1575,6 +1575,10 @@ call, `librosa.filters.mel`, which builds the mel filterbank matrix. It is paid 
 16.3324% describe this code; replacing the call with a committed filterbank is a different artefact
 needing its own measurement. About 95 MB more is `sympy` and `networkx`, which are torch's.
 
+**That measurement was made on 2026-08-26 and the librosa half of this paragraph is now history**:
+the filterbank is committed, the features are bit-identical, and librosa is gone along with `soxr`,
+numba, llvmlite, pooch and audioread. The entry dated that day below has it.
+
 **The CLI zip does not carry it, and as of 2026-08-21 the bundle is its own download.** The
 installer bundles the interpreter into the desktop application's publish, where `PythonRuntime`
 looks for it; the CLI ships as a separate ~250 MB zip (decision 3, 2026-08-16 — Velopack has no PATH
@@ -4924,11 +4928,45 @@ carries rc.3's Python delta, which predates this stack: **the next win-cuda tag 
 it**, and the 474.6 MB the diariser's weights no longer occupy is the room it has to spend.
 
 
+**The LGPL obligation in the bundled Python is discharged twice over: by a written offer, and then
+by removing most of what it covered.** Both on 2026-08-26; `docs/LICENSING.md` carries the reading.
+
+**The reading first.** Two components were LGPL-2.1 and they were not alike. **libsndfile is a
+separate DLL `soundfile` loads with `dlopen`**, and a user can replace it — the mechanism §6(b)(2)
+asks for, though 6(b)(1)'s "already present on the user's computer system" does not describe a copy
+the installer ships. **libsoxr was statically linked into `soxr/soxr_ext.pyd`**, verified from its
+import table, which closed §6(b) outright. Three of §6's conditions were already met by
+construction — the texts travel, the notice names them, and nothing here forbids modification or
+reverse engineering — and none of §6(a)–(e) had been done.
+`licences/LGPL-WRITTEN-OFFER.txt` is the §6(c) instrument that closes that, and
+`scripts/package-windows.ps1` refuses a publish without it.
+
+**Then the removal, which was the better answer where it was available.** `librosa.filters.mel` in
+`diariser/feats.py` is now a committed `mel-filterbank.npy`, and librosa left the pins — taking
+`soxr`, numba, llvmlite, pooch and audioread with it. An assembled bundle went from **108
+distributions and 1.40 GB to 99 and 1.26 GB**, and **nothing statically linked in this product is
+under the LGPL any more.** libsndfile stays, because `soundfile` genuinely reads every WAV the host
+writes, and it is the replaceable half; the offer covers it.
+
+**Changing `feats.py` is the part that needed the evidence, and it has it.** That file was the
+spike's byte for byte so the measured 16.3324% AMI figure would describe it. The committed matrix
+*is* that call's output from the pinned librosa 1.0.0 at the same parameters, and the mel features
+were compared old code against new: **identical to the last bit over two minutes of real audio,
+12,016 × 128, with librosa hard-blocked at `sys.meta_path`**. So the figure still describes this
+code, and describes it more tightly — a committed array cannot drift where a library call can. Both
+engines were then run from the rebuilt bundle: Sortformer on the CPU and DiariZen at its reference
+19 turns and 3 speakers.
+
+**What this does not settle.** The AMI figure was not re-scored; it does not need to be, because the
+input to the model is bit-identical, but that is an argument from the mel array rather than a fresh
+DER. If anything downstream of `feats.py` ever changes, the argument does not carry and the score
+does.
+
 **The second diariser can put its speaker embedder on ONNX Runtime, and `auto` does not.** Studied, built and measured 2026-08-26. DiariZen had no GPU path at all: **WebGPU is an ONNX Runtime execution provider and DiariZen is torch** — verified, not assumed, since torch 2.13.0+cpu exposes no `vulkan` and no `webgpu` backend and this machine has no CUDA. `torch-directml` is blocked by a pin, requiring `torch==2.4.1`, and moving the bundle off 2.13.0 would invalidate the translator's 8,149-sentence gate and the diariser's 16.3324% together. The route was an ONNX export of the two neural stages, and **it inverted its own plan twice**: the stage it was written to accelerate is the one that stayed in torch, the stage it assumed was nearly free upstream is the one that pays — and then the stage that pays turned out to move the answer, so it ships reachable by name rather than chosen automatically.
 
 - **Segmentation exports cleanly and gains nothing, so it did not move.** The pruned WavLM-large and Conformer go through `torch.onnx.export(dynamo=True)` in 25 s to a 282 MB, 1520-node opset-18 graph, and ORT's CPU provider reproduces torch to **1.7166e-05**, inside the 1e-4 gate. **The dynamic time axis the plan worried about is not needed**: `Inference.slide` zero-pads the final chunk, so every call is exactly 256,000 samples and only batch varies. But torch CPU, ORT CPU and ORT WebGPU all land **within about 10% of each other** — this laptop's own run-to-run variance — and WebGPU scales linearly from batch 1 to 4, so it is bandwidth-bound and there is no dispatch overhead for graph capture to recover.
 - **On WebGPU it is also wrong on this checkpoint, for a reason worth reporting upstream.** One node diverges: the feature-extractor convolution that reads **153 channels**, one of the widths structured pruning left behind (1 → 512 → 153 → 224 → 255 → 302 → 368 → 211). Reduced to a **one-node `Conv` graph containing none of this project's code**, onnxruntime-webgpu 1.27.0 on a Radeon 880M returns ~100% relative error at input widths 150, 153 and 159 while adjacent widths are correct to 1e-06 — deterministically, `0.000e+00` spread over four fresh sessions of eight runs each. Zero-padding the input channels fixes it exactly, bit-identical on the CPU.
-- **And it could not hold the configured batch.** At batch 8 the WebGPU device is lost, reproduced twice at 5.2 s, contained inside the Dawn device rather than a Windows TDR. The mechanism is total working set, not one buffer and not submission length: a single 1536 MB buffer allocates fine and a 9.78 s single submission survives. The pipeline was configured at batch 32 when this was measured; `master` set it to **8** the same evening, with its own memory-and-RTF sweep behind the number, and this branch does not yet have that commit.
+- **And it could not hold the configured batch.** At batch 8 the WebGPU device is lost, reproduced twice at 5.2 s, contained inside the Dawn device rather than a Windows TDR. The mechanism is total working set, not one buffer and not submission length: a single 1536 MB buffer allocates fine and a 9.78 s single submission survives. The pipeline was configured at batch 32 when this was measured and runs **8** now, which makes the point sharper rather than softer: the batch at which the segmentation graph loses the WebGPU device is the batch the product uses. The embedder is unaffected — it ran to batch 32 on WebGPU without incident — so what this closes is the segmentation half, which was not going there anyway.
 - **The wespeaker embedder does move, and it is half the pipeline.** Measured stage split: segmentation 50.5%, embedding 48.9%, clustering 0.0%. The ResNet34 exports to a 26.7 MB graph dynamic in batch *and* both frame axes, and reproduces the torch embedder to **1.21e-07 on ORT CPU** and **1.94e-07 on WebGPU** at batch 32 — three orders inside the parity gate. Placement confirms it: **192 of 206 executed nodes on WebGPU, 93.2%**, so the graph runs where it says it does.
 
 **And it still moves the answer, which is why `auto` is torch.** On `two-hosts-three-guests-a`, idle machine, torch returns **225 speaker turns** and both ONNX providers return **222** — as time, **565 of 300,000 frames, 0.19% of the timeline and 0.82% of speech**, with the speech/silence split byte-identical at 682.3 s because segmentation never left torch. The two ONNX providers return the identical answer to each other, so this is torch-versus-ONNX-Runtime and not CPU-versus-GPU. **The rule this project applies is that what it picks unasked reproduces the figure it publishes** — CUDA is excluded from the first diariser's `auto` while scoring *better*, 16.1021% against 16.3324%, so "changes the answer" has always been the criterion rather than "scores worse". `auto` therefore resolves to `torch`; `--speaker-backend webgpu` reaches the fast path, warns, and trades a difference nobody has priced for about a third of the wall clock.
