@@ -355,9 +355,62 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     partial void OnDiarisationProviderChanged(string? value)
     {
+        // The list first: a stored-but-unregistered choice appears in it as a marked row, so the
+        // rows depend on this value and the bound SelectedItem must be re-resolved after them.
+        OnPropertyChanged(nameof(DiarisationProviders));
         OnPropertyChanged(nameof(SelectedDiarisationProvider));
         OnPropertyChanged(nameof(DiarisationProviderExplanation));
         _settings.Update(current => current with { DiarisationProvider = value });
+    }
+
+    /// <summary>
+    /// Re-offers the rows once the probe has answered, in ItemsSource-then-SelectedItem order.
+    /// </summary>
+    partial void OnRegisteredDiariserProvidersChanged(IReadOnlyList<string>? value)
+    {
+        OnPropertyChanged(nameof(DiarisationProviders));
+        OnPropertyChanged(nameof(SelectedDiarisationProvider));
+        OnPropertyChanged(nameof(DiarisationProviderExplanation));
+    }
+
+    /// <summary>True once a probe has been started, so opening the tab repeatedly asks once.</summary>
+    private bool _diariserProviderProbeStarted;
+
+    /// <summary>
+    /// Asks the sidecar what ONNX Runtime registered, off the UI thread, at most once per window.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Started when the Settings page is opened rather than at launch: the op reports each engine's
+    /// automatic resolution as well as the raw list, and getting that honestly costs the engines'
+    /// imports — seconds of torch — which is not a cost to put on every start of an application
+    /// most of whose users never open this page.
+    /// </para>
+    /// <para>
+    /// A null answer leaves the flag down so a later visit tries again. "Not established" is
+    /// usually a sidecar that has not been installed yet or a machine that was busy, and both of
+    /// those stop being true without the window restarting.
+    /// </para>
+    /// </remarks>
+    private async Task ProbeDiariserProvidersAsync()
+    {
+        if (_diariserProviderProbeStarted)
+        {
+            return;
+        }
+
+        _diariserProviderProbeStarted = true;
+
+        // ConfigureAwait(true): the continuation raises property changes for bound controls, which
+        // belongs on the UI thread.
+        var registered = await _engines.AvailableDiariserProvidersAsync().ConfigureAwait(true);
+        if (registered is null)
+        {
+            _diariserProviderProbeStarted = false;
+            return;
+        }
+
+        RegisteredDiariserProviders = registered;
     }
 
     /// <summary>The twin of the above, and for the same reason.</summary>
@@ -404,6 +457,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // somebody has just been there. Opening this page is when they are about to read it.
             OnPropertyChanged(nameof(CanSetDiarisationBatchSize));
             OnPropertyChanged(nameof(DiarisationBatchSizeHint));
+
+            // And the provider rows, which cannot be known without asking the runtime. Deliberately
+            // not awaited: the page draws now with every row on offer and narrows when the answer
+            // arrives, rather than blocking a tab switch on a torch import.
+            _ = ProbeDiariserProvidersAsync();
         }
     }
 
@@ -519,13 +577,58 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// window offers rather than everything the sidecar accepts; that property says what is left
     /// out and why.
     /// </remarks>
-    public IReadOnlyList<DiarisationProviderChoice> DiarisationProviders { get; } =
+    private static readonly IReadOnlyList<DiarisationProviderChoice> AllDiarisationProviders =
     [
         new(null, "Automatic"),
         new("cpu", "CPU"),
         new("webgpu", "WebGPU"),
         new("cuda", "CUDA (NVIDIA)"),
     ];
+
+    /// <summary>
+    /// What ONNX Runtime registered here, or null until the probe has answered. Null keeps every
+    /// row on offer — see <see cref="IEngineProvider.AvailableDiariserProvidersAsync"/> for why a
+    /// failed probe must not empty the picker.
+    /// </summary>
+    [ObservableProperty]
+    private IReadOnlyList<string>? _registeredDiariserProviders;
+
+    /// <summary>
+    /// The rows on offer: Automatic, plus the providers this machine's runtime actually registered.
+    /// </summary>
+    /// <remarks>
+    /// <b>The bundle pins <c>onnxruntime-webgpu</c>, whose wheel has no CUDA provider</b>, so
+    /// offering a CUDA row unconditionally offered one that could not work on any machine — an
+    /// NVIDIA card included. That was shipped on 2026-08-27 and corrected the same day.
+    /// <para>
+    /// A stored choice that is no longer registered stays in the list, marked. Dropping it would
+    /// leave the combo showing "Automatic" while the settings file said otherwise, which is the
+    /// disagreement a person cannot diagnose; and rewriting their file to match would be this
+    /// window quietly discarding a choice it was not asked to change.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<DiarisationProviderChoice> DiarisationProviders
+    {
+        get
+        {
+            if (RegisteredDiariserProviders is not { } registered)
+            {
+                return AllDiarisationProviders;
+            }
+
+            var rows = AllDiarisationProviders
+                .Where(row => row.Provider is null || registered.Contains(row.Provider))
+                .ToList();
+
+            if (DiarisationProvider is { Length: > 0 } chosen && !rows.Any(row => row.Provider == chosen))
+            {
+                var label = AllDiarisationProviders.FirstOrDefault(row => row.Provider == chosen)?.Label ?? chosen;
+                rows.Add(new DiarisationProviderChoice(chosen, $"{label} — not available on this machine"));
+            }
+
+            return rows;
+        }
+    }
 
     /// <summary>The twin of <see cref="SelectedAskExpertPlacement"/>, and for the same reason.</summary>
     public DiarisationProviderChoice SelectedDiarisationProvider
@@ -573,14 +676,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
             : "Only the downloadable speaker model has this setting. The built-in one works in a "
               + "fixed way that cannot be changed.";
 
-    public string DiarisationProviderExplanation =>
-        "Automatic uses the path each speaker model was checked on, and is the right choice unless "
-        + "you have a reason. WebGPU moves part of the work onto your graphics and finishes sooner, "
-        + "but it groups voices slightly differently, so the labels will not match the automatic "
-        + "ones exactly — which of the two is closer to the truth has not been established. CUDA "
-        + "needs an NVIDIA card and its runtime files. If you pick one this machine cannot use, "
-        + "labelling stops with an error rather than quietly using something else. Takes effect at "
-        + "your next recording.";
+    /// <summary>
+    /// What the choices mean, naming only the ones on offer.
+    /// </summary>
+    /// <remarks>
+    /// Built from the offered rows rather than written once, because the earlier fixed text
+    /// explained CUDA on machines where no CUDA row exists — a paragraph about a control that is
+    /// not there reads as a missing feature rather than as an absent one.
+    /// </remarks>
+    public string DiarisationProviderExplanation
+    {
+        get
+        {
+            var offered = DiarisationProviders.Select(row => row.Provider).ToArray();
+            var text =
+                "Automatic uses the path each speaker model was checked on, and is the right choice "
+                + "unless you have a reason.";
+
+            if (offered.Contains("webgpu"))
+            {
+                text += " WebGPU moves part of the work onto your graphics and finishes sooner, but "
+                    + "it groups voices slightly differently, so the labels will not match the "
+                    + "automatic ones exactly — which of the two is closer to the truth has not been "
+                    + "established.";
+            }
+
+            if (offered.Contains("cuda"))
+            {
+                text += " CUDA runs on an NVIDIA card and changes the labels in the same way.";
+            }
+
+            text += RegisteredDiariserProviders is null
+                ? " This list is still being checked against what your machine can run."
+                : " Only what this machine can actually run is listed.";
+
+            return text + " Takes effect at your next recording.";
+        }
+    }
 
     public string DiarisationBatchSizeExplanation =>
         "How much of the recording the speaker model holds at once. Fewer windows need "

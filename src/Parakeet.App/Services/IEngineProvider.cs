@@ -80,6 +80,27 @@ public interface IEngineProvider
     bool SupportsDiariserBatchSize { get; }
 
     /// <summary>
+    /// The execution providers this machine's ONNX Runtime registered, as protocol names, or null
+    /// when that could not be established.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Null and empty are different answers and the window depends on the difference.</b> Null
+    /// is "not established" — no interpreter, a sidecar that would not start, a probe still running
+    /// — and the caller keeps offering what it offered before, because a control emptied by a
+    /// failed probe is worse than one that occasionally offers too much. Empty would mean the
+    /// runtime registered nothing, which cannot happen: the CPU provider is always there.
+    /// </para>
+    /// <para>
+    /// <b>Why this is asked at all.</b> The bundle pins <c>onnxruntime-webgpu</c>, whose wheel has
+    /// no CUDA provider, so a CUDA row offered on the strength of an NVIDIA card would fail on every
+    /// machine including one with the card. Which providers exist is a property of the installed
+    /// runtime and not of the hardware, and only that runtime can answer it.
+    /// </para>
+    /// </remarks>
+    Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// What this run's labeller means for the numbers this project publishes, or null when there is
     /// nothing to say. The window's half of what <c>LabellerFactory</c> prints on the command line.
     /// </summary>
@@ -528,6 +549,16 @@ public sealed class EngineProvider : IEngineProvider
             : null;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Short-circuited when there is no interpreter: starting a sidecar to ask is the one thing
+    /// that certainly cannot work then, and the answer would be "not established" either way.
+    /// </remarks>
+    public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
+        HasBundledPython
+            ? SidecarExecutionProviders.QueryAsync(ct: ct)
+            : Task.FromResult<IReadOnlyList<string>?>(null);
+
+    /// <inheritdoc />
     public bool SupportsDiariserBatchSize =>
         SupportsSpeakerLabelling
         && DiarisationModel is { } batchModel
@@ -643,6 +674,14 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// that offered the control would be offering a setting that reaches nothing.
     /// </summary>
     public bool SupportsDiariserBatchSize => false;
+
+    /// <summary>
+    /// Null — "not established". The canned engine runs on no execution provider at all, and
+    /// answering with a list would put this provider in the business of describing a machine it
+    /// never touches. Null is also what keeps the picker's full set of rows visible under a test.
+    /// </summary>
+    public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>?>(null);
 
     /// <summary>Nothing to say: the canned labeller runs nowhere and reproduces no published figure.</summary>
     public string? DescribeLabeller(ISpeakerLabeller labeller) => null;
