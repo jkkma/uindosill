@@ -185,7 +185,7 @@ public sealed class FakeAnswerEngine : IAnswerEngine
         // The overview opens with the framing sentence its prompt asks for, cited to where the
         // recording starts — so the panel's lead, its chips and its copy text are all exercised
         // without a model, and a fake that skipped it would let the shape ship untested.
-        if (request.Mode == AnswerMode.WholeTranscript)
+        if (request.Mode is AnswerMode.WholeTranscript or AnswerMode.Survey)
         {
             yield return "This recording covers several things ";
             yield return $"[{evidence[0].CitationId}]\n";
