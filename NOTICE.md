@@ -228,9 +228,9 @@ every distribution in an assembled bundle and splices the result between the mar
 
 <!-- BEGIN bundled-python-notices -->
 
-**99 distributions, read off an assembled bundle** by `scripts/collect-python-notices.py`, which is what keeps this list from being a recollection. Every licence below is the one the installed package states in its own `METADATA` — PEP 639's `License-Expression` where the wheel has one, the legacy `License` field or the classifier where it does not, which is why some rows read as an SPDX expression and others as a category.
+**109 distributions, read off an assembled bundle** by `scripts/collect-python-notices.py`, which is what keeps this list from being a recollection. Every licence below is the one the installed package states in its own `METADATA` — PEP 639's `License-Expression` where the wheel has one, the legacy `License` field or the classifier where it does not, which is why some rows read as an SPDX expression and others as a category.
 
-**The texts themselves already travel with the product.** `pip install --target` keeps each wheel's `.dist-info`, the bundling script prunes only `__pycache__`, and the packaging script copies the tree whole — so 231 licence and notice files ship inside the interpreter directory. The paths below are relative to `python/Lib/site-packages` in an installed copy.
+**The texts themselves already travel with the product.** `pip install --target` keeps each wheel's `.dist-info`, the bundling script prunes only `__pycache__`, and the packaging script copies the tree whole — so 248 licence and notice files ship inside the interpreter directory. The paths below are relative to `python/Lib/site-packages` in an installed copy.
 
 | Distribution | Version | Licence, as the package states it | Text that ships |
 |---|---|---|---|
@@ -239,7 +239,6 @@ every distribution in an assembled bundle and splices the result between the mar
 | aiohttp | 3.14.3 | Apache-2.0 AND MIT | `aiohttp-3.14.3.dist-info/licenses/LICENSE.txt` and 1 more |
 | aiosignal | 1.4.0 | Apache 2.0 | `aiosignal-1.4.0.dist-info/licenses/LICENSE` |
 | alembic | 1.19.1 | MIT | `alembic-1.19.1.dist-info/licenses/LICENSE` |
-| annotated-doc | 0.0.5 | MIT | `annotated_doc-0.0.5.dist-info/licenses/LICENSE` |
 | antlr4-python3-runtime | 4.9.3 | BSD | **none ships** — METADATA says `BSD` with no version; the sdist carries no licence file. Built from source because it publishes no wheel — see the allowlist in `scripts/bundle-python.ps1`. Reached through `omegaconf`, which pins `==4.9.*`. |
 | asteroid-filterbanks | 0.4.0 | MIT | `asteroid_filterbanks-0.4.0.dist-info/LICENSE` |
 | attrs | 26.1.0 | MIT | `attrs-26.1.0.dist-info/licenses/LICENSE` |
@@ -250,14 +249,15 @@ every distribution in an assembled bundle and splices the result between the mar
 | colorlog | 6.12.0 | MIT License | `colorlog-6.12.0.dist-info/licenses/LICENSE` |
 | contourpy | 1.3.3 | BSD 3-Clause License | `contourpy-1.3.3.dist-info/LICENSE` |
 | cycler | 0.12.1 | Copyright (c) 2015, matplotlib project | `cycler-0.12.1.dist-info/LICENSE` |
-| docopt | 0.6.2 | MIT | `docopt-0.6.2.dist-info/licenses/LICENSE-MIT` |
 | einops | 0.8.2 | MIT | `einops-0.8.2.dist-info/licenses/LICENSE` |
 | filelock | 3.32.4 | MIT | `filelock-3.32.4.dist-info/licenses/LICENSE` |
 | flatbuffers | 25.12.19 | Apache 2.0 | **none ships** — METADATA says `Apache 2.0`; the wheel carries no licence file. |
 | fonttools | 4.63.0 | MIT | `fonttools-4.63.0.dist-info/licenses/LICENSE` and 1 more |
 | frozenlist | 1.8.0 | Apache-2.0 | `frozenlist-1.8.0.dist-info/licenses/LICENSE` |
 | fsspec | 2026.7.0 | BSD-3-Clause | `fsspec-2026.7.0.dist-info/licenses/LICENSE` |
+| googleapis-common-protos | 1.75.2 | Apache 2.0 | `googleapis_common_protos-1.75.2.dist-info/licenses/LICENSE` |
 | greenlet | 3.5.5 | MIT AND PSF-2.0 | `greenlet-3.5.5.dist-info/licenses/LICENSE` and 1 more |
+| grpcio | 1.83.0 | Apache-2.0 | `grpcio-1.83.0.dist-info/licenses/LICENSE` |
 | huggingface_hub | 0.36.2 | Apache | `huggingface_hub-0.36.2.dist-info/licenses/LICENSE` |
 | idna | 3.19 | BSD-3-Clause | `idna-3.19.dist-info/licenses/LICENSE.md` |
 | Jinja2 | 3.1.6 | BSD License | `jinja2-3.1.6.dist-info/licenses/LICENSE.txt` |
@@ -279,7 +279,17 @@ every distribution in an assembled bundle and splices the result between the mar
 | numpy | 2.5.2 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | `numpy-2.5.2.dist-info/licenses/LICENSE.txt` and 16 more |
 | omegaconf | 2.3.1 | BSD License | `omegaconf-2.3.1.dist-info/licenses/LICENSE` |
 | onnx | 1.22.0 | Apache-2.0 | `onnx-1.22.0.dist-info/licenses/LICENSE` and 1 more |
+| onnx-ir | 1.0.0 | Apache-2.0 | `onnx_ir-1.0.0.dist-info/licenses/LICENSE` |
 | onnxruntime-webgpu | 1.27.0 | MIT License | `onnxruntime/LICENSE` |
+| onnxscript | 0.7.1 | MIT License | `onnxscript-0.7.1.dist-info/licenses/LICENSE` |
+| opentelemetry-api | 1.44.0 | Apache-2.0 | `opentelemetry_api-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-exporter-otlp | 1.44.0 | Apache-2.0 | `opentelemetry_exporter_otlp-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-exporter-otlp-proto-common | 1.44.0 | Apache-2.0 | `opentelemetry_exporter_otlp_proto_common-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-exporter-otlp-proto-grpc | 1.44.0 | Apache-2.0 | `opentelemetry_exporter_otlp_proto_grpc-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-exporter-otlp-proto-http | 1.44.0 | Apache-2.0 | `opentelemetry_exporter_otlp_proto_http-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-proto | 1.44.0 | Apache-2.0 | `opentelemetry_proto-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-sdk | 1.44.0 | Apache-2.0 | `opentelemetry_sdk-1.44.0.dist-info/licenses/LICENSE` |
+| opentelemetry-semantic-conventions | 0.65b0 | Apache-2.0 | `opentelemetry_semantic_conventions-0.65b0.dist-info/licenses/LICENSE` |
 | optimum | 2.1.0 | Apache | `optimum-2.1.0.dist-info/licenses/LICENSE` |
 | optimum-onnx | 0.1.0 | Apache-2.0 | `optimum_onnx-0.1.0.dist-info/licenses/LICENSE` |
 | optuna | 4.9.0 | MIT License | `optuna-4.9.0.dist-info/licenses/LICENSE` and 1 more |
@@ -290,10 +300,12 @@ every distribution in an assembled bundle and splices the result between the mar
 | propcache | 0.5.2 | Apache-2.0 | `propcache-0.5.2.dist-info/licenses/LICENSE` and 1 more |
 | protobuf | 7.36.0 | 3-Clause BSD License | `protobuf-7.36.0.dist-info/LICENSE` |
 | psutil | 7.2.2 | BSD-3-Clause | `psutil-7.2.2.dist-info/LICENSE` |
-| pyannote.core | 5.0.0 | MIT License | `pyannote.core-5.0.0.dist-info/LICENSE` |
-| pyannote.database | 5.1.3 | MIT License | `pyannote.database-5.1.3.dist-info/LICENSE` |
-| pyannote.metrics | 3.2.1 | UNKNOWN | `pyannote.metrics-3.2.1.dist-info/LICENSE` |
-| pyannote.pipeline | 3.0.1 | MIT License | `pyannote.pipeline-3.0.1.dist-info/LICENSE` |
+| pyannote-audio | 4.0.7 | (none stated) | `pyannote_audio-4.0.7.dist-info/licenses/LICENSE` |
+| pyannote-core | 6.0.1 | (none stated) | `pyannote_core-6.0.1.dist-info/licenses/LICENSE` |
+| pyannote-database | 6.1.1 | (none stated) | `pyannote_database-6.1.1.dist-info/licenses/LICENSE` |
+| pyannote-metrics | 4.1 | (none stated) | `pyannote_metrics-4.1.dist-info/licenses/LICENSE` |
+| pyannote-pipeline | 4.0.0 | (none stated) | `pyannote_pipeline-4.0.0.dist-info/licenses/LICENSE` |
+| pyannoteai-sdk | 0.4.0 | (none stated) | `pyannoteai_sdk-0.4.0.dist-info/licenses/LICENSE` |
 | pycparser | 3.0 | BSD-3-Clause | `pycparser-3.0.dist-info/licenses/LICENSE` |
 | Pygments | 2.21.0 | BSD-2-Clause | `pygments-2.21.0.dist-info/licenses/AUTHORS` and 1 more |
 | pyparsing | 3.3.2 | MIT | `pyparsing-3.3.2.dist-info/licenses/LICENSE` |
@@ -310,13 +322,11 @@ every distribution in an assembled bundle and splices the result between the mar
 | semver | 3.0.4 | Copyright (c) 2013, Konstantine Rybnikov | `semver-3.0.4.dist-info/LICENSE.txt` |
 | sentencepiece | 0.2.2 | Apache-2.0 | **none ships** — METADATA says `Apache-2.0`; the wheel carries no licence file. |
 | setuptools | 84.0.0 | MIT | `setuptools-84.0.0.dist-info/licenses/LICENSE` |
-| shellingham | 1.5.4 | ISC License | `shellingham-1.5.4.dist-info/LICENSE` |
 | six | 1.17.0 | MIT | `six-1.17.0.dist-info/LICENSE` |
 | sortedcontainers | 2.4.0 | Apache 2.0 | `sortedcontainers-2.4.0.dist-info/LICENSE` |
 | soundfile | 0.14.0 | BSD 3-Clause License | `soundfile-0.14.0.dist-info/LICENSE` |
 | SQLAlchemy | 2.0.52 | MIT | `sqlalchemy-2.0.52.dist-info/licenses/LICENSE` |
 | sympy | 1.14.0 | BSD | `sympy-1.14.0.dist-info/licenses/AUTHORS` and 1 more |
-| tabulate | 0.10.0 | MIT | `tabulate-0.10.0.dist-info/licenses/LICENSE` |
 | tensorboardX | 2.6.5 | MIT | `tensorboardx-2.6.5.dist-info/licenses/LICENSE` |
 | threadpoolctl | 3.6.0 | BSD-3-Clause | `threadpoolctl-3.6.0.dist-info/licenses/LICENSE` |
 | tokenizers | 0.22.2 | Apache Software License | **none ships** — Classifier says `Apache Software License`; the wheel carries no licence file. |
@@ -325,16 +335,16 @@ every distribution in an assembled bundle and splices the result between the mar
 | torch-audiomentations | 0.12.0 | MIT | `torch_audiomentations-0.12.0.dist-info/LICENSE` |
 | torch_pitch_shift | 1.2.5 | MIT License | `torch_pitch_shift-1.2.5.dist-info/LICENSE` |
 | torchaudio | 2.11.0+cpu | BSD License | `torchaudio-2.11.0+cpu.dist-info/licenses/LICENSE` |
+| torchcodec | 0.16.0+cpu | (none stated) | `torchcodec-0.16.0+cpu.dist-info/licenses/LICENSE` and 7 more |
 | torchmetrics | 1.9.0 | Apache-2.0 | `torchmetrics-1.9.0.dist-info/licenses/LICENSE` |
 | tqdm | 4.70.0 | MPL-2.0 AND MIT | `tqdm-4.70.0.dist-info/licenses/LICENCE` |
 | transformers | 4.57.6 | Apache 2.0 License | `transformers-4.57.6.dist-info/licenses/LICENSE` |
-| typer | 0.27.1 | MIT | `typer-0.27.1.dist-info/licenses/LICENSE` |
 | typing_extensions | 4.16.0 | PSF-2.0 | `typing_extensions-4.16.0.dist-info/licenses/LICENSE` |
 | tzdata | 2026.3 | Apache-2.0 | `tzdata-2026.3.dist-info/licenses/LICENSE` and 1 more |
 | urllib3 | 2.7.0 | MIT | `urllib3-2.7.0.dist-info/licenses/LICENSE.txt` |
 | yarl | 1.24.5 | Apache-2.0 | `yarl-1.24.5.dist-info/licenses/LICENSE` and 1 more |
 
-**5 of the 99 ship no licence text of their own**: `antlr4-python3-runtime`, `flatbuffers`, `primePy`, `sentencepiece`, `tokenizers`. What each claims instead is in `KNOWN_TEXTLESS` in the script that writes this, with the route by which it arrives. Most name Apache, and the Apache-2.0 text travels in this bundle several times over — `onnx`, `optimum` and `transformers` each carry a copy — so for those a recipient has the licence even without one attached. **That is not true of all of them**: `antlr4-python3-runtime` says only `BSD`, which names a family rather than one of two licences that differ by a clause, and `primePy`'s `License` field is the literal `UNKNOWN` with a classifier alone claiming MIT. Upstream's omission in every case, recorded rather than papered over.
+**5 of the 109 ship no licence text of their own**: `antlr4-python3-runtime`, `flatbuffers`, `primePy`, `sentencepiece`, `tokenizers`. What each claims instead is in `KNOWN_TEXTLESS` in the script that writes this, with the route by which it arrives. Most name Apache, and the Apache-2.0 text travels in this bundle several times over — `onnx`, `optimum` and `transformers` each carry a copy — so for those a recipient has the licence even without one attached. **That is not true of all of them**: `antlr4-python3-runtime` says only `BSD`, which names a family rather than one of two licences that differ by a clause, and `primePy`'s `License` field is the literal `UNKNOWN` with a classifier alone claiming MIT. Upstream's omission in every case, recorded rather than papered over.
 
 **Three of these are not simply permissive, and they are the rows to read twice.** `soundfile` is BSD-3-Clause but carries an LGPL-2.1 `libsndfile` as a *separate, dynamically loaded and replaceable* DLL, whose `COPYING` ships at `_soundfile_data/COPYING` — which this table does not show because it belongs to no `.dist-info`. `certifi` and `tqdm` are MPL-2.0, file-level copyleft. **`soxr` was a fourth until 2026-08-26**, and it was the difficult one: its libsoxr was statically linked into `soxr/soxr_ext.pyd`, where LGPL-2.1 §6(b) could not reach it. It arrived only because librosa declared it, and librosa left when the one call it was here for became a committed matrix. **Nothing statically linked in this product is under the LGPL.** `licences/LGPL-WRITTEN-OFFER.txt` discharges what remains and `docs/LICENSING.md` reads it.
 
