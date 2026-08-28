@@ -247,22 +247,20 @@ Get-ChildItem -LiteralPath $engines -Recurse -Directory -Filter '__pycache__' |
 foreach ($required in @(
     'uindosill_engines/serve.py',
     'uindosill_engines/protocol.py',
-    'uindosill_engines/diariser/parity-reference.npy',
-    # The second diariser's speaker embedder had its own reference and its own gate here until
-    # 2026-08-27, when DiariZen — the only engine with a negotiable embedder — moved to
-    # `attic/diarizen/` and took the fixture with it. The pyannote pipeline that replaced it is
-    # torch on both stages with no ONNX route, so it has no second path to compare against and no
-    # reference to ship. **Removed rather than made optional**: this list throws on a missing entry,
-    # which is the whole point of it, and a name that can never be present would make every bundle
-    # fail. If an ONNX embedder is built for the new engine, its reference belongs back on this list
-    # and on package-windows.ps1's.
-    # The mel filterbank, committed 2026-08-26 when the `librosa.filters.mel` call that built it
-    # was replaced by its own output. Without this file the diariser raises on construction, so a
-    # bundle missing it is a bundle whose speaker labelling does not start.
-    'uindosill_engines/diariser/mel-filterbank.npy',
+    # **The diariser has nothing on this list, and that is the change of 2026-08-27.** Three of
+    # its files were here — a parity reference, a mel filterbank and NVIDIA's vendored
+    # `sortformer_modules.py` — and all three went to `attic/sortformer/` with the ONNX engine they
+    # belonged to. The pyannote pipeline that remains is torch on both stages: no execution provider
+    # to choose, so no second path to compare against and no reference to ship; and no vendored
+    # source, because it calls upstream's own installed package.
+    #
+    # **Removed rather than made optional**, which is the same call made for DiariZen's embedder
+    # reference a few hours earlier: this list throws on a missing entry, which is the whole point
+    # of it, and a name that can never be present would make every bundle fail. If an ONNX path is
+    # built for the diariser again, its reference belongs back on this list and on
+    # package-windows.ps1's.
     'uindosill_engines/translator/parity-reference.json',
-    'uindosill_engines/translator/parity-sources.json',
-    'uindosill_engines/_vendor/nemo/collections/asr/modules/sortformer_modules.py')) {
+    'uindosill_engines/translator/parity-sources.json')) {
     $path = Join-Path $Destination $required
     if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
         # The parity references are on this list on purpose. Without one, the check that stands

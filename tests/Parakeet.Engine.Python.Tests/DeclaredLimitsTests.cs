@@ -9,11 +9,19 @@ namespace Parakeet.Engine.Python.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="SidecarSpeakerLabeller.DeclaredLimits"/> is a second copy of two numbers that belong
-/// to the Python engine, and it exists because the window has to warn about them before anything is
+/// <see cref="SidecarSpeakerLabeller.DeclaredLimits"/> is a second copy of two values that belong
+/// to the Python engine, and it exists because the window has to state them before anything is
 /// loaded — and on a machine with no bundled Python, before there is anything to ask. The copy is
 /// policed twice: at load, by <c>SidecarSpeakerLabeller</c> refusing a sidecar that reports
-/// different numbers, and here, by reading the constants out of the source.
+/// different values, and here, by reading the constants out of the source.
+/// </para>
+/// <para>
+/// <b>Both values are <c>None</c> now, and that is what makes this worth keeping rather than what
+/// makes it pointless.</b> Until 2026-08-27 they were 4 and 3000 — the ONNX diariser's speaker
+/// slots and the fifty minutes its labels had been established to — and a drift between the two
+/// halves would have put a wrong number in front of a user. A drift now would be worse in a quieter
+/// way: a cap or a bound appearing on one side only would be this build claiming an established
+/// limit for an engine nothing has measured. A null is a claim too, and it is held to the same way.
 /// </para>
 /// <para>
 /// The load-time check fires on the machine where the two halves are together, which is a user's.
@@ -21,11 +29,8 @@ namespace Parakeet.Engine.Python.Tests;
 /// shipping is a check that reports history.
 /// </para>
 /// <para>
-/// It reads the file rather than importing it, because this suite has no Python:
-/// <c>scripts/cloud-setup.sh</c> installs the SDK and PowerShell and no interpreter. Two integers
-/// in two <c>#:</c>-documented module constants are well within what a regular expression can be
-/// trusted with, and a rename that put them out of its reach fails this test rather than passing
-/// it silently.
+/// It reads the files rather than importing them, because this suite has no Python:
+/// <c>scripts/cloud-setup.sh</c> installs the SDK and PowerShell and no interpreter.
 /// </para>
 /// </remarks>
 public sealed class DeclaredLimitsTests
@@ -33,15 +38,15 @@ public sealed class DeclaredLimitsTests
     [Fact]
     public void TheDeclaredCapIsTheOneTheSidecarShips()
     {
-        Assert.Equal(SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers, ReadConstant("MAX_SPEAKERS"));
+        Assert.Null(SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers);
+        AssertEngineConstantIsNone("MAX_SPEAKERS");
     }
 
     [Fact]
     public void TheDeclaredEstablishedLengthIsTheOneTheSidecarShips()
     {
-        var seconds = ReadConstant("RELIABLE_UP_TO_SECONDS");
-
-        Assert.Equal(SidecarSpeakerLabeller.DeclaredLimits.ReliableUpTo, TimeSpan.FromSeconds(seconds));
+        Assert.Null(SidecarSpeakerLabeller.DeclaredLimits.ReliableUpTo);
+        AssertEngineConstantIsNone("RELIABLE_UP_TO_SECONDS");
     }
 
     [Fact]
@@ -49,28 +54,15 @@ public sealed class DeclaredLimitsTests
     {
         // Without this, the copy being policed is the middle one of three. `capabilities()` is what
         // the host is actually told, and it could be edited to a literal — `"maxSpeakers": 8` — while
-        // the module constant above it stayed 4 and both checks in this file kept passing. Asserting
-        // that the dict names the constants is what makes the chain constant → reply → declaration
-        // unbroken.
-        Assert.Contains("\"maxSpeakers\": MAX_SPEAKERS", Source, StringComparison.Ordinal);
-        Assert.Contains("\"reliableUpToSeconds\": RELIABLE_UP_TO_SECONDS", Source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheCapMatchesTheSpeakerCountTheGraphIsDrivenWith()
-    {
-        // A third copy, and the one that is not a report but a shape: `engine.py`'s N_SPK is the
-        // width of the probability array the streaming loop allocates and slices. If it and
-        // MAX_SPEAKERS ever disagreed, the host would warn about a cap the model does not have —
-        // or, worse, not warn about one it does.
-        var geometry = File.ReadAllText(
-            Path.Combine(RepositoryRoot, "python", "uindosill_engines", "diariser", "engine.py"));
-        var match = Regex.Match(geometry, @"^N_SPK\s*=\s*([0-9]+)\s*$", RegexOptions.Multiline);
-
-        Assert.True(match.Success, "N_SPK was not found in diariser/engine.py.");
-        Assert.Equal(
-            SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers,
-            int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture));
+        // the module constant stayed None and both checks above kept passing. Asserting that the
+        // dict names the constants is what makes the chain constant -> reply -> declaration unbroken.
+        //
+        // They are read through `engine_module` rather than defined beside the dict, which is where
+        // they moved when the second diariser arrived: the values belong to the engine that has
+        // them, not to the package that reports them.
+        Assert.Contains("\"maxSpeakers\": engine_module.MAX_SPEAKERS", Source, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"reliableUpToSeconds\": engine_module.RELIABLE_UP_TO_SECONDS", Source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -87,25 +79,31 @@ public sealed class DeclaredLimitsTests
     }
 
     /// <summary>
-    /// Evaluates a constant written as either an integer or a product of them — the file spells
-    /// fifty minutes <c>50 * 60</c>, which is clearer than 3000 and is why this does the arithmetic
-    /// rather than demanding a literal.
+    /// Asserts a module constant in the engine is spelled <c>None</c>, rather than absent.
     /// </summary>
-    private static int ReadConstant(string name)
+    /// <remarks>
+    /// The distinction is the point. A constant that had been deleted would leave
+    /// <c>capabilities()</c> raising <c>AttributeError</c> at load — loud, and not this test's
+    /// business — but one quietly given a number would ship a bound this project has not measured,
+    /// which nothing else would catch. So this fails on a missing constant too: an engine that
+    /// stopped declaring its limits at all is a change worth stopping for either way.
+    /// </remarks>
+    private static void AssertEngineConstantIsNone(string name)
     {
-        var match = Regex.Match(Source, $@"^{Regex.Escape(name)}\s*=\s*([0-9][0-9 *]*)\s*$", RegexOptions.Multiline);
+        var match = Regex.Match(
+            EngineSource, $@"^{Regex.Escape(name)}\s*=\s*(.+?)\s*$", RegexOptions.Multiline);
 
         Assert.True(
             match.Success,
-            $"{name} was not found in diariser/__init__.py. Either it was renamed — in which case this build's " +
-            "declared limits are describing a constant that no longer exists — or its shape changed past what this " +
-            "check can read. Both are worth stopping for.");
+            $"{name} was not found in diariser/pyannote_engine.py. Either it was renamed — in which case this " +
+            "build's declared limits are describing a constant that no longer exists — or its shape changed past " +
+            "what this check can read. Both are worth stopping for.");
 
-        return match.Groups[1].Value
-            .Split('*', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(part => int.Parse(part, CultureInfo.InvariantCulture))
-            .Aggregate(1, (product, part) => product * part);
+        Assert.Equal("None", match.Groups[1].Value);
     }
+
+    private static string EngineSource { get; } = File.ReadAllText(
+        Path.Combine(RepositoryRoot, "python", "uindosill_engines", "diariser", "pyannote_engine.py"));
 
     private static string Source { get; } = File.ReadAllText(
         Path.Combine(RepositoryRoot, "python", "uindosill_engines", "diariser", "__init__.py"));

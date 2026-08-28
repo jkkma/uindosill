@@ -18,17 +18,21 @@ in licences/GPL-2.0.txt. See docs/LICENSING.md for what each obliges, and
 licences/mpv-WRITTEN-OFFER.txt for where the corresponding source lives.
 
 The model weights are covered by neither. They are separately licensed by their
-authors — four entries under four licences — and their notices are in
+authors — four entries under three licences — and their notices are in
 NOTICE.md:
 
     Transcription     parakeet-tdt-0.6b-v3          CC BY 4.0
-    Speaker labelling sortformer-4spk-v2.1          NVIDIA Open Model License
+    Speaker labelling pyannote-...-community-1      CC BY 4.0
     Translation       opus-mt-tc-bible-big-mul-en   Apache-2.0
     Speech detection  silero-vad-v5.1.2             MIT
 
+The NVIDIA Open Model License was a fifth line here until 2026-08-27, when the
+Sortformer weights it covered were retired. Nothing in this product is under it.
+
 Some are distributed with the application and some are not. Every installer
-carries the speech-detection weights; the default channel carries the
-speaker-labelling weights as well, and the win-cuda channel does not. The
+carries the speech-detection weights and no other; the speaker-labelling weights
+were bundled in the default channel while they were Sortformer's, and the
+pipeline that replaced them is a gated download like the rest. The
 transcription and translation weights are downloaded by the user on request and
 ship with no build.
 

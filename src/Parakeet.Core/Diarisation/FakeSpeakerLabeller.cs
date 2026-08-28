@@ -43,12 +43,14 @@ public sealed record FakeSpeakerLabellerOptions
     /// the capability it then advertises. True by default, as it has always behaved.
     /// </summary>
     /// <remarks>
-    /// False is the shape that matters, because it is the shipping labeller's: Sortformer estimates
-    /// the count and cannot be told one, so a caller's count is honoured afterwards by
-    /// <see cref="SpeakerTurns.FoldDownTo"/> rather than by the model. With this false the fake
-    /// keeps emitting <see cref="SpeakerCount"/> voices whatever it is asked for, which is what
-    /// gives the fold something to fold and what makes that repair testable without 453 MiB of
-    /// weights in CI.
+    /// False is the shape that matters, because it is the shipping labeller's: the diariser decides
+    /// how many voices there are and is not told, so a caller's count is honoured afterwards by
+    /// <see cref="SpeakerTurns.FoldDownTo"/> rather than by the model. That was true of the ONNX
+    /// engine, which estimated within four slots, and is true of the pyannote pipeline for a
+    /// different reason — it clusters, and the clustering is never passed a count. With this false
+    /// the fake keeps emitting <see cref="SpeakerCount"/> voices whatever it is asked for, which is
+    /// what gives the fold something to fold and what makes that repair testable without any weights
+    /// in CI.
     /// </remarks>
     public bool SupportsFixedSpeakerCount { get; init; } = true;
 

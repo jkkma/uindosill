@@ -358,7 +358,6 @@ internal static class TranscribeCommand
                 ModelPath = parsed.Value("speaker-model-path"),
                 Threads = ParseThreads(parsed.Value("speaker-threads"), "--speaker-threads"),
                 Backend = parsed.Value("speaker-backend"),
-                AllowUnverifiedBackend = parsed.HasFlag("speaker-backend-unverified"),
             },
             options,
             ct);

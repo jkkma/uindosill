@@ -18,7 +18,7 @@ Every message carries the `id` of the request it belongs to and a `type`:
     -> {"id": 1, "op": "hello"}
     <- {"id": 1, "type": "result", "protocol": 1, "python": "3.12.10", ...}
 
-    -> {"id": 2, "op": "load", "model": "sortformer", "path": "C:/.../sortformer-default.onnx"}
+    -> {"id": 2, "op": "load", "engine": "diariser", "path": "C:/.../pyannote-.../"}
     <- {"id": 2, "type": "result", "capabilities": {...}}
 
     -> {"id": 3, "op": "label", "wav": "C:/.../tmp.wav", "postProcessing": {...}}
@@ -65,7 +65,17 @@ from typing import Any, Callable, Iterator
 #: is survivable; the dangerous direction is a version-4 sidecar meeting a version-3 *host* that
 #: still says `diarizen` and would be told its non-commercial model had loaded when a differently
 #: licensed one had. Neither happens once the numbers disagree at `hello`.
-PROTOCOL_VERSION = 4
+#:
+#: **5 — the diariser's `kind` is gone, because there is one diariser.** Sortformer moved to
+#: `attic/sortformer/` and `load` for `engine: "diariser"` no longer reads `kind` or
+#: `graphOptimization`; `path` is a directory and nothing else. A version-4 host sends
+#: `kind: "sortformer"` with the path of an ONNX file it expects to be loaded, and a version-5
+#: sidecar ignoring an unknown keyword would answer that with pyannote's capabilities — the host
+#: believing it had loaded a four-slot streaming graph under the NVIDIA Open Model License while a
+#: CC BY 4.0 torch pipeline had loaded instead. That is the same failure version 4 was minted to
+#: prevent, in the same direction: a host told it has what it asked for when it has something else.
+#: Refusing at `hello` is what makes the field's disappearance loud rather than silent.
+PROTOCOL_VERSION = 5
 
 
 class RequestError(Exception):

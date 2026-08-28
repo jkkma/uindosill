@@ -50,7 +50,7 @@ public class SpeakerNamingTests
         var named = Document().WithSpeakerNames(new Dictionary<string, string> { ["Speaker 1"] = "Ada" });
 
         Assert.Equal("parakeet-v3", named.ModelId);
-        Assert.Equal("sortformer", named.SpeakerModelId);
+        Assert.Equal("pyannote", named.SpeakerModelId);
         Assert.Equal(2, named.Segments.Count);
         Assert.Equal("hello there", named.Segments[0].Text);
         Assert.Equal(TimeSpan.Zero, named.Segments[0].Start);
@@ -108,7 +108,7 @@ public class SpeakerNamingTests
     private static TranscriptDocument Document() => new()
     {
         ModelId = "parakeet-v3",
-        SpeakerModelId = "sortformer",
+        SpeakerModelId = "pyannote",
         Segments =
         [
             new TranscriptSegment

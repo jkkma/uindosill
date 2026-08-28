@@ -9,8 +9,8 @@ namespace Parakeet.App.ViewModels;
 /// <remarks>
 /// <para>
 /// <b>One object per speaker, not per line.</b> A three-hour recording is fifteen hundred segments
-/// and, at this pipeline's architectural ceiling, four voices. A name written onto every line would
-/// mean fifteen hundred property notifications to change four facts, and fifteen hundred copies of
+/// and a handful of voices. A name written onto every line would mean fifteen hundred property
+/// notifications to change a handful of facts, and fifteen hundred copies of
 /// one string that could disagree with each other. So the lines hold a reference to this and bind
 /// through it — see <see cref="TranscriptLineViewModel.Voice"/> — and renaming a speaker raises one
 /// notification that every cue of that speaker is already listening to, and none that any other

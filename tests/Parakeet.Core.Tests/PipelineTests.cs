@@ -396,67 +396,6 @@ public class AttributionTests
     }
 
     [Fact]
-    public void TheDiariserNoticeCarriesTheStringItsLicenceMandatesVerbatim()
-    {
-        // NVIDIA Open Model License §3.1 does not ask for a package of elements the way CC BY does.
-        // It asks for one exact sentence in a Notice file, and a copy of the Agreement. A notice
-        // that paraphrases the sentence has not met the condition, so the string is asserted
-        // character for character and asserted on its own line — prefixing it, as the renderer
-        // prefixes every other field, would stop it being the required string.
-        var text = Attributions.Get(Attributions.SortformerDiarisation4Spk).ToPlainText();
-
-        Assert.Contains(
-            "\nLicensed by NVIDIA Corporation under the NVIDIA Open Model License\n",
-            "\n" + text,
-            StringComparison.Ordinal);
-
-        Assert.Contains("soniqo", text, StringComparison.Ordinal);          // the export is a third party's
-        Assert.Contains("Model Derivative", text, StringComparison.Ordinal); // and what that makes it
-        Assert.Contains("AS IS", text, StringComparison.Ordinal);            // §6
-        Assert.Contains(Attributions.OpenModelLicencePath, text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheAgreementTheDiariserNoticePointsAtActuallyShips()
-    {
-        // §3.1 wants a copy, not a link. A notice naming a file that is not there is worse than no
-        // notice, so the path in the attribution is resolved rather than trusted, and the sentence
-        // the Agreement mandates is checked to be inside it.
-        var repository = AppContext.BaseDirectory;
-        while (repository is not null && !File.Exists(Path.Combine(repository, "Uindosill.slnx")))
-        {
-            repository = Path.GetDirectoryName(repository);
-        }
-
-        Assert.NotNull(repository);
-        var agreement = Path.Combine(repository, Attributions.OpenModelLicencePath.Replace('/', Path.DirectorySeparatorChar));
-        Assert.True(File.Exists(agreement), $"the NVIDIA Open Model License copy is missing from {agreement}");
-
-        var text = File.ReadAllText(agreement);
-        Assert.Contains("Licensed by NVIDIA Corporation under the NVIDIA Open Model License", text, StringComparison.Ordinal);
-        Assert.Contains("You may reproduce and distribute copies of the Model", text, StringComparison.Ordinal);
-        Assert.Contains("An output is not a Derivative Model", text, StringComparison.Ordinal);
-        Assert.Contains("Last Modified: October 24, 2025", text, StringComparison.Ordinal);
-
-        // The sections this product's own notices cite have to be findable in the copy it ships.
-        // The Agreement is a nested list on NVIDIA's page, and a tag-stripping extraction flattens
-        // it to unnumbered paragraphs — leaving "section 6 of the Agreement" in the rendered notice
-        // pointing at a heading that carries no number, and the Agreement's own cross-references
-        // ("revocable (as stated in Section 2.1)") unresolvable inside the file that contains them.
-        Assert.Contains("3.1. If you distribute the Model", text, StringComparison.Ordinal);
-        Assert.Contains("2.3. AI Ethics.", text, StringComparison.Ordinal);
-        Assert.Contains("6. Disclaimer of Warranty.", text, StringComparison.Ordinal);
-        Assert.Contains("revocable (as stated in Section 2.1)", text, StringComparison.Ordinal);
-
-        // Eleven top-level sections, Definitions through Trade and Compliance.
-        Assert.Contains("11. Trade and Compliance.", text, StringComparison.Ordinal);
-
-        // And nothing from the page around it.
-        Assert.DoesNotContain("Popular Links", text, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Privacy Policy", text, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void TheTranslatorNoticeCarriesAllFourApacheSection4Conditions()
     {
         // §4 attaches four conditions to redistribution, and (c) and (d) are the two that cannot be
@@ -508,17 +447,28 @@ public class AttributionTests
     }
 
     [Fact]
-    public void TheDiarisationLicencesConstraintsOnUseAreListed()
+    public void TheDiarisationConstraintOnUseIsListed()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);
 
-        // The one restriction here that is about what the product does rather than what it prints:
-        // §2.3 incorporates the Trustworthy AI terms, whose biometric clause is squarely on point
-        // for a feature that separates people by their voices.
+        // The one restriction here that is about what the product does rather than what it prints,
+        // and it must survive a change of engine. It arrived as NVIDIA Open Model License §2.3,
+        // whose Trustworthy AI terms name biometric processing; those weights were retired on
+        // 2026-08-27 and `community-1`'s CC BY 4.0 raises the subject nowhere. **The caution is
+        // asserted anyway**, because it was never really about the licence: separating people by
+        // their voices is voice biometrics whichever model does it. This test is what stops the
+        // sentence being swept out with the paperwork that introduced it.
         Assert.Contains("biometric", joined, StringComparison.Ordinal);
+        Assert.Contains("consent", joined, StringComparison.Ordinal);
 
-        // And the difference from CC BY that a reader would otherwise assume away.
-        Assert.Contains("revocable", joined, StringComparison.Ordinal);
+        // And the caution itself must not still be phrased as somebody's licence term, which would
+        // be this product citing an agreement no model it ships is under. The licence is named once
+        // more in this list — in the patent-bargain entry, saying that its bargain has left — and
+        // that is a statement about the past rather than a condition on the user, so the assertion
+        // is over the sentence that carries the caution rather than over the whole list.
+        var caution = Attributions.WeightUsageRestrictions.Single(
+            r => r.Contains("biometric", StringComparison.Ordinal));
+        Assert.DoesNotContain("NVIDIA", caution, StringComparison.Ordinal);
     }
 
     [Fact]

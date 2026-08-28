@@ -1,8 +1,10 @@
 """The sidecar's dispatch loop.
 
 Started by the .NET host as `python -m uindosill_engines`, kept alive for a whole run, and driven
-over stdin/stdout by :mod:`.protocol`. It holds the loaded models so a batch pays the 453 MiB
-diariser load and the 1.34 GiB translator load once rather than per file.
+over stdin/stdout by :mod:`.protocol`. It holds the loaded models so a batch pays the diariser
+load and the 1.34 GiB translator load once rather than per file. (The diariser's cost used to be
+stated here as 453 MiB; that was the ONNX graph now in `attic/sortformer/`, and the resident size of
+the pipeline that replaced it has not been measured.)
 
 Nothing here decides anything. Which model to use, where the weights are, what post-processing to
 apply and what to do about a speaker count the model cannot honour are all the host's business and
@@ -16,7 +18,7 @@ import platform
 import sys
 from typing import Any
 
-from .diariser import PYANNOTE, SORTFORMER, Diariser
+from .diariser import Diariser
 from .protocol import PROTOCOL_VERSION, Channel, RequestError, claim_stdout, serve
 from .translator import Translator
 
@@ -59,20 +61,24 @@ class Session:
         a load does cannot drift apart. That costs this op the engines' imports — seconds of torch
         — which is the right trade for a diagnostic that is asked once and must not lie.
 
-        DirectML is deliberately absent from `usable`, and for two separate measured reasons. For
-        the diariser it is faithful only with the graph optimiser disabled, and that finding is from
-        one NVIDIA card and one driver; until it has been measured on an AMD GPU — the case DirectML
-        exists for — selecting it automatically would be shipping an unproven path to exactly the
-        users who cannot check it. For the translator it is not faithful at all: 0 of 32 FLEURS
-        sentences matched the CPU, the decoder falling into a repetition loop, at 21.5x *slower*.
+        **Everything here is the translator's question now.** The diariser was the other consumer
+        of this op and it is a torch pipeline since 2026-08-27; `auto` still reports what its own
+        resolver settles on, for the same reason as before — asked rather than restated — but that
+        answer is the CPU by construction and no execution provider participates in it.
+
+        DirectML is deliberately absent from `usable`: for the translator it is not faithful at all,
+        0 of 32 FLEURS sentences matching the CPU, the decoder falling into a repetition loop, at
+        21.5x *slower*. **The measured diarisation reason that stood beside it has gone to the
+        attic with the graph it was measured on** — DirectML scoring 53.15% DER against the CPU's
+        16.33% is a fact about Sortformer, and repeating it here, where the only diariser is one
+        DirectML cannot run at all, would be attaching a number to the wrong engine.
 
         **The AMD path is still an open question, and WebGPU won the part of it that was asked.**
-        WebGPU was evaluated ahead of DirectML on 2026-08-21 and took both engines: it is
-        vendor-neutral like DirectML, sits on D3D12 or Vulkan underneath, and reproduces the CPU on
-        both models where DirectML reproduces neither. **What has not been asked is the part the
-        question was about** — no AMD GPU has run any of this, and DirectML's diarisation defect was
-        driver-mediated, so a result from one NVIDIA card is a prior rather than an answer. The bar
-        is unchanged: probabilities matching the CPU reference, on an AMD GPU. The Ryzen AI NPU
+        WebGPU was evaluated ahead of DirectML on 2026-08-21 and took both engines then; one of
+        those engines has since left. It is vendor-neutral like DirectML, sits on D3D12 or Vulkan
+        underneath, and reproduces the CPU on the translator where DirectML does not. **What has not
+        been asked is the part the question was about** — no AMD GPU has run any of this. The bar is
+        unchanged: output matching the CPU reference, on an AMD GPU. The Ryzen AI NPU
         (`VitisAIExecutionProvider`) is a separate question and is deferred past v1.0.
         """
         import onnxruntime as ort
@@ -101,18 +107,11 @@ class Session:
                 path=message.get("path", ""),
                 model_id=message.get("modelId", ""),
                 threads=int(message.get("threads", 0) or 0),
-                provider=message.get("provider", "cpu"),
-                graph_optimization=message.get("graphOptimization"),
+                provider=message.get("provider", "auto"),
                 profile=bool(message.get("profile", False)),
-                # Which of the two diarisers, named by the host because the host is what resolved
-                # the catalogue entry. Defaulted rather than required so that the field reads the
-                # same as every other optional one here; the protocol number is what actually stops
-                # a stale sidecar being asked for the engine it does not have.
-                kind=message.get("kind", SORTFORMER),
                 # Absent means "the model's own", which is not the same as any number this could
-                # default to — so it stays None rather than acquiring a value here. The second
-                # diariser reads it as the checkpoint's `batch_size`; the first refuses it outright,
-                # because its batching is its exported graph's geometry.
+                # default to — so it stays None rather than acquiring a value here. The diariser
+                # reads it as the checkpoint's `batch_size`.
                 batch_size=(
                     int(message["batchSize"])
                     if message.get("batchSize") is not None
@@ -144,22 +143,12 @@ class Session:
         probabilities with three orders of magnitude of daylight, the other compares strings with
         none. The host's question is the same either way, so it is one op.
 
-        **The second diariser has no fixture and is refused here**, rather than in
-        :meth:`_engine_for`, which `placement` and `write_parity_reference` also go through. Parity
-        compares two paths to one answer and the pyannote pipeline has one: torch on both stages,
-        no ONNX route, so the only comparison available would be a tensor against itself. Refused by
-        name rather than by running Sortformer's fixture, which would fail somewhere inside on a
-        missing attribute and read as a bug here rather than as the wrong question.
+        **Only the translator has a fixture**, and since 2026-08-27 that is the whole list. The
+        refusal for the diariser lives in :meth:`_engine_for` rather than here — see the reasoning
+        there, which changed when the ONNX diariser was shelved and the same sentence became the
+        right answer for `placement` too.
         """
         name = message.get("engine", "diariser")
-        if name == "diariser" and self.diariser.loaded and self.diariser.kind == PYANNOTE:
-            raise RequestError(
-                "request",
-                "this diariser has no parity fixture: it is torch on both stages with no ONNX "
-                "route, so there is no second path to compare against. Parity applies to the "
-                "other diariser, whose execution provider is chosen.",
-            )
-
         engine, module = self._engine_for(name)
         result = module.check(engine._engine)
         result["backend"] = engine.capabilities()["backend"]
@@ -198,11 +187,13 @@ class Session:
         )
 
         # **"No sessions" and "sessions that recorded nothing" are different failures and only one
-        # of them is about profiling.** The second diariser runs its segmentation in torch and, on
-        # the default `auto`, its embedder too — so it owns no ONNX session at all, and answering
-        # that with "reload with `profile: true`" prescribes a fix that cannot work no matter how
-        # many times it is tried. Separated 2026-08-27, after a review pointed out that the default
-        # configuration of one engine hits the wrong branch.
+        # of them is about profiling**, and answering the first with "reload with `profile: true`"
+        # prescribes a fix that cannot work no matter how many times it is tried. Separated
+        # 2026-08-27, when the diariser was a torch pipeline that could still reach this code and
+        # hit the wrong branch. It cannot reach it now — `_engine_for` turns it away first — so this
+        # guards the translator alone, which is a narrower job than the one it was written for and
+        # is kept because a future torch-backed engine would want it back rather than want it
+        # rediscovered.
         if not sessions:
             raise RequestError(
                 "request",
@@ -218,10 +209,10 @@ class Session:
                 "`profile: true`. Placement cannot be measured after the fact — ONNX Runtime reads "
                 "the setting when the session is built — so reload with it set.")
 
+        # One table, because `_engine_for` above admits one engine. The diariser had the other and
+        # it went to `attic/sortformer/` with the graph it described.
         from .translator.engine import PROVIDERS as TRANSLATOR_PROVIDERS
-        from .diariser.engine import PROVIDERS as DIARISER_PROVIDERS
-        table = DIARISER_PROVIDERS if name == "diariser" else TRANSLATOR_PROVIDERS
-        provider_name = table[wanted][0]
+        provider_name = TRANSLATOR_PROVIDERS[wanted][0]
 
         return {
             "engine": name,
@@ -235,24 +226,25 @@ class Session:
     def _engine_for(self, name: str) -> tuple[Any, Any]:
         """The loaded engine and its parity module, or the reason there is not one."""
         if name == "diariser":
-            if not self.diariser.loaded:
-                raise RequestError("model", "parity was asked for before the diariser was loaded")
-
-            # **Only one of the two diarisers has a fixture, because only one has two paths to
-            # compare.** Sortformer's is two chunks of synthetic mel through the streaming loop,
-            # comparing the probabilities one ONNX graph returns against the same graph on the CPU —
-            # a question that exists because a provider can be chosen there. pyannote's pipeline is
-            # torch on both stages with no ONNX route, so there is no second answer to check the
-            # first against, and a parity number for it would be a tensor compared with itself.
+            # **The diariser has no ONNX graph, so both questions this helper serves are the wrong
+            # question for it**, and one sentence answers both. `parity` compares two paths to one
+            # answer; `placement` asks which provider owned which node. This pipeline is torch on
+            # both stages, so it has one path and no nodes to place, and neither op has anything to
+            # report rather than having something to report that happens to be empty.
             #
-            # **The refusal for the pyannote arm is not here, and that is the point.** This helper
-            # serves `parity`, `placement` and `write_parity_reference` alike, so a parity-shaped
-            # refusal in it answers a `placement` request with a sentence about fixtures — which is
-            # what it did for the few minutes between the swap landing and a review catching it.
-            # Each caller refuses on its own terms; see :meth:`parity`.
-            from .diariser import parity as diariser_parity
-
-            return self.diariser, diariser_parity
+            # **Refused here rather than in each caller, which is a reversal.** While the ONNX
+            # diariser was still loadable the refusal had to sit in `parity` and
+            # `write_parity_reference` separately, because a parity-shaped sentence about fixtures
+            # is not an answer to a `placement` request — a distinction a review caught minutes
+            # after the pyannote swap landed. Shelving Sortformer removed the case that made them
+            # differ: the reason is now the same reason for every caller, and stating it once is
+            # what stops the three copies drifting.
+            raise RequestError(
+                "request",
+                "the diariser is a torch pipeline with no ONNX graph: it has no execution provider "
+                "to place nodes on and no second path to compare against, so it has no parity "
+                "fixture. Both ops apply to the translator.",
+            )
 
         if name == "translator":
             if not self.translator.loaded:
@@ -274,16 +266,6 @@ class Session:
         """
         name = message.get("engine", "diariser")
 
-        # Refused on the same terms as `parity`, and for the same reason: there is no fixture for
-        # this arm, so there is no reference to write. Without this the call would reach Sortformer's
-        # `compute` with a pyannote pipeline and fail inside on a missing attribute.
-        if name == "diariser" and self.diariser.loaded and self.diariser.kind == PYANNOTE:
-            raise RequestError(
-                "request",
-                "this diariser has no parity fixture, so there is no reference to write: it is "
-                "torch on both stages with no ONNX route to compare against.",
-            )
-
         engine, module = self._engine_for(name)
 
         capabilities = engine.capabilities()
@@ -294,30 +276,15 @@ class Session:
                 f"the parity reference must be produced on the cpu, not {backend}: a reference taken "
                 "from a provider that diverges would bless its divergence and fail every faithful machine.")
 
-        # **Dormant since 2026-08-27, and kept rather than deleted.** It closed a gap that only the
-        # second diariser had: DiariZen's reference was its *torch* embedder while ONNX Runtime's CPU
-        # provider also reported `cpu`, so a maintenance run made with an ONNX embedder installed
-        # would have overwritten the committed reference with ONNX output and blessed the very
-        # divergence the fixture existed to detect. No engine here now has a negotiable embedder —
-        # the arm above refuses pyannote outright and Sortformer reports no `embeddingBackend` — so
-        # nothing reaches it. An ONNX embedder for the new engine is what would wake it up, and this
-        # is the reasoning it would have to satisfy again.
-        embedding_backend = capabilities.get("embeddingBackend", "")
-        if embedding_backend and not embedding_backend.startswith("torch:"):
-            raise RequestError(
-                "request",
-                f"the diariser's parity reference must be produced by the torch embedder, not "
-                f"{embedding_backend}: it is what every ONNX embedder is judged against, and taking "
-                "it from one of them would bless that one's divergence. Load with provider 'torch'.")
-
+        # **The embedder guard that stood here went with the diariser on 2026-08-27.** It existed
+        # because DiariZen's reference was its *torch* embedder while ONNX Runtime's CPU provider
+        # also reported `cpu`, so a maintenance run with an ONNX embedder installed would have
+        # overwritten the committed reference and blessed the divergence the fixture detects. The
+        # translator has one runtime and no such ambiguity, and `_engine_for` is what makes that a
+        # closed set rather than an assumption. An engine with a negotiable embedder is what would
+        # need it again; `attic/sortformer/` is where the reasoning is kept.
         produced = module.compute(engine._engine)
         path = module.reference_path()
-
-        if name == "diariser":
-            import numpy as np
-
-            np.save(path, produced.astype(np.float32))
-            return {"path": path, "frames": int(produced.shape[0]), "backend": backend}
 
         import json as json_io
 

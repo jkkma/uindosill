@@ -37,7 +37,6 @@ public class ModelCatalogTests
         Assert.Equal(
             new Dictionary<string, string>
             {
-                ["sortformer-4spk-v2.1"] = "NVIDIA-Open-Model-License",
                 ["pyannote-speaker-diarization-community-1"] = "CC-BY-4.0",
             },
             catalog.DiarisationModels.ToDictionary(m => m.Id, m => m.License));
@@ -270,14 +269,14 @@ public class ModelCatalogTests
         // to `transcribe`, which is the failure the discriminator exists to prevent.
         var catalog = ModelCatalog.Default;
 
-        // **Two diarisers since 2026-08-26, and neither is Recommended.** They are a choice the
-        // user makes rather than a ranking: Sortformer is bundled, fast and capped at four voices;
-        // the pyannote pipeline is a download with no cap, and it needs a Hugging Face token
-        // because its repository is gated. Recommended picks the default *ASR* model, so a diariser
-        // carrying it would be the failure the discriminator exists to stop -- which is why it is
-        // asserted on both.
+        // **One diariser since 2026-08-27, and it is not Recommended.** There were two from
+        // 2026-08-26: Sortformer, bundled, fast and capped at four voices, and the pyannote
+        // pipeline, a download with no cap needing a Hugging Face token because its repository is
+        // gated. The first was retired and the assertion below is now a single-element list, which
+        // is why it is written as one rather than as a count. Recommended picks the default *ASR*
+        // model, so a diariser carrying it would be the failure the discriminator exists to stop.
         Assert.Equal(
-            new[] { "sortformer-4spk-v2.1", "pyannote-speaker-diarization-community-1" },
+            new[] { "pyannote-speaker-diarization-community-1" },
             catalog.DiarisationModels.Select(m => m.Id));
         Assert.All(catalog.DiarisationModels, m => Assert.False(m.Recommended));
 

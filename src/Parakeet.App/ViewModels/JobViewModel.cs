@@ -35,12 +35,14 @@ public sealed partial class JobViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A statement of fact, and deliberately not on <see cref="Warning"/>. The warning line carries
-    /// the backends that do <em>not</em> reproduce the published figure — CUDA and DirectML — and
-    /// <c>SpeakerLabelling.DescribeBackend</c> returns null for the two that do, on the reasoning
-    /// spelled out in <c>LabellerFactory</c>: a sentence on every run about a backend that agrees
-    /// would train people to ignore the line that matters. That convention was written for the
-    /// command line, where a run prints a block of provenance the reader is already looking at.
+    /// A statement of fact, and deliberately not on <see cref="Warning"/>. The warning line used to
+    /// carry the diariser backends that did <em>not</em> reproduce the published figure — CUDA and
+    /// DirectML — while the two that did produced no line, on the reasoning that a sentence on every
+    /// run about a backend that agrees would train people to ignore the line that matters.
+    /// <b>Nothing warns about a diariser backend since 2026-08-27</b>: the helper that produced
+    /// those sentences went with the engine its measurements belonged to, and no device has been
+    /// shown to move this pipeline's labels — which is exactly why the provenance below still
+    /// matters, since it is now the only place the device is recorded at all.
     /// </para>
     /// <para>
     /// In the window it left a hole. The Models tab names the backend the <em>transcription</em>
@@ -522,7 +524,15 @@ public sealed partial class JobViewModel : ObservableObject
         {
             if (!voices.ContainsKey(speaker))
             {
-                voices[speaker] = new SpeakerViewModel(speaker, voices.Count % 4);
+                // **Eight since 2026-08-27, and it is still a wrap.** It was `% 4` because four was the ONNX
+        // diariser's architectural ceiling — a fifth speaker could not occur, so the modulo was
+        // unreachable rather than lossy. That engine is in `attic/sortformer/` and the pipeline that
+        // replaced it clusters with no cap, so five and more became ordinary; AMI-style meetings
+        // have five to seven. The palette grew to match (Theme/Controls.axaml), which moves the
+        // collision to the ninth speaker rather than removing it — and nine in one recording would
+        // repeat a colour while still reading a different name, which is the same graceful failure
+        // as before, further out.
+        voices[speaker] = new SpeakerViewModel(speaker, voices.Count % 8);
             }
         }
 

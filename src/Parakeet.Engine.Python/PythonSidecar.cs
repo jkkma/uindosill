@@ -10,9 +10,11 @@ namespace Parakeet.Engine.Python;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One process for a whole run rather than one per file: the diariser's graph is 453 MiB and the
-/// translator's 1.34 GiB, and a batch that reloads them per file spends more time loading than
-/// working. It is started lazily — nothing spawns until a model is actually wanted — and stopped on
+/// One process for a whole run rather than one per file: the translator's weights are 1.34 GiB and
+/// the diariser loads a torch pipeline whose resident size has not been measured, and a batch that
+/// reloads them per file spends more time loading than working. (This said "the diariser's graph is
+/// 453 MiB" until 2026-08-27; that graph is in <c>attic/sortformer/</c> and the diariser has no
+/// graph at all now.) It is started lazily — nothing spawns until a model is actually wanted — and stopped on
 /// dispose.
 /// </para>
 /// <para>
@@ -42,9 +44,10 @@ public sealed class PythonSidecar : IAsyncDisposable
     /// Python side moved to 2: the suite stayed green because the fake sidecar answers whatever this
     /// constant says, so nothing in CI could see it. <c>ProtocolVersionTests</c> now reads the Python
     /// constant out of the source and asserts it against this one, which is the check that would
-    /// have caught it.
+    /// have caught it. It moved to 5 on 2026-08-27, when the diariser lost its <c>kind</c> field
+    /// along with the Sortformer engine that made two of them necessary.
     /// </remarks>
-    public const int ProtocolVersion = 4;
+    public const int ProtocolVersion = 5;
 
     private const int StandardErrorLinesKept = 200;
 

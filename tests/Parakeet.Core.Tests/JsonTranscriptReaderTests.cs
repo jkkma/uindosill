@@ -17,7 +17,7 @@ public class JsonTranscriptReaderTests
         ProcessingTime = TimeSpan.FromSeconds(1.2),
         DecodeTime = TimeSpan.FromSeconds(0.9),
         SpeechDetector = "energy gate",
-        SpeakerModelId = "sortformer-4spk-v2.1",
+        SpeakerModelId = "pyannote-speaker-diarization-community-1",
         SpeakerBackend = ComputeBackend.WebGpu,
 
         // Deliberately a runtime whose provider half does NOT match SpeakerBackend above. The field

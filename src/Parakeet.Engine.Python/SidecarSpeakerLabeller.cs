@@ -6,141 +6,60 @@ using Parakeet.Core.Transcription;
 
 namespace Parakeet.Engine.Python;
 
-/// <summary>
-/// Whether this machine's stack reproduces the diariser the published figures describe.
-/// </summary>
-/// <remarks>
-/// The numbers travel with the verdict rather than only a boolean, because "the check failed" with
-/// no magnitude tells a user nothing they can act on. A stack sitting just past the tolerance and
-/// one scoring 53% diarisation error are different situations and deserve different reactions.
-/// </remarks>
-public sealed record ParityResult
-{
-    public required bool Passed { get; init; }
-
-    /// <summary>
-    /// False when the check itself could not be run — the sidecar answered the <c>parity</c>
-    /// request with an error rather than a verdict. <see cref="Passed"/> is then false too, and
-    /// <see cref="Reason"/> carries the error: the labels are unverified rather than known wrong.
-    /// </summary>
-    /// <remarks>
-    /// The third state, and the one that used to be silent. Until 2026-08-22 a check that crashed
-    /// was reported as null — the same null as "not run" on the CPU — and the labels went out
-    /// with nothing said. A missing fixture is still null: the sidecar reports that structurally,
-    /// before anything runs, and it is not a failure of anything on this machine.
-    /// </remarks>
-    public bool Ran { get; init; } = true;
-
-    /// <summary>
-    /// Why it failed when no magnitude says so: the sidecar's own reason — a shape that does not
-    /// match the reference's, probabilities that are not finite — or, when <see cref="Ran"/> is
-    /// false, the error the check came back with. Null when the verdict is in the numbers below.
-    /// </summary>
-    public string? Reason { get; init; }
-
-    /// <summary>
-    /// Largest disagreement with the reference, over the fixture's probabilities. NaN when the
-    /// verdict carried no magnitude — see <see cref="Reason"/>.
-    /// </summary>
-    public double MaxAbsoluteDifference { get; init; } = double.NaN;
-
-    /// <summary>
-    /// How many frame decisions differ. Zero is common on a passing <i>and</i> a failing stack —
-    /// CUDA disagrees at 8.1e-04 while flipping nothing on this fixture — which is exactly why the
-    /// verdict is taken on the probabilities and not on this.
-    /// </summary>
-    public double DecisionFlipPercent { get; init; }
-
-    public double Tolerance { get; init; } = double.NaN;
-
-    /// <summary>
-    /// The sentence a run prints about this result, or null when there is nothing to say because
-    /// the check passed. One place for the three failing shapes — a magnitude past the tolerance,
-    /// a reason given instead of one, a check that could not run — so the command line and the
-    /// window cannot come to describe them differently.
-    /// </summary>
-    public string? Describe() =>
-        !Ran ? SpeakerLabelling.DescribeParityNotRun(Reason ?? "the sidecar gave no reason")
-        : Passed ? null
-        : Reason is { Length: > 0 } reason ? SpeakerLabelling.DescribeParityFailure(reason)
-        : SpeakerLabelling.DescribeParityFailure(MaxAbsoluteDifference, Tolerance);
-}
-
-/// <summary>The two diarisers the sidecar can load, and the strings it is told them by.</summary>
-/// <remarks>
-/// Constants rather than an enum because these cross a JSON boundary verbatim: the sidecar switches
-/// on the same two strings, and an enum here would need a converter whose only job is to produce
-/// them. Kept together so the pair is greppable from both sides.
-/// </remarks>
-public static class DiariserKinds
-{
-    /// <summary>Streaming ONNX, four speaker slots. Downloaded, like the other; see BundledModels.</summary>
-    public const string Sortformer = "sortformer";
-
-    /// <summary>Offline torch, clusters rather than tracks, no total speaker cap, downloaded only.</summary>
-    /// <remarks>
-    /// <b>This was <c>diarizen</c> until 2026-08-27, and the old name is not an alias.</b> The two
-    /// are different weights under different licences — CC BY 4.0 here against DiariZen's
-    /// CC BY-NC 4.0 — reached through releases of <c>pyannote.audio</c> that cannot share an
-    /// interpreter, so a host that said the old word and silently got this one would be reporting a
-    /// model it had not loaded. <see cref="PythonSidecar.ProtocolVersion"/> went to 4 with it, which
-    /// is what turns the mismatch into a refusal at <c>hello</c>.
-    /// </remarks>
-    public const string Pyannote = "pyannote";
-}
-
 /// <summary>How the sidecar's diariser is loaded and driven.</summary>
 public sealed record SidecarLabellerOptions
 {
     /// <summary>
-    /// Which of the two diarisers this is: <see cref="DiariserKinds.Sortformer"/> or
-    /// <see cref="DiariserKinds.Pyannote"/>.
-    /// </summary>
-    /// <remarks>
-    /// <b>It decides what <see cref="ModelPath"/> means</b> — a <c>.onnx</c> file for Sortformer, a
-    /// directory tree for pyannote — and it is passed to the sidecar rather than inferred there,
-    /// because the host is what resolved the catalogue entry and a sidecar sniffing the path would
-    /// be a second place the answer lives. Several other members of this record apply to only one
-    /// of the two; each says so.
-    /// </remarks>
-    public string Kind { get; init; } = DiariserKinds.Sortformer;
-
-    /// <summary>
-    /// Where the weights are: <c>sortformer-default.onnx</c> for Sortformer, the model directory for
-    /// pyannote — which keeps the upstream repository's subdirectory layout rather than being
-    /// flattened, because the pipeline resolves its parts through its own <c>config.yaml</c>.
+    /// The model directory — which keeps the upstream repository's subdirectory layout rather than
+    /// being flattened, because the pipeline resolves its parts through its own <c>config.yaml</c>.
     /// Required; there is no default location.
     /// </summary>
+    /// <remarks>
+    /// <b>A directory, and only a directory, since 2026-08-27.</b> This field meant a <c>.onnx</c>
+    /// file or a directory depending on which of two diarisers was being loaded, and a <c>Kind</c>
+    /// beside it told the sidecar which to expect. Sortformer went to <c>attic/sortformer/</c> and
+    /// took the ambiguity with it, so neither side has to agree about the meaning of this string
+    /// any more — which is one fewer thing that can disagree.
+    /// </remarks>
     public required string ModelPath { get; init; }
 
     /// <summary>Catalogue id carried into the transcript's provenance beside the ASR model's.</summary>
-    public string ModelId { get; init; } = "sortformer-4spk-v2.1";
+    public string ModelId { get; init; } = "pyannote-speaker-diarization-community-1";
 
     /// <summary>
-    /// Intra-op threads for the ONNX session, or 0 for the diariser's own default of 12 — the
-    /// number every CPU figure in this project was measured with. Not "let ONNX Runtime choose":
-    /// that is the translator's 0, and the two differ on purpose, because changing the diariser's
-    /// thread count is changing the conditions its 16.33% was produced under.
+    /// Torch intra-op threads, or 0 for the diariser's own default of 12. Not "let the runtime
+    /// choose": that is the translator's 0, and the two differ on purpose.
     /// </summary>
+    /// <remarks>
+    /// <b>The 12 is inherited rather than derived.</b> It was the number every CPU diarisation
+    /// figure this project published was measured with, and those figures were the shelved engine's
+    /// — so the default now rests on nothing measured about <i>this</i> pipeline. Kept because a
+    /// number that has never been shown to be wrong is a better default than one nobody chose, and
+    /// recorded as a gap in <c>docs/UNPROVEN.md</c> rather than left looking like evidence.
+    /// </remarks>
     public int IntraOpThreads { get; init; }
 
     /// <summary>
-    /// Execution provider: <c>auto</c>, <c>cpu</c>, <c>cuda</c>, <c>webgpu</c> or <c>dml</c>.
+    /// The torch device: <c>auto</c>, <c>cpu</c> or <c>cuda</c>.
     /// </summary>
     /// <remarks>
-    /// <b>This changes the answer, not only the speed.</b> Measured 2026-08-21 on AMI test: CPU
-    /// 16.3324%, WebGPU 16.3319%, CUDA 16.1021%, DirectML at its own default 53.15%. The
-    /// provider therefore travels into the transcript's provenance, and a non-CPU provider is
-    /// verified against the parity fixture before it is trusted.
+    /// <para>
+    /// <b>A device rather than an execution provider, since 2026-08-27.</b> Both neural stages are
+    /// torch on the same device, so <c>webgpu</c> and <c>dml</c> name nothing here and are refused
+    /// rather than quietly treated as the CPU. <c>auto</c> is the CPU, because the bundled torch is
+    /// the CPU build — resolved rather than negotiated, so there is nothing to fall back from.
+    /// </para>
+    /// <para>
+    /// <b>The measured provider comparison that stood here went with Sortformer.</b> CPU 16.3324%,
+    /// WebGPU 16.3319%, CUDA 16.1021% and DirectML 53.15% on AMI test are that graph's numbers, and
+    /// no figure of any kind has been produced on this pipeline. The device still travels into the
+    /// transcript's provenance, which is worth doing before there is evidence rather than after.
+    /// </para>
     /// </remarks>
-    public string Provider { get; init; } = "cpu";
-
-    /// <summary>ONNX Runtime graph optimisation level, or null for the provider's safe default.</summary>
-    public string? GraphOptimization { get; init; }
+    public string Provider { get; init; } = "auto";
 
     /// <summary>
-    /// Windows of audio the second diariser batches together, or null for the pipeline's own
-    /// value. <b>pyannote only</b> — the other arm refuses it.
+    /// Windows of audio the diariser batches together, or null for the pipeline's own value.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -158,26 +77,36 @@ public sealed record SidecarLabellerOptions
     /// memory pressure were one condition. Nothing here may be presented to a user as a speed
     /// setting.
     /// </para>
-    /// <para>
-    /// Sortformer refuses this rather than ignoring it, because its batching is its exported
-    /// graph's geometry: a host that sent one and had it dropped would be operating on a wrong
-    /// belief about what it configured.
-    /// </para>
     /// </remarks>
     public int? BatchSize { get; init; }
 
-    /// <summary>The tuned post-processing. Changing it invalidates the measured DER.</summary>
-    public SortformerPostProcessing PostProcessing { get; init; } = SortformerPostProcessing.Default;
+    /// <summary>
+    /// The post-processing thresholds, <b>which the current diariser ignores</b>.
+    /// </summary>
+    /// <remarks>
+    /// Sent and dropped rather than removed. This pipeline binarizes internally at the parameters
+    /// its own published figures describe, and reports <c>honoursPostProcessing: false</c> — which
+    /// nothing on this side reads, so it is a capabilities-dump field rather than a signal; the
+    /// host knows; the field survives because the protocol still carries it and because these
+    /// values are the shelved engine's tuned set, which is a record worth keeping where the type
+    /// that would use it lives. See <c>attic/sortformer/</c>.
+    /// </remarks>
+    public DiariserPostProcessing PostProcessing { get; init; } = DiariserPostProcessing.Default;
 }
 
 /// <summary>
-/// The knobs NeMo's <c>ts_vad_post_processing</c> turns. Tuned on the 18 AMI development meetings
-/// and applied unchanged to the 16 test meetings; changing a default here invalidates the measured
-/// DER, which is that parameter set's number and no other's.
+/// The knobs NeMo's <c>ts_vad_post_processing</c> turned, tuned on the 18 AMI development meetings
+/// and applied unchanged to the 16 test meetings.
 /// </summary>
-public sealed record SortformerPostProcessing
+/// <remarks>
+/// <b>Nothing reads these any more.</b> They were the shelved ONNX diariser's, and the 16.33% AMI
+/// figure they produced is that parameter set's number and no other's — which is exactly why they
+/// are recorded rather than reset to something tidier. The pipeline that ships now binarizes
+/// internally and says so through <c>honoursPostProcessing</c>.
+/// </remarks>
+public sealed record DiariserPostProcessing
 {
-    public static SortformerPostProcessing Default { get; } = new();
+    public static DiariserPostProcessing Default { get; } = new();
 
     public double Onset { get; init; } = 0.5;
 
@@ -195,14 +124,13 @@ public sealed record SortformerPostProcessing
 }
 
 /// <summary>
-/// Speaker labelling by NVIDIA's Streaming Sortformer 4spk v2.1, run in the bundled Python.
+/// Speaker labelling by <c>pyannote/speaker-diarization-community-1</c>, run in the bundled Python.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The engine moved out of process on 2026-08-21. What it buys is that the numerical core is
-/// NVIDIA's own <c>SortformerModules</c> — the arrival-order speaker cache imported and called
-/// rather than reimplemented — and that the mel featurizer is the one validated bit-exact against
-/// NeMo's <c>FilterbankFeatures</c>. What it costs is a process boundary, which is this class.
+/// upstream's own pipeline, imported and called rather than reimplemented. What it costs is a
+/// process boundary, which is this class.
 /// </para>
 /// <para>
 /// <b>The audio crosses as a file, not as PCM down the pipe.</b> The host decodes and resamples,
@@ -211,9 +139,17 @@ public sealed record SortformerPostProcessing
 /// failure modes, and the decode belongs to the side that already owns Media Foundation.
 /// </para>
 /// <para>
-/// <b>Four speakers, and no more.</b> The cap is architectural: above it a fifth voice is merged
-/// into one of the four rather than reported. Its labels are established only to fifty minutes.
-/// Both facts arrive through <see cref="Capabilities"/> so a caller cannot forget them.
+/// <b>No speaker cap and no established length.</b> This pipeline clusters rather than tracking, so
+/// there is no architectural ceiling on how many voices it can separate — and nothing about it has
+/// been measured, so there is no bound on how long a recording its labels hold up over either. Both
+/// facts arrive as nulls through <see cref="Capabilities"/>, which the window renders as "no limit"
+/// and "no bound established" so that a caller cannot mistake either for an unasked question.
+/// </para>
+/// <para>
+/// <b>This class labelled with NVIDIA's Streaming Sortformer 4spk v2.1 until 2026-08-27</b>, and
+/// that engine carried every diarisation figure this project has published — 16.33% DER on AMI
+/// test, four speaker slots, labels established to fifty minutes. It is in <c>attic/sortformer/</c>
+/// and none of its numbers describe what runs here.
 /// </para>
 /// </remarks>
 public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
@@ -253,7 +189,9 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// weights are still on disk: how many voices can be told apart, and how long a recording the
     /// labels have been established on. Both drive warnings that are worth reading before a batch
     /// starts and worthless after it — "seven speakers was never reachable" said afterwards is not
-    /// a warning, it is an epitaph — so they cannot wait for a 453 MiB load to answer them.
+    /// a warning, it is an epitaph — so they cannot wait for the pipeline to load to answer them.
+    /// <b>Both are null here</b>, which is itself an answer and not an absence of one: the window
+    /// says "no limit" and "no bound established" rather than staying silent.
     /// </para>
     /// <para>
     /// <b>This is a second copy of two constants that live in the sidecar, and it is checked
@@ -272,56 +210,30 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// </remarks>
     public static SpeakerLabellerLimits DeclaredLimits { get; } = new()
     {
-        Name = "sortformer-onnx-python",
-
-        // The model estimates the count and cannot be told one.
-        SupportsFixedSpeakerCount = false,
-
-        // Architectural: the graph has four speaker slots, and a fifth voice is merged into one of
-        // the four rather than reported.
-        MaxSpeakers = 4,
-
-        // Where the evidence stops, not where the model does. Measured 2026-08-20 by growing a
-        // window from a fixed onset: right at 10, 30, 40 and 50 minutes across two episodes, then
-        // wrong past an hour.
-        ReliableUpTo = TimeSpan.FromMinutes(50),
-    };
-
-    /// <summary>
-    /// pyannote's declared limits, and every one of them is a null or a false on purpose.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b><see cref="SpeakerLabellerLimits.MaxSpeakers"/> is null because there is no cap</b>, not
-    /// because nobody looked. The pipeline clusters rather than tracking, and the clustering is
-    /// never given a count: upstream's <c>VBxClustering</c> declares
-    /// <c>expects_num_clusters = False</c>, so a count accepted by the pipeline's call does not
-    /// reach the thing that decides how many speakers there are.
-    /// </para>
-    /// <para>
-    /// <b><see cref="SpeakerLabellerLimits.ReliableUpTo"/> is null because nothing has been
-    /// measured</b>, which the window renders as "no bound established" rather than as "any
-    /// length". Sortformer's fifty minutes is a figure this project produced; there is no
-    /// equivalent for this model and inventing one from upstream's benchmark table would be
-    /// quoting somebody else's corpus as this project's evidence. That applies with more force
-    /// here than it did to the arm this replaced: upstream publishes DER figures for
-    /// <c>community-1</c> on several corpora, and not one of them was produced on this project's
-    /// material through this project's audio path.
-    /// </para>
-    /// </remarks>
-    public static SpeakerLabellerLimits PyannoteDeclaredLimits { get; } = new()
-    {
         Name = "pyannote-torch-python",
+
+        // The pipeline clusters rather than tracking, and the clustering is never given a count.
         SupportsFixedSpeakerCount = false,
+
+        // **Null because there is no cap, not because nobody looked.** Upstream's VBxClustering
+        // never given a count by this build: `label` calls the pipeline with no `num_speakers`.
+        //
+        // **That is a statement about this build rather than about upstream, and it was written the
+        // other way round until 2026-08-27.** `VBxClustering.expects_num_clusters = false` means a
+        // count is not *required*, not that it is ignored — 4.0.7 clamps to min/max and re-clusters
+        // with KMeans when a requested count disagrees with what VBx derived. The sidecar's own
+        // docstring had this right while this comment had it wrong.
         MaxSpeakers = null,
+
+        // **Null because nothing has been measured**, which the window renders as "no bound
+        // established" rather than as "any length". The fifty minutes that stood here was a figure
+        // this project produced on Sortformer, and it went to attic/sortformer/ with the graph;
+        // inventing a replacement from upstream's benchmark table would be quoting somebody else's
+        // corpus as this project's evidence. Upstream publishes DER figures for community-1 on
+        // several corpora and not one of them was produced on this project's material through this
+        // project's audio path.
         ReliableUpTo = null,
     };
-
-    /// <summary>The declared limits of one of the two diarisers, by kind.</summary>
-    public static SpeakerLabellerLimits DeclaredLimitsFor(string kind) =>
-        string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal)
-            ? PyannoteDeclaredLimits
-            : DeclaredLimits;
 
     public async ValueTask LoadAsync(CancellationToken ct = default)
     {
@@ -354,16 +266,10 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             var reply = await _sidecar.SendAsync("load", writer =>
             {
                 writer.WriteString("engine", "diariser");
-                writer.WriteString("kind", _options.Kind);
                 writer.WriteString("path", _options.ModelPath);
                 writer.WriteString("modelId", _options.ModelId);
                 writer.WriteNumber("threads", _options.IntraOpThreads);
                 writer.WriteString("provider", _options.Provider);
-                if (_options.GraphOptimization is { Length: > 0 } level)
-                {
-                    writer.WriteString("graphOptimization", level);
-                }
-
                 // Omitted rather than sent as null when nobody has chosen, so that "the model's
                 // own" is the absence of the field rather than a second shape the sidecar has to
                 // agree about — the same rule the settings file follows for the backend.
@@ -380,33 +286,17 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // batch, where one labeller serves every file and a per-file failure does not stop the
             // run, that turns a refusal into a warning that fires once and is then never seen again.
             var capabilities = ReadCapabilities(reply.GetProperty("capabilities"));
-            CheckDeclaredLimits(capabilities, _options.Kind);
-            FellBackFrom = ExecutionProviders.ReadFellBackFrom(reply.GetProperty("capabilities"));
+            CheckDeclaredLimits(capabilities);
 
-            // Every backend but the CPU is checked against the committed reference before it is
-            // used, because the failure this catches is silent: measured 2026-08-21, DirectML at
-            // ONNX Runtime's default settings scores 53.15% diarisation error against the CPU's
-            // 16.33% while emitting speaker turns that read as perfectly ordinary. Two chunks of
-            // synthetic mel is all it costs, and it is the only thing standing between a user and
-            // a transcript that is wrong in a way nothing in it reveals.
-            // <b>The pyannote arm has no fixture and is never asked for one.</b> Parity compares
-            // two paths to the same answer, and that arm has one: torch on both stages, no ONNX
-            // route, so the only comparison available would be a tensor against itself. The sidecar
-            // refuses the <c>parity</c> op for it by name, so asking anyway would surface as a
-            // request error on an otherwise good load. The arm this replaced did have one — an ONNX
-            // speaker embedder against torch — and the fixture left with the engine it measured.
-            //
-            // <b>Sortformer is checked on every backend but the CPU</b>, because the failure this
-            // catches is silent: measured 2026-08-21, DirectML at ONNX Runtime's default settings
-            // scores 53.15% diarisation error against the CPU's 16.33% while emitting speaker turns
-            // that read as perfectly ordinary. Its reference IS ONNX Runtime's CPU provider, which
-            // is why <c>cpu</c> is exempt: never compare the reference against itself.
-            var isPyannote = string.Equals(_options.Kind, DiariserKinds.Pyannote, StringComparison.Ordinal);
-            if (!isPyannote && capabilities.Backend != ComputeBackend.Cpu)
-            {
-                Parity = await CheckParityAsync(ct).ConfigureAwait(false);
-            }
-
+            // **No parity check, and no backend is exempt from one — there is none to run.**
+            // Parity compares two paths to one answer, and this pipeline has one: torch on both
+            // stages, no ONNX route. The check that stood here belonged to the ONNX diariser and
+            // went to attic/sortformer/ with its fixture; the sidecar now refuses the `parity` op
+            // for the diariser by name, so asking anyway would surface as a request error on an
+            // otherwise good load. What that check caught was real — DirectML scoring 53.15% DER
+            // against the CPU's 16.33% while emitting speaker turns that read as perfectly ordinary
+            // — and it is worth knowing that this build has no equivalent guard, which is why
+            // docs/UNPROVEN.md carries it rather than this comment implying the risk left too.
             _capabilities = capabilities;
         }
         finally
@@ -414,59 +304,6 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             _loadGate.Release();
         }
     }
-
-    /// <summary>
-    /// The parity check's result, or null when it was not run — which is the CPU case, since the
-    /// CPU is what everything else is compared against.
-    /// </summary>
-    public ParityResult? Parity { get; private set; }
-
-    /// <summary>
-    /// The providers <c>auto</c> tried and passed over before the one that loaded, each with the
-    /// reason it did not build. Empty when the first candidate built, or when the provider was
-    /// named — a named provider is never fallen back from.
-    /// </summary>
-    public IReadOnlyList<string> FellBackFrom { get; private set; } = [];
-
-    private async Task<ParityResult?> CheckParityAsync(CancellationToken ct)
-    {
-        JsonElement reply;
-        try
-        {
-            reply = await _sidecar.SendAsync("parity", _ => { }, null, ct).ConfigureAwait(false);
-        }
-        catch (PythonEngineException exception)
-        {
-            // The check was asked for and could not answer. That is not the CPU's "not run" and
-            // not a fixture that is missing — the sidecar reports a missing fixture structurally,
-            // below, before anything runs — it is a check that crashed, and until 2026-08-22 it was
-            // reported as the same null as the other two, so the labels went out unverified with
-            // nothing said. It is a result now, one that says it did not run and why.
-            return new ParityResult { Passed = false, Ran = false, Reason = exception.Message };
-        }
-
-        if (!reply.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)
-        {
-            // No fixture committed: nothing was compared and nothing failed, and the null says so.
-            return null;
-        }
-
-        return new ParityResult
-        {
-            Passed = reply.TryGetProperty("passed", out var passed) && passed.ValueKind == JsonValueKind.True,
-            Reason = reply.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
-                ? reason.GetString()
-                : null,
-            MaxAbsoluteDifference = Number(reply, "maxAbsDiff") ?? double.NaN,
-            DecisionFlipPercent = Number(reply, "decisionFlipPercent") ?? 0,
-            Tolerance = Number(reply, "tolerance") ?? double.NaN,
-        };
-    }
-
-    private static double? Number(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetDouble()
-            : null;
 
     public async Task<IReadOnlyList<SpeakerTurn>> LabelAsync(
         IAudioSource audio,
@@ -533,7 +370,9 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// and PCM16 moved it. Measured 2026-08-22 on the CPU (<c>docs/UNPROVEN.md</c>): on a 48 kHz
     /// MP3 decoded and resampled here, the reference diarising the PCM16 file against the same floats
     /// written exact scored 2.50% DER at collar 0.25 and flipped 1.10% of frame-speaker cells, while
-    /// the speaker count stood still — ten times the CUDA gap that keeps CUDA out of <c>auto</c>. On
+    /// the speaker count stood still — ten times the CUDA gap that kept CUDA out of <c>auto</c> on the
+    /// diariser retired 2026-08-27, which is the scale this was judged against. (<c>auto</c> is the
+    /// CPU here for an unrelated reason: the bundled torch is the CPU build.) On
     /// 16 kHz 16-bit input, which is AMI and therefore every published figure, the round trip moves
     /// 0.25% of samples by one LSB and the DER by nothing, which is why it went unseen. A float file
     /// is twice the size and costs the reference nothing to read: soundfile hands back the bytes.
@@ -793,13 +632,15 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// Holds the sidecar's reported limits against the ones this build has been warning from.
     /// </summary>
     /// <remarks>
-    /// <b>Per kind, because the two diarisers declare different limits and both are right.</b>
-    /// Comparing a pyannote load against Sortformer's four-speaker cap would fail every load of
-    /// a model whose whole point is not having one.
+    /// <b>One set of limits, since there is one diariser.</b> This took a kind and chose between
+    /// two sets while Sortformer was loadable, because comparing a pyannote load against its
+    /// four-speaker cap would have failed every load of a model whose whole point is not having
+    /// one. Both nulls below are claims, and the sidecar is held to them the same way a number
+    /// would be.
     /// </remarks>
-    private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported, string kind)
+    private static void CheckDeclaredLimits(SpeakerLabellerCapabilities reported)
     {
-        var declared = DeclaredLimitsFor(kind);
+        var declared = DeclaredLimits;
 
         // Name is not compared: it is the catalogue's id where there is one, and the two sides get
         // it from different places by design. The numbers are the claim.
@@ -810,13 +651,18 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             throw new PythonSidecarException(
                 $"The bundled Python's diariser reports a cap of {Describe(reported.MaxSpeakers)} speakers and " +
                 $"labels established to {Describe(reported.ReliableUpTo)}, and this build has been saying " +
-                $"{Describe(declared.MaxSpeakers)} and {Describe(declared.ReliableUpTo)}. Those " +
+                $"{DescribeAlone(declared.MaxSpeakers)} and {Describe(declared.ReliableUpTo)}. Those " +
                 "numbers are what the warnings before a run are written from, so the two halves are out of step — " +
                 "reinstall rather than mixing them.");
         }
     }
 
+    // Two call sites and two grammars: one is followed by the word "speakers" and the other is not,
+    // which only showed once both declared limits became null and the sentence read "has been saying
+    // no limit on the and no measured length".
     private static string Describe(int? value) => value?.ToString() ?? "no limit on the";
+
+    private static string DescribeAlone(int? value) => value?.ToString() ?? "no cap";
 
     private static string Describe(TimeSpan? value) =>
         value is { } bound ? $"{bound.TotalMinutes:F0} minutes" : "no measured length";
@@ -824,8 +670,8 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     private static SpeakerLabellerCapabilities ReadCapabilities(JsonElement element) => new()
     {
         EngineName = element.TryGetProperty("engineName", out var name)
-            ? name.GetString() ?? "sortformer-onnx-python"
-            : "sortformer-onnx-python",
+            ? name.GetString() ?? "pyannote-torch-python"
+            : "pyannote-torch-python",
         ModelId = element.TryGetProperty("modelId", out var id) ? id.GetString() : null,
         Backend = element.TryGetProperty("backend", out var backend)
             ? ExecutionProviders.Parse(backend.GetString())

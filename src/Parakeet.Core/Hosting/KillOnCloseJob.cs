@@ -11,7 +11,7 @@ namespace Parakeet.Core.Hosting;
 /// <remarks>
 /// <para>
 /// Every child this application starts holds something expensive — the Python sidecar carries
-/// 453 MiB or 1.34 GiB of weights, and v2's <c>llama-server</c> a ~9 GB model. A host that is
+/// hundreds of megabytes to 1.34 GiB of weights, and v2's <c>llama-server</c> a ~9 GB model. A host that is
 /// killed from Task Manager, crashes, or is stopped by a debugger never reaches
 /// <c>DisposeAsync</c>, and until 2026-08-22 the sidecar outlived it: still resident, still
 /// reading a stdin nobody would write to again, with a staged WAV beside it. The job object is
