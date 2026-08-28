@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Parakeet.App.Services;
 using Parakeet.Core.Licensing;
 using Parakeet.Core.Models;
+using Parakeet.Engine.LlamaServer;
 using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.ViewModels;
@@ -706,9 +707,25 @@ public sealed partial class ModelsViewModel : ObservableObject
         var chosen = SelectedSideloaded?.FileName;
         Sideloaded.Clear();
 
+        // A drafting head that belongs to a model on this disk is not an unaccounted-for file:
+        // the answering engine pairs the two by name and uses it. Listing it here put "nothing
+        // uses them" and a Delete button beside the file that makes answers a third faster, and
+        // deleting it would have cost that silently. A head with no model left to pair with is
+        // still dead weight, and still listed.
+        var modelNames = onDisk
+            .Select(m => Path.GetFileName(m.Path))
+            .Where(name => !DraftModelLocator.IsDraftHead(name))
+            .ToList();
+
         foreach (var file in onDisk.Where(m => m.IsSideloaded))
         {
-            Sideloaded.Add(new SideloadedFileViewModel(Path.GetFileName(file.Path), file.SizeBytes));
+            var name = Path.GetFileName(file.Path);
+            if (DraftModelLocator.IsDraftHead(name) && PairsWithAModelPresent(name, modelNames))
+            {
+                continue;
+            }
+
+            Sideloaded.Add(new SideloadedFileViewModel(name, file.SizeBytes));
         }
 
         SelectedSideloaded = Sideloaded.FirstOrDefault(f =>
@@ -726,12 +743,41 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// <summary>
     /// What the sideloaded files are and what they cost, in one line.
     /// </summary>
-    public string SideloadedSummary =>
-        Sideloaded.Count == 0
-            ? string.Empty
-            : $"{Sideloaded.Count} file{(Sideloaded.Count == 1 ? string.Empty : "s")} in this folder "
-              + $"({ByteSize.Describe(Sideloaded.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
-              + "weights from an older version of Uindosill, or files put here by hand. Nothing uses them.";
+    public string SideloadedSummary
+    {
+        get
+        {
+            if (Sideloaded.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var summary = $"{Sideloaded.Count} file{(Sideloaded.Count == 1 ? string.Empty : "s")} in this folder "
+                + $"({ByteSize.Describe(Sideloaded.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
+                + "weights from an older version of Uindosill, or files put here by hand.";
+
+            // **It used to end "Nothing uses them", and that became untrue.** The Ask tab picks
+            // the model it answers with by looking in this folder, not by catalogue id, so a
+            // .gguf here can be the model in use — and this sentence sits directly above a
+            // Delete button. Said only when there is a .gguf among them, because for a leftover
+            // that is not one the original sentence was right.
+            // A head is a .gguf and is never the model the panel answers with, so it does not
+            // make the sentence about the Ask tab true — only a model the panel could load does.
+            return Sideloaded.Any(f =>
+                f.FileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
+                && !DraftModelLocator.IsDraftHead(f.FileName))
+                ? summary + " The Ask tab answers with a .gguf from this folder, so one of these may "
+                    + "be the model it is using — the Ask tab's own settings say which."
+                : summary + " Nothing uses them.";
+        }
+    }
+
+    /// <summary>
+    /// Whether a drafting head has a model on this disk to draft for. Same rule the engine pairs
+    /// by, so the tab cannot call a head unused that the next answer will load.
+    /// </summary>
+    private static bool PairsWithAModelPresent(string headName, IReadOnlyList<string> modelNames) =>
+        modelNames.Any(model => DraftModelLocator.Match(model, [headName]) is not null);
 
     /// <summary>
     /// What becomes of the models folder, with the size read off the folder rather than written
