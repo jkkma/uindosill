@@ -43,38 +43,47 @@ quantisation are modifications.
   Chinese, Japanese, Korean, Arabic, Hindi or Thai, and the product must not offer them. A test
   asserts that no catalogue entry claims those tags.
 
-## Speaker diarisation weights — NVIDIA Open Model License
+## Speaker diarisation weights — CC BY 4.0
 
-**Streaming Sortformer Diarizer 4spk v2.1 (speaker diarisation model weights)**
+**pyannote speaker-diarization-community-1 (speaker diarisation pipeline: segmentation and embedding
+model weights, PLDA matrices and pipeline configuration)**
 
-> Licensed by NVIDIA Corporation under the NVIDIA Open Model License
+- **Creator:** The pyannote authors (`pyannote/speaker-diarization-community-1`); the VBx clustering
+  it uses was contributed by Petr Pálka and Jiangyu Han (Brno University of Technology, Speech@FIT)
+  per pyannote.audio's 4.0 release notes.
+- **Copyright:** Copyright (c) pyannote contributors.
+- **Licence notice:** Licensed under the Creative Commons Attribution 4.0 International License
+  (CC BY 4.0).
+- **Warranty:** Provided as-is and without warranties or conditions of any kind, to the extent
+  possible under law.
+- **Source:** https://huggingface.co/pyannote/speaker-diarization-community-1
+- **Modifications:** Unmodified — the pipeline configuration, both model checkpoints and both PLDA
+  files are installed by URL from the upstream repository at commit
+  `3533c8cf8e369892e6b79ff1bf80f7b0286a54ee`, keeping that repository's directory layout, and driven
+  as published. Uindosill hosts no copy of any of them. Upstream ships usage reporting enabled, and
+  Uindosill switches it off before the package is loaded so that it sends nothing.
+- **Licence:** Creative Commons Attribution 4.0 International,
+  https://creativecommons.org/licenses/by/4.0/legalcode
 
-That sentence is quoted rather than paraphrased because §3.1 of the Agreement mandates it verbatim,
-in a Notice file, alongside a **copy of the Agreement** — which is why one ships, at
-`licences/NVIDIA-Open-Model-License-2025-10-24.txt`, and why the build copies it into every publish.
-A link is not a copy.
+**The creator line is what a public source supports, and the card that would settle it is gated.**
+CC BY 4.0 §3(a)(1)(A) asks for the credits the licensor designates, and an unauthenticated read of
+the model card returns HTTP 401 — so those designations have not been read. Read the card on the
+first authenticated install and correct this to what it designates.
 
-- **Agreement:** version dated 24 October 2025,
-  https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/
-- **Source:** https://huggingface.co/soniqo/Sortformer-Diarization-4spk-ONNX
-- **Provenance:** NVIDIA trained `diar_streaming_sortformer_4spk-v2.1`; a third party, soniqo,
-  exported it to ONNX with no retraining and no change to weights, architecture or configuration.
-  That export is a Model Derivative under §1 and is published under the same terms. Uindosill hosts
-  neither file and installs soniqo's copy by URL.
-- **Warranty:** NVIDIA provides the model on an "AS IS" basis, without warranties or conditions of
-  any kind, express or implied (§6).
+### The restriction that comes with speaker labelling
 
-### Two things this licence does that CC BY 4.0 does not
+**Speaker diarisation is voice biometrics.** It works by telling people's voices apart, which several
+jurisdictions treat as processing biometric information and which may require the consent of the
+people recorded. No licence in this product imposes that — it is the law of the place the recording
+was made, and it is the user's responsibility on their own material.
 
-- **§2.3 incorporates NVIDIA's Trustworthy AI terms**, which forbid use in violation of applicable
-  law and name illegal surveillance and the illegal collection or processing of biometric
-  information without consent where consent is required. **Speaker diarisation is voice
-  biometrics.** Whether recording and separating people's voices needs their consent is a question
-  about the user's own material and the user's own jurisdiction, and it is theirs to answer.
-- **§2.1 makes the grant revocable** and lets NVIDIA update the Agreement for legal or regulatory
-  reasons; it also terminates automatically on filing patent or copyright litigation over the model,
-  or on circumventing a safety guardrail. CC BY 4.0 is irrevocable. The two are not interchangeable,
-  and `docs/LICENSING.md` records what that difference means for shipping.
+That caution used to be a licence term. Until 2026-08-27 speaker labelling was NVIDIA's **Streaming
+Sortformer Diarizer 4spk v2.1** under the **NVIDIA Open Model License**, whose §2.3 incorporated
+NVIDIA's Trustworthy AI terms and named biometric processing specifically, and whose §2.1 made the
+grant revocable where CC BY 4.0 is not. Those weights were retired to `attic/sortformer/` and
+**nothing in this product is under that Agreement now**, so the copy of it that §3.1 required no
+longer ships. The caution survived the paperwork because it was never really about the paperwork.
+`docs/LICENSING.md` keeps the reading of the retired licence.
 
 ## Translation weights — Apache-2.0
 
@@ -158,12 +167,12 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 | Instrument Sans (typeface; desktop application only) | OFL-1.1 — Copyright 2022 The Instrument Sans Project Authors; `licences/InstrumentSans-OFL.txt` travels with it | https://github.com/Instrument/instrument-sans |
 | Chivo Mono (typeface; desktop application only) | OFL-1.1 — Copyright 2019 The Chivo Project Authors; `licences/ChivoMono-OFL.txt` travels with it | https://github.com/Omnibus-Type/Chivo |
 | Velopack (installer and update framework; desktop application only) | MIT — Copyright (c) Velopack Ltd. All rights reserved. | https://github.com/velopack/velopack |
-| ONNX Runtime (`Microsoft.ML.OnnxRuntime` 1.29.0 beside the .NET assemblies, running the speech-detection graph in process; and `onnxruntime-webgpu` 1.27.0 in the bundled Python, running the speaker diarisation model and the translator) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; `licences/onnxruntime-LICENSE.txt` and `licences/onnxruntime-ThirdPartyNotices.txt` are the 1.29.0 package's own (69 blocks, verbatim), which is the in-process copy's notice exactly; the wheel ships its own `ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
+| ONNX Runtime (`Microsoft.ML.OnnxRuntime` 1.29.0 beside the .NET assemblies, running the speech-detection graph in process; and `onnxruntime-webgpu` 1.27.0 in the bundled Python, running the translator; the diariser is torch and runs no graph on it) | MIT — Copyright (c) Microsoft Corporation. Bundles third-party components under their own licences; `licences/onnxruntime-LICENSE.txt` and `licences/onnxruntime-ThirdPartyNotices.txt` are the 1.29.0 package's own (69 blocks, verbatim), which is the in-process copy's notice exactly; the wheel ships its own `ThirdPartyNotices.txt` | https://github.com/microsoft/onnxruntime |
 | NVIDIA CUDA runtime (`cudart64_12.dll`, `cublas64_12.dll`, `cublasLt64_12.dll`) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A | https://docs.nvidia.com/cuda/eula/index.html |
 | NVIDIA CUDA runtime 13.3 (the ask tier's runtime in the win-cuda channel's `llm/cuda`, beside `llama-server.exe` — `cudart64_13.dll` and the rest of upstream's `cudart-llama` archive) | NVIDIA CUDA Toolkit EULA — proprietary, not MIT; redistributable under Attachment A; `docs/LICENSING.md` records what about the inventory is still owed | https://docs.nvidia.com/cuda/eula/index.html |
 | CPython (embeddable 3.12.10; the interpreter the diariser and the translator run in) | PSF License Agreement Version 2, plus the Microsoft Distributable Code conditions its Windows binary build adds | https://www.python.org/ |
 | The bundled Python packages (pinned in `python/requirements-bundle.txt`) | Mostly MIT, BSD and Apache-2.0 — but `soundfile`'s wheel carries an LGPL-2.1 `libsndfile`. **All 99 are listed below**, generated from an assembled bundle. That one is the only LGPL component: a separate DLL loaded at run time and replaceable, which `licences/LGPL-WRITTEN-OFFER.txt` discharges under §6(c) and `docs/LICENSING.md` reads. A statically linked libsoxr was a second until 2026-08-26, when librosa and `soxr` left the bundle | https://pypi.org/ |
-| NVIDIA NeMo (source, vendored at `python/uindosill_engines/_vendor/nemo/`; runs the diariser's speaker cache) | Apache-2.0 — Copyright (c) 2025, NVIDIA CORPORATION | https://github.com/NVIDIA/NeMo |
+| NVIDIA NeMo (source; ran the retired diariser's speaker cache. **Not redistributed since 2026-08-27** — it moved to `attic/sortformer/uindosill_engines/_vendor/nemo/` with that engine and no build or package carries it. Listed because the source tree still contains it) | Apache-2.0 — Copyright (c) 2025, NVIDIA CORPORATION | https://github.com/NVIDIA/NeMo |
 | pyannote.audio (the released wheel, pinned in `python/requirements-bundle.txt`; the segmentation, embedding and VBx clustering pipeline the second diariser runs on) | MIT — *Copyright (c) 2020 CNRS*, reproduced as the repository's `LICENSE` states it; the licence text travels in the wheel's own `.dist-info`. Its `pipelines/clustering.py` carries the VBx implementation contributed by BUT Speech@FIT under the same MIT terms — unlike DiariZen's vendored `clustering/VBx.py`, which was Apache-2.0 under its own header and left with that engine. **The model weights are not here** — they are CC BY 4.0 and are downloaded, never bundled; see `docs/LICENSING.md` | https://github.com/pyannote/pyannote-audio |
 
 ### The CUDA runtime is the one component here that is not MIT
@@ -333,9 +342,16 @@ Re-running against a bundle built from the same pins must produce this section u
 
 <!-- END bundled-python-notices -->
 
-### NeMo is vendored as source, and it is deliberately not a rewrite
+### NeMo was vendored as source, and it left with the engine that called it
 
-`python/uindosill_engines/_vendor/nemo/` holds fifteen files, and **two of them are NVIDIA's**:
+**Nothing under `python/` vendors NeMo since 2026-08-27.** The tree moved to
+`attic/sortformer/uindosill_engines/_vendor/nemo/` with the diariser that imported it, and the
+`_vendor/` directory it lived in is gone — the bundled Python now installs every package it runs
+from PyPI. The Apache-2.0 reading below is kept because the files are still in this repository and a
+redistribution of the source tree still carries them; it is a statement about what is in the attic
+rather than about what the bundle ships.
+
+That tree holds fifteen files, and **two of them are NVIDIA's**:
 `collections/asr/modules/sortformer_modules.py` (1,307 lines) and
 `collections/asr/parts/preprocessing/features.py` (494 lines), both copied **verbatim** with their
 copyright headers intact. They are here so the diariser's Arrival-Order Speaker Cache is NVIDIA's
@@ -362,8 +378,9 @@ The four conditions in Apache-2.0 §4 were checked before this was committed, no
   nothing else of the kind, checked 2026-08-21 against the GitHub contents API. That is the same
   answer the Marian weights gave, and it is recorded here rather than assumed for the same reason.
 
-The model weights are a separate question with a separate answer — Streaming Sortformer is under the
-**NVIDIA Open Model License**, not Apache-2.0, and has its own section above.
+The model weights were a separate question with a separate answer — Streaming Sortformer was under
+the **NVIDIA Open Model License**, not Apache-2.0. Both are retired; `attic/sortformer/` holds the
+Agreement copy that used to ship at `licences/`.
 
 ## Deliberately not used
 

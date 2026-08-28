@@ -938,8 +938,8 @@ public class SpeakerLabellingPipelineTests
 
     private static SpeakerLabellerCapabilities Capped(int? max) => new()
     {
-        EngineName = "sortformer-onnx",
-        ModelId = "sortformer-4spk-v2.1",
+        EngineName = "pyannote-torch",
+        ModelId = "pyannote-speaker-diarization-community-1",
         SupportsFixedSpeakerCount = false,
         MaxSpeakers = max,
     };
@@ -956,7 +956,7 @@ public class SpeakerLabellingPipelineTests
         Assert.Contains("7 speakers were asked for", warning, StringComparison.Ordinal);
         Assert.Contains("at most 4", warning, StringComparison.Ordinal);
         Assert.Contains("never reachable", warning, StringComparison.Ordinal);
-        Assert.Contains("sortformer-4spk-v2.1", warning, StringComparison.Ordinal);
+        Assert.Contains("pyannote-speaker-diarization-community-1", warning, StringComparison.Ordinal);
 
         // And it warns rather than refuses, which is a product decision and belongs in the text:
         // somebody who knows they will get four still wants the run.
@@ -989,7 +989,7 @@ public class SpeakerLabellingPipelineTests
             Capped(4) with { ModelId = null }, 6);
 
         Assert.NotNull(warning);
-        Assert.Contains("sortformer-onnx", warning, StringComparison.Ordinal);
+        Assert.Contains("pyannote-torch", warning, StringComparison.Ordinal);
     }
 
     private static SpeakerTurn T(double start, double end, string speaker) =>
@@ -1154,17 +1154,6 @@ public class SpeakerLabellingPipelineTests
         Assert.Equal(3, merges[0].OverlapSeconds, 6);
         Assert.Equal(7, merges[1].OverlapSeconds, 6);
         Assert.Single(SpeakerTurns.Speakers(folded));
-    }
-
-    [Fact]
-    public void TheParityFailureSentenceIsInvariantOnACommaDecimalMachine()
-    {
-        // CA1305 cannot see an interpolated string, and this one printed "8,143e-04" under es-PY.
-        var sentence = SpeakerLabelling.DescribeParityFailure(8.143e-04, 1e-04);
-
-        Assert.Contains("8.143e-04", sentence, StringComparison.Ordinal);
-        Assert.Contains("1e-04", sentence, StringComparison.Ordinal);
-        Assert.DoesNotContain(",", sentence.Split("reference.")[1].Split("The speaker")[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1591,32 +1580,5 @@ public class SpeakerFormattingTests
         Assert.Equal(options.Capacity, options.CapacityFor(null));
         Assert.Equal(options.Capacity - "Speaker 1: ".Length, options.CapacityFor("Speaker 1"));
         Assert.Equal(options.MaxLineLength, options.CapacityFor(new string('x', 200)));   // never below one line
-    }
-
-    [Fact]
-    public void TheEmbedderWarningFiresOnlyForAnOnnxEmbedder()
-    {
-        // What a user is shown when they name a provider for the second diariser. Both arms are
-        // asserted, and the silent one matters more: it is the default path, and a warning that
-        // fired on `auto` would appear on every ordinary run and train people to ignore the line
-        // that matters.
-        Assert.Null(SpeakerLabelling.DescribeEmbeddingBackend(""));
-        Assert.Null(SpeakerLabelling.DescribeEmbeddingBackend("torch:cpu"));
-
-        var warning = SpeakerLabelling.DescribeEmbeddingBackend("onnxruntime:webgpu");
-        Assert.NotNull(warning);
-        Assert.Contains("ONNX Runtime", warning, StringComparison.Ordinal);
-
-        // **It must not quote a diarisation error rate.** One was published for this embedder on
-        // 2026-08-26 and withdrawn on 2026-08-27: it had been scored against a previous run's
-        // hypothesis output rather than ground truth, on a stretch `stretches.json` marks
-        // `"labelled": false`. No DER exists for this model on any backend, and this assertion is
-        // here so that a future edit cannot quietly reintroduce one.
-        // Named figures rather than the letters "DER", which are a substring of "embedder" and made
-        // the first version of this assertion fail against correct text.
-        Assert.DoesNotContain("16.39", warning, StringComparison.Ordinal);
-        Assert.DoesNotContain("16.65", warning, StringComparison.Ordinal);
-        Assert.DoesNotContain("0.26", warning, StringComparison.Ordinal);
-        Assert.DoesNotContain("diarisation error", warning, StringComparison.OrdinalIgnoreCase);
     }
 }

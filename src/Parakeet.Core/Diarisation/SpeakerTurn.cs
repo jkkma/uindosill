@@ -169,18 +169,27 @@ public static class SpeakerTurns
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>What this repairs.</b> The streaming diariser holds about 3.5 seconds of audio per speaker
-    /// in a cache it re-selects every step, with no long-term anchor, so over a long recording one
-    /// person's identity can drift far enough to claim a second slot — measured 2026-08-20 on this
-    /// project's own podcasts, where two hosts came back as three substantial clusters and three
-    /// speakers as four. The failure is always **over**-segmentation, and over-segmentation is the
-    /// kind that can be repaired afterwards: two labels can be merged, where one label cannot be
-    /// split back into two people.
+    /// <b>What this repairs, and on which engine it was established.</b> The streaming diariser
+    /// retired on 2026-08-27 held about 3.5 seconds of audio per speaker in a cache it re-selected
+    /// every step, with no long-term anchor, so over a long recording one person's identity could
+    /// drift far enough to claim a second slot — measured 2026-08-20 on this project's own podcasts,
+    /// where two hosts came back as three substantial clusters and three speakers as four. On that
+    /// engine the failure was always <b>over</b>-segmentation, and over-segmentation is the kind
+    /// that can be repaired afterwards: two labels can be merged, where one label cannot be split
+    /// back into two people.
+    /// </para>
+    /// <para>
+    /// <b>That premise has not been established for the pipeline this now folds.</b> It clusters
+    /// globally rather than tracking, so it has no cache to drift, and its one scored meeting
+    /// over-split — 5 speakers against a reference 4, 2026-08-27 — which is consistent with the
+    /// premise without testing it. The fold is still the right repair for over-segmentation and
+    /// still cannot repair the other direction; what is unproven is how often it is the direction
+    /// that happens.
     /// </para>
     /// <para>
     /// <b>Least collision is the criterion, and it is the only evidence available.</b> No speaker
-    /// embeddings exist here — the ONNX graph returns per-frame activity for four slots and nothing
-    /// that identifies a voice — so the question "are these two labels the same person" has to be
+    /// embeddings exist here — a labeller returns turns on a timeline and nothing that identifies a
+    /// voice — so the question "are these two labels the same person" has to be
     /// answered from the timeline. Two labels that are really one person are **never active at the
     /// same instant**, because the drifted identity replaced the original rather than joining it;
     /// two different people in conversation collide constantly, on back-channel alone. So the pair

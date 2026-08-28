@@ -107,16 +107,20 @@ public sealed record SpeakerLabellerCapabilities
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b><see cref="Backend"/> cannot answer this, which is why it exists.</b> The second diariser
-    /// has two neural stages on two runtimes: segmentation is always torch, and only the embedder
-    /// negotiates a provider. Both the torch embedder and ONNX Runtime's CPU provider report
-    /// <see cref="ComputeBackend.Cpu"/>, so that one word cannot tell them apart — and they are not
-    /// interchangeable. Measured 2026-08-26 on <c>two-hosts-three-guests-a</c>, the ONNX embedder
-    /// returns <b>222</b> speaker turns where torch returns <b>225</b>, differing over 0.19% of the
-    /// timeline. Which is closer to the truth is unknown — a DER published for this on 2026-08-26
-    /// was withdrawn the next day, having been scored against a previous run's output rather than
-    /// ground truth. The reference is torch, so an ONNX embedder is a departure from the published
-    /// path however fast it is, and a caller that cannot see which one ran cannot say so.
+    /// <b>Always <c>torch:&lt;device&gt;</c> for the shipping labeller, and never empty.</b> The
+    /// pipeline runs both neural stages on one runtime, so this and the segmentation backend agree
+    /// by construction and <see cref="Backend"/> would in fact answer it.
+    /// <para>
+    /// <b>It exists because one engine had two runtimes, and that engine has gone.</b> DiariZen ran
+    /// segmentation in torch and let only the embedder negotiate a provider; both the torch embedder
+    /// and ONNX Runtime's CPU provider reported <see cref="ComputeBackend.Cpu"/>, so one word could
+    /// not tell them apart, and they were not interchangeable — measured 2026-08-26 on
+    /// <c>two-hosts-three-guests-a</c>, the ONNX embedder returned <b>222</b> speaker turns where
+    /// torch returned <b>225</b>, differing over 0.19% of the timeline, and which was closer to the
+    /// truth was never established. That engine left on 2026-08-27. The field is kept because an
+    /// ONNX embedder for the current pipeline is the obvious next thing to want, and it would want
+    /// this back rather than want it rediscovered.
+    /// </para>
     /// </para>
     /// </remarks>
     public string EmbeddingBackend { get; init; } = "";
@@ -131,7 +135,8 @@ public sealed record SpeakerLabellerCapabilities
     /// learn it; and when the caller did ask, this is what confirms the number reached the pipeline
     /// rather than merely arriving at the sidecar. The second diariser has three batch attributes
     /// that must move together, so "it was sent" and "it is in force" are genuinely different
-    /// claims. Null on the first diariser, whose batching is its exported graph's geometry.
+    /// claims. It was null on the ONNX diariser, whose batching was its exported graph's geometry;
+    /// that engine is in <c>attic/sortformer/</c> and every shipping labeller now reports a number.
     /// </remarks>
     public int? BatchSize { get; init; }
 
@@ -140,9 +145,15 @@ public sealed record SpeakerLabellerCapabilities
 
     /// <summary>
     /// The most distinct voices the model can keep apart, when it has such a limit. A file with more
-    /// speakers than this is labelled with the fifth voice merged into one of the others, and the
-    /// caller must say so rather than present the labels as complete.
+    /// speakers than this is labelled with the surplus voices merged into the others, and the caller
+    /// must say so rather than present the labels as complete.
     /// </summary>
+    /// <remarks>
+    /// <b>Null for every labeller this product ships, since 2026-08-27.</b> The four-slot ONNX
+    /// diariser is in <c>attic/sortformer/</c> and the clustering pipeline that replaced it has no
+    /// cap. Null means "no limit", not "nobody looked" — <see cref="ReliableUpTo"/> is the field
+    /// where a null means the second thing.
+    /// </remarks>
     public int? MaxSpeakers { get; init; }
 
     /// <summary>

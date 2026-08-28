@@ -176,18 +176,18 @@ internal static class Commands
                 Name = "speaker-model",
                 TakesValue = true,
                 ValueName = "id",
-                Help = "Catalogue id of the diarisation model. Default: the installed one. Two entries label speakers " +
-                       "and neither is preferred over the other, so a machine with both installed is asked " +
-                       "rather than chosen for.",
+                Help = "Catalogue id of the diarisation model. Default: the installed one. One entry labels " +
+                       "speakers; the resolution is over what is installed rather than over the catalogue, so a " +
+                       "machine with a second one is asked rather than chosen for.",
             },
             new OptionSpec
             {
                 Name = "speaker-model-path",
                 TakesValue = true,
-                ValueName = "file",
-                Help = "Use a diarisation model directly instead of a catalogue entry. An .onnx graph is the Sortformer " +
-                       "engine and a directory is the pyannote pipeline, which is how the engine is chosen when " +
-                       "there is no catalogue entry to state one.",
+                ValueName = "dir",
+                Help = "Use a diarisation model directory directly instead of a catalogue entry. It is the pyannote " +
+                       "pipeline's own layout, config.yaml included, because the pipeline resolves its parts " +
+                       "through that file.",
             },
             new OptionSpec
             {
@@ -203,27 +203,11 @@ internal static class Commands
                 Name = "speaker-backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Where the diariser runs, in a vocabulary that spans both engines. For the Sortformer " +
-                       "graph it names an ONNX Runtime execution provider: cpu, cuda, webgpu or dml, defaulting " +
-                       "to webgpu where it loads and then cpu — the one that reproduces the published figure, " +
-                       "then the reference itself. cuda is never chosen automatically: it fails the parity " +
-                       "fixture and its figure is its own, so it has to be named here. This changes the speaker " +
-                       "labels, not only the speed — measured on AMI test, cpu scores 16.3324% DER, webgpu " +
-                       "16.3319% and cuda 16.1021%, and a figure from one provider does not describe " +
-                       "another. dml is refused unless --speaker-backend-unverified is given: at ONNX " +
-                       "Runtime's default settings it scores 53.15% while looking healthy. For the pyannote " +
-                       "pipeline it names a torch device instead: cpu (which auto and torch both resolve to) or " +
-                       "cuda, which needs a CUDA torch build rather than the CPU one the bundle installs; webgpu " +
-                       "and dml are refused there, since the pipeline has no ONNX route for them to select. Those " +
-                       "AMI figures are Sortformer's and describe no other engine.",
-            },
-            new OptionSpec
-            {
-                Name = "speaker-backend-unverified",
-                Help = "Unlock dml, the one diariser backend refused by name: at ONNX Runtime's default settings it " +
-                       "scores 53.15% DER while looking healthy. For measuring it, not for using it. This flag does not " +
-                       "lift a failed parity check — a backend that fails the check runs anyway, with a warning that its " +
-                       "labels are this machine's own and no figure in this project describes them.",
+                Help = "Which torch device the diariser runs on: cpu, or cuda on a machine whose torch build has it — the " +
+                       "bundle installs the CPU one. Unset means auto, which is the cpu. webgpu and dml name " +
+                       "ONNX Runtime execution providers and are refused rather than quietly given the cpu, " +
+                       "because this pipeline is torch on both stages with no ONNX route for them to select. " +
+                       "Whether the device moves the speaker labels here has not been measured.",
             },
             new OptionSpec
             {
@@ -300,10 +284,11 @@ internal static class Commands
             "across chunk boundaries well before it collapses.\n\n" +
             "--speakers is an opt-in and stays off by default: it reads the file a second time and runs a second model,\n" +
             "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.\n" +
-            "How many voices are told apart depends on the model. Sortformer stops at four, merging a fifth into\n" +
-            "one of them, and the command says so on any file where four were found; the pyannote pipeline has no\n" +
-            "such ceiling and returns as many as its clustering finds. To score speaker turns without\n" +
-            "transcribing, use 'uindosill diarise'.\n\n" +
+            "The pyannote pipeline puts no ceiling on how many voices it tells apart — it clusters rather than\n" +
+            "tracks, so the count is something it returns rather than something it is bounded by, and it can\n" +
+            "return more speakers than were present as readily as fewer. Nothing about its accuracy has been\n" +
+            "measured here; see docs/UNPROVEN.md. To score speaker turns without transcribing, use\n" +
+            "'uindosill diarise'.\n\n" +
             "--translate is the other opt-in, and it runs last: decode, then label speakers, then translate. That\n" +
             "order belongs to the code — speakers are attributed word by word and a translated segment has no words,\n" +
             "so translating first would coarsen every label instead of failing where anyone could see it. Word\n" +
@@ -343,18 +328,18 @@ internal static class Commands
                 Short = 'm',
                 TakesValue = true,
                 ValueName = "id",
-                Help = "Catalogue id of the diarisation model. Default: the installed one. Two entries label speakers " +
-                       "and neither is preferred over the other, so a machine with both installed is asked " +
-                       "rather than chosen for.",
+                Help = "Catalogue id of the diarisation model. Default: the installed one. One entry labels " +
+                       "speakers; the resolution is over what is installed rather than over the catalogue, so a " +
+                       "machine with a second one is asked rather than chosen for.",
             },
             new OptionSpec
             {
                 Name = "model-path",
                 TakesValue = true,
-                ValueName = "file",
-                Help = "Use a model directly instead of a catalogue entry. An .onnx graph is the Sortformer engine " +
-                       "and a directory is the pyannote pipeline, which is how the engine is chosen when there " +
-                       "is no catalogue entry to state one.",
+                ValueName = "dir",
+                Help = "Use a model directory directly instead of a catalogue entry. It is the pyannote pipeline's " +
+                       "own layout, config.yaml included, because the pipeline resolves its parts through that " +
+                       "file.",
             },
             new OptionSpec
             {
@@ -362,34 +347,20 @@ internal static class Commands
                 Short = 't',
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Threads for the diariser: ONNX Runtime's intra-op count for the Sortformer graph, torch's for " +
-                       "the pyannote pipeline. Default: 12 — the diariser's own, and the number every CPU figure " +
-                       "in this project was measured with.",
+                Help = "Threads for the diariser: torch's intra-op count. Default: 12 — the diariser's own. That " +
+                       "number was inherited from the engine every CPU figure in this project was measured on, " +
+                       "and nothing about its effect on this one has been measured.",
             },
             new OptionSpec
             {
                 Name = "backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Where the diariser runs, and the vocabulary spans both engines rather than either. " +
-                       "For the Sortformer graph it names an ONNX Runtime execution provider: cpu, cuda, webgpu " +
-                       "or dml, defaulting to webgpu where it loads and then cpu — the one that reproduces the " +
-                       "published figure, then the reference itself; cuda is never chosen automatically and has " +
-                       "to be named, because it fails the parity fixture and its figure is its own. This changes " +
-                       "the speaker turns, not only the speed — on AMI test cpu scores 16.3324% DER, webgpu " +
-                       "16.3319% and cuda 16.1021% — so a scoring run must say which one produced it. dml needs " +
-                       "--backend-unverified; at ONNX Runtime's defaults it scores 53.15% while looking healthy. " +
-                       "For the pyannote pipeline it names a torch device instead: cpu (which auto and torch both " +
-                       "resolve to) or cuda, which needs a CUDA torch build rather than the CPU one the bundle " +
-                       "installs. webgpu and dml are refused there rather than quietly given the CPU, because the " +
-                       "pipeline is torch on both stages with no ONNX route for them to select. Those AMI figures " +
-                       "are Sortformer's and describe no other engine.",
-            },
-            new OptionSpec
-            {
-                Name = "backend-unverified",
-                Help = "Allow a backend that has not passed the parity check on this machine. For measuring one, " +
-                       "not for using one.",
+                Help = "Which torch device the diariser runs on: cpu, or cuda on a machine whose torch build has it — the " +
+                       "bundle installs the CPU one. Unset means auto, which is the cpu. webgpu and dml name " +
+                       "ONNX Runtime execution providers and are refused rather than quietly given the cpu, " +
+                       "because this pipeline is torch on both stages with no ONNX route for them to select. " +
+                       "Whether the device moves the speaker labels here has not been measured.",
             },
             new OptionSpec
             {
@@ -398,8 +369,7 @@ internal static class Commands
                 ValueName = "n",
                 Help = "How many voices there are, when known. The diariser estimates the count and cannot be told it, " +
                        "so this is applied afterwards: its labels are folded down to this many by merging the pair " +
-                       "that talk over each other least. Nothing merges if it already found this many or fewer, and " +
-                       "a count above what it can tell apart is warned about before the audio is read.",
+                       "that talk over each other least. Nothing merges if it already found this many or fewer.",
             },
             Fake,
             Help,
@@ -409,16 +379,15 @@ internal static class Commands
             "without the ASR pass, which costs orders of magnitude more and contributes nothing to a speaker turn.\n" +
             "This is what the diarisation measurements are run through, and what 'uindosill der' scores.\n\n" +
             "Speakers are labelled spk0, spk1 and upwards by the model's own column rather than renamed in order\n" +
-            "of appearance: the column is what the speaker cache works to keep meaning the same person for a\n" +
-            "whole recording, and a scorer wants to see the labels the model actually produced.\n\n" +
+            "of appearance: it is the label the model itself assigned, and a scorer wants to see what the\n" +
+            "model produced rather than a renaming of it.\n\n" +
             "'der' pairs hypotheses to references by file stem, which is what --id is for: AMI's audio is\n" +
             "ES2004a.Mix-Headset.wav and its reference is ES2004a.rttm.\n\n" +
-            "How many speakers can be told apart is the loaded model's property rather than this command's, and\n" +
-            "the two differ structurally. Sortformer's graph has four speaker slots: above that a fifth voice is\n" +
-            "merged into one of the four, and no measurement in this repository prices what that costs. The\n" +
-            "pyannote pipeline has no such ceiling — it clusters rather than tracks, so the count is something it\n" +
+            "How many speakers can be told apart is the loaded model's property rather than this command's. The\n" +
+            "pyannote pipeline has no ceiling — it clusters rather than tracks, so the count is something it\n" +
             "returns rather than something it is bounded by, and it can return more speakers than were present as\n" +
-            "readily as fewer. See docs/UNPROVEN.md for what is and is not measured about either.",
+            "readily as fewer. The four-slot graph this project measured until 2026-08-27 is retired. See\n" +
+            "docs/UNPROVEN.md for what is and is not measured about what remains.",
     };
 
     public static readonly CommandSpec Translate = new()

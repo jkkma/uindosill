@@ -44,7 +44,16 @@ NeMo's `collar=0.25` are *half*-widths — NeMo's own docstring says so — whic
 arXiv 2509.26177 (which states it uses pyannote.metrics with exactly those settings). A number from a
 NeMo model card is therefore not on this scale until it is rescored at `--collar 0.5`.
 
-## `sortformer/` — what the reference diariser computed
+## `sortformer/` — moved to `attic/sortformer/fixtures/` on 2026-08-27
+
+The blobs described below are no longer in this directory. They were read only by
+`attic/Parakeet.Engine.Sortformer.Tests/`, which is unbuilt, and by the generator that made them;
+when the Python engine they described followed the C# one into the attic there was nothing live left
+to read them, so they went with it. **The description is kept here** because this file is the index
+of what a diarisation fixture in this repository is, and a tree that quietly loses a section reads as
+a tree that never had one.
+
+### What they were
 
 Eight files, 859 KiB, written by `scripts/make-diariser-fixtures.py`. They were the whole of the
 correctness claim for the C# port of Streaming Sortformer, and they existed because the ONNX graph

@@ -72,17 +72,22 @@ public sealed record TranscriptDocument
 
     /// <summary>
     /// Which execution provider named the speakers, when a labeller ran. Beside
-    /// <see cref="SpeakerModelId"/> rather than folded into it, because the model alone does not
-    /// identify the answer: measured on AMI test, the same graph scores 16.3324% DER on the CPU,
-    /// 16.3319% on WebGPU and 16.1021% on CUDA (docs/UNPROVEN.md). A transcript naming only the
-    /// model says which weights ran and not which labels they produced, which is half a provenance.
+    /// <see cref="SpeakerModelId"/> rather than folded into it, because the model alone need not
+    /// identify the answer. That was established rather than assumed, on the diariser retired
+    /// 2026-08-27: measured on AMI test, that one graph scored 16.3324% DER on the CPU, 16.3319% on
+    /// WebGPU and 16.1021% on CUDA (docs/UNPROVEN.md). Whether the shipping pipeline's device moves
+    /// its labels is unmeasured, which is a reason to keep recording the device rather than to stop.
+    /// A transcript naming only the model says which weights ran and not which labels they produced,
+    /// which is half a provenance.
     /// </summary>
     public ComputeBackend? SpeakerBackend { get; init; }
 
     /// <summary>
     /// Which runtime ran the speaker embedder, as <c>runtime:provider</c> — <c>torch:cpu</c> or
-    /// <c>onnxruntime:webgpu</c>. Null when the labeller has only one runtime, which is every
-    /// labeller but the second diariser.
+    /// <c>onnxruntime:webgpu</c>. Null when the labeller reports no embedder — the canned one — and
+    /// otherwise <c>torch:&lt;device&gt;</c>, since the shipping pipeline runs both stages on one
+    /// runtime. It was null for every labeller but DiariZen, which had two; that engine left on
+    /// 2026-08-27.
     /// </summary>
     /// <remarks>
     /// <b><see cref="SpeakerBackend"/> cannot carry this, which is the whole reason for a second

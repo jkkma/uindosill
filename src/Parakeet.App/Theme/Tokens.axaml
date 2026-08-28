@@ -95,6 +95,65 @@
   <SolidColorBrush x:Key="Taro600Brush" Color="{StaticResource Taro600}" />
   <SolidColorBrush x:Key="Taro700Brush" Color="{StaticResource Taro700}" />
 
+  <!-- ── The speaker hues ────────────────────────────────────────────────────────────────────
+       Four more hues, pinned to exactly one job: telling speakers apart in a transcript. They are
+       admitted the way #F0D983 is admitted by rule 2 above — a hue outside the two ramps, tied to
+       one job, and wrong anywhere else — rather than as a third product generation. Nothing but a
+       speaker chip may draw them.
+
+       **Added 2026-08-27, and the reason is a cap that stopped existing.** Speaker labelling had
+       four chips because the ONNX diariser had four speaker slots: a fifth speaker could not occur,
+       so the palette needed no fifth entry. That engine was retired the same day and the clustering
+       pipeline that replaced it has no cap — AMI-style meetings routinely have five to seven — so
+       the wrap at four went from unreachable to a collision, and the honest fix was more chips
+       rather than a comment explaining the repeat.
+
+       **They are matcha's own lightness and chroma, rotated in hue, exactly as taro is.** Each pair
+       below was produced by rendering oklch at the 100 and 700 steps of the table above — L 0.9364
+       C 0.0355 and L 0.4580 C 0.0813 — at a new hue. The generator was validated first by
+       reproducing the shipped matcha and taro hexes byte for byte from those same figures, so these
+       are the ramps this file already describes rather than a second method.
+
+       **The hues are what sRGB allows, not what a wheel would suggest.** At this chroma the 100 and
+       700 steps are only both in gamut over three arcs — 49-183, 216-235 and 300-356 — and a hue
+       outside them clips, which silently changes the lightness the design claims is identical. The
+       four were chosen inside those arcs to maximise the smallest gap between any two of the seven
+       hues now in the file (these four, matcha at 128.2, taro at 304.0, the spoken-word yellow at
+       94.9). That smallest gap is 32.8 degrees, and it is the constraint rather than the ambition:
+       a wider spread is not available at matcha's chroma without leaving sRGB.
+
+       What the round trip reports, against the L 0.9364 / C 0.0355 and L 0.4580 / C 0.0813 targets:
+
+         apricot  h  49   100  L 0.9372 C 0.0353   700  L 0.4590 C 0.0816
+         mint     h 161   100  L 0.9364 C 0.0363   700  L 0.4569 C 0.0813
+         sky      h 216   100  L 0.9369 C 0.0360   700  L 0.4571 C 0.0812
+         blossom  h 337   100  L 0.9361 C 0.0369   700  L 0.4579 C 0.0812
+
+       — inside 0.0010 of lightness and 0.0014 of chroma, which is the same 8-bit rounding residue
+       taro's own table records rather than a different colour.
+
+       Contrast, computed rather than estimated: each 700 on its own 100 runs 5.82:1 to 6.14:1,
+       against matcha's 5.86:1 for the same pairing; each 700 on white runs 6.92:1 to 7.52:1,
+       against matcha-700's 7.00:1. `SpeakerChipContrastTests` recomputes all of it from this file
+       and fails below 4.5:1, so a later edit to any value here is caught in CI. -->
+  <Color x:Key="Apricot100">#FFE4D6</Color>
+  <Color x:Key="Apricot700">#7C492C</Color>
+  <Color x:Key="Mint100">#D6F2E2</Color>
+  <Color x:Key="Mint700">#256548</Color>
+  <Color x:Key="Sky100">#D0F1F9</Color>
+  <Color x:Key="Sky700">#006274</Color>
+  <Color x:Key="Blossom100">#FBE1F3</Color>
+  <Color x:Key="Blossom700">#744568</Color>
+
+  <SolidColorBrush x:Key="Apricot100Brush" Color="{StaticResource Apricot100}" />
+  <SolidColorBrush x:Key="Apricot700Brush" Color="{StaticResource Apricot700}" />
+  <SolidColorBrush x:Key="Mint100Brush" Color="{StaticResource Mint100}" />
+  <SolidColorBrush x:Key="Mint700Brush" Color="{StaticResource Mint700}" />
+  <SolidColorBrush x:Key="Sky100Brush" Color="{StaticResource Sky100}" />
+  <SolidColorBrush x:Key="Sky700Brush" Color="{StaticResource Sky700}" />
+  <SolidColorBrush x:Key="Blossom100Brush" Color="{StaticResource Blossom100}" />
+  <SolidColorBrush x:Key="Blossom700Brush" Color="{StaticResource Blossom700}" />
+
   <!-- ── Ground and ink ──────────────────────────────────────────────────────────────────────
        The neutrals carry a trace of the matcha hue (chroma 0.004–0.025 at hue ~126°) so white
        never looks blue beside the accent. Nothing here exceeds 0.025 chroma. -->

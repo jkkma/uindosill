@@ -136,11 +136,17 @@ public sealed record AppSettings
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two entries do this job and they are not ranked: Sortformer is fast, ships with the
-    /// installer and stops at four voices; the pyannote pipeline has no such limit and is
-    /// downloaded rather than bundled, needing a Hugging Face token because its repository is
-    /// gated. How long it takes has not been measured. Which is better depends on the recording and
-    /// on who is doing the recording, so this is a choice rather than a default with an override.
+    /// <b>One entry does this job since 2026-08-27, and this setting is kept rather than retired.</b>
+    /// It existed because two did and they were not ranked: Sortformer was fast, shipped with the
+    /// installer and stopped at four voices, while the pyannote pipeline has no such limit and is
+    /// downloaded rather than bundled, needing a Hugging Face token because its repository is gated.
+    /// Sortformer is in <c>attic/sortformer/</c> now, so the choice this stored has one option.
+    /// <para>
+    /// Kept because the reasoning that made it a choice is intact — which of two diarisers suits a
+    /// recording is not something this project can answer for somebody — and because a third entry
+    /// is the obvious next thing to want, given that nothing about the remaining one's accuracy has
+    /// been measured. Retiring it would mean writing it again.
+    /// </para>
     /// </para>
     /// <para>
     /// <b>Null keeps meaning "nobody has said", and it has to.</b> A stored id whose entry is not
@@ -476,14 +482,22 @@ public sealed class AppSettingsStore
     /// </summary>
     /// <remarks>
     /// <b>A presentation subset, not the protocol's vocabulary.</b> The sidecar is the authority and
-    /// accepts more than this — <c>dml</c>, which the command line refuses outright for scoring 53%
-    /// diarisation error at ONNX Runtime's own defaults, and <c>torch</c>, which is what
-    /// <c>auto</c> already resolves to on the second diariser and would be a second spelling of the
-    /// same choice in a menu. Neither belongs in a list a person picks from. A name arriving here
-    /// that is not in this list is refused by the sidecar rather than silently accepted, so the
-    /// cost of this list being short is a clear failure and never a wrong answer.
+    /// accepts <c>torch</c> as well, which is what <c>auto</c> already resolves to and would be a
+    /// second spelling of the same choice in a menu.
+    /// <para>
+    /// <b><c>webgpu</c> left this list on 2026-08-27 and its removal is a repair, not tidying.</b>
+    /// It was here for the ONNX diariser, which is now in <c>attic/sortformer/</c>; the pipeline
+    /// that replaced it is torch on both stages and <i>refuses</i> the name rather than falling back
+    /// to the CPU. Left in this list, a settings file that already stored <c>webgpu</c> — which the
+    /// Settings tab offered until that day — would read back as valid, reach the sidecar, and fail
+    /// every speaker-labelling run in the window, with no row in the picker for the user to clear it
+    /// from. Out of the list, <see cref="ReadDiarisationProvider"/> returns null for it, which means
+    /// <c>auto</c>. <c>dml</c> was never here and is refused for the same reason.
+    /// </para>
+    /// A name arriving here that is not in this list is refused by the sidecar rather than silently
+    /// accepted, so the cost of this list being short is a clear failure and never a wrong answer.
     /// </remarks>
-    public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "webgpu", "cuda"];
+    public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "cuda"];
 
     /// <summary>
     /// The batch sizes this window offers for the second diariser. Empty entry is the model's own.

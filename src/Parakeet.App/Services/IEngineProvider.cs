@@ -67,15 +67,21 @@ public interface IEngineProvider
     SpeakerLabellerLimits? SpeakerLimits { get; }
 
     /// <summary>
-    /// True when the chosen diariser's batch size can be set, which is the second one only.
+    /// True when the chosen diariser's batch size can be set.
     /// </summary>
     /// <remarks>
     /// Asked of the provider rather than decided in the view model, on the same reasoning as
-    /// <see cref="SupportsSpeakerLabelling"/>: which diariser is chosen is a fact about the
-    /// catalogue entry and the model store, and a window that worked it out from an id would be a
-    /// second place that answer lives. False is a real answer — the first diariser's batching is
-    /// its exported graph's geometry, and the sidecar refuses the field rather than ignoring it, so
-    /// a control left enabled for it would offer a setting that turns every load into an error.
+    /// <see cref="SupportsSpeakerLabelling"/>: it is a fact about the catalogue entry and the model
+    /// store, and a window that worked it out from an id would be a second place that answer lives.
+    /// <para>
+    /// <b>It distinguished the two diarisers until 2026-08-27 and now tracks availability alone.</b>
+    /// The engine that refused the field — its batching was its exported graph's geometry, so a
+    /// control left enabled for it would have turned every load into an error — is in
+    /// <c>attic/sortformer/</c>. The remaining implementation is
+    /// <see cref="SupportsSpeakerLabelling"/>, so false now means the model is not installed or
+    /// there is no bundled Python. Kept as its own member because a second entry is the obvious next
+    /// thing to want and it would need the distinction back.
+    /// </para>
     /// </remarks>
     bool SupportsDiariserBatchSize { get; }
 
@@ -84,15 +90,20 @@ public interface IEngineProvider
     /// torch devices rather than ONNX Runtime providers.
     /// </summary>
     /// <remarks>
-    /// <b>The picker asks this because the two diarisers do not accept the same words.</b>
-    /// Sortformer is an ONNX graph and takes <c>cpu</c>, <c>cuda</c>, <c>webgpu</c> or <c>dml</c>;
-    /// the pyannote pipeline is torch on both stages with no ONNX route at all and <i>refuses</i>
-    /// <c>webgpu</c> and <c>dml</c> outright rather than falling back — deliberately, because
-    /// somebody who picked one and silently got the CPU has been told nothing. Filtering the rows
-    /// on what ONNX Runtime registered is therefore not enough: that answers a question about the
-    /// wrong engine, and offering a WebGPU row for this one is offering a row whose only outcome is
-    /// a failed load. Added 2026-08-27 after a review found exactly that, one commit after the same
-    /// picker was corrected for offering a CUDA row no machine could use.
+    /// <b>Unconditionally true since 2026-08-27, and kept rather than folded away.</b> It was added
+    /// hours earlier because the two diarisers did not accept the same words: the ONNX graph took
+    /// <c>cpu</c>, <c>cuda</c>, <c>webgpu</c> or <c>dml</c>, while the pyannote pipeline is torch on
+    /// both stages with no ONNX route and <i>refuses</i> <c>webgpu</c> and <c>dml</c> outright
+    /// rather than falling back — deliberately, because somebody who picked one and silently got the
+    /// CPU has been told nothing. The graph is in <c>attic/sortformer/</c>, so only one vocabulary
+    /// remains.
+    /// <para>
+    /// <b>What that costs is worth naming.</b> With this always true, the picker returns a fixed
+    /// torch device list and never applies
+    /// <see cref="AvailableDiariserProvidersAsync"/>'s answer — so a CUDA row is offered whether or
+    /// not this machine's torch build has one, and the window no longer claims otherwise. Restoring
+    /// a real availability filter means asking torch rather than ONNX Runtime, which nothing does.
+    /// </para>
     /// </remarks>
     bool DiariserRunsInTorch { get; }
 
@@ -396,31 +407,25 @@ public sealed class EngineProvider : IEngineProvider
         }
 
         var (provider, batchSize) = _diariserSettings();
-        var kind = KindOf(model);
 
         return new SidecarSpeakerLabeller(new SidecarLabellerOptions
         {
             // The same order as everywhere else: the user's own copy, then the installer's.
-            Kind = kind,
             ModelPath = PathForInstalledOrBundled(model)!,
             ModelId = model.Id,
 
             // The Settings tab's own control, not the Models tab's backend list. That one is
             // parakeet.cpp's — Vulkan, CUDA, CPU — and naming it here would offer the diariser
-            // backends it has no path to and hide WebGPU, which is the one it wants; the two
-            // runtimes overlap only in the word "CPU". This window passed a hardcoded `auto` until
-            // the separate setting existed, which is why WebGPU was unreachable from it.
+            // backends it has no path to; the two runtimes overlap only in the word "CPU". This
+            // window passed a hardcoded `auto` until the separate setting existed.
             //
-            // Null still means `auto`, and `auto` still reproduces the published path on both
-            // diarisers rather than picking the fastest.
+            // Null still means `auto`, which is the CPU.
             Provider = provider ?? "auto",
 
-            // **Second diariser only, and null unless somebody chose.** The other arm refuses the
-            // field rather than ignoring it — its batching is its exported graph's geometry — so
-            // sending one for it would turn a setting that does not apply into a failed load.
-            BatchSize = string.Equals(kind, DiariserKinds.Pyannote, StringComparison.Ordinal)
-                ? batchSize
-                : null,
+            // Null unless somebody chose, which means the pipeline's own value. The guard that
+            // stood here — sending it only to the engine that accepted it — went with the engine
+            // that refused it, whose batching was its exported graph's geometry.
+            BatchSize = batchSize,
         });
     }
 
@@ -471,9 +476,8 @@ public sealed class EngineProvider : IEngineProvider
             // reader needs to know there is a choice waiting.
             ModelTask.Diarisation => (DiarisationModel is not null,
                 "Speaker labelling needs its own model, which is not installed yet. Install one from the Models "
-                + "tab. There are two: a 453 MiB one that is quick but tells apart at most four voices, and a "
-                + "31 MiB one with no limit on the number of voices, which needs a free Hugging Face account "
-                + "before it can be downloaded."),
+                + "tab: a 31 MiB download with no limit on the number of voices, which needs a free Hugging "
+                + "Face account before it can be fetched."),
             ModelTask.Translation => (TranslationModel is not null,
                 "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
                 + "it is a 1.34 GiB download and reads 25 languages into English only."),
@@ -523,30 +527,16 @@ public sealed class EngineProvider : IEngineProvider
     {
         ArgumentNullException.ThrowIfNull(labeller);
 
-        var sidecar = labeller as SidecarSpeakerLabeller;
-
-        // Why this backend, when `auto` wanted another — first, because it is the sentence that
-        // explains the speed of the run, and until 2026-08-22 the sidecar kept the reason only for
-        // the case where every candidate failed.
-        var fellBack = sidecar is { FellBackFrom.Count: > 0 }
-            ? $"The diariser's preferred backends did not build on this machine ({string.Join("; ", sidecar.FellBackFrom)}), " +
-              $"so this run used {labeller.Capabilities.Backend.ToString().ToLowerInvariant()}."
-            : null;
-        var backend = SpeakerLabelling.DescribeBackend(labeller.Capabilities.Backend);
-
-        // The second diariser's embedder can leave torch while `Backend` still reads cpu, so the
-        // line above cannot see it. This window never asks for that — it passes `auto`, which is
-        // torch — so in practice this is silent; it is here because "the window cannot reach it"
-        // is a property of one line in this file rather than a guarantee.
-        var embedder = SpeakerLabelling.DescribeEmbeddingBackend(labeller.Capabilities.EmbeddingBackend);
-
-        // The result describes its own three failing shapes, including the check that could not
-        // run — which used to be reported as nothing.
-        var parity = sidecar?.Parity?.Describe();
-
-        // This window chooses the backend itself, so none of these gets the command line's
-        // "use --speaker-backend cpu" remedy: there is no flag here to follow the advice with.
-        return Join(fellBack, backend, embedder, parity);
+        // **Four sentences stood here and went with the diariser on 2026-08-27**, matching the
+        // command line's: a fallback report, a measured warning about cuda and DirectML, one about
+        // an ONNX speaker embedder, and a parity result. All four described the ONNX diariser now in
+        // `attic/sortformer/`, and this pipeline is torch on both stages — nothing to fall back
+        // from, no provider measured to move the answer, no second path to compare against.
+        //
+        // There is nothing left to say, and the window says nothing rather than saying that
+        // nothing is wrong: no figure of any kind has been produced on this engine.
+        // `docs/UNPROVEN.md` is where that is kept visible.
+        return null;
     }
 
     /// <summary>
@@ -562,13 +552,18 @@ public sealed class EngineProvider : IEngineProvider
     /// </remarks>
     public SpeakerLabellerLimits? SpeakerLimits =>
         SupportsSpeakerLabelling && DiarisationModel is { } model
-            ? SidecarSpeakerLabeller.DeclaredLimitsFor(KindOf(model)) with { Name = model.Id }
+            ? SidecarSpeakerLabeller.DeclaredLimits with { Name = model.Id }
             : null;
 
     /// <inheritdoc />
     /// <remarks>
-    /// Short-circuited when there is no interpreter: starting a sidecar to ask is the one thing
-    /// that certainly cannot work then, and the answer would be "not established" either way.
+    /// <b>Answers about a runtime the diariser no longer uses, and is kept for one reason.</b> This
+    /// probes ONNX Runtime for the providers it registered, so that the Settings tab could not offer
+    /// a row that had no chance of working. The diariser is torch now; <see cref="DiariserRunsInTorch"/>
+    /// is true, and the view model returns its fixed device list before this is consulted. It is
+    /// still implemented rather than removed because the translator is still an ONNX graph and this
+    /// is the only probe of what the bundle's wheel actually registered — but nothing on the
+    /// diariser path reads it, and a caller should not infer from its existence that one does.
     /// </remarks>
     public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
         HasBundledPython
@@ -576,23 +571,19 @@ public sealed class EngineProvider : IEngineProvider
             : Task.FromResult<IReadOnlyList<string>?>(null);
 
     /// <inheritdoc />
-    public bool SupportsDiariserBatchSize =>
-        SupportsSpeakerLabelling
-        && DiarisationModel is { } batchModel
-        && string.Equals(KindOf(batchModel), DiariserKinds.Pyannote, StringComparison.Ordinal);
+    /// <remarks>
+    /// Unconditional since 2026-08-27: the batch size applied to one of two diarisers and now
+    /// applies to the only one. Kept as a capability rather than folded away because the Settings
+    /// tab asks it, and an engine that cannot take one is what it exists to answer for.
+    /// </remarks>
+    public bool SupportsDiariserBatchSize => SupportsSpeakerLabelling;
 
     /// <inheritdoc />
-    public bool DiariserRunsInTorch =>
-        DiarisationModel is { } torchModel
-        && string.Equals(KindOf(torchModel), DiariserKinds.Pyannote, StringComparison.Ordinal);
-
-    /// <summary>Which sidecar engine a diarisation entry is driven by.</summary>
     /// <remarks>
-    /// Read off the entry rather than guessed from its id, and defaulted to Sortformer so that
-    /// an entry written before the field existed keeps meaning what it always meant.
+    /// Unconditional for the same reason, and true rather than false: the ONNX diariser went to
+    /// <c>attic/sortformer/</c> and what remains is torch on both stages.
     /// </remarks>
-    private static string KindOf(ModelDescriptor model) =>
-        model.Engine is { Length: > 0 } engine ? engine : DiariserKinds.Sortformer;
+    public bool DiariserRunsInTorch => true;
 
     /// <summary>
     /// True when the translation checkpoint is installed, and false with a reason when it is not.
@@ -697,8 +688,16 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// </summary>
     public bool SupportsDiariserBatchSize => false;
 
-    /// <summary>False: the canned labeller is neither diariser and runs on no runtime at all.</summary>
-    public bool DiariserRunsInTorch => false;
+    /// <summary>
+    /// True, matching the real provider rather than describing the canned labeller.
+    /// </summary>
+    /// <remarks>
+    /// It was false while this meant "which of two diarisers is loaded" and the canned one was
+    /// neither. It now means "what vocabulary does the speaker-provider picker speak", and a demo
+    /// mode that answered false would offer rows the shipping product does not have. The canned
+    /// labeller still runs on no runtime at all; that is simply not what this asks.
+    /// </remarks>
+    public bool DiariserRunsInTorch => true;
 
     /// <summary>
     /// Null — "not established". The canned engine runs on no execution provider at all, and

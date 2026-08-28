@@ -88,9 +88,10 @@ Thumbs.db
 # working tree, and one channel's output alone is over 200 MB.
 /packaging/
 
-# Python bytecode. scripts/ holds five Python tools — the DER validator, the test-count guard, the
-# diariser fixture generator, the WER corpus and the translation ONNX exporter — and importing one
-# from another (the fixture generator is imported by hand when a fixture is being investigated)
-# leaves __pycache__ behind.
+# Python bytecode. scripts/ holds seven Python tools — the DER validator, the test-count guard, the
+# TAL reference builder, the cascade and translation measures, the bundled-Python notice collector
+# and the translation ONNX exporter — and importing one from another by hand leaves __pycache__
+# behind. (The diariser fixture generator was an eighth until 2026-08-27; it is in
+# `attic/sortformer/scripts/` now.)
 __pycache__/
 *.pyc

@@ -2,11 +2,13 @@
 
 The code is MIT — **except that a build carrying the video player is distributed under the GPL**, which is the first section below. The weights are neither, and their obligations are the ones worth reading twice.
 
-**Four model licences ship, not one** — five until 2026-08-27, when the only non-commercial one
-left with DiariZen. The transcription weights are CC BY 4.0 and want a
-seven-element notice package. The speaker diarisation weights are under the NVIDIA Open Model
-License and want one verbatim sentence plus a copy of the agreement — and, unlike CC BY, they are
-revocable and carry a use restriction about biometrics. The translation weights are Apache-2.0 and
+**Three model licences ship, not one** — five until 2026-08-27, when the only non-commercial one
+left with DiariZen in the morning and the NVIDIA Open Model License left with Sortformer that
+afternoon. **The transcription and speaker diarisation weights are both CC BY 4.0** and want a
+seven-element notice package each. Nothing in this product is revocable, and no licence here
+imposes a use restriction — the biometrics caution in `NOTICE.md` is now this project's own
+statement rather than a term of anyone's grant, kept because separating people by their voices is
+voice biometrics whichever model does it. The translation weights are Apache-2.0 and
 want a copy of the licence, a statement of what was changed, and the notices the source carried.
 The speech-detection weights are MIT and want the copyright line and the permission notice, which
 is the whole of it — the fourth licence, added with Silero VAD on 2026-08-23. Which entry has which
@@ -22,22 +24,23 @@ used to assert "any NC entry is unbundled" asserts the stronger thing: that the 
 entry's own section below is the record, and it keeps the NC history because a licence that was
 once carried is worth being able to find again.
 
-**One of the five is distributed rather than downloaded, which changes who owes the notice.**
+**One of the four is distributed rather than downloaded, which changes who owes the notice.**
 Since the installer began carrying weights on 2026-08-23 every channel ships the speech-detection
 graph, which is 2.2 MiB and would otherwise be a dead checkbox on a fresh install. Everything else
 is fetched by the user on request. A downloaded weight is the user's copy; a bundled one is this
 project redistributing someone else's model, so it is the **MIT** obligation — Silero's copyright
 line and permission notice — that attaches to the build. The other four attach to the download.
 
-**The diarisation weights stopped being bundled on 2026-08-26, and that lightened an obligation
-rather than only a package.** Until then the default channel carried Sortformer, so this project
-was redistributing NVIDIA Open Model License material and owed §3.1's verbatim notice and a copy of
-the Agreement *with every build*. Both still ship — the notice is rendered wherever the others are
-and `licences/NVIDIA-Open-Model-License-2025-10-24.txt` still travels — because a user who downloads
-those weights is owed them all the same, and because a revocable grant is one this project would
-rather over-notice than under-notice. What changed is that the obligation now follows the file to
-the person who fetched it. The reason for the change was not licensing: speaker labelling has two
-models and neither is better, so bundling one would have made it the answer on every fresh install
+**The diarisation weights stopped being bundled on 2026-08-26, and the obligation they carried ended
+outright on 2026-08-27.** Until the first date the default channel carried Sortformer, so this
+project was redistributing NVIDIA Open Model License material and owed §3.1's verbatim notice and a
+copy of the Agreement *with every build*; unbundling moved that obligation to the user who fetched
+the file, and the notice and Agreement kept shipping anyway, because a revocable grant is one this
+project would rather over-notice than under-notice. The next day those weights were retired
+altogether — `attic/sortformer/` — and **no model in this product is under that Agreement now**, so
+the copy that used to ship at `licences/` went with them. The reason for the original unbundling was
+not licensing: speaker labelling had two models and neither was better, so bundling one would have
+made it the answer on every fresh install
 by default rather than by choice. `docs/PHASES.md` § *Decided 2026-08-26* records it.
 
 **And since 2026-08-23 an installer that carries a Python has shipped, so this obligation is live
@@ -156,7 +159,17 @@ one would be a licence breach rather than a feature.
 sponsorship. The product is "Uindosill", it says it uses NVIDIA Parakeet weights under CC BY 4.0, and
 it does not use NVIDIA branding.
 
-## The diarisation weights are NOT CC BY 4.0 — they are the NVIDIA Open Model License
+## The diarisation weights were NOT CC BY 4.0 — retired 2026-08-27, and the reading is kept
+
+**Nothing in this product is under the NVIDIA Open Model License any more.** The Sortformer weights
+this section reads were shelved to `attic/sortformer/` on 2026-08-27, and the Agreement copy §3.1
+required went with them. The section stays because the reading took work and is the thing a future
+NVIDIA checkpoint would need — `OpenModelLicenceAttribution` is kept unused in the code for the same
+reason — and because two of its findings outlived the licence: the biometric caution, which is now
+carried on this project's own authority in `NOTICE.md`, and the revocability comparison, which is why
+CC BY 4.0 is the bar a replacement is held to. Read it in the past tense.
+
+### What was read
 
 Read in full at NVIDIA's own URL on 2026-08-19, version **dated 24 October 2025**, the same way the
 CUDA EULA below was read. `soniqo/Sortformer-Diarization-4spk-ONNX` and the
@@ -180,10 +193,12 @@ Open Model License""*.
   the renderer emits it on its own line without a prefix — every other field is labelled
   (`Source:`, `Provenance:`), and prefixing this one would stop it being the required string. A test
   asserts it appears character for character on a line of its own.
-- The Agreement is **a copy, not a link**. It ships at
-  `licences/NVIDIA-Open-Model-License-2025-10-24.txt`; `build/Licences.targets` copies the directory
-  into every build output; `scripts/package-windows.ps1` refuses to pack a publish without it; and a
-  test resolves the path the notice prints and reads the mandated sentence out of the file it names.
+- The Agreement was **a copy, not a link**. It shipped from `licences/`, `build/Licences.targets`
+  copied the directory into every build output, `scripts/package-windows.ps1` refused to pack a
+  publish without it, and a test resolved the path the notice printed and read the mandated sentence
+  out of the file it named. **All four went on 2026-08-27**, when the weights that owed the copy were
+  retired; the text is kept at `attic/sortformer/NVIDIA-Open-Model-License-2025-10-24.txt` and ships
+  nowhere.
   A notice pointing at a file that is not there is worse than no notice.
 
 **This project distributes the weights, as of 2026-08-23.** Until then it did not: the application
@@ -194,10 +209,13 @@ the installer removes the question rather than answering it** — §3.1's *"If y
 Model"* is now plainly triggered, and both of its conditions were already being met by machinery
 that exists:
 
-- The **copy of the Agreement** ships at `licences/NVIDIA-Open-Model-License-2025-10-24.txt`, in
-  every build output, and `scripts/package-windows.ps1` refuses to pack a publish without it.
-- The **verbatim attribution notice** is emitted by `OpenModelLicenceAttribution.RequiredNotice`,
+- The **copy of the Agreement** shipped from `licences/`, in every build output, and
+  `scripts/package-windows.ps1` refused to pack a publish without it.
+- The **verbatim attribution notice** was emitted by `OpenModelLicenceAttribution.RequiredNotice`,
   on its own line, asserted character for character by a test.
+
+Both were removed on 2026-08-27 with the weights that owed them. `OpenModelLicenceAttribution`
+remains in the code, constructed by nothing, for the reason given at the top of this section.
 
 So the posture that was adopted as insurance — *"the notice and the copy ship regardless"* — is what
 makes the bundling lawful without anything new being written. The pinned revision still decides
@@ -390,10 +408,11 @@ the open item it was.
 pinned commit for a NOTICE file and carries none, so there is nothing under that heading to
 reproduce; the MIT text is the whole of the obligation as far as it was read.
 
-## The second diariser is CC BY 4.0 (pyannote), and the non-commercial licence is gone — 2026-08-27
+## The diariser is CC BY 4.0 (pyannote), and it is now the only one — 2026-08-27
 
 `pyannote-speaker-diarization-community-1` replaced `diarizen-wavlm-large-s80-md-v2` as the
-speaker-labelling alternative beside Sortformer. **It is CC BY 4.0**: attribution, no use
+speaker-labelling alternative beside Sortformer in the morning, and became the whole of speaker
+labelling that afternoon when Sortformer was retired. **It is CC BY 4.0**: attribution, no use
 restriction, the same shape the transcription weights already ship under and the same
 `CcByAttribution` record renders. There is nothing in this section a commercial user must refuse.
 
@@ -408,7 +427,7 @@ total speaker cap — survived the move. `docs/UNPROVEN.md` carries what has and
 
 | Artefact | Licence | Where it is stated |
 |---|---|---|
-| `pyannote.audio` (the package, from PyPI) | MIT, *Copyright (c) 2020- CNRS* | the wheel's own `LICENSE` |
+| `pyannote.audio` (the package, from PyPI) | MIT, *Copyright (c) 2020 CNRS* | the wheel's own `LICENSE` |
 | **The `community-1` pipeline: both checkpoints, both PLDA files, `config.yaml`** | **CC BY 4.0** | the model card's frontmatter |
 
 **Two upstream behaviours are switched off, and both are licensing-adjacent enough to record here.**
@@ -452,9 +471,11 @@ distribution, and would hand every commercial recipient a file they may not use.
 copy was the user's and the obligation to stay non-commercial was theirs, so this project shipped
 nothing under NC terms even then; since 2026-08-27 it carries no NC entry to be careful about.
 `BundledModels` therefore does not list it — and **as of 2026-08-26 it lists no diariser at all**:
-Sortformer left the installer the same day, so a fresh install downloads whichever of the two the
-user picks. That makes the non-commercial rule easy to state and impossible to breach by accident:
-no build of this project carries speaker-labelling weights of any licence.
+Sortformer left the installer the same day and the catalogue the day after, so a fresh install
+downloads the one entry that remains. That makes the non-commercial rule easy to state and impossible
+to breach by accident: no build of this project carries speaker-labelling weights of any licence, and
+since 2026-08-27 there are no weights in this product under any licence but CC BY 4.0, Apache-2.0 and
+MIT.
 
 **Four upstream licences meet in one catalogue entry, and the entry owes all four.**
 
@@ -791,10 +812,14 @@ public repository under this project's MIT licence. Their two `PackageReference`
 `Microsoft.ML.OnnxRuntime` were the last ones in the tree until 2026-08-23, when
 `Parakeet.Engine.SileroVad` took a live one for the speech-detection graph — the section above.
 
-The weights sections above are untouched by the move, and that is the point worth stating. The same
-CC BY 4.0, NVIDIA Open Model License and Apache-2.0 material is used for the same purpose against
+The weights sections above were untouched by the move, and that is the point worth stating: the same
+CC BY 4.0, NVIDIA Open Model License and Apache-2.0 material was used for the same purpose against
 the same conditions. **What changed is which process loads it, not who the licensee is or what the
 licence asks for.**
+
+(The NVIDIA Open Model License material named there is the Sortformer diariser, retired on
+2026-08-27. Nothing in this product is under that Agreement now — see the section above — which does
+not affect the argument this paragraph makes about the move.)
 
 ## Display it in the application
 

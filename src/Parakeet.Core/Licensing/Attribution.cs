@@ -101,6 +101,15 @@ public sealed record CcByAttribution : IModelAttribution
 /// difference in shipping risk, recorded in <c>docs/LICENSING.md</c> rather than absorbed.
 /// </para>
 /// </remarks>
+/// <remarks>
+/// <b>Nothing constructs this since 2026-08-27.</b> The Streaming Sortformer diariser was the only
+/// model in this product under the NVIDIA Open Model License, and it is in <c>attic/sortformer/</c>;
+/// the Agreement copy that §3.1 required went with it, so no path here names a file that ships.
+/// Kept rather than deleted for the same reason as <see cref="CcByNcAttribution"/>: this is a
+/// reading of a licence family whose terms differ from CC BY in ways that took work to establish,
+/// and the next NVIDIA checkpoint anyone wants would need exactly it. <c>docs/LICENSING.md</c> holds
+/// the reading itself.
+/// </remarks>
 public sealed record OpenModelLicenceAttribution : IModelAttribution
 {
     public required string Title { get; init; }
@@ -244,9 +253,10 @@ public sealed record ApacheAttribution : IModelAttribution
 /// <para>
 /// <b>What it does not carry, and both absences are deliberate.</b> There is no agreement path:
 /// CC BY-NC 4.0 asks for a link to the licence, not a copy of it, exactly as CC BY does — the copy
-/// that <see cref="OpenModelLicenceAttribution"/> ships is that licence's own requirement and not a
-/// house style. And there is no revocation note: unlike the NVIDIA Open Model License, a Creative
-/// Commons grant is not revocable while its terms are met. <c>docs/LICENSING.md</c> records both
+/// that <see cref="OpenModelLicenceAttribution"/> shipped is that licence's own requirement and not
+/// a house style — and no model in this product carries it any more. And there is no revocation
+/// note: unlike the NVIDIA Open Model License, a Creative Commons grant is not revocable while its
+/// terms are met. <c>docs/LICENSING.md</c> records both
 /// comparisons rather than leaving them to be re-derived.
 /// </para>
 /// </remarks>
@@ -322,8 +332,6 @@ public static class Attributions
 {
     public const string ParakeetTdt06BV3 = "nvidia-parakeet-tdt-0.6b-v3";
 
-    public const string SortformerDiarisation4Spk = "nvidia-sortformer-diar-4spk-v2.1-onnx";
-
     public const string OpusMtBibleBigMulEn = "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx";
 
     /// <summary>
@@ -340,9 +348,6 @@ public static class Attributions
 
     /// <summary>Where the Apache License 2.0 copy lives, relative to the repository root.</summary>
     public const string ApacheLicencePath = "licences/Apache-License-2.0.txt";
-
-    /// <summary>Where the NVIDIA Open Model License copy lives, relative to the repository root.</summary>
-    public const string OpenModelLicencePath = "licences/NVIDIA-Open-Model-License-2025-10-24.txt";
 
     public const string SileroVad = "silero-vad";
 
@@ -390,30 +395,6 @@ public static class Attributions
             LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
         },
 
-        // The diarisation weights, and the first entry here that is not CC BY. The catalogue's own
-        // note about the deferred Nemotron entries said what had to happen first — "establish the
-        // licence, register the attribution, and move it into models" — and this is that, done for
-        // a different family: the Agreement was read in full at NVIDIA's URL on 2026-08-19 and
-        // permits redistribution outright, with the notice below and a copy of the text as its only
-        // conditions. See docs/LICENSING.md.
-        [SortformerDiarisation4Spk] = new OpenModelLicenceAttribution
-        {
-            Title = "Streaming Sortformer Diarizer 4spk v2.1 (speaker diarisation model weights)",
-            RequiredNotice = "Licensed by NVIDIA Corporation under the NVIDIA Open Model License",
-            AgreementVersion = "version dated 24 October 2025",
-            AgreementPath = OpenModelLicencePath,
-            AgreementUri = new Uri("https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"),
-            MaterialUri = new Uri("https://huggingface.co/soniqo/Sortformer-Diarization-4spk-ONNX"),
-            ProvenanceNotice =
-                "NVIDIA trained diar_streaming_sortformer_4spk-v2.1; a third party, soniqo, exported it "
-                + "to ONNX with no retraining and no change to weights, architecture or configuration, "
-                + "composing the pre-encoder and head into one graph traced at static shapes. That "
-                + "export is a Model Derivative under section 1 of the Agreement and is published under "
-                + "the same terms. Uindosill hosts neither file and installs soniqo's copy by URL.",
-            WarrantyDisclaimerNotice =
-                "NVIDIA provides the model on an \"AS IS\" basis, without warranties or conditions of any "
-                + "kind, express or implied (section 6 of the Agreement).",
-        },
 
         // The answering weights. Unlike the translation entry below, this project exports nothing
         // here: the modification §4(b) wants described is somebody else's, exactly as for the
@@ -454,11 +435,11 @@ public static class Attributions
 
         // The translation weights, and the first Apache-2.0 entry. Uindosill exports these itself —
         // the ONNX graphs are produced here from the upstream PyTorch checkpoint by
-        // scripts/export-translation-onnx.py — so the modification notice §4(b) wants is a
+        // scripts/export-translation-onnx.py â€” so the modification notice Â§4(b) wants is a
         // description of this project's own work rather than of somebody else's.
         [OpusMtBibleBigMulEn] = new ApacheAttribution
         {
-            Title = "OPUS-MT tc-bible-big mul→deu+eng+nld (machine translation model weights)",
+            Title = "OPUS-MT tc-bible-big mulâ†’deu+eng+nld (machine translation model weights)",
             Creator = "Helsinki-NLP, the Language Technology Research Group at the University of Helsinki",
             LicenceStatement = "Apache License, Version 2.0,",
             LicenceUri = new Uri("https://www.apache.org/licenses/LICENSE-2.0"),
@@ -468,11 +449,11 @@ public static class Attributions
                 "Modified: the original Marian checkpoint at revision bb1ef830d5 was exported to ONNX in the "
                 + "merged decoder layout by scripts/export-translation-onnx.py, which splits it into an encoder "
                 + "graph and a decoder graph with past key values exposed. The weights are unchanged and "
-                + "unquantised — float32 in, float32 out. Uindosill redistributes the exported graphs and does "
+                + "unquantised â€” float32 in, float32 out. Uindosill redistributes the exported graphs and does "
                 + "not redistribute the original checkpoint.",
             SourceNoticeFinding =
-                "The upstream repository was read at the pinned revision bb1ef830d5 on 2026-08-20 — its file "
-                + "listing and every text file in it. It ships no NOTICE file, so §4(d) has nothing to "
+                "The upstream repository was read at the pinned revision bb1ef830d5 on 2026-08-20 â€” its file "
+                + "listing and every text file in it. It ships no NOTICE file, so Â§4(d) has nothing to "
                 + "reproduce, and it carries no copyright, patent or trademark notice anywhere, so none is "
                 + "reproduced here rather than one being invented. The attribution notices it does carry are "
                 + "these:",
@@ -489,12 +470,12 @@ public static class Attributions
 
                 "The source asks to be cited: Tiedemann et al., \"Democratizing neural machine translation "
                 + "with OPUS-MT\" (Language Resources and Evaluation 58, 2023, doi:10.1007/s10579-023-09704-w); "
-                + "Tiedemann and Thottingal, \"OPUS-MT – Building open translation services for the World\" "
-                + "(EAMT 2020); and Tiedemann, \"The Tatoeba Translation Challenge – Realistic Data Sets for "
+                + "Tiedemann and Thottingal, \"OPUS-MT â€“ Building open translation services for the World\" "
+                + "(EAMT 2020); and Tiedemann, \"The Tatoeba Translation Challenge â€“ Realistic Data Sets for "
                 + "Low Resource and Multilingual MT\" (WMT 2020).",
 
                 "Acknowledgements, in the source's own words: \"The work is supported by the HPLT project, "
-                + "funded by the European Union’s Horizon Europe research and innovation programme under "
+                + "funded by the European Unionâ€™s Horizon Europe research and innovation programme under "
                 + "grant agreement No 101070350. We are also grateful for the generous computational resources "
                 + "and IT infrastructure provided by CSC -- IT Center for Science, Finland, and the EuroHPC "
                 + "supercomputer LUMI.\"",
@@ -504,7 +485,7 @@ public static class Attributions
                 + "either express or implied (section 7 of the License).",
         },
 
-        // The speech-detection graph, and the first MIT entry — the fourth licence shape here. MIT
+        // The speech-detection graph, and the first MIT entry â€” the fourth licence shape here. MIT
         // asks for the copyright line and the permission text to travel with the material, so the
         // LICENSE file ships at SileroVadLicencePath and this names it. The graph is installed by URL
         // from the upstream repository at a pinned commit and is not modified; the one thing this
@@ -572,9 +553,11 @@ public static class Attributions
         "CC BY 4.0 §2(b) withholds patent and trademark rights: nothing in this product may imply NVIDIA " +
         "endorsement or sponsorship.",
         "Apache-2.0 §3 grants a patent licence with the translation weights and terminates it for anyone " +
-        "who files patent litigation alleging the model infringes. CC BY 4.0, which the transcription " +
-        "weights ship under, licenses no patent rights at all (§2(b)(1)), so the three licences in this " +
-        "product make three different patent bargains and none of them is the other's.",
+        "who files patent litigation alleging the model infringes. CC BY 4.0, which the transcription and " +
+        "diarisation weights ship under, licenses no patent rights at all (§2(b)(1)), so the licences in " +
+        "this product make different patent bargains and none of them is the other's. **A third bargain " +
+        "left on 2026-08-27**: the NVIDIA Open Model License terminated automatically on filing patent or " +
+        "copyright litigation over the model, and the weights it covered are retired.",
 
         "The translation checkpoint's own card disclaims its coverage list — \"for a large number of " +
         "language pairs it will not work at all\" — so the language tags on that entry are list " +
@@ -586,20 +569,23 @@ public static class Attributions
         "Arabic, Hindi or Thai, and the product must not offer them.",
 
         // The one restriction that is about what the diariser does rather than about paperwork.
-        // NVIDIA Open Model License §2.3 incorporates the Trustworthy AI terms by reference, and
-        // their clause (b) names biometric processing specifically — which is what telling voices
-        // apart is, under several jurisdictions' definitions. It is listed with the others rather
-        // than left in the Agreement because this list is what the CLI and the About window render.
-        "NVIDIA Open Model License §2.3 requires use consistent with NVIDIA's Trustworthy AI terms, which " +
-        "forbid use in violation of applicable law — naming illegal surveillance and the illegal collection " +
-        "or processing of biometric information without the subject's consent where consent is required. " +
-        "Speaker diarisation is voice biometrics: recording and separating people's voices may need their " +
-        "consent, and that is the user's responsibility on their own material.",
-
-        "NVIDIA Open Model License §2.1 makes the diarisation grant revocable and lets NVIDIA update the " +
-        "Agreement for legal or regulatory reasons, and terminates it automatically on filing patent or " +
-        "copyright litigation over the model. CC BY 4.0, which the transcription weights ship under, is " +
-        "irrevocable; the two are not interchangeable and the difference is a shipping risk, not a detail.",
+        //
+        // **This was the NVIDIA Open Model License's §2.3 until 2026-08-27, and it is now this
+        // project's own statement.** That Agreement incorporated NVIDIA's Trustworthy AI terms by
+        // reference, and their clause (b) named biometric processing specifically. The weights it
+        // governed are in `attic/sortformer/` and the licence went with them — but the fact it was
+        // pointing at did not: telling voices apart is voice biometrics under several
+        // jurisdictions' definitions whichever model does it, and `community-1`'s CC BY 4.0 simply
+        // does not raise the subject. Dropping the sentence because the licence that mandated it
+        // left would have removed a real consent warning on the grounds of a paperwork change.
+        //
+        // It is phrased as a caution rather than as a licence term, because that is what it now is.
+        "Speaker diarisation is voice biometrics: it works by telling people's voices apart, which several " +
+        "jurisdictions treat as processing biometric information and which may require the consent of the " +
+        "people recorded. No licence in this product imposes that — it is the law of the place the recording " +
+        "was made, and it is the user's responsibility on their own material. Said here because this list is " +
+        "what the CLI and the About window render, and because it was carried as a licence term until the " +
+        "weights that carried it were retired.",
     ];
 
     /// <summary>Third-party code licences, shown in the same place as the model notice.</summary>
