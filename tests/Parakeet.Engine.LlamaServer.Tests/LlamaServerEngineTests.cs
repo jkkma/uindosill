@@ -1044,8 +1044,16 @@ public class DraftModelLocatorTests
     public void HeadsAreRecognisedByNameSoThePickerCanLeaveThemOut()
     {
         Assert.True(DraftModelLocator.IsDraftHead(Head));
-        Assert.True(DraftModelLocator.IsDraftHead(@"C:\models\" + Head));
         Assert.False(DraftModelLocator.IsDraftHead(Model));
+
+        // **Combined rather than spelled with a separator.** The claim is "a head is still a head
+        // with a directory in front of it", not "a backslash separates directories". `IsHead` asks
+        // `Path.GetFileName`, which on Linux does not treat a backslash as one — so the hardcoded
+        // Windows path that stood here made the whole string the file name, and the prefix check
+        // failed on the runner while passing on the only platform this ships to.
+        Assert.True(DraftModelLocator.IsDraftHead(Path.Combine("models", Head)));
+        Assert.True(DraftModelLocator.IsDraftHead(
+            Path.Combine(Path.GetTempPath(), "models", Head)));
 
         // "mtp-.gguf" names no family at all, so it is not a head anyone can pair.
         Assert.False(DraftModelLocator.IsDraftHead("mtp-.gguf"));
