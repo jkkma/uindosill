@@ -14,8 +14,8 @@ public enum RoutingBasis
     /// <summary>The question names something the index can find.</summary>
     Findable = 2,
 
-    /// <summary>Global by kind, answered from retrieval because reading it all was too expensive
-    /// to start without being asked.</summary>
+    /// <summary>Global by kind, answered from an even sample of the recording because reading it
+    /// all was too expensive to start without being asked.</summary>
     GlobalButTooLong = 3,
 }
 
@@ -124,14 +124,21 @@ public static class QuestionRouter
         {
             return new RoutingDecision
             {
-                Mode = AnswerMode.Retrieval,
+                // A survey since 2026-08-27, and retrieval before it. The asker wanted the whole
+                // recording; the honest thing to hand them when all of it will not fit is a
+                // thinner pass over all of it, not a thorough pass over the eight windows a
+                // scorer liked — and a global question is the case where the scorer has least to
+                // go on. Reading every minute stays available and stays a decision, because it
+                // was measured at 1,112.6 s of prefill on the second machine.
+                Mode = AnswerMode.Survey,
                 Basis = RoutingBasis.GlobalButTooLong,
 
                 // The one case worth a sentence: the asker wanted the whole recording, did not
-                // get it, and would otherwise read a thin answer as the recording's own thinness.
-                Notice = "This looks like a question about the whole recording, but this one is "
-                    + "long, so the answer below comes from the parts that matched. For a pass "
-                    + "over all of it, switch answering to \"the whole transcript\" in Settings.",
+                // get all of it, and would otherwise read a sampled answer as a complete one.
+                Notice = "This recording is long, so the answer below comes from an even sample "
+                    + "across all of it rather than every minute — it may miss things said in "
+                    + "between. For a pass over every word, switch answering to \"the whole "
+                    + "transcript\" in Settings.",
             };
         }
 

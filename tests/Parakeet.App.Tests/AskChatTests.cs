@@ -562,20 +562,33 @@ public class AskChatTests
         var (chat, provider, _) = Chat(job);
         await AskAsync(chat, "give me a summary");
 
-        // No model was loaded and nothing was read: the words of a summary request match nothing
-        // in a transcript, so the fallback tier came up empty too.
-        Assert.Equal(0, provider.Created);
+        // **This is the hole the survey tier filled on 2026-08-27.** Until then the assertion
+        // here was `Assert.Equal(0, provider.Created)` and a failure sentence: a summary request's
+        // words match nothing in an index, so the retrieval fallback came up empty and a reader
+        // asking the most obvious question about a long recording got no answer at all. The
+        // recording is now sampled end to end instead, so there is always evidence and always an
+        // answer.
+        Assert.Equal(1, provider.Created);
+        Assert.Equal(AnswerMode.Survey, provider.LastCreated!.LastRequest!.Mode);
 
         var entry = Assert.Single(chat.Entries);
-        Assert.NotNull(entry.RoutingNotice);
-        Assert.Contains("whole recording", entry.RoutingNotice, StringComparison.Ordinal);
-
-        // And it must not claim the recording has no answer. That is a statement about the
-        // recording; the truth here is a statement about the tier, and only one of the two is
-        // something the panel actually knows.
+        Assert.Null(entry.Failure);
         Assert.False(entry.Abstained);
-        Assert.NotNull(entry.Failure);
-        Assert.Contains("whole transcript", entry.Failure, StringComparison.Ordinal);
+
+        // The evidence is a sample of the whole, which means it reaches both ends of the
+        // recording — an answer built from the opening minutes is the failure the whole-recording
+        // instruction exists to steer away from, and a survey that only sampled the start would
+        // reintroduce it while looking like a fix.
+        var evidence = provider.LastCreated!.LastRequest!.Evidence;
+        Assert.True(evidence.Count > 1, "a survey of a long recording is more than one window");
+        Assert.Equal(1, evidence[0].FirstSegment);
+        Assert.Equal(120, evidence[^1].LastSegment);
+
+        // And the reader is told both halves: that it covers all of it, and that it does not
+        // cover every minute. Saying only the first would read as completeness.
+        Assert.NotNull(entry.RoutingNotice);
+        Assert.Contains("even sample", entry.RoutingNotice, StringComparison.Ordinal);
+        Assert.Contains("miss things", entry.RoutingNotice, StringComparison.Ordinal);
 
         // Asking for it explicitly still reads the whole thing — the ceiling is on the
         // automatic path, never on the person.

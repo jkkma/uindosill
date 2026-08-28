@@ -44,7 +44,11 @@ public static class AnswerPromptBuilder
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var whole = request.Mode == AnswerMode.WholeTranscript;
+        // A survey is the whole-recording job done on a sample: everything below that is
+        // about coverage and grouping applies to it unchanged, and the one thing that must
+        // not is the sentence claiming the transcript is complete.
+        var sampled = request.Mode == AnswerMode.Survey;
+        var whole = request.Mode == AnswerMode.WholeTranscript || sampled;
         var builder = new StringBuilder();
 
         if (whole)
@@ -55,8 +59,24 @@ public static class AnswerPromptBuilder
             // summary is graded on and a pointed answer never needs. The failure this steers
             // away from is the one the register predicted for the global path: an answer drawn
             // from the opening minutes that reads exactly like an answer drawn from all of them.
-            builder.Append("You are describing a recording. Below is its complete transcript, ");
-            builder.Append("cut into numbered parts in the order they were spoken.\n");
+            if (sampled)
+            {
+                // The gaps are stated, and stated first. A sample presented as a transcript
+                // is the failure that matters here: the model would otherwise narrate a
+                // three-hour recording as though it had read every minute, and every word of
+                // that would carry a real citation, which is what would make it convincing.
+                builder.Append("You are describing a recording. Below is an even sample ");
+                builder.Append("taken across the whole of it — numbered parts in the order ");
+                builder.Append("they were spoken, with gaps between them you cannot see. ");
+                builder.Append("Describe what the sample shows, and do not claim to have ");
+                builder.Append("read every minute.\n");
+            }
+            else
+            {
+                builder.Append("You are describing a recording. Below is its complete ");
+                builder.Append("transcript, cut into numbered parts in the order they were ");
+                builder.Append("spoken.\n");
+            }
         }
         else
         {
@@ -150,7 +170,9 @@ public static class AnswerPromptBuilder
         var instruction = builder.ToString();
 
         builder.Clear();
-        builder.Append(whole ? "Transcript:\n" : "Evidence:\n");
+        builder.Append(whole
+            ? (sampled ? "Transcript sample:\n" : "Transcript:\n")
+            : "Evidence:\n");
         foreach (var window in request.Evidence)
         {
             builder.Append('[').Append(window.CitationId).Append("] ").Append(window.Text).Append('\n');

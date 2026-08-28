@@ -131,13 +131,23 @@ public class QuestionRouterTests
         // obviously thin, a wrong whole-recording pass costs a prefill measured in minutes. So
         // the automatic path refuses to start one, and says so rather than answering thinly in
         // silence — otherwise the answer reads as the recording being thin.
+        //
+        // **What it answers instead changed on 2026-08-27**: a survey, an even sample of all of
+        // it, rather than the eight windows that best matched. A global question is precisely the
+        // case where the scorer has least to rank on, so the old fallback answered thoroughly
+        // from a part the question never asked about. Reading every minute is still a decision
+        // and still costs the measured prefill; this is the tier between.
         var decision = QuestionRouter.Route(
             "give me a summary", Index(), wholeTranscriptIsAffordable: false);
 
-        Assert.Equal(AnswerMode.Retrieval, decision.Mode);
+        Assert.Equal(AnswerMode.Survey, decision.Mode);
         Assert.Equal(RoutingBasis.GlobalButTooLong, decision.Basis);
         Assert.NotNull(decision.Notice);
-        Assert.Contains("whole recording", decision.Notice, StringComparison.Ordinal);
+
+        // The reader is owed both halves: that it covers all of the recording, and that it does
+        // not cover every minute of it. A notice with only the first reads as completeness.
+        Assert.Contains("even sample", decision.Notice, StringComparison.Ordinal);
+        Assert.Contains("miss things", decision.Notice, StringComparison.Ordinal);
 
         // A pointed question is unaffected by the ceiling — retrieval was where it was going.
         var pointed = QuestionRouter.Route(

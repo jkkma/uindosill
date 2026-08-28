@@ -13,6 +13,19 @@ public enum AnswerMode
 
     /// <summary>Windowed map steps merged by a reduce, ids carried through.</summary>
     MapReduce = 2,
+
+    /// <summary>
+    /// An even sample of the recording end to end, as much of it as the context allows — the
+    /// answer to a question about the whole recording when reading all of it will not fit.
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-08-27. Before it, a global question about a long recording was answered from
+    /// the eight best-matching windows, which for "summarise this" is eight windows chosen by a
+    /// scorer with nothing to rank on; the alternative was a prefill measured at 1,112.6 s.
+    /// Every window here is real and citable exactly as in <see cref="Retrieval"/> — the sample
+    /// is of the whole rather than all of a part, and the prompt says so.
+    /// </remarks>
+    Survey = 3,
 }
 
 /// <summary>One claim: its text, an optional label and verbatim quote, and the citations behind it.</summary>

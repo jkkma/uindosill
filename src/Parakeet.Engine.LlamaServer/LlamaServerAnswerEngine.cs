@@ -128,7 +128,8 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         // misrepresents the claim or picks a line so generic it verifies against anything, and
         // the check that passes then has checked nothing. Citation trust in this mode is
         // resolve-only: the id still names a real span the reader can click and hear.
-        var requireQuote = _options.RequireQuote && request.Mode != AnswerMode.WholeTranscript;
+        var requireQuote = _options.RequireQuote
+            && request.Mode is not (AnswerMode.WholeTranscript or AnswerMode.Survey);
 
         // Both modes open with a sentence answering the question — see AnswerPromptBuilder for
         // why retrieval gained one on 2026-08-25 — so the grammar admits one in both, since
@@ -383,13 +384,33 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             writer.WriteEndArray();
             writer.WriteNumber("max_tokens", maxTokens);
 
-            // Greedy decoding, pinned. Every measured figure and every clean answer in the
-            // record was taken at temperature 0; unpinned, the server's own default (~0.8)
-            // applies, and under the grammar's any-character text production a hot sampler
-            // wanders into charset-legal noise — observed in the app on 2026-08-25, repetition
-            // loops and foreign-script tokens inside English bullets, every one caught by the
-            // quote check. Citing a transcript is extraction, not creation; greedy is the mode
-            // the task wants and the only one the lab has measured.
+            // **Greedy, in both modes — and the reason is now measured rather than argued.**
+            //
+            // Retrieval is extraction: a bullet's «…» has to be a literal substring of the cited
+            // span, so diversity can only cost accuracy where the wanted output is a copy of the
+            // source. Greedy is also reproducible, which is worth something in a product whose
+            // promise is a checkable citation — measured 2026-08-27, two runs of thirteen
+            // questions produced identical verified-quote and citation counts, and `top_k=1` at
+            // temperature 0 produced byte-identical output to sending nothing at all, which is
+            // the proof this is already argmax.
+            //
+            // **The whole-transcript mode was given the publisher's own sampling on 2026-08-27
+            // and had it taken away again the same day, by the measurement that was supposed to
+            // justify it.** The reason for the split was the record's "a 'give me a summary' ask
+            // produced bullets of pure loop" (2026-08-25) — greedy trapped in a repetition
+            // attractor. That does not reproduce on the path that ships: over four global
+            // questions on a real transcript the greedy answers repeated **no 8-gram at all** and
+            // cited across 97% of the recording, and three seeds of temperature 1.0 / top-p 0.95
+            // / top-k 64 matched it exactly — 0.0% repetition, 97–100% coverage, every citation
+            // resolving, every wall time inside the run-to-run noise. The loop the record
+            // describes was seen under the grammar, which has been off by default since the day
+            // it was written.
+            //
+            // So the split bought nothing measurable and cost determinism, and a behaviour change
+            // needs evidence rather than an absent hazard. **What this does not establish** is
+            // that sampling makes summaries no *better*: repetition and coverage are mechanical,
+            // and how well a summary reads is not scored here or anywhere in this project.
+            // docs/UNPROVEN.md carries that as the open item.
             writer.WriteNumber("temperature", 0);
             writer.WriteBoolean("stream", true);
             writer.WriteBoolean("cache_prompt", true);

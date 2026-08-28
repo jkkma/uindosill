@@ -76,6 +76,12 @@ public class LlamaServerArgumentTests
         // --fit on trims layers and context to what fits, so a model that does not fit still
         // runs, silently degraded — the register calls it a way to be fooled, and it is off.
         Assert.Equal("off", arguments[arguments.IndexOf("--fit") + 1]);
+
+        // The prefill batch, which is not a detail: prefill is about 60% of an answer's wall on
+        // the second machine, and the physical batch at 1,024 was measured worth more than
+        // cutting the evidence from eight windows to six.
+        Assert.Equal("4096", arguments[arguments.IndexOf("-b") + 1]);
+        Assert.Equal("2048", arguments[arguments.IndexOf("-ub") + 1]);
     }
 
     [Fact]
@@ -85,6 +91,27 @@ public class LlamaServerArgumentTests
 
         var chosen = Arguments(Options() with { FlashAttention = "off" }, 1, "k");
         Assert.Equal("off", chosen[chosen.IndexOf("-fa") + 1]);
+    }
+
+    [Fact]
+    public void ADraftingHeadBringsItsSpecTypeAndFollowsTheModelOntoTheDevice()
+    {
+        // No head, no drafting, and no --spec-type either: naming a draft model without it is
+        // the one combination that loads a second model and drafts nothing, because the
+        // server's own default for --spec-type is `none`.
+        var plain = Arguments(Options(), 1, "k");
+        Assert.DoesNotContain("--spec-type", plain);
+        Assert.DoesNotContain("-md", plain);
+
+        var drafted = Arguments(
+            Options() with { DraftModelPath = "/models/mtp-some-model.gguf", GpuLayers = 24 }, 1, "k");
+
+        Assert.Equal("draft-mtp", drafted[drafted.IndexOf("--spec-type") + 1]);
+        Assert.Equal("/models/mtp-some-model.gguf", drafted[drafted.IndexOf("-md") + 1]);
+
+        // The head goes wherever the model went — a draft on the CPU while the target decodes on
+        // the device pays a transfer per drafted token, which is the cost being avoided.
+        Assert.Equal("24", drafted[drafted.IndexOf("-ngld") + 1]);
     }
 
     [Fact]
@@ -670,6 +697,30 @@ public class RequestBodyTests
 
         Assert.False(json.RootElement.TryGetProperty("grammar", out _));
     }
+
+    [Fact]
+    public void DecodingIsGreedyAndSendsNoOtherSamplingField()
+    {
+        // One sampler for both modes. The mode-dependent version lived for part of one day on
+        // 2026-08-27 and was removed by the measurement meant to justify it: greedy repeated no
+        // 8-gram across four whole-transcript summaries and covered 97% of the recording, and
+        // three seeds of the publisher's own temperature 1.0 / top-p 0.95 / top-k 64 matched it
+        // on repetition, on coverage and on wall time. The "bullets of pure loop" the record
+        // describes were seen under the grammar, which is off by default.
+        //
+        // Sending nothing but temperature 0 is also what makes an answer reproducible, which a
+        // product promising checkable citations should not give away for free: two runs of the
+        // same thirteen questions produced identical verified-quote and citation counts, and
+        // `top_k=1` at temperature 0 produced byte-identical output to sending nothing, which is
+        // the proof this is already argmax.
+        using var json = JsonDocument.Parse(LlamaServerAnswerEngine.BuildRequestBody("r", "e", null, 512));
+        var root = json.RootElement;
+
+        Assert.Equal(0, root.GetProperty("temperature").GetDouble());
+        Assert.False(root.TryGetProperty("top_p", out _));
+        Assert.False(root.TryGetProperty("top_k", out _));
+        Assert.False(root.TryGetProperty("min_p", out _));
+    }
 }
 
 public class QuantisationNameTests
@@ -937,5 +988,73 @@ public sealed class LlamaServerIntegrationTests
                 $"citation [{citation.Citation.Raw}] resolved to nothing usable, in:\n{text}");
             Assert.NotNull(citation.Start);
         }
+    }
+}
+
+public class DraftModelLocatorTests
+{
+    // The real pair, as the publisher ships them: the head names the family, the model adds a
+    // quantisation. Every other case in this class is a way that could go wrong.
+    private const string Model = "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf";
+    private const string Head = "mtp-gemma-4-26B-A4B-it.gguf";
+
+    [Fact]
+    public void TheHeadIsPairedWithEveryQuantisationOfItsOwnFamily()
+    {
+        foreach (var quantisation in new[]
+        {
+            "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+            "gemma-4-26B-A4B-it-UD-IQ2_M.gguf",
+            "gemma-4-26B-A4B-it-Q8_0.gguf",
+        })
+        {
+            Assert.Equal(Head, DraftModelLocator.Match(quantisation, [Head]));
+        }
+    }
+
+    [Fact]
+    public void AHeadForAnotherModelIsNotPairedAtAll()
+    {
+        // The failure this forbids is the expensive one: a mismatched draft is a child that
+        // loads two models and then refuses, so the panel stops answering rather than slows down.
+        Assert.Null(DraftModelLocator.Match(Model, ["mtp-Qwen3.5-9B.gguf"]));
+        Assert.Null(DraftModelLocator.Match(Model, ["mtp-gemma-4-31B-it.gguf"]));
+        Assert.Null(DraftModelLocator.Match(Model, []));
+    }
+
+    [Fact]
+    public void TheMostSpecificHeadWins()
+    {
+        // Two heads that both name a prefix of the model: the longer stem is the one that knows
+        // more about which file it belongs to.
+        var specific = "mtp-gemma-4-26B-A4B-it-UD.gguf";
+        Assert.Equal(specific, DraftModelLocator.Match(Model, [Head, specific]));
+        Assert.Equal(specific, DraftModelLocator.Match(Model, [specific, Head]));
+    }
+
+    [Fact]
+    public void AHeadIsNeverItsOwnTarget()
+    {
+        // Selecting the head in the picker is a mistake a person can make with a file dialog;
+        // pairing it with itself would turn an ordinary load failure into a confusing one.
+        Assert.Null(DraftModelLocator.Match(Head, [Head]));
+    }
+
+    [Fact]
+    public void HeadsAreRecognisedByNameSoThePickerCanLeaveThemOut()
+    {
+        Assert.True(DraftModelLocator.IsDraftHead(Head));
+        Assert.True(DraftModelLocator.IsDraftHead(@"C:\models\" + Head));
+        Assert.False(DraftModelLocator.IsDraftHead(Model));
+
+        // "mtp-.gguf" names no family at all, so it is not a head anyone can pair.
+        Assert.False(DraftModelLocator.IsDraftHead("mtp-.gguf"));
+    }
+
+    [Fact]
+    public void ADirectoryWithoutAHeadAnswersNullRatherThanThrowing()
+    {
+        // A missing head costs speed and nothing else, so every way of not finding one is null.
+        Assert.Null(DraftModelLocator.FindBeside(Path.Combine(Path.GetTempPath(), "no-such-dir-9f3a", Model)));
     }
 }
