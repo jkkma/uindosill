@@ -5093,11 +5093,12 @@ see: an answer built from four windows instead of eight does not become wrong, i
 and quote verification asks whether a quote is honest rather than whether the answer is complete.
 The setting ships defaulting to Thorough, which this now supports rather than merely justifies.
 
-**Every paraphrase failed at every depth, and one of them is a stemmer away from working.** The
-question *"picking up an unfamiliar game"* does not retrieve the span that says *"unfamiliarity is
-one problem, bad feel is a second problem"* — but the query `unfamiliarity bad feel learning`
-retrieves it at rank 1. The tokenizer does not stem, so `unfamiliar` and `unfamiliarity` are
-different terms. That is a cheaper repair than dense retrieval and it does not cover all four:
+**Every paraphrase failed at every depth, and one of them is a stemmer away from working.** A
+question asking about picking up an *unfamiliar* game does not retrieve the span it was labelled
+against, in which the speaker uses the word *unfamiliarity* — while a query carrying that longer
+form retrieves the same span at rank 1. The tokenizer does not stem, so `unfamiliar` and
+`unfamiliarity` are different terms. (The span itself is quoted only in the labelled set, which
+is why that set lives on the Drive.) That is a cheaper repair than dense retrieval and it does not cover all four:
 q17 asks about a *takeover* where the transcript says *sold*, *buyout* and *debt*, and no stemmer
 reaches that. The register's decision 3 named dense retrieval as the tier-1 answer for exactly
 these; this is the first measurement of how much it would be worth.
