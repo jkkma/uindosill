@@ -39,7 +39,6 @@ public sealed partial class AskChatViewModel : ObservableObject
 {
     /// <summary>Windows handed to the model per question: ~2k tokens of evidence at the
     /// default window length, well inside the engine's context.</summary>
-    private const int EvidenceCount = 8;
 
     private readonly IAnswerEngineProvider? _provider;
     private readonly ModelSession? _session;
@@ -125,6 +124,16 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// into the transcript that is no longer open, and a chip that seeks the wrong recording is
     /// worse than an empty panel.
     /// </summary>
+    /// <summary>
+    /// How much recording a survey may carry, in characters. Four characters per token is the
+    /// estimate <see cref="AnswerContextBudget"/> uses throughout, so the retrieval tier's 16,384
+    /// tokens is about 65,000 characters — and this takes half of it, leaving the instruction, the
+    /// question, the template's own tokens and the whole answer budget the other half. Sized down
+    /// rather than up on purpose: a survey that overflowed the context would be truncated
+    /// server-side in silence, which is the one failure the citation contract cannot survive.
+    /// </summary>
+    private const int SurveyBudgetChars = 32_000;
+
     public void SetRecording(JobViewModel? recording)
     {
         _recording = recording;
@@ -214,6 +223,7 @@ public sealed partial class AskChatViewModel : ObservableObject
             _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
 
             var whole = provider.ModePreference == AskModePreference.WholeTranscript;
+            var survey = false;
             RoutingDecision? routed = null;
             if (provider.ModePreference == AskModePreference.Automatic)
             {
@@ -225,16 +235,30 @@ public sealed partial class AskChatViewModel : ObservableObject
 
                 routed = QuestionRouter.Route(question, _retriever, affordable);
                 whole = routed.Mode == AnswerMode.WholeTranscript;
+
+                // The third tier, from 2026-08-27: the question asked about the whole recording
+                // and the whole recording will not fit, so it is answered from an even sample of
+                // all of it rather than from the parts a scorer liked — which, for a question
+                // with nothing to rank on, is the weakest thing retrieval does.
+                survey = routed.Mode == AnswerMode.Survey;
                 entry.RoutingNotice = routed.Notice;
             }
 
-            var mode = whole ? AnswerMode.WholeTranscript : AnswerMode.Retrieval;
+            var mode = whole ? AnswerMode.WholeTranscript
+                : survey ? AnswerMode.Survey
+                : AnswerMode.Retrieval;
 
             // The whole-transcript path's evidence is the recording tiled once, in the
             // non-overlapping shape, because retrieval's overlap would send the transcript twice.
+            // The budget is the retrieval tier's own context, which is what makes a survey
+            // affordable by construction: it never commits the reader to a longer prefill than
+            // the tier they were already on. The instruction and the question ride in the same
+            // context, so the allowance below leaves them room.
             var evidence = whole
                 ? _coverWindows
-                : [.. _retriever.Retrieve(question, EvidenceCount).Select(hit => hit.Window)];
+                : survey
+                    ? SurveyWindowSelector.Select(_coverWindows, SurveyBudgetChars)
+                    : [.. _retriever.Retrieve(question, _provider.EvidenceWindows).Select(hit => hit.Window)];
 
             if (evidence.Count == 0)
             {

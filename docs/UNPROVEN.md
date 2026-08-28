@@ -4832,6 +4832,276 @@ the re-prefill entirely — documented server behaviour, not yet watched on a re
 mode has never been driven end to end against a real model in the app; the suite drives it
 against the fake through the real panel, parser and validator.
 
+#### The Ask tab is three times faster, and only half of that is free — measured 2026-08-27
+
+The question was how fast the Ask tab can be made on the second machine, with the quantisation and
+the sampling as the dials. Neither dial turned out to be where the time was. Laptop (Ryzen AI 9 365
+/ Radeon 880M, 15.62 GiB of system memory), Vulkan, `llama-server` build **10603** — not the
+`b10448` this document quotes elsewhere — with `GGML_VK_DISABLE_BFLOAT16=1` and the expert-offload
+pair, `gemma-4-26B-A4B-it` at UD-IQ4_XS with the experts in system memory, 16,384-token context,
+`--reasoning off`, no grammar, temperature 0. Thirteen questions against the laptop's own CSB384
+transcript (1,378 segments, `runs/20260816-033132-vulkan/`), through the product's own path:
+`Bm25Retriever` at the panel's depth, `AnswerPromptBuilder`'s real prompt, `AnswerParser`,
+`CitationValidator`. Ten questions expect an answer; three name topics the episode never covers
+(Tokyo weather, Elden Ring scores, a Switch 2 price — zero case-insensitive hits each, and the last
+is adjacent to a topic the episode does discuss). `cache_prompt` is off in the harness so every ask
+pays its own prefill: the comparison is between configurations, not between cache states.
+
+**The noise floor was measured rather than assumed.** The shipped configuration was run twice, at
+the start and the end of the session: 42.3 s and 45.4 s median wall, 7.66 and 7.37 tok/s decode.
+So **wall differences under about 3 s are not results**. The two runs produced *identical* quality
+counts — 17 quotes verified, 3 failed, 11 absent, 52 of 52 citations resolving, both times — which
+is worth more than the timing: greedy decoding without drafting is deterministic here, so a
+changed quote count in any arm below is a real change in what the model wrote.
+
+| configuration | decode | prefill | median wall | TTFT | quote ok/fail/absent | citations | abstained |
+|---|---:|---:|---:|---:|---|---:|---:|
+| shipped | 7.66 | 90.6 | 42.3 s | 23.2 | 17 / 3 / 11 | 52 / 52 | 3 / 3 |
+| shipped, re-run | 7.37 | 87.6 | 45.4 s | 23.8 | 17 / 3 / 11 | 52 / 52 | 3 / 3 |
+| + MTP drafting | 10.11 | 92.5 | 37.8 s | 23.0 | 16 / 3 / 11 | 47 / 47 | 3 / 3 |
+| + KV at q8_0 | 9.96 | 89.5 | 39.8 s | 23.7 | 20 / 3 / 9 | 53 / 53 | 3 / 3 |
+| + `-ub 1024` | 10.46 | 111.9 | **28.0 s** | 18.7 | 14 / 4 / 9 | 44 / 44 | 3 / 3 |
+| + evidence at 4 | 10.96 | 102.3 | **14.7 s** | 11.8 | 15 / 3 / 6 | 47 / 47 | 3 / 3 |
+
+**Prefill is the bottleneck, not decode.** The shipped run generated 1,444 tokens across thirteen
+questions — answers average about 108 tokens — while each question prefills roughly 2,000 tokens of
+evidence. At 7.66 tok/s that is ~188 s of decode inside ~491 s of wall, so **about 60% of the time
+is spent before the first word appears**, which the ~23 s TTFT says directly. Every lever that only
+touches decode is therefore working on the smaller half, and that is why the quantisation ladder
+the session set out to walk is not where the win came from.
+
+**Speculative decoding works, but only from a trained head.** Draft acceptance predicts the
+outcome exactly: `ngram-mod` accepted 3.0% of its drafts and gave 7.78 tok/s, `ngram-simple` 11.5%
+and 7.32, `ngram-map-k` 15.3% and 7.87 — none of them distinguishable from the 7.66 of no drafting
+at all, and the first is slower. The publisher's multi-token-prediction head accepted **71.7%** and
+gave **10.11 tok/s, a 1.32x decode gain**. The reason the prompt-lookup variants fail is the shape
+of the work: an answer that cites a transcript is mostly the model's own prose around a short
+quote, so there is little verbatim span for a lookup to find. Unsloth claims 1.4–2.2x for the same
+head; 1.32x is what this machine gets, where decode is bounded by reading the experts out of system
+memory. The head costs about 0.5 GB resident and took free system RAM from ~1.4 to ~0.89 GiB with
+the 26B loaded — still the fastest arm measured, but that margin is what it spends.
+
+**`-ub 1024` is worth more than dropping the evidence from eight windows to six**, and unlike the
+evidence it costs nothing semantic: prefill rose from ~89 to 112 tok/s and the wall fell from 39.8
+to 28.0 s, against 31.7 s for six windows at the default batch. It is the physical batch the
+prefill is chunked into and changes no token the model sees.
+
+**Speculative decoding is not output-identical here, and the record should not claim it is.** Under
+greedy it ought to be — the draft is accepted only where it matches what the target would have
+sampled — but batched verification changes the order of floating-point reductions, and the quote
+counts move between drafting arms while the two undrafted runs agree exactly. The differences are
+small and no arm lost the contract; the guarantee is simply weaker than the theory.
+
+**Sampling is the wrong dial, measured rather than argued.** Google's standardized configuration
+for this family (temperature 1.0, top-p 0.95, top-k 64 — the model card's *Best Practices* and the
+Unsloth run guide, both read 2026-08-27) ran at 33.9 s against greedy's 37.8, and temperature 0.5
+at 39.1: the whole span sits inside the noise band above. `top_k=1` at temperature 0 produced
+**byte-identical quality counts** to sending no sampling fields at all, which is the empirical proof
+that temperature 0 was already short-circuiting to greedy and that there is no sampling overhead to
+recover on a 262K vocabulary. **What the record should not keep claiming is that a hot sampler
+breaks the answers here.** The 2026-08-25 observation that it "wanders into charset-legal noise"
+was made *under the grammar's any-character text production*, and the grammar has been off by
+default since that same day: at temperature 1.0 on the shipped path, 19 of 21 quotes verified
+against 16 of 19 for greedy, every citation resolved, and all three adversarial questions were
+abstained from. Greedy stays the default for reproducibility rather than for quality, and the
+quality claim behind the pin is now unsupported on the configuration that actually ships.
+
+**What none of this measures — and the gap matters most where the win is biggest.** Retrieval
+recall is not scored anywhere above. The evidence-depth result is the largest single lever in the
+table, and its risk is precisely the thing not measured: with four windows instead of eight the
+answer can simply not be in front of the model, and a question whose evidence ranks fifth is
+answered worse or not at all. Every question in this set had its answer in a high-ranking window,
+so the set cannot see that failure. Scoring it needs gold ranges, which needs
+`tests/fixtures/csb384/questions.json` to stop being `status: template` — and until it does,
+`scripts/measure-answers.ps1` refuses to score it, by design. That is why the depth shipped as a
+setting defaulting to the old behaviour rather than as a new default. Also unmeasured: whether the
+answers are *useful*, which no column here claims; the three-quantisation comparison the session
+opened with, which is a separate entry; and any of it on any machine but this one.
+
+**Two of the three catalogue digests are checked against bytes, and one is not.** The drafting
+head and UD-IQ4_XS were hashed on disk on 2026-08-27 and match their pins exactly; UD-Q4_K_XL's
+pin is upstream's LFS object id read from a live `HEAD` against the pinned revision, with the
+returned size matching — the same footing the gated pyannote entry stands on, and the method was
+validated by the two files that could be checked both ways. **Nothing has ever loaded
+UD-Q4_K_XL.** At 15.85 GiB it does not fit this machine, which is the entry's whole reason for
+carrying a fit warning; the desktop is where that becomes a measurement.
+
+#### The evidence-depth win survives a held-out transcript, and the thing it risks is still unmeasured — 2026-08-27
+
+The 2.55x above was measured over thirteen questions written *after* reading CSB384, which is a
+fitting risk worth naming: the questions were chosen knowing roughly what BM25 would surface, and
+every one of them had its answer in a high-ranking window. So a second transcript was transcribed
+here the same day — a 23-minute two-speaker discussion from YouTube, 72 segments and 4,910 words,
+at RTF 0.035 on Vulkan with the Silero detector — and fourteen questions were written straight
+through it in order, without running retrieval first and without checking where any answer ranked.
+Three of them name topics with zero occurrences in the transcript, one deliberately adjacent to
+what is discussed.
+
+| depth | median wall | bullets | quotes verified | citations | abstained |
+|---|---:|---:|---:|---:|---:|
+| k = 8 | 33.0 s | 36 | 24 | 52 / 52 | 3 / 3 |
+| k = 6 | 30.2 s | 41 | 24 | 62 / 62 | 3 / 3 |
+| k = 4 | **20.2 s** | 33 | 22 | 52 / 52 | 3 / 3 |
+
+**Citation honesty held on unseen content.** No invented segment id at any depth, no failed quote
+at k = 4, and all three unanswerable questions abstained from at all three depths. Whatever the
+CSB384 result was, it was not an artifact of questions fitted to that transcript.
+
+**The completeness cost is still not measured, and the bullet counts hint that it is real.** k = 4
+produced 33 bullets against 36 and 41. That is the shape a recall loss takes here: too little
+evidence does not produce a wrong answer, it produces a *thinner* one, and every metric in this
+table is blind to it — quote verification asks whether a quote is honest, never whether the answer
+is complete. A model handed less material writes less, and every word of it still verifies.
+
+**And this transcript cannot punish the cut the way the real workload would.** It yields 46
+windows, so k = 4 still sees 8.7% of it; CSB384's 349 windows put k = 4 at 1.1%. The held-out check
+is roughly eight times gentler than a three-hour episode, which is the length this feature is for.
+The setting therefore ships at Thorough and the faster depths remain offered rather than chosen —
+`docs/PHASES.md`'s entry for the day says the same.
+
+#### Greedy does not loop on summaries, and the publisher's sampling buys nothing there — measured 2026-08-27, and it removed a change made the same day
+
+The engine was given mode-dependent sampling that morning — greedy for retrieval, Google's
+standardized temperature 1.0 / top-p 0.95 / top-k 64 for the whole-transcript path — on the
+strength of this document's own 2026-08-25 note that "pinning temperature to 0 changed the noise's
+character, not its existence ... a 'give me a summary' ask produced bullets of pure loop". The
+measurement meant to justify that split is what withdrew it.
+
+Four global questions against a 10-minute recording (77 segments) in the real whole-transcript
+mode — the recording tiled once into non-overlapping cover windows, exactly as the panel passes it
+— on the 26B-A4B at UD-IQ4_XS with the drafting head. Greedy once, since it is deterministic, and
+the sampled configuration at three seeds, since one draw from a distribution decides nothing.
+Repetition is the share of an answer's 8-grams it has already used; coverage is the span its
+resolving citations reach across the recording.
+
+| | median wall | bullets | citations | repetition (mean / worst) | coverage |
+|---|---:|---:|---:|---|---:|
+| greedy | 54.9 s | 28 | 50 / 50 | **0.0% / 0.0%** | 97% |
+| temp 1.0, seed 1 | 56.1 s | 27 | 65 / 65 | 0.0% / 0.0% | 100% |
+| temp 1.0, seed 2 | 53.5 s | 26 | 61 / 61 | 0.0% / 0.0% | 100% |
+| temp 1.0, seed 3 | 52.1 s | 28 | 52 / 52 | 0.0% / 0.0% | 97% |
+
+**The loop does not reproduce.** Greedy repeated no 8-gram at all, across four different phrasings
+of "summarise this", and cited across 97% of the recording. The 2026-08-25 observation was made
+under the grammar's any-character text production, and the grammar has been off by default since
+that same day: the hazard left with it, and a note describing a configuration that no longer ships
+was doing duty as a reason.
+
+**And the sampled configuration wins nothing measurable** — three seeds matched greedy on
+repetition, on coverage, on citation resolution and on wall time. So the split cost determinism and
+bought nothing, and it was reverted the same day. Sampling is one pinned greedy again in both
+modes.
+
+**What this does not establish.** That sampling makes summaries no *better*: repetition and
+coverage are mechanical, and how well a summary reads — whether the grouping is sensible, whether
+the emphasis is right — is scored nowhere in this project. It is one 10-minute recording and four
+questions. And nothing here has run the whole-transcript path against a three-hour transcript at
+all: the router refuses to send one there automatically, because `AnswerContextBudget` makes a
+recording affordable only if it fits the retrieval tier's 16,384 tokens — about 39,000 characters,
+roughly 25 to 30 minutes of speech — so a long episode falls back to retrieval with a notice
+saying so. Summarising a three-hour recording end to end means setting the mode by hand and paying
+the prefill this document already records: 1,112.6 s for 52,944 tokens.
+
+**One harness defect is worth recording, because it produced a clean-looking result.** The first
+run of this comparison passed no evidence at all, on the assumption that the whole-transcript
+prompt reads `AskRequest.Transcript`. It does not — the recording arrives as cover windows in
+`Evidence`, which is what `AskChatViewModel` passes. The prompt was 303 tokens with no transcript
+in it, and the 26B correctly answered `NOT_IN_TRANSCRIPT` four times. A smoke test on a small model
+had passed the same broken harness minutes earlier, inventing four cited bullets from nothing. What
+caught it was reading `prompt_n` rather than the summary line — the same lesson as the two
+truncated GGUFs the same day, whose byte counts, not their exit code, said they were short.
+
+#### Summarising a three-hour recording, which the automatic path could not do at all — built and measured 2026-08-28
+
+**The feature did not work, and the test suite said so in an assertion nobody read as a defect.**
+`AskChatTests.ALongRecordingIsNotReadWholeAutomaticallyAndTheAnswerSaysSo` asserted
+`Assert.Equal(0, provider.Created)`: on a long recording, *"give me a summary"* loaded no model and
+produced no answer. The mechanism is in the router. A global question reaches the whole-transcript
+path only when the recording fits the retrieval tier's 16,384 tokens — about 39,000 characters,
+roughly 25 to 30 minutes of speech — and a three-hour episode is five times that, so it fell back
+to retrieval; and a summary request's words match nothing in an index, so retrieval returned
+nothing and the panel showed a failure sentence. Both halves were working as designed and the
+result was that the Ask tab's most obvious question about its most typical recording had no answer.
+
+**The third tier.** `AnswerMode.Survey`, from `SurveyWindowSelector`: the recording's
+non-overlapping cover windows, sampled evenly by position to fit a character budget, ends always
+included. Every window is real and citable exactly as in retrieval, so the citation contract is
+untouched; what changes is that the model sees a sample of the whole rather than all of a part.
+Selection is by position and never by score — a global question is precisely where a scorer has
+least to rank on, which is what the old fallback got wrong.
+
+**The prompt says it is a sample**, before anything else, and the panel's notice says it to the
+reader. A sample narrated as a transcript is the failure this project cares most about: the model
+would describe three hours as though it had read every minute, and every sentence of that would
+carry a real citation, which is what would make it convincing.
+
+Measured on the second machine against CSB384 (2:55:23, 1,378 segments, 175 cover windows), the
+26B-A4B at UD-IQ4_XS with its drafting head, four global questions:
+
+| | first question | later questions | median | citations | repetition | coverage |
+|---|---:|---|---:|---:|---:|---:|
+| survey, no prompt cache | 149.8 s | 138, 127, 123 s | 132.5 s | 109 / 109 | 0.0% | 98% |
+| survey, `cache_prompt` | 135.9 s | 49, 43, 37 s | **45.9 s** | 104 / 104 | 0.0% | 98% |
+| survey, `-ub 2048` too | **120.8 s** | 46, 38, 39 s | **42.6 s** | 104 / 104 | 0.0% | 99% |
+
+**The prompt cache is the largest single effect, and it is structural rather than lucky.** A
+survey's evidence is chosen by position, so it is identical for every question about one
+recording, and the prompt puts the evidence first with the question last. The second question's
+prefill was **14 tokens against the first's 8,642** — only the question itself was new — and the
+wall fell from 135.9 s to 49.0 s. Retrieval cannot do this: its evidence changes with every
+question, so its cache hit is the instruction and nothing else. `cache_prompt` has been on in the
+shipped engine since the path was written; every other figure in this document was measured with
+it off, deliberately, so that arms compared configurations rather than cache warmth — which means
+those figures are the pessimistic ones wherever a reader asks a second question.
+
+**The prefill batch had not plateaued.** `-ub 2048` took the cold first answer from 135.9 s to
+120.8 s while producing *more* output than the run it beat, and free system RAM after load was
+0.27 GiB against 0.24 GiB at 1,024 — the server's own footprint dominates and the batch is lost
+in it. Both are now the engine's defaults (`-b 4096 -ub 2048`).
+
+**What is not measured, and it is the half that matters most.** Whether these summaries are any
+*good*. Repetition and citation span are mechanical and they say only that the answer does not
+loop and does reach both ends of the recording; coverage of 98% means the cited spans stretch
+across the episode, not that the summary is a fair account of it. The labelled set's three global
+questions carry ranges an answer must touch and are judged by a person, which has not happened.
+Nor has anyone compared a survey against the whole-transcript pass it approximates on the same
+recording — the honest comparison for "how much does sampling cost", and one that needs the ~18.5
+minutes of prefill the full pass takes here.
+
+#### Retrieval recall, measured at last — 2026-08-28, and the faster evidence setting does cost something
+
+`tests/fixtures/csb384/questions.json` has been a template since it was written, and
+`scripts/measure-answers.ps1` refuses to score one, so every statement in this document about
+evidence depth has said the recall risk was unmeasured. A labelled set now exists — thirty
+questions in the composition the template names, against the pinned CSB384 transcript
+(1,378 segments, `63c99c67…`), each quote checked as a normalised substring of its own gold span
+before the file was written. **It lives on the Drive and not here**, as the template's own comment
+requires: thirty verbatim quotes from a podcast do not belong in a public repository.
+
+Scored through `uindosill retrieve` — the product's own windows, tokenizer and BM25 behind a verb
+— over the twenty-two questions that carry gold ranges and are answered from a span:
+
+| depth | recall | questions whose evidence was not retrieved |
+|---|---:|---|
+| k = 8 (as shipped) | **81.8%** | the four paraphrases |
+| k = 6 | 81.8% | the four paraphrases |
+| k = 4 (*Answer faster*) | **72.7%** | + q04 (rank 5), q09 (rank 6) |
+| k = 2 | 68.2% | + q07 (rank 3) |
+
+**The faster setting costs nine points of recall**, which is what the label-free checks could not
+see: an answer built from four windows instead of eight does not become wrong, it becomes thinner,
+and quote verification asks whether a quote is honest rather than whether the answer is complete.
+The setting ships defaulting to Thorough, which this now supports rather than merely justifies.
+
+**Every paraphrase failed at every depth, and one of them is a stemmer away from working.** The
+question *"picking up an unfamiliar game"* does not retrieve the span that says *"unfamiliarity is
+one problem, bad feel is a second problem"* — but the query `unfamiliarity bad feel learning`
+retrieves it at rank 1. The tokenizer does not stem, so `unfamiliar` and `unfamiliarity` are
+different terms. That is a cheaper repair than dense retrieval and it does not cover all four:
+q17 asks about a *takeover* where the transcript says *sold*, *buyout* and *debt*, and no stemmer
+reaches that. The register's decision 3 named dense retrieval as the tier-1 answer for exactly
+these; this is the first measurement of how much it would be worth.
+
 ### The confidence threshold is set by guess, and the first real data disagrees
 
 `TranscriptionOptions.LowConfidenceThreshold` defaults to 0.45. In the one real transcript, the
