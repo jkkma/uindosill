@@ -1813,6 +1813,14 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
 
+              <!-- The graphics option's one-time preparation speaks here: what it is doing while it
+                   runs, and what went wrong if it could not. Hidden the rest of the time rather
+                   than left as an empty line, because a permanently reserved gap under a setting
+                   reads as something missing. -->
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         IsVisible="{Binding HasSpeakerGraphsMessage}"
+                         Text="{Binding SpeakerGraphsMessage}" />
+
               <!-- The access token for the speaker model whose download is gated. Here rather than
                    on the Models tab because this is where the settings file is written, and beside
                    the other speaker settings because it belongs to one of those models.

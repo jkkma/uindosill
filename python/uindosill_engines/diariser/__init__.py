@@ -38,8 +38,9 @@ def resolve_auto() -> list[str]:
     `auto` is therefore the CPU by construction rather than by election.
 
     `cuda` remains reachable by name on a machine whose torch build has it — see
-    :meth:`PyannoteEngine._resolve_device`, which is also where `webgpu` and `dml` are refused
-    rather than quietly treated as the CPU.
+    :meth:`PyannoteEngine._resolve_device` — and `webgpu` and `dml` are reachable where the
+    exported graphs are installed, through :meth:`PyannoteEngine._install_onnx_route`. Neither is
+    elected by `auto`: the default stays the route upstream's own figures describe.
     """
     return ["cpu"]
 
@@ -75,10 +76,11 @@ class Diariser:
         that left, which is why the sidecar and the host once had to agree about which of two
         meanings the field carried; with one engine the meaning is fixed and the check can be flat.
 
-        **`provider` names a torch device, not an execution provider.** Both neural stages are
-        torch on the same device, so there is no half to negotiate separately: `auto` is the CPU,
-        `cuda` is reachable by name on a machine whose torch build has it, and `webgpu` and `dml`
-        are refused rather than quietly treated as the CPU.
+        **`provider` names a torch device or an ONNX Runtime execution provider.** `auto` is the
+        CPU and `cuda` is reachable by name on a machine whose torch build has it; `webgpu` and
+        `dml` move both neural stages onto the graphs exported by
+        `scripts/export-diariser-onnx.py`, and are refused — never quietly given the CPU — when
+        those are not installed.
 
         **`batch_size` of `None` means the model's own value**, which is its config's.
         """
@@ -130,8 +132,9 @@ class Diariser:
             "maxSpeakers": engine_module.MAX_SPEAKERS,
             "reliableUpToSeconds": engine_module.RELIABLE_UP_TO_SECONDS,
             "honoursPostProcessing": False,
-            # **Both stages, both torch, both on the device named here.** They agree by
-            # construction; an ONNX embedder is what would separate them again.
+            # **Both stages on the same runtime, so both names agree.** They are both torch on
+            # the named device, or both ONNX on the named provider; nothing splits them today,
+            # and the two fields exist so that a route which did would be visible.
             #
             # `embeddingBackend` is read by the host; **`segmentationBackend` is read by nothing**,
             # on either side, and is sent so that a capabilities dump says which runtime ran the

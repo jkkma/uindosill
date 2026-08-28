@@ -63,10 +63,13 @@ Written as contrasts because that is how the difference was found, and kept now 
 is with something shelved: each one is a property of this pipeline that a reader would otherwise
 have to infer from its absence.
 
-* **It is torch, and there is no ONNX half.** DiariZen's speaker embedder had an ONNX route with a
-  parity fixture; this pipeline's embedder is reached through pyannote's own model loader and no
-  such route has been built. The provider therefore names a torch device, not an execution
-  provider, and `auto` is the CPU.
+* **It is torch, and its ONNX half is derived rather than shipped.** DiariZen's speaker embedder
+  had an ONNX route with a parity fixture; this pipeline's two neural stages are reached through
+  pyannote's own model loader, and since 2026-08-28 `scripts/export-diariser-onnx.py` exports both
+  to graphs an execution provider can run (:meth:`PyannoteEngine._install_onnx_route`). The
+  provider therefore names a torch device *or* an ONNX one, `auto` is still the CPU, and the ONNX
+  names are refused when the graphs are absent — which is the default, since nothing installs
+  them.
 * **It is offline, not streaming.** It reads the whole file, embeds every chunk, then clusters
   globally — so there is no duration drift to bound, and equally it holds the whole embedding set
   in memory.
@@ -133,6 +136,30 @@ WEIGHT_FILES = (
 )
 
 REQUIRED_FILES = (CONFIG_FILE, *WEIGHT_FILES)
+
+#: Where `scripts/export-diariser-onnx.py` puts the derived graphs, relative to the model directory.
+#: A subdirectory of the pinned install rather than a directory of its own, so that deleting the
+#: model takes its derivatives with it and a stale graph cannot outlive the weights it came from.
+ONNX_SUBDIR = "onnx"
+
+#: The two graphs that subdirectory must hold for an ONNX provider to be selectable.
+ONNX_FILES = ("segmentation.onnx", "embedding.onnx")
+
+#: Execution providers reachable once the graphs exist. `cpu` and `cuda` are deliberately absent:
+#: they are torch devices here and keep the published path, and adding an ONNX spelling of the CPU
+#: would give two routes to one answer with no way to tell from a run which produced it.
+ONNX_PROVIDERS = {
+    "webgpu": ["WebGpuExecutionProvider", "CPUExecutionProvider"],
+    "dml": ["DmlExecutionProvider", "CPUExecutionProvider"],
+}
+
+#: DirectML fused the *previous* ONNX diariser into a single node at any optimisation level above
+#: none and computed a different function with it — AMI DER 53.1522% against the same build's CPU
+#: 16.3347%, measured 2026-08-21 and recorded in `docs/UNPROVEN.md`. That was a different graph, so
+#: it is not evidence about this one; it is evidence about the provider, which is why the same
+#: precaution is carried over rather than waiting to be re-earned. WebGPU showed no such defect and
+#: is left at ORT's default.
+ONNX_GRAPH_OPTIMISATION = {"dml": "ORT_DISABLE_ALL"}
 
 #: The environment variable upstream reads to decide whether to export a span. Named here rather
 #: than written inline at its one call site so that the grep for it lands on this comment.
@@ -289,27 +316,135 @@ class PyannoteEngine:
         self._profile = profile
         self._model_dir = model_dir
 
-        device = self._resolve_device(provider)
-        if device is not None:
-            self._pipeline.to(device)
-        self.device = str(device) if device is not None else "cpu"
+        # An ONNX provider is not a torch device, so the pipeline stays on the CPU either way: the
+        # featuriser, the powerset decoding, the PLDA and the VBx clustering are all torch or numpy
+        # and none of them moves. What moves is the two neural forwards, and only those.
+        if provider in ONNX_PROVIDERS:
+            self._pipeline.to(torch.device("cpu"))
+            self.device = "cpu"
+            self._install_onnx_route(provider, model_dir)
+            self.segmentation_backend = f"onnx:{provider}"
+            self.embedding_backend = f"onnx:{provider}"
+        else:
+            device = self._resolve_device(provider)
+            if device is not None:
+                self._pipeline.to(device)
+            self.device = str(device) if device is not None else "cpu"
 
-        # **One runtime, both stages**, which is the difference from the DiariZen arm worth stating:
-        # there the embedder could be moved to ONNX Runtime independently and the two backends were
-        # reported separately because only one of them was chosen. Here both stages are torch on the
-        # same device, so one name is the whole truth and the two fields agree by construction.
-        self.segmentation_backend = f"torch:{self.device}"
-        self.embedding_backend = f"torch:{self.device}"
+            # **One runtime, both stages** on the torch path: both neural stages are torch on the
+            # same device, so one name is the whole truth and the two fields agree by construction.
+            self.segmentation_backend = f"torch:{self.device}"
+            self.embedding_backend = f"torch:{self.device}"
+
+    def _install_onnx_route(self, provider: str, model_dir: str) -> None:
+        """Point the two neural stages at ONNX Runtime, leaving the pipeline otherwise untouched.
+
+        **Only `forward` is replaced, on the two modules that do the arithmetic.** Everything that
+        makes this pipeline what it is — `Inference`'s sliding window, the powerset decoding, the
+        PLDA, the VBx clustering — keeps running upstream's code over upstream's objects, because
+        the alternative is owning a reimplementation of a pipeline this project deliberately does
+        not own. `Inference.infer` calls `self.model(chunks)`, so an instance-level `forward`
+        intercepts it without subclassing anything.
+
+        The graphs are derived artefacts and are checked for by name: a provider that names one is
+        refused when it is missing rather than silently falling back to torch, which would report a
+        GPU run that never happened.
+        """
+        import numpy as np
+        import onnxruntime as ort
+        import torch
+
+        onnx_dir = os.path.join(model_dir, ONNX_SUBDIR)
+        missing = [name for name in ONNX_FILES if not os.path.isfile(os.path.join(onnx_dir, name))]
+        if missing:
+            raise RequestError(
+                "model",
+                f"'{provider}' needs the exported graphs and {onnx_dir} is missing "
+                f"{', '.join(missing)}. Run scripts/export-diariser-onnx.py against this model "
+                "directory first; the torch path (cpu) needs nothing.",
+            )
+
+        available = ort.get_available_providers()
+        wanted = ONNX_PROVIDERS[provider]
+        if wanted[0] not in available:
+            raise RequestError(
+                "request",
+                f"this ONNX Runtime build has no {wanted[0]}; it offers {', '.join(available)}.",
+            )
+
+        options = ort.SessionOptions()
+        if provider in ONNX_GRAPH_OPTIMISATION:
+            options.graph_optimization_level = getattr(
+                ort.GraphOptimizationLevel, ONNX_GRAPH_OPTIMISATION[provider]
+            )
+
+        segmentation_session = ort.InferenceSession(
+            os.path.join(onnx_dir, ONNX_FILES[0]), options, providers=wanted
+        )
+        embedding_session = ort.InferenceSession(
+            os.path.join(onnx_dir, ONNX_FILES[1]), options, providers=wanted
+        )
+
+        # **Refused rather than reported** when ORT declines the provider and seats the session on
+        # the CPU fallback instead: a run that says webgpu and computed on the CPU is a measurement
+        # nobody can interpret, and this is the only place the difference is still visible.
+        for stage, session in (("segmentation", segmentation_session), ("embedding", embedding_session)):
+            seated = session.get_providers()
+            if seated and seated[0] != wanted[0]:
+                raise RequestError(
+                    "model",
+                    f"ONNX Runtime placed the {stage} graph on {seated[0]} rather than "
+                    f"{wanted[0]}, so this run would not be on the device it names.",
+                )
+
+        segmentation_model = self._pipeline._segmentation.model
+        embedding_wrapper = self._pipeline._embedding
+        inner = embedding_wrapper.model_
+
+        # Forced before the swap: `min_num_samples` binary-searches the shortest waveform the model
+        # accepts by *calling it and catching failures*, and letting that run against ORT would both
+        # probe the wrong implementation and answer with a different number. Touching the
+        # cached_property here pins upstream's own value.
+        _ = embedding_wrapper.min_num_samples
+
+        compute_fbank = inner.compute_fbank
+
+        def segmentation_forward(waveforms: "torch.Tensor") -> "torch.Tensor":
+            scores = segmentation_session.run(
+                None, {"waveforms": waveforms.detach().cpu().numpy().astype(np.float32)}
+            )[0]
+            return torch.from_numpy(scores)
+
+        def embedding_forward(waveforms: "torch.Tensor", weights=None) -> "torch.Tensor":
+            # fbank stays in torch: `compute_fbank` is a `torch.vmap` over an FFT and has no ONNX
+            # lowering, which is also why wespeaker's own ONNX inference computes it outside the
+            # graph. The graph starts where the arithmetic is.
+            fbank = compute_fbank(waveforms)
+            if weights is None:
+                weights = torch.ones(fbank.shape[0], fbank.shape[1], dtype=fbank.dtype)
+            embeddings = embedding_session.run(
+                None,
+                {
+                    "fbank": fbank.detach().cpu().numpy().astype(np.float32),
+                    "weights": weights.detach().cpu().numpy().astype(np.float32),
+                },
+            )[0]
+            return torch.from_numpy(embeddings)
+
+        segmentation_model.forward = segmentation_forward
+        inner.forward = embedding_forward
+
+        self._onnx_sessions = (segmentation_session, embedding_session)
 
     @staticmethod
     def _resolve_device(provider: str) -> Any:
         """Map the host's provider name onto a torch device, refusing the ones that mean nothing here.
 
-        **The vocabulary is the host's and it is wider than this engine's**, because it was written
-        for an ONNX arm: `webgpu` and `dml` are execution providers, not torch devices, and there is
-        no ONNX route in this pipeline for them to name. Refused outright rather than silently
-        treated as the CPU — somebody who typed `webgpu` and got the CPU has been told nothing, which
-        is the same rule both older arms enforce.
+        **Only the torch names reach here.** `webgpu` and `dml` are execution providers rather than
+        torch devices, and they are handled before this is called — see
+        :meth:`PyannoteEngine._install_onnx_route`, which loads the exported graphs or refuses when
+        they are absent. Reaching this with one of them means the caller bypassed that branch, so
+        the message below names both vocabularies rather than denying one exists.
         """
         import torch
 
@@ -327,8 +462,8 @@ class PyannoteEngine:
 
         raise RequestError(
             "request",
-            f"'{provider}' does not name anything this diariser can run on. It is a torch pipeline "
-            "with no ONNX route, so webgpu and dml have nothing to select here. Choose cpu or cuda.",
+            f"'{provider}' does not name anything this diariser can run on. Choose cpu or cuda for "
+            "the torch pipeline, or webgpu or dml where the exported graphs are installed.",
         )
 
     @property

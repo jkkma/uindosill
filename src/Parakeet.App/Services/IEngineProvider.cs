@@ -108,6 +108,18 @@ public interface IEngineProvider
     bool DiariserRunsInTorch { get; }
 
     /// <summary>
+    /// The directory of the diarisation model an ask would load, or null when none is installed.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for one caller and one question: whether the exported ONNX graphs are beside those
+    /// weights, which is what decides if the Settings window may offer a GPU row. The window is
+    /// given the directory rather than the answer because the same directory is what an export
+    /// would write into, and handing out two derived facts where one path serves would let them
+    /// disagree.
+    /// </remarks>
+    string? DiarisationModelDirectory { get; }
+
+    /// <summary>
     /// The execution providers this machine's ONNX Runtime registered, as protocol names, or null
     /// when that could not be established.
     /// </summary>
@@ -557,6 +569,15 @@ public sealed class EngineProvider : IEngineProvider
 
     /// <inheritdoc />
     /// <remarks>
+    /// Deliberately not gated on <see cref="SupportsSpeakerLabelling"/>: that also asks whether the
+    /// bundled Python is present, and a machine without it still has weights on disk whose graphs a
+    /// window may want to describe. The one question here is where the model is.
+    /// </remarks>
+    public string? DiarisationModelDirectory =>
+        DiarisationModel is { } model ? PathForInstalledOrBundled(model) : null;
+
+    /// <inheritdoc />
+    /// <remarks>
     /// <b>Answers about a runtime the diariser no longer uses, and is kept for one reason.</b> This
     /// probes ONNX Runtime for the providers it registered, so that the Settings tab could not offer
     /// a row that had no chance of working. The diariser is torch now; <see cref="DiariserRunsInTorch"/>
@@ -698,6 +719,9 @@ public sealed class FakeEngineProvider : IEngineProvider
     /// labeller still runs on no runtime at all; that is simply not what this asks.
     /// </remarks>
     public bool DiariserRunsInTorch => true;
+
+    /// <summary>Null — the canned provider has no model directory, so it has no graphs either.</summary>
+    public string? DiarisationModelDirectory => null;
 
     /// <summary>
     /// Null — "not established". The canned engine runs on no execution provider at all, and

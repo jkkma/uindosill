@@ -301,16 +301,16 @@ public class AppSettingsStoreTests
         // Null is automatic. The window passed a hardcoded "auto" until this setting existed, so "it
         // round-trips" is the whole feature working.
         //
-        // **"webgpu" left this list on 2026-08-27 and its absence is asserted below.** It was a real
-        // choice while the diariser was an ONNX graph; the torch pipeline that replaced it refuses
-        // the name, so a settings file still carrying it must read back as automatic rather than
-        // reaching the sidecar and failing every run.
+        // **"webgpu" left this list on 2026-08-27 and returned on 2026-08-28**, when the diariser's
+        // two neural stages gained an ONNX export for a provider to run. While it had none the name
+        // selected nothing and had to read back as automatic; now it names a real route and is
+        // stored verbatim. "dml" did not come back and its absence is still asserted below.
         var path = TempFile();
         try
         {
             Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
 
-            foreach (var provider in new[] { "cpu", "cuda" })
+            foreach (var provider in new[] { "cpu", "cuda", "webgpu" })
             {
                 Assert.True(new AppSettingsStore(path).Save(
                     new AppSettings { DiarisationProvider = provider }));
@@ -326,18 +326,17 @@ public class AppSettingsStoreTests
             File.WriteAllText(path, "{\"diarisationProvider\":\"auto\"}");
             Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
 
-            // **The regression this guards.** A file written before 2026-08-27 can name a provider
-            // the diariser now refuses. Read back as null it becomes automatic; read back verbatim
-            // it would reach the sidecar and fail every speaker-labelling run, with no row in the
-            // picker to clear it from.
+            // **A hand-edited "webgpu" is honoured now, and that is the change.** Storing it is
+            // only permission to name the route: whether this machine has the exported graphs is
+            // the Settings window's question, not this reader's, and the window offers the row's
+            // one-time preparation rather than failing at load.
             File.WriteAllText(path, "{\"diarisationProvider\":\"webgpu\"}");
-            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
-            File.WriteAllText(path, "{\"diarisationProvider\":\"dml\"}");
-            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+            Assert.Equal("webgpu", new AppSettingsStore(path).Load().DiarisationProvider);
 
-            // A name this window does not offer degrades to automatic rather than being passed to
-            // the sidecar. dml is the case that matters: the sidecar would accept it, and it scores
-            // 53% diarisation error at ONNX Runtime's own defaults.
+            // A name this window does not offer still degrades to automatic rather than being
+            // passed to the sidecar. dml is the case that matters: the sidecar would accept it, and
+            // on the previous ONNX diariser it scored 53% diarisation error at ONNX Runtime's own
+            // defaults. Nothing has been run on it since, which is why it is not offered.
             File.WriteAllText(path, "{\"diarisationProvider\":\"dml\"}");
             Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
 
@@ -407,12 +406,31 @@ public class AppSettingsStoreTests
             Assert.Null(viewModel.SelectedDiarisationProvider.Provider);
             Assert.Null(viewModel.SelectedDiarisationBatchSize.Size);
 
-            foreach (var row in viewModel.DiarisationProviders)
+            // **The graphics row is the one exception, and it is the feature rather than a gap.**
+            // Every other row is a name the sidecar can act on immediately, so choosing it writes
+            // it. `webgpu` needs the exported graphs, so choosing it starts a one-time preparation
+            // and keeps the choice only if that works — and under the canned provider there is no
+            // speaker model to export from, so it must come straight back. Asserted here rather
+            // than skipped, because "the row does not stick when it cannot work" is exactly what
+            // stops a stored choice failing the next transcription.
+            foreach (var row in viewModel.DiarisationProviders.Where(row => row.Provider != "webgpu"))
             {
                 viewModel.SelectedDiarisationProvider = row;
                 Assert.Equal(row.Provider, viewModel.DiarisationProvider);
                 Assert.Equal(row.Provider, new AppSettingsStore(path).Load().DiarisationProvider);
             }
+
+            var graphics = viewModel.DiarisationProviders.Single(row => row.Provider == "webgpu");
+            viewModel.SelectedDiarisationProvider = graphics;
+            Assert.Null(viewModel.DiarisationProvider);
+            Assert.True(viewModel.HasSpeakerGraphsMessage);
+
+            // Left as the automatic row rather than as a selection the picker cannot resolve.
+            Assert.Null(viewModel.SelectedDiarisationProvider.Provider);
+
+            // Put back, so the batch-size loop below starts from the state it used to.
+            viewModel.SelectedDiarisationProvider =
+                viewModel.DiarisationProviders.Single(row => row.Provider is null);
 
             foreach (var row in viewModel.DiarisationBatchSizes)
             {

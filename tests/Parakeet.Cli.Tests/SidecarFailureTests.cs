@@ -155,6 +155,59 @@ public class SidecarFailureTests
     }
 
     [Fact]
+    public async Task AskingForWebgpuWithoutTheExportedGraphsNamesTheMissingFilesAndStartsNothing()
+    {
+        // The ONNX route is a derived artefact: nothing installs the graphs, so the common case is
+        // asking for a provider whose graphs are not there. That has to fail as a usage error
+        // naming the files — not as a runtime failure inside a sidecar, and not by quietly running
+        // on the CPU, which would report a GPU run that never happened.
+        using var harness = new Harness();
+        using var _ = new NoInterpreter();
+
+        var model = Path.Combine(harness.Directory, "pyannote");
+        System.IO.Directory.CreateDirectory(model);
+
+        var exit = await harness.RunAsync(
+            "diarise", "--model-path", model, "--backend", "webgpu", harness.WriteWav("a.wav", 1));
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+
+        var error = harness.Error.ToString();
+        Assert.Contains("segmentation.onnx", error, StringComparison.Ordinal);
+        Assert.Contains("embedding.onnx", error, StringComparison.Ordinal);
+        Assert.Contains("export-diariser-onnx.py", error, StringComparison.Ordinal);
+
+        // The interpreter is missing here too, and the point is that it never mattered: the refusal
+        // happens before a subprocess is started, which is what makes it cost nothing.
+        Assert.DoesNotContain(PythonRuntime.InterpreterVariable, error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WebgpuIsNoLongerRefusedOutrightOnceTheGraphsAreBesideTheModel()
+    {
+        // The other half, and the one that would rot silently: until 2026-08-28 this backend was
+        // refused whatever was on disk, so a test that only asserted the refusal would still pass
+        // with the route removed.
+        using var harness = new Harness();
+        using var _ = new NoInterpreter();
+
+        var model = Path.Combine(harness.Directory, "pyannote");
+        var graphs = Path.Combine(model, "onnx");
+        System.IO.Directory.CreateDirectory(graphs);
+        await File.WriteAllTextAsync(Path.Combine(graphs, "segmentation.onnx"), "not a real graph");
+        await File.WriteAllTextAsync(Path.Combine(graphs, "embedding.onnx"), "not a real graph");
+
+        var exit = await harness.RunAsync(
+            "diarise", "--model-path", model, "--backend", "webgpu", harness.WriteWav("a.wav", 1));
+
+        // It gets past the guard and reaches the sidecar, where this machine has no interpreter.
+        // Whether the graphs load is the sidecar's business and is not asserted here — these are
+        // two text files.
+        Assert.Equal(ExitCodes.RuntimeError, exit);
+        Assert.Contains(PythonRuntime.InterpreterVariable, harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheCannedTranslatorNeedsNoInterpreterAtAll()
     {
         // The other half of the claim: --fake is what makes the whole pipeline exercisable without

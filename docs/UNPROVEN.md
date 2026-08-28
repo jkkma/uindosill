@@ -6710,3 +6710,69 @@ engine, taken deliberately; what is recorded here is its cost in evidence. That 
 is not total: the route back is one run of `measure-der.ps1` over AMI test on the engine that ships,
 scored once under the gate's own protocol. Until somebody makes it, this repository can say what one
 meeting did and cannot say whether the gate holds.
+
+## The diariser gained an ONNX route — added 2026-08-28, laptop
+
+**What was built.** `pyannote-speaker-diarization-community-1` is torch on both neural stages, so
+`--speaker-backend webgpu` had nothing to name and was refused outright. That refusal was correct
+for a torch-only pipeline and permanent only by accident: `scripts/export-diariser-onnx.py` now
+exports both stages, and `PyannoteEngine._install_onnx_route` runs them through ONNX Runtime, so
+`webgpu` and `dml` select something when the graphs are installed and are refused by name when they
+are not.
+
+**Why it exists at all.** On the second machine there is no other way to reach the GPU. The bundled
+torch is `2.13.0+cpu` — `version.cuda` `None`, `version.hip` `None` — PyTorch's ROCm wheels are
+Linux-only, and `torch-directml` pins `torch==2.4.1` against this bundle's 2.13.0. ONNX Runtime is
+the only remaining route, and its WebGPU provider is already in the bundle.
+
+**What moved and what did not.** Only the two forward passes. The featuriser stays in torch
+(`WeSpeakerResNet34.compute_fbank` is a `torch.vmap` over an FFT and has no ONNX lowering — wespeaker's
+own `infer_onnx.py` computes fbank outside the graph too), and the sliding window, the powerset
+decoding, the PLDA and the VBx clustering are all still upstream's code over upstream's objects.
+
+### What is measured
+
+**Graph parity against torch, swept rather than spot-checked** (ORT 1.27.0, opset 18, Radeon 880M):
+
+| stage | sweep | ORT CPU worst | WebGPU worst |
+| --- | --- | --- | --- |
+| segmentation | batch 1, 2, 4, 8, 32 | 2.670e-05 | 1.907e-05 |
+| embedding | batch×mask 1×589, 32×589, 7×300, 32×1000 | 1.676e-07 | 2.235e-07 |
+
+**Seeded, so the figures above are reproducible.** The sweep drew unseeded noise until 2026-08-28: the first run reported 2.670e-05 for the CPU provider and a re-run of the same code on the same graphs reported 3.481e-05 — both true, neither checkable against the other. `onnx_export.SEED` fixes every random tensor, and two consecutive exports now report the same numbers to four digits.
+
+The sweep is the measurement, not decoration: the TorchScript exporter warns that an LSTM traced at
+batch N can bake N into its initial states, and the pipeline runs batch 32 then a final chunk at
+batch 1. The embedding's two time axes are swept independently because `StatsPool` interpolates the
+mask to the feature map, so the pipeline sends lengths that never co-occurred in the trace.
+
+**End to end on one clip** — five minutes cut from a Castle Super Beast episode, CPU torch against
+WebGPU ONNX, same process, same audio:
+
+| | CPU torch | WebGPU ONNX |
+| --- | --- | --- |
+| turns | 59 | 59 |
+| speakers | 2 | 2 |
+| max abs Δ turn start | — | **0.000 s** |
+| max abs Δ turn end | — | **0.000 s** |
+| same speaker label | — | **59 / 59** |
+| load | 8.3 s | 0.6 s |
+| label | 102.7 s | 65.3 s (**1.57x**) |
+
+### What is unproven
+
+- **No DER, on either route.** The agreement above says the two routes produce the same turns on one
+  clip; it says nothing about whether those turns are right. The speaker gate names AMI test and
+  neither route has been scored on it — the torch path's own record is still the single meeting in
+  the section above.
+- **One clip, one recording, one machine.** Identical output at 0.000 s is a strong result and a
+  narrow one. Nothing has been run on a recording with more than two speakers, on overlapped
+  speech, or on any other GPU.
+- **`dml` is exported for but never executed.** It is wired with `ORT_DISABLE_ALL` carried over from
+  the Sortformer measurement — where DirectML fused that graph and scored 53.15% against the CPU's
+  16.33% — but that was a different graph, and no DirectML run has happened on these. The precaution
+  is inherited, not earned.
+- **The speedup is not the ceiling and not a promise.** 1.57x is with fbank and clustering still on
+  the CPU. Which of those dominates on a longer recording has not been profiled.
+- **Nothing installs the graphs.** They are a derived artefact a person exports; the catalogue does
+  not fetch them and no installer carries them.

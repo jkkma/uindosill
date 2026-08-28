@@ -485,19 +485,24 @@ public sealed class AppSettingsStore
     /// accepts <c>torch</c> as well, which is what <c>auto</c> already resolves to and would be a
     /// second spelling of the same choice in a menu.
     /// <para>
-    /// <b><c>webgpu</c> left this list on 2026-08-27 and its removal is a repair, not tidying.</b>
-    /// It was here for the ONNX diariser, which is now in <c>attic/sortformer/</c>; the pipeline
-    /// that replaced it is torch on both stages and <i>refuses</i> the name rather than falling back
-    /// to the CPU. Left in this list, a settings file that already stored <c>webgpu</c> — which the
-    /// Settings tab offered until that day — would read back as valid, reach the sidecar, and fail
-    /// every speaker-labelling run in the window, with no row in the picker for the user to clear it
-    /// from. Out of the list, <see cref="ReadDiarisationProvider"/> returns null for it, which means
-    /// <c>auto</c>. <c>dml</c> was never here and is refused for the same reason.
+    /// <b><c>webgpu</c> left this list on 2026-08-27 and came back on 2026-08-28.</b> It was here
+    /// for the ONNX diariser, which is now in <c>attic/sortformer/</c>; the torch pipeline that
+    /// replaced it refused the name, so a stored <c>webgpu</c> would have failed every
+    /// speaker-labelling run with no row in the picker to clear it from. What brings it back is
+    /// that the two neural stages now have an ONNX export, so the name selects something again.
+    /// <para>
+    /// <b>The hazard that removal was guarding against is still real and is handled elsewhere.</b>
+    /// The graphs are a derived artefact and a machine may not have them, so being in this list is
+    /// only permission to store the word — the Settings window offers the row against
+    /// <c>DiariserGraphs.AreInstalled</c>, and a stored <c>webgpu</c> whose graphs have since been
+    /// deleted shows the row with its one-time setup offered again rather than failing at load.
+    /// <c>dml</c> is deliberately still absent: it is reachable from the command line, where an
+    /// unmeasured provider belongs, and nothing has been run on it.
     /// </para>
     /// A name arriving here that is not in this list is refused by the sidecar rather than silently
     /// accepted, so the cost of this list being short is a clear failure and never a wrong answer.
     /// </remarks>
-    public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "cuda"];
+    public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "cuda", "webgpu"];
 
     /// <summary>
     /// The batch sizes this window offers for the second diariser. Empty entry is the model's own.

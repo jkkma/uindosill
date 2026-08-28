@@ -915,3 +915,66 @@ experiment took an hour.
 
 The first version of this entry, written the same evening, asserted the clustering was unseeded and
 scoped it as a "latent risk"; an adversarial review found the dead branch on 2026-08-27.
+
+## 38. A torch ONNX export writes its weights beside the graph, so a graph that loads here fails there
+
+`torch.onnx.export(..., dynamo=True)` defaults to `external_data=True`. It writes the graph to the
+path you named and the *weights* to a sibling `<name>.onnx.data`, and it does so silently — the
+export prints nothing about it and the file it reports is the one you asked for.
+
+Everything then works right up until the graph is installed somewhere. Copying `embedding.onnx` on
+its own produced a 297 KiB file that a parity check in the export directory had just passed, and
+`ort.InferenceSession` refused it with
+
+    FAIL : External data path validation failed for initializer: wrapped.conv1.weight.
+    External data path does not exist: "...\onnx\embedding.onnx.data"
+
+The size is the tell and it is easy to miss: a 26 MiB ResNet34 that serialises to 297 KiB has not
+been compressed. Note also that the two exporters differ — the TorchScript fallback wrote
+`segmentation.onnx` self-contained at 5.6 MiB — so a repository can have one graph of each kind and
+only discover it when the smaller one is moved.
+
+`external_data=False` fixes it, but the fix belongs next to a check rather than on its own, because
+the failure is silent at the point it is introduced and loud only much later:
+
+```python
+sidecar = path.with_suffix(path.suffix + ".data")
+if sidecar.exists():
+    raise RuntimeError(f"{path.name} was written with external data at {sidecar.name}")
+```
+
+`scripts/export-diariser-onnx.py` asserts exactly that after every export, on both exporter routes.
+
+## 39. `torch.vmap` has no ONNX lowering, and the model that uses it is not the model you export
+
+`WeSpeakerResNet34.forward` is two steps — `compute_fbank` then `resnet` — and only the second one
+exports. `compute_fbank` runs `torch.vmap(self._fbank)` over the batch, and vmap has no ONNX
+lowering at all.
+
+**The useful part is that this is not a defect to work around.** wespeaker's own `infer_onnx.py`
+computes fbank outside the graph and feeds features in, so the split the exporter forces is the
+split upstream already ships. The ONNX route therefore starts at the ResNet, fbank stays in torch
+on the CPU, and the graph takes `(batch, frames, mel_bins)`.
+
+What this does mean is that "export the model" is the wrong instinct for any pipeline with a
+featuriser: find the seam upstream's own ONNX path uses, and export from there. Exporting the whole
+thing would have failed, and forcing it through would have produced a graph whose FFT was traced at
+one batch size.
+
+## 40. An exported LSTM must be swept across batch sizes, because the warning that it might not be is only a warning
+
+The TorchScript exporter emits:
+
+> Exporting a model to ONNX with a batch_size other than 1, with a variable length with LSTM can
+> cause an error when running the ONNX model with a different batch size.
+
+It is a warning rather than an error because whether it bites depends on the graph. The segmentation
+model here was traced at batch 4 and the pipeline runs `segmentation_batch_size` (32) and then a
+final padded chunk at batch 1 — so had it bitten, almost every window of every real recording would
+have been affected, and the failure mode is a wrong number rather than an exception.
+
+Sweeping 1, 2, 4, 8, 32 against the torch output settled it in seconds: worst deviation 2.670e-05 on
+the CPU provider and 1.907e-05 on WebGPU, flat across batch size. **The sweep is now part of the
+export script rather than a thing somebody did once**, and the same applies to any axis the traced
+example fixed by accident: the embedding's mask length and its fbank length are independent in the
+pipeline because `StatsPool` interpolates one to the other, so they are swept independently too.

@@ -46,6 +46,17 @@ internal sealed record LabellerRequest
 internal static class LabellerFactory
 {
     /// <summary>
+    /// Where <c>scripts/export-diariser-onnx.py</c> puts the derived graphs, relative to the model
+    /// directory. Must agree with <c>ONNX_SUBDIR</c> in the sidecar's <c>pyannote_engine.py</c>,
+    /// which is the side that actually loads them; this constant exists so the usage error can be
+    /// raised before a subprocess starts.
+    /// </summary>
+    private const string DiariserOnnxSubdirectory = "onnx";
+
+    /// <summary>The two graphs an ONNX provider needs, matching the sidecar's <c>ONNX_FILES</c>.</summary>
+    private static readonly string[] DiariserOnnxFiles = ["segmentation.onnx", "embedding.onnx"];
+
+    /// <summary>
     /// Builds the labeller and loads it, so that its capabilities are real before anything is said
     /// about them.
     /// </summary>
@@ -86,22 +97,30 @@ internal static class LabellerFactory
             var (path, descriptor) = ResolveModel(context, request);
             var provider = ResolveBackend(request);
 
-            // **ONNX Runtime's execution providers name nothing here.** The diariser is a torch
-            // pipeline on both stages, so `webgpu` and `dml` cannot select anything, and silently
-            // handing somebody the CPU instead tells them nothing. Refused here rather than only in
-            // the sidecar — which must refuse them too, since nothing stops a host asking — because
-            // this costs no subprocess and produces a usage error with a usage exit code, which is
-            // what a mistyped flag deserves.
+            // **ONNX Runtime's execution providers name something here as of 2026-08-28, and only
+            // when the derived graphs exist.** The pipeline is still torch — the featuriser, the
+            // powerset decoding, the PLDA and the VBx clustering all are — but its two neural
+            // stages have an ONNX export (`scripts/export-diariser-onnx.py`), and with it a
+            // provider has a graph to run. Without it there is still nothing to select, so the
+            // refusal stays for that case and says which files are missing rather than what the
+            // engine is.
             //
-            // Two guards stood here until 2026-08-27 and were each one-sided, one of them found by
-            // an adversarial review: while there were two diarisers, `torch` was wrong for one and
-            // `webgpu`/`dml` were wrong for the other, and the pair had to agree about which model
-            // was loaded. One engine is one rule.
+            // Checked here rather than only in the sidecar — which must check too, since nothing
+            // stops another host asking — because this costs no subprocess and produces a usage
+            // error with a usage exit code, which is what an unbuilt route deserves.
             if (provider is "webgpu" or "dml")
             {
-                throw new CliUsageException(
-                    $"{request.BackendOption} {provider} names an ONNX Runtime execution provider, and the diariser " +
-                    "is a torch pipeline with no ONNX route for one to select. Choose cpu or cuda.");
+                var graphs = Path.Combine(path, DiariserOnnxSubdirectory);
+                var missing = DiariserOnnxFiles
+                    .Where(name => !File.Exists(Path.Combine(graphs, name)))
+                    .ToArray();
+                if (missing.Length > 0)
+                {
+                    throw new CliUsageException(
+                        $"{request.BackendOption} {provider} runs the diariser's two neural stages through ONNX " +
+                        $"Runtime, and {graphs} is missing {string.Join(", ", missing)}. Export them with " +
+                        "scripts/export-diariser-onnx.py against this model directory, or choose cpu.");
+                }
             }
 
             labeller = new SidecarSpeakerLabeller(new SidecarLabellerOptions
@@ -128,9 +147,14 @@ internal static class LabellerFactory
         // **Four warnings stood here and went with the diariser on 2026-08-27.** Three quoted AMI
         // figures at a backend — cuda's 16.10% and DirectML's 53.15% against the CPU's 16.33% — and
         // one reported a failed or unrun parity check. Every one of those numbers was measured on
-        // the ONNX diariser now in `attic/sortformer/`, and this pipeline is torch on both stages:
-        // no execution provider to choose, no second path to compare against, no fixture. There is
-        // nothing measured left to warn about, so nothing is said.
+        // the ONNX diariser now in `attic/sortformer/`, and they describe neither this pipeline nor
+        // its graphs. There is nothing measured left to warn about, so nothing is said.
+        //
+        // **A second path exists again as of 2026-08-28**, and it still earns no warning here. The
+        // ONNX export agreed with the torch pipeline exactly on the one recording it has been run
+        // against — 59 of 59 turns, identical speakers, max |Δ| 0.000 s on both boundaries — but
+        // one five-minute clip is not a corpus and no DER has been scored on either route.
+        // `docs/UNPROVEN.md` is where that stays visible.
         //
         // **That silence is weaker than the silence it replaces, and the difference matters.** The
         // old code said nothing for cpu and webgpu because both had been *measured* to reproduce the
@@ -175,10 +199,12 @@ internal static class LabellerFactory
     /// That finding belongs to the graph it was taken on, which is in <c>attic/sortformer/</c>.
     /// </para>
     /// <para>
-    /// The diariser that ships now is torch on both stages. <c>auto</c> is the CPU — the bundled
-    /// torch is the CPU build — and <c>cuda</c> is reachable by name on a machine whose torch has
-    /// it. ONNX Runtime's provider names are refused above rather than here, so that the message
-    /// can say what they would have selected and why there is nothing to select.
+    /// The diariser's pipeline is torch. <c>auto</c> is the CPU — the bundled torch is the CPU
+    /// build — and <c>cuda</c> is reachable by name on a machine whose torch has it. ONNX
+    /// Runtime's provider names are resolved here and checked above, where the model directory is
+    /// known: since 2026-08-28 the two neural stages have an ONNX export, so <c>webgpu</c> and
+    /// <c>dml</c> select something when the graphs are present and are refused by name when they
+    /// are not.
     /// </para>
     /// </remarks>
     private static string ResolveBackend(LabellerRequest request)
@@ -196,14 +222,15 @@ internal static class LabellerFactory
             // Passed through to the guard in CreateAsync, which is where the sentence explaining
             // that there is no graph for them to select lives. Recognised here rather than falling
             // into the unknown-backend arm below, because "unknown backend 'webgpu'" is a worse
-            // answer than "webgpu names an execution provider and this model has no ONNX route" —
-            // the name is not unknown, it is inapplicable.
+            // answer than naming the graphs the export would have produced. Whether they exist is
+            // a property of the install, not of the spelling, so it is decided in CreateAsync.
             "webgpu" => "webgpu",
             "dml" or "directml" => "dml",
 
             _ => throw new CliUsageException(
-                $"Unknown diariser backend '{asked}' for {request.BackendOption}. Choose cpu or cuda, or leave it " +
-                "unset for auto, which is the cpu."),
+                $"Unknown diariser backend '{asked}' for {request.BackendOption}. Choose cpu or cuda for the torch " +
+                "pipeline, or webgpu or dml where the exported graphs are installed, or leave it unset for auto, " +
+                "which is the cpu."),
         };
     }
 

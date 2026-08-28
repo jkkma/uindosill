@@ -45,9 +45,10 @@ public sealed class PythonSidecar : IAsyncDisposable
     /// constant says, so nothing in CI could see it. <c>ProtocolVersionTests</c> now reads the Python
     /// constant out of the source and asserts it against this one, which is the check that would
     /// have caught it. It moved to 5 on 2026-08-27, when the diariser lost its <c>kind</c> field
-    /// along with the Sortformer engine that made two of them necessary.
+    /// along with the Sortformer engine that made two of them necessary, and to 6 on 2026-08-28,
+    /// when the sidecar gained <c>exportDiariserGraphs</c> and the diariser an ONNX route.
     /// </remarks>
-    public const int ProtocolVersion = 5;
+    public const int ProtocolVersion = 6;
 
     private const int StandardErrorLinesKept = 200;
 

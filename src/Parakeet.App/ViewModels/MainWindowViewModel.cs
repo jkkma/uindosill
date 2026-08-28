@@ -4,6 +4,7 @@ using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.LlamaServer;
 using Parakeet.Engine.ParakeetCpp.Interop;
+using Parakeet.Engine.Python;
 
 namespace Parakeet.App.ViewModels;
 
@@ -18,6 +19,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Asked which diariser is chosen, for the settings that apply to only one of them.</summary>
     private readonly IEngineProvider _engines;
+
+    /// <summary>
+    /// Builds the thing that derives the diariser's ONNX graphs. A factory rather than an instance
+    /// because each export runs its own short-lived sidecar, and a seam rather than a `new` because
+    /// the headless tests exercise this path and must not start a Python.
+    /// </summary>
+    private readonly Func<IDiariserGraphExporter> _graphExporter;
 
     [ObservableProperty]
     private ComputeBackend _backend = ComputeBackend.Vulkan;
@@ -86,9 +94,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IMediaPlayer? player = null,
         Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
         string? downloadRoot = null,
-        IAnswerEngineProvider? answerEngines = null)
+        IAnswerEngineProvider? answerEngines = null,
+        Func<IDiariserGraphExporter>? graphExporter = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
+
+        _graphExporter = graphExporter
+            ?? (static () => new SidecarDiariserGraphExporterAdapter());
 
         var modelStore = store ?? new LocalModelStore();
         var modelCatalog = catalog ?? ModelCatalog.Default;
@@ -416,6 +428,89 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedDiarisationProvider));
         OnPropertyChanged(nameof(DiarisationProviderExplanation));
         _settings.Update(current => current with { DiarisationProvider = value });
+
+        // The graphics option needs a one-time preparation, and this is where a person asked for
+        // it. Started here rather than offered as a second control the user has to find: choosing
+        // the row is the whole of the intent, and a setting that silently does not work until you
+        // run something is not a setting.
+        if (value == "webgpu" && !SpeakerGraphsInstalled && !IsPreparingSpeakerGraphs)
+        {
+            _ = PrepareSpeakerGraphsAsync();
+        }
+    }
+
+    /// <summary>Whether the graphics option's one-time preparation has already been done.</summary>
+    /// <remarks>
+    /// A file check, read fresh every time rather than cached: the models folder is not this
+    /// application's alone, and the graphs go with the model when somebody removes it.
+    /// </remarks>
+    public bool SpeakerGraphsInstalled =>
+        DiariserGraphs.AreInstalled(_engines.DiarisationModelDirectory);
+
+    /// <summary>True while the graphs are being prepared, so the picker can show it is working.</summary>
+    [ObservableProperty]
+    private bool _isPreparingSpeakerGraphs;
+
+    /// <summary>
+    /// What the preparation is doing, or what went wrong. Null when there is nothing to say.
+    /// </summary>
+    [ObservableProperty]
+    private string? _speakerGraphsMessage;
+
+    partial void OnIsPreparingSpeakerGraphsChanged(bool value) =>
+        OnPropertyChanged(nameof(DiarisationProviderExplanation));
+
+    partial void OnSpeakerGraphsMessageChanged(string? value) =>
+        OnPropertyChanged(nameof(HasSpeakerGraphsMessage));
+
+    /// <summary>Whether there is a preparation message to draw. Bound to the line's visibility.</summary>
+    public bool HasSpeakerGraphsMessage => SpeakerGraphsMessage is { Length: > 0 };
+
+    /// <summary>
+    /// Prepares the graphics option, once, and puts the choice back if it cannot be prepared.
+    /// </summary>
+    /// <remarks>
+    /// <b>Reverting on failure is the part that matters.</b> A stored <c>webgpu</c> whose graphs
+    /// are missing fails at load, which is after the recording has been read — so a preparation
+    /// that did not work has to take the setting down with it rather than leave a choice that will
+    /// break the next transcription.
+    /// </remarks>
+    private async Task PrepareSpeakerGraphsAsync()
+    {
+        if (_engines.DiarisationModelDirectory is not { Length: > 0 } directory)
+        {
+            SpeakerGraphsMessage = "Speaker labelling needs its model installed first.";
+            DiarisationProvider = null;
+            return;
+        }
+
+        IsPreparingSpeakerGraphs = true;
+        SpeakerGraphsMessage = "Preparing the speaker model for your graphics. This happens once.";
+
+        try
+        {
+            var exporter = _graphExporter();
+
+            // ConfigureAwait(true): everything after this touches bound properties.
+            await exporter.ExportAsync(directory, progress: null).ConfigureAwait(true);
+
+            SpeakerGraphsMessage = null;
+        }
+        catch (Exception exception)
+        {
+            // The message lands in the window verbatim, so it is user copy: what happened, and what
+            // they are left with.
+            SpeakerGraphsMessage =
+                "Could not prepare the speaker model for your graphics, so speaker labelling has "
+                + $"gone back to automatic. {exception.Message}";
+            DiarisationProvider = null;
+        }
+        finally
+        {
+            IsPreparingSpeakerGraphs = false;
+            OnPropertyChanged(nameof(SpeakerGraphsInstalled));
+            OnPropertyChanged(nameof(DiarisationProviderExplanation));
+        }
     }
 
     /// <summary>
@@ -517,6 +612,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // not awaited: the page draws now with every row on offer and narrows when the answer
             // arrives, rather than blocking a tab switch on a torch import.
             _ = ProbeDiariserProvidersAsync();
+
+            // **Repairs a stored choice whose graphs are gone.** The only way to store `webgpu` is
+            // to have prepared it once, so this fires for one situation: the speaker model was
+            // removed and reinstalled, taking its `onnx` subdirectory with it. Left alone the next
+            // transcription would read the whole recording and then fail in the sidecar; done here
+            // it costs a minute on a page the person is already looking at.
+            if (DiarisationProvider == "webgpu" && !SpeakerGraphsInstalled && !IsPreparingSpeakerGraphs)
+            {
+                _ = PrepareSpeakerGraphsAsync();
+            }
         }
     }
 
@@ -658,6 +763,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(null, "Automatic"),
         new("cpu", "CPU"),
         new("cuda", "CUDA (NVIDIA)"),
+        new("webgpu", "Graphics (WebGPU)"),
     ];
 
     /// <summary>
@@ -761,10 +867,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (offered.Contains("webgpu"))
             {
-                text += " WebGPU moves part of the work onto your graphics and finishes sooner, but "
-                    + "it groups voices slightly differently, so the labels will not match the "
-                    + "automatic ones exactly — which of the two is closer to the truth has not been "
-                    + "established.";
+                // **The sentence here promised the opposite until 2026-08-28**, and it was
+                // Sortformer's: "it groups voices slightly differently, so the labels will not
+                // match". On the pipeline that ships, the two routes were measured against each
+                // other on a five-minute recording and produced the same turns to the millisecond
+                // with the same speakers, so that warning described a model nobody is choosing.
+                // One recording is not a promise, which is why this says "on what has been tried".
+                text += " Graphics (WebGPU) does the heavy part on your graphics card and finishes "
+                    + "sooner. On what has been tried it gave the same speakers and the same times "
+                    + "as automatic. It needs a one-time preparation, which starts when you choose "
+                    + "it and takes about a minute.";
+
+                if (IsPreparingSpeakerGraphs)
+                {
+                    text += " Preparing it now.";
+                }
             }
 
             if (offered.Contains("cuda"))
