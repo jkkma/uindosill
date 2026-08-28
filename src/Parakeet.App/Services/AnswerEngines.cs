@@ -107,12 +107,19 @@ public interface IAnswerEngineProvider
 /// the models folder.
 /// </summary>
 /// <remarks>
-/// The model comes from a file the user put there rather than from a catalogue entry, and that
-/// is deliberate: the decision register's model question is open until the CSB384 measurements
-/// run, so nothing is recommended, nothing is downloaded on this application's advice — but a
-/// person with a model file of their own is not made to wait for that. Where several files are
-/// present the largest is served, and the answer's model line names it, so nothing about the
-/// pick is hidden.
+/// <para>
+/// A model file the user put there works as well as one a catalogue entry installed, and that
+/// stays deliberate: the folder is not this application's alone, and somebody with weights of
+/// their own is not made to use ours.
+/// </para>
+/// <para>
+/// What changed on 2026-08-28 is that there is now an answer to "which one, if you have not
+/// said". The CSB384 measurements the register was waiting on have run, against the labelled
+/// thirty-question set, and the catalogue marks one answering entry as the default
+/// (<see cref="ModelCatalog.RecommendedAnswering"/>). Installed, it is served; absent, the
+/// largest file present is served as before. Either way the answer's model line names what
+/// answered, so nothing about the pick is hidden.
+/// </para>
 /// </remarks>
 public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
 {
@@ -189,6 +196,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             {
                 found.AddRange(Directory.EnumerateFiles(directory, "*.gguf", SearchOption.TopDirectoryOnly)
                     .Where(path => !DraftModelLocator.IsDraftHead(path))
+                    .Where(path => !IsAnotherJobsWeights(Path.GetFileName(path)))
                     .Select(path => new FileInfo(path)));
             }
             catch (IOException)
@@ -202,6 +210,57 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         }
 
         return [.. found.OrderByDescending(file => file.Length)];
+    }
+
+    /// <summary>
+    /// Whether this file name is one the catalogue installs for some job other than answering —
+    /// the recogniser's weights above all, which are a <c>.gguf</c> in the same folder and can
+    /// answer nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **By name against the catalogue, and only against the catalogue.** A file nobody's manifest
+    /// has heard of is still offered, because the models folder is not this application's alone
+    /// and refusing someone's own weights on a guess about their contents would be the worse
+    /// error. What is excluded is the narrow, certain case: this application put that file there,
+    /// for a job that is not this one.
+    /// </para>
+    /// <para>
+    /// Added 2026-08-28, when the answering default stopped being "the largest file present".
+    /// The old rule hid this — a 1.34 GiB recogniser never outweighed a 12.66 GiB answering model,
+    /// so it could not be reached by accident. It was still in the picker, where choosing it set
+    /// <see cref="AppSettings.AskModelFileName"/> to weights that cannot serve an answer and bought
+    /// a load failure instead of a refusal.
+    /// </para>
+    /// <para>
+    /// A name that some answering entry also claims is not excluded. The question this asks is who
+    /// owns the name, and a name two entries share is not evidence against it.
+    /// </para>
+    /// </remarks>
+    private static bool IsAnotherJobsWeights(string fileName) =>
+        OtherJobsFileNames.Contains(fileName);
+
+    /// <inheritdoc cref="IsAnotherJobsWeights"/>
+    private static readonly HashSet<string> OtherJobsFileNames = BuildOtherJobsFileNames();
+
+    private static HashSet<string> BuildOtherJobsFileNames()
+    {
+        var catalogue = ModelCatalog.Default;
+
+        var answering = catalogue.AnsweringModels
+            .SelectMany(model => model.Files)
+            .Select(file => file.FileName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // ToHashSet with the comparer, not a collection expression: case is not a distinction a
+        // Windows file name makes, and a set built without the comparer would miss the same file
+        // spelled differently.
+        return catalogue.Models
+            .Where(model => model.Task != ModelTask.Answering)
+            .SelectMany(model => model.Files)
+            .Select(file => file.FileName)
+            .Where(name => !answering.Contains(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public bool ThinkingMode => _thinkingMode();
@@ -261,16 +320,31 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     }
 
     /// <summary>
-    /// The .gguf to serve: the one chosen in Settings when it is still there, and otherwise the
-    /// largest present.
+    /// The .gguf to serve: the one chosen in Settings when it is still there, then the
+    /// catalogue's own answering default when that is installed, and otherwise the largest
+    /// present.
     /// </summary>
     /// <remarks>
-    /// Largest rather than newest for the unchosen case, because it is the pick a person can
-    /// predict without asking — but predicting it is not the same as choosing it, which is why
-    /// the picker exists as of 2026-08-25. A chosen name that no longer matches a file falls
-    /// back silently to the largest: the models folder is not this application's alone, and a
-    /// panel that refused to answer because a file someone deleted was once selected would be a
-    /// setting failing loudly at the wrong person.
+    /// <para>
+    /// The middle step arrived 2026-08-28 with a model that made the largest-file rule wrong.
+    /// That rule was chosen because it is the pick a person can predict without asking, and it
+    /// held while the only answering entries were one model at two quantisations. It stopped
+    /// holding when a 6.25 GiB dense 12B matched the 12.66 GiB mixture beside it — same median
+    /// wall, same grounding, same abstentions, fewer failed citations, at half the memory and
+    /// running entirely on the graphics chip (docs/UNPROVEN.md, 2026-08-28). "The biggest thing
+    /// installed" would serve the 26B to everyone who installed both and never said which, which
+    /// is now the worse answer rather than the safe one.
+    /// </para>
+    /// <para>
+    /// It is still the catalogue that decides, not this method: the entry carries the flag, and
+    /// an entry that is not installed does not win. A person who has only ever dropped a file
+    /// into the folder by hand reaches the largest-file rule exactly as before.
+    /// </para>
+    /// <para>
+    /// A chosen name that no longer matches a file falls through both: the models folder is not
+    /// this application's alone, and a panel that refused to answer because a file someone
+    /// deleted was once selected would be a setting failing loudly at the wrong person.
+    /// </para>
     /// </remarks>
     private string? FindModelFile()
     {
@@ -286,8 +360,28 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             }
         }
 
+        if (CatalogueDefaultFileName() is { Length: > 0 } preferred)
+        {
+            var match = files.FirstOrDefault(
+                file => string.Equals(file.Name, preferred, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                return match.FullName;
+            }
+        }
+
         return files.FirstOrDefault()?.FullName;
     }
+
+    /// <summary>
+    /// The weights of the catalogue's recommended answering entry, by file name, or null when no
+    /// entry claims the position. The drafting head is skipped: it is a file of the same entry
+    /// and answers nothing.
+    /// </summary>
+    private static string? CatalogueDefaultFileName() =>
+        ModelCatalog.Default.RecommendedAnswering?.Files
+            .Select(file => file.FileName)
+            .FirstOrDefault(name => !DraftModelLocator.IsDraftHead(name));
 }
 
 /// <summary>The canned tier, so the panel's whole life is testable with no server and no file.</summary>

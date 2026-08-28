@@ -110,11 +110,14 @@ public class MultiFileModelTests
         // its weights and the drafting head beside them, and a `files` array is what makes the pair
         // one entry. They must have directories of their own — they ship the same head under the
         // same name and would overwrite each other at the store root.
+        // **Five users since 2026-08-28**, the new one being the dense 12B, which installs its
+        // weights and its own drafting head the same way and for the same reason.
         Assert.Equal(
             new[]
             {
                 "pyannote-speaker-diarization-community-1",
                 "opus-mt-tc-bible-big-mul-en-fp32",
+                "gemma-4-12b-it-qat-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-iq4-xs",
             },

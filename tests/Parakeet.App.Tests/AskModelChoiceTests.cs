@@ -48,6 +48,42 @@ public class AskModelChoiceTests
     }
 
     [Fact]
+    public void WeightsThisApplicationInstalledForAnotherJobAreNotOffered()
+    {
+        // The recogniser's weights are a .gguf in the same folder and can answer nothing. Until
+        // 2026-08-28 the largest-file rule hid this — a 1.34 GiB recogniser never outweighed a
+        // 12.66 GiB answering model — but the row was in the picker the whole time, and choosing
+        // it bought a load failure rather than a refusal.
+        var (provider, directory, _, _) = Provider();
+
+        var recogniser = Assert.Single(
+            ModelCatalog.Default.TranscriptionModels
+                .First(model => model.Files.Count == 1)
+                .Files).FileName;
+
+        // Larger than the real model on purpose: if the filter is not doing the work, the
+        // largest-file rule serves this and the assertions below fail loudly.
+        Write(directory, recogniser, 900);
+        Write(directory, "an-answering-model.gguf", 10);
+
+        Assert.Equal(["an-answering-model.gguf"], provider.AvailableModelFileNames());
+        Assert.Equal("an-answering-model.gguf", provider.ResolveModelFileName());
+    }
+
+    [Fact]
+    public void AFileNoManifestKnowsAboutIsStillOffered()
+    {
+        // The exclusion is by name against the catalogue, never a guess about contents: the models
+        // folder is not this application's alone, and somebody's own weights are not refused for
+        // being unrecognised.
+        var (provider, directory, _, _) = Provider();
+        Write(directory, "something-nobody-here-has-heard-of.gguf", 50);
+
+        Assert.Equal(["something-nobody-here-has-heard-of.gguf"], provider.AvailableModelFileNames());
+        Assert.Equal("something-nobody-here-has-heard-of.gguf", provider.ResolveModelFileName());
+    }
+
+    [Fact]
     public void AnEmptyOrAbsentFolderOffersNothingRatherThanThrowing()
     {
         var (provider, directory, _, _) = Provider();
@@ -75,6 +111,40 @@ public class AskModelChoiceTests
         // Case is not a distinction a Windows file name makes.
         choose("SMALL.GGUF");
         Assert.Equal("small.gguf", provider.ResolveModelFileName());
+    }
+
+    [Fact]
+    public void TheCatalogueDefaultBeatsTheLargestFileButNotAnExplicitChoice()
+    {
+        // The largest-file rule stopped being right on 2026-08-28. The answering entry the
+        // catalogue marks as the default is a smaller file than the mixture beside it and matched
+        // it on the labelled question set at half the memory, so "the biggest thing installed"
+        // would serve the wrong one to everybody who installed both and never said which.
+        var (provider, directory, _, choose) = Provider();
+
+        var preferred = ModelCatalog.Default.RecommendedAnswering;
+        Assert.NotNull(preferred);
+
+        // The weights, not the drafting head beside them — that file answers nothing. The rule is
+        // restated here rather than shared, so a change to it has to be made twice on purpose.
+        var weights = Assert.Single(
+            preferred.Files,
+            file => !file.FileName.StartsWith("mtp-", StringComparison.OrdinalIgnoreCase)).FileName;
+
+        Write(directory, "enormous.gguf", 900);
+        Write(directory, weights, 10);
+
+        Assert.Equal(weights, provider.ResolveModelFileName());
+
+        // The catalogue advises; the person decides.
+        choose("enormous.gguf");
+        Assert.Equal("enormous.gguf", provider.ResolveModelFileName());
+
+        // And with the default not installed, the largest is served exactly as before — the step
+        // is a preference among files that are there, not a demand for a particular one.
+        choose(null);
+        File.Delete(Path.Combine(directory, weights));
+        Assert.Equal("enormous.gguf", provider.ResolveModelFileName());
     }
 
     [Fact]

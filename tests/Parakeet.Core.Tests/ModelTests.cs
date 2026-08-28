@@ -296,14 +296,31 @@ public class ModelCatalogTests
         Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", translator.Id);
         Assert.False(translator.Recommended);
 
-        // And two answering entries, added 2026-08-27 — the same model at two quantisations,
+        // And three answering entries. Two arrived 2026-08-27 — one model at two quantisations,
         // because the vendor-recommended one does not fit a 16 GiB machine and the smaller one is
-        // what this project measured running there. Neither may be Recommended, for the reason
-        // above: that property picks the default ASR model.
+        // what this project measured running there. The dense 12B joined them 2026-08-28 and took
+        // the default, having matched the 26B on the labelled question set at half the memory.
         Assert.Equal(
-            new[] { "gemma-4-26b-a4b-it-ud-q4-k-xl", "gemma-4-26b-a4b-it-ud-iq4-xs" },
+            new[]
+            {
+                "gemma-4-12b-it-qat-ud-q4-k-xl",
+                "gemma-4-26b-a4b-it-ud-q4-k-xl",
+                "gemma-4-26b-a4b-it-ud-iq4-xs",
+            },
             catalog.AnsweringModels.Select(m => m.Id));
-        Assert.All(catalog.AnsweringModels, m => Assert.False(m.Recommended));
+
+        // Exactly one answering entry may claim the default, and it is read per task: this is the
+        // assertion that would catch a second one being marked, which would make the panel's
+        // unchosen pick depend on manifest order.
+        var answeringDefault = Assert.Single(catalog.AnsweringModels, m => m.Recommended);
+        Assert.Equal("gemma-4-12b-it-qat-ud-q4-k-xl", answeringDefault.Id);
+        Assert.Same(answeringDefault, catalog.RecommendedAnswering);
+
+        // And it reaches no ASR path. Recommended is one flag read by two properties, so an
+        // answering entry carrying it must not become the default transcription model — the same
+        // failure the diarisation discriminator exists to stop, from the other direction.
+        Assert.Equal(ModelTask.Transcription, catalog.Recommended?.Task);
+        Assert.NotEqual("gemma-4-12b-it-qat-ud-q4-k-xl", catalog.Recommended?.Id);
 
         // And one speech-detection entry, added 2026-08-23 with the detector seam that reads it.
         var detector = Assert.Single(catalog.VoiceActivityModels);

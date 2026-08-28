@@ -119,14 +119,15 @@ public sealed record AppSettings
 
     /// <summary>
     /// The file name — not the path — of the .gguf the Ask panel should serve, or null to take
-    /// the largest present. Null is the shipped default and stays meaningful: it means "nobody
-    /// has chosen", so a folder whose contents change later still resolves to something.
+    /// the catalogue's answering default when it is installed and the largest file present when
+    /// it is not. Null is the shipped default and stays meaningful: it means "nobody has chosen",
+    /// so a folder whose contents change later still resolves to something.
     /// </summary>
     /// <remarks>
     /// A name rather than a path because the folder is the application's own and may move
     /// between installs, and because a stored path to a file someone has since deleted is a
-    /// setting that fails silently. A name that no longer matches anything falls back to the
-    /// largest, exactly as if nothing had been chosen — the models on that disk are not this
+    /// setting that fails silently. A name that no longer matches anything falls back the same
+    /// way, exactly as if nothing had been chosen — the models on that disk are not this
     /// application's to keep track of between runs.
     /// </remarks>
     public string? AskModelFileName { get; init; }

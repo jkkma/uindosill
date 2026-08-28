@@ -6830,3 +6830,69 @@ WebGPU ONNX, same process, same audio:
   stubbed provider list and against `resolve_auto` directly, on this desktop, with the graphs
   faked as empty files. No real diarisation has been driven through the elected route, and this
   machine has never had the graphs exported at all.
+
+## The Ask tab's default answering model changed — measured 2026-08-28, laptop
+
+`gemma-4-12B-it-qat` at UD-Q4_K_XL joined the catalogue and took the unchosen position from
+`gemma-4-26B-A4B-it`. Laptop (Ryzen AI 9 365 / Radeon 880M, 15.62 GiB), Vulkan, the vendored
+`llama-server` **b10603**, shipped defaults — 16,384-token context, `-b 4096 -ub 2048`,
+`--reasoning off`, no grammar, evidence depth 8. Driven through the Ask panel's own pipeline, over
+the labelled thirty-question CSB384 set, whose transcript pin was checked before anything was
+asked. **This is the first time any model has been scored against that set.**
+
+### What is measured
+
+- **It runs entirely on the integrated GPU.** `offloaded 49/49 layers`, a 6,390 MiB device model
+  buffer, **≈9.85 GiB on device** at the shipped context against 15,379 MiB free, and **7–9 s** to
+  load. The 540 MiB CPU buffer is the token embedding over a 262,144 vocabulary, which this build
+  keeps host-side by design. The shipped 26B, by contrast, runs its experts out of system memory
+  and needs `--cpu-moe` with `--no-host` to load here at all.
+- **It ties the 26B on speed.** Median wall **17.2 s against 17.1 s**; **477.6 s against 495.6 s**
+  over the 28 retrieval-routed questions, which is 0.64 s per question and inside this machine's
+  own noise band. **Neither is faster than the other on this evidence.**
+- **It ties the 26B on grounding and honesty.** Both cited inside the gold span on **18 of 22**
+  questions carrying one, both were correct on **18 of the 18** where retrieval reached the answer,
+  and both abstained on **5 of 5** — three adversarial questions plus two needles left unplanted,
+  whose content is therefore absent.
+- **It is cleaner on citations.** **96/97 passing against 134/141.** The 26B cites 2.10 spans per
+  bullet to the 12B's 1.35, and attaches one «quote» to several of them, where it can be verbatim
+  in only one. **No arm invented a segment id**: every failure in every arm is a real, resolving
+  span whose quote did not match.
+- **The drafting head is worth 1.27x on decode and 1.068x end to end** — 11.40 tok/s against 9.01
+  without it. The gap between those two figures is that **prefill is 11.45 s of a 17.2 s answer,
+  about 66%**, which drafting does not touch. The five abstentions save 0.0 s and the two
+  survey-tier answers save 5.5 s and 6.1 s.
+- **The head's quantisation is not a dial.** F16 (862 MB) against Q8_0 (465 MB): 480.7 s against
+  477.6 s over the same 28 questions, which is noise, for 396 MiB more device memory. **BF16 was
+  not measured and cannot be on this machine** — the Vulkan child runs with
+  `GGML_VK_DISABLE_BFLOAT16=1` because this driver hangs at model load without it.
+- **The whole three-hour transcript is 40,157 tokens under Gemma 4's tokenizer** — the real prompt,
+  instruction block and all 175 cover windows included — which is **15.3% of the model's 262,144
+  trained context**. Sliding-window attention is why a longer context is cheap: only 8 of 48 layers
+  grow, so `-c 53248` costs 832 MiB of non-SWA KV where the other 40 layers stay at 1,920 MiB.
+  **This is ~22% below the 50,892 and 51,712 recorded elsewhere in this document for the same
+  transcript**, which were the 0.6B's and the 9B's tokenizers; a token count does not transfer
+  between them.
+- **The 26B keeps one advantage: long prefill.** 104.6 s against 125.9 s on the survey tier's
+  8,642-token prompt.
+
+### What is unproven
+
+- **Whether either model's answers are useful.** Every column above is mechanical. The three global
+  questions carry no mark because the set's own README makes them a person's judgement, and nobody
+  has read them.
+- **The 81.8% is BM25's ceiling, not either model's.** Retrieval runs before the model sees
+  anything, so all arms received byte-identical evidence and missed the same four paraphrase
+  questions. **This set cannot separate these two models on grounding**, and no result above should
+  be read as saying it did.
+- **Citation precision is not scored** — whether a resolving span actually supports its claim.
+- **The needle mechanism was not run.** Scoring it means planting a synthetic segment and re-asking.
+  The two needle questions were counted instead as what they are without a plant: two more chances
+  to invent an answer.
+- **One laptop, one backend, one transcript.** Nothing here says anything about CUDA, about a card
+  with memory of its own, or about a second recording. The whole-transcript figures are three
+  questions on one episode.
+- **The 17.2-minute cold whole-transcript ask is a single measurement**, and the second and third
+  asks (86.8 s, 71.2 s) are cheap only because `cache_prompt` reuses the prefix.
+- **Nothing was measured at any other quantisation of the 12B**, nor with the Q4_0 head the
+  publisher ships as its default beside the weights.
