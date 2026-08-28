@@ -27,22 +27,28 @@ from typing import Any, Callable
 from ..protocol import RequestError
 
 
-def resolve_auto() -> list[str]:
-    """What `auto` resolves to for the diariser on this machine.
+def resolve_auto(model_dir: str | None = None) -> list[str]:
+    """What `auto` resolves to for the diariser, for a given model directory.
 
-    A list of one, and it is a list only so that the `providers` op reports the same shape for both
-    engines. **This is not the shortlist it used to be.** While the diariser was an ONNX graph,
-    `auto` was candidates *tried* in order, because `get_available_providers()` reports what a wheel
-    was compiled with rather than what a machine can create and only a session build settles it.
-    Nothing here is negotiable: this pipeline is torch, the bundled torch is the CPU build, and
-    `auto` is therefore the CPU by construction rather than by election.
+    **It depends on the model directory, which is why it takes one**, and it is `["cpu"]` without
+    one: the election turns on whether that directory holds the derived graphs, and a caller with no
+    model loaded cannot be told anything better than the answer that is right on a machine which has
+    never exported them. The `providers` op passes the loaded model's path when there is one.
 
-    `cuda` remains reachable by name on a machine whose torch build has it — see
-    :meth:`PyannoteEngine._resolve_device` — and `webgpu` and `dml` are reachable where the
-    exported graphs are installed, through :meth:`PyannoteEngine._install_onnx_route`. Neither is
-    elected by `auto`: the default stays the route upstream's own figures describe.
+    `cuda` stays reachable by name on a machine whose torch build has it — see
+    :meth:`PyannoteEngine._resolve_device` — and `dml` where the graphs are installed, through
+    :meth:`PyannoteEngine._install_onnx_route`. Neither is elected by `auto`.
+
+    The reasoning lives with the constants it reads, in :func:`.pyannote_engine.resolve_auto`; this
+    is the name the sidecar imports and it delegates so there is one election rather than two.
     """
-    return ["cpu"]
+    # Imported here rather than at module scope on the same grounds as `Diariser.load`: starting the
+    # sidecar should cost nothing until a model is asked for. This module is cheap — it imports
+    # `os` and the protocol, and defers torch and onnxruntime into the functions that need them —
+    # but the discipline is the file's, and one exception is how a file stops having one.
+    from .pyannote_engine import resolve_auto as engine_resolve_auto
+
+    return engine_resolve_auto(model_dir)
 
 
 class Diariser:
@@ -60,6 +66,15 @@ class Diariser:
     @property
     def loaded(self) -> bool:
         return self._engine is not None
+
+    @property
+    def model_path(self) -> str:
+        """Where the loaded pipeline came from, or empty when nothing is loaded.
+
+        Read by the `providers` op so that the `auto` it reports for this engine is the one a load
+        would actually take — which depends on whether this directory holds the derived graphs.
+        """
+        return self._model_path
 
     def load(
         self,
@@ -145,6 +160,13 @@ class Diariser:
             # sent nothing, in which case this is the config's own value and the host has no other
             # way to learn it; and when the host did send one, this is what confirms it reached the
             # pipeline's batch attributes rather than merely arriving.
+            # **What `auto` passed over on the way to the route that loaded**, with the reason
+            # each did not build — empty when the first candidate built, and empty whenever a
+            # provider was named, because a named provider is refused rather than fallen back from.
+            # The host's `ExecutionProviders.ReadFellBackFrom` reads this from both engines; the
+            # translator has carried it since 2026-08-22 and this engine had nothing to report
+            # until `auto` could elect something on 2026-08-28.
+            "fellBackFrom": list(getattr(engine, "fell_back_from", [])),
             "batchSize": getattr(engine, "batch_size", None),
         }
 
