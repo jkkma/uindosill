@@ -571,15 +571,18 @@ foreach ($channel in $Channels) {
         Write-Note ("$($entry.fileName): {0:N1} MB, sha256 matches the catalogue" -f ($size / 1MB))
     }
 
-    # The speaker opt-in's two obligations, checked on disk before anything is packed. The graph is
-    # run by onnxruntime.dll, which is MIT and has to travel with its notice; the weights are under
-    # the NVIDIA Open Model License, whose section 3.1 wants a copy of the Agreement rather than a
-    # link — and `uindosill notice` prints the path to that copy, so a publish without it prints a
-    # promise it does not keep. Both arrive through the build (Licences.targets and the NuGet
-    # package's own RID assets), which is exactly why they are checked here: a build that silently
-    # stopped copying them would produce a package that looks complete.
+    # The notices that must be on disk before anything is packed. ONNX Runtime is MIT and has to
+    # travel with its notice; Silero VAD is MIT with a notice of its own; and the LGPL written offer
+    # discharges what libsndfile leaves. They arrive through the build (Licences.targets and the
+    # NuGet package's own RID assets), which is exactly why they are checked here: a build that
+    # silently stopped copying them would produce a package that looks complete.
+    #
+    # The NVIDIA Open Model License copy was a fourth entry until 2026-08-27 and left with the
+    # speaker weights it covered; nothing in this product is under that Agreement now.
     foreach ($required in @(
-        'licences/NVIDIA-Open-Model-License-2025-10-24.txt',
+        # The NVIDIA Open Model License copy left this list on 2026-08-27 with the Sortformer
+        # weights it covered — §3.1 wanted a copy rather than a link, and there is no longer a model
+        # under that Agreement to want one. `attic/sortformer/` holds the text.
         'licences/onnxruntime-LICENSE.txt',
         'licences/onnxruntime-ThirdPartyNotices.txt',
         'licences/silero-vad-LICENSE.txt',
@@ -590,17 +593,17 @@ foreach ($channel in $Channels) {
         'licences/LGPL-WRITTEN-OFFER.txt')) {
         $path = Join-Path $publishDir $required
         if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
-            throw "$required is missing or empty in the publish. The diarisation weights are under the NVIDIA " +
-                  "Open Model License, whose section 3.1 wants a copy of the Agreement rather than a link, and " +
-                  "'uindosill notice' prints the path to that copy — so a publish without it prints a promise it " +
-                  "does not keep. ONNX Runtime is MIT and redistributed twice — inside the Python bundle since " +
+            throw "$required is missing or empty in the publish. 'uindosill notice' prints the path to each " +
+                  "of these, so a publish without one prints a promise it does not keep. " +
+                  "ONNX Runtime is MIT and redistributed twice — inside the Python bundle since " +
                   "2026-08-21 and beside the .NET assemblies again since 2026-08-23 for speech detection — and the " +
                   "Silero VAD graph is MIT with a notice of its own, so all of these are owed. See docs/LICENSING.md."
         }
     }
 
     # ONNX Runtime ships twice since 2026-08-23: the bundled Python carries the onnxruntime-webgpu
-    # wheel for the diariser and the translator, and `onnxruntime.dll` is beside the managed
+    # wheel for the translator — the diariser was its other consumer until 2026-08-27 and is torch
+    # now — and `onnxruntime.dll` is beside the managed
     # assemblies again for the speech-detection graph, which runs in process. Both copies' notices
     # come from `licences/` and are asserted above — one obligation, two binaries.
     #
@@ -611,17 +614,16 @@ foreach ($channel in $Channels) {
         foreach ($required in @(
             'python.exe',
             'uindosill_engines/serve.py',
-            'uindosill_engines/diariser/parity-reference.npy',
-            # The second diariser's embedder reference left with DiariZen on 2026-08-27; the
-            # pyannote pipeline that replaced it is torch on both stages and has no ONNX path to
-            # check against, so there is no fixture to require. See bundle-python.ps1's list.
+            # No diariser reference: the engine that had one is in `attic/sortformer/`, and the
+            # pipeline that replaced it is torch on both stages with no ONNX path to check against.
+            # See bundle-python.ps1's list, where the same three names left together.
             'uindosill_engines/translator/parity-reference.json',
             'Lib/site-packages/onnxruntime')) {
             $path = Join-Path $bundleDir $required
             if (-not (Test-Path -LiteralPath $path)) {
-                throw "python/$required is missing from the publish. Two of this product's three models run in " +
-                      "that bundle, and the parity references are what stand between a user and a silently " +
-                      "wrong execution provider."
+                throw "python/$required is missing from the publish. Two of this product's models run in " +
+                      "that bundle, and the translator's parity reference is what stands between a user and a " +
+                      "silently wrong execution provider."
             }
         }
 

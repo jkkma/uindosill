@@ -21,13 +21,17 @@ namespace Parakeet.App.Services;
 /// of arithmetic, not principle.
 /// </para>
 /// <para>
-/// <b>The diariser left the installer on 2026-08-26, and not for size.</b> Speaker labelling has
-/// two models now and neither is better than the other — one is quick and stops at four voices,
-/// the other has no such limit, costs about thirty times the compute and is licensed for
-/// non-commercial use only. Carrying one of them would have made it the answer on every fresh
-/// install for no reason except that it fit, which is a choice being made by the packaging
-/// script instead of by the person whose recording it is. Both are downloads; the Models tab is
-/// where the choice is made and <c>AppSettings.DiarisationModelId</c> is where it is kept.
+/// <b>The diariser left the installer on 2026-08-26, and not for size.</b> Speaker labelling had
+/// two models then and neither was better than the other, so carrying one would have made it the
+/// answer on every fresh install for no reason except that it fit — a choice made by the packaging
+/// script instead of by the person whose recording it is.
+/// </para>
+/// <para>
+/// <b>One model since 2026-08-27</b>, and it stays out for a reason that no longer needs that
+/// argument: its Hugging Face repository is gated, so the weights cannot be redistributed in an
+/// installer at all. It is a download, the Models tab is where it is fetched, and
+/// <c>AppSettings.DiarisationModelId</c> is where the choice is kept against a second entry
+/// arriving.
 /// </para>
 /// <para>
 /// The catalogue entries stay for every one of them: a machine that already downloaded one keeps using its
@@ -69,8 +73,10 @@ public static class BundledModels
     /// It held the diariser, for the maintainer's 2026-08-24 decision: with llm/cuda inside, the
     /// win-cuda package projected past GitHub's 2 GiB asset limit and its 474.6 MB weight was what
     /// gave. That is moot now the diariser is not bundled in any channel at all -- and the reason
-    /// is no longer size. Speaker labelling has two models and neither is a default; bundling one
-    /// of them would have made it the answer on every fresh install for no reason but that it fit.
+    /// is no longer size. It was that speaker labelling had two models and neither was a default,
+    /// so bundling one would have made it the answer on every fresh install for no reason but that
+    /// it fit. **There is one since 2026-08-27**, and it stays unbundled for a stronger reason: its
+    /// repository is gated, so the weights cannot be redistributed in an installer at all.
     /// </remarks>
     public static readonly string[] NotInCudaChannelIds = [];
 

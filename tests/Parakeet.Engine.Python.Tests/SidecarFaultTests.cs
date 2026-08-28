@@ -24,7 +24,7 @@ public sealed class SidecarFaultTests
     };
 
     private const string DiariserCapabilities =
-        """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"cpu","supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000}}""";
+        """{"id":{id},"type":"result","capabilities":{"engineName":"pyannote-torch-python","modelId":"pyannote-speaker-diarization-community-1","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"torch:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"reliableUpToSeconds":null,"honoursPostProcessing":false}}""";
 
     [Fact]
     public async Task AfterTheChildDiesEveryLaterRequestIsRefusedAtOnceWithTheSameReason()

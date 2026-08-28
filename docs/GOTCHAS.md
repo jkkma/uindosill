@@ -564,7 +564,8 @@ that covered everything looked like a run that had lost a third of the suite.
 out of the solution and leaves all three sitting in the working copy. The leftover TRX is not stale
 by the rule above — it is *newer* than the leftover DLL, because one run produced both — so the
 pair is self-consistent and sailed through. On 2026-08-22 the remains of
-`Parakeet.Engine.Sortformer.Tests` and `Parakeet.Engine.Marian.Tests` added 46 and 31 tests to a
+`Parakeet.Engine.Sortformer.Tests` and `Parakeet.Engine.Marian.Tests` — both in `attic/` since
+2026-08-21 and unbuilt — added 46 and 31 tests to a
 suite that no longer contains either, and the check reported **854 against a documented 777** with
 every per-assembly line looking plausible. A `TestResults/` now counts only when a `*.csproj` sits
 beside it, and the directories skipped are **named in a line above the totals** rather than dropped
@@ -743,6 +744,20 @@ test to remember a lifetime it is not shaped to own.
 
 ## 35. pyannote picks a speaker-embedding loader by substring-matching the file path, and the first match wins
 
+> **Gotchas 35 to 37 were found on DiariZen, which is in `attic/diarizen/`.** It was the second
+> diariser from 2026-08-26 until 2026-08-27; `pyannote/speaker-diarization-community-1` replaced it
+> that morning and became the only one that afternoon. Every path below beginning
+> `python/uindosill_engines/diariser/diarizen.py` or `_vendor/diarizen/` now lives under
+> `attic/diarizen/`, and the catalogue entry and attribution record they mention are gone.
+>
+> **They are kept because two of the three are about upstream rather than about that engine**, and
+> upstream is still here: 35 is a property of `pyannote.audio`'s own
+> `PretrainedSpeakerEmbedding`, and 36 is a property of how it treats speechbrain — which is why
+> `requirements-bundle.txt` still cites 36 as the reason speechbrain stays out. **37 is the one to
+> re-check rather than to trust**: pyannote 4 upstreamed the VBx clustering it describes, so the
+> dead-branch finding may or may not hold for the code that ships now, and nobody has looked. The
+> determinism it concludes was measured on DiariZen and does not transfer by itself.
+
 `PretrainedSpeakerEmbedding` — the factory DiariZen's pipeline calls to build its embedder — decides
 which of four loaders to use like this:
 
@@ -774,7 +789,7 @@ ImportError: 'onnxruntime' must be installed to use '...\wespeaker-voxceleb-resn
 
 **The fix is the file name, and it is deliberate rather than cosmetic.** It installs as
 `pyannote-wespeaker-voxceleb-resnet34-LM.bin`; `EMBEDDING_FILE` in
-`python/uindosill_engines/diariser/diarizen.py` says why, and the catalogue entry, the attribution
+`attic/diarizen/uindosill_engines/diariser/diarizen.py` says why, and the catalogue entry, the attribution
 record and `docs/LICENSING.md` all name it that way. The prefix is also simply true — the file comes
 from the `pyannote` organisation — which is what makes it a name worth keeping rather than a
 workaround to be tidied away by the next person who reads it as redundant.
@@ -843,7 +858,7 @@ whose import is known to be clean. This project chose the pin, and
 
 **Related.** The same upgrade removed two more things this stack reaches for — `torchaudio.AudioMetaData`
 (gone entirely) and `torchaudio.load`'s built-in decoding (now delegated to TorchCodec) — and flipped
-`torch.load`'s `weights_only` default. All three are repaired in `diariser/diarizen.py`'s
+`torch.load`'s `weights_only` default. All three are repaired in `attic/diarizen/uindosill_engines/diariser/diarizen.py`'s
 `_prepare_imports`, deliberately from this project's own code rather than by editing the vendored
 fork, so the vendored copy stays byte-identical to the source the published figures describe. They
 surface strictly one at a time, each only after the previous is fixed, which is why they were
@@ -851,7 +866,8 @@ enumerated by running rather than by reading.
 
 ## 37. The second diariser's clustering contains an unseeded RNG that never runs, and it costs an hour to find that out
 
-`_vendor/diarizen/clustering/VBx.py` initialises its variational EM from a flat Dirichlet prior drawn
+`attic/diarizen/uindosill_engines/_vendor/diarizen/clustering/VBx.py` initialises its variational EM
+from a flat Dirichlet prior drawn
 from numpy's **global, unseeded** generator:
 
 ```python
@@ -875,9 +891,14 @@ qinit = qinit if init_smoothing < 0 else softmax(qinit * init_smoothing, axis=1)
 gamma, pi, _, _, _ = VBx(fea, Phi, ..., gamma=qinit, ...)
 ```
 
-`gamma` is never `None`, so `np.random.gamma` never executes. The pipeline is deterministic:
-measured 2026-08-26, two unseeded runs of the same build over the same ten-minute stretch differ by
+`gamma` is never `None`, so `np.random.gamma` never executes. That pipeline was deterministic:
+measured 2026-08-26, two unseeded runs of the same build over the same ten-minute stretch differed by
 **0 of 300,000 frames**, and four runs all returned 225 turns.
+
+**Whether the shipping pipeline is deterministic is unverified.** `pyannote.audio` 4 upstreamed this
+same VBx implementation, so both the unseeded prior and the `qinit` that makes it unreachable are
+plausibly still there — but "plausibly" is not a reading, and no run of the current engine has been
+repeated to check. The one-meeting run of 2026-08-27 was a single pass.
 
 **Why this is worth a gotcha rather than a shrug.** When the ONNX speaker embedder changed the turn
 count from 225 to 222, this RNG was the obvious suspect, and ruling it out took two control runs of

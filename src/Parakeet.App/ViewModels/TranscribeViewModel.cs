@@ -460,9 +460,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 // than let Start be the first place anybody hears it. One sentence for every queue:
                 // the long-recording escalation is SpeakerDurationWarning's job, drawn right beside
                 // this field.
+                // The clause that stood here — that the model's own estimate can silently hear one
+                // person as two on long recordings — was measured on the streaming ONNX diariser
+                // retired 2026-08-27, whose speaker cache had no long-term anchor. The pipeline
+                // that ships clusters globally and has no such known failure; borrowing the finding
+                // would be quoting one engine's measurement about another.
                 return "Give the number of people talking; 'Label speakers' does not run without it. "
-                    + "The model's own estimate can silently hear one person as two on long recordings, "
-                    + "so the count is always asked for.";
+                    + "The model works the number out for itself, and how well it does that has not "
+                    + "been measured here.";
             }
 
             if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)

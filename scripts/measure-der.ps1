@@ -43,7 +43,7 @@
     # it writes speaker turns and nothing else, which is what makes scoring a corpus affordable.
     # Add --fake for the canned labeller, which needs no model at all.
     Get-ChildItem runs\der\stretches\*.wav | ForEach-Object { uindosill diarise -o runs\product $_.FullName }
-    .\scripts\measure-der.ps1 -Hypotheses runs\product -System "uindosill --speakers (sortformer)"
+    .\scripts\measure-der.ps1 -Hypotheses runs\product -System "uindosill --speakers (pyannote)"
 
 .EXAMPLE
     # AMI test, which is the corpus the ship gate is written against and is not what this script

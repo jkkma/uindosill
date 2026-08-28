@@ -369,7 +369,7 @@ public class FormatterTests
     {
         var labelled = Document() with
         {
-            SpeakerModelId = "sortformer-4spk-v2.1",
+            SpeakerModelId = "pyannote-speaker-diarization-community-1",
             SpeakerBackend = ComputeBackend.Cuda,
             RequestedSpeakerCount = 2,
             SpeakerFolds =
@@ -397,7 +397,7 @@ public class FormatterTests
         // And with metadata on, all four are there — otherwise this test passes on a formatter
         // that never writes them at all.
         using var full = JsonDocument.Parse(TranscriptFormats.Json.Format(labelled));
-        Assert.Equal("sortformer-4spk-v2.1", full.RootElement.GetProperty("speakerModel").GetString());
+        Assert.Equal("pyannote-speaker-diarization-community-1", full.RootElement.GetProperty("speakerModel").GetString());
         Assert.Equal("cuda", full.RootElement.GetProperty("speakerBackend").GetString());
         Assert.Equal(2, full.RootElement.GetProperty("requestedSpeakerCount").GetInt32());
         Assert.Equal(1, full.RootElement.GetProperty("speakerFolds").GetArrayLength());

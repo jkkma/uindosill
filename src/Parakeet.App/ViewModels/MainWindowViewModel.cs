@@ -613,7 +613,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [
         new(null, "Automatic"),
         new("cpu", "CPU"),
-        new("webgpu", "WebGPU"),
         new("cuda", "CUDA (NVIDIA)"),
     ];
 
@@ -626,56 +625,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private IReadOnlyList<string>? _registeredDiariserProviders;
 
     /// <summary>
-    /// The rows on offer: Automatic, plus the providers this machine's runtime actually registered.
+    /// The rows on offer: Automatic, the CPU, and CUDA.
     /// </summary>
     /// <remarks>
-    /// <b>The bundle pins <c>onnxruntime-webgpu</c>, whose wheel has no CUDA provider</b>, so
-    /// offering a CUDA row unconditionally offered one that could not work on any machine — an
-    /// NVIDIA card included. That was shipped on 2026-08-27 and corrected the same day.
+    /// <b>Three fixed rows, because the diariser has one vocabulary.</b> It is a torch pipeline, so
+    /// these are torch devices; <c>webgpu</c> and <c>dml</c> are ONNX Runtime execution providers
+    /// and the sidecar refuses them by name rather than falling back to the CPU.
     /// <para>
-    /// A stored choice that is no longer registered stays in the list, marked. Dropping it would
-    /// leave the combo showing "Automatic" while the settings file said otherwise, which is the
-    /// disagreement a person cannot diagnose; and rewriting their file to match would be this
-    /// window quietly discarding a choice it was not asked to change.
+    /// <b>This filtered by what ONNX Runtime had registered until 2026-08-27, and that machinery is
+    /// gone with the engine it served.</b> Two corrections landed on it that day — a CUDA row the
+    /// bundle's <c>onnxruntime-webgpu</c> wheel could not have provided, then a WebGPU row the torch
+    /// pipeline would have refused — and shelving the ONNX diariser removed the question both were
+    /// answering. What went with them is a real capability: <b>nothing now checks whether this
+    /// machine can use the CUDA row before offering it.</b> A torch build without CUDA answers at
+    /// load, which is later and worse than not offering it, and restoring the check means asking
+    /// torch rather than ONNX Runtime — which nothing does. <c>docs/UNPROVEN.md</c> carries it.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<DiarisationProviderChoice> DiarisationProviders
-    {
-        get
-        {
-            // **The torch pipeline's vocabulary is not ONNX Runtime's, so the registration list
-            // cannot filter it.** That list says what the ONNX diariser could run on; the pyannote
-            // one is torch on both stages and refuses `webgpu` and `dml` by name rather than
-            // falling back, so a row offered from ORT's registration is a row whose only outcome is
-            // a failed load. Filtered before the registration test rather than after, because the
-            // two answers are about different engines and the wrong one must not narrow the right
-            // one. `cuda` stays on offer: it is a real torch device, and whether this machine's
-            // torch build has one is what the sidecar answers.
-            if (_engines.DiariserRunsInTorch)
-            {
-                return AllDiarisationProviders
-                    .Where(row => row.Provider is null or "cpu" or "cuda")
-                    .ToList();
-            }
-
-            if (RegisteredDiariserProviders is not { } registered)
-            {
-                return AllDiarisationProviders;
-            }
-
-            var rows = AllDiarisationProviders
-                .Where(row => row.Provider is null || registered.Contains(row.Provider))
-                .ToList();
-
-            if (DiarisationProvider is { Length: > 0 } chosen && !rows.Any(row => row.Provider == chosen))
-            {
-                var label = AllDiarisationProviders.FirstOrDefault(row => row.Provider == chosen)?.Label ?? chosen;
-                rows.Add(new DiarisationProviderChoice(chosen, $"{label} — not available on this machine"));
-            }
-
-            return rows;
-        }
-    }
+    public IReadOnlyList<DiarisationProviderChoice> DiarisationProviders => AllDiarisationProviders;
 
     /// <summary>The twin of <see cref="SelectedAskExpertPlacement"/>, and for the same reason.</summary>
     public DiarisationProviderChoice SelectedDiarisationProvider
@@ -724,8 +691,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string? DiarisationBatchSizeHint =>
         CanSetDiarisationBatchSize
             ? null
-            : "Only the downloadable speaker model has this setting. The built-in one works in a "
-              + "fixed way that cannot be changed.";
+            // Until 2026-08-27 this said the setting belonged to one of two speaker models and not
+            // to the built-in one. There is one model, it is not built in, and this property is
+            // false only when speaker labelling is unavailable at all — so the sentence named a
+            // cause that could not be the cause.
+            : "This setting needs the speaker model installed and the bundled Python present.";
 
     /// <summary>
     /// What the choices mean, naming only the ones on offer.
@@ -741,8 +711,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             var offered = DiarisationProviders.Select(row => row.Provider).ToArray();
             var text =
-                "Automatic uses the path each speaker model was checked on, and is the right choice "
-                + "unless you have a reason.";
+                "Automatic is your processor, because the Python that ships with Uindosill has no "
+                + "graphics build of the speaker model's runtime. Nothing here has been measured on "
+                + "any option.";
 
             if (offered.Contains("webgpu"))
             {
@@ -754,18 +725,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (offered.Contains("cuda"))
             {
-                // **"changes the labels in the same way" is Sortformer's measurement**, taken on
-                // AMI test, and it does not describe the torch pipeline — where nothing has been
-                // measured on any provider. Saying it there would put one model's finding in front
-                // of somebody choosing for another.
-                text += _engines.DiariserRunsInTorch
-                    ? " CUDA runs on an NVIDIA card. Whether it changes the labels has not been checked."
-                    : " CUDA runs on an NVIDIA card and changes the labels in the same way.";
+                // **The alternative sentence here was Sortformer's measurement**, taken on AMI
+                // test: "changes the labels in the same way". That engine went to
+                // `attic/sortformer/` on 2026-08-27 and `DiariserRunsInTorch` is unconditionally
+                // true now, so only one arm was ever reachable afterwards and the other is gone.
+                // Nothing has been measured on any provider for the pipeline that remains, which is
+                // what this says rather than borrowing a finding from a model nobody is choosing.
+                text += " CUDA runs on an NVIDIA card. Whether it changes the labels has not been checked.";
             }
 
-            text += RegisteredDiariserProviders is null
-                ? " This list is still being checked against what your machine can run."
-                : " Only what this machine can actually run is listed.";
+            // **No availability claim, because this list no longer makes one.** While the diariser
+            // was an ONNX graph the rows were filtered by what ONNX Runtime had registered, and the
+            // two sentences that stood here reported that filter's state. `DiariserRunsInTorch` is
+            // unconditionally true since 2026-08-27, so `DiarisationProviders` returns a fixed
+            // torch device list and the probe's answer is never applied — saying "only what this
+            // machine can run is listed" would be asserting a check that does not happen. CUDA is
+            // offered whether or not this torch build has it, and naming it is how somebody finds
+            // out.
+            text += " CUDA is offered whether or not this computer has it; choosing it will say so "
+                + "if it cannot be used.";
 
             return text + " Takes effect at your next recording.";
         }

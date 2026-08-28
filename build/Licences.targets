@@ -4,12 +4,12 @@
     Copies licences/ into the build output, so the notices the product renders name files that are
     actually there.
 
-    Three obligations land in that directory and none of them is satisfied by a link.
+    Two obligations land in that directory and neither is satisfied by a link.
 
-    The NVIDIA Open Model License covers the speaker diarisation weights, and §3.1 says a
-    redistributor "must give any other recipients of the Model a copy of this Agreement". A copy,
-    not a URL — and `uindosill notice` prints the path to it, so a build that leaves the file
-    behind prints a promise it does not keep.
+    A third stood here until 2026-08-27: the NVIDIA Open Model License covered the speaker
+    diarisation weights and §3.1 required a redistributor to "give any other recipients of the Model
+    a copy of this Agreement". Those weights were retired, no model in this product is under that
+    Agreement, and the copy is kept in `attic/sortformer/` rather than shipped.
 
     ONNX Runtime is MIT, and MIT requires the copyright notice to travel with the binary. It also
     statically links 69 third-party components whose own notices are in its ThirdPartyNotices.txt,

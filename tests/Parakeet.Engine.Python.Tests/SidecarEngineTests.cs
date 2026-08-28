@@ -26,7 +26,7 @@ namespace Parakeet.Engine.Python.Tests;
 public sealed class SidecarEngineTests
 {
     private const string DiariserCapabilities =
-        """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"webgpu","supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000}}""";
+        """{"id":{id},"type":"result","capabilities":{"engineName":"pyannote-torch-python","modelId":"pyannote-speaker-diarization-community-1","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"torch:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"reliableUpToSeconds":null,"honoursPostProcessing":false}}""";
 
     private const string TranslatorCapabilities =
         """{"id":{id},"type":"result","capabilities":{"engineName":"marian-onnx-python","modelId":"opus-mt","backend":"webgpu","maxSourceTokens":512,"beams":6,"maxNewTokens":512,"lengthPenalty":1.0,"earlyStopping":false}}""";
@@ -281,7 +281,7 @@ public sealed class SidecarEngineTests
     // -- the diariser --------------------------------------------------------------------------
 
     [Fact]
-    public async Task ThePyannoteDiariserIsNeverParityChecked()
+    public async Task TheDiariserIsNeverParityChecked()
     {
         // **Parity compares two paths to one answer, and this arm has one.** pyannote's pipeline is
         // torch on both stages with no ONNX route, so the only comparison available would be a
@@ -313,7 +313,6 @@ public sealed class SidecarEngineTests
             {
                 ModelPath = "unread-directory",
                 Provider = "cuda",
-                Kind = DiariserKinds.Pyannote,
             },
             sidecar);
 
@@ -321,57 +320,14 @@ public sealed class SidecarEngineTests
 
         Assert.Equal(ComputeBackend.Cuda, labeller.Capabilities.Backend);
 
-        // Asserted rather than merely scripted: this is the field the warning path keys on, and a
-        // rename of the JSON key would otherwise ship in silence. On this arm both stages report
-        // the same runtime, so it also stands for segmentation.
+        // Asserted rather than merely scripted: a rename of the JSON key would otherwise ship in
+        // silence. Both stages report the same runtime, so it also stands for segmentation.
         Assert.Equal("torch:cuda", labeller.Capabilities.EmbeddingBackend);
 
-        Assert.Null(labeller.Parity);
-    }
-
-    [Fact]
-    public async Task SortformerOnTheCpuIsNotParityCheckedBecauseTheCpuIsItsReference()
-    {
-        // **The exemption that survives, and it belongs to the ONNX diariser.** Sortformer's
-        // committed reference *is* ONNX Runtime's CPU provider, so checking the CPU against it
-        // would compare the reference with itself and measure nothing. Every other backend it can
-        // reach is checked — see the DirectML figure in `SidecarSpeakerLabeller`.
-        //
-        // This test was DiariZen's until 2026-08-27, asserting that its *torch* embedder was
-        // exempt. When the engine was replaced, only the `Kind` constant here was updated, which
-        // left a test whose name, reason and scripted payload all still described an engine that
-        // had left the tree — and which passed under either rule, because a scripted `cpu` backend
-        // satisfies both. An adversarial review caught it. It is re-pointed at Sortformer rather
-        // than deleted, because the CPU exemption is a real rule that otherwise loses its only
-        // test: the pyannote arm's exemption is covered by the sibling above, which scripts `cuda`.
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new
-            {
-                op = "load",
-                emit = new[]
-                {
-                    """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"cpu","graphOptimization":null,"supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000,"fellBackFrom":[]}}""",
-                },
-            }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions
-            {
-                ModelPath = "unread.onnx",
-                Provider = "auto",
-                Kind = DiariserKinds.Sortformer,
-            },
-            sidecar);
-
-        await labeller.LoadAsync();
-
-        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
-
-        // No `parity` reply is scripted: if the check ran, the fake sidecar would have nothing to
-        // answer with and the load would not complete. That is what makes this an assertion about
-        // the rule rather than about the null.
-        Assert.Null(labeller.Parity);
+        // **The assertion is that the load completed at all.** No `parity` reply is scripted, so if
+        // this labeller had sent one the fake sidecar would have had nothing to answer with and
+        // LoadAsync would not have returned. That is what makes this a statement about the rule —
+        // no diariser is parity-checked, on any backend — rather than about a null.
     }
 
 
@@ -384,13 +340,13 @@ public sealed class SidecarEngineTests
 
         await using var sidecar = new PythonSidecar(fake.Resolution);
         await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx", Provider = "auto" }, sidecar);
+            new SidecarLabellerOptions { ModelPath = "unread-directory", Provider = "auto" }, sidecar);
 
         await labeller.LoadAsync();
 
         Assert.Equal(SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers, labeller.Capabilities.MaxSpeakers);
         Assert.Equal(SidecarSpeakerLabeller.DeclaredLimits.ReliableUpTo, labeller.Capabilities.ReliableUpTo);
-        Assert.Equal(ComputeBackend.WebGpu, labeller.Capabilities.Backend);
+        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
     }
 
     [Fact]
@@ -405,13 +361,13 @@ public sealed class SidecarEngineTests
                 op = "load",
                 emit = new[]
                 {
-                    """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","backend":"cpu","supportsFixedSpeakerCount":false,"maxSpeakers":8,"reliableUpToSeconds":3000}}""",
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"pyannote-torch-python","backend":"cpu","supportsFixedSpeakerCount":false,"maxSpeakers":8,"reliableUpToSeconds":3000}}""",
                 },
             }));
 
         await using var sidecar = new PythonSidecar(fake.Resolution);
         await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
+            new SidecarLabellerOptions { ModelPath = "unread-directory" }, sidecar);
 
         var failure = await Assert.ThrowsAsync<PythonSidecarException>(async () => await labeller.LoadAsync());
 
@@ -425,80 +381,14 @@ public sealed class SidecarEngineTests
         using var fake = FakeSidecarProcess.Scripted(Script());
         await using var sidecar = new PythonSidecar(fake.Resolution);
         await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
+            new SidecarLabellerOptions { ModelPath = "unread-directory" }, sidecar);
 
         // The limits are; the backend and the model id are not, and a guess at those is how
-        // provenance becomes fiction.
-        Assert.Equal(4, SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers);
+        // provenance becomes fiction. The declared cap is null rather than 4 since the four-slot
+        // graph was retired — still an answer available before a load, and still the point of the
+        // split: null is "no cap", not "ask later".
+        Assert.Null(SidecarSpeakerLabeller.DeclaredLimits.MaxSpeakers);
         Assert.Throws<InvalidOperationException>(() => labeller.Capabilities);
-    }
-
-    [Fact]
-    public async Task AFailedDiariserParityCheckCarriesTheMagnitudeAndNotOnlyTheVerdict()
-    {
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new { op = "load", emit = new[] { DiariserCapabilities } },
-            new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":true,"passed":false,"maxAbsDiff":0.796,"decisionFlipPercent":2.997,"tolerance":1.0e-04}""" } }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
-
-        await labeller.LoadAsync();
-
-        Assert.NotNull(labeller.Parity);
-        Assert.False(labeller.Parity!.Passed);
-        Assert.Equal(0.796, labeller.Parity.MaxAbsoluteDifference, 6);
-        Assert.Equal(2.997, labeller.Parity.DecisionFlipPercent, 6);
-        Assert.Equal(1.0e-04, labeller.Parity.Tolerance, 12);
-    }
-
-    [Fact]
-    public async Task ADiariserParityCheckThatCrashesIsAResultThatSaysItDidNotRunRatherThanNothing()
-    {
-        // The third state. A check that crashes is not the CPU's "not run" and not a missing
-        // fixture; until 2026-08-22 it came back as the same null as both, and the labels went out
-        // unverified with nothing said anywhere.
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new { op = "load", emit = new[] { DiariserCapabilities } },
-            new { op = "parity", emit = new[] { """{"id":{id},"type":"error","kind":"internal","message":"boom"}""" } }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
-
-        await labeller.LoadAsync();
-
-        var parity = Assert.IsType<ParityResult>(labeller.Parity);
-        Assert.False(parity.Ran);
-        Assert.False(parity.Passed);
-        Assert.Contains("boom", parity.Reason, StringComparison.Ordinal);
-        Assert.Contains("could not be run", parity.Describe(), StringComparison.Ordinal);
-        Assert.Contains("boom", parity.Describe(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ADiariserParityReasonIsCarriedWhenTheSidecarGivesOneInsteadOfAMagnitude()
-    {
-        // A shape that does not match, probabilities that are not finite: the sidecar says so in
-        // words, and the words are what reaches the user — not a difference of NaN.
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new { op = "load", emit = new[] { DiariserCapabilities } },
-            new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":true,"passed":false,"reason":"2 of 3048 probabilities are not finite","tolerance":1.0e-04}""" } }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx" }, sidecar);
-
-        await labeller.LoadAsync();
-
-        var parity = Assert.IsType<ParityResult>(labeller.Parity);
-        Assert.True(parity.Ran);
-        Assert.False(parity.Passed);
-        Assert.Equal("2 of 3048 probabilities are not finite", parity.Reason);
-        Assert.True(double.IsNaN(parity.MaxAbsoluteDifference));
-        Assert.Contains("not finite", parity.Describe(), StringComparison.Ordinal);
-        Assert.DoesNotContain("NaN", parity.Describe(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -518,32 +408,6 @@ public sealed class SidecarEngineTests
         Assert.False(parity.Passed);
         Assert.Contains("could not be run", parity.Describe(), StringComparison.Ordinal);
         Assert.Contains("boom", parity.Describe(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task TheProvidersAutoPassedOverArriveWithTheirReasons()
-    {
-        // What explains a run at CPU speed on a machine with a GPU. Until 2026-08-22 the sidecar
-        // kept the reasons only for the case where every candidate failed, so the one fact that
-        // explained the run was discarded at the moment it was known.
-        using var fake = FakeSidecarProcess.Scripted(Script(
-            new
-            {
-                op = "load",
-                emit = new[]
-                {
-                    """{"id":{id},"type":"result","capabilities":{"engineName":"sortformer-onnx-python","modelId":"sortformer-4spk-v2.1","backend":"cpu","supportsFixedSpeakerCount":false,"maxSpeakers":4,"reliableUpToSeconds":3000,"fellBackFrom":["webgpu: no adapter","cuda: library not found"]}}""",
-                },
-            }));
-
-        await using var sidecar = new PythonSidecar(fake.Resolution);
-        await using var labeller = new SidecarSpeakerLabeller(
-            new SidecarLabellerOptions { ModelPath = "unread.onnx", Provider = "auto" }, sidecar);
-
-        await labeller.LoadAsync();
-
-        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
-        Assert.Equal(["webgpu: no adapter", "cuda: library not found"], labeller.FellBackFrom);
     }
 
     [Fact]

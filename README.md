@@ -27,7 +27,7 @@
 |---|---|
 | **Transcribe** | Audio and video files, locally, with NVIDIA Parakeet TDT 0.6B v3 through [`parakeet.cpp`](https://github.com/mudler/parakeet.cpp) — 25 European languages, on CPU, Vulkan or CUDA. Seven output formats: `txt`, `md`, `srt`, `vtt`, word-timed `vtt-words` for karaoke-style highlighting, `json` with timestamps, and `rttm`. |
 | **Paste a link** | A URL behaves like a file: the audio track is downloaded and queued. On the Ask tab the picture streams from the link rather than landing on disk, so a three-hour video costs megabytes instead of gigabytes. |
-| **Label who spoke** | Opt-in, off by default. NVIDIA Streaming Sortformer adds `Speaker 1:` to every format and unlocks `rttm`. It tells apart **at most four speakers** — architectural, not a setting — and the product says so rather than degrading quietly. |
+| **Label who spoke** | Opt-in, off by default. `pyannote/speaker-diarization-community-1` adds `Speaker 1:` to every format and unlocks `rttm`. It clusters rather than tracks, so there is **no ceiling on how many voices** it can separate — and it has been scored on **one meeting**, not on a corpus, which the product says rather than leaving you to assume. |
 | **Translate to English** | Opt-in. A Marian checkpoint exported here to ONNX, decoded at beam 6. The English arrives *beside* the transcript rather than instead of it, sentence for sentence, with the same speakers on both sides. |
 | **Find the speech** | Silero VAD (2.2 MiB, MIT, on the CPU) cuts on pauses in speech rather than on quiet, so narration over a music bed no longer comes out in thirty-second blocks. Default wherever its model is installed; `--vad energy` asks for the loudness gate on purpose. |
 | **Ask the transcript** | A chat panel beside the text. A local `llama-server` answers, the model cites opaque segment ids the application resolves to times — it never writes a timestamp of its own — a claim it cannot anchor renders as unresolved, and every answer says it was generated, not transcribed. |
@@ -61,13 +61,20 @@ turns it back off.
 | Task | Result | Corpus | Beside it |
 |---|---|---|---|
 | Word error rate | **10.21%** (f16, CUDA) | Earnings-22 subset — 11 h of accented English earnings calls, human transcripts | 13.40% against the same corpus's non-verbatim transcript style; all five quantisations land within **0.08 points** of one another |
-| Diarisation error rate | **16.33%** (collar 0, overlap scored) | AMI meeting corpus | The best published figure on the same audio is 18.8% |
+| Diarisation error rate | **14.38%** (collar 0.25, overlap scored) — **one meeting, not a corpus** | AMI `ES2004a`, 17.5 min | 18.76% at collar 0. The engine that carried this project's 16.33% over the whole AMI test set was retired on 2026-08-27; see below |
 | Translation | chrF++ clears its per-language bar in **23 of 24** languages, with **zero collapses** | FLEURS `test` — all 8,149 sentences, beam 6 | Margins over each language's floor run +28.15 to +60.53, median +42.76; Slovak misses by 0.74 |
 
-The DER figure names its provider: 16.3319% on WebGPU, 16.3324% on the CPU, 0.0005 points apart.
-That agreement is *why* WebGPU is the default rather than CUDA's faster 16.1021% — a figure only
-one provider reproduces describes whoever measured it. The sidecar's translation decode was held
-to the same standard: it reproduced all 8,149 recorded hypotheses across 24 languages character
+**The diarisation figure is one meeting rather than a corpus, and that is a change rather than an
+omission.** Until 2026-08-27 speaker labelling was NVIDIA's Streaming Sortformer, which scored
+**16.33%** DER over the whole AMI test set — sixteen meetings — against a best published figure of
+18.8% on the same audio, at 16.3324% on the CPU and 16.3319% on WebGPU, which is why WebGPU was
+chosen automatically over CUDA's faster but divergent 16.1021%. That engine was shelved to
+`attic/sortformer/`, and **not one of those numbers describes what ships now**. The pipeline that
+replaced it has been scored on one of those sixteen meetings, and a single meeting is not a corpus:
+the two figures must not be set beside each other. `docs/UNPROVEN.md` records what a comparable
+number would take, and `docs/PHASES.md` records that the speaker gate is unmet until it exists.
+
+The translation decode is still held to that standard: it reproduced all 8,149 recorded hypotheses across 24 languages character
 for character.
 
 Slovak is the single language the translation gate fails, by 0.74 of a chrF++ point against
@@ -94,9 +101,12 @@ check*, because silently retiring a guard is worse than never having one.
 Three habits fall out of it, and they show up throughout the codebase:
 
 - **A provider can be catastrophically wrong and look healthy.** At ONNX Runtime's default
-  settings DirectML scores 53.15% DER while returning plausible speaker turns, a clean exit and a
-  13× speed-up. So both sidecar engines check a committed parity fixture at load on every provider
-  but the CPU, and `dml` is refused by name until a second flag unlocks it.
+  settings DirectML scored 53.15% DER while returning plausible speaker turns, a clean exit and a
+  13× speed-up — measured on the diariser retired in August 2026. So the translator checks a
+  committed parity fixture at load on every provider but the CPU, and `dml` is refused by name
+  until a second flag unlocks it. **The diariser no longer has such a check**: it is a torch
+  pipeline with one path, and parity needs two. That is a gap rather than a resolution, and
+  [UNPROVEN.md](docs/UNPROVEN.md) carries it.
 - **An exclusion list fails safely; an inclusion list fails silently.** The first release
   candidate shipped without three whole features because a packaging step pruned everything it did
   not recognise. The prune now deletes only *named* backends a channel does not carry, and the
@@ -127,7 +137,7 @@ rather than a convenience, since a test needing 670 MB of weights is a test CI w
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1414 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1404 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -150,7 +160,7 @@ uindosill bench recording.wav
 Speaker labels are a separate model and a separate download:
 
 ```bash
-uindosill models download sortformer-4spk-v2.1   # 453 MiB; not a transcription model
+uindosill models download pyannote-speaker-diarization-community-1   # 31 MiB; needs a Hugging Face token
 uindosill transcribe --speakers -f srt,rttm meeting.wav
 uindosill diarise meeting.wav                    # speaker turns only, no transcription
 ```
@@ -159,7 +169,7 @@ uindosill diarise meeting.wav                    # speaker turns only, no transc
 contributes nothing to a speaker turn; it is what the AMI measurement runs through, and
 `uindosill der` scores its output.
 
-Both sidecar engines take an execution provider — `auto|cpu|cuda|webgpu`, resolved inside the
+The translator takes an execution provider — `auto|cpu|cuda|webgpu`, resolved inside the
 sidecar, because the only thing that knows whether a provider will initialise is the ONNX Runtime
 that would have to initialise it:
 
@@ -220,7 +230,7 @@ the engines across a process boundary did not move the decisions with them.
 | UI | Avalonia 12.1.1 | Plain `net10.0` TFM on Windows, so the desktop app cross-builds from Linux CI. |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 | Avalonia's documented default; source-generator based. |
 | ASR engine | `mudler/parakeet.cpp` via P/Invoke | MIT, ABI v6, and the only candidate with a published decode-parity result. |
-| The other two models | A bundled Python sidecar — one child process per run, JSON lines over stdin and stdout, WebGPU by default | Both are ONNX Runtime models, and the C# ports were ~7,400 lines reimplementing what NVIDIA and HuggingFace already ship. **ONNX Runtime lives in that process now: no .NET project in this solution references it.** WebGPU because it reproduces the CPU's answer to 0.0005 DER points and CUDA does not. |
+| The other two models | A bundled Python sidecar — one child process per run, JSON lines over stdin and stdout | The C# ports were ~7,400 lines reimplementing what NVIDIA and HuggingFace already ship. **ONNX Runtime lives in that process: no .NET project in this solution references it.** The translator is an ONNX Runtime model and defaults to WebGPU, which reproduces the CPU's output where CUDA and DirectML do not. The diariser is torch on both stages and defaults to the CPU, because the bundled torch is the CPU build. |
 | Model format | GGUF | `mudler/parakeet-cpp-gguf`, f16 only — the quantisations were withdrawn from the catalogue on 2026-08-20, a product decision the WER measurement above is exactly what made cheap. |
 | Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
 | Deployment | Self-contained + ReadyToRun + single-file, `win-x64` | Managed assemblies inside the executable; the vendored natives are not, and are found by path. No trimming, no NativeAOT. |
@@ -252,8 +262,10 @@ Three things worth knowing before downloading:
 - **Two flavours.** The default installer carries the CPU and Vulkan backends with the bundled
   Python inside; `win-cuda` adds the NVIDIA CUDA runtime. Take the first unless you know you want
   CUDA. Whichever you install keeps updating from the same channel, recorded at install time.
-- **Two of the four models come with it.** Speech detection (2.2 MiB) and speaker labelling
-  (452.6 MiB) are inside the installer, so both opt-ins work the moment you first open the app.
+- **One of the four models comes with it.** Speech detection (2.2 MiB) is inside the installer, so
+  that opt-in works the moment you first open the app. **Speaker labelling does not** — it is a
+  31 MiB download that needs a free Hugging Face account and an accepted user agreement, so that
+  opt-in is dead until you fetch it from the Models tab.
   Speech recognition (1.34 GiB) and English translation (1.34 GiB) are downloads from the Models
   tab, because a GitHub release asset has to stay under 2 GiB.
 
@@ -338,14 +350,17 @@ deliberately. The obligations it creates, including where the corresponding sour
 [LICENSING.md](docs/LICENSING.md), which also says plainly that nobody with a professional opinion
 has read any of it.
 
-**The four sets of model weights carry four different licences, and none of them is the code's:**
+**The four sets of model weights carry three different licences, and none of them is the code's:**
 
 | Weights | Licence |
 |---|---|
 | Transcription — `parakeet-tdt-0.6b-v3` | CC BY 4.0 |
-| Speaker labelling — Sortformer | NVIDIA Open Model License |
+| Speaker labelling — `pyannote/speaker-diarization-community-1` | CC BY 4.0 |
 | Translation — Marian / OPUS-MT | Apache-2.0 |
 | Speech detection — Silero VAD | MIT |
+
+The NVIDIA Open Model License was the fourth until 2026-08-27, when the Sortformer weights it covered
+were retired; nothing in this product is under it now.
 
 CC BY 4.0 permits commercial redistribution and bundling but attaches a seven-element notice
 requirement, forbids DRM on the weights, and withholds patent and trademark rights. The NVIDIA

@@ -260,15 +260,19 @@ public class AppSettingsStoreTests
     [Fact]
     public void TheDiariserProviderIsAutomaticAsShippedAndSurvivesARoundTrip()
     {
-        // Null is automatic, and automatic reproduces the path each diariser's published figures
-        // describe. The window passed a hardcoded "auto" until this setting existed, which is what
-        // made WebGPU unreachable from it, so "it round-trips" is the whole feature working.
+        // Null is automatic. The window passed a hardcoded "auto" until this setting existed, so "it
+        // round-trips" is the whole feature working.
+        //
+        // **"webgpu" left this list on 2026-08-27 and its absence is asserted below.** It was a real
+        // choice while the diariser was an ONNX graph; the torch pipeline that replaced it refuses
+        // the name, so a settings file still carrying it must read back as automatic rather than
+        // reaching the sidecar and failing every run.
         var path = TempFile();
         try
         {
             Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
 
-            foreach (var provider in new[] { "webgpu", "cpu", "cuda" })
+            foreach (var provider in new[] { "cpu", "cuda" })
             {
                 Assert.True(new AppSettingsStore(path).Save(
                     new AppSettings { DiarisationProvider = provider }));
@@ -282,6 +286,15 @@ public class AppSettingsStoreTests
 
             // And the word itself, if a hand-edited file carries it, reads back as the same null.
             File.WriteAllText(path, "{\"diarisationProvider\":\"auto\"}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+
+            // **The regression this guards.** A file written before 2026-08-27 can name a provider
+            // the diariser now refuses. Read back as null it becomes automatic; read back verbatim
+            // it would reach the sidecar and fail every speaker-labelling run, with no row in the
+            // picker to clear it from.
+            File.WriteAllText(path, "{\"diarisationProvider\":\"webgpu\"}");
+            Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
+            File.WriteAllText(path, "{\"diarisationProvider\":\"dml\"}");
             Assert.Null(new AppSettingsStore(path).Load().DiarisationProvider);
 
             // A name this window does not offer degrades to automatic rather than being passed to
@@ -382,73 +395,6 @@ public class AppSettingsStoreTests
             {
                 Assert.Contains(row.Size!.Value, AppSettingsStore.DiarisationBatchSizes);
             }
-        }
-        finally
-        {
-            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void TheProviderPickerOffersOnlyWhatTheRuntimeRegistered()
-    {
-        // The bundle pins onnxruntime-webgpu, whose wheel has no CUDA provider — so a CUDA row
-        // offered on the strength of an NVIDIA card fails on every machine including one with the
-        // card. Shipped on 2026-08-27 and corrected the same day; this is the correction.
-        var viewModel = new MainWindowViewModel(
-            new FakeEngineProvider(),
-            new LocalModelStore(TestTemp.NewDirectory("uindosill-providers")),
-            ModelCatalog.Default,
-            settings: new AppSettingsStore(TempFile()),
-            answerEngines: new FakeAnswerEngineProvider());
-
-        // Before the probe answers, every row stays on offer: a control emptied by a probe that
-        // could not run is worse than one that briefly offers too much.
-        Assert.Null(viewModel.RegisteredDiariserProviders);
-        Assert.Contains(viewModel.DiarisationProviders, row => row.Provider == "cuda");
-
-        viewModel.RegisteredDiariserProviders = ["cpu", "webgpu"];
-
-        var offered = viewModel.DiarisationProviders.Select(row => row.Provider).ToList();
-        Assert.Equal(new List<string?> { null, "cpu", "webgpu" }, offered);
-        Assert.DoesNotContain("cuda", offered);
-
-        // And the explanation stops describing a control that is not there.
-        Assert.DoesNotContain("CUDA", viewModel.DiarisationProviderExplanation, StringComparison.Ordinal);
-        Assert.Contains("WebGPU", viewModel.DiarisationProviderExplanation, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AStoredProviderTheRuntimeNoLongerHasStaysVisibleRatherThanVanishing()
-    {
-        // Dropping it would leave the combo reading "Automatic" while the settings file said cuda —
-        // a disagreement nobody can diagnose from the window. Rewriting the file to match would be
-        // the window discarding a choice it was not asked to change. So it is shown, and marked.
-        var path = TempFile();
-        try
-        {
-            Assert.True(new AppSettingsStore(path).Save(new AppSettings { DiarisationProvider = "cuda" }));
-
-            var viewModel = new MainWindowViewModel(
-                new FakeEngineProvider(),
-                new LocalModelStore(TestTemp.NewDirectory("uindosill-stale-provider")),
-                ModelCatalog.Default,
-                settings: new AppSettingsStore(path),
-                answerEngines: new FakeAnswerEngineProvider());
-
-            Assert.Equal("cuda", viewModel.DiarisationProvider);
-
-            viewModel.RegisteredDiariserProviders = ["cpu", "webgpu"];
-
-            var stale = Assert.Single(
-                viewModel.DiarisationProviders, row => row.Provider == "cuda");
-            Assert.Contains("not available", stale.Label, StringComparison.OrdinalIgnoreCase);
-
-            // The selection still resolves to it, so the window and the file agree.
-            Assert.Equal("cuda", viewModel.SelectedDiarisationProvider.Provider);
-
-            // And the file is untouched by merely looking at the page.
-            Assert.Equal("cuda", new AppSettingsStore(path).Load().DiarisationProvider);
         }
         finally
         {

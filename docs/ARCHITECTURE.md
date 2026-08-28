@@ -191,7 +191,8 @@ never falling *into* CUDA) and reports every path
 it tried when it fails. See `docs/NATIVE-BINARIES.md`.
 
 **Nothing else in the solution loads a native library of ours, and nothing loads ONNX Runtime at
-all.** The diariser's and the translator's natives are ONNX Runtime's, and since 2026-08-21 they are
+all.** The translator's natives are ONNX Runtime's — the diariser's were too until 2026-08-27, and it
+is torch on both stages now — and since 2026-08-21 they are
 `pip`'s business inside a child interpreter rather than this repository's: no project references
 `Microsoft.ML.OnnxRuntime`, no RID-specific asset has to be resolved for one, and everything above
 applies to exactly one library. What replaced that reference is a process.
@@ -201,8 +202,10 @@ applies to exactly one library. What replaced that reference is a process.
 The diariser and the translator do not run in this process. Each is a child interpreter started by
 `PythonSidecar`, driven over its stdin and stdout, and kept alive for the whole run.
 
-**One child per engine, and not one per file.** The diariser's graph is 453 MiB and the translator's
-1.34 GiB, so a batch that reloaded them per file would spend more of itself loading than working.
+**One child per engine, and not one per file.** The translator's weights are 1.34 GiB and the
+diariser loads a torch pipeline whose resident size has not been measured, so a batch that reloaded
+them per file would spend more of itself loading than working. (The diariser's half of that sentence
+was 453 MiB until 2026-08-27; that was the ONNX graph now in `attic/sortformer/`.)
 The child is started lazily — nothing spawns until a model is actually wanted — and stopped on
 dispose: asked to shut down and given five seconds, then killed, or killed at once when a request
 was cancelled in flight and never answered, since a child mid-way through work nobody wants cannot
@@ -315,26 +318,37 @@ already drew in process, kept deliberately, so that crossing a process boundary 
 the decisions.
 
 One consequence looks like a mistake and is not. **`SpeakerLabellerLimits` is a second copy of two
-constants that live in the sidecar.** The four-speaker cap and the fifty-minute bound have to be on
-screen while a queue is being built and the weights are still on disk — "seven speakers was never
-reachable" said afterwards is not a warning, it is an epitaph — and at that moment there may be no
-interpreter to ask. So the host *declares* them and `LoadAsync` refuses a sidecar whose answer
-differs, which is the only thing that keeps a duplicate honest: the check fires on the machine where
-the two halves are actually together. The backend is deliberately **not** in that type. It is the
+constants that live in the sidecar.** The speaker cap and the established length have to be on screen
+while a queue is being built and the weights are still on disk — "seven speakers was never reachable"
+said afterwards is not a warning, it is an epitaph — and at that moment there may be no interpreter
+to ask. So the host *declares* them and `LoadAsync` refuses a sidecar whose answer differs, which is
+the only thing that keeps a duplicate honest: the check fires on the machine where the two halves are
+actually together. **Both are `null` since 2026-08-27** — no cap and no measured bound, where the
+retired engine declared four speakers and fifty minutes — and a null is held to exactly as a number
+was, because a cap appearing on one side only would be this build claiming a limit nobody
+established. The backend is deliberately **not** in that type. It is the
 one thing only the sidecar can answer, and a declared guess at it would be provenance turning into
 fiction.
 
 **A non-CPU backend is checked against a committed fixture before it is trusted, and the result is
-reported rather than enforced.** Measured 2026-08-21, DirectML at ONNX Runtime's default settings
-scores 53.1522% diarisation error on AMI test against the CPU's 16.3324%, while emitting speaker
-turns that read as perfectly ordinary — a failure with nothing in its own output to reveal it. So
-the diariser compares probabilities against a committed reference at a threshold of 1e-4 that was
-measured rather than chosen: WebGPU lands at 1.073e-06 and passes, CUDA at 8.143e-04 and does not,
-and two CPU runs across ONNX Runtime 1.27.0 and 1.29.0 are bit-identical. Failing does not stop the
-run — under a named provider the user asked for it, and under `auto` the run has already landed on
-the best provider that built, which is the one being checked — and what the command line and the
-window do is name it and say it disagreed. `--speaker-backend-unverified` lifts the refusal of `dml`
-by name and nothing else; it does not lift a failed check, because nothing does. **The translator's fixture is the weaker instrument and says so**: six sentences
+reported rather than enforced.** That is the translator's rule now, and it was the diariser's until
+2026-08-27. The measurement that established it was the diariser's too: DirectML at ONNX Runtime's
+default settings scored 53.1522% diarisation error on AMI test against the CPU's 16.3324%, while
+emitting speaker turns that read as perfectly ordinary — a failure with nothing in its own output to
+reveal it. Against a committed reference at a threshold of 1e-4, WebGPU landed at 1.073e-06 and
+passed, CUDA at 8.143e-04 and did not.
+
+**The diariser has no such check any more, and that is a loss rather than a simplification.** It is
+torch on both stages with no ONNX route, so there is no second path to compare against and the
+sidecar refuses `parity` for it by name; `--speaker-backend-unverified` was withdrawn with the
+fixture, since there was no longer a provider to unlock or a check to override. What the retired
+engine's numbers show is that a silently wrong provider is a real failure mode, and nothing on the
+diariser path would now catch one. `docs/UNPROVEN.md` carries it.
+
+Failing does not stop a translator run — under a named provider the user asked for it, and under
+`auto` the run has already landed on the best provider that built, which is the one being checked —
+and what the command line and the window do is name it and say it disagreed.
+**The translator's fixture is the weaker instrument and says so**: six sentences
 compared by string equality, with no margin at all, so a provider wrong only on long or unusual
 inputs passes it. It catches the failure that has actually been seen — DirectML wrong on all 32
 sentences measured — and nothing subtler. What establishes a translator on a machine is the gate
@@ -364,54 +378,46 @@ weights, no ONNX Runtime and no parity check in it — both fixtures above run a
 that has both halves, and CI never sees them. That is a loss rather than a tidy-up: seven checkpoint
 tests went to `attic/` with the C# translator and nothing in the suite replaces them.
 
-## The diariser owns three things its graph does not
+## The diariser is upstream's pipeline, and this project owns none of it
 
-The ONNX export runs the pre-encoder, the encoder and the head. Everything else is the host's, and
-each piece is a place where a plausible implementation gives a worse diarisation error rate without
-failing at all. **Since 2026-08-21 that host is the sidecar, and the point of moving was that none
-of the three would be written a second time**: `feats.py` and `postproc.py` came across from the
-spike byte for byte and `engine.py` with one import path edited, because those files are what the
-measured 16.33% was produced by and a rewrite would be a different artefact needing a different
-measurement.
+`pyannote/speaker-diarization-community-1`, loaded and called through `pyannote.audio` 4.0.7 in the
+bundled Python. Segmentation, speaker embedding and VBx clustering are all upstream's; what this
+project owns is the handoff — a 16 kHz mono WAV written by the host, read with `soundfile` and
+passed in as an in-memory waveform, which is also what keeps `torchcodec` and its FFmpeg dependency
+off every path reached here.
 
-- **The mel featurizer** reproduces NeMo's `FilterbankFeatures` for this checkpoint: pre-emphasis,
-  a 400-sample Hann window with `periodic=false` inside a 512-point transform, 128 Slaney mel
-  filters, `log(x + 2^-24)`, and **no normalisation** — the checkpoint says `normalize: NA`, where
-  nearly every NeMo ASR config says `per_feature`, and using the common setting makes a correct
-  model look mediocre. Every constant is read out of the `preprocessor:` block of the checkpoint's
-  own `model_config.yaml` rather than off a model card. **It no longer streams.** The C# one
-  produced features a chunk at a time; this computes the whole file's mel up front, which is 128
-  float32 every 10 ms — about 51 kB per second of audio, so hundreds of megabytes on a long
-  recording. **Its peak is now profiled, and it was not the mel.** Measured 2026-08-22 on the
-  bundled torch, whole-file, the complex spectrum and the intermediates behind it peaked at about
-  730 kB per second of audio — 1,317 MB above the resting working set for thirty minutes. Since
-  that day the STFT runs in hop-aligned blocks of 8,192 frames, each seeing exactly the samples its
-  frames would have seen, and the mel is written straight into its final layout: bit-identical to
-  the whole-file result on thirty minutes of real audio, and about 306 kB per second of audio at
-  peak (551 MB on the same thirty minutes), the rest being the samples themselves. The figures are
-  in `docs/UNPROVEN.md` beside the 16.33 % they do not move.
-- **The Arrival-Order Speaker Cache** is what makes speaker 2 the same person at minute thirty as at
-  minute one. The graph takes the cache and the FIFO as inputs and returns embeddings; it does not
-  update them. Eviction is not first-in-first-out — frames are scored by how confidently exactly one
-  speaker is active, boosted twice so every speaker keeps a floor and none dominates, and the best
-  188 survive in arrival order with unused slots filled by a running mean of silence. **It is
-  NVIDIA's `SortformerModules`, imported and called rather than ported**, and the price of the
-  alternative is on record: the C# port of it scored 16.3368% on AMI test against the reference's
-  16.3324%, 0.0044 points for a port that was done carefully.
-- **The chunk loop** slices the mel spectrogram with asymmetric first and last chunks, trims the
-  graph's fixed 381-frame output back to the pre-encode length of the piece's *physical* width, and
-  applies the prediction mask the export omits. This one is still this project's code, because it is
-  the part NVIDIA ships as a training loop rather than as anything callable — but it is the spike's
-  own loop rather than a second reading of it. **The trim is the one place the spike's loop was
-  wrong, found 2026-08-22:** it trimmed to the valid length the graph reports, where NeMo's
-  `streaming_update_async` takes the chunk's capacity from the tensor's physical width and clamps
-  the valid length to it, and the two differ on every file because the featurizer pads to a
-  multiple of 16 and the STFT is one frame longer than the valid count. One or two frames were lost
-  on 7.3 % of durations — a 600 s file came out 7,498 frames where 7,500 are due — and the last
-  chunk's rows landed 160 ms early. The 16.33 % AMI figure was produced by that loop and re-scored
-  on the fixed one on 2026-08-22 — unchanged to four decimals on every provider, because none of the
-  sixteen test durations is among the 7.3 %; `docs/UNPROVEN.md` has the run and what it does not
-  show.
+It clusters rather than tracks, so **the number of speakers is an output rather than a ceiling**, and
+there is no cache to keep speaker 2 the same person at minute thirty as at minute one — the whole
+file is embedded and then clustered globally. That also means it is offline: it holds the whole
+embedding set in memory rather than streaming.
+
+**Its binarisation is internal.** The host still sends post-processing thresholds and the sidecar
+still drops them, reporting `honoursPostProcessing: false`, because the pipeline binarizes at the
+parameters its own published figures describe and the thresholds the host knows how to send were
+tuned for a different engine.
+
+**Nothing about it has been measured here** — no diarisation error rate, no real-time factor, no
+established length. Its capabilities report `null` for the speaker cap and for the reliable duration,
+and the window renders those as "no limit" and "no bound established" rather than as silence.
+`docs/UNPROVEN.md` is the record.
+
+### What this section described until 2026-08-27
+
+Three things NVIDIA's Streaming Sortformer graph did not do for itself, and the reason they were
+worth a section: **a mel featurizer** reproducing NeMo's `FilterbankFeatures` for that checkpoint
+(`normalize: NA`, not the `per_feature` nearly every NeMo ASR config uses — the difference between a
+correct model and one that looks mediocre); **the Arrival-Order Speaker Cache**, NVIDIA's own
+`SortformerModules` imported rather than ported, which was what made speaker 2 the same person
+throughout; and **the chunk loop**, this project's own code, whose trim was found wrong on 2026-08-22
+and re-scored unchanged to four decimals.
+
+Each of those was a place where a plausible implementation gives a worse diarisation error rate
+without failing at all, which is why they were described here rather than left to the code. The
+engine is in `attic/sortformer/`, and `attic/README.md` carries what it measured — including the
+16.33% AMI figure those three pieces produced, the 53.1522% DirectML result that justified the parity
+fixture, and the fixture itself, all of which left with it. **The pipeline above has no parity check
+at all**, because it has one path rather than two: the sidecar refuses the `parity` and `placement`
+ops for the diariser by name.
 
 ## Output
 

@@ -31,8 +31,8 @@ tests/fixtures/diarisation/**/expected.json text eol=lf
 # `writeParityReference` op, which writes LF explicitly, and the sources by a generator that does the
 # same. Under the default CRLF conversion every regeneration would report both files as changed, and
 # the "re-running must be a no-op" property they are checked by would stop meaning anything — the
-# same rule, for the same reason, as the diarisation fixtures above. (The diariser's own reference is
-# an `.npy` and is covered by the binary rule above.)
+# same rule, for the same reason, as the diarisation fixtures above. (The diariser had an `.npy`
+# reference of its own here until 2026-08-27; it went to `attic/sortformer/` with its engine.)
 python/uindosill_engines/translator/parity-reference.json text eol=lf
 python/uindosill_engines/translator/parity-sources.json text eol=lf
 
@@ -41,7 +41,7 @@ python/uindosill_engines/translator/parity-sources.json text eol=lf
 # under Apache-2.0 §4(b), and the way anybody checks such a claim is to diff a checkout against
 # NVIDIA's. Under the default CRLF conversion every line of both files would differ, and the
 # claim would look false to exactly the person taking the trouble to verify it.
-python/uindosill_engines/_vendor/** text eol=lf
+attic/sortformer/uindosill_engines/_vendor/** text eol=lf
 
 # The two embedded typefaces. TrueType begins with a version tag full of NUL bytes, so git's
 # text-or-binary sniff gets these right on its own — but the rule above exists because that sniff

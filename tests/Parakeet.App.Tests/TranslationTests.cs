@@ -107,7 +107,7 @@ public class TranslationTests
         var spoken = new TranscriptDocument
         {
             Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hola", Speaker = "A" }],
-            SpeakerModelId = "sortformer-4spk-v2.1",
+            SpeakerModelId = "pyannote-speaker-diarization-community-1",
             SpeakerBackend = ComputeBackend.WebGpu,
         };
 
@@ -124,7 +124,7 @@ public class TranslationTests
             new JobResult { Job = new TranscriptionJob { InputPath = "/tmp/a.wav" }, State = JobState.Completed, Document = translated },
             source: spoken);
 
-        Assert.Equal("Speakers: sortformer-4spk-v2.1 on webgpu", job.SpeakerProvenance);
+        Assert.Equal("Speakers: pyannote-speaker-diarization-community-1 on webgpu", job.SpeakerProvenance);
         Assert.Equal("English: opus-mt-tc-bible-big-mul-en-fp32 on webgpu", job.TranslationProvenance);
 
         // Running the file again clears both, so a row cannot describe a run that is no longer

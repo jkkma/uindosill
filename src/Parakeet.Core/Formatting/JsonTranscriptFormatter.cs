@@ -73,8 +73,11 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
 
                 // Which provider produced those labels, not merely which model was loaded. The two
                 // are separate answers here in a way they are not for the ASR engine above: the
-                // diariser's provider is resolved inside the sidecar, and the providers disagree —
-                // AMI test scores 16.3324% DER on the CPU, 16.3319% on WebGPU and 16.1021% on CUDA.
+                // diariser's device is resolved inside the sidecar. That providers *can* disagree
+                // was measured on the diariser retired 2026-08-27 — AMI test scoring 16.3324% DER on
+                // the CPU, 16.3319% on WebGPU and 16.1021% on CUDA — and whether the pipeline that
+                // replaced it has the same property is unmeasured, which is why the field is still
+                // written rather than dropped.
                 if (document.SpeakerBackend is { } speakerBackend)
                 {
                     writer.WriteString("speakerBackend", speakerBackend.ToString().ToLowerInvariant());

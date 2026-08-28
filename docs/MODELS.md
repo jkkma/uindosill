@@ -7,11 +7,18 @@ folder redirection and roaming profiles keep working. `UINDOSILL_MODELS_DIR` ove
 Never the install directory: a **downloaded** model there is destroyed by every update, which turns
 each patch into a 670 MB re-download.
 
-**Two of the four ship inside the installer instead, as of 2026-08-23**, and they are a different
-thing from a download: speech detection (2.2 MiB, MIT) and speaker labelling (452.6 MiB, NVIDIA Open
-Model License) sit in `models/` beside the executable, so both opt-ins are live on a fresh install
-rather than dead until somebody visits a tab. They are replaced with the application on every update
-and removed with it on uninstall, which is right — they belong to the build, not to the user.
+**One of the four ships inside the installer instead**, and it is a different thing from a download:
+speech detection (2.2 MiB, MIT) sits in `models/` beside the executable, so that opt-in is live on a
+fresh install rather than dead until somebody visits a tab. It is replaced with the application on
+every update and removed with it on uninstall, which is right — it belongs to the build, not to the
+user.
+
+**Speaker labelling was the second, from 2026-08-23 until 2026-08-26**, at 452.6 MiB under the NVIDIA
+Open Model License. It left the installer that day because two entries then did the job and bundling
+one would have chosen for the user; the entry itself was retired on 2026-08-27. What replaced it
+could not be bundled in any case: `pyannote/speaker-diarization-community-1` is a gated repository,
+so **speaker labelling is dead on a fresh install until the user fetches it**, which needs a free
+Hugging Face account and an accepted user agreement.
 Speech recognition and English translation are 1.34 GiB each and stay downloads: a GitHub release
 asset must be under 2 GiB, and either one puts the CUDA installer past it.
 
@@ -83,7 +90,6 @@ separate question and `docs/UNPROVEN.md` holds it.
 | Entry | Bytes | SHA-256 |
 |---|---|---|
 | `tdt-0.6b-v3-f16` | 1,441,046,400 | `8ba47343…fc5abb22` |
-| `sortformer-4spk-v2.1` | 474,630,246 | `cc5d606a…52c0062a` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
 | `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
 | `pyannote-speaker-diarization-community-1` | five files, 32,821,421 | per file; see `models.json` — four from upstream LFS `oid`s, `config.yaml` from its git blob id (see above) |
@@ -111,32 +117,34 @@ says nothing whatever about what they transcribe. q8_0 through q4_k were *diffed
 nearly three hours of real speech — see the section below and `docs/UNPROVEN.md` — but that is
 divergence, not accuracy.
 
-### The diarisation entry is a different licence and a different upstream
+### The diarisation entry is a different upstream, and it used to be a different licence
 
-`sortformer-4spk-v2.1` is the sixth row above and the first that is not CC BY 4.0, not GGUF, and not
-from `mudler/parakeet-cpp-gguf`. It carries `"task": "diarisation"`, which is what keeps it out of
-every ASR path — `transcribe` refuses it by name, it is never the recommended entry, and the window's
-Load button does not offer it. That discriminator shipped in an earlier release **before** any such
-entry existed, deliberately, so that no build could ever list one as a transcription model.
+`pyannote-speaker-diarization-community-1` carries `"task": "diarisation"`, which is what keeps it
+out of every ASR path — `transcribe` refuses it by name, it is never the recommended entry, and the
+window's Load button does not offer it. That discriminator shipped in an earlier release **before**
+any such entry existed, deliberately, so that no build could ever list one as a transcription model.
 
-Three things about it differ from every row above.
+**It is CC BY 4.0, like the transcription weights**, and it is the only diarisation entry. There were
+two until 2026-08-27, and the other was the interesting one: `sortformer-4spk-v2.1`, 474,630,246
+bytes, `cc5d606a…52c0062a`, under the **NVIDIA Open Model License** — the one entry in this catalogue
+that was not CC BY 4.0. That licence was revocable where CC BY is not, wanted a copy of its Agreement
+rather than a link, and carried a use restriction about biometric processing. It was retired to
+`attic/sortformer/` with its weights, the Agreement copy went with it, and **this catalogue now has
+no entry under any licence but CC BY 4.0, Apache-2.0 and MIT**. `docs/LICENSING.md` keeps the reading
+of the retired one, and `attic/README.md` says what left with it.
 
-**The licence is the NVIDIA Open Model License**, not CC BY 4.0. It permits redistribution, and its
-conditions are one verbatim sentence and a copy of the Agreement — which ships at
-`licences/NVIDIA-Open-Model-License-2025-10-24.txt` and which the packaging script refuses to build
-without. It is also **revocable**, where CC BY is not, and it carries a use restriction about
-biometric processing that is squarely on point for a feature that separates voices.
-`docs/LICENSING.md` has the reading.
+**Its `quantisation` says `fp32` and nobody has opened its files to check.** The paragraph that stood
+here belonged to the Sortformer export and went to `attic/sortformer/` with it: on that entry the
+Hub's `base_model:quantized:…` tag was wrong, and this document said so on evidence — 473 of the
+file's 474 MB were float32 parameters, 118.3 M of them, counted by opening the graph. **No equivalent
+count exists for this entry.** It is 31.3 MiB of torch checkpoints and npz matrices, and its `fp32`
+is upstream's word rather than a reading of its bytes.
 
-**The URL is pinned to a revision, not to `main`.** `soniqo/Sortformer-Diarization-4spk-ONNX` is one
-person's ONNX export of NVIDIA's checkpoint rather than a vendor's repository, so the entry names
-`db3a7b542ab60562f24b7bd0cead521b62b1b6a9` explicitly. The size and digest were read from the
-HuggingFace API at that revision, and a local copy used for the AMI measurement hashes to the same
-value, so what was scored is what the entry installs.
-
-**`quantisation` says `fp32`, and the Hub's own tag is wrong.** The listing carries
-`base_model:quantized:…`, but 473 of the file's 474 MB are float32 parameters — 118.3 M of them,
-counted by opening the graph. The tag looks auto-derived; the field records what is in the file.
+**It is a gated repository and a multi-file entry**, which is the pair of properties that makes it
+unlike every row above. Hugging Face masks the LFS object ids of gated repositories, so four of its
+five files are pinned by size and upstream `oid` and `config.yaml` by its git blob id; a download
+needs an accepted user agreement and a token. **Nothing about its accuracy has been measured here** —
+see `docs/UNPROVEN.md`, which is also where the figure the retired entry carried is kept.
 
 ### The speech-detection entry is MIT, from GitHub, and pinned against the bytes it serves
 
@@ -209,11 +217,15 @@ entry into `models`. Nothing about it is installable before that.
 
 ## An entry is one file, or several
 
-Every ASR entry and the diariser are a single file, and that shape is unchanged: `fileName`, `url`,
-`sizeBytes` and `sha256` on the entry itself, installed into the store root under that name.
+Every ASR entry and the speech detector are a single file, and that shape is unchanged: `fileName`,
+`url`, `sizeBytes` and `sha256` on the entry itself, installed into the store root under that name.
+(**The diariser was on that list until 2026-08-27**, when the single-`.onnx` engine was retired; the
+pipeline that replaced it is a directory.)
 
-An entry may instead list several. **One does, as of 2026-08-20** — the ONNX translation route,
-which is nine files: two graphs, two configs and a five-file tokenizer. The shape shipped in
+An entry may instead list several. **Two do** — the ONNX translation route, which is nine files
+since 2026-08-20: two graphs, two configs and a five-file tokenizer; and the diarisation entry, which
+is five files in three subdirectories since 2026-08-27 and is the reason `directory` exists beside
+`fileName`. The shape shipped in
 2026-08-20's earlier work with nothing using it, which is the same order the task discriminator and
 the diarisation entry arrived in and for the same reason: the code that has to understand a shape
 ships before the entry that has it, so no build can meet one it does not know. The real entry looks
