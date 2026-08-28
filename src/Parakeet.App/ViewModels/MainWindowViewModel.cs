@@ -626,9 +626,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         + "next question.";
 
     public string AskModeExplanation =>
-        "Deciding from your question sends summaries and \"what are the main topics\" through the "
+        "Deciding from your question sends summaries and \"what are the main topics\" across the "
         + "whole recording, and everything else through the parts that matched — which is faster. "
-        + "A long recording is only read whole when you ask for it, because that can take a while.";
+        + "A long recording is covered by an even sample of it rather than read minute by minute, "
+        + "and the answer says so; reading every word of a long one is only done when you ask for "
+        + "it, because it can take a while.";
 
     public string AskExpertPlacementExplanation =>
         "Some models split their work into experts and run only a few of them for each word. They "

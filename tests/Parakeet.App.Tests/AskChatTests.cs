@@ -530,6 +530,46 @@ public class AskChatTests
     }
 
     [Fact]
+    public async Task ASurveyAnswerSaysItReadASampleRatherThanTheRetrievedParts()
+    {
+        // The provenance line makes a claim about coverage, and it goes into the copied email as
+        // well as the panel. It knew two tiers and a survey is a third: it read a little of all of
+        // the recording where retrieval reads all of a little, so reporting it as "retrieved
+        // parts" understates what the answer saw and misdescribes where it came from.
+        var segments = new List<TranscriptSegment>();
+        for (var i = 0; i < 120; i++)
+        {
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(i * 10),
+                End = TimeSpan.FromSeconds((i * 10) + 10),
+                Text = $"segment {i} about the quarterly budget review " + new string('x', 420),
+            });
+        }
+
+        var job = new JobViewModel("/tmp/long.wav");
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = job.Path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                Segments = segments,
+                AudioDuration = TimeSpan.FromSeconds(1_200),
+            },
+        });
+
+        var (chat, provider, _) = Chat(job);
+        await AskAsync(chat, "give me a summary");
+
+        Assert.Equal(AnswerMode.Survey, provider.LastCreated!.LastRequest!.Mode);
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.DoesNotContain("retrieved parts", entry.ModelLine, StringComparison.Ordinal);
+        Assert.Contains("even sample", entry.ModelLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ALongRecordingIsNotReadWholeAutomaticallyAndTheAnswerSaysSo()
     {
         // A whole-recording pass on a long transcript is minutes of prefill, and the automatic
