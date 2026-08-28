@@ -830,6 +830,49 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
+    public void ADraftingHeadIsNotOfferedForDeletionBesideTheModelItDraftsFor()
+    {
+        // **The sentence said "Nothing uses them" over a Delete button.** The Ask tab picks the
+        // model it answers with by looking in this folder rather than by catalogue id, so a .gguf
+        // here can be the model in use — and the drafting head beside it is what makes answers a
+        // third faster. Both were listed as unaccounted-for, and deleting either would have cost
+        // something the tab had just said was costing nothing.
+        var directory = TestTemp.NewDirectory("uindosill-models");
+        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"), "weights");
+        File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "the head");
+
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        // The head pairs with a model that is here, so it is accounted for and is not offered.
+        var file = Assert.Single(main.Models.Sideloaded);
+        Assert.Equal("gemma-4-26B-A4B-it-UD-IQ4_XS.gguf", file.FileName);
+
+        // And the model itself is still listed — it really is not a catalogue entry at this path —
+        // but no longer under a sentence claiming nothing uses it.
+        Assert.DoesNotContain("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Ask tab", main.Models.SideloadedSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHeadWithNothingToDraftForIsStillDeadWeight()
+    {
+        // The other half: a head whose model has been removed drafts for nothing, occupies
+        // hundreds of megabytes, and is exactly what this list exists to surface.
+        var directory = TestTemp.NewDirectory("uindosill-models");
+        File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "an orphan");
+
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        var file = Assert.Single(main.Models.Sideloaded);
+        Assert.Equal("mtp-gemma-4-26B-A4B-it.gguf", file.FileName);
+
+        // Not a .gguf model anybody answers with, so the original sentence is the true one here.
+        Assert.Contains("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheModelsTabShowsAndRemovesWeightsTheCatalogueDoesNotClaim()
     {
         // Four quantisations were withdrawn from the catalogue on 2026-08-20 and stayed on disk.
