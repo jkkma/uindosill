@@ -104,8 +104,24 @@ public sealed partial class ModelViewModel : ObservableObject
         ModelTask.Diarisation => "SPEAKERS",
         ModelTask.Translation => "ENGLISH",
         ModelTask.VoiceActivity => "SPEECH",
+        ModelTask.Answering => "ASK",
         _ => string.Empty,
     };
+
+    /// <summary>
+    /// Why this machine may not be able to run this entry, or null when nothing is in the way.
+    /// Shown beside the entry rather than on the download button: it is a warning, not a refusal,
+    /// and the download is the reader's to make.
+    /// </summary>
+    /// <remarks>
+    /// Only the answering entries are ever big enough for this to say anything — see
+    /// <see cref="ModelFit"/>, whose rule is anchored to what this project has measured running
+    /// and not running on a 16 GiB machine.
+    /// </remarks>
+    public string? FitWarning => ModelFit.WhyItMightNotRun(Descriptor, ModelFit.TotalPhysicalBytes());
+
+    /// <summary>Whether <see cref="FitWarning"/> has anything to say.</summary>
+    public bool HasFitWarning => FitWarning is not null;
 
     public string Licence => Descriptor.License;
 
@@ -458,6 +474,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                     ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
                     ModelTask.Translation => "'Translate to English' on the Transcribe tab",
                     ModelTask.VoiceActivity => "'Neural speech detection' on the Settings tab",
+                    ModelTask.Answering => "the Ask tab, beside a finished transcript",
                     _ => "its own opt-in",
                 };
 

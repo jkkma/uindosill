@@ -36,6 +36,18 @@ public enum ModelTask
     /// speaking and nothing about who. Added 2026-08-23 with the Silero VAD entry.
     /// </summary>
     VoiceActivity = 3,
+
+    /// <summary>
+    /// Questions about a finished transcript: what the Ask tab loads. Never an ASR model — it
+    /// hears nothing — and never a diariser. Added 2026-08-27, when the answering model stopped
+    /// being a file people were told to find for themselves and became a catalogue entry.
+    /// </summary>
+    /// <remarks>
+    /// It is the first entry whose size can exceed what the machine reading this catalogue can
+    /// run, which is why <see cref="ModelFit"/> exists: every other task's weights are between
+    /// 2 MiB and 1.34 GiB and fit anywhere the application does.
+    /// </remarks>
+    Answering = 4,
 }
 
 /// <summary>

@@ -200,15 +200,24 @@ public class ModelCatalogTests
         // carries five of them, and five nulls in one group is not five files sharing a digest —
         // it is five files with nothing to compare. Grouping them would fail this test for the one
         // reason it is not about.
+        // Keyed on the digest *and* the URL since 2026-08-27, when the two answering entries
+        // arrived sharing one upstream file: both install the same drafting head, from the same
+        // URL, into directories of their own. That is one file used twice rather than a slip, and
+        // the failure this test names — the second download rejected as corrupt — cannot happen,
+        // because the bytes really are the same. A digest repeated across two *different* URLs is
+        // still the copy-paste slip and still fails.
         var duplicate = ModelCatalog.Default.Models
             .SelectMany(m => m.Files.Select(f => (Model: m, File: f)))
             .Where(x => x.File.Sha256 is not null)
-            .GroupBy(x => x.File.Sha256, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault(g => g.Count() > 1);
+            .GroupBy(
+                x => (Digest: x.File.Sha256!.ToLowerInvariant(), Url: x.File.Url.AbsoluteUri),
+                comparer: null)
+            .FirstOrDefault(g => g.Select(x => x.File.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1
+                                 || g.Count() > g.Select(x => x.Model.Id).Distinct(StringComparer.Ordinal).Count());
 
         Assert.True(
             duplicate is null,
-            $"digest {duplicate?.Key} is pinned by {duplicate?.Count()} files: " +
+            $"digest {duplicate?.Key.Digest} is pinned by {duplicate?.Count()} files: " +
             $"{string.Join(", ", duplicate?.Select(x => $"{x.Model.Id}/{x.File.FileName}") ?? [])}");
     }
 
@@ -262,7 +271,7 @@ public class ModelCatalogTests
     }
 
     [Fact]
-    public void TheDiariserTheTranslatorAndTheSpeechDetectorAreTheOnlyEntriesThatDoNotTranscribe()
+    public void TheDiariserTheTranslatorTheSpeechDetectorAndTheAnswerersAreTheEntriesThatDoNotTranscribe()
     {
         // The manifest carries two diarisation entries, one translation entry and one
         // speech-detection entry, and every other entry is an ASR model. Both halves are asserted:
@@ -288,6 +297,15 @@ public class ModelCatalogTests
         Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", translator.Id);
         Assert.False(translator.Recommended);
 
+        // And two answering entries, added 2026-08-27 — the same model at two quantisations,
+        // because the vendor-recommended one does not fit a 16 GiB machine and the smaller one is
+        // what this project measured running there. Neither may be Recommended, for the reason
+        // above: that property picks the default ASR model.
+        Assert.Equal(
+            new[] { "gemma-4-26b-a4b-it-ud-q4-k-xl", "gemma-4-26b-a4b-it-ud-iq4-xs" },
+            catalog.AnsweringModels.Select(m => m.Id));
+        Assert.All(catalog.AnsweringModels, m => Assert.False(m.Recommended));
+
         // And one speech-detection entry, added 2026-08-23 with the detector seam that reads it.
         var detector = Assert.Single(catalog.VoiceActivityModels);
         Assert.Equal("silero-vad-v5.1.2", detector.Id);
@@ -297,10 +315,14 @@ public class ModelCatalogTests
         Assert.True(detector.Verified);
 
         Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
+        // Every entry lands in exactly one task's list. This is the assertion that catches a new
+        // ModelTask member reaching no list at all — the enum's own remark warns that nothing
+        // switches on it exhaustively, so the compiler will not.
         Assert.Equal(
             catalog.Models.Count,
             catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count
-            + catalog.TranslationModels.Count + catalog.VoiceActivityModels.Count);
+            + catalog.TranslationModels.Count + catalog.VoiceActivityModels.Count
+            + catalog.AnsweringModels.Count);
     }
 
     [Fact]
@@ -364,7 +386,7 @@ public class ModelCatalogTests
 
         var ex = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
         Assert.Contains(
-            "known tasks are transcription, diarisation, translation and voice-activity", ex.Message, StringComparison.Ordinal);
+            "known tasks are transcription, diarisation, translation, voice-activity and answering", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -386,6 +408,90 @@ public class ModelCatalogTests
         Assert.DoesNotContain(catalog.TranscriptionModels, m => m.Id == "vad");
         Assert.DoesNotContain(catalog.DiarisationModels, m => m.Id == "vad");
         Assert.DoesNotContain(catalog.TranslationModels, m => m.Id == "vad");
+    }
+
+    [Fact]
+    public void AnAnsweringEntryReachesNoOtherTasksList()
+    {
+        var json = """
+            {"models":[
+            {"id":"asr","family":"p","displayName":"A","quantisation":"f16","fileName":"a.gguf","url":"https://e.com/a","license":"L","attributionId":"x","recommended":true},
+            {"id":"llm","task":"answering","family":"gemma","displayName":"Q","quantisation":"UD-Q4_K_XL","fileName":"q.gguf","url":"https://e.com/q","license":"Apache-2.0","attributionId":"x","recommended":true}]}
+            """;
+
+        var catalog = ModelCatalog.Parse(json);
+
+        Assert.Equal(["llm"], catalog.AnsweringModels.Select(m => m.Id));
+        Assert.Equal(ModelTask.Answering, catalog.Get("llm").Task);
+
+        // The recommendation is the ASR entry's and stays there: an answering model is not a
+        // recogniser, and Load must never be offered it.
+        Assert.Equal("asr", catalog.Recommended?.Id);
+        Assert.DoesNotContain(catalog.TranscriptionModels, m => m.Id == "llm");
+        Assert.DoesNotContain(catalog.DiarisationModels, m => m.Id == "llm");
+        Assert.DoesNotContain(catalog.TranslationModels, m => m.Id == "llm");
+        Assert.DoesNotContain(catalog.VoiceActivityModels, m => m.Id == "llm");
+    }
+}
+
+public class ModelFitTests
+{
+    private static ModelDescriptor Answering(long bytes) => ModelCatalog.Parse($$"""
+        {"models":[{"id":"llm","task":"answering","family":"g","displayName":"Q","quantisation":"q",
+        "fileName":"q.gguf","url":"https://e.com/q","sizeBytes":{{bytes}},
+        "license":"Apache-2.0","attributionId":"x","recommended":true}]}
+        """).Get("llm");
+
+    private const long Gib = 1024L * 1024 * 1024;
+
+    [Fact]
+    public void TheRuleIsAnchoredToWhatThisProjectHasSeenRunAndNotRun()
+    {
+        // The two measured points on the second machine, 15.6 GiB of system memory (2026-08-27):
+        // the 12.66 GiB UD-IQ4_XS ran, leaving 0.9-1.8 GiB free, and the 15.85 GiB UD-Q4_K_XL is
+        // what this warning exists to talk about. The rule has to separate exactly these.
+        var laptop = (long)(15.6 * Gib);
+
+        Assert.Null(ModelFit.WhyItMightNotRun(Answering((long)(12.66 * Gib)), laptop));
+        Assert.NotNull(ModelFit.WhyItMightNotRun(Answering((long)(15.85 * Gib)), laptop));
+
+        // A desktop with room says nothing at all about the same file.
+        Assert.Null(ModelFit.WhyItMightNotRun(Answering((long)(15.85 * Gib)), 64 * Gib));
+    }
+
+    [Fact]
+    public void OnlyAnsweringEntriesAreEverWarnedAbout()
+    {
+        // Saying "too big for this computer" about a 2 MiB speech detector would be noise, and the
+        // sentence is only true of the one task whose weights are tens of gigabytes.
+        var asr = ModelCatalog.Parse("""
+            {"models":[{"id":"asr","family":"p","displayName":"A","quantisation":"f16","fileName":"a.gguf",
+            "url":"https://e.com/a","sizeBytes":1441046400,"license":"L","attributionId":"x","recommended":true}]}
+            """).Get("asr");
+
+        Assert.Null(ModelFit.WhyItMightNotRun(asr, 1 * Gib));
+    }
+
+    [Fact]
+    public void AMachineThatCouldNotBeMeasuredIsNotRefused()
+    {
+        // Unknown answers yes. A reading of zero is the runtime declining to say, and a warning
+        // built on that would appear on machines that run the model perfectly well.
+        Assert.True(ModelFit.Fits(100 * Gib, 0));
+        Assert.Null(ModelFit.WhyItMightNotRun(Answering(100 * Gib), 0));
+    }
+
+    [Fact]
+    public void AnUnpinnedSizeIsNotGuessedAt()
+    {
+        // sizeBytes is optional in the schema, and a warning computed from a missing number would
+        // be a warning about zero bytes.
+        var unpinned = ModelCatalog.Parse("""
+            {"models":[{"id":"llm","task":"answering","family":"g","displayName":"Q","quantisation":"q",
+            "fileName":"q.gguf","url":"https://e.com/q","license":"Apache-2.0","attributionId":"x","recommended":true}]}
+            """).Get("llm");
+
+        Assert.Null(ModelFit.WhyItMightNotRun(unpinned, 1 * Gib));
     }
 }
 

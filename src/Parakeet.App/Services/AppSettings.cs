@@ -19,6 +19,42 @@ public enum AskModePreference
     WholeTranscript = 2,
 }
 
+/// <summary>
+/// How many retrieved windows the retrieval tier hands the model — the dominant term in how long
+/// an answer takes, and the one dial where speed is bought with something other than precision.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Measured 2026-08-27 on the second machine</b>, the 26B-A4B at UD-IQ4_XS with its drafting
+/// head, thirteen retrieval questions: eight windows answered in a median 37.8 s, six in 31.7 s
+/// and four in <b>16.6 s</b>. Prefill is about 60% of that wall and scales with the evidence, so
+/// this is where the time is. The mechanical checks did not degrade as the evidence shrank —
+/// every citation resolved at all three depths, all three adversarial questions were abstained
+/// from at all three, and verified quotes did not fall.
+/// </para>
+/// <para>
+/// <b>Why the default is still the slowest one.</b> What that run did not measure is recall: with
+/// fewer windows the answer can simply not be in front of the model, and a question whose evidence
+/// ranks fifth is answered worse or not at all. Scoring that needs gold ranges — the labelled
+/// question set in <c>tests/fixtures/csb384/questions.json</c>, whose status is still
+/// <c>template</c> — so the faster settings are offered rather than chosen, and
+/// <c>docs/UNPROVEN.md</c> records which half of the trade has evidence behind it.
+/// </para>
+/// </remarks>
+public enum AskEvidenceDepth
+{
+    /// <summary>Eight windows: what the panel has always used, and what every citation figure in
+    /// the record was measured at.</summary>
+    Thorough = 0,
+
+    /// <summary>Six windows. A quarter off the wall in the measured run.</summary>
+    Balanced = 1,
+
+    /// <summary>Four windows, and roughly two and a half times faster — with the recall the
+    /// paragraph above describes unmeasured.</summary>
+    Fast = 2,
+}
+
 /// <summary>The handful of choices that outlive a run of the application.</summary>
 public sealed record AppSettings
 {
@@ -57,6 +93,29 @@ public sealed record AppSettings
     /// different tiers. The two fixed settings stay for anyone who would rather decide once.
     /// </summary>
     public AskModePreference AskMode { get; init; } = AskModePreference.Automatic;
+
+    /// <summary>
+    /// How much evidence the retrieval tier shows the model. <see cref="AskEvidenceDepth.Thorough"/>
+    /// as shipped, which is the eight windows every measured citation figure in this project was
+    /// taken at; the faster settings trade an unmeasured amount of recall for a large and measured
+    /// amount of time. See <see cref="AskEvidenceDepth"/>.
+    /// </summary>
+    public AskEvidenceDepth AskEvidence { get; init; } = AskEvidenceDepth.Thorough;
+
+    /// <summary>The number of windows <see cref="AskEvidence"/> asks for.</summary>
+    public int EvidenceWindows => WindowsFor(AskEvidence);
+
+    /// <summary>
+    /// The windows each depth asks for. Static so a caller holding the enum alone — the window
+    /// model's picker, which never has an <see cref="AppSettings"/> in hand — can ask without
+    /// building one.
+    /// </summary>
+    public static int WindowsFor(AskEvidenceDepth depth) => depth switch
+    {
+        AskEvidenceDepth.Fast => 4,
+        AskEvidenceDepth.Balanced => 6,
+        _ => 8,
+    };
 
     /// <summary>
     /// The file name — not the path — of the .gguf the Ask panel should serve, or null to take
@@ -249,6 +308,7 @@ public sealed class AppSettingsStore
                 CheckForUpdatesOnLaunch = ReadBool(root, "checkForUpdatesOnLaunch", AppSettings.Default.CheckForUpdatesOnLaunch),
                 AskThinking = ReadBool(root, "askThinking", AppSettings.Default.AskThinking),
                 AskMode = ReadAskMode(root),
+                AskEvidence = ReadAskEvidence(root),
                 AskModelFileName = ReadString(root, "askModelFileName"),
                 HuggingFaceToken = ReadString(root, "huggingFaceToken"),
                 DiarisationModelId = ReadString(root, "diarisationModelId"),
@@ -305,6 +365,7 @@ public sealed class AppSettingsStore
                 // reason: reordering the enum would silently turn one user's saved choice into
                 // another's.
                 ["askMode"] = settings.AskMode.ToString().ToLowerInvariant(),
+                ["askEvidence"] = settings.AskEvidence.ToString().ToLowerInvariant(),
 
                 // The name for the same reason again. Always written, never omitted: unlike the
                 // backend, "nobody has said" and the shipped default are the same behaviour here
@@ -484,6 +545,29 @@ public sealed class AppSettingsStore
     /// so it becomes <see cref="AskModePreference.Automatic"/> rather than pinning a user to
     /// retrieval on the strength of a value they never set.
     /// </remarks>
+    /// <summary>
+    /// The evidence depth, or the shipped default when the file says nothing this build knows.
+    /// An unreadable value becomes <see cref="AskEvidenceDepth.Thorough"/> rather than a faster
+    /// one: the settings whose recall is unmeasured are chosen deliberately or not at all.
+    /// </summary>
+    private static AskEvidenceDepth ReadAskEvidence(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("askEvidence", out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return AppSettings.Default.AskEvidence;
+        }
+
+        return value.GetString()?.ToLowerInvariant() switch
+        {
+            "thorough" => AskEvidenceDepth.Thorough,
+            "balanced" => AskEvidenceDepth.Balanced,
+            "fast" => AskEvidenceDepth.Fast,
+            _ => AppSettings.Default.AskEvidence,
+        };
+    }
+
     private static AskModePreference ReadAskMode(JsonElement root)
     {
         if (root.ValueKind == JsonValueKind.Object

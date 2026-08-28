@@ -54,9 +54,62 @@ public sealed record LlamaServerOptions
     /// <summary>Layers to offload; the default asks for all of them.</summary>
     public int GpuLayers { get; init; } = 999;
 
+    /// <summary>
+    /// The logical and physical prefill batches — <c>-b</c> and <c>-ub</c>. Larger than the
+    /// server's own 2048 and 512 because prefill is where an answer's time goes.
+    /// </summary>
+    /// <remarks>
+    /// <b>Measured 2026-08-27/28 on the second machine</b>, the 26B-A4B at UD-IQ4_XS with its
+    /// drafting head. On retrieval-shaped questions the physical batch at 1,024 took prefill
+    /// from ~89 to 112 tok/s and the median answer from 39.8 s to 28.0 s — more than cutting
+    /// the evidence from eight windows to six bought, and unlike the evidence it changes no
+    /// token the model sees. On the survey tier's larger prompt, 2,048 took the first answer
+    /// about a three-hour recording from 135.9 s to 120.8 s.
+    /// </remarks>
+    /// <remarks>
+    /// <b>It is not a memory setting on the evidence available.</b> Free system RAM after
+    /// load was 0.24 GiB at 1,024 and 0.27 GiB at 2,048 with the same model — the server's
+    /// footprint dominates and the batch is lost in it. That is one machine and one model;
+    /// a machine that cannot afford the compute buffer sets these lower.
+    /// </remarks>
+    public int BatchSize { get; init; } = 4_096;
+
+    /// <inheritdoc cref="BatchSize"/>
+    public int PhysicalBatchSize { get; init; } = 2_048;
+
     /// <summary>`-fa on|off|auto`, or null for the server's own default. #26609 is why this
     /// exists: CUDA plus expert offload plus flash attention is a live crash until it closes.</summary>
     public string? FlashAttention { get; init; }
+
+    /// <summary>
+    /// A multi-token-prediction head to draft with, or null for ordinary one-token-at-a-time
+    /// decoding. The file ships beside the weights it belongs to — `mtp-&lt;model&gt;.gguf` in the
+    /// models folder — and <see cref="DraftModelLocator"/> is what pairs the two.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Measured 2026-08-27 on the second machine</b>, the 26B-A4B at UD-IQ4_XS over thirteen
+    /// retrieval questions: decode 7.66 -&gt; 10.11 tok/s and median wall 42.3 -&gt; 37.8 s, at
+    /// <b>71.7% draft acceptance</b>, with the citation checks unchanged (every citation resolved
+    /// either way, three of three adversarial questions abstained from). Unsloth claims 1.4–2.2x
+    /// for the same head; 1.32x is what this laptop gets, where decode is bounded by reading the
+    /// experts out of system memory rather than by arithmetic.
+    /// </para>
+    /// <para>
+    /// <b>Prompt-lookup drafting was measured and rejected in the same session</b>, which is why
+    /// this is a model path and not a `--spec-type` string: `ngram-simple`, `ngram-map-k` and
+    /// `ngram-mod` accepted 11.5%, 15.3% and 3.0% of their drafts and bought nothing
+    /// (7.32, 7.87, 7.78 tok/s against 7.66 for no drafting at all). An answer that cites a
+    /// transcript is mostly the model's own prose around a short quote, so there is little
+    /// verbatim span for a lookup to find — the trained head predicts the model instead.
+    /// </para>
+    /// <para>
+    /// <b>It costs memory.</b> The head is ~0.5 GB resident, and on the second machine it took
+    /// free system RAM from ~1.4 to ~0.89 GiB with the 26B loaded — still the fastest arm
+    /// measured there, but the margin above the paging cliff is what it spends.
+    /// </para>
+    /// </remarks>
+    public string? DraftModelPath { get; init; }
 
     /// <summary>
     /// Extra environment for the child. On Vulkan, <c>GGML_VK_DISABLE_BFLOAT16=1</c> is set by

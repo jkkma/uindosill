@@ -178,6 +178,11 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             "-c", options.ContextSize.ToString(CultureInfo.InvariantCulture),
             "-ngl", options.GpuLayers.ToString(CultureInfo.InvariantCulture),
 
+            // Prefill is about 60% of an answer's wall on the second machine, so the batch
+            // it is chunked into is not a detail — see LlamaServerOptions.BatchSize.
+            "-b", options.BatchSize.ToString(CultureInfo.InvariantCulture),
+            "-ub", options.PhysicalBatchSize.ToString(CultureInfo.InvariantCulture),
+
             // The register's decision 1 names --fit on as a way to be fooled: it trims layers
             // and context to what fits, so a model that does not fit still runs, silently
             // degraded. Off, and a failure is a failure someone can read.
@@ -224,6 +229,23 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         {
             arguments.Add("-fa");
             arguments.Add(flashAttention);
+        }
+
+        if (options.DraftModelPath is { Length: > 0 } draft)
+        {
+            // Speculative decoding against the model's own multi-token-prediction head. The type
+            // is named rather than left to the server: `--spec-type` defaults to `none`, so
+            // handing over a draft model without it drafts nothing at all.
+            arguments.Add("--spec-type");
+            arguments.Add("draft-mtp");
+            arguments.Add("-md");
+            arguments.Add(draft);
+
+            // The head follows the model onto whatever the model is on. A draft left on the CPU
+            // while the target decodes on the device pays a transfer per drafted token, which is
+            // the cost speculative decoding exists to avoid.
+            arguments.Add("-ngld");
+            arguments.Add(options.GpuLayers.ToString(CultureInfo.InvariantCulture));
         }
 
         return arguments;

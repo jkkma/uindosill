@@ -87,6 +87,14 @@ public interface IAnswerEngineProvider
     MoeExpertPlacement ExpertPlacement { get; }
 
     /// <summary>
+    /// How many retrieved windows the next ask should show the model, read by the panel before
+    /// every question. A per-request fact like <see cref="ModePreference"/> and not a
+    /// child-process argument, so changing it needs no new engine — only a different context
+    /// size, which <see cref="Create"/> already sizes per prompt.
+    /// </summary>
+    int EvidenceWindows { get; }
+
+    /// <summary>
     /// A new engine, not yet loaded, sized for a prompt of roughly <paramref name="promptChars"/>
     /// characters per <see cref="AnswerContextBudget.ContextTokensFor"/>. Throws when
     /// <see cref="Check"/> says unavailable.
@@ -113,13 +121,15 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     private readonly Func<AskModePreference> _modePreference;
     private readonly Func<string?> _chosenModel;
     private readonly Func<MoeExpertPlacement> _expertPlacement;
+    private readonly Func<int> _evidenceWindows;
 
     public LlamaAnswerEngineProvider(
         IModelStore store,
         Func<bool>? thinkingMode = null,
         Func<AskModePreference>? modePreference = null,
         Func<string?>? chosenModel = null,
-        Func<MoeExpertPlacement>? expertPlacement = null)
+        Func<MoeExpertPlacement>? expertPlacement = null,
+        Func<int>? evidenceWindows = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
@@ -127,6 +137,10 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         _modePreference = modePreference ?? (static () => AskModePreference.Automatic);
         _chosenModel = chosenModel ?? (static () => null);
         _expertPlacement = expertPlacement ?? (static () => MoeExpertPlacement.Automatic);
+
+        // Eight when nobody says otherwise: the depth every citation figure in this project was
+        // measured at, and the one whose recall is not in question.
+        _evidenceWindows = evidenceWindows ?? (static () => 8);
     }
 
     /// <summary>
@@ -146,25 +160,56 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     /// The .gguf files in the models folder, largest first — the list the picker offers, read
     /// fresh because the folder is not this application's alone to write.
     /// </summary>
-    public IReadOnlyList<string> AvailableModelFileNames()
+    public IReadOnlyList<string> AvailableModelFileNames() =>
+        [.. ModelFilesOnDisk().Select(file => file.Name)];
+
+    /// <summary>
+    /// Every .gguf a person could ask questions of, largest first: the ones dropped into the
+    /// models folder by hand, and the ones a catalogue entry installed into a directory of its
+    /// own. Drafting heads are not among them — they answer nothing.
+    /// </summary>
+    /// <remarks>
+    /// One level down and no further, because that is the shape the catalogue writes: an entry
+    /// with a <c>files</c> array names a directory to install into, and it must, since the two
+    /// answering entries ship the same drafting head under the same name and would otherwise
+    /// overwrite each other at the root.
+    /// </remarks>
+    private IReadOnlyList<FileInfo> ModelFilesOnDisk()
     {
-        if (!Directory.Exists(_store.RootDirectory))
+        var root = _store.RootDirectory;
+        if (!Directory.Exists(root))
         {
             return [];
         }
 
-        return
-        [
-            .. Directory.EnumerateFiles(_store.RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly)
-                .Select(path => new FileInfo(path))
-                .OrderByDescending(file => file.Length)
-                .Select(file => file.Name),
-        ];
+        var found = new List<FileInfo>();
+        foreach (var directory in Directory.EnumerateDirectories(root).Prepend(root))
+        {
+            try
+            {
+                found.AddRange(Directory.EnumerateFiles(directory, "*.gguf", SearchOption.TopDirectoryOnly)
+                    .Where(path => !DraftModelLocator.IsDraftHead(path))
+                    .Select(path => new FileInfo(path)));
+            }
+            catch (IOException)
+            {
+                // A directory that vanished between listing and reading is one fewer model, not a
+                // panel that stops working.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return [.. found.OrderByDescending(file => file.Length)];
     }
 
     public bool ThinkingMode => _thinkingMode();
 
     public AskModePreference ModePreference => _modePreference();
+
+    /// <inheritdoc />
+    public int EvidenceWindows => _evidenceWindows();
 
     public MoeExpertPlacement ExpertPlacement => _expertPlacement();
 
@@ -205,6 +250,13 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             ThinkBeforeAnswer = ThinkingMode,
             ContextSize = AnswerContextBudget.ContextTokensFor(promptChars),
             ExpertPlacement = ExpertPlacement,
+
+            // A drafting head is used when one is sitting beside the model, and there is no
+            // setting for it: it is faster at the same answer rather than a different trade, so
+            // there is nothing for a person to weigh. Measured 2026-08-27 on the second machine —
+            // 1.32x on decode at 71.7% acceptance, citation checks unchanged (docs/UNPROVEN.md).
+            // Absent, this is null and the child decodes one token at a time as before.
+            DraftModelPath = DraftModelLocator.FindBeside(model),
         });
     }
 
@@ -222,15 +274,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
     /// </remarks>
     private string? FindModelFile()
     {
-        if (!Directory.Exists(_store.RootDirectory))
-        {
-            return null;
-        }
-
-        var files = Directory.EnumerateFiles(_store.RootDirectory, "*.gguf", SearchOption.TopDirectoryOnly)
-            .Select(path => new FileInfo(path))
-            .OrderByDescending(file => file.Length)
-            .ToList();
+        var files = ModelFilesOnDisk();
 
         if (_chosenModel() is { Length: > 0 } chosen)
         {
@@ -267,6 +311,9 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
 
     /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
     public AskModePreference ModePreference { get; set; } = AskModePreference.Automatic;
+
+    /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
+    public int EvidenceWindows { get; set; } = 8;
 
     /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>.</summary>
     public MoeExpertPlacement ExpertPlacement { get; set; } = MoeExpertPlacement.Automatic;

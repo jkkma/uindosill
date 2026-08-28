@@ -32,6 +32,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private AskModePreference _askMode;
 
+    /// <summary>The Settings picker: how much evidence an answer is built from. Thorough as
+    /// shipped — see <see cref="AskEvidenceDepth"/> for the measured trade.</summary>
+    [ObservableProperty]
+    private AskEvidenceDepth _askEvidence;
+
     /// <summary>The .gguf chosen for asking, or null for "the largest one there".</summary>
     [ObservableProperty]
     private string? _askModelFileName;
@@ -97,6 +102,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
         _askThinking = loaded.AskThinking;
         _askMode = loaded.AskMode;
+        _askEvidence = loaded.AskEvidence;
         _askModelFileName = loaded.AskModelFileName;
         _huggingFaceToken = loaded.HuggingFaceToken;
         _askExpertPlacement = loaded.AskExpertPlacement;
@@ -144,7 +150,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 () => AskThinking,
                 () => AskMode,
                 () => AskModelFileName,
-                () => AskExpertPlacement);
+                () => AskExpertPlacement,
+                () => AppSettings.WindowsFor(AskEvidence));
         }
 
         Ask = new AskViewModel(
@@ -235,6 +242,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
                         break;
                     case ModelTask.VoiceActivity:
                         Transcribe.RefreshSpeechDetectionAvailability();
+                        break;
+
+                    // The answering entry, from 2026-08-27. It has to be named rather than left to
+                    // the default below, which refreshes the transcribe panel: installing a
+                    // language model would have lit up a control that does not use it and left the
+                    // Ask panel still saying it has no model until the next selection change.
+                    case ModelTask.Answering:
+                        Ask.Chat.RefreshDocument();
                         break;
 
                     // The transcription entry joined this on 2026-08-23, when Start began loading
@@ -347,6 +362,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(SelectedAskMode));
         PersistAskMode(value);
+    }
+
+    /// <summary>Remembers the depth. The panel reads it at the next question — no new engine is
+    /// needed, because the evidence count is a prompt fact and not a child-process argument.</summary>
+    partial void OnAskEvidenceChanged(AskEvidenceDepth value)
+    {
+        OnPropertyChanged(nameof(SelectedAskEvidence));
+        _settings.Update(current => current with { AskEvidence = value });
     }
 
     /// <summary>Remembers the model; the panel builds a fresh engine at the next question.</summary>
@@ -517,6 +540,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(AskModePreference.Retrieval, "The parts that matched"),
         new(AskModePreference.WholeTranscript, "The whole transcript"),
     ];
+
+    /// <summary>
+    /// The evidence-depth picker's rows. The labels say what the reader gets rather than how many
+    /// windows it is: the count is an implementation number, and the thing being chosen is how
+    /// carefully the recording is searched before the model answers.
+    /// </summary>
+    public IReadOnlyList<AskEvidenceChoice> AskEvidenceLevels { get; } =
+    [
+        new(AskEvidenceDepth.Thorough, "Search more of the recording"),
+        new(AskEvidenceDepth.Balanced, "In between"),
+        new(AskEvidenceDepth.Fast, "Answer faster"),
+    ];
+
+    /// <summary>The twin of <see cref="SelectedAskMode"/>, and for the same reason.</summary>
+    public AskEvidenceChoice SelectedAskEvidence
+    {
+        get => AskEvidenceLevels.First(choice => choice.Depth == AskEvidence);
+        set => AskEvidence = value.Depth;
+    }
 
     /// <summary>The picker binds a row rather than the enum, and this keeps the two in step.</summary>
     public AskModeChoice SelectedAskMode
@@ -802,6 +844,11 @@ public sealed record DiarisationBatchSizeChoice(int? Size, string Label)
 }
 
 /// <summary>One row of the ask-mode picker: the setting, under the name a person reads.</summary>
+public sealed record AskEvidenceChoice(AskEvidenceDepth Depth, string Label)
+{
+    public override string ToString() => Label;
+}
+
 public sealed record AskModeChoice(AskModePreference Mode, string Label)
 {
     /// <summary>What the picker shows. The list is bound directly, so this is the label.</summary>
