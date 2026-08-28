@@ -257,7 +257,7 @@ every distribution in an assembled bundle and splices the result between the mar
 | fsspec | 2026.7.0 | BSD-3-Clause | `fsspec-2026.7.0.dist-info/licenses/LICENSE` |
 | googleapis-common-protos | 1.75.2 | Apache 2.0 | `googleapis_common_protos-1.75.2.dist-info/licenses/LICENSE` |
 | greenlet | 3.5.5 | MIT AND PSF-2.0 | `greenlet-3.5.5.dist-info/licenses/LICENSE` and 1 more |
-| grpcio | 1.83.0 | Apache-2.0 | `grpcio-1.83.0.dist-info/licenses/LICENSE` |
+| grpcio | 1.83.1 | Apache-2.0 | `grpcio-1.83.1.dist-info/licenses/LICENSE` |
 | huggingface_hub | 0.36.2 | Apache | `huggingface_hub-0.36.2.dist-info/licenses/LICENSE` |
 | idna | 3.19 | BSD-3-Clause | `idna-3.19.dist-info/licenses/LICENSE.md` |
 | Jinja2 | 3.1.6 | BSD License | `jinja2-3.1.6.dist-info/licenses/LICENSE.txt` |
