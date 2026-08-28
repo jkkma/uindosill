@@ -6385,9 +6385,13 @@ took the worst of it.
   in time may be quoted from this project, in either direction.
 - **One stretch, one corpus, and not the one the gate is defined on.** The other four stretches are
   unmeasured. No figure here may be compared with the 16.33% Sortformer number, which is AMI.
-- **The bundle has not been rebuilt.** `scripts/bundle-python.ps1` has not run with the two new
-  pins, so no installer carries `onnxscript`, and the derivation has never been exercised from a
-  `._pth` bundle — the configuration that broke speechbrain in a way no virtualenv reproduced.
+- **The derivation has never been exercised from a `._pth` bundle** — the configuration that broke
+  speechbrain in a way no virtualenv reproduced. **The dependency half of this is discharged as of
+  2026-08-28**: `scripts/bundle-python.ps1` has run with the two new pins, and the published
+  `uindosill-python-win-x64.zip` for `v1.0.0-rc.6` was read that day and carries `onnx` 1.22.0,
+  `onnxscript` 0.7.1, `onnx_ir` 1.0.0 and `ml_dtypes` 0.6.0. Shipping the dependency is not the
+  same as having run the export against it, and nothing has — so the Settings row that derives the
+  graphs is untested on an installed build rather than known to fail on one.
 - **Transcription and diarisation have not been driven together** with the ONNX embedder. Reading
   the code says they cannot interact — Silero VAD is CPU-only, single-threaded, in a different
   process, and diarisation is a separate second pass that re-reads the file and ignores VAD's
@@ -6407,10 +6411,13 @@ took the worst of it.
   `uindosill doctor`. They are removed with the model, so this is an under-report rather than a
   leak — but a user comparing the folder on disk against the figure the app shows will find them
   about 27 MB apart on that entry.
-- **The licence enumeration is behind by two top-level pins.** `docs/LICENSING.md`'s "112
-  distributions, sixty-two unread" predates `onnx` and `onnxscript`, which bring `onnx_ir` and
-  `ml_dtypes` with them. Both figures are floors until `scripts/bundle-python.ps1` is run and the
-  `.dist-info` enumeration redone.
+- **The licence enumeration is current, and this item is closed 2026-08-28.** It read that
+  `docs/LICENSING.md`'s "112 distributions, sixty-two unread" was behind `onnx` and `onnxscript`.
+  Neither figure is in `docs/LICENSING.md` any more — the enumeration moved to `NOTICE.md` on
+  2026-08-23, which `NOTICE.md` records — and `5cbcb7d` regenerated it from an assembled bundle on
+  2026-08-28 at **109 distributions and 248 licence files, five of them textless**, both pins and
+  their `onnx_ir` and `ml_dtypes` inside the count. Confirmed the same day against the published
+  `v1.0.0-rc.6` asset rather than against a local bundle alone.
 - **Nothing is measured on the desktop**, where CUDA exists, is reachable by name and is not in
   `auto`. CUDA's record on the other diariser is that it does not reproduce the CPU.
 
