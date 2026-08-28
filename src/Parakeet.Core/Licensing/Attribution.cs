@@ -346,6 +346,21 @@ public static class Attributions
     /// </remarks>
     public const string Gemma426BA4BIt = "google-gemma-4-26b-a4b-it-gguf";
 
+    /// <summary>
+    /// The answering model the Ask panel serves unchosen: Gemma 4 12B, quantisation-aware trained,
+    /// Apache-2.0, installed as a third party's GGUF.
+    /// </summary>
+    /// <remarks>
+    /// A second Gemma 4 entry rather than a second quantisation of the first, because it is a
+    /// different model: 12B dense against 26B mixture-of-experts, and a separate upstream
+    /// repository. The licence is the same Apache-2.0 as
+    /// <see cref="Gemma426BA4BIt"/> — the model card of every repository named below was read on
+    /// 2026-08-28 and all four serve it. Note that the GGUF's own <c>general.license</c> metadata
+    /// key reads <c>gemma</c>, which is a stale tag written by the conversion tooling and not what
+    /// either publisher's licence says; the card is the licence.
+    /// </remarks>
+    public const string Gemma412BItQat = "google-gemma-4-12b-it-qat-gguf";
+
     /// <summary>Where the Apache License 2.0 copy lives, relative to the repository root.</summary>
     public const string ApacheLicencePath = "licences/Apache-License-2.0.txt";
 
@@ -427,6 +442,45 @@ public static class Attributions
 
                 "GGUF conversion and dynamic quantisation by Unsloth: "
                 + "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF",
+            ],
+            WarrantyDisclaimerNotice =
+                "The model is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
+                + "either express or implied (section 7 of the licence).",
+        },
+
+        [Gemma412BItQat] = new ApacheAttribution
+        {
+            Title = "Gemma 4 12B instruction-tuned, quantisation-aware trained "
+                + "(language model weights, GGUF)",
+            Creator = "Google DeepMind",
+            LicenceStatement = "Apache License, Version 2.0,",
+            LicenceUri = new Uri("https://www.apache.org/licenses/LICENSE-2.0"),
+            LicencePath = ApacheLicencePath,
+            MaterialUri = new Uri("https://huggingface.co/google/gemma-4-12B-it"),
+            ModificationNotice =
+                "Modified: Google DeepMind trained gemma-4-12B-it and published the "
+                + "quantisation-aware-trained variant this is built from; a third party, Unsloth, "
+                + "converted it to the GGUF format and quantised it, with no retraining and no change "
+                + "to the architecture. The installed file is Unsloth's UD-Q4_K_XL dynamic "
+                + "quantisation of that variant, in which the weights are reduced to roughly four bits "
+                + "per value at a precision that varies per tensor. Installed beside it is the "
+                + "publisher's own multi-token-prediction head at Q8_0, which drafts tokens the model "
+                + "then verifies and changes no answer it would otherwise give. Uindosill hosts "
+                + "neither the original checkpoint nor the conversion, and installs Unsloth's copy by "
+                + "URL.",
+            SourceNoticeFinding =
+                "Both upstream repositories were read on 2026-08-28 — google/gemma-4-12B-it and "
+                + "unsloth/gemma-4-12B-it-qat-GGUF at revision 980b060c40. Neither ships a NOTICE "
+                + "file, so §4(d) has nothing to reproduce, and neither carries a copyright, patent "
+                + "or trademark notice, so none is reproduced here rather than one being invented. "
+                + "The attribution notices they do carry are these:",
+            RetainedSourceNotices =
+            [
+                "Gemma is a family of open models built by Google DeepMind. Model page: "
+                + "https://huggingface.co/google/gemma-4-12B-it",
+
+                "GGUF conversion and dynamic quantisation by Unsloth: "
+                + "https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF",
             ],
             WarrantyDisclaimerNotice =
                 "The model is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "

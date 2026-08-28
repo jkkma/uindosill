@@ -63,6 +63,21 @@ public sealed class ModelCatalog
     /// <summary>The entries the Ask tab may load to answer questions about a transcript.</summary>
     public IReadOnlyList<ModelDescriptor> AnsweringModels => _byTask[ModelTask.Answering];
 
+    /// <summary>
+    /// The answering model the Ask panel serves when nobody has chosen one. Only ever a
+    /// <see cref="ModelTask.Answering"/> entry, for the same reason <see cref="Recommended"/> is
+    /// only ever a transcription one: the flag is read per task, so an entry marked recommended
+    /// for one job cannot become the default for another.
+    /// </summary>
+    /// <remarks>
+    /// Null when no answering entry is marked, which is a meaningful state rather than a broken
+    /// one — the panel then falls back to the largest file on disk, exactly as it did before any
+    /// entry claimed the position. Nothing here says the file is installed; that is a question
+    /// about a folder, and the caller owns it.
+    /// </remarks>
+    public ModelDescriptor? RecommendedAnswering =>
+        AnsweringModels.FirstOrDefault(m => m.Recommended);
+
     public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
         _byId.TryGetValue(id, out model);
 
