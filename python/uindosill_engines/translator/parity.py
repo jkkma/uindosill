@@ -4,12 +4,14 @@
 is a prior, not a guarantee: DirectML's diarisation defect turned out to be driver-mediated, so
 "faithful where it was measured" does not transfer, and a wrong translator produces English rather
 than an error. This is the cheap check that stands between a user and a translation that is wrong in
-a way nothing in it reveals — the same job :mod:`..diariser.parity` does, run for the same reason.
+a way nothing in it reveals. **It is the only such check left**: the diariser had one until
+2026-08-27 and it went to `attic/sortformer/` with the ONNX engine it compared, since the pipeline
+that replaced it is torch on both stages and has one path where parity needs two.
 
-**It is not that check in a different costume, and the difference matters.** The diariser compares
-probabilities and has three orders of magnitude of daylight between a faithful provider (about
-1e-06) and a diverging one (about 1e-03), so its threshold is a measurement. A translation is a
-string: the comparison here is identical-or-not, per sentence, with no margin at all. A provider that
+**It was never that check in a different costume, and the difference is why only this one survived
+being useful.** The diariser's compared probabilities, with three orders of magnitude of daylight
+between a faithful provider (about 1e-06) and a diverging one (about 1e-03), so its threshold was a
+measurement. A translation is a string: the comparison here is identical-or-not, per sentence, with no margin at all. A provider that
 diverges only on long or unusual inputs passes this and fails a corpus. What it does catch is the
 failure that has actually been observed — DirectML's repetition-loop collapse, which was wrong on
 **all 32** sentences measured, not on a subtle few.
