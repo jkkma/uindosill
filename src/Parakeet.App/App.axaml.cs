@@ -15,7 +15,7 @@ public partial class App : Application
     /// <remarks>
     /// <b>The third argument is what makes the Models tab's diariser choice reach a run.</b>
     /// Without it the provider takes its no-argument default of "nobody has chosen" and resolves
-    /// the first installed diariser instead, which is Sortformer on every machine that has it --
+    /// the first installed diariser instead -- one entry since 2026-08-27, so "first" and "only" --
     /// so the tab would write the setting, tick the row, and change nothing. It is a delegate
     /// rather than a value because the choice can change while the window is open, and it reads
     /// the store each time for the same reason.

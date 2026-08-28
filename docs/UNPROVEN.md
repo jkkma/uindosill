@@ -6536,3 +6536,177 @@ caught that mattered, all now fixed:
   observed during that run. **Telemetry needs a packet capture and TorchCodec needs the call
   watched**, and a run that produced a DER is exactly the run either check should have ridden along
   with.
+
+## Sortformer was shelved 2026-08-27, and the figures the product publishes went with it
+
+Every diarisation number in this document that is attributed to Sortformer was measured on NVIDIA's
+Streaming Sortformer 4spk v2.1. That engine is in `attic/sortformer/`. **None of those numbers
+describes the product any more**, and they are kept here — unedited — because this document records
+what was measured rather than what currently ships, which is the same rule that kept DiariZen's
+figures after its swap. Other diarisation systems have figures here too: sherpa-onnx's 25.05% and
+25.77%, DiariZen's speaker counts, and the shipping pipeline's own first run. None of them is
+interchangeable with another.
+
+**This entry was written with a false headline and corrected the same day.** It said the shipping
+diariser had never been scored on anything. It has — see *What the first run settled*, above, on
+2026-08-27, a few hours before this. What is true is narrower and is set out below.
+
+### What is measured about the shipping diariser
+
+Not nothing, which is what this entry first claimed. On 2026-08-27, on the desktop:
+
+- **One meeting has a DER.** AMI **ES2004a** alone, 17.5 minutes, one of the sixteen test meetings:
+  **14.38%** at collar 0.25 with overlap, **18.76%** at collar 0, returning 5 speakers against the
+  reference's 4. The entry above says what that is and is not, and its warning stands: a single
+  meeting is not a corpus, and this number must not be set beside Sortformer's 16.33%, which is a
+  sixteen-meeting mean.
+- **One file has a real-time factor.** 200.7 s of wall clock for 1049.4 s of audio — **5.2×
+  realtime** — on the CPU at the default 12 threads. Sortformer on a three-minute excerpt of the
+  same meeting was about fifty times faster, structurally rather than by misconfiguration.
+
+### Not proven — and this list got longer rather than shorter
+
+- **The speaker gate is unmet by the shipping product.** The gate is AMI test DER ≤ 23.8 at collar 0
+  with overlap, *and* mean |speakers found − speakers in reference| ≤ 1.0, tuned on the 18 dev
+  meetings and applied unchanged to the 16 test meetings, scored once. Sortformer passed it at
+  16.33% and 0.06. **The shipping engine has been scored on one of those sixteen meetings**, which
+  is not the protocol and cannot be compared to it. The harness is `scripts/measure-der.ps1`,
+  unchanged; the corpus is on the desktop. Nothing but a run stands in the way, and until it happens
+  the row in `docs/PHASES.md` reads unmet rather than passed.
+- **The one meeting scored is not reassuring about the criterion the gate added second.** It
+  returned 5 speakers where the reference has 4 — an over-split on a meeting with no crosstalk
+  problem to speak of — and the speaker-error criterion is a mean over sixteen meetings that this
+  does not estimate.
+- **There is no established length.** The declared limits report `null` for both the speaker cap and
+  the reliable duration. The first is a property of clustering and is true; the second is an absence
+  of evidence. Sortformer's fifty minutes was measured by growing a window from a fixed onset over
+  two episodes, and the same ladder would answer this — on a model that, having no cap, may fail
+  differently or not at all. The longest file this engine has been run on is 17.5 minutes.
+- **Nothing guards against a silently wrong backend on the speaker path.** The parity fixture went
+  with the ONNX engine, because comparing two paths to one answer needs two paths and this pipeline
+  has one. `cuda` is still reachable by name here, on a machine whose torch build has it, and
+  **whether it changes the labels is unchecked** — the window and the command line now say exactly
+  that, where they used to quote a measurement. A torch-against-torch comparison across devices is
+  the shape the replacement would take, and nobody has built one. **What the retired fixture was
+  worth is itself a matter of record rather than assumption**: the 53.15% DirectML result was found
+  by a DER run, not by the fixture, and this document says so elsewhere. The fixture's value was
+  that it ran on every load; the DER run's is that it found the defect.
+- **The thread default of 12 rests on nothing measured about this engine.** It was the number every
+  CPU diarisation figure Sortformer published was taken with. The 5.2× above was also taken at 12,
+  so the default is at least the condition of the one speed figure that exists — but no sweep has
+  been run here, and 12 was not chosen for this pipeline.
+- **The post-processing thresholds are inert and still travel.** The host sends them, the sidecar
+  drops them and reports `honoursPostProcessing: false`. They are Sortformer's tuned set. Upstream's
+  internal binarisation is what `community-1`'s published figures describe, and this project has
+  reproduced none of those either.
+
+### The speaker palette grew to eight the same day, and nobody has looked at it
+
+Speaker chips were capped at four because the retired diariser was: a fifth speaker could not occur,
+so `voices.Count % 4` was unreachable rather than lossy. The clustering pipeline that replaced it has
+no cap and AMI-style meetings routinely have five to seven, so the wrap became a collision. Four
+hues were added — `Tokens.axaml`'s speaker hues, at matcha's own oklch lightness and chroma rotated
+to 49, 161, 216 and 337 degrees — and the wrap moved to `% 8`.
+
+**What is measured.** The generator was validated by reproducing the shipped matcha and taro hexes
+byte for byte from the lightness and chroma figures `Tokens.axaml` already published, so the new
+ramps are that file's own construction rather than a second method. Every chip's text against its
+own background is computed from the two theme files by `SpeakerChipContrastTests` and held at
+4.5:1 — the eight run 4.90:1 to 7.00:1 — and a second test holds each chip's fill-and-edge pair
+unique. Both run in CI.
+
+**What is not.** *Nobody has seen them.* No screenshot, no window, no human. The contrast arithmetic
+says each chip's text is legible on its own fill; it does not say eight chips are
+distinguishable **from each other** at 12px across a scrolling transcript, and the constraint that
+set the hues makes that worth doubting: at matcha's chroma the sRGB gamut admits only three arcs, so
+the smallest gap between any two of the seven hues now in the file is **32.8 degrees**, and mint
+(161) sits that distance from matcha (128.2). Two pale greens five chips apart is exactly the case
+this palette exists to prevent, and it is the case nothing here has tested.
+
+**And the ninth speaker still repeats.** The wrap moved; it did not go. A recording with nine voices
+gives speaker 9 speaker 1's colour, with only the name to separate them.
+
+### The Settings tab offers CUDA without checking for it
+
+The speaker-provider picker filtered its rows by what ONNX Runtime had registered. That answered a
+question about the retired engine, and it went with it — so the CUDA row is now offered on every
+machine, including one whose torch build has no CUDA, and the failure arrives at load rather than as
+an absent row. Two corrections had landed on that filter on 2026-08-27 alone, which is a measure of
+how easy the control is to get wrong.
+
+**Restoring it means asking torch rather than ONNX Runtime** — a sidecar op reporting
+`torch.cuda.is_available()`, wired where the ONNX probe used to be. Nothing does that today.
+`AvailableDiariserProvidersAsync` still probes ONNX Runtime and is still correct about the
+translator, which is why it was kept; nothing on the diariser path reads it.
+
+### The shelving was checked against the real sidecar, and ES2004a reproduces bit for bit
+
+Ten minutes of CI cannot see the thing this change most needed checked: nothing in the suite starts
+a Python. `ProtocolVersionTests` exists because that constant went stale once and the suite stayed
+green — the fake sidecar answers whatever the constant says. So the real one was asked, on the
+desktop, against the installed weights and `pyannote-venv`.
+
+**The protocol change works end to end.** `hello` reports 5, matching the host's constant. `load`
+succeeds with no `kind` field at all, in 26.3 s, reporting both declared limits as null — and the
+host's `CheckDeclaredLimits` did not throw, which is the only place the duplicated constants are
+compared on a machine that has both halves. `parity` and `placement` each refuse the diariser by
+name, before and after a load. `provider: webgpu` is refused rather than quietly given the CPU.
+`providers` resolves the diariser's `auto` to `["cpu"]`.
+
+**And the numbers did not move.** `uindosill diarise` over AMI **ES2004a**, scored by `uindosill der`
+against `only_words`, reproduces the run of earlier the same day in every component:
+
+| | that run | after the shelving |
+|---|---|---|
+| DER, collar 0.25, overlap included | 14.38% | **14.38%** |
+| DER, collar 0 | 18.76% | **18.76%** |
+| missed / false alarm / confusion | 10.09 / 2.09 / 2.21 | **10.09 / 2.09 / 2.21** |
+| over reference crosstalk: DER / missed | 35.27 / 28.74 | **35.27 / 28.74** |
+| speakers found against reference | 5 / 4 | **5 / 4**, `spk1` unmatched |
+
+298 turns, 838.3 s of speech, 223.7 s of wall clock for 17.5 minutes — 5x realtime against that
+run's 5.2x, which is wall clock on a machine doing other things and not a result.
+
+**What that does and does not establish.** It establishes that removing the ONNX engine, collapsing
+the `kind` switch, bumping the protocol and deleting the parity path changed nothing about what the
+shipping diariser produces — the components agree to the last decimal published, which they could
+not do if a turn had moved. It does **not** turn one meeting into the sixteen the gate names; the
+gate is unmet exactly as it was before this check.
+
+**It is also the first corroboration that this pipeline is deterministic**, which `docs/GOTCHAS.md`
+gotcha 37 records as unverified: two runs in separate processes, hours apart, either side of a
+change to the host, produced identical turns. That is one corroboration on one file rather than the
+controlled repeat the question deserves — the two runs differed in more than the seed would — but it
+is more than the nothing that stood there before.
+
+### What the shelving does settle
+
+- **The build is green and the suite is honest about being smaller.** 1404 tests, 1397 passed and 7
+  skipped, down ten — fourteen methods removed, two of them renamed back, two added. Of the twelve
+  genuine removals: **five** exercised the diariser's parity path, **two** the retired licence's
+  notice and its Agreement copy, **two** the speaker-provider picker's ONNX-registration filter,
+  **one** the four-speaker cap, **one** the `fellBackFrom` list that a torch `auto` cannot populate,
+  and **one** the ONNX-speaker-embedder warning that left with DiariZen and had nothing to fire on.
+  None was deleted to make a failure go away. The two additions hold the new chip palette; a third
+  assertion went inside an existing test, that a settings file still naming `webgpu` reads back as
+  automatic rather than reaching a sidecar that refuses it.
+- **`DeclaredLimitsTests` still polices the duplicate**, against a shape that is now two nulls. It
+  fails if either side acquires a number, which is the case worth catching — a cap or a bound
+  appearing on one side only would be this build claiming an established limit for an engine that
+  has been run on one meeting.
+- **No component of this product is under the NVIDIA Open Model License.** Checked by enumeration:
+  `models.json` has four entries, under CC BY 4.0, CC BY 4.0, Apache-2.0 and MIT. The Agreement copy
+  that §3.1 required is in `attic/sortformer/` and ships nowhere, and the packaging script no longer
+  requires it.
+- **The biometric caution survived the licence that introduced it.** It arrived as NVIDIA's §2.3 and
+  is now carried on this project's own authority, because separating people by their voices is voice
+  biometrics whichever model does it. A test asserts both that it is still listed and that it is no
+  longer phrased as somebody's licence term.
+
+### What this entry does not claim
+
+That the shelving was a mistake, or that it was not. It was the maintainer's decision on a working
+engine, taken deliberately; what is recorded here is its cost in evidence. That cost is large but it
+is not total: the route back is one run of `measure-der.ps1` over AMI test on the engine that ships,
+scored once under the gate's own protocol. Until somebody makes it, this repository can say what one
+meeting did and cannot say whether the gate holds.

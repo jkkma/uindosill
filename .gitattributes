@@ -13,26 +13,29 @@
 # failure that looks like a broken port rather than a broken checkout.
 *.f32 binary
 
-# Written by scripts/make-diariser-fixtures.py and scripts/validate-der.py, both of which emit LF
-# and both of which compare what they would write against what is on disk. Checked out as CRLF,
-# every re-run reports every fixture as changed and the "re-running must be a no-op" guarantee
-# those scripts are built around stops meaning anything.
+# Written by scripts/validate-der.py, which emits LF and compares what it would write against what
+# is on disk. Checked out as CRLF, every re-run reports every fixture as changed and the "re-running
+# must be a no-op" guarantee it is built around stops meaning anything. (The rule covered a second
+# generator until 2026-08-27; `make-diariser-fixtures.py` and the fixtures it wrote went to
+# `attic/sortformer/` with the engine they described, so the scorer's is the only one left.)
 tests/fixtures/diarisation/**/expected.json text eol=lf
 
-# The diariser's parity reference: a NumPy .npy array of float32 probabilities, compared against
-# this machine's own to decide whether a GPU backend reproduces the CPU. An .npy begins with a magic
-# string and a version pair that puts a NUL inside the first ten bytes, so git's sniff gets this one
-# right unaided — marked anyway, on the same grounds as the .f32 rule above. A fixture whose 0x0A
-# bytes were rewritten on checkout would not fail loudly; it would fail as a parity check that
-# rejects every backend on somebody else's clone, including the CPU.
+# NumPy .npy arrays. **Nothing outside `attic/` is one since 2026-08-27**, when the diariser's parity
+# reference and its mel filterbank went to `attic/sortformer/`; the rule is kept because those files
+# are still in this repository and a checkout that rewrote their 0x0A bytes would corrupt them
+# silently. An .npy begins with a magic string and a version pair that puts a NUL inside the first
+# ten bytes, so git's sniff gets this right unaided — marked anyway, on the same grounds as the .f32
+# rule above. What it used to protect is worth keeping written down: a fixture mangled on checkout
+# did not fail loudly, it failed as a parity check that rejected every backend on somebody else's
+# clone, including the CPU.
 *.npy binary
 
 # The translator's parity fixture and the sentences it is taken over. Written by the sidecar's own
 # `writeParityReference` op, which writes LF explicitly, and the sources by a generator that does the
 # same. Under the default CRLF conversion every regeneration would report both files as changed, and
 # the "re-running must be a no-op" property they are checked by would stop meaning anything — the
-# same rule, for the same reason, as the diarisation fixtures above. (The diariser's own reference is
-# an `.npy` and is covered by the binary rule above.)
+# same rule, for the same reason, as the diarisation fixtures above. (The diariser had an `.npy`
+# reference of its own here until 2026-08-27; it went to `attic/sortformer/` with its engine.)
 python/uindosill_engines/translator/parity-reference.json text eol=lf
 python/uindosill_engines/translator/parity-sources.json text eol=lf
 
@@ -41,7 +44,7 @@ python/uindosill_engines/translator/parity-sources.json text eol=lf
 # under Apache-2.0 §4(b), and the way anybody checks such a claim is to diff a checkout against
 # NVIDIA's. Under the default CRLF conversion every line of both files would differ, and the
 # claim would look false to exactly the person taking the trouble to verify it.
-python/uindosill_engines/_vendor/** text eol=lf
+attic/sortformer/uindosill_engines/_vendor/** text eol=lf
 
 # The two embedded typefaces. TrueType begins with a version tag full of NUL bytes, so git's
 # text-or-binary sniff gets these right on its own — but the rule above exists because that sniff

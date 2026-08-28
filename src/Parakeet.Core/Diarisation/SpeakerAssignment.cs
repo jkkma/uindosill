@@ -407,125 +407,17 @@ public static class SpeakerLabelling
             + "but the speaker labels is unaffected.";
     }
 
-    /// <summary>
-    /// What a backend means for the figures this project publishes, or null when it means nothing.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Here rather than in the command line's factory because the window owes the same sentence, and
-    /// a measured finding written down twice is a finding one of whose copies goes stale. What each
-    /// surface adds is its own remedy — the command line can name a flag and the window cannot,
-    /// since it chooses the backend itself — so the remedy is not part of this.
-    /// </para>
-    /// <para>
-    /// <b>Null for CPU and for WebGPU, and that silence is a measurement.</b> On AMI test,
-    /// 2026-08-21: cpu 16.3324%, webgpu 16.3319%, cuda 16.1021%, DirectML at its own defaults
-    /// 53.15%. WebGPU lands 0.0005 points from the CPU — closer than this project's own
-    /// C#-against-Python port managed — so the published figure describes it, and warning on every
-    /// run about a backend that agrees would train people to ignore the line that matters.
-    /// </para>
-    /// </remarks>
-    public static string? DescribeBackend(ComputeBackend backend) => backend switch
-    {
-        ComputeBackend.Cuda =>
-            "Speaker labelling ran on cuda. It does not reproduce the CPU's probabilities — on AMI test it scores " +
-            "16.10% against the CPU's 16.33%, and two CUDA runs on different driver and library versions have " +
-            "differed by 0.40 points — so these labels are this machine's result rather than the published one.",
-        ComputeBackend.DirectMl =>
-            "WARNING: speaker labelling ran on DirectML, which has not passed parity here. At ONNX Runtime's " +
-            "default settings it scores 53.15% diarisation error against the CPU's 16.33% while producing speaker " +
-            "turns that look entirely normal. Treat these labels as unverified.",
-        _ => null,
-    };
-
-    /// <summary>
-    /// What it means that the second diariser's embedder left torch, or null when it did not.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Separate from <see cref="DescribeBackend"/> because the thing it warns about is invisible
-    /// to a <see cref="ComputeBackend"/>.</b> DiariZen ran segmentation in torch and negotiated a
-    /// provider only for the embedder, and both the torch embedder and ONNX Runtime's CPU provider
-    /// report <see cref="ComputeBackend.Cpu"/> — so the one word that reaches
-    /// <see cref="DescribeBackend"/> could not distinguish the reference path from a departure to it.
-    /// </para>
-    /// <para>
-    /// <b>Nothing reaches this since 2026-08-27, and it is kept rather than deleted.</b> DiariZen
-    /// was the only engine with a negotiable embedder; the pyannote pipeline that replaced it is
-    /// torch on both stages and reports <c>torch:</c>, which this returns null for. So the warning
-    /// is dormant, not wrong — and an ONNX embedder for the new engine is the obvious next thing
-    /// to want, at which point the reasoning below is what it has to satisfy again.
-    /// </para>
-    /// <para>
-    /// <b>What is measured is that the two disagree, not that either is worse.</b> On
-    /// <c>two-hosts-three-guests-a</c>, 2026-08-26, on an idle machine, the ONNX embedder changed
-    /// the labels: 222 speaker turns against torch's 225, which as time is 565 of 300,000 frames —
-    /// 0.19% of the timeline and 0.82% of speech — with the speech/silence split byte-identical,
-    /// since segmentation never leaves torch. The difference is deterministic and reproducible: four
-    /// torch runs returned 225 and both ONNX providers returned exactly the same 222.
-    /// </para>
-    /// <para>
-    /// <b>No diarisation error rate exists for either.</b> A first attempt to score one was withdrawn
-    /// on 2026-08-27: it used <c>runs/der/stretches/*.rttm</c> as a reference, and those files are a
-    /// previous run's hypothesis output rather than ground truth — every one caps at four speakers on
-    /// episodes with two, five and seven, and <c>tests/fixtures/diarisation/dev/stretches.json</c>
-    /// marks the stretch <c>"labelled": false</c>. So this warning says the labels differ and does
-    /// not say which is better, because nothing has established that.
-    /// </para>
-    /// <para>
-    /// <b>That is still enough to keep it out of <c>auto</c>.</b> This project's rule is that what it
-    /// picks unasked reproduces the figure it publishes, and CUDA is excluded from the other
-    /// diariser's automatic choice while scoring <i>better</i> — so "changes the answer" has always
-    /// been the criterion, and it does not need a DER to apply. Reaching this embedder takes naming
-    /// a provider, and naming one earns this sentence.
-    /// </para>
-    /// </remarks>
-    public static string? DescribeEmbeddingBackend(string embeddingBackend) =>
-        embeddingBackend.StartsWith("onnxruntime:", StringComparison.Ordinal)
-            ? "Speaker labelling used the ONNX Runtime speaker embedder rather than the torch one the published "
-              + "figures describe, in exchange for running about a third faster. On the one ten-minute recording "
-              + "where both were run it labelled 0.19% of the timeline differently — 222 speaker turns against "
-              + "225 — and which of the two is closer to the truth has not been established. These labels are "
-              + "this machine's result rather than the published one."
-            : null;
-
-    /// <summary>
-    /// What a failed parity check means, given how far the probabilities were off.
-    /// </summary>
-    /// <remarks>
-    /// Takes the two numbers rather than a result type, so that this project's one shared vocabulary
-    /// for diarisation does not have to learn about the sidecar. The magnitude is in the sentence
-    /// because "the check failed" with no number tells a user nothing they can act on: a stack
-    /// sitting just past the tolerance and one scoring 53% diarisation error deserve different
-    /// reactions.
-    /// </remarks>
-    public static string DescribeParityFailure(double maxAbsoluteDifference, double tolerance) =>
-        // Invariant, as every user-facing figure in this repository is: on a comma-decimal machine
-        // this read "8,143e-04" until 2026-08-22, and CA1305 cannot see an interpolated string.
-        string.Create(
-            System.Globalization.CultureInfo.InvariantCulture,
-            $"WARNING: this machine's diariser does not reproduce the reference. Its probabilities differ by up to " +
-            $"{maxAbsoluteDifference:0.###e+00} against a tolerance of {tolerance:0.###e+00}. The speaker labels " +
-            $"may differ from what another computer would produce for the same recording.");
-
-    /// <summary>
-    /// What a failed parity check means when the sidecar gave a reason rather than a magnitude —
-    /// a shape that does not match the reference's, probabilities that are not finite.
-    /// </summary>
-    public static string DescribeParityFailure(string reason) =>
-        $"WARNING: this machine's diariser does not reproduce the reference: {reason}. The speaker labels " +
-        "may differ from what another computer would produce for the same recording.";
-
-    /// <summary>
-    /// What it means that the parity check could not be run at all: not that the labels are wrong,
-    /// and not that they are right — that the one check standing between a user and a silently
-    /// wrong provider did not happen, and the labels are unverified.
-    /// </summary>
-    /// <remarks>
-    /// A third state, and until 2026-08-22 a silent one: a check that crashed was reported exactly
-    /// as a check that was never asked for, and the run went on with nothing said.
-    /// </remarks>
-    public static string DescribeParityNotRun(string reason) =>
-        $"WARNING: the check that compares this machine's diariser against the reference could not be run: {reason}. " +
-        "The speaker labels are unverified.";
+    // **Five helpers stood here and went with the diariser on 2026-08-27.** DescribeBackend named
+    // what cuda and DirectML cost against the published figure; DescribeEmbeddingBackend named what
+    // an ONNX speaker embedder cost against torch; DescribeParityFailure, its string overload and
+    // DescribeParityNotRun said what a failed or unrun parity check meant.
+    //
+    // All five spoke about the ONNX diariser, and every number in them — 16.33%, 16.10%, 53.15% on
+    // AMI test — was measured on it. It is in `attic/sortformer/`. The pipeline that ships now is
+    // torch on both stages with no execution provider to choose and no second path to compare
+    // against, so there is no parity check to report and no backend that has been shown to move the
+    // answer. **That is a smaller claim than the old silence made.** These helpers returned null for
+    // cpu and webgpu because those two had been *measured* to agree; nothing here has been measured
+    // at all, and saying nothing now means nothing is known rather than that nothing is wrong.
+    // `docs/UNPROVEN.md` is where that distinction is kept.
 }

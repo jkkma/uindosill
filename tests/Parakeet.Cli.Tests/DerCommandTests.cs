@@ -344,7 +344,7 @@ public class DerCommandTests
         var exit = await harness.RunAsync("transcribe", "--speakers", "--model-path", Path.Combine(harness.Directory, "models", "tdt-0.6b-v3-f16.gguf"), input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("sortformer-4spk-v2.1", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("pyannote-speaker-diarization-community-1", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.Contains("models download", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.ChangeExtension(input, ".txt")));
     }
@@ -361,7 +361,7 @@ public class DerCommandTests
         var exit = await harness.RunAsync("transcribe", "--speakers", input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("sortformer-4spk-v2.1", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("pyannote-speaker-diarization-community-1", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("tdt-0.6b-v3", harness.Error.ToString(), StringComparison.Ordinal);
     }
 

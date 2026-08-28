@@ -146,24 +146,6 @@
       "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nMeasured against transcripts written by people, on real recordings of accented English business calls, roughly one word in ten comes out different. Clear speech and good microphones do better than that; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option — there is no smaller, faster version to trade accuracy for."
     },
     {
-      "id": "sortformer-4spk-v2.1",
-      "engine": "sortformer",
-      "task": "diarisation",
-      "family": "diar_streaming_sortformer_4spk-v2.1",
-      "displayName": "Speaker labelling",
-      "quantisation": "fp32",
-      "fileName": "sortformer-default.onnx",
-      "url": "https://huggingface.co/soniqo/Sortformer-Diarization-4spk-ONNX/resolve/db3a7b542ab60562f24b7bd0cead521b62b1b6a9/sortformer-default.onnx",
-      "sizeBytes": 474630246,
-      "sha256": "cc5d606a5e9f6381c736d753bac34875c436bb27210d1ab0adc4ccb952c0062a",
-      "verified": true,
-      "license": "NVIDIA-Open-Model-License",
-      "attributionId": "nvidia-sortformer-diar-4spk-v2.1-onnx",
-      "recommended": false,
-      "languages": [],
-      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time, so it roughly doubles how long a file takes.\n\nIt can tell apart four voices at most. A fifth person does not get their own label; they are folded in with somebody else.\n\nIt was tested on English meeting recordings, where it does well. On long recordings it drifts: past about an hour it starts splitting one person into several. Other languages have not been tested."
-    },
-    {
       "id": "pyannote-speaker-diarization-community-1",
       "engine": "pyannote",
       "task": "diarisation",
@@ -210,7 +192,7 @@
       ],
       "recommended": false,
       "languages": [],
-      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part. The other speaker option stops at four.\n\nHow long it takes has not been measured yet. Treat the first run on a long recording as the one that tells you.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited — Uindosill shows that credit for you.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
+      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part.\n\nOn one 17-minute meeting it ran at about five times faster than real time on a processor; that is one recording on one computer, so treat the first run on a long recording as the one that tells you.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited — Uindosill shows that credit for you.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
     },
     {
       "id": "opus-mt-tc-bible-big-mul-en-fp32",

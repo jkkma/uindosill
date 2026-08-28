@@ -566,7 +566,11 @@
                                   Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
                                   Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
                                   Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
-                                  Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
+                                  Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}"
+                                  Classes.chip4="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=4}"
+                                  Classes.chip5="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=5}"
+                                  Classes.chip6="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=6}"
+                                  Classes.chip7="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=7}">
                             <TextBlock Text="{Binding Voice.Name}" />
                           </Border>
                           <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
@@ -695,12 +699,13 @@
               </StackPanel>
 
               <!-- ── Which model labels speakers ────────────────────────────────────────
-                   Speaker labelling is the one job with two models to choose between, and neither
-                   is simply better: one is included, quick and tells apart at most four voices; the
-                   other has no such limit but is a download, is licensed for personal use only and
-                   takes about as long again as the recording. Only shown on a speaker model, and
-                   only when there is something to say — on every other entry these two lines would
-                   be a control with no meaning. -->
+                   Speaker labelling was the one job with two models to choose between, and neither
+                   was simply better: one was included, quick and told apart at most four voices,
+                   the other had no such limit but was a download. The four-voice one was retired to
+                   attic/sortformer/ on 2026-08-27, so the choice has one option and this control is
+                   effectively never enabled — kept because a second entry is the obvious next thing
+                   to want and would need it back. Only shown on a speaker model, and only when
+                   there is something to say. -->
               <StackPanel Spacing="6" IsVisible="{Binding Selected.IsDiarisationModel}">
                 <Button Classes="onPage" Content="Use this one for speakers"
                         Command="{Binding UseForSpeakersCommand}"
@@ -1214,6 +1219,10 @@
                             Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
                             Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
                             Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}"
+                            Classes.chip4="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=4}"
+                            Classes.chip5="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=5}"
+                            Classes.chip6="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=6}"
+                            Classes.chip7="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=7}"
                             ToolTip.Tip="{Binding Label}">
                       <!-- LostFocus, so the transcript is not redrawn on every keystroke of a name
                            being typed. Enter commits by moving focus off the box — see WireVoices
@@ -1324,7 +1333,11 @@
                                       Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
                                       Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
                                       Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
-                                      Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}">
+                                      Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}"
+                                      Classes.chip4="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=4}"
+                                      Classes.chip5="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=5}"
+                                      Classes.chip6="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=6}"
+                                      Classes.chip7="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=7}">
                                 <TextBlock Text="{Binding Voice.Name}" />
                               </Border>
                               <!-- Inlines rather than Text, which is what lets one word inside a

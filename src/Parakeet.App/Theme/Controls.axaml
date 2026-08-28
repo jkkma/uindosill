@@ -474,10 +474,30 @@
     <Setter Property="BorderThickness" Value="0" />
   </Style>
 
-  <!-- Two fills, then two outlines: four speakers told apart without leaving the matcha family or
-       borrowing taro, which belongs to v2 and would make labelling look like a v2 feature. The set
-       is closed at four because that is the diariser's ceiling, not a setting, so there is
-       deliberately no fifth style here to fall through to. -->
+  <!-- ══ Speaker chips: four in matcha, then four in hues of their own ═══════════════════════
+       Two fills then two outlines in matcha, and after them four light fills in the speaker hues
+       Tokens.axaml admits for this one job. **Taro is still not borrowed** — it belongs to v2, and
+       drawing it here would make speaker labelling look like a v2 feature.
+
+       **The first four are untouched, and that is deliberate.** They are what one, two, three and
+       four speakers have always rendered as, which is nearly every recording; extending the palette
+       is not a reason to redraw the common case. The new hues begin where the old set ran out.
+
+       **Four was not a design choice.** It was the ONNX diariser's architectural ceiling: a fifth
+       speaker could not occur, so no fifth style was written. That engine was retired on 2026-08-27
+       and the clustering pipeline that replaced it has no cap — AMI-style meetings routinely have
+       five to seven — so the wrap at four stopped being unreachable and became a collision.
+
+       **Why hues rather than four more matcha steps.** Matcha is one hue with six stops, and the
+       two that would have been left differ by less than a chip's area can show: #5F793D against
+       #4A602C is not a distinction anyone would name across a transcript. Rotating the hue at the
+       same lightness and chroma is what the design already does for taro, so it is the move this
+       system has a rule for.
+
+       **Contrast is asserted rather than eyeballed.** `SpeakerChipContrastTests` reads these pairs
+       out of this file, resolves them against Tokens.axaml, computes WCAG 2.1 contrast for every
+       chip's text on its own background and fails below 4.5:1. A palette edit that darkens a
+       foreground or lightens a fill is caught in CI rather than in a screenshot. -->
   <Style Selector="Border.speaker.chip0">
     <Setter Property="Background" Value="{DynamicResource Matcha600Brush}" />
   </Style>
@@ -506,6 +526,37 @@
   </Style>
   <Style Selector="Border.speaker.chip3 TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource Matcha600Brush}" />
+  </Style>
+
+  <!-- The speaker hues, all in chip1's treatment — a light fill with its own dark text — because
+       that pairing is the most legible of the four above and there is no reason to spend the
+       weaker ones on the speakers a reader meets last. -->
+  <Style Selector="Border.speaker.chip4">
+    <Setter Property="Background" Value="{DynamicResource Apricot100Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip4 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Apricot700Brush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip5">
+    <Setter Property="Background" Value="{DynamicResource Mint100Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip5 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Mint700Brush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip6">
+    <Setter Property="Background" Value="{DynamicResource Sky100Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip6 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Sky700Brush}" />
+  </Style>
+
+  <Style Selector="Border.speaker.chip7">
+    <Setter Property="Background" Value="{DynamicResource Blossom100Brush}" />
+  </Style>
+  <Style Selector="Border.speaker.chip7 TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Blossom700Brush}" />
   </Style>
 
   <!-- ══ v2, and everything below this line is taro ═══════════════════════════════════════════

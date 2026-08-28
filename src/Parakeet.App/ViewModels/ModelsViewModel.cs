@@ -284,10 +284,12 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two entries do this job and neither is simply better: one is bundled, fast and stops at four
-    /// voices; the other has no such limit but is a download, needs a Hugging Face token because
-    /// its repository is gated, and has had none of its speed or accuracy measured. So the tab asks
-    /// rather than deciding, and this is where the asking happens.
+    /// <b>One entry does this job since 2026-08-27</b>, so this command is effectively never
+    /// enabled: it needs an installed diarisation entry that is not already the active one. It is
+    /// kept rather than removed because the reasoning that made it a choice is intact — two entries
+    /// did the job that morning and neither was simply better, so the tab asked rather than deciding
+    /// — and a second entry would want it back. A permanently disabled control is the cost, and it
+    /// is noted here so the next reader knows it is deliberate.
     /// </para>
     /// <para>
     /// <b>The choice is written before the list is updated</b>, and the list is only updated when

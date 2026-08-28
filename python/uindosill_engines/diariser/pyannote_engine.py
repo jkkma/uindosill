@@ -1,14 +1,24 @@
 """pyannote.audio's own diariser, as the sidecar drives it: segmentation, wespeaker, VBx.
 
-The second diariser, standing where DiariZen stood until 2026-08-27. It answers the same question
-Sortformer's geometry cannot — **how many voices are in this recording** — and it clusters rather
-than tracks, so the count is an output rather than a ceiling.
+The only diariser, since 2026-08-27. It stood where DiariZen stood that morning and became the
+whole of speaker labelling that afternoon, when the Sortformer engine moved to `attic/sortformer/`.
+It answers the question that engine's geometry could not — **how many voices are in this
+recording** — and it clusters rather than tracks, so the count is an output rather than a ceiling.
 
-**Nothing here is measured yet.** No DER, no real-time factor, no turn count on any recording. Every
-number this module would want to state is absent on purpose rather than estimated, and the
-capabilities it reports say `None` where DiariZen's said `None` for the same reason: no bound has
-been established. `docs/UNPROVEN.md` is the record, and until an entry there says otherwise this
-engine is code that loads rather than a diariser with a figure.
+**What it does not answer is what that engine did.** Every diarisation figure this project has
+published — 16.33% DER on AMI test above all — was measured on Sortformer, and none of it describes
+this pipeline.
+
+**One meeting is measured, and it is not a corpus.** This said "nothing here is measured yet" until
+the engine was first run on 2026-08-27; what that run produced is AMI ES2004a alone — 14.38% DER at
+collar 0.25 with overlap, 18.76% at collar 0, 5 speakers against a reference 4, at 5.2x realtime on
+the CPU. **It must not be set beside Sortformer's 16.33%**, which is a sixteen-meeting mean over the
+whole AMI test set, and it does not answer the speaker gate, which names that test set and a
+protocol this did not follow.
+
+Everything else this module would want to state is still absent on purpose rather than estimated,
+and the capabilities it reports say `None` where DiariZen's said `None` for the same reason: no
+bound has been established. `docs/UNPROVEN.md` is the record.
 
 **Why it replaced DiariZen rather than joining it.** DiariZen's `pyannote-audio` is a fork of 3.1.1
 and pyannote's own release line is at 4.x; the two cannot share an interpreter. It is not only the
@@ -47,8 +57,11 @@ speaker-labelling alternative has been usable commercially. `docs/LICENSING.md` 
   of upstream's source, not an observation; `docs/UNPROVEN.md` carries it, and
   `docs/LICENSING.md` records what it buys.
 
-**Three things it does not share with the Sortformer engine, all structural** — and all three are
-the same three DiariZen had, because they follow from clustering rather than from the checkpoint:
+**Three things it did not share with the Sortformer engine, all structural** — and all three were
+the same three DiariZen had, because they follow from clustering rather than from the checkpoint.
+Written as contrasts because that is how the difference was found, and kept now that the comparison
+is with something shelved: each one is a property of this pipeline that a reader would otherwise
+have to infer from its absence.
 
 * **It is torch, and there is no ONNX half.** DiariZen's speaker embedder had an ONNX route with a
   parity fixture; this pipeline's embedder is reached through pyannote's own model loader and no
@@ -59,8 +72,9 @@ the same three DiariZen had, because they follow from clustering rather than fro
   in memory.
 * **Its binarisation is internal and the host's post-processing does not reach it.** The pipeline
   binarizes at the parameters its own `config.yaml` carries, which is what its published figures
-  describe. Applying this project's Sortformer defaults on top — a one-second minimum silence,
-  which merges turns — would produce output no measurement describes. So the options are reported
+  describe. Applying the defaults the host still knows how to send — a one-second minimum silence,
+  which merges turns, tuned for the shelved engine — would produce output no measurement
+  describes. So the options are reported
   as not honoured rather than quietly applied, and dropped rather than passed on.
 
 **The layout this module expects is unverified.** `pyannote/speaker-diarization-community-1` is a
@@ -181,7 +195,8 @@ class PyannoteEngine:
     """One loaded pyannote pipeline, held for the life of the sidecar.
 
     Construction is the expensive part — a segmentation checkpoint, a wespeaker model and the PLDA
-    matrices — so the sidecar builds this once per batch, exactly as it does the Sortformer session.
+    matrices — so the sidecar builds this once per batch, which is the reason the host keeps the
+    process alive rather than spawning one per file.
     """
 
     def __init__(
@@ -201,8 +216,8 @@ class PyannoteEngine:
             raise RequestError(
                 "model",
                 f"the pyannote model directory {model_dir} is missing {', '.join(sorted(missing))}. "
-                "This entry is installed as a Hugging Face snapshot and keeps that repository's "
-                "subdirectory layout; a flattened copy will not load.",
+                "The catalogue installs these files individually at these relative paths, keeping "
+                "the upstream repository's subdirectory layout; a flattened copy will not load.",
             )
 
         # Before the import, and that is the point of it — see the function's own docstring.

@@ -49,7 +49,9 @@ Output goes under `runs/`, which is gitignored.
     # What the corpus actually holds, before any filtering picks a default for you.
     python3 scripts/make-tal-references.py --data <split>.json --out runs/tal-raw --min-seconds 0 --max-gap 0
 
-    # The usable set: acts of at most four voices, two minutes and up.
+    # The usable set: acts of at most four voices, two minutes and up. Four because the diariser of
+    # the day was capped there; the cut is kept as it was so the corpus stays the one that was
+    # measured, not because the cap still exists.
     python3 scripts/make-tal-references.py --data <split>.json --out runs/tal
 
     # Two-voice material, the shape the over-segmentation repair needs.
@@ -306,7 +308,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--slice-by", choices=("acts", "speakers"), default="acts",
                         help="Cut on the episode's own act boundaries (default), or on maximal runs inside the speaker cap.")
     parser.add_argument("--max-speakers", type=int, default=4,
-                        help="Most distinct voices a stretch may hold. Default 4, the diariser's cap.")
+                        help="Most distinct voices a stretch may hold. Default 4 — which was the diariser's "
+                             "cap until 2026-08-27 and is now only the number this corpus was cut at.")
     parser.add_argument("--min-seconds", type=float, default=120.0,
                         help="Shortest stretch kept. Default 120.")
     parser.add_argument("--max-seconds", type=float, default=0.0,

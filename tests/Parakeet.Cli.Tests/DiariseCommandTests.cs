@@ -176,7 +176,7 @@ public class DiariseCommandTests
         var exit = await harness.RunAsync("diarise", input);
 
         Assert.Equal(ExitCodes.UsageError, exit);
-        Assert.Contains("sortformer-4spk-v2.1", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("pyannote-speaker-diarization-community-1", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.Contains("models download", harness.Error.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.ChangeExtension(input, ".rttm")));
     }
@@ -300,12 +300,16 @@ public class DiariseCommandTests
         var help = harness.Out.ToString();
         Assert.Contains("--id", help, StringComparison.Ordinal);
 
-        // **Both engines, not one.** This asserted "four speakers" until 2026-08-27, when the
-        // second diariser became a clustering pipeline with no ceiling at all — a help text that
-        // still described the cap as the command's would have been wrong for whichever model the
-        // reader had installed. Naming each engine is what keeps the text honest about which of
-        // the two a sentence is about.
-        Assert.Contains("four speaker slots", help, StringComparison.Ordinal);
-        Assert.Contains("pyannote pipeline has no such ceiling", help, StringComparison.Ordinal);
+        // **The ceiling is the model's property, and the help says whose.** This asserted "four
+        // speakers" until 2026-08-27, when a second diariser arrived with no ceiling at all and the
+        // text had to name both engines; the four-slot one was shelved to `attic/sortformer/` the
+        // same day, so it names one again. What is asserted throughout is the same claim: that the
+        // help attributes the limit to the model rather than to the command.
+        Assert.Contains("pyannote pipeline has no ceiling", help, StringComparison.Ordinal);
+
+        // And that it does not quietly inherit the retired engine's evidence. The only diarisation
+        // figures this project has published were measured on that engine, and none of them
+        // describes what a reader of this help would be running.
+        Assert.Contains("has not been measured", help, StringComparison.Ordinal);
     }
 }

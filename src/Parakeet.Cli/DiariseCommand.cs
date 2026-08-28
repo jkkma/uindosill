@@ -71,7 +71,6 @@ internal static class DiariseCommand
                 ModelPath = parsed.Value("model-path"),
                 Threads = TranscribeCommand.ParseThreads(parsed.Value("threads"), "--threads"),
                 Backend = parsed.Value("backend"),
-                AllowUnverifiedBackend = parsed.HasFlag("backend-unverified"),
                 BackendOption = "--backend",
             },
             options,
