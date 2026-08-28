@@ -60,6 +60,9 @@ public sealed class ModelCatalog
     /// <summary>The entries the neural speech-detection opt-in may load in place of the energy gate.</summary>
     public IReadOnlyList<ModelDescriptor> VoiceActivityModels => _byTask[ModelTask.VoiceActivity];
 
+    /// <summary>The entries the Ask tab may load to answer questions about a transcript.</summary>
+    public IReadOnlyList<ModelDescriptor> AnsweringModels => _byTask[ModelTask.Answering];
+
     public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
         _byId.TryGetValue(id, out model);
 
@@ -388,8 +391,9 @@ public sealed class ModelCatalog
             "diarisation" => ModelTask.Diarisation,
             "translation" => ModelTask.Translation,
             "voice-activity" => ModelTask.VoiceActivity,
+            "answering" => ModelTask.Answering,
             _ => throw new InvalidDataException(
-                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation, translation and voice-activity."),
+                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation, translation, voice-activity and answering."),
         };
     }
 

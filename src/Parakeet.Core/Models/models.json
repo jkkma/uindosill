@@ -324,6 +324,62 @@
       "recommended": false,
       "languages": [],
       "notes": "Finds where speech starts and stops, so a recording is cut into segments at the pauses rather than by loudness. It writes no words and names no speakers.\n\nThe ordinary cut listens for quiet, which works for conversation and fails under music: a documentary with a bed under the narration comes out in thirty-second blocks. This model listens for speech instead, so those recordings break at the sentences. It runs on the processor beside the recogniser and costs a little time per file.\n\n2.2 MiB to download. Off unless you turn it on."
+    },
+    {
+      "id": "gemma-4-26b-a4b-it-ud-q4-k-xl",
+      "engine": "llama-server",
+      "task": "answering",
+      "family": "gemma-4-26B-A4B-it",
+      "displayName": "Answering questions",
+      "quantisation": "UD-Q4_K_XL",
+      "directory": "gemma-4-26b-a4b-it-ud-q4-k-xl",
+      "files": [
+        {
+          "fileName": "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf",
+          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf",
+          "sizeBytes": 17010980576,
+          "sha256": "ef728c8e0c337fd1067b947af006e38a9ef2419e56feced4fd29b4bf0636e30c"
+        },
+        {
+          "fileName": "mtp-gemma-4-26B-A4B-it.gguf",
+          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/mtp-gemma-4-26B-A4B-it.gguf",
+          "sizeBytes": 461766816,
+          "sha256": "6326fb9f5e487aa8dcdd313a091e3c67724cb2a666ec3b7d2895b5b26d93ed1b"
+        }
+      ],
+      "verified": true,
+      "license": "Apache-2.0",
+      "attributionId": "google-gemma-4-26b-a4b-it-gguf",
+      "recommended": false,
+      "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\nThis is a big download and a big model: 15.8 GiB of weights, and it wants about 18 GB of memory free once it is running. On a computer with 16 GB of memory or less it will be slow or will not start at all, and the Models tab says so before you download it.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
+    },
+    {
+      "id": "gemma-4-26b-a4b-it-ud-iq4-xs",
+      "engine": "llama-server",
+      "task": "answering",
+      "family": "gemma-4-26B-A4B-it",
+      "displayName": "Answering questions (smaller)",
+      "quantisation": "UD-IQ4_XS",
+      "directory": "gemma-4-26b-a4b-it-ud-iq4-xs",
+      "files": [
+        {
+          "fileName": "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+          "sizeBytes": 13597177568,
+          "sha256": "babd1e389d386352f71600765d37390f7dc993fbfad6725caccf996ffe34aecf"
+        },
+        {
+          "fileName": "mtp-gemma-4-26B-A4B-it.gguf",
+          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/mtp-gemma-4-26B-A4B-it.gguf",
+          "sizeBytes": 461766816,
+          "sha256": "6326fb9f5e487aa8dcdd313a091e3c67724cb2a666ec3b7d2895b5b26d93ed1b"
+        }
+      ],
+      "verified": true,
+      "license": "Apache-2.0",
+      "attributionId": "google-gemma-4-26b-a4b-it-gguf",
+      "recommended": false,
+      "notes": "The same model as the one above, squeezed smaller so it fits on a computer with 16 GB of memory. Answers on the Ask tab, with a clickable timestamp behind every claim.\n\n12.7 GiB of weights. Measured on a 16 GB laptop it answers a question in about 40 seconds and every citation it produced pointed at real words in the recording.\n\nChoose this one if the larger version warns you that your computer is too small. On a machine with plenty of memory the larger one is the better answer."
     }
   ],
   "deferredComment": [

@@ -106,8 +106,18 @@ public class MultiFileModelTests
         // 2026-08-27 — whose own shape is asserted below rather than here. This half stays about
         // the translation entry because its nine files are what the schema was built for.
         // Manifest order: the second diariser sits beside the other one, ahead of the translator.
+        // **Four users since 2026-08-27**, the new two being the answering entries: each installs
+        // its weights and the drafting head beside them, and a `files` array is what makes the pair
+        // one entry. They must have directories of their own — they ship the same head under the
+        // same name and would overwrite each other at the store root.
         Assert.Equal(
-            new[] { "pyannote-speaker-diarization-community-1", "opus-mt-tc-bible-big-mul-en-fp32" },
+            new[]
+            {
+                "pyannote-speaker-diarization-community-1",
+                "opus-mt-tc-bible-big-mul-en-fp32",
+                "gemma-4-26b-a4b-it-ud-q4-k-xl",
+                "gemma-4-26b-a4b-it-ud-iq4-xs",
+            },
             ModelCatalog.Default.Models.Where(m => m.IsMultiFile).Select(m => m.Id));
 
         var multiFile = ModelCatalog.Default.Get("opus-mt-tc-bible-big-mul-en-fp32");

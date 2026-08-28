@@ -110,6 +110,44 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void TheEvidenceDepthRoundTripsAndDegradesToTheSlowSetting()
+    {
+        var path = Path.Combine(TestTemp.NewDirectory("uindosill-settings"), "settings.json");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+            var store = new AppSettingsStore(path);
+            store.Update(current => current with { AskEvidence = AskEvidenceDepth.Fast });
+            Assert.Equal(AskEvidenceDepth.Fast, new AppSettingsStore(path).Load().AskEvidence);
+
+            // Absent means as-shipped, and as-shipped is the depth every measured citation figure
+            // in this project was taken at rather than the fastest one.
+            File.WriteAllText(path, "{}");
+            Assert.Equal(AskEvidenceDepth.Thorough, new AppSettingsStore(path).Load().AskEvidence);
+
+            // A value this build does not know degrades the same way. The faster depths trade
+            // recall nobody has measured, so they are chosen deliberately or not at all.
+            File.WriteAllText(path, "{\"askEvidence\":\"whatever\"}");
+            Assert.Equal(AskEvidenceDepth.Thorough, new AppSettingsStore(path).Load().AskEvidence);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EachDepthNamesItsOwnWindowCount()
+    {
+        // The numbers the 2026-08-27 run measured: 8 windows at 37.8 s, 6 at 31.7 s, 4 at 16.6 s.
+        Assert.Equal(8, AppSettings.WindowsFor(AskEvidenceDepth.Thorough));
+        Assert.Equal(6, AppSettings.WindowsFor(AskEvidenceDepth.Balanced));
+        Assert.Equal(4, AppSettings.WindowsFor(AskEvidenceDepth.Fast));
+        Assert.Equal(8, AppSettings.Default.EvidenceWindows);
+    }
+
+    [Fact]
     public void TheExpertPlacementIsAutomaticAsShippedAndSurvivesARoundTrip()
     {
         // Automatic asks the Vulkan loader which kind of graphics this is. The two fixed rows are
