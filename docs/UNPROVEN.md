@@ -6368,6 +6368,46 @@ how easy the control is to get wrong.
 `AvailableDiariserProvidersAsync` still probes ONNX Runtime and is still correct about the
 translator, which is why it was kept; nothing on the diariser path reads it.
 
+### The shelving was checked against the real sidecar, and ES2004a reproduces bit for bit
+
+Ten minutes of CI cannot see the thing this change most needed checked: nothing in the suite starts
+a Python. `ProtocolVersionTests` exists because that constant went stale once and the suite stayed
+green — the fake sidecar answers whatever the constant says. So the real one was asked, on the
+desktop, against the installed weights and `pyannote-venv`.
+
+**The protocol change works end to end.** `hello` reports 5, matching the host's constant. `load`
+succeeds with no `kind` field at all, in 26.3 s, reporting both declared limits as null — and the
+host's `CheckDeclaredLimits` did not throw, which is the only place the duplicated constants are
+compared on a machine that has both halves. `parity` and `placement` each refuse the diariser by
+name, before and after a load. `provider: webgpu` is refused rather than quietly given the CPU.
+`providers` resolves the diariser's `auto` to `["cpu"]`.
+
+**And the numbers did not move.** `uindosill diarise` over AMI **ES2004a**, scored by `uindosill der`
+against `only_words`, reproduces the run of earlier the same day in every component:
+
+| | that run | after the shelving |
+|---|---|---|
+| DER, collar 0.25, overlap included | 14.38% | **14.38%** |
+| DER, collar 0 | 18.76% | **18.76%** |
+| missed / false alarm / confusion | 10.09 / 2.09 / 2.21 | **10.09 / 2.09 / 2.21** |
+| over reference crosstalk: DER / missed | 35.27 / 28.74 | **35.27 / 28.74** |
+| speakers found against reference | 5 / 4 | **5 / 4**, `spk1` unmatched |
+
+298 turns, 838.3 s of speech, 223.7 s of wall clock for 17.5 minutes — 5x realtime against that
+run's 5.2x, which is wall clock on a machine doing other things and not a result.
+
+**What that does and does not establish.** It establishes that removing the ONNX engine, collapsing
+the `kind` switch, bumping the protocol and deleting the parity path changed nothing about what the
+shipping diariser produces — the components agree to the last decimal published, which they could
+not do if a turn had moved. It does **not** turn one meeting into the sixteen the gate names; the
+gate is unmet exactly as it was before this check.
+
+**It is also the first corroboration that this pipeline is deterministic**, which `docs/GOTCHAS.md`
+gotcha 37 records as unverified: two runs in separate processes, hours apart, either side of a
+change to the host, produced identical turns. That is one corroboration on one file rather than the
+controlled repeat the question deserves — the two runs differed in more than the seed would — but it
+is more than the nothing that stood there before.
+
 ### What the shelving does settle
 
 - **The build is green and the suite is honest about being smaller.** 1404 tests, 1397 passed and 7

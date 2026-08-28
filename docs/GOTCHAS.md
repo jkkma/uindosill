@@ -895,10 +895,14 @@ gamma, pi, _, _, _ = VBx(fea, Phi, ..., gamma=qinit, ...)
 measured 2026-08-26, two unseeded runs of the same build over the same ten-minute stretch differed by
 **0 of 300,000 frames**, and four runs all returned 225 turns.
 
-**Whether the shipping pipeline is deterministic is unverified.** `pyannote.audio` 4 upstreamed this
-same VBx implementation, so both the unseeded prior and the `qinit` that makes it unreachable are
-plausibly still there — but "plausibly" is not a reading, and no run of the current engine has been
-repeated to check. The one-meeting run of 2026-08-27 was a single pass.
+**Whether the shipping pipeline is deterministic has one data point and no reading.**
+`pyannote.audio` 4 upstreamed this same VBx implementation, so both the unseeded prior and the
+`qinit` that makes it unreachable are plausibly still there — but "plausibly" is not a reading, and
+nobody has opened 4.0.7's copy to check. What exists is a repeat: AMI ES2004a run twice on
+2026-08-27, in separate processes and either side of a change to the host, produced identical turns
+and a DER agreeing in every component. That is consistent with the branch still being dead and does
+not demonstrate it; a seeded-versus-unseeded comparison, or reading the installed source, is what
+would.
 
 **Why this is worth a gotcha rather than a shrug.** When the ONNX speaker embedder changed the turn
 count from 225 to 222, this RNG was the obvious suspect, and ruling it out took two control runs of
