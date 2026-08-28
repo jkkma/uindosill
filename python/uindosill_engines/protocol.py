@@ -75,7 +75,13 @@ from typing import Any, Callable, Iterator
 #: CC BY 4.0 torch pipeline had loaded instead. That is the same failure version 4 was minted to
 #: prevent, in the same direction: a host told it has what it asked for when it has something else.
 #: Refusing at `hello` is what makes the field's disappearance loud rather than silent.
-PROTOCOL_VERSION = 5
+#:
+#: **6 — `exportDiariserGraphs`, so the ONNX route is reachable without a script.** The diariser's
+#: two neural stages can be exported to ONNX, which is the only way to the GPU on a machine whose
+#: torch is the CPU build. A version-5 sidecar meeting the new op answers `unknown op`, which the
+#: host would surface as a failure the user cannot act on — there is nothing wrong with their
+#: install, the sidecar simply predates the feature. Refusing at `hello` says that plainly instead.
+PROTOCOL_VERSION = 6
 
 
 class RequestError(Exception):

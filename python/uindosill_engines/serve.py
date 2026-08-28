@@ -14,6 +14,7 @@ deliberately, so that moving the engine across a process boundary does not also 
 
 from __future__ import annotations
 
+import os
 import platform
 import sys
 from typing import Any
@@ -130,6 +131,40 @@ class Session:
             )
             return {"capabilities": capabilities}
         raise RequestError("request", f"unknown engine {engine!r}")
+
+    def export_diariser_graphs(self, message: dict[str, Any], channel: Channel) -> dict[str, Any]:
+        """Derives the diariser's ONNX graphs so an execution provider has something to run.
+
+        **Here rather than in a script the user is told to run.** The graphs are the only way to the
+        GPU on a machine whose torch is the CPU build, and telling somebody to run a Python script
+        is not a feature — the application calls this and the Models tab shows the progress.
+
+        Needs no loaded engine, and deliberately: it is a property of the weights on disk, not of a
+        session, and asking for it while a pipeline is loaded for labelling would hold two copies of
+        the checkpoints in memory for no reason.
+
+        `parity` defaults off. The sweep is the slow half and its value is in the lab, where the
+        question is whether an export route can be trusted at all; the application is re-deriving
+        graphs from the same weights by the same code and has nothing new to learn from it.
+        """
+        from .diariser import onnx_export
+
+        path = message.get("path", "")
+        if not path or not os.path.isdir(path):
+            raise RequestError("model", f"the diarisation model directory is not at {path}")
+
+        request_id = message.get("id")
+
+        def progress(done: int, total: int) -> None:
+            channel.progress(request_id, done, total)
+
+        manifest = onnx_export.export(
+            model_dir=path,
+            out_dir=message.get("out") or None,
+            parity=bool(message.get("parity", False)),
+            progress=progress,
+        )
+        return {"manifest": manifest}
 
     def parity(self, message: dict[str, Any], channel: Channel) -> dict[str, Any]:
         """Checks a loaded engine against its committed reference.
@@ -352,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
             "label": session.label,
             "translate": session.translate,
             "parity": session.parity,
+            "exportDiariserGraphs": session.export_diariser_graphs,
             "placement": session.placement,
             "writeParityReference": session.write_parity_reference,
         },

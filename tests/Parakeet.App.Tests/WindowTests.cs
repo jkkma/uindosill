@@ -398,6 +398,8 @@ public class ShutdownTests
 
         public bool DiariserRunsInTorch => _inner.DiariserRunsInTorch;
 
+        public string? DiarisationModelDirectory => _inner.DiarisationModelDirectory;
+
         public Task<IReadOnlyList<string>?> AvailableDiariserProvidersAsync(CancellationToken ct = default) =>
             _inner.AvailableDiariserProvidersAsync(ct);
 
