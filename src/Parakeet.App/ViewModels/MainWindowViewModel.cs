@@ -860,10 +860,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         get
         {
             var offered = DiarisationProviders.Select(row => row.Provider).ToArray();
-            var text =
-                "Automatic is your processor, because the Python that ships with Uindosill has no "
-                + "graphics build of the speaker model's runtime. Nothing here has been measured on "
-                + "any option.";
+
+            // **What automatic means gained a second state on 2026-08-28.** It was the processor
+            // unconditionally — the diariser is torch and the bundled torch is the CPU build — and
+            // the sidecar now elects WebGPU where the derived graphs exist. `SpeakerGraphsInstalled`
+            // is the same file check the graphics row uses to decide whether choosing it needs a
+            // preparation first, so the two cannot disagree about whether the graphs are there.
+            //
+            // "measured for accuracy" rather than "measured": the two routes *were* measured
+            // against each other and agreed, which is an equivalence and not an accuracy. No DER
+            // exists for either of them, so neither can be recommended over the other on accuracy.
+            var text = SpeakerGraphsInstalled
+                ? "Automatic is your graphics card, now that its one-time preparation has been "
+                    + "done. It uses your processor instead if the card turns out not to work. "
+                    + "Nothing here has been measured for accuracy on any option."
+                : "Automatic is your processor. It becomes your graphics card once the one-time "
+                    + "preparation has been done, and goes back to the processor if the card turns "
+                    + "out not to work. Nothing here has been measured for accuracy on any option.";
 
             if (offered.Contains("webgpu"))
             {
@@ -873,10 +886,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // other on a five-minute recording and produced the same turns to the millisecond
                 // with the same speakers, so that warning described a model nobody is choosing.
                 // One recording is not a promise, which is why this says "on what has been tried".
+                //
+                // It is compared against *the processor* rather than against automatic, which is
+                // what it said until 2026-08-28. Automatic is now this same route once the graphs
+                // exist, and a sentence comparing a thing to itself tells a reader nothing.
                 text += " Graphics (WebGPU) does the heavy part on your graphics card and finishes "
                     + "sooner. On what has been tried it gave the same speakers and the same times "
-                    + "as automatic. It needs a one-time preparation, which starts when you choose "
-                    + "it and takes about a minute.";
+                    + "as the processor.";
+
+                // Only offered as future work when there is work left: after the preparation this
+                // row costs nothing to choose, and telling somebody it takes a minute when it does
+                // not is the kind of small untruth that makes the rest of the panel less believed.
+                text += SpeakerGraphsInstalled
+                    ? " Its one-time preparation has been done."
+                    : " It needs a one-time preparation, which starts when you choose it and takes "
+                        + "about a minute.";
 
                 if (IsPreparingSpeakerGraphs)
                 {

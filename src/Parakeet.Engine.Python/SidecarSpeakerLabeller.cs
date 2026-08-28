@@ -40,14 +40,25 @@ public sealed record SidecarLabellerOptions
     public int IntraOpThreads { get; init; }
 
     /// <summary>
-    /// The torch device: <c>auto</c>, <c>cpu</c> or <c>cuda</c>.
+    /// The torch device or ONNX Runtime execution provider: <c>auto</c>, <c>cpu</c>, <c>cuda</c>,
+    /// <c>webgpu</c> or <c>dml</c>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>A device rather than an execution provider, since 2026-08-27.</b> Both neural stages are
-    /// torch on the same device, so <c>webgpu</c> and <c>dml</c> name nothing here and are refused
-    /// rather than quietly treated as the CPU. <c>auto</c> is the CPU, because the bundled torch is
-    /// the CPU build — resolved rather than negotiated, so there is nothing to fall back from.
+    /// <b>Two vocabularies in one field, and the name decides which applies.</b> <c>cpu</c> and
+    /// <c>cuda</c> are torch devices and keep the pipeline on the route upstream's own figures
+    /// describe. <c>webgpu</c> and <c>dml</c> are execution providers, and move the two neural
+    /// forwards onto the graphs the application derives into the model's <c>onnx</c> subdirectory —
+    /// refused, never quietly given the CPU, when those graphs are absent.
+    /// </para>
+    /// <para>
+    /// <b><c>auto</c> elects WebGPU where the graphs exist, since 2026-08-28.</b> It was the CPU
+    /// unconditionally before then, because the bundled torch is the CPU build and no ONNX route
+    /// existed for a provider name to reach. It is a shortlist tried in order now, on the
+    /// translator's terms: a provider that registers can still fail to build a session, so
+    /// <c>auto</c> falls through to the CPU where a provider named outright raises instead. Without
+    /// the graphs it is the CPU exactly as before, which is every machine that has not run the
+    /// preparation — nothing installs them and the catalogue does not fetch them.
     /// </para>
     /// <para>
     /// <b>The measured provider comparison that stood here went with Sortformer.</b> CPU 16.3324%,
@@ -180,6 +191,18 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             "The diariser's capabilities are not known until it has been loaded.");
 
     /// <summary>
+    /// The providers <c>auto</c> tried and passed over before the one that loaded, each with the
+    /// reason it did not build. Empty when the first candidate built, and empty when the provider
+    /// was named — a named provider is refused rather than fallen back from.
+    /// </summary>
+    /// <remarks>
+    /// Always empty before 2026-08-28, because this engine's <c>auto</c> resolved to the CPU
+    /// unconditionally and had nothing to pass over. It elects WebGPU where the derived graphs
+    /// exist now, so a run can land on the CPU for a reason worth reading.
+    /// </remarks>
+    public IReadOnlyList<string> FellBackFrom { get; private set; } = [];
+
+    /// <summary>
     /// The two limits of this model that a caller needs <i>before</i> anything is loaded, and
     /// nothing else.
     /// </summary>
@@ -298,6 +321,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
             // — and it is worth knowing that this build has no equivalent guard, which is why
             // docs/UNPROVEN.md carries it rather than this comment implying the risk left too.
             _capabilities = capabilities;
+            FellBackFrom = ExecutionProviders.ReadFellBackFrom(reply.GetProperty("capabilities"));
         }
         finally
         {
@@ -371,8 +395,9 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
     /// MP3 decoded and resampled here, the reference diarising the PCM16 file against the same floats
     /// written exact scored 2.50% DER at collar 0.25 and flipped 1.10% of frame-speaker cells, while
     /// the speaker count stood still — ten times the CUDA gap that kept CUDA out of <c>auto</c> on the
-    /// diariser retired 2026-08-27, which is the scale this was judged against. (<c>auto</c> is the
-    /// CPU here for an unrelated reason: the bundled torch is the CPU build.) On
+    /// diariser retired 2026-08-27, which is the scale this was judged against. (<c>auto</c> was the
+    /// CPU when this was measured, for an unrelated reason: the bundled torch is the CPU build, and
+    /// it did not yet elect the WebGPU route.) On
     /// 16 kHz 16-bit input, which is AMI and therefore every published figure, the round trip moves
     /// 0.25% of samples by one LSB and the DER by nothing, which is why it went unseen. A float file
     /// is twice the size and costs the reference nothing to read: soundfile hands back the bytes.

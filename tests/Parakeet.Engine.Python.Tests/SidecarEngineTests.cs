@@ -433,6 +433,39 @@ public sealed class SidecarEngineTests
     }
 
     [Fact]
+    public async Task ADiariserThatFellBackSaysFromWhat()
+    {
+        // The translator's twin above, and unreachable on this engine until 2026-08-28: its `auto`
+        // resolved to the CPU unconditionally, so there was never a candidate to pass over and the
+        // list was always empty. `auto` elects WebGPU where the derived graphs exist now, which is
+        // what gives a diarisation that ran on the processor a reason worth reading — the one fact
+        // explaining its speed, known only at the moment the session refused to build.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new
+            {
+                op = "load",
+                emit = new[]
+                {
+                    """{"id":{id},"type":"result","capabilities":{"engineName":"pyannote-torch-python","modelId":"pyannote","backend":"cpu","segmentationBackend":"torch:cpu","embeddingBackend":"torch:cpu","supportsFixedSpeakerCount":false,"maxSpeakers":null,"reliableUpToSeconds":null,"honoursPostProcessing":false,"fellBackFrom":["webgpu: no adapter"]}}""",
+                },
+            }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var labeller = new SidecarSpeakerLabeller(
+            new SidecarLabellerOptions
+            {
+                ModelPath = "unread-directory",
+                Provider = "auto",
+            },
+            sidecar);
+
+        await labeller.LoadAsync();
+
+        Assert.Equal(ComputeBackend.Cpu, labeller.Capabilities.Backend);
+        Assert.Equal(["webgpu: no adapter"], labeller.FellBackFrom);
+    }
+
+    [Fact]
     public async Task TheDecodeDescriptionIsInvariantOnACommaDecimalMachine()
     {
         // "length penalty 0,65" is what this read under es-PY until 2026-08-22: the sentence goes

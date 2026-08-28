@@ -49,6 +49,15 @@ jobs:
       - name: The count script's own rules must hold
         run: python3 scripts/check-test-counts.py --self-check
 
+      # `auto` decides which arithmetic unit a user's diarisation runs on, and the sidecar has no
+      # test suite of its own: it is driven from C# through a fake, which is the right shape for the
+      # protocol and the wrong one for an election over two filesystem checks. This needs no
+      # toolchain — the module defers torch and onnxruntime into the functions that use them — and
+      # it stubs the provider list, so the machines CI is not are checked here too: one with a
+      # WebGPU build, one with DirectML, and one with neither.
+      - name: The diariser's `auto` must elect what it documents
+        run: python3 scripts/check-diariser-auto.py
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

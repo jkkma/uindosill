@@ -6815,3 +6815,18 @@ WebGPU ONNX, same process, same audio:
   the CPU. Which of those dominates on a longer recording has not been profiled.
 - **Nothing installs the graphs.** They are a derived artefact a person exports; the catalogue does
   not fetch them and no installer carries them.
+- **`auto` elects WebGPU on a five-minute equivalence, not on accuracy — 2026-08-28.** Where the
+  graphs exist, the diariser's `auto` resolves to `["webgpu", "cpu"]` rather than `["cpu"]`. What
+  that rests on is the agreement table above: one clip, one machine, two speakers, 0.000 s. **No DER
+  exists for either route**, so the election is not evidence that the automatic answer is the better
+  one — only that on the single recording tried it was the same one. A corpus could still separate
+  them, and clustering is a step function, so an elementwise agreement is precisely the instrument
+  that would fail to see a threshold being crossed.
+- **The fall-through has never fired.** `auto` drops to the CPU when a WebGPU session refuses to
+  build. No machine here has refused: every run that elected WebGPU built it. The election is
+  covered by `scripts/check-diariser-auto.py` only as far as the provider list — a session that
+  builds and then fails, and the `passed_over` list that records it, are both unexercised.
+- **Nothing has been transcribed with `auto` electing WebGPU.** The election was checked against a
+  stubbed provider list and against `resolve_auto` directly, on this desktop, with the graphs
+  faked as empty files. No real diarisation has been driven through the elected route, and this
+  machine has never had the graphs exported at all.

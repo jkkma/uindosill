@@ -97,7 +97,16 @@ class Session:
             "usable": usable,
             # Lists, best first, because `auto` tries rather than predicts — the first entry is what
             # a load will attempt and the rest are what it will fall through to.
-            "auto": {"diariser": diariser_auto(), "translator": translator_auto()},
+            # The diariser's `auto` depends on whether the loaded model directory holds the
+            # derived graphs, so the loaded path is passed when there is one. With nothing loaded
+            # it answers `["cpu"]`, which is what a load would take on a machine that has never
+            # exported them — the honest answer to a question asked without a model.
+            "auto": {
+                "diariser": diariser_auto(
+                    self.diariser.model_path if self.diariser.loaded else None
+                ),
+                "translator": translator_auto(),
+            },
             "onnxruntime": ort.__version__,
         }
 

@@ -162,6 +162,17 @@ internal static class LabellerFactory
         // stays visible; a warning on every run would be this project asserting a doubt it has not
         // earned either, and the honest place for an unmeasured engine is the record, not stderr.
 
+        // **`auto` tried something better first and it did not build.** Not an accuracy warning —
+        // the paragraph above is why there is none of those — but a fact about which arithmetic unit
+        // ran, said once, with the reason. Diarisation at CPU speed on a machine with a GPU is a
+        // question until somebody reads why, and this is the only place the answer exists.
+        if (labeller is SidecarSpeakerLabeller { FellBackFrom.Count: > 0 } sidecarLabeller)
+        {
+            context.WriteError(
+                $"{request.BackendOption} auto passed over {string.Join("; ", sidecarLabeller.FellBackFrom)} — " +
+                "this run's diariser is on the processor.");
+        }
+
         // The seam's capabilities are the caller's to honour, and there are two separate things a
         // caller can be owed here. Both are said, because they are different facts and only one of
         // them was being said.

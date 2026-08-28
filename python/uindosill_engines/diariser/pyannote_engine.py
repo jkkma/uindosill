@@ -161,6 +161,58 @@ ONNX_PROVIDERS = {
 #: is left at ORT's default.
 ONNX_GRAPH_OPTIMISATION = {"dml": "ORT_DISABLE_ALL"}
 
+#: What `auto` elects where the graphs exist, best first, before `cpu` is appended behind it.
+#:
+#: **`dml` is deliberately absent.** It is wired and exported for, and it has never been executed on
+#: these graphs — the `ORT_DISABLE_ALL` precaution above is inherited from a different graph rather
+#: than earned on this one. An unmeasured provider belongs behind a name, not in the default.
+#:
+#: **`cuda` is absent because it is not an option here**: it is a torch device on this pipeline, and
+#: the bundled torch is the CPU build. It stays reachable by name where a CUDA torch exists.
+AUTO_ORDER = ["webgpu"]
+
+
+def graphs_installed(model_dir: str) -> bool:
+    """Whether both derived graphs are present for this model directory.
+
+    The question `auto` asks before electing an ONNX provider, and the same one
+    :meth:`PyannoteEngine._install_onnx_route` answers with a refusal when a provider was named
+    outright. Split out because both need the same answer, and a second pair of `os.path.isfile`
+    calls would be a second place for the two filenames to drift apart.
+    """
+    onnx_dir = os.path.join(model_dir, ONNX_SUBDIR)
+    return all(os.path.isfile(os.path.join(onnx_dir, name)) for name in ONNX_FILES)
+
+
+def resolve_auto(model_dir: str | None = None) -> list[str]:
+    """The providers `auto` will try for this model directory, best first.
+
+    **A shortlist tried in order rather than a prediction**, which is the translator's shape and was
+    not this engine's until 2026-08-28. `get_available_providers()` reports what the wheel was
+    compiled with rather than what this machine can create, so `WebGpuExecutionProvider` appears
+    even where no adapter can back it; only a session build settles it, and
+    :class:`PyannoteEngine` falls through to the CPU when one refuses.
+
+    **It is `["cpu"]` whenever the graphs are absent, and that is most machines.** The graphs are a
+    derived artefact: nothing installs them, the catalogue does not fetch them, and the application
+    writes them into `<model-dir>/onnx/` only when somebody chooses the graphics row in Settings.
+    Electing WebGPU without them would mean either a refusal where the CPU would have worked or a
+    minute of silent export inside what looks like an ordinary load, and neither is a default.
+
+    **What this does not claim.** No DER has been scored on either route. What promoted WebGPU here
+    is that the two were run against each other on one five-minute recording and agreed to the
+    millisecond, which is an equivalence check and not an accuracy one — and the CPU route has no
+    DER of its own either, so the choice is not being made on accuracy grounds in either direction.
+    `docs/UNPROVEN.md` carries both gaps.
+    """
+    if not model_dir or not graphs_installed(model_dir):
+        return ["cpu"]
+
+    import onnxruntime as ort
+
+    available = set(ort.get_available_providers())
+    return [p for p in AUTO_ORDER if ONNX_PROVIDERS[p][0] in available] + ["cpu"]
+
 #: The environment variable upstream reads to decide whether to export a span. Named here rather
 #: than written inline at its one call site so that the grep for it lands on this comment.
 TELEMETRY_SWITCH = "PYANNOTE_METRICS_ENABLED"
@@ -319,14 +371,50 @@ class PyannoteEngine:
         # An ONNX provider is not a torch device, so the pipeline stays on the CPU either way: the
         # featuriser, the powerset decoding, the PLDA and the VBx clustering are all torch or numpy
         # and none of them moves. What moves is the two neural forwards, and only those.
-        if provider in ONNX_PROVIDERS:
+        #
+        # **`auto` is elected here and not by the caller**, because the election turns on whether
+        # this model directory's graphs exist and this is the first place the directory is known.
+        #
+        # **Only `auto` tolerates a failure.** A provider that registers can still fail to build a
+        # session, and a diariser that falls through to the CPU is better than one that will not
+        # load — but somebody who *typed* `webgpu` and silently got the CPU has been told nothing,
+        # so a named provider still raises. That is the whole difference between the two paths, and
+        # it is why `tolerant` is bound to how the list was built rather than to what is in it.
+        #
+        # Falling through is safe because `_install_onnx_route` is atomic against the pipeline: it
+        # swaps the two `forward` attributes as its last two statements, so every refusal above them
+        # — missing graphs, an absent provider, a session that would not build, a graph ORT seated
+        # somewhere other than where it was asked — leaves the pipeline exactly as it found it.
+        # Named for the `fellBackFrom` field it becomes, because a run that landed on the CPU
+        # because WebGPU would not initialise must be able to say so: that is the one fact which
+        # explains its speed, and it is known only here, at the moment it stops being true.
+        self.fell_back_from: list[str] = []
+        candidates = resolve_auto(model_dir) if provider == "auto" else [provider]
+        tolerant = provider == "auto"
+
+        elected = "cpu"
+        for candidate in candidates:
+            if candidate not in ONNX_PROVIDERS:
+                elected = candidate
+                break
             self._pipeline.to(torch.device("cpu"))
+            try:
+                self._install_onnx_route(candidate, model_dir)
+            except Exception as exc:  # noqa: BLE001
+                if not tolerant:
+                    raise
+                # Capped per entry: an ONNX Runtime message can run to a screenful.
+                self.fell_back_from.append(f"{candidate}: {exc}"[:300])
+                continue
+            elected = candidate
+            break
+
+        if elected in ONNX_PROVIDERS:
             self.device = "cpu"
-            self._install_onnx_route(provider, model_dir)
-            self.segmentation_backend = f"onnx:{provider}"
-            self.embedding_backend = f"onnx:{provider}"
+            self.segmentation_backend = f"onnx:{elected}"
+            self.embedding_backend = f"onnx:{elected}"
         else:
-            device = self._resolve_device(provider)
+            device = self._resolve_device(elected)
             if device is not None:
                 self._pipeline.to(device)
             self.device = str(device) if device is not None else "cpu"
@@ -468,10 +556,14 @@ class PyannoteEngine:
 
     @property
     def backend(self) -> str:
-        """Where the work happens, as one name the host can parse.
+        """The torch device the pipeline sits on, as one name the host can parse.
 
-        Unlike the DiariZen arm this is unambiguous: both neural stages are torch on the device this
-        returns, so there is no chosen half to distinguish from a fixed one.
+        **It is not the whole story once an ONNX provider is elected**, and it was until 2026-08-28.
+        The pipeline stays on CPU torch whichever route runs — the featuriser, the powerset
+        decoding, the PLDA and the VBx clustering never move — so this returns `cpu` for a run whose
+        two neural forwards were on WebGPU. `segmentation_backend` and `embedding_backend` are the
+        fields that name the route, which is why the capabilities carry all three rather than this
+        one: a reader who takes `backend` for the whole answer would call a GPU run a CPU one.
         """
         return self.device
 
