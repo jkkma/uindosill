@@ -5741,6 +5741,38 @@ default, `llm/cuda` in win-cuda, per the 2026-08-24 channel decision. The 485.4 
 figures below are rc.3's and remain pre-ask-tier; the default installer has grown to 1.156 GB
 with the drops and the bundled weights inside it.
 
+#### The assets uploaded — 2026-08-28, and the margin is now the thing to watch
+
+**v1.0.0-rc.6 published**, which settles the paragraph above: the 2 GiB limit is enforced at upload
+and every asset cleared it. Eight assets, 6.043 GB in total, on the third attempt — the first two
+failed the bundled-Python notice check and never reached the publish step.
+
+| asset | bytes | |
+| --- | ---: | --- |
+| `UindosillDesktop-win-cuda-Setup.exe` | **1,998,799,822** | 93.1% of the 2 GiB limit |
+| `UindosillDesktop-1.0.0-rc.6-win-cuda-full.nupkg` | 1,994,329,550 | |
+| `UindosillDesktop-win-Setup.exe` | 758,419,184 | 1,156,231,387 at rc.5 |
+| `UindosillDesktop-1.0.0-rc.6-full.nupkg` | 753,948,912 | |
+| `uindosill-python-win-x64.zip` | 459,584,428 | 419,612,478 at rc.5 |
+| `uindosill-cli-win-x64.zip` | 77,647,894 | under its 400 MB guard |
+| `releases.win-cuda.json` | 287 | |
+| `releases.win.json` | 277 | |
+
+**The win-cuda headroom fell from 180.1 MiB to 141.8 MiB** — the asset grew 40,214,248 bytes since
+rc.5's measurement, which is the bundled Python growing with it: `pyannote.audio` took the closure
+from 99 distributions to 109, and the Python zip from 419,612,478 to 459,584,428 bytes. The default channel
+moved the other way, 1.156 GB to 758 MB, because Sortformer was unbundled and `BundledIds` is now
+`silero-vad-v5.1.2` alone.
+
+**`NotInCudaChannelIds` is empty, so the lever built for this is unused and available.** It existed
+to keep the diariser's weights out of the win-cuda channel; that pressure went away when Sortformer
+was unbundled from every installer, and the pressure that replaced it is the interpreter rather than
+any model. Excluding a weight cannot buy back what the Python closure costs.
+
+**What this still does not establish.** That any delta applies: deltas were seeded from rc.3 and
+uploaded, and none has been installed. That the installers run — nothing here launches one. And
+nothing is signed.
+
 What this still does not establish: that the assets **upload**, since the publish step was
 skipped by design — the 2 GiB limit is enforced at upload, and clearing it in a local read-back
 is a strong indication rather than the event itself. Deltas were seeded from rc.3 but no delta's
