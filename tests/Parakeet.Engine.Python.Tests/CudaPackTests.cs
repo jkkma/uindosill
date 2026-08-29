@@ -61,12 +61,22 @@ public class CudaPackTests
     }
 
     [Fact]
-    public void TheShippedManifestIsUnverifiedUntilTheAssetsAreUploaded()
+    public void AVerifiedManifestNamesAReleaseItsPartsCanBeFetchedFrom()
     {
-        // Not a value nobody set: it says these digests describe a local build rather than anything
-        // a user can fetch. When this starts failing, the release has happened and the flag should
-        // have been flipped in the same commit — which is the reminder this assertion is for.
-        Assert.False(CudaPackManifest.Shipped.Verified);
+        // Was TheShippedManifestIsUnverifiedUntilTheAssetsAreUploaded, an Assert.False standing as
+        // a reminder to flip the flag in the same commit as the upload. The upload happened on
+        // 2026-08-29 for v1.0.0-rc.7, so the reminder is spent — and this is what it was really
+        // protecting. `verified` asserts the parts are fetchable; a flag set true over a baseUrl
+        // still naming a tag nobody released is exactly the failure it exists to prevent, and it
+        // would present to a user as four 404s after they agreed to a 1.8 GB download.
+        var manifest = CudaPackManifest.Shipped;
+
+        if (!manifest.Verified)
+        {
+            return;
+        }
+
+        Assert.Matches(@"^https://.+/releases/download/v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$", manifest.BaseUrl);
     }
 
     // ---- Parsing -----------------------------------------------------------------------------

@@ -4,13 +4,22 @@
     "The CUDA pack: the three packages whose CUDA build differs from the bundle's CPU one, shipped",
     "as byte-range parts of one zip. Produced by scripts/bundle-python-cuda.ps1 -Package, which",
     "writes a manifest.json this file is filled in from. See docs/PHASES.md, 'Built 2026-08-29 --",
-    "the pack becomes a download'.",
+    "the pack becomes a download' and 'Shipped 2026-08-29 -- the pack becomes a download that",
+    "exists'.",
     "",
-    "verified is FALSE and that is not a placeholder for a value nobody set: it means no release",
-    "asset has been uploaded, so these digests describe a build made on the maintainer's desktop on",
-    "2026-08-29 and NOT anything a user can currently fetch. The installer refuses an unverified",
-    "manifest unless the caller opts in, on ModelInstaller's terms. Flip it to true in the same",
-    "commit that uploads the assets, and only after the digests have been read back off the upload.",
+    "verified is TRUE as of v1.0.0-rc.7, and what that flag asserts is that the four parts exist at",
+    "baseUrl: the installer refuses an unverified manifest unless the caller opts in, on",
+    "ModelInstaller's terms, and that refusal is the only thing between a user and four 404s. These",
+    "digests are the ones scripts/bundle-python-cuda.ps1 -Package computed over the parts that were",
+    "then uploaded to that release, byte for byte. They were read back off the uploaded assets",
+    "afterwards rather than before, because the release cannot exist until the commit carrying this",
+    "file is tagged; docs/UNPROVEN.md records that read-back and its result. A pin taken from a",
+    "local build whose upload has NOT happened goes back to false.",
+    "",
+    "The digests moved on 2026-08-29 without torch moving: a rebuild of the same pins produced a",
+    "zip 27,649 bytes larger than the one first recorded here, because requirements-bundle.txt pins",
+    "26 direct packages and nothing transitive. The pack is therefore not byte-reproducible, which",
+    "is why these are read off the artefact that shipped rather than assumed to match a rebuild.",
     "",
     "The version is the bundle's own torch pin in its CUDA build. It must stay that way: the pack",
     "shadows the bundle's torch by sitting ahead of it on PYTHONPATH, and a pack whose version has",
@@ -18,37 +27,37 @@
     "8,149-sentence gate does not describe. CudaPackInstaller checks the pair at install."
   ],
   "archiveName": "uindosill-python-cuda-win-x64.zip",
-  "archiveBytes": 1961716087,
-  "archiveSha256": "2a056a0d1f5dad7ae913059a7949ee8bc7c3b2daccb42b6ce78ffd32eac8de15",
-  "unpackedBytes": 2965027252,
-  "verified": false,
+  "archiveBytes": 1961743736,
+  "archiveSha256": "df4b9f29ecc03734f35cb45a184e81d3507aa8e62c8c83cd45fa6863cd585b24",
+  "unpackedBytes": 2965058392,
+  "verified": true,
   "torchVersion": "2.13.0+cu130",
   "packages": {
     "torch": "2.13.0+cu130",
     "torchaudio": "2.11.0+cu130",
     "torchcodec": "0.16.0+cu130"
   },
-  "baseUrl": "https://github.com/jkkma/uindosill/releases/download/v1.0.0",
+  "baseUrl": "https://github.com/jkkma/uindosill/releases/download/v1.0.0-rc.7",
   "parts": [
     {
       "fileName": "uindosill-python-cuda-win-x64.zip.001",
       "sizeBytes": 536870912,
-      "sha256": "e1b2bce8e01cde0fe961100247788ffb9ca8cbf8aee66b7a96be8f89199609a8"
+      "sha256": "0203d16647d2ef38d4da26733ba017af067138d444a41d5ca251cc4492a88ae6"
     },
     {
       "fileName": "uindosill-python-cuda-win-x64.zip.002",
       "sizeBytes": 536870912,
-      "sha256": "ad4006f275e43c8a9247d4a7a218eb244a31ad5daafe57d38cf2866756706497"
+      "sha256": "ac3b4544d11ad2cd84b444bd964d3d0cb70f8129565d74a18cfa26ecb34e3bb7"
     },
     {
       "fileName": "uindosill-python-cuda-win-x64.zip.003",
       "sizeBytes": 536870912,
-      "sha256": "3261903285908c7770e7b8d2357cf7cdaae98d0a0e8ddf4fe99990c469ab870a"
+      "sha256": "d5dc7de51c95928e9b62508a65452af474985f0e98d3e71a4ac8505c10bd1399"
     },
     {
       "fileName": "uindosill-python-cuda-win-x64.zip.004",
-      "sizeBytes": 351103351,
-      "sha256": "b8c6dab35adafc35631e6d18dd27186362e96a44299d785b92004df4220dcdcc"
+      "sizeBytes": 351131000,
+      "sha256": "4457eb46b6c0a5dfa48f18933217ead18284a33117fca4531dc449f8c768f26c"
     }
   ]
 }

@@ -6059,3 +6059,62 @@ observed.
 **1515 tests, no weights, no display, no network - 1507 passed and 8 skipped.** One new, on the
 three branches against the threshold the uninstaller itself uses. Three changed: two that asserted
 the retired wording, and one renamed for the branch it actually reaches.
+
+### Shipped 2026-08-29 - the CUDA pack becomes a download that exists, and the pin is not reproducible
+
+**The pack had been built, tested and wired up, and could not be installed by anybody.**
+`cuda-pack.json` carried `verified: false` over a `baseUrl` naming `v1.0.0`, a tag that does not
+exist, so `CanInstallCudaPack` was false in every build and the Settings copy said so: *"This build
+has no published download for it yet."* That was the correct state and a deliberate one. It is not
+a state to leave a feature in.
+
+**Built fresh rather than trusting the recorded pin, and that turned out to matter.** The same
+`requirements-bundle.txt`, the same `cu130` index, the same three package versions
+(`torch 2.13.0+cu130`, `torchaudio 2.11.0+cu130`, `torchcodec 0.16.0+cu130`, checked against the
+bundle's own `torch==2.13.0` pin) produced a **different zip**: 1,961,743,736 bytes against the
+1,961,716,087 recorded on the same day, a difference of 27,649 bytes, and a different SHA-256.
+Nothing about torch moved. `requirements-bundle.txt` pins 26 direct packages with `==` and pins
+**nothing transitive**, so the closure drifts under both artefacts whenever an upstream point
+release lands.
+
+**The consequence is a rule rather than an observation: the pack is not byte-reproducible, so its
+digests must be read off the artefact that shipped.** The previous pin described a build on this
+desktop that no longer exists and that nobody could have reconstructed. `docs/PHASES.md` already
+records the same mechanism eating the win-cuda channel's headroom between rc.5 and rc.6; this is
+the second artefact it reaches, and the first where a stale pin would have presented to a user as a
+digest mismatch after 1.8 GB had been fetched.
+
+**The read-back happens after the upload, and the ordering is forced rather than chosen.** The
+release cannot exist until the commit carrying this file is tagged, and the file must carry
+`verified: true` for the tagged build to offer the download at all. So the digests go in from the
+parts that are then uploaded byte for byte, and the confirmation that GitHub stored them unchanged
+is performed against the uploaded assets and recorded in `docs/UNPROVEN.md`. A pin taken from a
+local build whose upload has not happened goes back to `false`.
+
+**CI does not build the pack and will not upload it.** `-CudaPack` is off by default because the
+step needs about 3 GB of wheels, and `.github/workflows/release.yml` does not name the parts in its
+asset list. The four parts and their manifest are a by-hand step after the release publishes, which
+is the shape this stays until somebody decides the 1.8 GB is worth a release job's time.
+
+**Two assertions were written as reminders and have now been spent.**
+`TheShippedManifestIsUnverifiedUntilTheAssetsAreUploaded` and
+`TheButtonIsDeadWhileTheManifestIsUnverified` both asserted `Assert.False(...Verified)` with a
+comment saying that when they start failing, the release has happened. It happened. Both were
+rewritten to hold the relationship in either state rather than the value in one: the button is live
+only where the flag says the parts exist, and a verified manifest must name a release tag its parts
+can actually be fetched from - a flag set true over an unreleased tag being precisely the failure
+the flag exists to prevent.
+
+**The win-cuda channel was measured whole before the tag went out**, because rc.4 died twice at
+GitHub's per-asset limit and a release job takes 35 minutes to find out.
+`UindosillDesktop-win-cuda-Setup.exe` came to **1,998,899,901 bytes**, which is **141.7 MiB under
+the 2,147,483,648-byte ceiling** and 100,079 bytes larger than rc.6. The read-back held: `cpu`,
+`cuda` and `vulkan` inside, `llm/cuda` as the ask engine, all three companions with their notices,
+`silero-vad-v5.1.2` as the only weight, and a bundled Python of 459,562,905 bytes.
+
+**One thing this does not change.** The historical figure at *Built 2026-08-29 - the pack becomes a
+download* quotes the digest `2a056a0d…` for the local install it describes. That observation stands
+as what was run that day; it is simply no longer the artefact anybody can fetch.
+
+**1515 tests, no weights, no display, no network - 1507 passed and 8 skipped.** None added; three
+rewritten as described, and one renamed with them.
