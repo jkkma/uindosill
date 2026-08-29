@@ -18,6 +18,20 @@ public static class TranscriptionRunner
         ArgumentNullException.ThrowIfNull(audio);
         options ??= TranscriptionOptions.Default;
 
+        // Validated before anything is paid for. TranscribeAsync validates too, but it is a lazy
+        // iterator whose first line runs only at the first MoveNext — after the load below — so
+        // without this check a typo'd option would cost a multi-hundred-megabyte model load
+        // before it was refused.
+        options.Validate();
+
+        // Loaded before the stopwatch starts, because the stopwatch's figure is documented as
+        // excluding model load and is the basis of every published real-time factor. LoadAsync is
+        // idempotent, so a caller that pre-loaded (every shipping caller does) pays nothing —
+        // but a caller that leans on TranscribeAsync's load-for-you contract used to get seconds
+        // of model load silently inside ProcessingTime, and a real-time factor that measured the
+        // wrong thing with no indication anything was off.
+        await engine.LoadAsync(ct).ConfigureAwait(false);
+
         var segments = new List<TranscriptSegment>();
         var stopwatch = Stopwatch.StartNew();
 

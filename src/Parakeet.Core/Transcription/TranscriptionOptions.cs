@@ -93,6 +93,24 @@ public sealed record TranscriptionOptions
     /// </summary>
     public float? LowConfidenceThreshold { get; init; } = 0.45f;
 
+    /// <summary>
+    /// The voice-activity settings the audio is actually cut under: <see cref="VoiceActivity"/>
+    /// re-capped to <see cref="MaxSegmentLength"/>, with the forced-split search window shrunk to
+    /// fit when the cap comes in under it. The window is a cut-placement heuristic — where in a
+    /// full segment's tail to look for a quiet frame — and the segmenter clamps it to the cap
+    /// anyway; deriving it here is what lets a three-second cap mean a three-second cap instead
+    /// of an error naming a knob nobody touched. The rescue cannot tell a defaulted window from
+    /// one the caller set past the cap on purpose: both shrink, because the segmenter clamps
+    /// both the same way, and the shrunk value is what the cut actually searches.
+    /// </summary>
+    public VoiceActivityOptions SegmentationOptions() => VoiceActivity with
+    {
+        MaxSegmentLength = MaxSegmentLength,
+        ForcedSplitSearchWindow = VoiceActivity.ForcedSplitSearchWindow < MaxSegmentLength
+            ? VoiceActivity.ForcedSplitSearchWindow
+            : MaxSegmentLength - VoiceActivity.FrameLength,
+    };
+
     public void Validate()
     {
         if (MaxSegmentLength <= TimeSpan.Zero)
@@ -135,6 +153,25 @@ public sealed record TranscriptionOptions
             }
         }
 
-        VoiceActivity.Validate();
+        // Validated as derived, not as handed in: the audio is cut under SegmentationOptions() —
+        // this record's VoiceActivity re-capped to MaxSegmentLength — and until 2026-08-29 the
+        // raw record was checked here while the derived one was checked only by the segmenter,
+        // inside the decode iterator, after the model had loaded. A cap of four seconds or less
+        // passed here and threw there, naming ForcedSplitSearchWindow — a knob the caller never
+        // set, and one the segmenter clamps to fit regardless. The derived check covers every
+        // field the raw one did; the one failure the derivation itself can produce (a cap too
+        // short to hold four detector frames) is re-attributed to the cap, which is what was
+        // actually set.
+        try
+        {
+            SegmentationOptions().Validate();
+        }
+        catch (ArgumentOutOfRangeException exc) when (exc.ParamName == nameof(MaxSegmentLength))
+        {
+            // The derived record's own sentence, but attributed once: AOORE appends the parameter
+            // and the value to Message, so passing the whole of it through would print both twice.
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxSegmentLength), MaxSegmentLength, exc.Message.Split(" (Parameter", 2)[0]);
+        }
     }
 }

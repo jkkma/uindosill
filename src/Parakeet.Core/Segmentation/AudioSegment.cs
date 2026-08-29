@@ -19,8 +19,11 @@ public sealed class AudioSegment
     public required ReadOnlyMemory<float> Samples { get; init; }
 
     /// <summary>
-    /// False when the segment was emitted by a forced cut or a fixed window rather than by
-    /// detected speech. Only used for reporting; both kinds are decoded.
+    /// False when nothing affirmed speech in this segment: a fixed window, where every frame is
+    /// speech by fiat, or a synthetic segment such as the warm-up's. A forced cut at the cap
+    /// mid-utterance stays true — the clock placed the cut, but the detector or the gate
+    /// affirmed the content. Informational only: nothing reads it today, and both kinds are
+    /// decoded either way.
     /// </summary>
     public bool SpeechDetected { get; init; } = true;
 
