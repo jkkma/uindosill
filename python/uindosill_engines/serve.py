@@ -62,10 +62,12 @@ class Session:
         a load does cannot drift apart. That costs this op the engines' imports — seconds of torch
         — which is the right trade for a diagnostic that is asked once and must not lie.
 
-        **Everything here is the translator's question now.** The diariser was the other consumer
-        of this op and it is a torch pipeline since 2026-08-27; `auto` still reports what its own
-        resolver settles on, for the same reason as before — asked rather than restated — but that
-        answer is the CPU by construction and no execution provider participates in it.
+        **Mostly the translator's question now.** The diariser is a torch pipeline since
+        2026-08-27, so its `auto` mostly settles on a torch device — the CPU, or `cuda` where a
+        CUDA torch is installed — but since 2026-08-28 it is not "the CPU by construction": with
+        the two derived graphs exported into the model directory, its resolver can elect an ONNX
+        provider for the embedding stage. `auto` reports whatever its resolver settles on, asked
+        rather than restated, which is exactly why this paragraph does not enumerate the cases.
 
         DirectML is deliberately absent from `usable`: for the translator it is not faithful at all,
         0 of 32 FLEURS sentences matching the CPU, the decoder falling into a repetition loop, at
@@ -222,7 +224,18 @@ class Session:
 
         name = message.get("engine", "diariser")
         engine, module = self._engine_for(name)
-        module.check(engine._engine)
+
+        # The check's result is read, not just its side effect. It exists here to make the
+        # profiled sessions execute, but when the parity fixture is missing it reports that
+        # precisely and decodes nothing — and a discarded report turned that into the empty
+        # profile below, diagnosed as "loaded without `profile: true`": a false claim
+        # prescribing a reload that cannot ever fix it.
+        checked = module.check(engine._engine)
+        if not checked.get("available", True):
+            raise RequestError(
+                "request",
+                f"placement needs the {name}'s parity check to run the sessions, and it could "
+                f"not: {checked.get('reason', 'no reason given')}")
 
         inner = engine._engine
         wanted = engine.capabilities()["backend"]

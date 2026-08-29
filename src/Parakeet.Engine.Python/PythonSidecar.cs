@@ -56,6 +56,7 @@ public sealed class PythonSidecar : IAsyncDisposable
     private readonly ConcurrentDictionary<int, Pending> _pending = new();
     private readonly Queue<string> _standardError = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly object _errorGate = new();
 
     private Process? _process;
@@ -64,6 +65,14 @@ public sealed class PythonSidecar : IAsyncDisposable
     private PythonSidecarException? _fault;
     private int _nextId;
     private volatile bool _disposed;
+
+    /// <summary>
+    /// True only once the handshake has passed — the fast path's key, and deliberately not
+    /// <c>_process</c>: a process exists for the whole stretch of the handshake, and a caller
+    /// released on its existence would send requests onto a pipe whose protocol nobody had
+    /// checked yet.
+    /// </summary>
+    private volatile bool _started;
 
     public PythonSidecar(PythonRuntime.Resolution runtime) => _runtime = runtime;
 
@@ -140,13 +149,50 @@ public sealed class PythonSidecar : IAsyncDisposable
     /// </remarks>
     public async Task StartAsync(CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ThrowIfFaulted();
 
-        if (_process is not null)
+        if (_started)
         {
             return;
         }
 
+        // The idempotence check above is a fast path, not the mechanism: everything else in this
+        // class serves concurrent callers, and the constructor parameter that shares one sidecar
+        // between two engines makes concurrent first calls reachable. Unguarded, both observed
+        // no child and both spawned an interpreter — the second assignment orphaned the first
+        // child behind open pipes, and a hello written to the child whose stdout nobody was
+        // reading never completed. The gate also makes "started means handshaken" true for a
+        // caller arriving mid-start: keyed on _started rather than _process, it waits out the
+        // winner's whole handshake rather than returning the moment a process exists — and
+        // leaves with the winner's fault when the handshake fails, via the re-check below.
+        await _startGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            ThrowIfFaulted();
+
+            if (_started)
+            {
+                return;
+            }
+
+            await StartLockedAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                _startGate.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Disposal won the race against a start still in flight; the gate went with it.
+            }
+        }
+    }
+
+    private async Task StartLockedAsync(CancellationToken ct)
+    {
         var start = new ProcessStartInfo
         {
             FileName = _runtime.Interpreter,
@@ -221,6 +267,8 @@ public sealed class PythonSidecar : IAsyncDisposable
                     $"The Python engines speak protocol {protocol} and this build speaks {ProtocolVersion}. " +
                     "The bundled Python and the application are out of step, reinstall rather than mixing them.");
             }
+
+            _started = true;
         }
         catch (Exception exc)
         {
@@ -648,6 +696,7 @@ public sealed class PythonSidecar : IAsyncDisposable
 
         process.Dispose();
         _writeGate.Dispose();
+        _startGate.Dispose();
         _process = null;
     }
 

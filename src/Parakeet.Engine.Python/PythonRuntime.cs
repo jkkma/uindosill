@@ -381,9 +381,12 @@ public static class PythonRuntime
     /// by it.
     /// </para>
     /// <para>
-    /// <b>A directory that exists but does not hold torch is ignored rather than reported.</b> The
-    /// pack is an accelerator for something that already works; the honest failure for a broken one
-    /// is a diariser that runs on the CPU, which is what happens, and not a load that refuses.
+    /// <b>A directory that exists but does not hold a torch that can import is ignored rather than
+    /// reported</b> — no marker at all, or the marker over a gutted <c>torch/lib</c> (see
+    /// <see cref="IsCudaPackHealthy"/>). The pack is an accelerator for something that already
+    /// works; the honest failure for a broken one is a diariser that runs on the CPU, and until
+    /// 2026-08-29 that sentence was only true of the first shape — a half-deleted pack still won
+    /// the resolution, sat in front of the bundle, and turned both opt-ins into tracebacks.
     /// A user who downloaded a pack and is not getting CUDA is told by the run's own provenance —
     /// the elected device is reported — rather than by a resolver that has to guess whether the
     /// directory was meant to be a pack at all.
@@ -400,13 +403,54 @@ public static class PythonRuntime
                 Path.Combine(baseDirectory, CudaPackDirectoryName),
             };
 
-        return candidates.FirstOrDefault(IsCudaPack);
+        return candidates.FirstOrDefault(IsCudaPackHealthy);
     }
 
     /// <summary>Whether a directory holds the package whose absence makes a pack pointless.</summary>
     public static bool IsCudaPack(string directory) =>
         Directory.Exists(directory)
         && File.Exists(Path.Combine([directory, .. CudaPackMarker]));
+
+    /// <summary>
+    /// Whether a directory holds a pack that can plausibly import: the marker, and a
+    /// <c>torch/lib</c> with something in it.
+    /// </summary>
+    /// <remarks>
+    /// The marker alone survives damage the pack does not — an interrupted delete that took the
+    /// native libraries and stopped, a quarantined DLL — and a tree in that state used to pass
+    /// <see cref="IsCudaPack"/> forever: it went in front of the bundle on <c>PYTHONPATH</c>,
+    /// <c>import torch</c> failed in the sidecar, both opt-ins died with a traceback, and the
+    /// installer's already-installed answer left no way back short of deleting the directory by
+    /// hand. <c>torch/lib</c> is where every native library of a Windows torch build lives, so
+    /// its emptiness is the cheapest honest signal of that damage; per-file digests belong to the
+    /// download, which cannot vouch for a directory damaged after it.
+    /// </remarks>
+    public static bool IsCudaPackHealthy(string directory)
+    {
+        if (!IsCudaPack(directory))
+        {
+            return false;
+        }
+
+        var lib = Path.Combine(directory, "torch", "lib");
+        try
+        {
+            return Directory.Exists(lib) && Directory.EnumerateFileSystemEntries(lib).Any();
+        }
+        catch (IOException)
+        {
+            // A lib that exists but cannot be listed — an ACL the same intervention that guts
+            // packs can leave, a directory pending deletion, a drive that vanished between the
+            // two calls — is an unhealthy pack. Resolution promises never to throw (a checkbox
+            // cannot be drawn out of an exception), and this probe runs inside it and inside a
+            // GUI binding getter, so the answer is false, not a stack.
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static string ExecutableName =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "bin/python3";

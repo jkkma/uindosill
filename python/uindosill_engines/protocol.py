@@ -198,6 +198,15 @@ def serve(channel: Channel, handlers: dict[str, Callable[[dict[str, Any], Channe
             channel.result(request_id, stopped=True)
             return 0
 
+        # ``dict.get`` hashes its key, so a list- or object-valued op raised TypeError on the
+        # lookup below — which sits outside the try, so one malformed line ended the process,
+        # loaded models and all, where this module's own contract says a failure is a message.
+        # A hashable non-string op (a number, null) already fell through to "unknown op"; the
+        # unhashable JSON shapes now take the same door.
+        if not isinstance(op, str):
+            channel.error(request_id, "request", f"op must be a string, got {op!r}")
+            continue
+
         handler = handlers.get(op)
         if handler is None:
             channel.error(request_id, "request", f"unknown op {op!r}")
