@@ -811,6 +811,73 @@ public sealed partial class ModelsViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>Whether there is anything installed for <see cref="RemoveAllCommand"/> to remove.</summary>
+    public bool CanRemoveAll => !IsTranscribing && Models.Any(m => m.IsInstalled);
+
+    /// <summary>
+    /// Removes every installed catalogue entry in one action.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Added 2026-08-29, because the folder notice was true and useless.</b> It said the weights
+    /// survive an uninstall, which they do, and left a reader who had just decided to uninstall with
+    /// six entries to select and Remove one at a time. Tens of gigabytes stay behind when somebody
+    /// does not know to do that, and "it is in the notice" is not a defence when the notice frames
+    /// the survival as a feature.
+    /// </para>
+    /// <para>
+    /// <b>Deliberately not an uninstall hook.</b> One was built and withdrawn on 2026-08-23: run
+    /// directly it deleted the data directory, run by the uninstaller it returned in 98 ms having
+    /// deleted nothing, and six causes were eliminated by experiment without the failure ever
+    /// reproducing. The rule that came out of that is the one this obeys: nothing this product does
+    /// unattended deletes a user's files. A button is attended.
+    /// </para>
+    /// <para>
+    /// <b>Catalogue entries only.</b> What else is in the folder is offered separately by
+    /// <see cref="RemoveSideloadedCommand"/>, because this application did not put it there and
+    /// cannot say what it is. A loaded model is skipped rather than deleted from under the engine,
+    /// and named, so the count and the message agree with what actually happened.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRemoveAll))]
+    private void RemoveAll()
+    {
+        var freed = 0L;
+        var removed = 0;
+        var skipped = new List<string>();
+
+        foreach (var model in Models.Where(m => m.IsInstalled).ToList())
+        {
+            if (model.IsLoaded)
+            {
+                skipped.Add(model.DisplayName);
+                continue;
+            }
+
+            freed += model.Descriptor.TotalSizeBytes ?? 0;
+            if (_store.Remove(model.Descriptor))
+            {
+                removed++;
+            }
+
+            model.IsInstalled = false;
+            model.Progress = 0;
+            model.Status = "Not installed";
+        }
+
+        SyncActiveDiariser();
+
+        StatusMessage = removed == 0
+            ? "Nothing was removed."
+            : $"Removed {removed} {(removed == 1 ? "model" : "models")}, freeing about "
+              + $"{ByteSize.Describe(freed)}."
+              + (skipped.Count > 0
+                  ? $" {string.Join(" and ", skipped)} stayed, being loaded. Unload and try again."
+                  : string.Empty);
+
+        Refresh();
+    }
+
     /// <summary>
     /// Re-reads the model directory: which entries are installed, what else is in there, and what
     /// the whole folder now comes to.
@@ -1026,12 +1093,13 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </remarks>
     public string UninstallNotice =>
         _installedBytes == 0
-            ? "Uninstalling Uindosill does not delete downloaded models. They live outside the "
-              + "application folder, so they survive an update, a reinstall and an uninstall."
-            : "Uninstalling Uindosill does not delete downloaded models. They live outside the "
-              + "application folder, so they survive an update, a reinstall and an uninstall, "
-              + $"what is in that folder now comes to {ByteSize.Describe(_installedBytes)}, and the "
-              + "buttons above remove any of it you no longer want.";
+            ? "Downloaded models live outside the application folder, so they survive an "
+              + "update and a reinstall. There are none here at the moment."
+            : "Downloaded models live outside the application folder. That is what lets them "
+              + "survive an update and a reinstall, and it also means uninstalling Uindosill "
+              + $"leaves them behind. There is {ByteSize.Describe(_installedBytes)} in that "
+              + "folder now. If you are uninstalling, remove it here first: nothing else "
+              + "will.";
 
     /// <summary>Whether there is a sideloaded file selected to delete.</summary>
     public bool CanRemoveSideloaded => SelectedSideloaded is not null && !IsTranscribing;
