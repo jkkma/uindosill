@@ -1894,6 +1894,36 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
 
+              <!-- The CUDA pack. Drawn only on a machine whose driver has CUDA, or one that already
+                   has the pack — a computer that cannot use this is not shown a 1.8 GB download and
+                   is not told about one either, because a disabled row with an explanation is an
+                   advertisement for something that will never apply. `CudaDriverProbe` decides, and
+                   it asks nvcuda.dll rather than an adapter name; its third answer, "could not
+                   tell", counts as no.
+
+                   The button is separately disabled while the manifest is unverified, which is the
+                   state this build ships in: the digests describe a local build and no release
+                   asset has been uploaded, so there is nothing to download yet. The explanation
+                   says so in words rather than leaving a dead button unexplained. -->
+              <StackPanel Spacing="6" IsVisible="{Binding ShowCudaPack}">
+                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           Text="{Binding CudaPackExplanation}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8"
+                            IsVisible="{Binding CanOfferCudaPack}">
+                  <Button Content="Set up graphics acceleration"
+                          Command="{Binding InstallCudaPackCommand}" />
+                  <ProgressBar Width="160" VerticalAlignment="Center"
+                               Minimum="0" Maximum="1"
+                               Value="{Binding CudaPackProgress}"
+                               IsVisible="{Binding IsInstallingCudaPack}" />
+                </StackPanel>
+
+                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           IsVisible="{Binding HasCudaPackMessage}"
+                           Text="{Binding CudaPackMessage}" />
+              </StackPanel>
+
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting

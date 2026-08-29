@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "comment": [
+    "The CUDA pack: the three packages whose CUDA build differs from the bundle's CPU one, shipped",
+    "as byte-range parts of one zip. Produced by scripts/bundle-python-cuda.ps1 -Package, which",
+    "writes a manifest.json this file is filled in from. See docs/PHASES.md, 'Built 2026-08-29 --",
+    "the pack becomes a download'.",
+    "",
+    "verified is FALSE and that is not a placeholder for a value nobody set: it means no release",
+    "asset has been uploaded, so these digests describe a build made on the maintainer's desktop on",
+    "2026-08-29 and NOT anything a user can currently fetch. The installer refuses an unverified",
+    "manifest unless the caller opts in, on ModelInstaller's terms. Flip it to true in the same",
+    "commit that uploads the assets, and only after the digests have been read back off the upload.",
+    "",
+    "The version is the bundle's own torch pin in its CUDA build. It must stay that way: the pack",
+    "shadows the bundle's torch by sitting ahead of it on PYTHONPATH, and a pack whose version has",
+    "drifted from python/requirements-bundle.txt would silently run a decode the translator's",
+    "8,149-sentence gate does not describe. CudaPackInstaller checks the pair at install."
+  ],
+  "archiveName": "uindosill-python-cuda-win-x64.zip",
+  "archiveBytes": 1961716087,
+  "archiveSha256": "2a056a0d1f5dad7ae913059a7949ee8bc7c3b2daccb42b6ce78ffd32eac8de15",
+  "unpackedBytes": 2965027252,
+  "verified": false,
+  "torchVersion": "2.13.0+cu130",
+  "packages": {
+    "torch": "2.13.0+cu130",
+    "torchaudio": "2.11.0+cu130",
+    "torchcodec": "0.16.0+cu130"
+  },
+  "baseUrl": "https://github.com/jkkma/uindosill/releases/download/v1.0.0",
+  "parts": [
+    {
+      "fileName": "uindosill-python-cuda-win-x64.zip.001",
+      "sizeBytes": 536870912,
+      "sha256": "e1b2bce8e01cde0fe961100247788ffb9ca8cbf8aee66b7a96be8f89199609a8"
+    },
+    {
+      "fileName": "uindosill-python-cuda-win-x64.zip.002",
+      "sizeBytes": 536870912,
+      "sha256": "ad4006f275e43c8a9247d4a7a218eb244a31ad5daafe57d38cf2866756706497"
+    },
+    {
+      "fileName": "uindosill-python-cuda-win-x64.zip.003",
+      "sizeBytes": 536870912,
+      "sha256": "3261903285908c7770e7b8d2357cf7cdaae98d0a0e8ddf4fe99990c469ab870a"
+    },
+    {
+      "fileName": "uindosill-python-cuda-win-x64.zip.004",
+      "sizeBytes": 351103351,
+      "sha256": "b8c6dab35adafc35631e6d18dd27186362e96a44299d785b92004df4220dcdcc"
+    }
+  ]
+}

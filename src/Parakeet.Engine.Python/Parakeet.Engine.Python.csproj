@@ -28,4 +28,14 @@
     <InternalsVisibleTo Include="Parakeet.Engine.Python.Tests" />
   </ItemGroup>
 
+  <!--
+    The CUDA pack's pins travel beside the assembly rather than embedded in it, for the reason
+    models.json is a file: the release step that produces the parts writes their digests back into
+    the repository as data, and a resource compiled into a DLL is not something a packaging script
+    can update. CudaPackManifest.Shipped reads it out of AppContext.BaseDirectory.
+  -->
+  <ItemGroup>
+    <None Update="cuda-pack.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

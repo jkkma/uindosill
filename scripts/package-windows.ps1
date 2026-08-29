@@ -73,6 +73,15 @@ param(
     # read-back below says so rather than letting it pass as a release.
     [switch] $SkipPython,
 
+    # Also build and split the CUDA pack into release assets. Off by default and
+    # deliberately so: it needs a CUDA venv or about 3 GB of pip downloads, produces
+    # 2.8 GB on disk, and is an accelerator for one opt-in rather than part of the
+    # product. `-CudaPackVenv` names an existing venv to copy out of, which is what
+    # makes the step take a minute instead of twenty.
+    [switch] $CudaPack,
+
+    [string] $CudaPackVenv,
+
     # Where the publish, the packages and the release feed land. Gitignored; nothing a build
     # produces belongs in the working tree.
     [string] $OutputDirectory,
@@ -878,6 +887,65 @@ else {
         Write-Host "     $($names.Count) entries, from $bundleSource"
     }
     finally { $zip.Dispose() }
+}
+
+# ---- The CUDA pack, when asked for. -------------------------------------------------------------
+#
+# **Not part of a normal release, and the switch is the decision.** The pack is 2.8 GB unpacked and
+# 1.83 GB compressed; building it needs either a CUDA venv on this machine or about 3 GB of wheel
+# downloads. It accelerates one opt-in on one vendor's hardware, so it is built when somebody asks
+# for it rather than on every release.
+#
+# **The parts go beside the other release files and the whole zip does not.** 1,961,716,087 bytes
+# clears GitHub's 2 GiB asset limit by 177 MB, which is the kind of margin that stops being one
+# after a torch point release -- and parts give a 1.8 GB download somewhere to resume from. The
+# manifest is copied out beside them because `src/Parakeet.Engine.Python/cuda-pack.json` is filled
+# in from it by hand, and the digests have to be read off the thing that was actually uploaded.
+if ($CudaPack) {
+    Write-Host ''
+    Write-Note 'building the CUDA pack (this is the slow one)'
+
+    $packStaging = Join-Path $OutputDirectory 'python-cuda'
+    $packArgs = @{ Destination = $packStaging; Package = $true
+                   PackageDirectory = (Join-Path $OutputDirectory 'releases') }
+    if ($CudaPackVenv) { $packArgs['FromVenv'] = $CudaPackVenv }
+
+    & (Join-Path $PSScriptRoot 'bundle-python-cuda.ps1') @packArgs
+    if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+        throw 'bundle-python-cuda.ps1 failed; no CUDA pack assets were produced.'
+    }
+
+    # Read back, on the same terms as every other artefact here: the parts must exist, add up to
+    # the manifest's archive size, and each be under the asset limit that made them parts at all.
+    $packManifestPath = Join-Path (Join-Path $OutputDirectory 'releases') 'manifest.json'
+    if (-not (Test-Path -LiteralPath $packManifestPath)) {
+        $failures += 'the CUDA pack produced no manifest.json, so its digests cannot be pinned.'
+    }
+    else {
+        $packManifest = Get-Content -LiteralPath $packManifestPath -Raw | ConvertFrom-Json
+        $total = 0L
+        foreach ($part in $packManifest.parts) {
+            $partPath = Join-Path (Join-Path $OutputDirectory 'releases') $part.fileName
+            if (-not (Test-Path -LiteralPath $partPath)) {
+                $failures += "the CUDA pack manifest names $($part.fileName), which was not produced."
+                continue
+            }
+            $actual = (Get-Item -LiteralPath $partPath).Length
+            if ($actual -ne $part.sizeBytes) {
+                $failures += "CUDA pack part $($part.fileName) is $actual bytes and its manifest says $($part.sizeBytes)."
+            }
+            if ($actual -ge 2GB) {
+                $failures += "CUDA pack part $($part.fileName) is $actual bytes, at or over the 2 GiB asset limit."
+            }
+            $total += $actual
+            Write-Host ("     {0,-54} {1,13:N0} bytes" -f $part.fileName, $actual)
+        }
+        if ($total -ne $packManifest.archiveBytes) {
+            $failures += "the CUDA pack parts total $total bytes and the manifest claims an archive of $($packManifest.archiveBytes)."
+        }
+        Write-Host ("     {0,-54} {1,13:N0} bytes" -f 'manifest.json', (Get-Item -LiteralPath $packManifestPath).Length)
+        Write-Host "     torch $($packManifest.torchVersion); pin these digests into src/Parakeet.Engine.Python/cuda-pack.json"
+    }
 }
 
 if ($failures) {

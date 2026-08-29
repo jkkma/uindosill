@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Parakeet.App.Services;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
@@ -944,6 +945,196 @@ public sealed partial class MainWindowViewModel : ObservableObject
         + "windows need more. How much either costs on this model, and whether the setting changes "
         + "the labels, has not been measured. Takes effect at your next recording.";
 
+    // ---- The CUDA pack ------------------------------------------------------------------------
+    //
+    // **The row is drawn only where it would do something**, which takes two questions rather than
+    // one: does this machine's driver have CUDA (`CudaDriverProbe`, which asks nvcuda.dll rather
+    // than an adapter name), and is the pack already installed. A machine that answers no to the
+    // first is not shown a 1.8 GB download it cannot use, and is not told about it either — an
+    // absent row is the honest treatment of a feature that does not apply, where a disabled one
+    // with an explanation is an advertisement.
+    //
+    // **`Unknown` is treated as absent for the row and said so in the hint.** The probe's three
+    // answers exist precisely so this decision is not made on a guess, and offering a download on
+    // "I could not tell" is the guess it was built to avoid.
+
+    /// <summary>What the driver said, asked once and cached: the probe pays a driver init.</summary>
+    private CudaDriver? _cudaDriver;
+
+    private CudaDriver CudaDriver => _cudaDriver ??= CudaDriverProbe.Describe();
+
+    /// <summary>Where the pack would be installed — the directory holding the bundle.</summary>
+    private static string CudaPackRoot => UserDataPaths.RootDirectory();
+
+    /// <summary>True when this machine could use the pack and has not got it.</summary>
+    public bool CanOfferCudaPack =>
+        CudaDriver.Availability == CudaDriverAvailability.Present && !IsCudaPackInstalled;
+
+    /// <summary>True when the pack is on disk, whatever the driver says.</summary>
+    public bool IsCudaPackInstalled => CudaPackInstaller.IsInstalled(CudaPackRoot);
+
+    /// <summary>Whether to draw the block at all: either it is installed, or it could be.</summary>
+    public bool ShowCudaPack => CanOfferCudaPack || IsCudaPackInstalled;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCudaPackMessage))]
+    private string? _cudaPackMessage;
+
+    public bool HasCudaPackMessage => !string.IsNullOrWhiteSpace(CudaPackMessage);
+
+    /// <summary>
+    /// What the block says, which differs by state rather than being one sentence with a blank in it.
+    /// </summary>
+    public string CudaPackExplanation
+    {
+        get
+        {
+            if (IsCudaPackInstalled)
+            {
+                return "Speaker labelling runs on your NVIDIA card. Measured on one ten-minute "
+                    + "recording it was about 13 times faster than the processor and produced "
+                    + "exactly the same speakers and boundaries. No accuracy score has been taken "
+                    + "on either.";
+            }
+
+            var manifest = CudaPackManifestOrNull;
+            if (manifest is null)
+            {
+                return "Graphics acceleration for speaker labelling is not available in this build.";
+            }
+
+            var download = ByteSize.Describe(manifest.TotalDownloadBytes);
+            var disk = ByteSize.Describe(manifest.UnpackedBytes);
+
+            var text = $"Speaker labelling can run on your NVIDIA card. It needs a {download} "
+                + $"download and about {disk} on disk, once. Measured on one ten-minute recording "
+                + "it was about 13 times faster than the processor and produced exactly the same "
+                + "speakers and boundaries.";
+
+            if (!manifest.Verified)
+            {
+                text += " This build has no published download for it yet, so it cannot be "
+                    + "installed from here.";
+            }
+
+            return text;
+        }
+    }
+
+    /// <summary>The pinned manifest, or null where it could not be read — never a throw into the UI.</summary>
+    private static CudaPackManifest? CudaPackManifestOrNull
+    {
+        get
+        {
+            try
+            {
+                return CudaPackManifest.Shipped;
+            }
+            catch (Exception exception) when (exception is IOException or PythonSidecarException
+                                                  or System.Text.Json.JsonException)
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>True when the button should be live: offered, and there is something to fetch.</summary>
+    public bool CanInstallCudaPack =>
+        CanOfferCudaPack && CudaPackManifestOrNull is { Verified: true } && !IsInstallingCudaPack;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanInstallCudaPack))]
+    private bool _isInstallingCudaPack;
+
+    [ObservableProperty]
+    private double _cudaPackProgress;
+
+    /// <summary>
+    /// Downloads and installs the pack, reporting into <see cref="CudaPackMessage"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>The failure is shown rather than thrown.</b> Every way this can go wrong — a part that
+    /// will not fetch, a digest that disagrees, a disk without 2.8 GB free — is a thing the user can
+    /// act on, and none of them is a reason to take the window down. The pack is an accelerator for
+    /// something that already works, so the product on the other side of any of these failures is
+    /// the product as it ships.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanInstallCudaPack))]
+    private async Task InstallCudaPackAsync(CancellationToken ct)
+    {
+        var manifest = CudaPackManifestOrNull;
+        if (manifest is null)
+        {
+            return;
+        }
+
+        IsInstallingCudaPack = true;
+        CudaPackMessage = "Starting…";
+        CudaPackProgress = 0;
+
+        try
+        {
+            var root = CudaPackRoot;
+            var store = new LocalModelStore(Path.Combine(root, "models"));
+
+            // No Hugging Face token, unlike every other download this application makes: the pack
+            // is a release asset of this project rather than a model from the hub, and handing a
+            // credential to a request that does not need one is how a credential reaches a host it
+            // was never meant for.
+            using var downloader = new ModelInstaller(store);
+            var installer = new CudaPackInstaller(store, downloader);
+
+            var progress = new Progress<CudaPackProgress>(p =>
+            {
+                CudaPackProgress = p.Fraction ?? 0;
+                CudaPackMessage = p.Phase switch
+                {
+                    CudaPackPhase.Downloading => "Downloading…",
+                    CudaPackPhase.Assembling => "Putting the pieces together…",
+                    CudaPackPhase.Verifying => "Checking it arrived intact…",
+                    CudaPackPhase.Unpacking => "Unpacking…",
+                    _ => "Finishing…",
+                };
+            });
+
+            await installer.InstallAsync(
+                manifest,
+                root,
+                manifest.TorchVersionWithoutBuild,
+                allowUnverified: false,
+                progress,
+                ct).ConfigureAwait(true);
+
+            CudaPackMessage = "Installed. Speaker labelling will use your graphics card from your "
+                + "next recording.";
+        }
+        catch (OperationCanceledException)
+        {
+            CudaPackMessage = "Stopped. What was downloaded is kept, so starting again resumes.";
+        }
+        catch (Exception exception) when (exception is CudaPackException or ModelInstallException
+                                              or IOException or HttpRequestException)
+        {
+            CudaPackMessage = exception.Message;
+        }
+        finally
+        {
+            IsInstallingCudaPack = false;
+            RefreshCudaPack();
+        }
+    }
+
+    /// <summary>
+    /// Re-asks the two questions after an install, so the block redraws without a restart.
+    /// </summary>
+    public void RefreshCudaPack()
+    {
+        OnPropertyChanged(nameof(IsCudaPackInstalled));
+        OnPropertyChanged(nameof(CanOfferCudaPack));
+        OnPropertyChanged(nameof(ShowCudaPack));
+        OnPropertyChanged(nameof(CanInstallCudaPack));
+        OnPropertyChanged(nameof(CudaPackExplanation));
+    }
 }
 
 /// <summary>One row of the speaker-provider picker: the stored name, under the name a person reads.</summary>
