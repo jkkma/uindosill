@@ -293,32 +293,85 @@ public sealed class PythonSidecar : IAsyncDisposable
         try
         {
             await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Cancelled at the gate: nothing reached the child under this id, so nothing is left
+            // waiting for a reply to it.
+            _pending.TryRemove(id, out _);
+            throw;
+        }
+
+        // **Once the gate is held the write is committed, and the caller's token stops the wait
+        // for it rather than the write itself.** A line longer than the writer's buffer crosses
+        // the pipe in more than one flush, and a token honoured inside the write could tear it
+        // between two: the prefix would sit on the pipe with no terminator, the next request's
+        // line would glue onto it, and the child would answer the glued line with an id of null —
+        // which Dispatch records as noise, leaving that request's caller waiting forever. Long
+        // lines are real (a translate request carries its whole segment, with every non-ASCII
+        // character escaped to six), and so is the window: a busy child is not reading, so the
+        // pipe backs up and a mid-line write parks for as long as the child works. The write
+        // therefore runs to completion on its own, holding the gate so no other line can
+        // interleave with it, and a caller that stops waiting mid-write abandons the request
+        // exactly as one that stops waiting after it. The wait for the pipe to drain moves to
+        // the next request's gate wait, where it is cancellable.
+        async Task<PythonSidecarException?> WriteWholeLineAsync()
+        {
             try
             {
                 var input = _process?.StandardInput
                     ?? throw new PythonSidecarException("The Python engines are not running.");
-                await input.WriteAsync(line.AsMemory(), ct).ConfigureAwait(false);
-                await input.FlushAsync(ct).ConfigureAwait(false);
+                await input.WriteAsync(line.AsMemory()).ConfigureAwait(false);
+                await input.FlushAsync().ConfigureAwait(false);
+                return null;
             }
-            catch (Exception exc) when (exc is not OperationCanceledException)
+            catch (Exception exc)
             {
                 // A write that fails is a child that is gone, and the tail of what it said before
                 // it went belongs on this message as much as on the reader's — this is the one a
                 // batch sees when the child died between two files, with nothing pending to carry
-                // the other.
-                throw Faulted(new PythonSidecarException(
+                // the other. Returned rather than thrown, because a caller that already stopped
+                // waiting would leave a thrown one unobserved.
+                return Faulted(new PythonSidecarException(
                     $"The Python engines stopped accepting input: {exc.Message}" + DescribeStandardError(), exc));
             }
             finally
             {
-                _writeGate.Release();
+                try
+                {
+                    _writeGate.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Disposal won the race against a write its caller had abandoned; the gate it
+                    // would have released is gone with everything else.
+                }
             }
         }
-        catch
+
+        var wrote = WriteWholeLineAsync();
+        try
         {
-            // Cancelled at the gate or during the write, or the write failed: either way nothing
-            // reached the child under this id, so nothing is left waiting for a reply to it.
-            _pending.TryRemove(id, out _);
+            if (await wrote.WaitAsync(ct).ConfigureAwait(false) is { } failure)
+            {
+                // The write failed, so nothing reached a child anyone will hear from again and
+                // nothing is left waiting for a reply to it.
+                _pending.TryRemove(id, out _);
+                throw failure;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller stopped waiting while the line was still crossing the pipe. The write
+            // finishes without it — see above — so this request is abandoned exactly as one
+            // cancelled after the write: the entry stays for the late reply, and the count tells
+            // disposal to kill a child working on something nobody wants.
+            if (_pending.ContainsKey(id) && !pending.Abandoned)
+            {
+                pending.Abandoned = true;
+                Interlocked.Increment(ref _abandoned);
+            }
+
             throw;
         }
 

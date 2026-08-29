@@ -308,6 +308,59 @@ public sealed class PythonSidecarTests
     }
 
     [Fact]
+    public async Task ACancelLandingMidWriteLeavesTheLineWholeAndTheChannelUsable()
+    {
+        // The test above cancels a request that is already on the wire; this one cancels a
+        // request still crossing it. A child asleep in a rule's delay is a child not reading its
+        // stdin, so the pipe behind it fills and a long enough line parks the writer part-way
+        // through — which is the real shape of a cancel during translation, where the whole
+        // segment travels in the line with every non-ASCII character escaped to six. Before the
+        // write was committed (see SendAsync), the token could tear the line between two flushes:
+        // the next request's line glued onto the dangling prefix, the child answered the glue
+        // with an id of null, and that request's caller waited forever.
+        var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly(
+            new
+            {
+                op = "nap",
+                announce = new[] { """{"id":{id},"type":"progress","completed":1,"total":99}""" },
+
+                // Long enough that a stalled test process cannot see the child wake, drain the
+                // pipe and answer before the 200 ms token below fires; the bounded waits at the
+                // bottom keep the worst case a slow test, not a hung one.
+                delayMilliseconds = 5000,
+                emit = new[] { """{"id":{id},"type":"result"}""" },
+            },
+            new { op = "wide", emit = new[] { """{"id":{id},"type":"result"}""" } },
+            new { op = "ping", emit = new[] { """{"id":{id},"type":"result","said":"fine"}""" } }));
+        using var staged = fake;
+        await using var child = sidecar;
+
+        // Waited for, as above: the announce is the child saying it has the nap in hand — and,
+        // because announce comes before the delay, that it has now stopped reading.
+        var napping = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var nap = sidecar.SendAsync("nap", _ => { }, new SynchronousProgress(napping));
+        await napping.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // Megabytes against a pipe of kilobytes: the write is parked mid-line when the token
+        // fires, and the caller comes back at once rather than waiting out the child's sleep —
+        // the line itself finishes later, whole, once the child wakes and drains the pipe.
+        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var wide = sidecar.SendAsync(
+            "wide",
+            writer => writer.WriteString("payload", new string('x', 4 * 1024 * 1024)),
+            null,
+            cancel.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wide);
+
+        // The bounded waits are the regression check: a torn line makes the child silent for
+        // every request after it, and silence here should be a failed test, not a hung one.
+        await nap.WaitAsync(TimeSpan.FromSeconds(10));
+        var reply = await sidecar.SendAsync("ping", _ => { }).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("fine", reply.GetProperty("said").GetString());
+        Assert.False(sidecar.IsFaulted);
+    }
+
+    [Fact]
     public async Task SendingAfterDisposeIsRefusedRatherThanSilentlyLost()
     {
         var (fake, sidecar) = await FakeSidecarProcess.StartAsync(HelloOnly());
