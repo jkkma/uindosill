@@ -702,6 +702,25 @@ public sealed partial class ModelsViewModel : ObservableObject
             model.Status = "Failed";
             StatusMessage = ex.Message;
         }
+
+        // **The backstop, added 2026-08-29 after this method took the application down with it.**
+        // Hugging Face ended a response after 149 KB of a 6.3 GB file; `HttpIOException` matched
+        // neither clause above, escaped an async command — where nothing is awaiting it and there
+        // is no handler above it — and the process was terminated with the download half-written
+        // and the window gone.
+        //
+        // `ModelInstaller` now retries a dropped connection and turns a persistent one into a
+        // `ModelInstallException`, which is the real fix and is why the clause above still carries
+        // the message a user reads. This clause is here because **a download must never be able to
+        // close the window**, whatever it throws: the partial file survives, the catalogue is
+        // untouched, and the honest outcome of any of these is a row that says it failed.
+        catch (Exception ex) when (ex is IOException or HttpRequestException
+                                      or UnauthorizedAccessException or InvalidOperationException)
+        {
+            model.Status = "Failed";
+            StatusMessage = $"The download stopped: {ex.Message} What arrived is kept, so starting " +
+                            "again will resume rather than begin from nothing.";
+        }
         finally
         {
             model.IsBusy = false;
