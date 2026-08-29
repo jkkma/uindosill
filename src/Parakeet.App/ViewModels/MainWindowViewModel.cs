@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Parakeet.App.Services.Tools;
 using Parakeet.App.Services;
 using Parakeet.Core.Models;
 using Parakeet.Core.Transcription;
@@ -1122,6 +1123,140 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsInstallingCudaPack = false;
             RefreshCudaPack();
         }
+    }
+
+    // ---- yt-dlp and Deno --------------------------------------------------------------------
+    //
+    // **The one pair of vendored binaries with a shelf life of weeks.** YouTube changes what it
+    // serves, yt-dlp changes to match, and Deno goes with it because yt-dlp needs a JavaScript
+    // runtime for the signature challenge. A pinned yt-dlp is eventually a broken one, and
+    // "reinstall the application to fix a download" is not an answer — so this is the one place the
+    // product fetches something newer than it shipped with.
+    //
+    // See `ToolUpdater` for what replaces the pin: the publisher's own digest, which is weaker than
+    // a hash committed in this repository and is deliberately weaker.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasToolsMessage))]
+    private string? _toolsMessage;
+
+    public bool HasToolsMessage => !string.IsNullOrWhiteSpace(ToolsMessage);
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UpdateToolsCommand))]
+    private bool _isUpdatingTools;
+
+    /// <summary>What the two binaries say they are, filled in by the button rather than at launch.</summary>
+    [ObservableProperty]
+    private string _toolVersions = "Not checked yet.";
+
+    public bool CanUpdateTools => !IsUpdatingTools;
+
+    public string ToolsExplanation =>
+        "YouTube changes how it serves audio, and yt-dlp changes to keep up — often weekly. This "
+        + "fetches the newest yt-dlp and Deno straight from the people who publish them, checks "
+        + "each one against the fingerprint they publish beside it, and keeps the copy that came "
+        + "with Uindosill untouched underneath. If an update ever goes wrong, the versions that "
+        + "shipped are still there.";
+
+    /// <summary>
+    /// Checks both tools and installs whichever the publisher has moved on from.
+    /// </summary>
+    /// <remarks>
+    /// <b>One button rather than a check followed by an update.</b> The question a user has is
+    /// "is my downloader broken because it is old", and the answer they want is that it is not any
+    /// more. Splitting it into two presses buys a confirmation nobody needs for a 17 MB binary that
+    /// is verified before it is written and reverts by deleting a folder.
+    /// <para>
+    /// Failures are reported per tool and never thrown: one publisher being unreachable must not
+    /// stop the other being updated, and neither must close the window — which is the lesson of the
+    /// model download that terminated the process on 2026-08-29.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanUpdateTools))]
+    private async Task UpdateToolsAsync(CancellationToken ct)
+    {
+        IsUpdatingTools = true;
+        ToolsMessage = "Checking…";
+
+        var report = new List<string>();
+        try
+        {
+            using var updater = new ToolUpdater();
+
+            foreach (var tool in new[] { UpdatableTool.YtDlp, UpdatableTool.Deno })
+            {
+                var name = tool == UpdatableTool.YtDlp ? "yt-dlp" : "Deno";
+
+                if (ToolUpdater.PathFor(tool) is null)
+                {
+                    report.Add($"{name}: this build did not come with it.");
+                    continue;
+                }
+
+                try
+                {
+                    var status = await updater.CheckAsync(tool, ct).ConfigureAwait(true);
+
+                    if (status.Problem is { Length: > 0 } problem)
+                    {
+                        report.Add($"{name}: could not check — {problem}");
+                        continue;
+                    }
+
+                    if (!status.UpdateAvailable)
+                    {
+                        report.Add($"{name} {status.InstalledVersion} is current.");
+                        continue;
+                    }
+
+                    ToolsMessage = $"Updating {name} to {status.LatestVersion}…";
+                    var installed = await updater.UpdateAsync(
+                        tool,
+                        new Progress<string>(step => ToolsMessage = $"{name}: {step}"),
+                        ct).ConfigureAwait(true);
+
+                    report.Add($"{name} updated from {status.InstalledVersion} to {installed}.");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is HttpRequestException or IOException
+                                                      or InvalidOperationException
+                                                      or UnauthorizedAccessException)
+                {
+                    report.Add($"{name}: {exception.Message}");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            report.Add("Stopped.");
+        }
+        finally
+        {
+            IsUpdatingTools = false;
+            ToolsMessage = string.Join(" ", report);
+            await RefreshToolVersionsAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Asks both binaries what they are, for the line under the button.</summary>
+    public async Task RefreshToolVersionsAsync(CancellationToken ct = default)
+    {
+        var ytDlp = await ToolUpdater.InstalledVersionAsync(UpdatableTool.YtDlp, ct).ConfigureAwait(true);
+        var deno = await ToolUpdater.InstalledVersionAsync(UpdatableTool.Deno, ct).ConfigureAwait(true);
+
+        // Which copy is running matters as much as its version: an updated tool lives in the user's
+        // profile and the shipped one does not, and somebody debugging a download needs to know
+        // which of the two they are looking at.
+        var updated = ToolUpdater.IsFromUserData(UpdatableTool.YtDlp)
+            || ToolUpdater.IsFromUserData(UpdatableTool.Deno);
+
+        ToolVersions =
+            $"yt-dlp {ytDlp ?? "not found"} · Deno {deno ?? "not found"}"
+            + (updated ? " (updated copy)" : string.Empty);
     }
 
     /// <summary>

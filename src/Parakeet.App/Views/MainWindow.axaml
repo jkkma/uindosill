@@ -1884,7 +1884,32 @@
             <StackPanel Spacing="9"
                         DataContext="{Binding $parent[Window].DataContext}"
                         x:DataType="vm:MainWindowViewModel">
-              <TextBlock Text="SPEAKER LABELS" Classes="section" />
+              <!-- yt-dlp and Deno. The one place this product fetches something newer than it
+                   shipped with, and the reason is that a pinned yt-dlp has a shelf life of weeks:
+                   YouTube changes what it serves and yt-dlp changes to match. Everything else here
+                   is pinned and verified against a hash committed in the repository; this is
+                   verified against the hash the publisher serves beside the download, which is
+                   weaker and is the trade being made. See ToolUpdater.
+
+                   No IsVisible: unlike the CUDA block this applies to every machine, and a build
+                   that vendored neither tool says so in the line under the button rather than
+                   hiding a control whose absence would be its own puzzle. -->
+              <TextBlock Text="DOWNLOADING FROM LINKS" Classes="section" />
+
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding ToolsExplanation}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Update yt-dlp and Deno"
+                        Command="{Binding UpdateToolsCommand}" />
+                <TextBlock Text="{Binding ToolVersions}" Classes="meta" VerticalAlignment="Center" />
+              </StackPanel>
+
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         IsVisible="{Binding HasToolsMessage}"
+                         Text="{Binding ToolsMessage}" />
+
+              <TextBlock Text="SPEAKER LABELS" Classes="section" Margin="0,8,0,0" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Run on" Classes="secondary" VerticalAlignment="Center" />
