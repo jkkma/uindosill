@@ -29,14 +29,15 @@ verbs refuse to run and say why; everything else in the CLI works without it.
 
 ## Optional: NVIDIA acceleration for speaker labelling
 
-The `uindosill-python-cuda-win-x64.zip.001` to `.004` files, together with `manifest.json`, are the
-CUDA build of PyTorch: about 1.8 GB, split into four parts.
+**You do not download these files yourself.** The `uindosill-python-cuda-win-x64.zip.001` to `.004`
+files and `manifest.json` are the CUDA build of PyTorch, and the application fetches them for you:
+open **Settings, Advanced** and press the button. The row is offered only on a machine whose driver
+actually reports CUDA, and pressing it downloads about 1.8 GB, checks every part against the digest
+this release pins, and unpacks it. A connection that drops resumes where it stopped instead of
+starting again.
 
-Download **all four parts plus the manifest into one folder**, then install it from
-**Settings, Advanced** inside the application, which offers the row only on a machine whose driver
-actually reports CUDA. Every part's SHA-256 is checked before anything is unpacked, and a transfer
-that drops resumes at a part boundary instead of starting over. It is split rather than shipped
-whole because a single 1.8 GB asset leaves no room under GitHub's 2 GiB per-file limit.
+They sit here as four parts rather than one file because a single 1.8 GB asset leaves too little
+room under GitHub's 2 GiB per-file limit. That is a packaging detail, not something to do by hand.
 
 On one ten-minute recording this was about 13 times faster than the processor and produced exactly
 the same speakers and the same boundaries. That is a speed result. No accuracy figure is claimed
