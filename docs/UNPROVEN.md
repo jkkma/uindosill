@@ -7084,17 +7084,34 @@ observed on a live machine with tens of gigabytes at stake rather than argued fr
 or this uninstall: the file is still the one written on 2026-08-19, byte for byte. The earlier
 entry's warning stands and is now stronger — any future hook needs evidence written by the hook.
 
+**The Yes path was then run, and it found what the tests could not.** Answering Yes against a
+multi-gigabyte data directory made `UninstallCleanup` walk it **synchronously inside the hook**. The
+walk overran the thirty seconds and Velopack killed the process part-way, and because the callback
+never returned, none of the uninstall's remaining steps ran: the shortcuts stayed, the install
+directory stayed, the registry entry stayed. The application was still installed, and every further
+attempt did the same to whatever was left. Observed on this desktop with the CUDA pack present, over
+several attempts, until the directory was finally empty, a run reached `NothingToAsk`, and the
+uninstall completed normally in about four minutes — which is simply what removing a 5.26 GB
+`win-cuda` install directory costs.
+
+**The prediction two bullets above was wrong in the direction that mattered.** It said a killed
+delete would cost a re-download. It does, but it also **blocks the uninstall altogether**, and
+nothing here anticipated that. Since 2026-08-29 the guards run in the hook and the walk is handed to
+a detached command, so overrunning is no longer reachable: the hook returns in milliseconds whatever
+the directory holds.
+
 **What is still not measured.**
 
-- **The Yes path.** Nothing has ever been deleted by this dialog. Only the keep-by-timeout outcome
-  has been observed, so `UninstallCleanup` running for real against a multi-gigabyte directory
-  remains unwitnessed outside its tests.
-- **A late Yes.** Whether an answer given close to the thirty seconds reaches the delete and is then
-  killed part-way is untested. `ModelInstaller` clears an existing entry directory before its
-  staging move, so the expected cost is a re-download rather than a corrupt entry, but that is
-  reasoning from the code.
-- **One machine, one run, one channel.** The `win` channel's installer has still never been
-  installed by anybody.
+- **The scheduled delete during a real uninstall.** The detached command has not been watched
+  removing a multi-gigabyte directory while an uninstall runs beside it. What is held is the
+  guards, the command they produce, and that a refused target schedules nothing at all.
+- **Whether the detached command survives on every host.** It starts before Velopack's
+  `Environment.Exit`, and Windows does not kill children with their parent — the same mechanism
+  Velopack uses for its own install directory. A host that put the callback in a job object would
+  kill it, and the result would be files kept rather than files half-removed, which is the safe
+  direction but not the intended one.
+- **One machine, one channel.** The `win` channel's installer has still never been installed by
+  anybody.
 
 ## The CUDA pack's parts were verified against the release — 2026-08-29
 
