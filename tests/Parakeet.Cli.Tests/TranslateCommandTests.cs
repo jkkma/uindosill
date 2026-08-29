@@ -337,7 +337,7 @@ public class TranslateCommandTests
         // And the listing says which is which.
         await harness.RunAsync("models", "list");
         Assert.Contains(
-            "translation model — not selectable for transcribe", harness.Out.ToString(), StringComparison.Ordinal);
+            "translation model: not selectable for transcribe", harness.Out.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

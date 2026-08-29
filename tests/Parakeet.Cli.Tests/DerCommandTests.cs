@@ -467,6 +467,6 @@ public class DerCommandTests
         // And the listing says which is which.
         harness.Error.GetStringBuilder().Clear();
         await harness.RunAsync("models", "list");
-        Assert.Contains("diarisation model — not selectable for transcribe", harness.Out.ToString(), StringComparison.Ordinal);
+        Assert.Contains("diarisation model: not selectable for transcribe", harness.Out.ToString(), StringComparison.Ordinal);
     }
 }

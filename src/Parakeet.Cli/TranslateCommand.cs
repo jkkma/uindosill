@@ -186,8 +186,8 @@ internal static class TranslateCommand
                     ? $"line {refused.SegmentIndex + 1} is {refused.Tokens} tokens, past this translator's limit of {refused.Limit}"
                     : $"line {refused.SegmentIndex + 1}: {refused.Message}";
                 context.WriteError(
-                    $"{path}: {detail}. It is refused rather than truncated — a shortened source comes back as fluent " +
-                    "English with no sign that anything was dropped — so split the line and run again. Nothing was " +
+                    $"{path}: {detail}. It is refused rather than truncated: a shortened source comes back as fluent " +
+                    "English with no sign that anything was dropped, so split the line and run again. Nothing was " +
                     "written for this file.");
                 return ExitCodes.RuntimeError;
             }
@@ -230,7 +230,7 @@ internal static class TranslateCommand
             if (lostNumbers.Count > 0)
             {
                 context.WriteError(
-                    $"{stem}: {lostNumbers.Count} of {lines.Length} lines carry a number the English does not — " +
+                    $"{stem}: {lostNumbers.Count} of {lines.Length} lines carry a number the English does not, " +
                     string.Join("; ", lostNumbers.Take(5)) +
                     (lostNumbers.Count > 5 ? $"; and {lostNumbers.Count - 5} more" : string.Empty) +
                     ". A date or a quantity that changed in translation reads as confidently as one that did not.");

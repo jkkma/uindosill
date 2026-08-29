@@ -727,6 +727,13 @@
                            IsVisible="{Binding Selected.IsActiveDiariser}" />
               </StackPanel>
 
+              <!-- Where an entry that is not the recogniser actually runs. This was a
+                   sentence inside the engine panel, which only needed saying because the
+                   panel was drawn under entries it had nothing to do with. It belongs to
+                   the entry, so it sits with the rest of what the entry says about itself. -->
+              <TextBlock Text="{Binding WhereItRuns}" Classes="meta" TextWrapping="Wrap"
+                         IsVisible="{Binding HasWhereItRuns}" />
+
               <ProgressBar Value="{Binding Selected.Progress}" Maximum="100" Height="6"
                            IsVisible="{Binding Selected.IsBusy}" />
               <TextBlock Text="{Binding Selected.Status}" Classes="meta" />
@@ -746,7 +753,10 @@
                  The backend row is bound here too: MainWindowViewModel has exposed Backends and
                  Backend all along and this view referenced neither, so the app was pinned to its
                  default with no way to see or change it. -->
-            <Border Classes="tinted" Padding="14">
+            <!-- Drawn only on a transcription entry since 2026-08-29. It is the window's one
+                 ASR engine, and under any other entry it was a block of controls about
+                 something the reader had not clicked. -->
+            <Border Classes="tinted" Padding="14" IsVisible="{Binding ShowEnginePanel}">
               <StackPanel Spacing="11">
                 <TextBlock Text="SPEECH RECOGNITION ENGINE" Classes="section"
                            Foreground="{DynamicResource Matcha700Brush}" />

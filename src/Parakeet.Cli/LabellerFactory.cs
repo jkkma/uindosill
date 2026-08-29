@@ -174,7 +174,7 @@ internal static class LabellerFactory
         if (labeller is SidecarSpeakerLabeller { FellBackFrom.Count: > 0 } sidecarLabeller)
         {
             context.WriteError(
-                $"{request.BackendOption} auto passed over {string.Join("; ", sidecarLabeller.FellBackFrom)} — " +
+                $"{request.BackendOption} auto passed over {string.Join("; ", sidecarLabeller.FellBackFrom)}: " +
                 "this run's diariser is on the processor.");
         }
 

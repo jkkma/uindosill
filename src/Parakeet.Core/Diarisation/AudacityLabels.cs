@@ -70,7 +70,7 @@ public static class AudacityLabels
             if (speaker.Length == 0)
             {
                 throw new FormatException(
-                    $"Audacity labels line {lineNumber} has no text. Every label must carry the speaker's name — " +
+                    $"Audacity labels line {lineNumber} has no text. Every label must carry the speaker's name, " +
                     "the export merges all tracks, so the text is the only thing that says who a label belongs to.");
             }
 

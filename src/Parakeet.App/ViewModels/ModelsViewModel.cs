@@ -278,7 +278,67 @@ public sealed partial class ModelsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanLoad))]
     [NotifyPropertyChangedFor(nameof(LoadHint))]
     [NotifyPropertyChangedFor(nameof(CanUnload))]
+    [NotifyPropertyChangedFor(nameof(ShowEnginePanel))]
+    [NotifyPropertyChangedFor(nameof(WhereItRuns))]
+    [NotifyPropertyChangedFor(nameof(HasWhereItRuns))]
     private ModelViewModel? _selected;
+
+    /// <summary>
+    /// Whether to draw the recogniser's engine panel at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Only on a transcription entry, since 2026-08-29.</b> The panel is the window's one ASR
+    /// engine and it used to be drawn under every entry, so selecting the translator produced a
+    /// block headed SPEECH RECOGNITION ENGINE with a Backend picker and a dead Load button, none of
+    /// which had anything to do with what had just been clicked. It carried a sentence apologising
+    /// for itself, which is what a control says when it is in the wrong place.
+    /// </para>
+    /// <para>
+    /// <b>Retitling it was not enough and that is worth recording.</b> The first repair named the
+    /// panel honestly, which fixed what it *claimed* to be and left it exactly where it was; the
+    /// complaint was never the title but that it appears at all under a model it cannot load. The
+    /// Unload button goes with it, which is the one thing this costs: unloading now means selecting
+    /// a transcription entry first. That is where somebody looking for the recogniser would click.
+    /// </para>
+    /// </remarks>
+    public bool ShowEnginePanel => Selected is { IsTranscriptionModel: true };
+
+    /// <summary>
+    /// Where the selected entry actually runs, for entries the engine panel no longer speaks for.
+    /// </summary>
+    /// <remarks>
+    /// This is the useful half of the sentence the panel used to carry. It belongs to the entry
+    /// rather than to the engine, so it is shown in the entry's own detail beside "Speaker
+    /// labelling uses this model" and the rest of what that entry has to say about itself.
+    /// </remarks>
+    public string? WhereItRuns
+    {
+        get
+        {
+            if (Selected is not { } model || model.IsTranscriptionModel)
+            {
+                return null;
+            }
+
+            // Named per task rather than "not a transcription model", which describes what it is
+            // not and leaves the reader to work out what it is for. The place is named with the
+            // control, because the passes live on different tabs and a control named without its
+            // page is a repair nobody can act on.
+            var used = model.Descriptor.Task switch
+            {
+                ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
+                ModelTask.Translation => "'Translate to English' on the Transcribe tab",
+                ModelTask.VoiceActivity => "'Neural speech detection' on the Advanced tab of Settings",
+                ModelTask.Answering => "the Ask tab, beside a finished transcript",
+                _ => "its own opt-in",
+            };
+
+            return $"Runs from {used}, alongside the recogniser. There is nothing to load here.";
+        }
+    }
+
+    public bool HasWhereItRuns => WhereItRuns is { Length: > 0 };
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -531,30 +591,15 @@ public sealed partial class ModelsViewModel : ObservableObject
                 return "Choose a model on the left.";
             }
 
+            // **Nothing is said here about a non-transcription entry any more.** This branch
+            // explained that the panel was the recogniser's and that the selected model ran
+            // somewhere else, which is a sentence the panel needed only because it was drawn
+            // where it did not belong. The panel is hidden for those entries now (see
+            // ShowEnginePanel) and the useful half of that sentence moved to the entry's own
+            // detail as WhereItRuns, so a hint here would be text under a block nobody sees.
             if (!model.IsTranscriptionModel)
             {
-                // Named per task rather than "not a transcription model", which describes what it
-                // is not and leaves the reader to work out what it is for. The place is named with
-                // the control, because the two passes and the speech detector live on different
-                // tabs and a control named without its page is a repair nobody can act on.
-                var used = model.Descriptor.Task switch
-                {
-                    ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
-                    ModelTask.Translation => "'Translate to English' on the Transcribe tab",
-                    ModelTask.VoiceActivity => "'Neural speech detection' on the Advanced tab of Settings",
-                    ModelTask.Answering => "the Ask tab, beside a finished transcript",
-                    _ => "its own opt-in",
-                };
-
-                // **This sentence used to open by explaining what the panel was**, because the panel
-                // was called "LOADED MODEL" and sat under the entry somebody had just clicked, so
-                // every non-transcription entry drew a paragraph apologising for the controls above
-                // it. That was the panel's title failing, not the hint's job: it is retitled
-                // "SPEECH RECOGNITION ENGINE" as of 2026-08-29 and now says what it is on its own,
-                // so what is left here is the only part the reader could not already see — where
-                // this model is actually used.
-                return $"{model.DisplayName} is not loaded here - it runs from {used}, alongside "
-                       + "the recogniser.";
+                return null;
             }
 
             return model.IsInstalled ? null : "Download it first.";

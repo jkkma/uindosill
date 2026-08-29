@@ -107,7 +107,7 @@ internal static class DerCommand
             if (hypothesis.FileIds.Count > 0 && reference.Document.FileIds.Count > 0
                 && !hypothesis.FileIds.SequenceEqual(reference.Document.FileIds, StringComparer.Ordinal))
             {
-                warnings.Add($"file id differs: reference says '{string.Join(",", reference.Document.FileIds)}', hypothesis says '{string.Join(",", hypothesis.FileIds)}'. Scored anyway — the id is informational — but check the pairing.");
+                warnings.Add($"file id differs: reference says '{string.Join(",", reference.Document.FileIds)}', hypothesis says '{string.Join(",", hypothesis.FileIds)}'. Scored anyway, the id is informational, but check the pairing.");
             }
 
             DiarisationScore score;
@@ -193,7 +193,7 @@ internal static class DerCommand
         }
         else
         {
-            context.WriteLine($"references  {referenceDirectory} — one <stem>.rttm per hypothesis");
+            context.WriteLine($"references  {referenceDirectory}: one <stem>.rttm per hypothesis");
         }
 
         context.WriteLine($"convention  {headline.Describe()}");
@@ -216,7 +216,7 @@ internal static class DerCommand
             var overlapTotal = DiarisationErrorRate.Aggregate(results.Select(r => r.Headline.OverlapRegions));
             context.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"{"(all, summed)",-32} {Percent(headlineTotal.Rate),8} {Percent(headlineTotal.MissedRate),7} {Percent(headlineTotal.FalseAlarmRate),7} {Percent(headlineTotal.ConfusionRate),7} {Percent(strictTotal.Rate),8} {Percent(overlapTotal.Rate),8} {Percent(overlapTotal.MissedRate),8} {headlineTotal.ReferenceSpeech,8:F1} {"",7}"));
-            context.WriteLine("            summed components over summed reference speech — the set's DER, weighting a long file more than a short one");
+            context.WriteLine("            summed components over summed reference speech: the set's DER, weighting a long file more than a short one");
         }
 
         foreach (var scored in results)

@@ -49,9 +49,9 @@ internal static class Commands
     private static readonly OptionSpec VulkanDisableBFloat16 = new()
     {
         Name = "vk-disable-bf16",
-        Help = "Vulkan: disable bf16 kernels before loading. This is the default — it is what lets " +
+        Help = "Vulkan: disable bf16 kernels before loading. This is the default: it is what lets " +
                "the model load on devices whose driver mishandles bf16 cooperative matrices, and it " +
-               "measured at no cost on NVIDIA — so the flag only spells the default out.",
+               "measured at no cost on NVIDIA, so the flag only spells the default out.",
     };
 
     private static readonly OptionSpec VulkanKeepBFloat16 = new()
@@ -137,9 +137,9 @@ internal static class Commands
                 Name = "vad",
                 TakesValue = true,
                 ValueName = "detector",
-                Help = "Which detector finds the speech to cut at: neural — Silero VAD on ONNX Runtime, in process on the " +
+                Help = "Which detector finds the speech to cut at: neural (Silero VAD on ONNX Runtime, in process on the " +
                        "CPU, which hears pauses under music the gate cannot, and the default whenever its model is installed " +
-                       "(uindosill models download silero-vad-v5.1.2, 2.2 MiB) — or energy, a loudness gate, which is what " +
+                       "(uindosill models download silero-vad-v5.1.2, 2.2 MiB)), or energy, a loudness gate, which is what " +
                        "runs when the model is not installed. Every run names its detector on stderr. Every figure in " +
                        "docs/UNPROVEN.md measured before 2026-08-23 is the gate's. neural contradicts --no-vad.",
             },
@@ -194,7 +194,7 @@ internal static class Commands
                 Name = "speaker-threads",
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Intra-op threads for the diariser. Default: 12 — the diariser's own, and the number every CPU " +
+                Help = "Intra-op threads for the diariser. Default: 12, the diariser's own, and the number every CPU " +
                        "figure in this project was measured with; not ONNX Runtime's choice, which is what the " +
                        "translator defaults to.",
             },
@@ -203,7 +203,7 @@ internal static class Commands
                 Name = "speaker-backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it — the bundle " +
+                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it, the bundle " +
                        "installs the CPU one. Unset means auto, which elects cuda where torch can reach it and " +
                        "the cpu otherwise. webgpu and dml name ONNX Runtime execution providers and move the " +
                        "speaker embedder alone, leaving segmentation in torch; they need graphs the app derives " +
@@ -248,7 +248,7 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "name",
                 Help = "Execution provider for the translator: cpu, cuda, webgpu or dml. Default: webgpu " +
-                       "where it loads, then cuda, then cpu. This changes the English, not only the speed — " +
+                       "where it loads, then cuda, then cpu. This changes the English, not only the speed, " +
                        "measured on 32 FLEURS sentences at beam 6, webgpu returned the cpu's own " +
                        "translations on 32 of 32 at 1.30x the speed and cuda on 240 of 240. dml is refused " +
                        "unless --translate-backend-unverified is given: it matched on 0 of 32, its decoder " +
@@ -285,14 +285,14 @@ internal static class Commands
             "requirement rather than a tuning default: Parakeet degrades on long single-pass audio and glues text\n" +
             "across chunk boundaries well before it collapses.\n\n" +
             "--speakers is an opt-in and stays off by default: it reads the file a second time and runs a second model,\n" +
-            "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance — a label, not an identity.\n" +
-            "The pyannote pipeline puts no ceiling on how many voices it tells apart — it clusters rather than\n" +
+            "and it names voices 'Speaker 1', 'Speaker 2' in order of first appearance, a label, not an identity.\n" +
+            "The pyannote pipeline puts no ceiling on how many voices it tells apart; it clusters rather than\n" +
             "tracks, so the count is something it returns rather than something it is bounded by, and it can\n" +
             "return more speakers than were present as readily as fewer. Nothing about its accuracy has been\n" +
             "measured here; see docs/UNPROVEN.md. To score speaker turns without transcribing, use\n" +
             "'uindosill diarise'.\n\n" +
             "--translate is the other opt-in, and it runs last: decode, then label speakers, then translate. That\n" +
-            "order belongs to the code — speakers are attributed word by word and a translated segment has no words,\n" +
+            "order belongs to the code: speakers are attributed word by word and a translated segment has no words,\n" +
             "so translating first would coarsen every label instead of failing where anyone could see it. Word\n" +
             "timings do not survive translation and nothing pretends they do: -f vtt-words is refused under\n" +
             "--translate, and SRT and VTT space each cue across its segment as they already do for any segment the\n" +
@@ -349,7 +349,7 @@ internal static class Commands
                 Short = 't',
                 TakesValue = true,
                 ValueName = "n",
-                Help = "Threads for the diariser: torch's intra-op count. Default: 12 — the diariser's own. That " +
+                Help = "Threads for the diariser: torch's intra-op count. Default: 12, the diariser's own. That " +
                        "number was inherited from the engine every CPU figure in this project was measured on, " +
                        "and nothing about its effect on this one has been measured.",
             },
@@ -358,7 +358,7 @@ internal static class Commands
                 Name = "backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it — the bundle " +
+                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it, the bundle " +
                        "installs the CPU one. Unset means auto, which elects cuda where torch can reach it and " +
                        "the cpu otherwise. webgpu and dml name ONNX Runtime execution providers and move the " +
                        "speaker embedder alone, leaving segmentation in torch; they need graphs the app derives " +
@@ -379,7 +379,7 @@ internal static class Commands
             Help,
         ],
         Details =
-            "Audio in, RTTM out, no transcription — the same labeller behind the same seam as 'transcribe --speakers',\n" +
+            "Audio in, RTTM out, no transcription: the same labeller behind the same seam as 'transcribe --speakers',\n" +
             "without the ASR pass, which costs orders of magnitude more and contributes nothing to a speaker turn.\n" +
             "This is what the diarisation measurements are run through, and what 'uindosill der' scores.\n\n" +
             "Speakers are labelled spk0, spk1 and upwards by the model's own column rather than renamed in order\n" +
@@ -388,7 +388,7 @@ internal static class Commands
             "'der' pairs hypotheses to references by file stem, which is what --id is for: AMI's audio is\n" +
             "ES2004a.Mix-Headset.wav and its reference is ES2004a.rttm.\n\n" +
             "How many speakers can be told apart is the loaded model's property rather than this command's. The\n" +
-            "pyannote pipeline has no ceiling — it clusters rather than tracks, so the count is something it\n" +
+            "pyannote pipeline has no ceiling; it clusters rather than tracks, so the count is something it\n" +
             "returns rather than something it is bounded by, and it can return more speakers than were present as\n" +
             "readily as fewer. The four-slot graph this project measured until 2026-08-27 is retired. See\n" +
             "docs/UNPROVEN.md for what is and is not measured about what remains.",
@@ -445,7 +445,7 @@ internal static class Commands
                 TakesValue = true,
                 ValueName = "name",
                 Help = "Execution provider for the translator: cpu, cuda, webgpu or dml. Default: webgpu " +
-                       "where it loads, then cuda, then cpu. This changes the English, not only the speed — " +
+                       "where it loads, then cuda, then cpu. This changes the English, not only the speed, " +
                        "measured on 32 FLEURS sentences at beam 6, webgpu returned the cpu's own " +
                        "translations on 32 of 32 at 1.30x the speed and cuda on 240 of 240. dml is refused " +
                        "unless --backend-unverified is given: it matched on 0 of 32, its decoder " +
@@ -462,12 +462,12 @@ internal static class Commands
             Help,
         ],
         Details =
-            "Text in, English out, line by line, no audio and no ASR — the same translator behind the same seam as\n" +
+            "Text in, English out, line by line, no audio and no ASR: the same translator behind the same seam as\n" +
             "'transcribe --translate', without the decode that costs orders of magnitude more and contributes\n" +
             "nothing to a translation. This is the path the translation measurements are run through, which is why\n" +
             "it exists at all: a translator that can only be reached through a three-hour transcription is one\n" +
             "nobody checks against a corpus.\n\n" +
-            "One line in, one line out, in order, blank lines included — a blank line comes back blank rather than\n" +
+            "One line in, one line out, in order, blank lines included: a blank line comes back blank rather than\n" +
             "being dropped, because a file whose line numbers no longer line up is a file nothing can be scored\n" +
             "against. A line past the tokenizer's 512-token limit is refused rather than truncated, and names\n" +
             "itself.\n\n" +
@@ -563,7 +563,7 @@ internal static class Commands
         Details =
             "Each backend is probed in a separate process on purpose. A native library built with an AVX2 baseline\n" +
             "can execute AVX/BMI2 instructions from a static initialiser and kill the process at load time on a\n" +
-            "pre-Haswell CPU — no exception, no stack trace, just 'the app won't launch'. A child process turns\n" +
+            "pre-Haswell CPU, no exception, no stack trace, just 'the app won't launch'. A child process turns\n" +
             "that into an exit code this one can report.",
     };
 
@@ -645,8 +645,8 @@ internal static class Commands
             "A hypothesis is a transcript this tool wrote: the .json (its \"text\" field) or the .txt (its [hh:mm:ss] prefixes\n" +
             "are stripped). WER is (substitutions + deletions + insertions) / reference words, over tokens normalised the\n" +
             "same way on both sides: lower-cased, punctuation removed, hyphens split, bracketed annotations dropped, fillers\n" +
-            "dropped. That is NOT the normaliser the published leaderboards use — numbers, spellings and contractions are\n" +
-            "compared as written, and this model spells numbers out — so a figure from here is comparable to another figure\n" +
+            "dropped. That is NOT the normaliser the published leaderboards use: numbers, spellings and contractions are\n" +
+            "compared as written, and this model spells numbers out, so a figure from here is comparable to another figure\n" +
             "from here and not to a leaderboard. The raw column is the same score over whitespace tokens with nothing\n" +
             "normalised, so the size of the normalisation is visible.",
     };
@@ -701,10 +701,10 @@ internal static class Commands
             "'uindosill rttm' writes from Audacity labels and 'uindosill transcribe --speakers -f rttm' writes from a run.\n" +
             "DER is (missed + false alarm + confusion) / reference speech, over the union of both files' extents with the\n" +
             "collar cut out around every reference boundary, under the one-to-one speaker mapping that maximises\n" +
-            "co-occurring speech (found exhaustively — greedy mapping is not DER). Computed the way pyannote.metrics\n" +
+            "co-occurring speech (found exhaustively; greedy mapping is not DER). Computed the way pyannote.metrics\n" +
             "computes it and validated against it on the fixture pairs in tests/fixtures/diarisation/scorer/.\n\n" +
             "Three numbers come out together and travel together: the headline at the collar given, the strict number at\n" +
-            "collar 0, and the same components over reference-overlap regions only — where the target audio is hardest\n" +
+            "collar 0, and the same components over reference-overlap regions only, where the target audio is hardest\n" +
             "and where a headline averaged over every second of one person talking says least.",
     };
 
@@ -741,7 +741,7 @@ internal static class Commands
             Help,
         ],
         Details =
-            "Reads Audacity's Export Labels format — 'start<TAB>end<TAB>text', every label track merged into one file —\n" +
+            "Reads Audacity's Export Labels format, 'start<TAB>end<TAB>text', every label track merged into one file,\n" +
             "with the label text as the speaker's name: one track per speaker, each labelled independently, so overlap\n" +
             "falls out on its own. Point labels are dropped, same-speaker overlaps are merged, whitespace in a name becomes\n" +
             "an underscore because RTTM splits on whitespace. A summary of who spoke how much goes to stderr; the RTTM\n" +
@@ -789,7 +789,7 @@ internal static class Commands
         ],
         Details =
             "The transcript is the .json this tool wrote. It is cut into the same overlapping windows the Ask panel\n" +
-            "retrieves evidence from, indexed by the same tokenizer and scored by the same BM25 — so what this prints\n" +
+            "retrieves evidence from, indexed by the same tokenizer and scored by the same BM25, so what this prints\n" +
             "is what the panel's language model would have been shown, which is what makes a recall figure measured\n" +
             "through it a figure about the product. scripts/measure-answers.ps1 is the consumer: it scores these hits\n" +
             "against the labelled CSB384 question set at the panel's own evidence depth (-k 8).\n\n" +
@@ -797,9 +797,9 @@ internal static class Commands
             "array, so it is only meaningful against the transcript searched. A question no window matches returns an\n" +
             "empty list and exit code 0: empty retrieval is the abstain path's input, not an error.\n\n" +
             "One honest caveat: this reads the written file, whose times carry three decimals, where the panel holds\n" +
-            "raw ticks — a segment whose midpoint sits exactly on a window edge can fall on the other side of it, so\n" +
+            "raw ticks: a segment whose midpoint sits exactly on a window edge can fall on the other side of it, so\n" +
             "window membership matches the panel's for the file, not necessarily for the live session that wrote it.\n\n" +
-            "No model runs here and none is needed — this is tier 0 of the register's decision 3, the tier that is\n" +
+            "No model runs here and none is needed: this is tier 0 of the register's decision 3, the tier that is\n" +
             "testable with no language model in the room.",
     };
 

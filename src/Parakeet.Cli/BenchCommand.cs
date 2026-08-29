@@ -56,7 +56,7 @@ internal static class BenchCommand
 
         context.WriteLine($"file:     {path}");
         context.WriteLine($"machine:  {Environment.OSVersion.VersionString}, {Environment.ProcessorCount} logical processors");
-        context.WriteLine($"threads:  not settable — the parakeet.cpp ABI takes no thread count (recommended policy would be {DecodeThreadPlanner.Recommended()})");
+        context.WriteLine($"threads:  not settable, the parakeet.cpp ABI takes no thread count (recommended policy would be {DecodeThreadPlanner.Recommended()})");
         context.WriteLine($"warm-up:  {(warmUp ? "yes" : "NO — the first pass below is inflated by arena allocation and graph construction")}");
         context.WriteLine();
         context.WriteLine("batch  pass  audio      decode     RTF     peak RSS");

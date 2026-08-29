@@ -146,7 +146,7 @@ internal static partial class WerCommand
         }
         else
         {
-            context.WriteLine($"references  {referenceDirectory} — one per hypothesis, matched by file stem");
+            context.WriteLine($"references  {referenceDirectory}: one per hypothesis, matched by file stem");
         }
 
         context.WriteLine($"normaliser  lower-case, punctuation removed, hyphens split, brackets dropped, {(keepFillers ? "fillers kept" : "fillers (uh, um, hmm, mm, mhm, mmm) dropped")}");
@@ -168,7 +168,7 @@ internal static partial class WerCommand
                 $"{"(all, summed)",-40} {total.ReferenceWords,9:N0} {total.HypothesisWords,8:N0} {Percent(total.Rate),8} {total.Substitutions,7:N0} {total.Deletions,7:N0} {total.Insertions,7:N0} {Percent(totalRaw.Rate),9}"));
             if (referencePath is { Length: > 0 })
             {
-                context.WriteLine("            summed over the same reference each time — read it only if these hypotheses are different files of one corpus");
+                context.WriteLine("            summed over the same reference each time, read it only if these hypotheses are different files of one corpus");
             }
         }
 
