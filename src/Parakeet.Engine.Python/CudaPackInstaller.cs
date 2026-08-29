@@ -104,10 +104,15 @@ public sealed class CudaPackInstaller
     }
 
     /// <summary>
-    /// Whether the pack is already installed at the destination this installer would write to.
+    /// Whether the pack is already installed, whole, at the destination this installer would
+    /// write to. The health check rather than the marker, and in both askers for one reason: a
+    /// pack the resolver would skip as damaged must read as not-installed here, or the button
+    /// that could repair it stays hidden and the install that could repair it returns early —
+    /// which was the trap until 2026-08-29, with no way out short of deleting the directory by
+    /// hand.
     /// </summary>
     public static bool IsInstalled(string destinationRoot) =>
-        PythonRuntime.IsCudaPack(
+        PythonRuntime.IsCudaPackHealthy(
             Path.Combine(destinationRoot, PythonRuntime.CudaPackDirectoryName));
 
     /// <summary>
@@ -146,8 +151,15 @@ public sealed class CudaPackInstaller
                 "so there is nothing to verify the download against. It is not installed by default.");
         }
 
+        // Healthy, not merely marked: a tree whose torch/lib an interrupted delete or a
+        // quarantine gutted still carries torch/__init__.py, and the marker alone made that
+        // state permanent — this early return reported it installed, so re-running the install
+        // changed nothing while the resolver kept putting the broken tree in front of the
+        // bundle. A damaged pack now falls through to a full reinstall; Unpack replaces the
+        // destination wholesale from a verified, staged tree, and refuses with a sentence when
+        // the damaged one cannot be removed.
         var destination = Path.Combine(destinationRoot, PythonRuntime.CudaPackDirectoryName);
-        if (PythonRuntime.IsCudaPack(destination))
+        if (PythonRuntime.IsCudaPackHealthy(destination))
         {
             return destination;
         }
@@ -294,16 +306,34 @@ public sealed class CudaPackInstaller
             ZipFile.ExtractToDirectory(archive, staging, overwriteFiles: true);
             ct.ThrowIfCancellationRequested();
 
-            if (!PythonRuntime.IsCudaPack(staging))
+            // Healthy, not merely marked, and for a different reason than the install's own
+            // early return: the installed-state question moved to the health check on
+            // 2026-08-29, so a staged tree that carries the marker but no torch/lib would move
+            // into place and immediately read as not installed — the button re-offered, the
+            // early return never firing, and every press re-downloading gigabytes into the same
+            // loop. A bad archive is one loud refusal instead.
+            if (!PythonRuntime.IsCudaPackHealthy(staging))
             {
                 throw new CudaPackException(
-                    "The archive unpacked without a torch package at its root, so it is not a CUDA " +
-                    "pack. Nothing was installed.");
+                    "The archive unpacked without a torch package at its root (or with a torch " +
+                    "missing its native libraries), so it is not a usable CUDA pack. Nothing was " +
+                    "installed.");
             }
 
             // The one moment the destination exists in an incomplete state is this rename, which is
-            // why extraction happens somewhere else first.
+            // why extraction happens somewhere else first. The delete is best-effort by design, so
+            // its failure is asked about rather than discovered as the rename's raw IOException: a
+            // damaged pack somebody's handle is holding open cannot be replaced, and the sentence
+            // should say so.
             TryDeleteDirectory(destination);
+            if (Directory.Exists(destination))
+            {
+                throw new CudaPackException(
+                    $"The pack at {destination} could not be removed to make way for the fresh one — " +
+                    "something is holding it open. Close whatever is using it, or delete the directory " +
+                    "by hand, and install again.");
+            }
+
             Directory.Move(staging, destination);
         }
         catch

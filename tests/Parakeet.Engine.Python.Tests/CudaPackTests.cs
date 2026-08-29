@@ -196,8 +196,9 @@ public class CudaPackTests
         // rather than pass slowly.
         var installer = NewInstaller(out var root);
         var destination = Path.Combine(root, PythonRuntime.CudaPackDirectoryName);
-        Directory.CreateDirectory(Path.Combine(destination, "torch"));
+        Directory.CreateDirectory(Path.Combine(destination, "torch", "lib"));
         await File.WriteAllTextAsync(Path.Combine(destination, "torch", "__init__.py"), "#");
+        await File.WriteAllTextAsync(Path.Combine(destination, "torch", "lib", "torch_cuda.dll"), "#");
 
         var manifest = CudaPackManifest.Parse(Minimal);
 
@@ -215,6 +216,15 @@ public class CudaPackTests
         var torch = Path.Combine(root, PythonRuntime.CudaPackDirectoryName, "torch");
         Directory.CreateDirectory(torch);
         File.WriteAllText(Path.Combine(torch, "__init__.py"), "#");
+
+        // The marker without torch/lib is a gutted pack — an interrupted delete's leavings —
+        // and reading it as installed is the trap: the Settings button that could repair it
+        // stays hidden and the install that could repair it returns early. Not installed until
+        // the tree can plausibly import.
+        Assert.False(CudaPackInstaller.IsInstalled(root));
+
+        Directory.CreateDirectory(Path.Combine(torch, "lib"));
+        File.WriteAllText(Path.Combine(torch, "lib", "torch_cuda.dll"), "#");
 
         Assert.True(CudaPackInstaller.IsInstalled(root));
     }

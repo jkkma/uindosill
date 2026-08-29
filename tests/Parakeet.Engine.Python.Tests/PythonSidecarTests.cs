@@ -395,6 +395,26 @@ public sealed class PythonSidecarTests
     }
 
     [Fact]
+    public async Task ConcurrentFirstStartsBothCompleteWithoutParkingEitherCaller()
+    {
+        // The sequential case above is the fast path; this is the one the constructor parameter
+        // that shares a sidecar between two engines makes reachable. Unguarded, both calls saw a
+        // null process and both spawned an interpreter — one orphaned behind open pipes, and one
+        // caller parked forever on a hello written to a child whose stdout nobody read. What this
+        // pins is the parked-caller half, through the bounded wait; the one-child half has no
+        // observable here (the fake cannot report how many of it were spawned), so the name
+        // claims only what the assertions hold.
+        var fake = FakeSidecarProcess.Scripted(HelloOnly());
+        using var staged = fake;
+        var sidecar = new PythonSidecar(fake.Resolution);
+        await using var child = sidecar;
+
+        await Task.WhenAll(sidecar.StartAsync(), sidecar.StartAsync()).WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.Equal(PythonSidecar.ProtocolVersion, sidecar.Hello!.Value.GetProperty("protocol").GetInt32());
+    }
+
+    [Fact]
     public async Task TheRequestCarriesTheOpAndWhateverTheCallerWrote()
     {
         // Echoed back rather than asserted on the wire, because what a test can see is what the

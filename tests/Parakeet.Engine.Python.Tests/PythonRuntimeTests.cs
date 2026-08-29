@@ -47,12 +47,17 @@ public sealed class PythonRuntimeTests : IDisposable
         Environment.SetEnvironmentVariable(PythonRuntime.CudaPackVariable, _cudaPack);
     }
 
-    /// <summary>A directory laid out the way an unpacked CUDA pack is: torch, and nothing else.</summary>
+    /// <summary>
+    /// A directory laid out the way an unpacked CUDA pack is: torch with its lib of native
+    /// libraries, and nothing else. The lib matters — resolution asks for a pack that can
+    /// plausibly import, not just the marker.
+    /// </summary>
     private static string StageCudaPack(string root)
     {
         var torch = Path.Combine(root, PythonRuntime.CudaPackDirectoryName, "torch");
-        Directory.CreateDirectory(torch);
+        Directory.CreateDirectory(Path.Combine(torch, "lib"));
         File.WriteAllText(Path.Combine(torch, "__init__.py"), "# not really torch");
+        File.WriteAllText(Path.Combine(torch, "lib", "torch_cuda.dll"), "# not really a dll");
         return root;
     }
 
@@ -349,8 +354,9 @@ public sealed class PythonRuntimeTests : IDisposable
         // Unlike the two places, this names the pack rather than a directory holding one: it is the
         // development override, and a developer points it at what they built.
         var built = TestTemp.NewDirectory("uindosill-pack");
-        Directory.CreateDirectory(Path.Combine(built, "torch"));
+        Directory.CreateDirectory(Path.Combine(built, "torch", "lib"));
         File.WriteAllText(Path.Combine(built, "torch", "__init__.py"), "# not really torch");
+        File.WriteAllText(Path.Combine(built, "torch", "lib", "torch_cuda.dll"), "# not really a dll");
         Environment.SetEnvironmentVariable(PythonRuntime.CudaPackVariable, built);
 
         var resolved = PythonRuntime.Resolve(StageBundle(), StageCudaPack(StageNothing()));
@@ -366,6 +372,25 @@ public sealed class PythonRuntimeTests : IDisposable
         // a diariser that runs on the CPU — which is what a null here produces — and not a refusal.
         var userData = StageNothing();
         Directory.CreateDirectory(Path.Combine(userData, PythonRuntime.CudaPackDirectoryName));
+
+        var resolved = PythonRuntime.Resolve(StageBundle(), userData);
+
+        Assert.Null(resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void AGuttedPackIsSkippedSoTheBundleRunsInsteadOfBreaking()
+    {
+        // The marker survives damage the pack does not: an interrupted delete that took torch/lib
+        // and stopped leaves torch/__init__.py in place, and until 2026-08-29 that tree still won
+        // the resolution — it sat in front of the bundle on PYTHONPATH, `import torch` failed in
+        // the sidecar, and both opt-ins died with a traceback. Skipped, the bundle's CPU torch
+        // runs and the engines degrade instead, which is the failure the resolver's own remarks
+        // promise.
+        var userData = StageNothing();
+        var torch = Path.Combine(userData, PythonRuntime.CudaPackDirectoryName, "torch");
+        Directory.CreateDirectory(torch);
+        File.WriteAllText(Path.Combine(torch, "__init__.py"), "# not really torch");
 
         var resolved = PythonRuntime.Resolve(StageBundle(), userData);
 
