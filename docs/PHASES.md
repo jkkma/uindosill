@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1448 tests, no weights, no display, no network — **1441 passed and 7 skipped**, and
+**Status:** met. 1455 tests, no weights, no display, no network — **1448 passed and 7 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -2858,9 +2858,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** `CLAUDE.md`'s second
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1448 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1455 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2944,7 +2944,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2988,7 +2988,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -3045,7 +3045,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3135,7 +3135,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** Two of the four
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** Two of the four
 by-name skips are the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run
 against it on this machine they pass.
 
@@ -3175,7 +3175,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3192,7 +3192,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3240,7 +3240,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** The C# suite does
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3331,7 +3331,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** Twenty-two new, and
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3361,7 +3361,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** The
+page instead. **1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3396,7 +3396,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1448 tests, 1441 passed and 7 skipped, the count unchanged**: the file-writing
+assertion. **1455 tests, 1448 passed and 7 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3453,7 +3453,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3586,7 +3586,7 @@ design; an interactive installer with a directory picker would mean a different 
 different update story. What it gets instead is the icon and the splash, so the one window a user
 sees during an install is branded rather than bare.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** Six of the new ones
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** Six of the new ones
 are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
 that they are single-file entries the catalogue actually has, that the sum still fits under the
 asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
@@ -3677,7 +3677,7 @@ publish is a few dozen files. They size the executable instead: about 98 MB with
 against a couple of megabytes without, which is the thing that actually differs. Trimming and
 NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** No test changed: the
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** No test changed: the
 suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
 changes is the shape of a deployment rather than the behaviour of any code.
 
@@ -3761,7 +3761,7 @@ can actually verify, and keeps one `[?]` bullet so a renderer's uncited state ca
 unbuilt. The suite drives the whole seam end to end with no model: fake stream → the parser →
 the validator → every citation resolves against the transcript it was asked about.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped**, up from 1144;
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped**, up from 1144;
 `check-test-counts.py` agrees with every document that quotes a count.
 
 ### Built 2026-08-23, later — the second native stack is vendored and the engine runs on it
@@ -3813,7 +3813,7 @@ smuggled into prose when the first-token abstain window is missed, is in `docs/U
 pinned and unvendored, its `sm_120` reading is a scan of the b10448 build, and the desktop's
 first run remains the corroboration the register has been waiting for since 2026-08-16.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Decided 2026-08-24 — the model sees the English pane
 
@@ -3894,7 +3894,7 @@ machine is the exit criterion itself: a human asking three questions of a real t
 Windows and following a citation into the audio. `docs/UNPROVEN.md` says so where the tab's
 other unlooked-at work is recorded.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.**
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.**
 
 ### Built 2026-08-24 — the ask tier ships: Stage 5, and the second stack joins the channels
 
@@ -4008,8 +4008,8 @@ needle plant, the abstain row and the new summary block all exercised against a 
 CUDA). What the verb does not change: the recall *number* still waits on the thirty labelled
 questions, which are a person's session. Eight new CLI tests hold the seam — the top hit
 carrying the term's segment, order preserved across questions, the wide variant's shape, empty
-retrieval as success, and the three refusals. **1448 tests, no weights, no display, no network —
-1441 passed and 7 skipped**, up from 1262; 181 CLI tests.
+retrieval as success, and the three refusals. **1455 tests, no weights, no display, no network —
+1448 passed and 7 skipped**, up from 1262; 181 CLI tests.
 
 ### Decided 2026-08-24 — four decisions close the sitting
 
@@ -4074,8 +4074,8 @@ the product reads, that a store given nothing answers inside the redirect, and t
 construction which leaked now saves where it should — and one existing test was reading the
 override where it meant the default, so `ModelsAreNotStoredInTheInstallDirectory` now asks
 `LocalModelStore.DefaultRootDirectory()` the question it was written to ask. Proved by the run:
-the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1448 tests, no
-weights, no display, no network — 1441 passed and 7 skipped.** `docs/GOTCHAS.md` gotcha 33
+the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1455 tests, no
+weights, no display, no network — 1448 passed and 7 skipped.** `docs/GOTCHAS.md` gotcha 33
 carries the shape.
 
 Two 7-byte files, `decoy-a.gguf` and `decoy-b.onnx`, were found beside the weights in the same
@@ -4231,7 +4231,7 @@ reproduces the old behaviour on the only machine that has ever run an ask — so
 no-op everywhere it can be checked. No discrete-GPU Vulkan ask run exists with the pair off; the RTX 5080's Vulkan figures
 were taken on the lab script with a dense model, where `--cpu-moe` matches no tensors and the
 pair is a no-op either way. The two spike runs that would settle the other branch are named in
-`docs/UNPROVEN.md`. **1448 tests, 1441 passed and 7 skipped, 0 warnings**, and the gated engine
+`docs/UNPROVEN.md`. **1455 tests, 1448 passed and 7 skipped, 0 warnings**, and the gated engine
 trio green on cpu and vulkan against a real child with the probe in the start path.
 
 ### Built 2026-08-28 — the survey tier, and the Ask tab's headline feature starts working
@@ -4352,7 +4352,7 @@ are unaffected — they were taken with the flag explicitly on — and the same 
 cosmetic the overview path made common: a citation lifted from mid-sentence left the space in
 front of it, so "…the staging environment [S1-S4]." rendered as "…the staging environment .".
 Only the period and comma close up; a space before ; : ! ? is correct French typography.
-**1448 tests, 1441 passed and 7 skipped, 0 warnings**, the gated engine trio green on cpu and
+**1455 tests, 1448 passed and 7 skipped, 0 warnings**, the gated engine trio green on cpu and
 vulkan against a real child.
 
 ### Fixed 2026-08-25 — the suite gets one scratch root, and stops leaving 17,000 directories behind
@@ -4378,7 +4378,7 @@ something else. Measured rather than asserted, since a test cannot watch its own
 the `%TEMP%` entries were compared **by name** across a full suite — not by count, because a
 second worktree was running the same suite on this machine and its directories land in the same
 place — and the set came back identical, nothing added. That run's suite was unchanged by the
-change, and the count this document quotes is the current one — **1448 tests, 1441 passed and 7
+change, and the count this document quotes is the current one — **1455 tests, 1448 passed and 7
 skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
 
 The 17,140 already there are not deleted by any of this. About 1.06 GiB of that is research
@@ -5291,7 +5291,7 @@ says it once on stderr, as `TranslatorFactory` already did — and whose comment
 labeller did too. That is not an accuracy warning, which this engine still declines to make: it is a
 statement about which arithmetic unit ran.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** One new, the twin of
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** One new, the twin of
 the translator's: a scripted capabilities reply carrying a `fellBackFrom` entry must reach
 `SidecarSpeakerLabeller.FellBackFrom`. The election itself is in the sidecar, which the C# suite
 drives through a fake, so `scripts/check-diariser-auto.py` is what covers that and CI runs it.
@@ -5339,7 +5339,7 @@ variance, and the two runs discarded for having been executed concurrently. `dml
 unexecuted on these graphs, and the desktop — where a CUDA torch would carry fbank to the GPU too
 and might want the opposite trade — is unmeasured.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** None new: the
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** None new: the
 seating is inside the sidecar, which the C# suite drives through a fake, and the election guard
 `scripts/check-diariser-auto.py` covers `resolve_auto` rather than what a route seats once elected.
 The evidence for this change is the measurement, not the suite.
@@ -5390,9 +5390,69 @@ determinism is observed rather than guaranteed. A 7.6-second load is not a therm
 `docs/UNPROVEN.md` § *CUDA joined the diariser's `auto`* carries all of it, and
 `runs/diariser-cuda/20260828-equivalence-5080/` the artefacts.
 
-**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** None new, and one
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** None new, and one
 changed: `DiariseCommandTests` asserted the help said the device's effect on labels "has not been
 measured", which this makes false, so it now asserts the gap that is still open — no DER. The
 election guard `scripts/check-diariser-auto.py` grew nine cases and now stubs torch as well as
 onnxruntime, because a guard whose answer depends on which venv ran it is not a guard; it returns
 the same result under system Python, `pyannote-venv` and `pyannote-cuda-venv`.
+
+### Built 2026-08-29 — the CUDA pack: an overlay the bundle cannot carry, and the seam it plugs into
+
+**The problem it solves is arithmetic.** The entry above puts `cuda` first in the diariser's `auto`,
+and the shipped bundle pins the CPU torch build, so nothing an installed copy does can reach it. The
+obvious fix — ship a CUDA bundle — does not fit: the `win-cuda` channel's Setup.exe was measured at
+1,976,256,205 bytes against GitHub's 2 GiB asset limit, about 24 MB of headroom and that already
+after dropping the diariser's weights from the channel.
+
+**So the pack is an overlay rather than a second bundle, and the measurement is what made that
+choice.** A CPU and a CUDA install of `requirements-bundle.txt` differ in exactly three packages —
+`torch` 2778.4 MB against 489.8, `torchcodec` 38.2 against 23.4, `torchaudio` 9.2 against 2.3 — and
+**on Windows there are no separate `nvidia_*` distributions at all**, the CUDA libraries living
+inside `torch/lib`, where `cublasLt64_13.dll` alone is 456 MB. So the whole delta is three
+directories: **2.76 GB, against about 4 GB for a second whole bundle**, and no change to the
+three-place bundle resolution.
+
+**The mechanism is `PYTHONPATH` order, and it was proven before anything was built on it.** CPython
+puts `PYTHONPATH` ahead of site-packages, so the pack shadows the bundle's `torch` without replacing
+a byte of it; deleting the directory undoes it completely. On the bundle's own interpreter,
+`2.13.0+cpu` and `False` became `2.13.0+cu130` and `True` with the pack in front. **The dist-info
+directories travel with it**, because `importlib.metadata` resolves along the same path and would
+otherwise report the bundle's `+cpu` for a run on the CUDA build.
+
+**End to end through the product, on the CPU-torch venv the app actually uses.** `uindosill diarise`
+with `auto`, ten-minute stretch: **111.0 s without the pack, 8.0 s with it**, and the RTTM identical
+to the CPU reference in both cases. The pack the new `scripts/bundle-python-cuda.ps1` builds gives
+8.9 s and the same identical output, so the script's product is what was tested rather than a
+hand-assembled stand-in.
+
+**`ResolveCudaPack` checks user data before the application directory**, which is the opposite of
+the bundle's order and deliberate: the pack cannot ship inside the installer, so an
+`<app>/python-cuda` can only be something a hand put there, and a download must not be shadowed by
+it. `UINDOSILL_PYTHON_CUDA` overrides both and names the pack itself rather than a directory holding
+one, because that is the development case.
+
+**A directory that exists but holds no torch is ignored rather than reported.** The pack accelerates
+something that already works, so its honest failure is a diariser on the CPU — which is what a null
+produces — rather than a load that refuses. The run's own provenance is what tells a user which
+device was elected.
+
+**What is NOT built, and it is most of the feature.** There is no download: no zip is produced by
+`package-windows.ps1`, no catalogue entry describes the pack, nothing detects an NVIDIA card, and no
+Settings row offers it. Today the pack reaches a machine only by being built with the script and
+either unpacked as `python-cuda` beside the bundle or named by the variable. What this commit
+delivers is the seam — the resolution, the wiring, the builder, and the proof that the overlay
+works — which is what the download machinery would otherwise have been written blind against.
+
+**Also unproven.** One machine, one card, one recording. The pack has never been zipped, so its
+compressed size is unmeasured and whether it clears the 2 GiB asset limit as a single release asset
+is unknown — which is a real question for the download design and not a detail. Nothing has been
+tested against a *mismatched* pack, where the overlay's torch version differs from the bundle's pin;
+the script refuses to build a non-CUDA pack but nothing checks the pair at run time.
+
+**1455 tests, no weights, no display, no network — 1448 passed and 7 skipped.** Seven new, all on
+the resolution: the two places and their order, the variable, a bundle with no pack, a directory
+holding no torch, and a pack found alongside an interpreter named by `UINDOSILL_PYTHON` — the last
+being the case the `with` expression in `Resolve` exists for, since the environment branch returns
+early and carried no pack until it was written. The wiring itself is one expression in
+`PythonSidecar`, checked by hand against the real sidecar because the suite drives a fake one.
