@@ -129,6 +129,20 @@ public class OptionTabTests
     {
         var window = Open(Settings, out var viewModel);
 
+        // **The way to About is on General, which is the sub-tab that opens.** Asserted before the
+        // switch below, because the thing this half is about is that somebody who opens Settings
+        // and touches nothing can still find the licences.
+        Drawn<Button>(window, "ShowAbout");
+
+        // **The cut moved behind Advanced on 2026-08-29 and this is what that costs a test.** A
+        // TabControl realises only its selected page, so every assertion below would fail on a
+        // control that is present in the name scope and not being drawn — which is precisely the
+        // distinction `Drawn` exists to make, and why this switches the sub-tab rather than
+        // reaching past it with FindControl.
+        var subTabs = Drawn<TabControl>(window, "SettingsSubTabs");
+        subTabs.SelectedIndex = 1;
+        window.UpdateLayout();
+
         Drawn<DockPanel>(window, "SpeechDetectionRow");
 
         // The segmentation note followed the cap it explains, rather than being left behind on a
@@ -158,9 +172,58 @@ public class OptionTabTests
 
         Assert.DoesNotContain("LabelSpeakers", drawn);
         Assert.DoesNotContain("TranslateToEnglish", drawn);
+    }
 
-        // And the way to the About window, which is the Licences tab's replacement.
-        Drawn<Button>(window, "ShowAbout");
+    [AvaloniaFact]
+    public void TheAdvancedSubTabWarnsBeforeItOffersAnything()
+    {
+        // The advisory is the point of the split. A page of settings that can make transcripts
+        // worse, sitting one click from the update button anybody presses, has to say so — and it
+        // has to say so on the page rather than in a heading somebody scrolls past.
+        var window = Open(Settings, out _);
+
+        var subTabs = Drawn<TabControl>(window, "SettingsSubTabs");
+        subTabs.SelectedIndex = 1;
+        window.UpdateLayout();
+
+        var warning = window.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.Classes.Contains("warning") && t.Text is { Length: > 0 })
+            .Select(t => t.Text!)
+            .ToList();
+
+        Assert.Contains(warning, t => t.Contains("unless you know what they do", StringComparison.Ordinal));
+
+        // And that it does not overclaim in the other direction: the defaults were measured, the
+        // alternatives were not, and the copy says exactly that rather than "these are dangerous".
+        Assert.Contains(warning, t => t.Contains("none of the alternatives has been", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void TheAdvancedControlsAreNamedByWhatTheyReallyAre()
+    {
+        // **The reason Advanced exists rather than being a heading.** A power user needs the
+        // settings key, the CLI flag or the library name — "Run on" is prose, `diarisationProvider`
+        // and `--backend` are what they can act on. Asserted on the ones that map to something a
+        // person can type somewhere else.
+        var window = Open(Settings, out _);
+
+        var subTabs = Drawn<TabControl>(window, "SettingsSubTabs");
+        subTabs.SelectedIndex = 1;
+        window.UpdateLayout();
+
+        var text = string.Join("\n", window.GetVisualDescendants().OfType<TextBlock>()
+            .Select(t => t.Text)
+            .Where(t => t is { Length: > 0 }));
+
+        Assert.Contains("diarisationProvider", text, StringComparison.Ordinal);
+        Assert.Contains("--backend", text, StringComparison.Ordinal);
+        Assert.Contains("segmentation_batch_size", text, StringComparison.Ordinal);
+        Assert.Contains("Silero VAD", text, StringComparison.Ordinal);
+        Assert.Contains("askExpertPlacement", text, StringComparison.Ordinal);
+
+        // The one fact about these three that is easy to get wrong and expensive to discover: they
+        // are not written to the settings file at all.
+        Assert.Contains("not written to settings.json", text, StringComparison.Ordinal);
     }
 
     /// <summary>

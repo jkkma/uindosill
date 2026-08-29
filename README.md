@@ -137,7 +137,7 @@ rather than a convenience, since a test needing 670 MB of weights is a test CI w
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1491 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1493 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
