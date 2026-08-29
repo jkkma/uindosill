@@ -59,13 +59,13 @@ public sealed partial class AboutViewModel : ObservableObject
     /// </remarks>
     public string Summary =>
         "Uindosill turns recordings into text on this machine. The audio, the transcript and the " +
-        "models all stay on your own disk — nothing is uploaded, and there is no account to make.";
+        "models all stay on your own disk - nothing is uploaded, and there is no account to make.";
 
     /// <inheritdoc cref="Summary" />
     public string NetworkNote =>
         "The only thing this application does on the network without being asked is check once at " +
         "launch whether a newer version exists, and that can be switched off on the Updates tab. " +
-        "Everything else that reaches the network — downloading a model, fetching a link — you " +
+        "Everything else that reaches the network - downloading a model, fetching a link - you " +
         "start yourself.";
 
     /// <summary>
@@ -90,7 +90,7 @@ public sealed partial class AboutViewModel : ObservableObject
 
             foreach (var component in Attributions.Components)
             {
-                lines.Add($"  {component.Component} — {component.License} — {component.Uri}");
+                lines.Add($"  {component.Component} - {component.License} - {component.Uri}");
 
                 // The notes carry the qualifying text — which builds ship a component, and on what
                 // terms. This panel used to drop them while `uindosill notice` printed them, so the

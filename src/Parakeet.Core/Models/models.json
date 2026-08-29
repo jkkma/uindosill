@@ -13,8 +13,8 @@
     "the CLI and the UI say so on its face. See docs/MODELS.md before adding one.",
     "",
     "**\"displayName\" says what an entry does; \"family\" and \"id\" say what it is.** The names here are",
-    "the ones a person reading the Models tab needs — Speech recognition, Speaker labelling, English",
-    "translation — and the upstream artefact identifier is shown beside them rather than instead of",
+    "the ones a person reading the Models tab needs - Speech recognition, Speaker labelling, English",
+    "translation - and the upstream artefact identifier is shown beside them rather than instead of",
     "them. Before 2026-08-20 the display name WAS the identifier, which meant the tab answered a",
     "question nobody had while leaving the obvious one unanswered.",
     "",
@@ -23,7 +23,7 @@
     "",
     "Renaming here does not touch attribution. The licence notices name their own material in",
     "Licensing/Attribution.cs, with creator, source URL and modification notice, and never read",
-    "displayName — so CC BY still identifies the weights by the name NVIDIA published them under.",
+    "displayName - so CC BY still identifies the weights by the name NVIDIA published them under.",
     "",
     "**\"notes\" is text for the person using the application.** It is rendered into the Models tab",
     "and printed by `uindosill models`, so it is a product surface rather than a place to record a",
@@ -38,28 +38,28 @@
     "",
     "Sizes are exact and are compared to the downloaded byte count, so a rounded value is a bug.",
     "",
-    "An entry is one file or several. One file names it inline — \"fileName\", \"url\", \"sizeBytes\",",
-    "\"sha256\" — and lands in the store root, which is every entry below. Several go in a \"files\"",
+    "An entry is one file or several. One file names it inline - \"fileName\", \"url\", \"sizeBytes\",",
+    "\"sha256\" - and lands in the store root, which is every entry below. Several go in a \"files\"",
     "array of those same four keys, and then \"directory\" is required: the ONNX translation route",
     "ships config.json and vocab.json, and no single entry can own those names in a shared folder.",
     "An entry carrying both shapes is refused rather than guessed at. Pins are per file, so an entry",
-    "is verified only when every one of its files is — eight of nine is unverified.",
+    "is verified only when every one of its files is - eight of nine is unverified.",
     "",
     "A multi-file entry installs all or nothing: the installer assembles it in a <directory>.part",
     "staging folder and renames that into place once every file has been sized and hashed, so an",
     "interrupted download is never something an engine can be handed. Resume is per file.",
     "",
     "Weights are CC BY 4.0 (NVIDIA). Redistribution is permitted and the notice obligations are in",
-    "Licensing/Attribution.cs — they are not satisfied by attribution alone.",
+    "Licensing/Attribution.cs - they are not satisfied by attribution alone.",
     "",
     "**One transcription entry, unquantised, and that is a decision rather than a starting point.**",
-    "Until 2026-08-20 this catalogue offered f16 and four quantisations of it — q8_0, q6_k, q5_k and",
-    "q4_k — and the maintainer withdrew the four. The product offers the best checkpoint available",
+    "Until 2026-08-20 this catalogue offered f16 and four quantisations of it - q8_0, q6_k, q5_k and",
+    "q4_k - and the maintainer withdrew the four. The product offers the best checkpoint available",
     "and nothing below it.",
     "",
     "What that costs is on the record rather than waved away: all four scored within 0.08 points of",
     "f16 on the one corpus they were measured against, so this is not a quality argument. It is a",
-    "product one — a ladder asks every user to make a size-against-accuracy choice they have no way",
+    "product one - a ladder asks every user to make a size-against-accuracy choice they have no way",
     "to evaluate, and the answer was the same entry every time. docs/UNPROVEN.md keeps the ladder",
     "measurement, which is a dated record of files that were real and still are; it is not restated",
     "here as though those files were on offer.",
@@ -75,7 +75,7 @@
     "the window's Load button. Each discriminator shipped before the entry it guards, so no build can",
     "carry an entry whose task word it does not know.",
     "",
-    "There is one diarisation entry now. It is NOT CC BY 4.0 — it is the NVIDIA Open Model License, whose §3.1 wants a",
+    "There is one diarisation entry now. It is NOT CC BY 4.0 - it is the NVIDIA Open Model License, whose §3.1 wants a",
     "verbatim notice and a copy of the agreement rather than CC BY's seven elements. The Agreement was",
     "read in full at NVIDIA's own URL on 2026-08-19 and permits redistribution; docs/LICENSING.md",
     "records what it obliges and where the two licences differ. Its URL is pinned to a revision rather",
@@ -87,8 +87,8 @@
     "",
     "**It is verified, and the nine digests are attested twice over.** They were first taken off the",
     "bytes the gate run scored and re-hashed from disk; the files were then published to Hugging Face",
-    "on 2026-08-20, and every one of the nine LFS oids the repository publishes — an LFS oid IS the",
-    "file's SHA-256 — matched the scored digest. That is stronger than any other entry here, which",
+    "on 2026-08-20, and every one of the nine LFS oids the repository publishes - an LFS oid IS the",
+    "file's SHA-256 - matched the scored digest. That is stronger than any other entry here, which",
     "rest on the listing alone. The upload forces all nine onto LFS including the four under a",
     "kilobyte: an ordinary git blob has a git SHA-1 and publishes no SHA-256, and an entry is as",
     "verified as its least-checked member.",
@@ -143,7 +143,7 @@
         "sv",
         "uk"
       ],
-      "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nMeasured against transcripts written by people, on real recordings of accented English business calls, roughly one word in ten comes out different. Clear speech and good microphones do better than that; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option — there is no smaller, faster version to trade accuracy for."
+      "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nMeasured against transcripts written by people, on real recordings of accented English business calls, roughly one word in ten comes out different. Clear speech and good microphones do better than that; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option - there is no smaller, faster version to trade accuracy for."
     },
     {
       "id": "pyannote-speaker-diarization-community-1",
@@ -192,7 +192,7 @@
       ],
       "recommended": false,
       "languages": [],
-      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself — it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part.\n\nOn one 17-minute meeting it ran at about five times faster than real time on a processor; that is one recording on one computer, so treat the first run on a long recording as the one that tells you.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited — Uindosill shows that credit for you.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
+      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself - it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part.\n\nOn a processor it ran at about five times faster than real time on one 17-minute meeting, and about six times on a ten-minute one. On an NVIDIA card the same ten minutes took eight seconds rather than a hundred and eleven - roughly thirteen times quicker - and produced exactly the same speakers and boundaries. Both are single recordings on single computers, so treat the first run on a long recording as the one that tells you. Using the card needs a one-off download; Settings offers it where the machine can.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited - Uindosill shows that credit for you.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
     },
     {
       "id": "opus-mt-tc-bible-big-mul-en-fp32",
@@ -288,7 +288,7 @@
         "sv",
         "uk"
       ],
-      "notes": "Translates a finished transcript into English. It never listens to the audio — it works from the text the recogniser has already produced, so it can follow any of the 25 languages.\n\nIt was tested on 24 languages and does a good job on all of them but Slovak, which came out below the standard set for this feature. Transcripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run — the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
+      "notes": "Translates a finished transcript into English. It never listens to the audio - it works from the text the recogniser has already produced, so it can follow any of the 25 languages.\n\nIt was tested on 24 languages and does a good job on all of them but Slovak, which came out below the standard set for this feature. Transcripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run - the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
     },
     {
       "id": "silero-vad-v5.1.2",
@@ -361,7 +361,7 @@
       "license": "Apache-2.0",
       "attributionId": "google-gemma-4-26b-a4b-it-gguf",
       "recommended": false,
-      "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\nThis is a big download and a big model: 15.8 GiB of weights, and it wants about 18 GB of memory free once it is running. On a computer with 16 GB of memory or less it will be slow or will not start at all, and the Models tab says so before you download it.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
+      "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\nThis is a big download and a big model: 15.8 GiB of weights. How much memory it needs depends on what kind of graphics the computer has. Where the graphics shares the main memory, as on most laptops, the weights sit in that memory and it wants about 18 GB free once it is running - on a machine with 16 GB or less it will be slow or will not start at all, and the Models tab says so before you download it. Where the graphics is a card with memory of its own, the weights go on the card instead and the main memory is not the limit; the warning does not know what a card is holding, so it stays quiet and the first run is the one that tells you.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
     }
   ],
   "deferredComment": [
@@ -370,7 +370,7 @@
     "",
     "Two reasons put a file here. The first is licensing, below. The second, from 2026-08-29,",
     "is a quantisation withdrawn from the offer: its digests stay recorded so a later version",
-    "does not re-derive them, and nothing about the file changed — only whether it is offered.",
+    "does not re-derive them, and nothing about the file changed - only whether it is offered.",
     "",
     "The reason they are not is licensing, not caution about quality. Every entry in \"models\"",
     "carries a licence and an attribution id that resolves against Attribution.ById, because the",

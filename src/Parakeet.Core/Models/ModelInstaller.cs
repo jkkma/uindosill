@@ -463,7 +463,7 @@ public sealed class ModelInstaller : IDisposable
                 if (++attempt >= MaxAttempts)
                 {
                     throw new ModelInstallException(
-                        $"The download of {file.FileName} kept being cut off — {MaxAttempts} attempts, " +
+                        $"The download of {file.FileName} kept being cut off - {MaxAttempts} attempts, " +
                         $"the last after {after:N0} of {file.SizeBytes ?? 0:N0} bytes. What arrived is " +
                         "kept, so starting again resumes rather than restarting. " +
                         exception.Message,
