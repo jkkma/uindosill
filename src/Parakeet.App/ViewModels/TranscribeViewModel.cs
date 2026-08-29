@@ -101,9 +101,48 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
     [NotifyPropertyChangedFor(nameof(CanExportFiles))]
     [NotifyPropertyChangedFor(nameof(ExportNotice))]
+    [NotifyPropertyChangedFor(nameof(Speakers))]
+    [NotifyPropertyChangedFor(nameof(HasSpeakers))]
+    [NotifyPropertyChangedFor(nameof(RenameNotice))]
     [NotifyCanExecuteChangedFor(nameof(AddToRecordingCommand))]
     [NotifyCanExecuteChangedFor(nameof(ExportFilesCommand))]
     private JobViewModel? _selectedJob;
+
+    /// <summary>The voices in the selected recording, or null where it was never labelled.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The recording's own objects, not copies</b> — the same pass-through the Ask tab makes, to
+    /// the same <see cref="JobViewModel.Speakers"/>. A name typed on either tab is therefore the
+    /// same name, with nothing forwarding it: two views of one list.
+    /// </para>
+    /// <para>
+    /// <b>Added 2026-08-28, because the tab that writes the files could not name the speakers.</b>
+    /// Renaming was reachable from the Ask tab alone, while <see cref="ExportFilesCommand"/> has
+    /// always written <see cref="JobViewModel.Named"/> — so the names did reach the files, and the
+    /// only way to discover that was to visit a tab about asking questions before pressing Export.
+    /// The control existed, worked, and was one tab away from the button it changes the output of.
+    /// </para>
+    /// </remarks>
+    public System.Collections.ObjectModel.ObservableCollection<SpeakerViewModel>? Speakers =>
+        SelectedJob?.Speakers;
+
+    /// <summary>Whether there is anything to rename.</summary>
+    public bool HasSpeakers => Speakers is { Count: > 0 };
+
+    /// <summary>
+    /// What a name typed here does to what Export writes, said once somebody has typed one.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the Ask tab's sentence. That one says names are "for reading here", which is
+    /// true where it stands and would be false over this button: the export path applies them. What
+    /// both have to say is that files already on disk keep the labels they were written with, and a
+    /// new run starts over — a name is not stored against the recording.
+    /// </remarks>
+    public string? RenameNotice =>
+        Speakers is { } voices && voices.Any(v => v.IsRenamed)
+            ? "These names go into the files Export writes from here. Files already written keep the "
+              + "diariser's own labels, and a new run starts over."
+            : null;
 
     /// <summary>A tick under Output formats changes what Export writes and what would go inside the recording.</summary>
     private void OnFormatChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -125,6 +164,51 @@ public sealed partial class TranscribeViewModel : ObservableObject
         _exportResult = null;
         OnPropertyChanged(nameof(AddToRecordingNotice));
         OnPropertyChanged(nameof(ExportNotice));
+        RefreshSpeakers();
+    }
+
+    /// <summary>The voices this view model is currently listening to, so it can stop listening.</summary>
+    private readonly List<SpeakerViewModel> _watchedVoices = [];
+
+    /// <summary>
+    /// Re-asks what the voice strip should show, and listens to the voices it is showing.
+    /// </summary>
+    /// <remarks>
+    /// Two moments need it and they are different: selecting another row, and the selected row
+    /// finishing underneath. A run populates <see cref="JobViewModel.Speakers"/> at the end, so a
+    /// file transcribed while already selected would otherwise show no voices at all until the user
+    /// clicked another row and back — the same defect <see cref="RefreshTranscriptPane"/> exists
+    /// for, one collection over.
+    /// </remarks>
+    private void RefreshSpeakers()
+    {
+        foreach (var voice in _watchedVoices)
+        {
+            voice.PropertyChanged -= OnVoiceChanged;
+        }
+
+        _watchedVoices.Clear();
+
+        if (Speakers is { } voices)
+        {
+            foreach (var voice in voices)
+            {
+                voice.PropertyChanged += OnVoiceChanged;
+                _watchedVoices.Add(voice);
+            }
+        }
+
+        OnPropertyChanged(nameof(Speakers));
+        OnPropertyChanged(nameof(HasSpeakers));
+        OnPropertyChanged(nameof(RenameNotice));
+    }
+
+    private void OnVoiceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SpeakerViewModel.IsRenamed))
+        {
+            OnPropertyChanged(nameof(RenameNotice));
+        }
     }
 
     [ObservableProperty]
@@ -456,18 +540,25 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (SpeakerCount is not { } count)
             {
-                // Blank is not an option while the opt-in is on, and the hint says so here rather
-                // than let Start be the first place anybody hears it. One sentence for every queue:
-                // the long-recording escalation is SpeakerDurationWarning's job, drawn right beside
-                // this field.
+                // Blank is an option again as of 2026-08-28, and this sentence is where that is
+                // said. It read "does not run without it. The model works the number out for
+                // itself" — a requirement and the reason it was pointless, in one breath — because
+                // the refusal outlived the model it was measured for.
+                //
+                // What a number costs is said here rather than only in the branch below, because
+                // that branch is reached by somebody who has already typed one. The direction
+                // matters and only one of the two is destructive: above the true count the fold
+                // finds nothing to merge, below it two people end up under one name.
+                //
                 // The clause that stood here — that the model's own estimate can silently hear one
                 // person as two on long recordings — was measured on the streaming ONNX diariser
                 // retired 2026-08-27, whose speaker cache had no long-term anchor. The pipeline
                 // that ships clusters globally and has no such known failure; borrowing the finding
                 // would be quoting one engine's measurement about another.
-                return "Give the number of people talking; 'Label speakers' does not run without it. "
-                    + "The model works the number out for itself, and how well it does that has not "
-                    + "been measured here.";
+                return "Leave this blank and the model works out how many people are talking. "
+                    + "Give a number only if you already know it: the model is never told the "
+                    + "count, so a number merges its labels down to that many afterwards, and a "
+                    + "number below the true count puts two people under one name.";
             }
 
             if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)
@@ -531,24 +622,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
             ? Jobs.Where(job => SpeakerLabelling.DescribeDurationRisk(limits, job.Duration) is not null)
             : [];
 
-    /// <summary>
-    /// The longest queued file past that bound, or null when there is none.
-    /// </summary>
-    /// <remarks>
-    /// What both the hint and the guard at Start are computed from, so the sentence a person reads
-    /// beside the field and the one that stops the batch cannot disagree about which file is the
-    /// problem.
-    /// </remarks>
-    private JobViewModel? LongestPastTheBound() => JobsPastTheBound().MaxBy(job => job.Duration!.Value);
-
-    /// <summary>
-    /// How long a recording this labeller's labels have been established on, as a phrase. Invariant
-    /// because the surrounding interface is English throughout, and whole minutes keep a decimal
-    /// separator out of it either way.
-    /// </summary>
-    private string EstablishedLength => _engines.SpeakerLimits?.ReliableUpTo is { } bound
-        ? string.Create(CultureInfo.InvariantCulture, $"{bound.TotalMinutes:F0} minutes")
-        : "this model's established length";
+    // The two members that stood here — the longest file past the bound, and that bound as a
+    // phrase — existed only for the sentence that refused a blank speaker count, and went with it
+    // on 2026-08-28. The bound itself is not retired: JobsPastTheBound above still feeds
+    // SpeakerDurationWarning, which is what warns beside the queue when a labeller declares a
+    // ReliableUpTo and a file runs past it. The one shipping here declares none, so that sentence
+    // is dormant rather than gone, and the fake labellers in the tests still drive it.
 
     /// <summary>
     /// Whether the English opt-in does anything. Disabled with a reason when it does not, on the
@@ -936,6 +1015,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanShowTranslation));
         OnPropertyChanged(nameof(VisibleLines));
+        RefreshSpeakers();
     }
 
     public bool HasJobs => Jobs.Count > 0;
@@ -1350,32 +1430,26 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
-        // The opt-in does not run without a count, whatever the queue holds. It began as a
-        // past-the-bound rule, and what widened it is what the estimate's failure looks like from
-        // the outside: a drifted host arrives as a plausible extra speaker, nothing in the output
-        // says which of "four people" and "one person heard twice" happened, and an archived
-        // transcript carries no trace of the difference. The person pressing Start trivially knows
-        // the number; the model, when it is wrong, does not know that it is.
+        // **A blank count runs, and the refusal that stood here until 2026-08-28 was Sortformer's.**
+        // It was argued from a bound — fifty minutes, past which that model's estimate drifted and
+        // a host arrived as a plausible extra speaker — and widened from there to "required
+        // whenever the opt-in is on". Both halves of its evidence left with the model: the figure
+        // is in attic/sortformer/ with the graph that produced it, and the labeller here declares
+        // ReliableUpTo and MaxSpeakers null. What survived was a refusal resting on a bound that no
+        // longer exists, under a field whose own sentence said the model works the number out for
+        // itself.
         //
-        // It stops rather than inventing a number, and that distinction is the whole design. The
-        // fold merges whichever pair collides least whether or not the evidence supports it, so a
-        // guessed count does not estimate the answer — it forces one, and puts two people under one
-        // name with no margin behind the merge. Both ways out are decisions: give the number, or
-        // take the transcript without names. Neither is a guess, and the words are unaffected by
-        // either. A file past the bound still gets the sentence that names it, because "this
-        // specific recording is where the estimate is measured to go wrong" is more actionable
-        // than the rule alone.
-        if (LabelSpeakers && SpeakerCount is null)
-        {
-            StatusMessage = LongestPastTheBound() is { } risky
-                ? $"{risky.FileName} is longer than {EstablishedLength}, which is as far as this model's speaker "
-                    + "labels are reliable — past that it can hear one person as two. Set "
-                    + "'How many speakers' under the opt-in, or turn 'Label speakers' off and take the transcript "
-                    + "without names."
-                : "'Label speakers' needs to know how many. Set 'How many speakers' under the opt-in, or turn "
-                    + "it off and take the transcript without names.";
-            return;
-        }
+        // Requiring it also had the sign backwards. The count never reaches the clustering — this
+        // labeller reports SupportsFixedSpeakerCount false, as Sortformer did — so it is a fold
+        // applied afterwards, merging whichever pair collides least. Below the true count that does
+        // not correct an over-split; it puts two real people under one name, with no margin behind
+        // the merge. Demanding a number made that the path of least resistance, and the command
+        // line, which has always taken it as an optional flag that warns, was the half that had it
+        // right.
+        //
+        // Blank is therefore a decision like any other: take the model's own estimate. What is not
+        // offered is a default of two, because a fold nobody asked for is the one thing here that
+        // silently merges people.
 
         IsRunning = true;
         StatusMessage = null;

@@ -245,3 +245,29 @@ public sealed record InstalledModel
 
     public bool IsSideloaded => Descriptor is null;
 }
+
+/// <summary>A directory in the store root that no catalogue entry claims.</summary>
+/// <remarks>
+/// <para>
+/// Deliberately not an <see cref="InstalledModel"/> with a null descriptor, which is what a
+/// sideloaded <i>file</i> is. A bare file in the root is self-describing — it is weights, and
+/// sideloaded if nothing claims it — while a directory is only a model because an entry says which
+/// files make it one. There is still no such thing as a sideloaded multi-file model, and this type
+/// exists precisely so that reporting the directory does not amount to claiming there is.
+/// </para>
+/// <para>
+/// What it is instead is disk. A diariser retired to <c>attic/</c> leaves 332 MB of weights whose
+/// entry is gone, exactly as the four withdrawn quantisations left files behind — and the panel
+/// built for those could not see this one, because it only ever listed files. Same leftover, same
+/// question from the person paying for the disk, and until now only one of the two shapes could be
+/// answered.
+/// </para>
+/// </remarks>
+public sealed record SideloadedDirectory
+{
+    /// <summary>The directory's own name, with no path in front of it.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Every file inside it, at any depth, added up.</summary>
+    public required long SizeBytes { get; init; }
+}

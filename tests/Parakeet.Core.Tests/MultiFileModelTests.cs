@@ -340,6 +340,228 @@ public class MultiFileModelTests
         Assert.False(installed.IsSideloaded);
     }
 
+    // ------------------------------------------------- weights in the wrong folder
+
+    /// <summary>A second multi-file entry sharing one file name with <see cref="ThreeFileEntry"/>.</summary>
+    private static string SharedNameEntry() => $$"""
+        {
+          "id": "multi-two", "task": "translation", "family": "test", "displayName": "Multi Two",
+          "quantisation": "int8", "license": "Apache-2.0", "attributionId": "{{Attributions.ParakeetTdt06BV3}}",
+          "verified": true,
+          "directory": "opus-mt-en-two",
+          "files": [
+            { "fileName": "encoder.onnx", "url": "https://example.invalid/e2.onnx", "sizeBytes": 10, "sha256": "{{Digest0}}" }
+          ]
+        }
+        """;
+
+    [Fact]
+    public void AMultiFileEntrysWeightsInTheRootBelongToItRatherThanToNobody()
+    {
+        var catalog = ModelCatalog.Parse(Manifest(ThreeFileEntry()));
+
+        // The gap this closes: the store looks for these files only under the entry's directory, so
+        // a copy in the root matched nothing and the window announced it as a file no entry
+        // accounts for — directly beneath the entry that declares it, reading Not installed and
+        // offering to download it again.
+        var claiming = Assert.Single(catalog.EntriesDeclaringFile("encoder.onnx"));
+        Assert.Equal("multi", claiming.Id);
+
+        // A name nothing declares stays unclaimed, which is what keeps the withdrawn quantisations
+        // this list was built for reading as strays rather than as somebody's misplaced weights.
+        Assert.Empty(catalog.EntriesDeclaringFile("tdt-0.6b-v3-q8_0.gguf"));
+    }
+
+    [Fact]
+    public void ANameTwoEntriesDeclareComesBackAsBoth()
+    {
+        var catalog = ModelCatalog.Parse(Manifest(ThreeFileEntry() + ", " + SharedNameEntry()));
+
+        // The real collision: both 26B answering entries ship the same drafting head under the same
+        // name, which is why a multi-file entry gets a directory at all. Reported as the ambiguity
+        // it is rather than resolved — a caller that has to name one entry declines instead.
+        var claiming = catalog.EntriesDeclaringFile("encoder.onnx");
+        Assert.Equal(["multi", "multi-two"], claiming.Select(m => m.Id).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void AFileDeclaredOneLevelDownIsNeverAFileInTheRoot()
+    {
+        var nested = $$"""
+            {
+              "id": "nested", "task": "diarisation", "family": "test", "displayName": "Nested",
+              "quantisation": "fp32", "license": "Apache-2.0", "attributionId": "{{Attributions.ParakeetTdt06BV3}}",
+              "verified": true,
+              "directory": "nested",
+              "files": [
+                { "fileName": "segmentation/pytorch_model.bin", "url": "https://example.invalid/s.bin", "sizeBytes": 10, "sha256": "{{Digest0}}" }
+              ]
+            }
+            """;
+
+        var catalog = ModelCatalog.Parse(Manifest(nested));
+
+        // Declared below the entry's own directory, so no bare name in the store root is ever the
+        // file it describes. A stray `pytorch_model.bin` there belongs to nobody, and saying it
+        // belonged here would offer to file it somewhere it was never meant to go.
+        Assert.Empty(catalog.EntriesDeclaringFile("pytorch_model.bin"));
+        Assert.Empty(catalog.EntriesDeclaringFile("segmentation/pytorch_model.bin"));
+    }
+
+    [Fact]
+    public void GatheringIntoPlaceMovesEveryDeclaredFileAndTheEntryBecomesInstalled()
+    {
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var model = Assert.Single(ModelCatalog.Parse(Manifest(ThreeFileEntry())).Models);
+
+        foreach (var file in model.Files)
+        {
+            File.WriteAllText(Path.Combine(temp.Path, file.FileName), "content");
+        }
+
+        Assert.False(store.IsInstalled(model));
+        Assert.Equal(3, store.GatherIntoPlace(model));
+
+        // All of them, not the one a window happened to have selected: an entry is installed only
+        // when every file it declares is present, so moving all but one would move nearly
+        // everything and install nothing.
+        Assert.True(store.IsInstalled(model));
+        Assert.All(model.Files, file => Assert.False(File.Exists(Path.Combine(temp.Path, file.FileName))));
+    }
+
+    [Fact]
+    public void GatheringIntoPlaceRefusesRatherThanOverwriteAndLeavesTheFolderAsItFoundIt()
+    {
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var model = Assert.Single(ModelCatalog.Parse(Manifest(ThreeFileEntry())).Models);
+
+        foreach (var file in model.Files)
+        {
+            File.WriteAllText(Path.Combine(temp.Path, file.FileName), "in the root");
+        }
+
+        Directory.CreateDirectory(store.PathFor(model));
+        File.WriteAllText(store.PathFor(model, model.Files[0]), "already installed");
+
+        // Which of two copies to keep is not a question this path answers, so it answers none of
+        // it. Checked across the whole set before anything moves, so a refusal cannot leave the
+        // folder half-repaired.
+        Assert.Equal(0, store.GatherIntoPlace(model));
+        Assert.All(model.Files, file => Assert.True(File.Exists(Path.Combine(temp.Path, file.FileName))));
+        Assert.Equal("already installed", File.ReadAllText(store.PathFor(model, model.Files[0])));
+    }
+
+    [Fact]
+    public void ASingleFileEntryHasNoWrongFolderToBeIn()
+    {
+        var single = """
+            {
+              "id": "single", "family": "f", "displayName": "Single", "quantisation": "f16",
+              "fileName": "single.gguf", "url": "https://example.invalid/single.gguf",
+              "license": "CC-BY-4.0", "attributionId": "nvidia-parakeet-tdt-0.6b-v3",
+              "languages": ["en"]
+            }
+            """;
+
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var catalog = ModelCatalog.Parse(Manifest(single));
+        var model = Assert.Single(catalog.Models);
+        File.WriteAllText(Path.Combine(temp.Path, "single.gguf"), "content");
+
+        // Its file belongs in the root, so it is installed where it lies. Nothing declares the name
+        // for the purpose of finding it misplaced, and there is nothing to gather.
+        Assert.True(store.IsInstalled(model));
+        Assert.Empty(catalog.EntriesDeclaringFile("single.gguf"));
+        Assert.Equal(0, store.GatherIntoPlace(model));
+        Assert.True(File.Exists(Path.Combine(temp.Path, "single.gguf")));
+    }
+
+    // -------------------------------------------- folders no entry claims any more
+
+    [Fact]
+    public void ADirectoryNoEntryClaimsIsListedWithWhatItCosts()
+    {
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var catalog = ModelCatalog.Parse(Manifest(ThreeFileEntry()));
+        var model = Assert.Single(catalog.Models);
+
+        // The entry's own directory, installed. It is that entry's, and not a leftover.
+        Directory.CreateDirectory(store.PathFor(model));
+        foreach (var file in model.Files)
+        {
+            File.WriteAllText(store.PathFor(model, file), "content");
+        }
+
+        // A diariser retired to attic/ leaves exactly this: weights whose entry is gone. Nested,
+        // because that is how a multi-file entry stores them and the size has to find them.
+        var orphan = Path.Combine(temp.Path, "diarizen-wavlm-large-s80-md-v2");
+        Directory.CreateDirectory(Path.Combine(orphan, "nested"));
+        File.WriteAllText(Path.Combine(orphan, "pytorch_model.bin"), "abandoned weights");
+        File.WriteAllText(Path.Combine(orphan, "nested", "plda.npz"), "more");
+
+        // A staging directory, exactly as an interrupted install leaves one, and an empty one.
+        Directory.CreateDirectory(store.PathFor(model) + ".part");
+        File.WriteAllText(Path.Combine(store.PathFor(model) + ".part", "encoder.onnx"), "partial");
+        Directory.CreateDirectory(Path.Combine(temp.Path, "empty"));
+
+        var listed = store.ListSideloadedDirectories(catalog);
+
+        var only = Assert.Single(listed);
+        Assert.Equal("diarizen-wavlm-large-s80-md-v2", only.Name);
+        Assert.Equal("abandoned weights".Length + "more".Length, only.SizeBytes);
+    }
+
+    [Fact]
+    public void RemovingADirectoryTakesEverythingInItAndRefusesWhatIsNotItsToTake()
+    {
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var catalog = ModelCatalog.Parse(Manifest(ThreeFileEntry()));
+        var model = Assert.Single(catalog.Models);
+
+        Directory.CreateDirectory(store.PathFor(model));
+        foreach (var file in model.Files)
+        {
+            File.WriteAllText(store.PathFor(model, file), "content");
+        }
+
+        var staging = store.PathFor(model) + ".part";
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, "encoder.onnx"), "half a download");
+
+        var orphan = Path.Combine(temp.Path, "left-behind");
+        Directory.CreateDirectory(Path.Combine(orphan, "nested"));
+        File.WriteAllText(Path.Combine(orphan, "nested", "weights.bin"), "gigabytes, notionally");
+
+        // **An entry's own directory is that entry's to remove, through its descriptor**, or the
+        // two removal paths could come to disagree about what an entry consists of.
+        Assert.False(store.RemoveSideloadedDirectory(model.StorageName, catalog));
+        Assert.True(Directory.Exists(store.PathFor(model)));
+
+        // **A staging directory is a download in progress**, and deleting it throws away the files
+        // a resume is about to skip.
+        Assert.False(store.RemoveSideloadedDirectory(Path.GetFileName(staging), catalog));
+        Assert.True(Directory.Exists(staging));
+
+        // Anything carrying a separator is refused rather than normalised: this deletes, and
+        // recursively, so the only safe reading of an unexpected shape is "not mine".
+        Assert.False(store.RemoveSideloadedDirectory(Path.Combine("..", "elsewhere"), catalog));
+        Assert.False(store.RemoveSideloadedDirectory("nothing-of-the-sort", catalog));
+
+        // And the one it is for goes, with what is under it.
+        Assert.True(store.RemoveSideloadedDirectory("left-behind", catalog));
+        Assert.False(Directory.Exists(orphan));
+        Assert.Empty(store.ListSideloadedDirectories(catalog));
+
+        // Nothing else moved.
+        Assert.True(store.IsInstalled(model));
+        Assert.True(Directory.Exists(staging));
+    }
+
     // --------------------------------------------------------------- installing
 
     [Fact]

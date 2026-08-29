@@ -411,7 +411,13 @@ class PyannoteEngine:
 
         if elected in ONNX_PROVIDERS:
             self.device = "cpu"
-            self.segmentation_backend = f"onnx:{elected}"
+
+            # **The two names split here, which is what these two fields were built for.** Since
+            # 2026-08-28 an ONNX provider seats the embedder alone and segmentation stays in torch,
+            # because the provider is much faster at the second stage and much slower at the first
+            # (see `_install_onnx_route`). A reader of one field would now call this a torch run or
+            # an ONNX run and be half wrong either way.
+            self.segmentation_backend = f"torch:{self.device}"
             self.embedding_backend = f"onnx:{elected}"
         else:
             device = self._resolve_device(elected)
@@ -466,9 +472,17 @@ class PyannoteEngine:
                 ort.GraphOptimizationLevel, ONNX_GRAPH_OPTIMISATION[provider]
             )
 
-        segmentation_session = ort.InferenceSession(
-            os.path.join(onnx_dir, ONNX_FILES[0]), options, providers=wanted
-        )
+        # **Only the embedding graph is seated, and that is measured rather than assumed.**
+        # Segmentation was on this provider until 2026-08-28 and is nine times slower there: on the
+        # second machine, one ten-minute stretch, `segmentation` took 48.7 s under WebGPU against
+        # 5.5 s in torch on the CPU, while `embeddings` took 87.0 s against 192.1 s. The GPU wins
+        # the second stage by 2.2x and loses the first by 8.8x, so moving both was paying for the
+        # win with most of it. The graph is still exported and still required below — re-seating it
+        # is one line the day an ONNX Runtime makes it worth having.
+        #
+        # The likely reason, and it is a reason rather than a finding: the segmentation model is
+        # SincNet, LSTM, linear, and an LSTM is sequential. `onnx_export` records that opset 18
+        # implements LSTM "for both providers", which is coverage; coverage is not throughput.
         embedding_session = ort.InferenceSession(
             os.path.join(onnx_dir, ONNX_FILES[1]), options, providers=wanted
         )
@@ -476,16 +490,14 @@ class PyannoteEngine:
         # **Refused rather than reported** when ORT declines the provider and seats the session on
         # the CPU fallback instead: a run that says webgpu and computed on the CPU is a measurement
         # nobody can interpret, and this is the only place the difference is still visible.
-        for stage, session in (("segmentation", segmentation_session), ("embedding", embedding_session)):
-            seated = session.get_providers()
-            if seated and seated[0] != wanted[0]:
-                raise RequestError(
-                    "model",
-                    f"ONNX Runtime placed the {stage} graph on {seated[0]} rather than "
-                    f"{wanted[0]}, so this run would not be on the device it names.",
-                )
+        seated = embedding_session.get_providers()
+        if seated and seated[0] != wanted[0]:
+            raise RequestError(
+                "model",
+                f"ONNX Runtime placed the embedding graph on {seated[0]} rather than "
+                f"{wanted[0]}, so this run would not be on the device it names.",
+            )
 
-        segmentation_model = self._pipeline._segmentation.model
         embedding_wrapper = self._pipeline._embedding
         inner = embedding_wrapper.model_
 
@@ -496,12 +508,6 @@ class PyannoteEngine:
         _ = embedding_wrapper.min_num_samples
 
         compute_fbank = inner.compute_fbank
-
-        def segmentation_forward(waveforms: "torch.Tensor") -> "torch.Tensor":
-            scores = segmentation_session.run(
-                None, {"waveforms": waveforms.detach().cpu().numpy().astype(np.float32)}
-            )[0]
-            return torch.from_numpy(scores)
 
         def embedding_forward(waveforms: "torch.Tensor", weights=None) -> "torch.Tensor":
             # fbank stays in torch: `compute_fbank` is a `torch.vmap` over an FFT and has no ONNX
@@ -519,10 +525,10 @@ class PyannoteEngine:
             )[0]
             return torch.from_numpy(embeddings)
 
-        segmentation_model.forward = segmentation_forward
+        # Segmentation is deliberately left alone: upstream's torch `forward` is the fast one here.
         inner.forward = embedding_forward
 
-        self._onnx_sessions = (segmentation_session, embedding_session)
+        self._onnx_sessions = (embedding_session,)
 
     @staticmethod
     def _resolve_device(provider: str) -> Any:

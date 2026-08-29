@@ -479,12 +479,23 @@
                          they can — the checkbox is right above it and ticking it brings this to
                          life. It is a detail of the opt-in, not a setting of its own.
 
-                         Blank does not run — the placeholder says required and Start refuses until
-                         a number is here — but there is still no default of two, because the count
-                         has to come from the user for the fold to mean anything. The fold this
-                         drives is wrong to apply unasked: on one of the eighteen AMI development
-                         meetings the two genuinely different speakers who collide least never
-                         overlap at all, so a guessed default merges two real people there. -->
+                         Blank runs, and there is no default of two, because the count has to come
+                         from the user for the fold to mean anything. The fold this drives is wrong
+                         to apply unasked: on one of the eighteen AMI development meetings the two
+                         genuinely different speakers who collide least never overlap at all, so a
+                         guessed default merges two real people there.
+
+                         **Blank was refused until 2026-08-28, and that refusal was Sortformer's.**
+                         It was argued from a fifty-minute bound past which that model's estimate
+                         drifted — a figure this project measured on Sortformer, which left with it
+                         for attic/sortformer/. The model here declares no bound and no cap, so the
+                         refusal was resting on evidence that no longer exists while the sentence
+                         under the field said, in one breath, that the count was required and that
+                         the model works it out for itself. Requiring it also made the destructive
+                         reading the default: the number never reaches the clustering either way, so
+                         a count below the truth does not correct an over-split, it merges two real
+                         people. The command line has always taken this as an optional flag; the two
+                         now agree. -->
                     <StackPanel Orientation="Horizontal" Spacing="8"
                                 IsVisible="{Binding CanSetSpeakerCount}">
                       <TextBlock Text="How many speakers" Classes="secondary" VerticalAlignment="Center" />
@@ -493,7 +504,7 @@
                            a headless render would not have caught and the opened window did. -->
                       <NumericUpDown Value="{Binding SpeakerCount}" Minimum="1" Maximum="99"
                                      Increment="1" Width="170" FormatString="0"
-                                     PlaceholderText="required" />
+                                     PlaceholderText="optional" />
                     </StackPanel>
 
                     <TextBlock Text="{Binding SpeakerCountHint}" Classes="meta" TextWrapping="Wrap"
@@ -773,8 +784,12 @@
                  the catalogue on 2026-08-20 and stayed on disk, so a tab that manages models sat
                  beside gigabytes of models it would not admit to — while `uindosill models`
                  listed them under a heading of their own. There is no Load here, deliberately:
-                 nothing true can be said about weights the catalogue cannot describe, so the only
-                 thing offered is the space back. -->
+                 nothing true can be said about weights the catalogue cannot describe, so for those
+                 the only thing offered is the space back. Where the catalogue *can* name the file —
+                 a multi-file entry's weights in the root rather than in the entry's own directory —
+                 Move into place comes first, because there the honest options were never
+                 delete-or-nothing: the entry above was offering to download what was already on
+                 the disk. -->
             <Border Classes="tinted" Padding="14" IsVisible="{Binding HasSideloaded}">
               <StackPanel Spacing="11">
                 <TextBlock Text="ALSO IN THIS FOLDER" Classes="section"
@@ -785,21 +800,36 @@
                          ItemsSource="{Binding Sideloaded}"
                          SelectedItem="{Binding SelectedSideloaded}">
                   <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SideloadedFileViewModel">
-                      <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding FileName}" Classes="mono"
+                    <DataTemplate x:DataType="vm:SideloadedItemViewModel">
+                      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}" Classes="mono"
                                    FontSize="11" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Grid.Column="1" Text="{Binding SizeLabel}" Classes="meta"
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SizeLabel}" Classes="meta"
                                    Margin="10,0,0,0" />
+                        <!-- Said on the row rather than only in the paragraph above, because the
+                             paragraph describes a set and the Delete button acts on one line. A
+                             file the catalogue names by name and size is not a stray, and the row
+                             that is about to be deleted is where that has to be legible. -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                   Text="{Binding PlacementLabel}" Classes="meta" FontSize="10.5"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasPlacementLabel}" />
                       </Grid>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
 
-                <Button Classes="onPage" Content="Delete file"
-                        HorizontalAlignment="Left"
-                        Command="{Binding RemoveSideloadedCommand}"
-                        IsEnabled="{Binding CanRemoveSideloaded}" />
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <!-- First, and enabled only for weights an entry above declares: it is the
+                       non-destructive way out of the state, and it costs nothing to undo by hand.
+                       Delete keeps its place beside it for everything the catalogue cannot name. -->
+                  <Button Classes="onPage" Content="Move into place"
+                          Command="{Binding MoveIntoPlaceCommand}"
+                          IsEnabled="{Binding CanMoveIntoPlace}" />
+                  <Button Classes="onPage" Content="Delete file"
+                          Command="{Binding RemoveSideloadedCommand}"
+                          IsEnabled="{Binding CanRemoveSideloaded}" />
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -895,6 +925,57 @@
                    button is dark, or what the last press wrote — a disabled control with no
                    reason beside it is the shape of every interface defect this window has
                    shipped. -->
+              <!-- ── Who is speaking ──────────────────────────────────────────
+                   The same strip as the Ask tab and the same objects behind it, so a name typed on
+                   either is the name on both. It is repeated rather than moved because both tabs
+                   want it: one to read along with, this one to write into the files.
+
+                   Here because this is where it changes something. ExportFilesCommand has always
+                   written the named document, so the names did reach SRT, VTT, JSON and RTTM — but
+                   the only place to type one was a tab about asking questions, and the button they
+                   change was one tab away with nothing on this page admitting the feature existed.
+                   Directly above Export, so the last thing read before pressing it is who the
+                   voices are.
+
+                   Absent on a transcript nobody labelled, which is most of them: the pass is
+                   opt-in. -->
+              <TextBlock Text="WHO IS SPEAKING" Classes="section" Margin="0,4,0,0"
+                         IsVisible="{Binding HasSpeakers}" />
+
+              <ItemsControl Name="ExportVoices" ItemsSource="{Binding Speakers}"
+                            IsVisible="{Binding HasSpeakers}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel ItemSpacing="7" LineSpacing="7" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SpeakerViewModel">
+                    <Border Classes="speaker"
+                            Classes.chip0="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                            Classes.chip1="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=1}"
+                            Classes.chip2="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=2}"
+                            Classes.chip3="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=3}"
+                            Classes.chip4="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=4}"
+                            Classes.chip5="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=5}"
+                            Classes.chip6="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=6}"
+                            Classes.chip7="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=7}"
+                            ToolTip.Tip="{Binding Label}">
+                      <!-- LostFocus for the same reason as the Ask tab's: a name is redrawn when it
+                           is finished, not on every keystroke. -->
+                      <TextBox Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                               PlaceholderText="{Binding Label}"
+                               MinWidth="72" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Name="ExportRenameNotice" Classes="fine meta" MaxWidth="560"
+                         HorizontalAlignment="Left" TextWrapping="Wrap"
+                         Text="{Binding RenameNotice}"
+                         IsVisible="{Binding RenameNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
               <Button Name="ExportFiles" Classes="primary" Content="Export"
                       HorizontalAlignment="Left" Margin="0,4,0,0"
                       Command="{Binding ExportFilesCommand}" />
@@ -1831,7 +1912,7 @@
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Hugging Face token" Classes="secondary" VerticalAlignment="Center" />
                 <TextBox Text="{Binding HuggingFaceToken}" MinWidth="260" PasswordChar="•"
-                         Watermark="hf_…" />
+                         PlaceholderText="hf_…" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="One of the speaker models is only handed out to people who have accepted its terms. Open its page from the Models tab, accept them, then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />

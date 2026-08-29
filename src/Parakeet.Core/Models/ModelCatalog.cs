@@ -13,6 +13,7 @@ public sealed class ModelCatalog
 {
     private readonly Dictionary<string, ModelDescriptor> _byId;
     private readonly Dictionary<ModelTask, IReadOnlyList<ModelDescriptor>> _byTask;
+    private readonly Dictionary<string, IReadOnlyList<ModelDescriptor>> _byDeclaredFileName;
 
     private ModelCatalog(IReadOnlyList<ModelDescriptor> models, IReadOnlyList<DeferredModelPin> deferred)
     {
@@ -22,6 +23,19 @@ public sealed class ModelCatalog
         _byTask = Enum.GetValues<ModelTask>().ToDictionary(
             task => task,
             task => (IReadOnlyList<ModelDescriptor>)[.. models.Where(m => m.Task == task)]);
+
+        // OrdinalIgnoreCase throughout: case is not a distinction a Windows file name makes, and
+        // an index built without the comparer would miss the same file spelled differently.
+        _byDeclaredFileName = models
+            .Where(model => model.IsMultiFile)
+            .SelectMany(model => model.Files
+                .Where(file => !file.FileName.Contains('/', StringComparison.Ordinal))
+                .Select(file => (file.FileName, Model: model)))
+            .GroupBy(pair => pair.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<ModelDescriptor>)[.. group.Select(pair => pair.Model)],
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static readonly Lazy<ModelCatalog> DefaultCatalog = new(LoadEmbedded, isThreadSafe: true);
@@ -77,6 +91,39 @@ public sealed class ModelCatalog
     /// </remarks>
     public ModelDescriptor? RecommendedAnswering =>
         AnsweringModels.FirstOrDefault(m => m.Recommended);
+
+    /// <summary>
+    /// The multi-file entries that declare a file of this name directly inside their own
+    /// directory — the entries a bare file of that name in the store root would belong to, if
+    /// only it were one level down.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Multi-file entries only, and that is the whole point of it.</b> A single-file entry's
+    /// file lives in the root by design, so a file matching one is installed rather than
+    /// misplaced and <see cref="LocalModelStore.ListInstalled(ModelCatalog)"/> already pairs the
+    /// two. A multi-file entry's files are only ever looked for under its directory, so a copy
+    /// sitting in the root matches nothing, and the tab called it a file "no entry accounts for"
+    /// while the entry above it read Not installed — one model, described twice, contradictorily,
+    /// with a Delete button under one description and a Download button under the other.
+    /// </para>
+    /// <para>
+    /// A list rather than one entry, because a name can be claimed twice: the two 26B answering
+    /// entries ship the same drafting head under the same name. That collision is also why a
+    /// multi-file entry gets a directory in the first place, so this cannot be flattened by
+    /// letting such files count as installed where they lie.
+    /// </para>
+    /// <para>
+    /// Files whose manifest name carries a subpath are left out. They are declared to live one
+    /// level below the entry's own directory, so no bare name in the root is ever the file they
+    /// describe.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<ModelDescriptor> EntriesDeclaringFile(string fileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        return _byDeclaredFileName.TryGetValue(fileName, out var models) ? models : [];
+    }
 
     public bool TryGet(string id, [NotNullWhen(true)] out ModelDescriptor? model) =>
         _byId.TryGetValue(id, out model);

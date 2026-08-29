@@ -6478,8 +6478,11 @@ a load could have fetched: nothing gated, since the gate answers 401 without one
   audio, or **5.2× realtime**, on the CPU at the default 12 threads; a three-minute excerpt of the
   same meeting ran at 5.4× and 5.9× on two passes. For scale, Sortformer on that same excerpt took
   0.6 s — **280× realtime** on WebGPU, about fifty times faster. That gap is structural rather than
-  a misconfiguration: the pipeline is torch on both stages with no ONNX route, and its `auto` is
-  the CPU. It is one file on one machine and no RTF is claimed beyond it.
+  a misconfiguration: the pipeline was torch on both stages with no ONNX route, and its `auto` is
+  the CPU. It is one file on one machine and no RTF is claimed beyond it. **An ONNX route landed
+  2026-08-28 and this figure is the torch one** — see § *Where the diariser's time goes*, which puts
+  the same pipeline at 6.46× realtime on the second machine and finds the provider was seated on the
+  stage it is slowest at.
 - **The bundle resolves and installs; the *shipped* bundle still does not exist.** The closure
   resolves with no conflict, and `huggingface_hub` lands on the pinned 0.36.2, satisfying
   transformers' `<1.0` and `pyannote.audio`'s `>=0.28.1` at once — which was the specific risk named
@@ -6602,6 +6605,73 @@ Not nothing, which is what this entry first claimed. On 2026-08-27, on the deskt
 - **One file has a real-time factor.** 200.7 s of wall clock for 1049.4 s of audio — **5.2×
   realtime** — on the CPU at the default 12 threads. Sortformer on a three-minute excerpt of the
   same meeting was about fifty times faster, structurally rather than by misconfiguration.
+  **A second file has one on the second machine as of 2026-08-28**, on a route that did not exist
+  when this was written: 6.46× realtime with the embedder on WebGPU and segmentation left in torch.
+  The section below has it, and the phase split that explains both numbers.
+
+### Where the diariser's time goes, and the stage the GPU was on backwards — measured 2026-08-28, second machine
+
+**The bullet above says the pipeline is "torch on both stages with no ONNX route". That stopped
+being true on 2026-08-28**, and this is the first figure for the route that replaced it.
+
+**The machine, the file and the method, because every number below is theirs.** AMD Ryzen AI 9 365
+with a Radeon 880M, no CUDA; `runs/der/stretches/two-hosts-a.wav`, 600.0 s, 16 kHz mono — so the
+resampler is a no-op and none of this is the filter that once hid nine tenths of a diarisation. Wall
+clock per pipeline step, taken by wrapping the hook the engine already passes to
+`SpeakerDiarization.apply`, so what is timed is the shipping path and not a reimplementation of it.
+One run per configuration unless a repeat is named.
+
+**The phase split, and it is not where this document guessed.** PLDA and VBx clustering are the
+stages that cannot move to a GPU, and they are **not** the cost — `speaker_counting` and
+`discrete_diarization` together came to **0.11 s of 135.8 s**. The two neural stages are effectively
+the whole wall clock.
+
+| stage | torch CPU | ONNX WebGPU |
+|---|---:|---:|
+| segmentation | **5.5 s** | **48.7 s** |
+| speaker_counting | 0.066 s | 0.008 s |
+| embeddings | **192.1 s** | **87.0 s** |
+| discrete_diarization | 0.124 s | 0.099 s |
+| whole pass | 197.9 s — 3.0× realtime | 135.8 s — 4.4× realtime |
+
+**So the provider was on the wrong stage.** It is 2.2× faster at embeddings and **8.8× slower at
+segmentation**, and seating both paid for the win with most of it. The likely reason is stated as a
+reason rather than a finding: the segmentation model is SincNet, LSTM, linear, and an LSTM is
+sequential. `onnx_export` records that opset 18 implements LSTM "for both providers", which is
+coverage, and coverage is not throughput. No per-node placement was inspected.
+
+**The mixed route is what ships from 2026-08-28** — segmentation in torch, the embedder on the
+provider: **92.8 s, 6.46× realtime**, against 135.8 s for both stages and 197.9 s for neither. That
+is **1.46× faster than the route it replaces and 2.13× faster than the CPU**. Two earlier runs of
+the same arrangement, reached by monkeypatch rather than by the shipped code, gave 90.3 s and 91.4 s.
+
+**The output does not move, and that is checked on the numbers rather than by counting turns.** All
+three routes return 78 turns and 2 speakers, and held against torch CPU turn by turn, both ONNX
+arms are **bit-identical — max |Δstart| and max |Δend| 0.000000000 s, no speaker-label
+disagreement.** This matters because the precedent is the other way: DiariZen's ONNX embedder
+returned 222 turns where torch returned 225 (`ISpeakerLabeller.cs`), so equivalence here is a
+measurement and not an expectation.
+
+**Batch size is not a lever, and 128 is not safe.** At 32, 64 and 128 the pass took 135.8 s, 139.6 s
+and 144.2 s — bigger is slightly slower — and **batch 128 returned 79 turns and 3 speakers** where
+every other configuration returned 78 and 2. `PARITY_SEGMENTATION_BATCHES` covers `(1, 2, 4, 8, 32)`,
+so 128 is outside the sizes the export's own parity sweep checks. A repeat of that configuration
+**failed outright with no result written**, and the failure is unexplained. Nothing was changed on
+the strength of it; it is recorded as a reason not to raise the batch size without a parity run.
+
+**Threads are not a lever either.** 8, 12 and 20 threads gave 132.1 s, 135.8 s and 136.6 s.
+`DEFAULT_THREADS = 12` stands, and it was chosen for run-to-run comparability rather than speed
+anyway.
+
+**What is not established.** No DER on any of these routes, on this file or any other — the output
+equivalence above says the three agree with each other, not that any of them is right. One file, one
+machine, and single runs except where a repeat is named; run-to-run variance was 0.9% on the one
+configuration measured twice back to back (137.0 s and 135.8 s). **Two runs were accidentally
+executed concurrently and their timings are discarded rather than reported** — a second diarisation
+sharing this iGPU measured 215.0 s against the same configuration's 135.8 s alone, which is the size
+of the error that would have been. `dml` remains unexecuted on these graphs, so nothing here says
+which stage it would want. Nothing was measured on the desktop, where a CUDA torch would move
+fbank as well and this whole trade may come out differently.
 
 ### Not proven — and this list got longer rather than shorter
 

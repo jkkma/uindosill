@@ -338,6 +338,21 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(options);
 
+        // **The third silent phase, and the one that reads most like a hang.** The first labelling
+        // run of a session starts the bundled Python, imports torch and lets the provider compile
+        // its shaders before a single sample is read — tens of seconds on a cold machine, during
+        // which the row said "Labelling speakers" over a bar left full by the decode that just
+        // finished. That is the same defect the staging half was given a Detail for, one phase
+        // earlier, and it was mistaken for a hang the same way.
+        //
+        // No Total, so the bar renders indeterminate: this work has no measured length and a
+        // percentage would be invented. See TranscriptionProgress.Fraction.
+        progress?.Report(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.LabellingSpeakers,
+            Detail = "Labelling speakers — starting the speaker model",
+        });
+
         await LoadAsync(ct).ConfigureAwait(false);
 
         var wav = await WriteResampledWavAsync(audio, ct, progress).ConfigureAwait(false);
@@ -352,6 +367,14 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                 progress.Report(new TranscriptionProgress
                 {
                     Stage = TranscriptionStage.LabellingSpeakers,
+
+                    // **Numbered, because this bar restarting is the thing people report.** Two
+                    // halves each sweep 0–100% and there is no measured ratio to weight a single
+                    // combined bar with (docs/UNPROVEN.md), so they stay two — but the second one
+                    // arriving at 0% under an unchanged status reads as the work starting over.
+                    // Saying which half is running needs no ratio at all, which is what the
+                    // objection to combining them was actually about.
+                    Detail = "Labelling speakers — working out who is speaking (2 of 2)",
                     Processed = total is { } known ? known * Math.Clamp(fraction, 0d, 1d) : TimeSpan.Zero,
                     Total = total,
                 });
@@ -515,7 +538,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                         progress.Report(new TranscriptionProgress
                         {
                             Stage = TranscriptionStage.LabellingSpeakers,
-                            Detail = "Labelling speakers — reading the audio again",
+                            Detail = "Labelling speakers — reading the audio again (1 of 2)",
                             Processed = read,
                             Total = whole,
                         });
