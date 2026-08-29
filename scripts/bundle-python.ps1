@@ -74,6 +74,14 @@ param(
     # property of the sidecar worth checking on its own.
     [switch] $SkipPackages,
 
+    # Resolve the closure freely and rewrite python/requirements-bundle.lock.txt from what pip
+    # settled on, instead of constraining the install to what is already pinned there. This is the
+    # only supported way to move the lock, and it is deliberately a switch rather than the default:
+    # every other run of this script is meant to reproduce a bundle, not to choose a new one. Run
+    # scripts/collect-python-notices.py in the same commit, so NOTICE.md and the lock describe one
+    # bundle.
+    [switch] $WriteLock,
+
     # Reuse an already-downloaded embeddable zip instead of fetching it.
     [string] $ArchivePath
 )
@@ -96,6 +104,12 @@ $archiveSha256 = '4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3
 $repo = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repo 'python/uindosill_engines'
 $requirements = Join-Path $repo 'python/requirements-bundle.txt'
+
+# The transitive closure, pinned, applied as a pip constraints file. Its own header carries what it
+# is for and what it deliberately leaves out; the short version is that requirements-bundle.txt pins
+# 26 packages and the other 83 used to float, which cost a release job, a reproducible pack digest
+# and 100,079 bytes of installer margin in one afternoon.
+$lock = Join-Path $repo 'python/requirements-bundle.lock.txt'
 
 function Write-Step([string] $Text) { Write-Host "`n== $Text" -ForegroundColor Cyan }
 function Write-Note([string] $Text) { Write-Host "   $Text" -ForegroundColor DarkGray }
@@ -227,8 +241,52 @@ else {
     foreach ($name in $sdistAllowed) { $pipArgs += @('--no-binary', $name) }
     $pipArgs += @('--target', $sitePackages, '-r', $requirements)
 
+    # The constraints, unless this run is the one choosing them. `-c` binds a version where a
+    # package is installed and never installs one itself, so the lock cannot add to the bundle: a
+    # genuinely new transitive dependency still arrives unconstrained, and is caught one step later
+    # by collect-python-notices.py, which is the right place for it because a new distribution is a
+    # new licence and wants a person rather than a pin.
+    if ($WriteLock) {
+        Write-Note 'resolving freely: -WriteLock will rewrite the lock from what pip settles on'
+    }
+    elseif (Test-Path -LiteralPath $lock) {
+        $pipArgs += @('-c', $lock)
+        Write-Note "constrained by $(Split-Path -Leaf $lock)"
+    }
+    else {
+        # Not a throw: a checkout without the lock can still build a bundle, and saying so beats
+        # failing. But it is the drift this file exists to stop, so it is a warning and not a note.
+        Write-Warning ("$lock is missing, so the transitive closure will resolve to whatever is " +
+                       "current. That is what failed v1.0.0-rc.7's release job. Regenerate it with " +
+                       "-WriteLock.")
+    }
+
     & $HostPython @pipArgs
     if ($LASTEXITCODE -ne 0) { throw 'pip install failed; the bundle is incomplete.' }
+
+    if ($WriteLock) {
+        Write-Step 'Lock'
+
+        # Read off the assembled bundle rather than off the host: `--path` is what makes this the
+        # closure that shipped instead of whatever the machine happens to have.
+        $frozen = & $HostPython -m pip freeze --path $sitePackages
+        if ($LASTEXITCODE -ne 0) { throw 'pip freeze failed; the lock was not rewritten.' }
+
+        # The three that carry a local version suffix chosen by the index rather than by this
+        # repository. Constraining them would pin `+cpu` into the CUDA pack, whose whole purpose is
+        # to be the other build. Their versions are pinned in requirements-bundle.txt.
+        $indexChosen = @('torch', 'torchaudio', 'torchcodec')
+        $kept = @($frozen | Where-Object {
+            $name = ($_ -split '==')[0].Trim()
+            $name -and ($name -notin $indexChosen)
+        })
+
+        $header = @(Get-Content -LiteralPath $lock | Where-Object { $_.StartsWith('#') -or -not $_.Trim() })
+        Set-Content -LiteralPath $lock -Value ($header + $kept) -Encoding ascii
+
+        Write-Note "$(Split-Path -Leaf $lock): $($kept.Count) pinned, $($indexChosen.Count) left to the index"
+        Write-Note 'run scripts/collect-python-notices.py now, in the same commit'
+    }
 }
 
 # -- the source ------------------------------------------------------------------------------------

@@ -6118,3 +6118,70 @@ as what was run that day; it is simply no longer the artefact anybody can fetch.
 
 **1515 tests, no weights, no display, no network - 1507 passed and 8 skipped.** None added; three
 rewritten as described, and one renamed with them.
+
+### Fixed 2026-08-29 - the bundled Python's closure stops floating, after it cost three things in one afternoon
+
+**`python/requirements-bundle.txt` pins 26 packages and pins nothing they depend on.** The other 83
+distributions in the bundle were whatever pip resolved on the day. That was known and untroubling
+right up until it was not, and then it cost three separate things within a few hours:
+
+| what | how much |
+|---|---|
+| `v1.0.0-rc.7`'s release job | **failed after 30 minutes**, on the bundled-Python notice check |
+| the CUDA pack, rebuilt from identical pins | zip **27,649 bytes** larger, different SHA-256, torch unchanged |
+| the win-cuda installer | **100,079 bytes** larger than rc.6, against 141.7 MiB of margin |
+
+The release failure was one line: `kiwisolver` went 1.5.0 to 1.5.1 between rc.6 and rc.7. Still 109
+distributions, still 248 licence files, one version string. Three levels below `pyannote.audio`, by
+way of `matplotlib`, and nothing in this repository had an opinion about it.
+
+**The pack failure is the worse of the three**, because it is silent rather than loud. A pinned
+digest that cannot be reproduced is not a pin: it is a record of an artefact, and the only way to
+obtain a correct one is to read it off whatever happened to ship. That is how `cuda-pack.json` came
+to be filled in from a build rather than from a decision.
+
+**`python/requirements-bundle.lock.txt` is the closure, and it is applied as a pip CONSTRAINTS file
+rather than as a requirements list.** The distinction is the whole design. `-c` binds a version
+where a package is installed and never causes an installation, so the lock cannot add anything to
+the bundle. What it does is stop the 106 packages it names from moving.
+
+**Three are deliberately absent: `torch`, `torchaudio` and `torchcodec`.** They are the only entries
+carrying a local version suffix, and that suffix is chosen by the index the install runs against,
+not by this repository: `+cpu` in the bundle, `+cu130` in the pack. Constraining them would pin the
+CPU build into the artefact whose entire purpose is to be the CUDA one. Their versions stay pinned
+where they belong, and `CudaPackInstaller` still checks the pair at install.
+
+**What the lock deliberately does not catch is a genuinely new transitive package.** Constraints do
+not forbid one, so an arrival would install at its latest version. That is caught one step later by
+`scripts/collect-python-notices.py --check`, and it belongs there: a new distribution is a new
+licence, and it wants a person rather than a pin. The guard that failed rc.7 becomes the backstop
+instead of the tripwire.
+
+**Verified rather than assumed**, three ways, before it was committed:
+
+- **Constraints bind.** A dry-run resolve of `matplotlib` under a scratch constraint chose
+  `kiwisolver-1.5.0` with 1.5.1 available and current. That is the rc.7 failure, pinned shut.
+- **The lock and the requirements are satisfiable together**, which is the failure that would only
+  have appeared inside a release job. A dry-run resolve of the full set under the lock produced
+  **109 packages**, and the only three at versions the lock does not name were `torch`,
+  `torchaudio` and `torchcodec`, each at its index-chosen `+cpu` build. Everything else landed on
+  exactly the pinned version.
+- Both scripts parse.
+
+**`bundle-python.ps1 -WriteLock` is the only supported way to move it**: resolve freely, then
+rewrite the lock from `pip freeze --path` of the bundle just assembled, off the bundle rather than
+off the host. A switch rather than the default, because every other run of that script is meant to
+reproduce a bundle rather than choose one, and the note it prints says to run
+`collect-python-notices.py` in the same commit so that NOTICE.md and the lock describe one bundle.
+`bundle-python-cuda.ps1` takes the same constraints, which is what makes the pack's digests
+reproducible rather than merely recorded. Neither throws when the lock is missing: a checkout
+without it can still build a bundle, and both warn instead.
+
+**Not claimed.** That the bundle is now byte-identical across machines. Nothing here has built it
+twice on two machines and compared, and the wheels are still fetched from PyPI rather than
+vendored, so this removes version drift and not every source of difference. What is established is
+the resolution above: the same versions, in the same set, on this machine, under the lock.
+
+**1515 tests, no weights, no display, no network - 1507 passed and 8 skipped.** None added: the
+suite does not assemble a Python bundle, and the checks that matter here are the two resolves above
+and `collect-python-notices.py`, which CI already runs against the bundle every release builds.
