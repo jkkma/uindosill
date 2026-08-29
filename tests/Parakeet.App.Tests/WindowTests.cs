@@ -806,29 +806,57 @@ public class TranscribeViewModelTests
         Assert.Equal(0, job.Progress);
         Assert.True(job.IsIndeterminate);
 
-        // The staging half names itself, so the two pieces of work under one stage are told apart.
+        // Starting the model comes first and has no length anybody has measured, so it names itself
+        // over an indeterminate bar rather than inventing a percentage. Silent until 2026-08-28,
+        // and silence over a bar the decode left full is the shape of a hang — which is exactly how
+        // it was read.
         job.Apply(new TranscriptionProgress
         {
             Stage = TranscriptionStage.LabellingSpeakers,
-            Detail = "Labelling speakers — reading the audio again",
+            Detail = "Labelling speakers — starting the speaker model",
+        });
+
+        Assert.Equal("Labelling speakers — starting the speaker model", job.Status);
+        Assert.True(job.IsIndeterminate);
+
+        // Then the two halves that each sweep 0–100%, both numbered. They stay two bars because no
+        // measured ratio exists to weight one combined bar with; numbering them costs no such ratio
+        // and is what stops the second from reading as the work starting over.
+        job.Apply(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.LabellingSpeakers,
+            Detail = "Labelling speakers — reading the audio again (1 of 2)",
             Processed = TimeSpan.FromMinutes(5),
             Total = TimeSpan.FromMinutes(10),
         });
 
-        Assert.Equal("Labelling speakers — reading the audio again", job.Status);
+        Assert.Equal("Labelling speakers — reading the audio again (1 of 2)", job.Status);
         Assert.Equal(50, job.Progress);
         Assert.False(job.IsIndeterminate);
 
-        // And the sidecar's own reports fall back to the stage's name.
         job.Apply(new TranscriptionProgress
         {
             Stage = TranscriptionStage.LabellingSpeakers,
+            Detail = "Labelling speakers — working out who is speaking (2 of 2)",
             Processed = TimeSpan.FromMinutes(2),
             Total = TimeSpan.FromMinutes(10),
         });
 
-        Assert.Equal("Labelling speakers", job.Status);
+        Assert.Equal("Labelling speakers — working out who is speaking (2 of 2)", job.Status);
         Assert.Equal(20, job.Progress);
+
+        // A report with no detail still falls back to the stage's own name. Nothing in the shipping
+        // path sends one for this stage any more, and the rule is the row's rather than the
+        // sidecar's — every other stage relies on it.
+        job.Apply(new TranscriptionProgress
+        {
+            Stage = TranscriptionStage.LabellingSpeakers,
+            Processed = TimeSpan.FromMinutes(3),
+            Total = TimeSpan.FromMinutes(10),
+        });
+
+        Assert.Equal("Labelling speakers", job.Status);
+        Assert.Equal(30, job.Progress);
     }
 
     [Fact]
@@ -848,12 +876,88 @@ public class TranscribeViewModelTests
 
         // The head pairs with a model that is here, so it is accounted for and is not offered.
         var file = Assert.Single(main.Models.Sideloaded);
-        Assert.Equal("gemma-4-26B-A4B-it-UD-IQ4_XS.gguf", file.FileName);
+        Assert.Equal("gemma-4-26B-A4B-it-UD-IQ4_XS.gguf", file.Name);
 
-        // And the model itself is still listed — it really is not a catalogue entry at this path —
-        // but no longer under a sentence claiming nothing uses it.
+        // And the model itself is still listed — it really is not a catalogue entry *at this path*
+        // — but it is no longer described as a file nothing accounts for. The catalogue declares
+        // this name, under an entry that was simultaneously reading Not installed and offering to
+        // download it. Being in the wrong folder is a different problem with a different answer.
+        Assert.True(file.IsMisplaced);
+        Assert.Equal("gemma-4-26b-a4b-it-ud-iq4-xs", file.ClaimedBy?.Id);
         Assert.DoesNotContain("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
-        Assert.Contains("Ask tab", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Move into place", main.Models.SideloadedSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFolderNoEntryClaimsIsShownAndRemovedLikeAStrayFile()
+    {
+        // **The blind spot this closes.** ListInstalled lists directories from the catalogue rather
+        // than from the disk, so an entry that leaves the catalogue takes its folder out of every
+        // listing with it — a retired diariser's weights sat in the folder this tab names at the
+        // top of itself, invisible to the panel written for exactly this and unreachable by the
+        // only command that deletes leftovers, because that one takes bare file names.
+        var directory = TestTemp.NewDirectory("uindosill-models");
+        var orphan = Path.Combine(directory, "diarizen-wavlm-large-s80-md-v2");
+        Directory.CreateDirectory(Path.Combine(orphan, "nested"));
+        File.WriteAllText(Path.Combine(orphan, "pytorch_model.bin"), "abandoned weights");
+        File.WriteAllText(Path.Combine(orphan, "nested", "plda.npz"), "more");
+
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        var folder = Assert.Single(main.Models.Sideloaded);
+        Assert.Equal("diarizen-wavlm-large-s80-md-v2", folder.Name);
+        Assert.True(folder.IsDirectory);
+
+        // Named as a folder rather than counted as a file: the sentence over the Delete button is
+        // the one place the difference is legible, and it said "files" for both.
+        Assert.Contains("1 folder", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("1 file ", main.Models.SideloadedSummary, StringComparison.Ordinal);
+
+        // Nothing claims it, so Move into place has nothing to offer and does not pretend to.
+        main.Models.SelectedSideloaded = folder;
+        Assert.False(main.Models.CanMoveIntoPlace);
+        Assert.True(main.Models.CanRemoveSideloaded);
+
+        main.Models.RemoveSideloadedCommand.Execute(null);
+
+        Assert.False(Directory.Exists(orphan));
+        Assert.Empty(main.Models.Sideloaded);
+    }
+
+    [Fact]
+    public void WeightsInTheWrongFolderAreFiledWhereTheyBelongRatherThanDeleted()
+    {
+        // **The state this fixes.** A multi-file entry's weights are only ever looked for under
+        // that entry's own directory, so a copy in the root matched nothing: the tab announced
+        // 12.66 GiB that "no entry above accounts for" and put a Delete button under it, while the
+        // entry that declares those exact files — by name and to the byte — sat above reading Not
+        // installed with a Download button. Both offers cost the user the bytes they already had.
+        var directory = TestTemp.NewDirectory("uindosill-models");
+        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"), "weights");
+        File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "the head");
+
+        var store = new LocalModelStore(directory);
+        var main = new MainWindowViewModel(
+            new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
+
+        var entry = ModelCatalog.Default.Get("gemma-4-26b-a4b-it-ud-iq4-xs");
+        Assert.False(store.IsInstalled(entry));
+
+        var file = Assert.Single(main.Models.Sideloaded);
+        main.Models.SelectedSideloaded = file;
+        Assert.True(main.Models.CanMoveIntoPlace);
+
+        main.Models.MoveIntoPlaceCommand.Execute(null);
+
+        // The whole set moves, not the selected row alone: an entry is installed only when every
+        // file it declares is present, so filing the 12.66 GiB model and leaving its drafting head
+        // in the root would have moved nearly everything and installed nothing.
+        Assert.True(store.IsInstalled(entry));
+        Assert.False(File.Exists(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf")));
+        Assert.False(File.Exists(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf")));
+        Assert.Empty(main.Models.Sideloaded);
     }
 
     [Fact]
@@ -868,7 +972,7 @@ public class TranscribeViewModelTests
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
 
         var file = Assert.Single(main.Models.Sideloaded);
-        Assert.Equal("mtp-gemma-4-26B-A4B-it.gguf", file.FileName);
+        Assert.Equal("mtp-gemma-4-26B-A4B-it.gguf", file.Name);
 
         // Not a .gguf model anybody answers with, so the original sentence is the true one here.
         Assert.Contains("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
@@ -888,7 +992,7 @@ public class TranscribeViewModelTests
 
         Assert.True(main.Models.HasSideloaded);
         var file = Assert.Single(main.Models.Sideloaded);
-        Assert.Equal("tdt-0.6b-v3-q8_0.gguf", file.FileName);
+        Assert.Equal("tdt-0.6b-v3-q8_0.gguf", file.Name);
         Assert.Contains("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
 
         // The uninstall notice measures the folder rather than repeating a sentence typed once.
@@ -974,7 +1078,7 @@ public class TranscribeViewModelTests
         main.SelectedTab = 1;
 
         Assert.True(main.Models.HasSideloaded);
-        Assert.Equal("left-behind.gguf", Assert.Single(main.Models.Sideloaded).FileName);
+        Assert.Equal("left-behind.gguf", Assert.Single(main.Models.Sideloaded).Name);
     }
 
     [Fact]

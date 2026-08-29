@@ -186,21 +186,82 @@ public sealed partial class ModelViewModel : ObservableObject
 /// its name and its size, and offering to load a file the catalogue cannot describe would be
 /// offering to run weights this build cannot say anything true about.
 /// </para>
+/// <para>
+/// <b>Unless the catalogue does know the name</b>, which it may. A multi-file entry's weights are
+/// only ever looked for under that entry's own directory, so a copy of them lying in the root
+/// belongs to nothing as far as the store is concerned — and the tab said exactly that, about
+/// files whose names and sizes the manifest lists to the byte, directly under an entry reading Not
+/// installed that was offering to download them again. <see cref="ClaimedBy"/> is that entry when
+/// there is one, and it turns the row from a stray into a model in the wrong folder.
+/// </para>
 /// </remarks>
-public sealed class SideloadedFileViewModel
+public sealed class SideloadedItemViewModel
 {
-    public SideloadedFileViewModel(string fileName, long sizeBytes)
+    public SideloadedItemViewModel(
+        string name,
+        long sizeBytes,
+        bool isDirectory = false,
+        ModelDescriptor? claimedBy = null,
+        bool claimedEntryInstalled = false)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
-        FileName = fileName;
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Name = name;
         SizeBytes = sizeBytes;
+        IsDirectory = isDirectory;
+        ClaimedBy = claimedBy;
+        ClaimedEntryInstalled = claimedEntryInstalled;
     }
 
-    public string FileName { get; }
+    public string Name { get; }
+
+    /// <summary>
+    /// Whether this row is a folder rather than a file, which decides how it is removed.
+    /// </summary>
+    /// <remarks>
+    /// A folder is never a misplaced entry's weights: only a bare file in the root can be that, so
+    /// <see cref="ClaimedBy"/> is always null here and Move into place never offers itself. What a
+    /// folder can be is an entry that left the catalogue — a retired diariser's 332 MB — which is
+    /// the case this list could not show at all until 2026-08-28.
+    /// </remarks>
+    public bool IsDirectory { get; }
 
     public long SizeBytes { get; }
 
     public string SizeLabel => ByteSize.Describe(SizeBytes);
+
+    /// <summary>
+    /// The catalogue entry that declares a file of this name, or null when nothing does.
+    /// </summary>
+    /// <remarks>
+    /// One entry, though a name can be declared by more than one — the two 26B answering entries
+    /// ship the same drafting head. Which of them a loose head belongs to is not decidable from the
+    /// head, so <see cref="ModelsViewModel"/> only sets this where the answer is single.
+    /// </remarks>
+    public ModelDescriptor? ClaimedBy { get; }
+
+    /// <summary>Whether the entry that declares this name is already installed in its own directory.</summary>
+    /// <remarks>
+    /// The difference between weights that are merely in the wrong place and a second copy of
+    /// weights already sitting in the right one. Only the first can be moved into place; the
+    /// second is a duplicate, and which copy to keep is not this tab's call to make.
+    /// </remarks>
+    public bool ClaimedEntryInstalled { get; }
+
+    /// <summary>Whether this file is a known model in the wrong folder rather than a stray.</summary>
+    public bool IsMisplaced => ClaimedBy is not null && !ClaimedEntryInstalled;
+
+    /// <summary>
+    /// What the row says about itself under its name: the entry it belongs to, or nothing at all
+    /// when the catalogue has never heard of it.
+    /// </summary>
+    public string PlacementLabel => ClaimedBy is not { } model
+        ? string.Empty
+        : ClaimedEntryInstalled
+            ? $"a second copy of “{model.DisplayName}”, which is installed"
+            : $"belongs to “{model.DisplayName}” — wrong folder";
+
+    /// <summary>Whether there is anything to say under the name. Bound rather than converted.</summary>
+    public bool HasPlacementLabel => PlacementLabel.Length > 0;
 }
 
 public sealed partial class ModelsViewModel : ObservableObject
@@ -235,6 +296,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanUnload))]
     [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSideloadedCommand))]
+    [NotifyPropertyChangedFor(nameof(CanMoveIntoPlace))]
+    [NotifyCanExecuteChangedFor(nameof(MoveIntoPlaceCommand))]
     private bool _isTranscribing;
 
     public ModelsViewModel(
@@ -346,12 +409,14 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// <summary>
     /// Weights in the model directory that no catalogue entry claims. Usually empty.
     /// </summary>
-    public ObservableCollection<SideloadedFileViewModel> Sideloaded { get; } = [];
+    public ObservableCollection<SideloadedItemViewModel> Sideloaded { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveSideloadedCommand))]
     [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
-    private SideloadedFileViewModel? _selectedSideloaded;
+    [NotifyCanExecuteChangedFor(nameof(MoveIntoPlaceCommand))]
+    [NotifyPropertyChangedFor(nameof(CanMoveIntoPlace))]
+    private SideloadedItemViewModel? _selectedSideloaded;
 
     /// <summary>Whether the sideloaded section is drawn at all. Nothing to say when there is nothing there.</summary>
     public bool HasSideloaded => Sideloaded.Count > 0;
@@ -704,7 +769,7 @@ public sealed partial class ModelsViewModel : ObservableObject
 
         // Rebuilt rather than reconciled: this list is short, changes rarely, and nothing is bound
         // to the identity of a row in it.
-        var chosen = SelectedSideloaded?.FileName;
+        var chosen = SelectedSideloaded?.Name;
         Sideloaded.Clear();
 
         // A drafting head that belongs to a model on this disk is not an unaccounted-for file:
@@ -725,11 +790,27 @@ public sealed partial class ModelsViewModel : ObservableObject
                 continue;
             }
 
-            Sideloaded.Add(new SideloadedFileViewModel(name, file.SizeBytes));
+            var claimedBy = ClaimingEntry(name);
+            Sideloaded.Add(new SideloadedItemViewModel(
+                name,
+                file.SizeBytes,
+                isDirectory: false,
+                claimedBy,
+                claimedBy is not null && _store.IsInstalled(claimedBy)));
+        }
+
+        // Folders, after the files and from a separate question. ListInstalled lists directories
+        // from the catalogue rather than from the disk, so an entry that leaves the catalogue takes
+        // its folder out of every listing with it — the retired diariser's 332 MB was on disk, in
+        // the folder this tab names at the top of itself, invisible to the panel written for
+        // exactly this and unreachable by the only command that deletes leftovers.
+        foreach (var directory in _store.ListSideloadedDirectories(_catalog))
+        {
+            Sideloaded.Add(new SideloadedItemViewModel(directory.Name, directory.SizeBytes, isDirectory: true));
         }
 
         SelectedSideloaded = Sideloaded.FirstOrDefault(f =>
-            string.Equals(f.FileName, chosen, StringComparison.OrdinalIgnoreCase));
+            string.Equals(f.Name, chosen, StringComparison.OrdinalIgnoreCase));
 
         _installedBytes = onDisk.Sum(m => m.SizeBytes);
 
@@ -752,24 +833,82 @@ public sealed partial class ModelsViewModel : ObservableObject
                 return string.Empty;
             }
 
-            var summary = $"{Sideloaded.Count} file{(Sideloaded.Count == 1 ? string.Empty : "s")} in this folder "
-                + $"({ByteSize.Describe(Sideloaded.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
-                + "weights from an older version of Uindosill, or files put here by hand.";
+            // **Three groups, because the one sentence used to describe all of them was false for
+            // two.** "No entry above accounts for" was written when nothing here could be a
+            // catalogue entry's file, and a multi-file entry made that untrue: its weights are
+            // looked for under its own directory, so a copy in the root matched nothing and was
+            // announced as belonging to nothing — directly beneath the entry that declares it, by
+            // name and to the byte, reading Not installed and offering to download it again.
+            var strays = Sideloaded.Where(f => f.ClaimedBy is null).ToList();
+            var misplaced = Sideloaded.Where(f => f.IsMisplaced).ToList();
+            var duplicates = Sideloaded.Where(f => f.ClaimedBy is not null && f.ClaimedEntryInstalled).ToList();
 
-            // **It used to end "Nothing uses them", and that became untrue.** The Ask tab picks
-            // the model it answers with by looking in this folder, not by catalogue id, so a
-            // .gguf here can be the model in use — and this sentence sits directly above a
-            // Delete button. Said only when there is a .gguf among them, because for a leftover
-            // that is not one the original sentence was right.
-            // A head is a .gguf and is never the model the panel answers with, so it does not
-            // make the sentence about the Ask tab true — only a model the panel could load does.
-            return Sideloaded.Any(f =>
-                f.FileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
-                && !DraftModelLocator.IsDraftHead(f.FileName))
-                ? summary + " The Ask tab answers with a .gguf from this folder, so one of these may "
-                    + "be the model it is using — the Ask tab's own settings say which."
-                : summary + " Nothing uses them.";
+            var sentences = new List<string>();
+
+            if (strays.Count > 0)
+            {
+                var summary = $"{DescribeCount(strays)} here "
+                    + $"({ByteSize.Describe(strays.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
+                    + "weights from an older version of Uindosill, or things put here by hand.";
+
+                // **It used to end "Nothing uses them", and that became untrue.** The Ask tab picks
+                // the model it answers with by looking in this folder, not by catalogue id, so a
+                // .gguf here can be the model in use — and this sentence sits directly above a
+                // Delete button. Said only when there is a .gguf among them, because for a leftover
+                // that is not one the original sentence was right.
+                // A head is a .gguf and is never the model the panel answers with, so it does not
+                // make the sentence about the Ask tab true — only a model the panel could load does.
+                sentences.Add(strays.Any(f =>
+                    f.Name.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
+                    && !DraftModelLocator.IsDraftHead(f.Name))
+                    ? summary + " The Ask tab answers with a .gguf from this folder, so one of these may "
+                        + "be the model it is using — the Ask tab's own settings say which."
+                    : summary + " Nothing uses them.");
+            }
+
+            if (misplaced.Count > 0)
+            {
+                var one = misplaced.Count == 1;
+                sentences.Add(
+                    $"{misplaced.Count} file{(one ? " is" : "s are")} the weights of an entry above "
+                    + $"({ByteSize.Describe(misplaced.Sum(f => f.SizeBytes))}), sitting in this folder "
+                    + $"instead of in the entry's own — which is why that entry reads Not installed and "
+                    + $"offers to download {(one ? "it" : "them")} again. Move into place files "
+                    + $"{(one ? "it" : "them")} where the entry expects {(one ? "it" : "them")}, and "
+                    + "nothing is downloaded.");
+            }
+
+            if (duplicates.Count > 0)
+            {
+                var one = duplicates.Count == 1;
+                sentences.Add(
+                    $"{duplicates.Count} more ({ByteSize.Describe(duplicates.Sum(f => f.SizeBytes))}) "
+                    + $"{(one ? "duplicates an entry" : "duplicate entries")} already installed, whose own "
+                    + $"folder holds the copy in use — so {(one ? "it is" : "they are")} the spare.");
+            }
+
+            return string.Join(" ", sentences);
         }
+    }
+
+    /// <summary>
+    /// "2 files", "1 folder", "2 files and 1 folder" — the two shapes counted separately, because
+    /// calling a folder a file is the mistake this list spent its whole life making by omission.
+    /// </summary>
+    private static string DescribeCount(IReadOnlyCollection<SideloadedItemViewModel> items)
+    {
+        var files = items.Count(i => !i.IsDirectory);
+        var folders = items.Count - files;
+
+        var filePart = files == 1 ? "1 file" : $"{files} files";
+        var folderPart = folders == 1 ? "1 folder" : $"{folders} folders";
+
+        return (files, folders) switch
+        {
+            (0, _) => folderPart,
+            (_, 0) => filePart,
+            _ => $"{filePart} and {folderPart}",
+        };
     }
 
     /// <summary>
@@ -778,6 +917,23 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </summary>
     private static bool PairsWithAModelPresent(string headName, IReadOnlyList<string> modelNames) =>
         modelNames.Any(model => DraftModelLocator.Match(model, [headName]) is not null);
+
+    /// <summary>
+    /// The catalogue entry a loose file in the root belongs to, or null when the catalogue does not
+    /// name it — or names it twice.
+    /// </summary>
+    /// <remarks>
+    /// A name two entries declare is left unclaimed rather than guessed at. Both 26B answering
+    /// entries ship <c>mtp-gemma-4-26B-A4B-it.gguf</c>, and a loose head is not evidence of which
+    /// of them it came from; saying the wrong one and offering to file it there would be worse than
+    /// the silence this keeps. The model beside it is not consulted either, because a head that
+    /// pairs with a model on this disk never reaches here — it is filtered out one level up.
+    /// </remarks>
+    private ModelDescriptor? ClaimingEntry(string fileName)
+    {
+        var claiming = _catalog.EntriesDeclaringFile(fileName);
+        return claiming.Count == 1 ? claiming[0] : null;
+    }
 
     /// <summary>
     /// What becomes of the models folder, with the size read off the folder rather than written
@@ -810,6 +966,58 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// <summary>Whether there is a sideloaded file selected to delete.</summary>
     public bool CanRemoveSideloaded => SelectedSideloaded is not null && !IsTranscribing;
 
+    /// <summary>Whether the selected file is a known entry's weights that can be filed where they belong.</summary>
+    public bool CanMoveIntoPlace => SelectedSideloaded is { IsMisplaced: true } && !IsTranscribing;
+
+    /// <summary>
+    /// Moves the selected file, and every other file its entry declares that is lying beside it,
+    /// into the directory that entry installs into.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The whole set rather than the one row, because an entry is installed only when all of its
+    /// files are present: moving a 12.66 GiB model and leaving its 440 MiB drafting head in the
+    /// root would leave the entry reading Not installed, having moved nearly everything. The store
+    /// refuses the lot rather than overwriting, so a folder that already holds part of an entry is
+    /// left exactly as it was found.
+    /// </para>
+    /// <para>
+    /// Nothing is deleted and nothing is fetched — this is a rename within one folder. That is why
+    /// it is offered where the alternatives were a re-download of bytes already present and a
+    /// Delete button under weights the Ask tab would have been glad to load.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanMoveIntoPlace))]
+    private void MoveIntoPlace()
+    {
+        if (SelectedSideloaded is not { ClaimedBy: { } model } file)
+        {
+            return;
+        }
+
+        try
+        {
+            var moved = _store.GatherIntoPlace(model);
+            StatusMessage = moved switch
+            {
+                0 => $"{file.Name} could not be moved. Something is already in "
+                     + $"{model.StorageName}, or the file is in use.",
+                1 => $"Moved {file.Name} into {model.StorageName}. “{model.DisplayName}” is installed.",
+                _ => $"Moved {moved} files into {model.StorageName}. “{model.DisplayName}” is installed.",
+            };
+        }
+        catch (IOException ex)
+        {
+            StatusMessage = $"{file.Name} could not be moved: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = $"{file.Name} could not be moved: {ex.Message}";
+        }
+
+        Refresh();
+    }
+
     /// <summary>
     /// Deletes one sideloaded file.
     /// </summary>
@@ -826,10 +1034,16 @@ public sealed partial class ModelsViewModel : ObservableObject
             return;
         }
 
-        var removed = _store.RemoveSideloaded(file.FileName, _catalog);
+        // A folder is deleted with everything in it, exactly as removing a multi-file entry is, and
+        // through a separate store method: the file path takes bare file names and refuses a
+        // directory, which is what left a retired diariser's 332 MB unreachable from here.
+        var removed = file.IsDirectory
+            ? _store.RemoveSideloadedDirectory(file.Name, _catalog)
+            : _store.RemoveSideloaded(file.Name, _catalog);
+
         StatusMessage = removed
-            ? $"Deleted {file.FileName} ({file.SizeLabel})."
-            : $"{file.FileName} could not be deleted. It may be in use, or already gone.";
+            ? $"Deleted {file.Name} ({file.SizeLabel})."
+            : $"{file.Name} could not be deleted. It may be in use, or already gone.";
 
         Refresh();
     }

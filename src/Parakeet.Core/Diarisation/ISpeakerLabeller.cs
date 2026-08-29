@@ -107,9 +107,14 @@ public sealed record SpeakerLabellerCapabilities
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Always <c>torch:&lt;device&gt;</c> for the shipping labeller, and never empty.</b> The
-    /// pipeline runs both neural stages on one runtime, so this and the segmentation backend agree
-    /// by construction and <see cref="Backend"/> would in fact answer it.
+    /// <b>It is the only field that says which runtime ran, and since 2026-08-28 it disagrees with
+    /// the segmentation one on purpose.</b> An ONNX provider now seats the embedder alone: the
+    /// pipeline is <c>torch:cpu</c> for segmentation and <c>onnx:webgpu</c> here, because the
+    /// provider is 2.2x faster at this stage and 8.8x slower at the other one — measured on the
+    /// second machine, one ten-minute stretch, `docs/UNPROVEN.md`. So <see cref="Backend"/> does
+    /// <em>not</em> answer this, and a reader who takes either name for the whole run is half wrong
+    /// either way. It was true that both stages shared a runtime until that day, and the sentence
+    /// that said so is kept below because the reason the field exists has not changed.
     /// <para>
     /// <b>It exists because one engine had two runtimes, and that engine has gone.</b> DiariZen ran
     /// segmentation in torch and let only the embedder negotiate a provider; both the torch embedder

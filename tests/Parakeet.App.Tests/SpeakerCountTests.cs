@@ -103,15 +103,16 @@ public class SpeakerCountTests
 
         // Blank by default rather than defaulting to two: the number has to come from the user for
         // the fold to mean anything, since a guessed count would merge two genuinely different
-        // speakers on one of the eighteen AMI development meetings. But blank no longer runs — the
-        // hint says the field is required the moment the opt-in makes it live.
+        // speakers on one of the eighteen AMI development meetings. Blank runs, and the hint says
+        // what blank does rather than demanding a number the model is never told.
         Assert.Null(viewModel.SpeakerCount);
         Assert.False(viewModel.CanSetSpeakerCount);
         Assert.Null(viewModel.SpeakerCountHint);
 
         viewModel.LabelSpeakers = true;
         Assert.True(viewModel.CanSetSpeakerCount);
-        Assert.Contains("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
+        Assert.Contains("Leave this blank", viewModel.SpeakerCountHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
 
         // And it says the count will be honoured afterwards rather than by the model, because those
         // are different facts and only one of them is what happens.
@@ -120,12 +121,13 @@ public class SpeakerCountTests
     }
 
     [Fact]
-    public async Task WithoutACountTheBatchRefusesToStart()
+    public async Task WithoutACountTheBatchRunsAndTheModelDecides()
     {
-        // The estimate this refusal replaces invents four voices on a drifted recording, the
-        // transcript gets four names, and no sentence anywhere says which of "four people" and
-        // "one person heard twice" happened. So the window does not take a blank at all: the count
-        // is required the moment the opt-in is on — no bound involved, this labeller has none set.
+        // **This refused to start until 2026-08-28, and the refusal was the retired model's.** It
+        // was argued from a fifty-minute bound past which that model's estimate drifted; the figure
+        // went to attic/ with the model, and the labeller that ships declares no bound and no cap.
+        // The count never reaches the clustering in either case, so requiring it did not steer the
+        // model — it forced a fold, and below the true count a fold merges two real people.
         var (viewModel, directory) = Create(OverSegmenting);
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
@@ -133,15 +135,14 @@ public class SpeakerCountTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
-        Assert.Contains("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
+        // It runs, and what comes back is the model's own estimate — four, unfolded, because
+        // nothing asked for fewer.
+        Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.DoesNotContain("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
 
-        // And where that field is. The opt-in is back on the page this message is read on, so the
-        // pointer is "under the opt-in" rather than the name of another tab — but there is still a
-        // pointer, because the field is hidden until the box is ticked and a control named without
-        // its place is a repair nobody can act on.
-        Assert.Contains("under the opt-in", viewModel.StatusMessage, StringComparison.Ordinal);
+        viewModel.SelectedJob = viewModel.Jobs[0];
+        await viewModel.ExportFilesCommand.ExecuteAsync(null);
+        Assert.Equal(4, SpeakersIn(Path.Combine(directory, "a.rttm")));
     }
 
     [Fact]
@@ -320,39 +321,29 @@ public class SpeakerCountTests
     }
 
     [Fact]
-    public async Task PastTheBoundTheBatchStopsAndAsksForACount()
+    public async Task PastTheBoundTheBatchWarnsBesideTheQueueAndStillRuns()
     {
-        // Blank refuses everywhere now, but past the bound the refusal earns a sharper sentence:
-        // this is the recording where estimating is measured to go wrong — one host over-segmented
-        // into two labels, silently, on a file somebody is about to spend half an hour on — so the
-        // message names the file rather than reciting the rule.
+        // **This stopped the batch until 2026-08-28.** Past the bound is where a labeller that
+        // declares one is measured to go wrong, and that is worth a sentence in front of the person
+        // who can still act on it — but it is not grounds to refuse, because the number they would
+        // type never reaches the clustering. It forces a fold instead, and a fold below the true
+        // count merges two real people. So the warning is drawn beside the queue and Start stays
+        // theirs to press.
         var (viewModel, directory) = Create(OverSegmenting with { ReliableUpTo = TimeSpan.FromSeconds(4) });
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
         viewModel.LabelSpeakers = true;
 
-        await viewModel.StartCommand.ExecuteAsync(null);
-
-        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
-        Assert.Contains("a.wav is longer than", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("'How many speakers'", viewModel.StatusMessage, StringComparison.Ordinal);
-
-        // And where that field is. The opt-in is back on the page this message is read on, so the
-        // pointer is "under the opt-in" rather than the name of another tab — but there is still a
-        // pointer, because the field is hidden until the box is ticked and a control named without
-        // its place is a repair nobody can act on.
-        Assert.Contains("under the opt-in", viewModel.StatusMessage, StringComparison.Ordinal);
-
-        // The hint beside the field says the same thing at the same moment, rather than letting
-        // Start be the first place anybody hears it.
-        Assert.Contains("does not run without it", viewModel.SpeakerCountHint, StringComparison.Ordinal);
-
-        // Two ways out, and both are decisions rather than guesses. Turning the opt-in off runs;
-        // the formats are Export's question now, so nothing about RTTM stands in Start's way.
-        viewModel.LabelSpeakers = false;
+        Assert.Contains("a.wav", viewModel.SpeakerDurationWarning, StringComparison.Ordinal);
+        Assert.Contains("only reliable", viewModel.SpeakerDurationWarning, StringComparison.Ordinal);
 
         await viewModel.StartCommand.ExecuteAsync(null);
+
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.DoesNotContain("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // And the hint beside the field says what blank does rather than refusing it.
+        Assert.Contains("Leave this blank", viewModel.SpeakerCountHint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -373,12 +364,13 @@ public class SpeakerCountTests
     }
 
     [Fact]
-    public async Task InsideTheBoundABlankCountIsStillRefused()
+    public async Task InsideTheBoundABlankCountRuns()
     {
-        // The guard is about the opt-in, not the bound. Inside the bound the estimate is measured
-        // correct, and the count is required anyway, because a wrong estimate is silent wherever it
-        // happens and the person pressing Start knows the number. What the bound still changes is
-        // the sentence: a short queue gets the rule, not a file named as past the evidence.
+        // A bound is still a fact worth saying — a labeller that declares one gets the warning
+        // Inside the bound there is nothing to warn about and, since 2026-08-28, nothing to refuse
+        // either. The guard that stood here was about the opt-in rather than the bound, so a short
+        // queue was stopped by a rule whose evidence was a length none of its files reached.
+        // Past the bound is PastTheBoundTheBatchWarnsBesideTheQueueAndStillRuns' claim.
         var (viewModel, directory) = Create(OverSegmenting with { ReliableUpTo = TimeSpan.FromMinutes(30) });
         viewModel.AddFiles([WriteWav(directory, "a.wav")]);
         SelectTextAndTurns(viewModel);
@@ -386,18 +378,18 @@ public class SpeakerCountTests
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        Assert.Equal(JobState.Pending, viewModel.Jobs[0].State);
-        Assert.Contains("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.DoesNotContain("is longer than", viewModel.StatusMessage, StringComparison.Ordinal);
-
-        // Giving the number is the way through, exactly as it is past the bound.
-        viewModel.SpeakerCount = 2;
-        await viewModel.StartCommand.ExecuteAsync(null);
-
         Assert.Equal(JobState.Completed, viewModel.Jobs[0].State);
+        Assert.DoesNotContain("needs to know how many", viewModel.StatusMessage, StringComparison.Ordinal);
+
+        // The model's own estimate, unfolded, because nothing asked for fewer. That a number still
+        // folds is ACountTheLabellerCannotBeToldIsFoldedDownAfterwards' claim, not this one's —
+        // asserting it here would need a second run, and a finished job does not run again.
         viewModel.SelectedJob = viewModel.Jobs[0];
         await viewModel.ExportFilesCommand.ExecuteAsync(null);
-        Assert.Equal(2, SpeakersIn(Path.Combine(directory, "a.rttm")));
+        Assert.Equal(4, SpeakersIn(Path.Combine(directory, "a.rttm")));
+
+        // Nothing queued is anywhere near thirty minutes, so there was never a warning here either.
+        Assert.Null(viewModel.SpeakerDurationWarning);
     }
 
     [Fact]

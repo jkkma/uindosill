@@ -48,6 +48,29 @@ public interface IModelStore
     bool Remove(ModelDescriptor model);
 
     /// <summary>
+    /// Moves the files a multi-file entry declares out of the store root and into that entry's own
+    /// directory, where the entry expects them. Returns how many moved, and zero when there was
+    /// nothing in the root to move.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The repair for weights that are the right model in the wrong folder — put there by hand, or
+    /// by a build that stored them differently. Before this the tab could only offer to delete
+    /// them: <see cref="ListInstalled(ModelCatalog)"/> matches a bare file in the root against
+    /// single-file entries only, so a multi-file entry's weights lying there were reported as
+    /// belonging to nothing while the entry itself read Not installed, and the two offers on the
+    /// screen were re-download and delete — both of which cost the user the bytes they already had.
+    /// </para>
+    /// <para>
+    /// It refuses rather than overwrites when the destination is occupied, because a file already
+    /// under the entry's directory is that entry's install and this is not the path that replaces
+    /// one. Nothing is deleted here either way: a refusal leaves both copies where they are, for
+    /// somebody who can see both to decide between.
+    /// </para>
+    /// </remarks>
+    int GatherIntoPlace(ModelDescriptor model);
+
+    /// <summary>
     /// Deletes a weights file in the store root that no catalogue entry claims. Returns false when
     /// there was nothing to delete, and refuses anything that is not a bare file name directly in
     /// the root or that a catalogue entry does claim.
@@ -70,6 +93,40 @@ public interface IModelStore
 
     /// <summary>The same, against a catalogue the caller names. See <see cref="ListInstalled(ModelCatalog)"/>.</summary>
     bool RemoveSideloaded(string fileName, ModelCatalog catalog);
+
+    /// <summary>
+    /// Directories in the store root that no catalogue entry claims, with what each costs on disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other half of <see cref="ListInstalled(ModelCatalog)"/>'s sideloaded files, and it was
+    /// missing for as long as that existed. <see cref="ListInstalled(ModelCatalog)"/> lists
+    /// directories <i>from the catalogue</i> — an entry names the files that make it a model — so a
+    /// directory whose entry has left the catalogue is not merely unlisted, it is unreachable:
+    /// nothing shows it, and <see cref="RemoveSideloaded(string, ModelCatalog)"/> takes bare file
+    /// names and refuses it. A diariser retired to <c>attic/</c> in August 2026 left 332 MB behind
+    /// in exactly that state, and the panel written for the four quantisations withdrawn on
+    /// 2026-08-20 could not see it, because those were files and this is a folder.
+    /// </para>
+    /// <para>
+    /// Staging directories are not reported. A <c>.part</c> is a download in progress or a resumable
+    /// one interrupted, so listing it as a leftover would invite deleting the eight good files that
+    /// a resume is about to skip.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<SideloadedDirectory> ListSideloadedDirectories(ModelCatalog catalog);
+
+    /// <summary>
+    /// Deletes a directory in the store root that no catalogue entry claims, and everything in it.
+    /// Returns false when there was nothing to delete or the name is not one this may touch.
+    /// </summary>
+    /// <remarks>
+    /// Recursive, like <see cref="Remove(ModelDescriptor)"/> is for a multi-file entry, and for the
+    /// same reason: whatever else is in there arrived with those weights. The guards are
+    /// <see cref="RemoveSideloaded(string, ModelCatalog)"/>'s — a bare name, present, and claimed by
+    /// nothing — plus a refusal of <c>.part</c>, because an interrupted download is not a leftover.
+    /// </remarks>
+    bool RemoveSideloadedDirectory(string directoryName, ModelCatalog catalog);
 }
 
 /// <summary>
@@ -217,6 +274,145 @@ public sealed class LocalModelStore : IModelStore
         }
 
         File.Delete(path);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public int GatherIntoPlace(ModelDescriptor model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        // A single-file entry keeps its file in the root already, so there is no such thing as a
+        // misplaced copy of one and nothing here to do.
+        if (!model.IsMultiFile)
+        {
+            return 0;
+        }
+
+        // Bare names only, matching the index that found this entry: a declared file carrying a
+        // subpath belongs below the entry's directory and was never a candidate for the root.
+        var candidates = model.Files
+            .Where(file => !file.FileName.Contains('/', StringComparison.Ordinal))
+            .Select(file => (
+                Source: Path.Combine(RootDirectory, file.FileName),
+                Destination: PathFor(model, file)))
+            .Where(pair => File.Exists(pair.Source))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return 0;
+        }
+
+        // Checked across the whole set before a single file moves, so a refusal leaves the folder
+        // exactly as it was found rather than half-repaired.
+        if (candidates.Any(pair => File.Exists(pair.Destination)))
+        {
+            return 0;
+        }
+
+        Directory.CreateDirectory(PathFor(model));
+
+        var moved = 0;
+        foreach (var (source, destination) in candidates)
+        {
+            File.Move(source, destination);
+            moved++;
+        }
+
+        return moved;
+    }
+
+    /// <summary>Suffix the installer assembles under, and the one shape here that is not a leftover.</summary>
+    private const string StagingSuffix = ".part";
+
+    /// <inheritdoc />
+    public IReadOnlyList<SideloadedDirectory> ListSideloadedDirectories(ModelCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+
+        if (!Directory.Exists(RootDirectory))
+        {
+            return [];
+        }
+
+        var claimed = catalog.Models
+            .Where(model => model.IsMultiFile)
+            .Select(model => model.StorageName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var found = new List<SideloadedDirectory>();
+        foreach (var path in Directory.EnumerateDirectories(RootDirectory)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        {
+            var name = Path.GetFileName(path);
+
+            if (claimed.Contains(name) || name.EndsWith(StagingSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            long size;
+            try
+            {
+                size = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                    .Sum(file => new FileInfo(file).Length);
+            }
+            catch (IOException)
+            {
+                // A directory that changed under the walk is one this cannot price, and a panel
+                // about disk usage that throws is worse than one that omits a row.
+                continue;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            // Empty directories are not reported. This panel exists to answer "what is this folder
+            // costing me", and nothing is the one answer that needs no row.
+            if (size > 0)
+            {
+                found.Add(new SideloadedDirectory { Name = name, SizeBytes = size });
+            }
+        }
+
+        return found;
+    }
+
+    /// <inheritdoc />
+    public bool RemoveSideloadedDirectory(string directoryName, ModelCatalog catalog)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directoryName);
+        ArgumentNullException.ThrowIfNull(catalog);
+
+        // A bare name and nothing else, on the same reasoning as the file path: this deletes, and
+        // recursively, so the only safe reading of an unexpected shape is "not mine".
+        if (!string.Equals(Path.GetFileName(directoryName), directoryName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (directoryName.EndsWith(StagingSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Claimed by an entry means it is that entry's to remove, through its descriptor.
+        if (catalog.Models.Any(model =>
+                model.IsMultiFile
+                && string.Equals(model.StorageName, directoryName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var path = Path.Combine(RootDirectory, directoryName);
+        if (!Directory.Exists(path))
+        {
+            return false;
+        }
+
+        Directory.Delete(path, recursive: true);
         return true;
     }
 

@@ -654,7 +654,17 @@ public partial class MainWindow : Window
     /// </remarks>
     private void WireVoices()
     {
-        if (this.FindControl<ItemsControl>("Voices") is not { } strip)
+        // Both strips, and the Export one is not optional politeness: it edits the names that go
+        // into the files that button writes, so a rename that silently does not commit there costs
+        // somebody a wrong export rather than a wrong caption on screen.
+        WireVoiceStrip("Voices");
+        WireVoiceStrip("ExportVoices");
+    }
+
+    /// <inheritdoc cref="WireVoices"/>
+    private void WireVoiceStrip(string name)
+    {
+        if (this.FindControl<ItemsControl>(name) is not { } strip)
         {
             return;
         }

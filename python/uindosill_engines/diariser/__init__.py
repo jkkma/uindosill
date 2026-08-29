@@ -147,13 +147,16 @@ class Diariser:
             "maxSpeakers": engine_module.MAX_SPEAKERS,
             "reliableUpToSeconds": engine_module.RELIABLE_UP_TO_SECONDS,
             "honoursPostProcessing": False,
-            # **Both stages on the same runtime, so both names agree.** They are both torch on
-            # the named device, or both ONNX on the named provider; nothing splits them today,
-            # and the two fields exist so that a route which did would be visible.
+            # **A route splits them as of 2026-08-28, which is what these two fields were for.**
+            # They agreed until then — both torch on the named device, or both ONNX on the named
+            # provider — and the pair existed against the day one did not. An ONNX provider now
+            # seats the embedder alone and leaves segmentation in torch, because it is 2.2x faster
+            # at the one and 8.8x slower at the other, so a webgpu run reports `torch:cpu` here and
+            # `onnx:webgpu` below.
             #
             # `embeddingBackend` is read by the host; **`segmentationBackend` is read by nothing**,
             # on either side, and is sent so that a capabilities dump says which runtime ran the
-            # half nobody chose.
+            # half nobody chose — which is now a different runtime rather than the same one.
             "segmentationBackend": getattr(engine, "segmentation_backend", "torch:cpu"),
             "embeddingBackend": getattr(engine, "embedding_backend", "torch:cpu"),
             # **Read off the loaded pipeline, not echoed back from the request.** The host may have
