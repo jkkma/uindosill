@@ -55,18 +55,30 @@ public class CudaPackSettingsTests
     }
 
     [Fact]
-    public void TheButtonIsDeadWhileTheManifestIsUnverified()
+    public void TheButtonIsLiveOnlyWhereThereIsSomethingToFetch()
     {
-        // **The state this build actually ships in**, and the reason the button must not merely
-        // fail when pressed: no release asset has been uploaded, so the pinned digests describe a
-        // local build and there is nothing at the URLs to fetch. When this assertion starts
-        // failing, the release has happened.
-        Assert.False(CudaPackManifest.Shipped.Verified);
-
+        // Was TheButtonIsDeadWhileTheManifestIsUnverified, whose Assert.False on the shipped
+        // manifest was written to start failing the day a release carried the assets. That day was
+        // 2026-08-29 and v1.0.0-rc.7. What it guarded holds in both states, so it is asserted as
+        // the relationship rather than as either value: the button is live only where the pinned
+        // flag says the parts exist, and never merely fails when pressed.
         var viewModel = NewViewModel();
 
-        Assert.False(viewModel.CanInstallCudaPack);
-        Assert.False(viewModel.InstallCudaPackCommand.CanExecute(null));
+        if (!CudaPackManifest.Shipped.Verified)
+        {
+            Assert.False(viewModel.CanInstallCudaPack);
+            Assert.False(viewModel.InstallCudaPackCommand.CanExecute(null));
+            return;
+        }
+
+        // Verified, so the button follows the two questions the row itself is drawn on and nothing
+        // else: a card the driver reports, and no install already running.
+        Assert.Equal(
+            viewModel.CanOfferCudaPack && !viewModel.IsInstallingCudaPack,
+            viewModel.CanInstallCudaPack);
+        Assert.Equal(
+            viewModel.CanInstallCudaPack,
+            viewModel.InstallCudaPackCommand.CanExecute(null));
     }
 
     [Fact]
@@ -85,16 +97,28 @@ public class CudaPackSettingsTests
     }
 
     [Fact]
-    public void AnUnverifiedManifestSaysWhyItCannotBeInstalled()
+    public void TheExplanationGivesAReasonExactlyWhenThereIsOne()
     {
         var viewModel = NewViewModel();
 
-        if (!viewModel.IsCudaPackInstalled && !CudaPackManifest.Shipped.Verified)
+        if (viewModel.IsCudaPackInstalled)
         {
-            // A dead button with no reason beside it is the failure this guards.
-            Assert.Contains("no published download", viewModel.CudaPackExplanation,
-                StringComparison.OrdinalIgnoreCase);
+            return;
         }
+
+        if (CudaPackManifest.Shipped.Verified)
+        {
+            // The sentence retired with the flag on 2026-08-29. Left in beside a live button it
+            // would tell somebody the download does not exist while offering it to them, which is
+            // the same defect as a dead button with no reason, pointing the other way.
+            Assert.DoesNotContain("no published download", viewModel.CudaPackExplanation,
+                StringComparison.OrdinalIgnoreCase);
+            return;
+        }
+
+        // A dead button with no reason beside it is the failure this guards.
+        Assert.Contains("no published download", viewModel.CudaPackExplanation,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
