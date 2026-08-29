@@ -171,7 +171,22 @@ public sealed class PythonSidecar : IAsyncDisposable
 
         // The package root reaches the child this way rather than by working directory, so the
         // host's own cwd — which is the user's, and arbitrary — cannot change which code runs.
-        start.Environment["PYTHONPATH"] = _runtime.PackageRoot;
+        //
+        // **The CUDA pack goes in front of it, and in front is the whole mechanism.** CPython puts
+        // PYTHONPATH entries ahead of site-packages, so a pack holding a CUDA-built `torch` shadows
+        // the bundle's CPU one without replacing a byte of it: the bundle stays exactly as it was
+        // installed, and deleting the pack directory undoes this completely. `importlib.metadata`
+        // resolves along the same path, so the version a dependency reads back is the CUDA build's
+        // too rather than a stale `+cpu` — checked on this machine 2026-08-28, where the bundle's
+        // interpreter reported `2.13.0+cpu` and False before the pack and `2.13.0+cu130` and True
+        // after it.
+        //
+        // Assignment rather than append, because the value is built here and never inherited: a
+        // PYTHONPATH the user happens to have set is not something this product should be running
+        // code out of.
+        start.Environment["PYTHONPATH"] = _runtime.CudaPackRoot is { Length: > 0 } pack
+            ? pack + Path.PathSeparator + _runtime.PackageRoot
+            : _runtime.PackageRoot;
         start.Environment["PYTHONIOENCODING"] = "utf-8";
 
         try

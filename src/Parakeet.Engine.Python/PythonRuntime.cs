@@ -51,6 +51,33 @@ public static class PythonRuntime
     /// <summary>The directory name a bundle takes, in every one of the three places.</summary>
     public const string BundleDirectoryName = "python";
 
+    /// <summary>A directory of CUDA-built packages to put ahead of the bundle's own.</summary>
+    public const string CudaPackVariable = "UINDOSILL_PYTHON_CUDA";
+
+    /// <summary>The directory name the CUDA pack takes where it is not named by a variable.</summary>
+    public const string CudaPackDirectoryName = "python-cuda";
+
+    /// <summary>
+    /// What a directory must contain to be a CUDA pack rather than an empty or half-unpacked one.
+    /// </summary>
+    /// <remarks>
+    /// <b>The pack is an overlay, not a bundle</b>, so it cannot be recognised by an interpreter the
+    /// way <see cref="BundleDirectoryName"/> is. Measured 2026-08-28 on this project's own pins, the
+    /// entire difference between a CPU and a CUDA install of the bundle is three packages — `torch`
+    /// at 2778 MB against 490 MB, `torchcodec` at 38 MB against 23 MB, and `torchaudio` at 9 MB
+    /// against 2 MB — and on Windows there are no separate `nvidia_*` distributions at all, the CUDA
+    /// libraries living inside `torch/lib`. So the pack is those three directories and their
+    /// dist-info, put ahead of the bundle on <c>PYTHONPATH</c>, which shadows the CPU build without
+    /// touching it: 2.8 GB rather than the 4 GB a second whole bundle would cost, and no change to
+    /// the three-place resolution above.
+    /// <para>
+    /// `torch` alone is checked because it is the package that carries the CUDA libraries and the
+    /// one whose absence makes the pack pointless; a pack missing one of the other two is a
+    /// half-unpacked archive, which the digests on the download are the right place to catch.
+    /// </para>
+    /// </remarks>
+    public static readonly string[] CudaPackMarker = ["torch", "__init__.py"];
+
     /// <summary>Which of the three places answered.</summary>
     public enum BundleSource
     {
@@ -82,6 +109,19 @@ public static class PythonRuntime
 
         /// <summary>True when the package root came from <see cref="PackagesVariable"/>.</summary>
         public bool PackagesOverridden { get; init; }
+
+        /// <summary>
+        /// A directory of CUDA-built packages to search before <see cref="PackageRoot"/>, or null
+        /// where none is installed — which is every machine that has not downloaded one.
+        /// </summary>
+        /// <remarks>
+        /// <b>Null is the shipped answer and not a failure.</b> The bundle pins the CPU torch build,
+        /// so the diariser's <c>auto</c> elects the CPU on an installed copy; this is the one thing
+        /// that changes that, and it is opt-in by download. Resolution never throws for its absence
+        /// and never mentions it in the message when the bundle itself is missing, because a user
+        /// without a bundle has a different problem and two problems in one message is neither.
+        /// </remarks>
+        public string? CudaPackRoot { get; init; }
 
         /// <summary>
         /// One phrase naming where this came from, for a run to report rather than a caller to guess.
@@ -150,12 +190,19 @@ public static class PythonRuntime
     {
         baseDirectory ??= AppContext.BaseDirectory;
 
+        // Resolved before the branch and carried onto whichever answer wins, because the pack is
+        // orthogonal to which of the three places held the bundle: a developer pointing
+        // UINDOSILL_PYTHON at a venv wants the pack found too, and a downloaded bundle and a
+        // downloaded pack land in the same directory as each other.
+        var cudaPack = ResolveCudaPack(baseDirectory, userDataDirectory);
+
         var interpreterOverride = Environment.GetEnvironmentVariable(InterpreterVariable);
         var packagesOverride = Environment.GetEnvironmentVariable(PackagesVariable);
 
         if (interpreterOverride is { Length: > 0 } || packagesOverride is { Length: > 0 })
         {
-            return FromEnvironment(interpreterOverride, packagesOverride, baseDirectory);
+            return FromEnvironment(interpreterOverride, packagesOverride, baseDirectory)
+                with { CudaPackRoot = cudaPack };
         }
 
         // Beside the application first, then the downloaded bundle. Both are checked before either
@@ -191,6 +238,7 @@ public static class PythonRuntime
                     Interpreter = interpreter,
                     PackageRoot = directory,
                     Source = source,
+                    CudaPackRoot = cudaPack,
                 };
             }
 
@@ -317,6 +365,48 @@ public static class PythonRuntime
 
     private static bool HasEngines(string packageRoot) =>
         Directory.Exists(Path.Combine(packageRoot, "uindosill_engines"));
+
+    /// <summary>
+    /// The CUDA pack directory, or null where none is installed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two places and a variable, mirroring the bundle's three</b> — <see cref="CudaPackVariable"/>
+    /// first so an explicit answer wins, then <c>&lt;user data&gt;/python-cuda</c>, then
+    /// <c>&lt;app&gt;/python-cuda</c>. The user-data copy is checked <i>before</i> the application's,
+    /// which is the opposite of the bundle's order and deliberate: the pack cannot ship inside the
+    /// installer — the win-cuda channel's Setup.exe was measured at 1,976,256,205 bytes against
+    /// GitHub's 2 GiB asset limit, with the pack 2.8 GB on its own — so an <c>&lt;app&gt;/python-cuda</c>
+    /// can only be something a user or a build put there by hand, and a download must not be shadowed
+    /// by it.
+    /// </para>
+    /// <para>
+    /// <b>A directory that exists but does not hold torch is ignored rather than reported.</b> The
+    /// pack is an accelerator for something that already works; the honest failure for a broken one
+    /// is a diariser that runs on the CPU, which is what happens, and not a load that refuses.
+    /// A user who downloaded a pack and is not getting CUDA is told by the run's own provenance —
+    /// the elected device is reported — rather than by a resolver that has to guess whether the
+    /// directory was meant to be a pack at all.
+    /// </para>
+    /// </remarks>
+    private static string? ResolveCudaPack(string baseDirectory, string? userDataDirectory)
+    {
+        var named = Environment.GetEnvironmentVariable(CudaPackVariable);
+        var candidates = named is { Length: > 0 }
+            ? [named]
+            : new[]
+            {
+                Path.Combine(userDataDirectory ?? UserDataPaths.RootDirectory(), CudaPackDirectoryName),
+                Path.Combine(baseDirectory, CudaPackDirectoryName),
+            };
+
+        return candidates.FirstOrDefault(IsCudaPack);
+    }
+
+    /// <summary>Whether a directory holds the package whose absence makes a pack pointless.</summary>
+    public static bool IsCudaPack(string directory) =>
+        Directory.Exists(directory)
+        && File.Exists(Path.Combine([directory, .. CudaPackMarker]));
 
     private static string ExecutableName =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "bin/python3";

@@ -24,20 +24,36 @@ public sealed class PythonRuntimeTests : IDisposable
 {
     private readonly string? _interpreter = Environment.GetEnvironmentVariable(PythonRuntime.InterpreterVariable);
     private readonly string? _packages = Environment.GetEnvironmentVariable(PythonRuntime.PackagesVariable);
+    private readonly string? _cudaPack = Environment.GetEnvironmentVariable(PythonRuntime.CudaPackVariable);
 
     public PythonRuntimeTests()
     {
         // These tests are about the environment variables, so they set them — and the collection
         // above is what stops two of them doing it at once. Restored in Dispose, because a variable
         // left set would silently change every later test in this process.
+        //
+        // **The CUDA one is cleared here for a sharper reason than symmetry.** It is the variable a
+        // developer on a machine with a pack is most likely to have set in their own shell, and
+        // every assertion below about `CudaPackRoot` being null would fail for them and pass in CI.
         Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, null);
         Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, null);
+        Environment.SetEnvironmentVariable(PythonRuntime.CudaPackVariable, null);
     }
 
     public void Dispose()
     {
         Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, _interpreter);
         Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, _packages);
+        Environment.SetEnvironmentVariable(PythonRuntime.CudaPackVariable, _cudaPack);
+    }
+
+    /// <summary>A directory laid out the way an unpacked CUDA pack is: torch, and nothing else.</summary>
+    private static string StageCudaPack(string root)
+    {
+        var torch = Path.Combine(root, PythonRuntime.CudaPackDirectoryName, "torch");
+        Directory.CreateDirectory(torch);
+        File.WriteAllText(Path.Combine(torch, "__init__.py"), "# not really torch");
+        return root;
     }
 
     private static string ExecutableName =>
@@ -272,6 +288,107 @@ public sealed class PythonRuntimeTests : IDisposable
 
         Assert.NotNull(resolution);
         Assert.Null(reason);
+    }
+
+    // ---- The CUDA pack: an overlay put ahead of the bundle, and absent on every shipped install --
+
+    [Fact]
+    public void WithoutAPackTheResolutionSaysSoRatherThanFailing()
+    {
+        // Null is the shipped answer. The bundle pins the CPU torch build, so this is what every
+        // installed copy resolves to, and nothing about it is an error.
+        var resolved = PythonRuntime.Resolve(StageBundle(), StageNothing());
+
+        Assert.Null(resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void ADownloadedPackIsFoundBesideTheDownloadedBundle()
+    {
+        var userData = StageCudaPack(StageNothing());
+
+        var resolved = PythonRuntime.Resolve(StageBundle(), userData);
+
+        Assert.Equal(
+            Path.Combine(userData, PythonRuntime.CudaPackDirectoryName),
+            resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void TheDownloadedPackWinsOverOneBesideTheApplication()
+    {
+        // **The opposite of the bundle's order, and deliberate.** The pack cannot ship inside the
+        // installer — it is 2.8 GB against a 2 GiB asset limit the win-cuda channel is already
+        // within 24 MB of — so an <app>/python-cuda is something a hand put there, and a download
+        // must not be shadowed by it.
+        var application = StageCudaPack(StageBundle());
+        var userData = StageCudaPack(StageNothing());
+
+        var resolved = PythonRuntime.Resolve(application, userData);
+
+        Assert.Equal(
+            Path.Combine(userData, PythonRuntime.CudaPackDirectoryName),
+            resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void APackBesideTheApplicationIsFoundWhenNothingWasDownloaded()
+    {
+        var application = StageCudaPack(StageBundle());
+
+        var resolved = PythonRuntime.Resolve(application, StageNothing());
+
+        Assert.Equal(
+            Path.Combine(application, PythonRuntime.CudaPackDirectoryName),
+            resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void TheVariableNamesTheDirectoryItself()
+    {
+        // Unlike the two places, this names the pack rather than a directory holding one: it is the
+        // development override, and a developer points it at what they built.
+        var built = TestTemp.NewDirectory("uindosill-pack");
+        Directory.CreateDirectory(Path.Combine(built, "torch"));
+        File.WriteAllText(Path.Combine(built, "torch", "__init__.py"), "# not really torch");
+        Environment.SetEnvironmentVariable(PythonRuntime.CudaPackVariable, built);
+
+        var resolved = PythonRuntime.Resolve(StageBundle(), StageCudaPack(StageNothing()));
+
+        Assert.Equal(built, resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void ADirectoryWithoutTorchIsNotAPack()
+    {
+        // An interrupted unpack, or a directory that happens to have the name. It is ignored rather
+        // than reported: the pack accelerates something that already works, so the honest failure is
+        // a diariser that runs on the CPU — which is what a null here produces — and not a refusal.
+        var userData = StageNothing();
+        Directory.CreateDirectory(Path.Combine(userData, PythonRuntime.CudaPackDirectoryName));
+
+        var resolved = PythonRuntime.Resolve(StageBundle(), userData);
+
+        Assert.Null(resolved.CudaPackRoot);
+    }
+
+    [Fact]
+    public void ThePackIsFoundEvenWhenTheInterpreterWasNamedByAVariable()
+    {
+        // The two are orthogonal: pointing UINDOSILL_PYTHON at a venv is the development case, and a
+        // developer with a pack wants it found too. This was the bug the `with` expression in
+        // Resolve exists to prevent — the environment branch returned early and carried no pack.
+        var bundle = StageBundle();
+        var userData = StageCudaPack(StageNothing());
+        Environment.SetEnvironmentVariable(
+            PythonRuntime.InterpreterVariable, Path.Combine(bundle, "python"));
+
+        var resolved = PythonRuntime.Resolve(bundle, userData);
+
+        Assert.True(resolved.Overridden);
+        Assert.Equal(
+            Path.Combine(userData, PythonRuntime.CudaPackDirectoryName),
+            resolved.CudaPackRoot);
     }
 }
 
