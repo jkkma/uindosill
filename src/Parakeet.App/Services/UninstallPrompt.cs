@@ -97,7 +97,7 @@ public static class UninstallPrompt
             var answer = MessageBoxW(
                 0,
                 Message(bytes, userDataRoot),
-                "Uindosill: keep your downloaded models?",
+                Caption,
                 MbYesNo | MbIconQuestion | MbDefaultButton2 | MbTopMost | MbSetForeground);
 
             return answer == IdYes ? UninstallChoice.Delete : UninstallChoice.Keep;
@@ -112,12 +112,27 @@ public static class UninstallPrompt
     }
 
     /// <summary>
+    /// The title bar, kept beside <see cref="Message"/> so that the two are read and changed
+    /// together rather than drifting apart as a literal at the call site.
+    /// </summary>
+    /// <remarks>
+    /// <c>MB_YESNO</c> cannot relabel its buttons, so the title, the body and the buttons all have
+    /// to point the same way. A title asking whether to <i>keep</i> the files, over buttons where
+    /// Yes deletes them, is an inverted control rather than a wording preference: the title is the
+    /// line a reader skims, so it is the one that most has to agree with what the buttons do.
+    /// </remarks>
+    internal const string Caption = "Uindosill: delete your downloaded models?";
+
+    /// <summary>
     /// The question. Written so the safe answer is the obvious one.
     /// </summary>
     /// <remarks>
     /// It leads with what keeping buys rather than with the space deleting frees, because the
     /// expensive mistake here is one-directional: keeping costs disk that a later visit can
-    /// reclaim, and deleting costs a download measured in tens of gigabytes.
+    /// reclaim, and deleting costs a download measured in tens of gigabytes. The last line says
+    /// what happens if nobody answers, which is not hypothetical: the callback runs inside
+    /// Velopack's 30-second budget, and an unanswered dialog is closed when that expires, leaving
+    /// the files in place.
     /// </remarks>
     internal static string Message(long bytes, string userDataRoot) =>
         $"Uindosill is being removed. Its downloaded models and runtimes are kept somewhere else, "
@@ -125,6 +140,7 @@ public static class UninstallPrompt
         + "If you are reinstalling, or trying a different version, choose No. The files are reused "
         + "as they are and you will not download them again.\n\n"
         + "Choose Yes only if you are done with Uindosill and want the space back.\n\n"
+        + "If you close this, or do not answer it, the files are kept.\n\n"
         + "Delete them?";
 
     private static long MeasureOrZero(DirectoryInfo directory)

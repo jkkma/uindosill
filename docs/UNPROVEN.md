@@ -851,7 +851,7 @@ deletes a user's files, because no code did.
 
 **That sentence is still true, and no longer for that reason.** On 2026-08-29 the hook came back
 with a modal question in front of it, so the deletion is *attended* rather than absent — see
-**The uninstaller asks, and no real uninstall has ever seen it** at the end of this document. The
+**The uninstaller asks, and a real uninstall has now run it** at the end of this document. The
 98 ms mystery recorded below is unchanged, unexplained, and is precisely what that design is built
 to fail towards.
 
@@ -7038,42 +7038,59 @@ asked. **This is the first time any model has been scored against that set.**
 - **Nothing was measured at any other quantisation of the 12B**, nor with the Q4_0 head the
   publisher ships as its default beside the weights.
 
-## The uninstaller asks, and no real uninstall has ever seen it — noted 2026-08-29
+## The uninstaller asks, and a real uninstall has now run it — measured 2026-08-29
 
-Since 2026-08-29 `Program.cs` registers Velopack's `OnBeforeUninstallFastCallback` again, and it
-puts a `MessageBoxW` question in front of the delete: `UninstallPrompt.Ask` measures
+Since 2026-08-29 `Program.cs` registers Velopack's `OnBeforeUninstallFastCallback`, and it puts a
+`MessageBoxW` question in front of the delete: `UninstallPrompt.Ask` measures
 `%LOCALAPPDATA%\Uindosill`, and only an explicit Yes reaches `UninstallCleanup`. `docs/GOTCHAS.md`
 gotcha 8 has the design and the two dates behind it.
 
-**What is proven.** That the decision logic is right at every boundary, and that the delete and its
-guards work against rebuilt directory trees: `UninstallPromptTests` and `UninstallCleanupTests`,
-including the real lock semantics on Windows and a real symbolic link elsewhere. That the window
-never promises the question where it will not be asked, held against
-`UninstallPrompt.AskAboveBytes` itself rather than a retyped number.
+**The gap this section was opened for is closed.** A `v1.0.0-rc.8` `win-cuda` installer was
+downloaded from the release, installed on the desktop, and then uninstalled from Windows' own
+Installed apps list. That is the first time any installer this project has built has been
+uninstalled by a person rather than by `--silent`, and the first time this hook has run outside a
+test.
 
-**What is not.** No `Update.exe --uninstall` has ever invoked any of it. This is the same gap the
-2026-08-23 hook carried, in the same place, and nothing about adding a dialog narrows it.
-Unobserved, specifically:
+**The hook fires.** The dialog appeared, measured the directory at **28.52 GiB** and named the path.
+The 98 ms no-op recorded against the 2026-08-23 hook **did not reproduce**. That failure is still
+unexplained, and this is one contrary observation rather than a refutation.
 
-- **That the dialog appears at all.** It rides on the exact callback measured on 2026-08-23
-  returning in **98 ms having done nothing**, on the same machine and build that deleted 4.64 GB in
-  another run, with six causes eliminated by experiment and the failure never reproducing.
-  **Reproducing that no-op is still the prerequisite, and it has not been reproduced.** A machine
-  where the callback is inert shows a completed uninstall, no question, and an intact data
-  directory — which is also exactly what a correct Keep looks like.
-- **That `MessageBoxW` is reachable from inside that callback on a real uninstall.** It needs no UI
-  toolkit, which is why it was chosen, but nothing has watched it draw from a process Velopack
-  spawned for an uninstall.
-- **What the 30-second fast-callback budget does to a human.** The budget is documented, not
-  measured here. Somebody away from the keyboard, or a Yes answered late over tens of gigabytes,
-  reaches the boundary; whether Velopack then kills the process mid-delete, and what a half-deleted
-  `models\` directory does to the next install, is untested. `ModelInstaller` clears an existing
-  entry directory before its staging move, so the expected outcome is a re-download rather than a
-  corrupt entry, but that is reasoning from the code and not an observation.
-- **The wording, on a real screen.** Nobody has read the dialog on an Installed apps click. The
-  tests assert either side of it, because it blocks on a human and cannot be exercised.
+**The 30-second budget is real and it is Velopack's.** Its own API documentation states that a fast
+callback is terminated at thirty seconds, and there is no setting for it: `VelopackApp` exposes six
+hooks and no timeout. Left unanswered, the dialog was closed at that boundary and the uninstall
+completed.
 
-The proof is the 2026-08-19 procedure rerun on a current build, twice: hash the weights, install,
-uninstall and answer No, and find `%LOCALAPPDATA%\Uindosill` byte-identical; then again answering
-Yes, and find it gone. Until somebody does that, **"uninstalling asks" is a claim about code paths,
-not about a machine** — and so is "and keeps them unless you say otherwise".
+**It failed towards keeping, which is the whole design.** Against a baseline taken immediately
+before, the data directory came through **14,625 of 14,625 files and 30,628,448,431 of
+30,628,448,431 bytes**, every length and modification time unchanged, while the install root, the
+Desktop shortcut and the Start Menu shortcut were all removed. This is gotcha 8's arrangement
+observed on a live machine with tens of gigabytes at stake rather than argued from the code.
+
+**Velopack's own log is confirmed useless as evidence here.** It recorded nothing for this install
+or this uninstall: the file is still the one written on 2026-08-19, byte for byte. The earlier
+entry's warning stands and is now stronger — any future hook needs evidence written by the hook.
+
+**What is still not measured.**
+
+- **The Yes path.** Nothing has ever been deleted by this dialog. Only the keep-by-timeout outcome
+  has been observed, so `UninstallCleanup` running for real against a multi-gigabyte directory
+  remains unwitnessed outside its tests.
+- **A late Yes.** Whether an answer given close to the thirty seconds reaches the delete and is then
+  killed part-way is untested. `ModelInstaller` clears an existing entry directory before its
+  staging move, so the expected cost is a re-download rather than a corrupt entry, but that is
+  reasoning from the code.
+- **One machine, one run, one channel.** The `win` channel's installer has still never been
+  installed by anybody.
+
+## The CUDA pack's parts were verified against the release — 2026-08-29
+
+The four parts and their manifest were uploaded to `v1.0.0-rc.8` and then **downloaded back from
+that release and hashed**, rather than checked against the copies that produced them: 536,870,912
+bytes three times and 351,131,000 once, each SHA-256 equal to the digest pinned in
+`src/Parakeet.Engine.Python/cuda-pack.json`. That is what `verified: true` in that file rests on,
+and it is why `baseUrl` names `v1.0.0-rc.8`: those assets live on that release and nowhere else, so
+that release has to keep existing for the download to resolve.
+
+**Not established.** That anybody has installed the pack from the release. The end-to-end install
+was driven by hand against a local server on 2026-08-29; what is proven here is that the bytes a
+user would fetch are the bytes the manifest describes.
