@@ -413,6 +413,15 @@ public sealed partial class AskChatViewModel : ObservableObject
             _engine = null;
         }
 
+        // The dispose above is a real await — it kills the old child and waits for it — and it is
+        // the window a transcription start can slip through: Start on the Transcribe tab cancels
+        // this ask the moment IsRunning goes true, but a continuation that did not look would
+        // carry on to the unload below and tear the transcriber out from under the batch that
+        // just borrowed it, mid-decode. The same re-check AskCore makes after the load, for the
+        // same reason: a cancel that lands during an await is only as good as the first look
+        // taken after it.
+        ct.ThrowIfCancellationRequested();
+
         if (_engine is not null)
         {
             return;

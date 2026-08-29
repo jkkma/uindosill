@@ -27,6 +27,11 @@ public sealed record FakeAnswerOptions
     /// can interleave other work with a load in flight — the window a cold load really has.</summary>
     public Task? LoadGate { get; init; }
 
+    /// <summary>Hold <see cref="IAnswerEngine.DisposeAsync"/> open until this completes. The
+    /// real engine's dispose kills a child process and waits for it, which is a window of its
+    /// own; this is what lets a test interleave work with a dispose in flight.</summary>
+    public Task? DisposeGate { get; init; }
+
     /// <summary>Throw from <see cref="IAnswerEngine.LoadAsync"/> instead of loading.</summary>
     public bool FailOnLoad { get; init; }
 
@@ -211,9 +216,13 @@ public sealed class FakeAnswerEngine : IAnswerEngine
         }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        if (_options.DisposeGate is { } gate)
+        {
+            await gate.ConfigureAwait(false);
+        }
+
         _loaded = false;
-        return ValueTask.CompletedTask;
     }
 }

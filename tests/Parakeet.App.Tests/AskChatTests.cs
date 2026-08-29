@@ -306,6 +306,50 @@ public class AskChatTests
     }
 
     [Fact]
+    public async Task ATranscriptionStartingDuringTheStaleEngineDisposeDoesNotUnloadTheSessionUnderIt()
+    {
+        // The stale-engine dispose in EnsureEngineAsync is a real await — the old child is killed
+        // and waited for — and it sits between the residency probe and the session unload. A
+        // transcription starting inside that window cancels the ask, but a continuation that did
+        // not look would unload the session anyway, disposing the engine the batch had just
+        // borrowed, mid-decode. This drives the interleaving: the ask must come back "Stopped."
+        // and the session must still be loaded.
+        var running = false;
+        var disposeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var session = new ModelSession(new FakeEngineProvider());
+        var (chat, provider, _) = Chat(
+            session: session,
+            transcriptionRunning: () => running,
+            options: new FakeAnswerOptions { DisposeGate = disposeGate.Task });
+
+        // A first question makes the ask engine resident; the Models tab then loads the
+        // transcriber beside it, which nothing prevents — loading is that tab's job, and the ask
+        // engine holds no lock on it.
+        await AskAsync(chat, "what about the budget review?");
+        await session.LoadAsync(new EngineSelection { Model = ModelCatalog.Default.Recommended });
+        Assert.True(session.IsLoaded);
+
+        // The flipped mode is what makes the second question dispose the resident engine rather
+        // than reuse it — the same trigger the mode-flip test below drives.
+        provider.ThinkingMode = true;
+        chat.QuestionText = "and the axolotl?";
+        var asking = chat.AskCommand.ExecuteAsync(null);
+        Assert.True(chat.IsAsking);
+
+        // The transcription starts while the dispose is still in flight: the window's wiring
+        // cancels the ask the moment IsRunning goes true, exactly as MainWindowViewModel does.
+        running = true;
+        var released = chat.OnTranscriptionStartedAsync();
+
+        disposeGate.SetResult();
+        await asking;
+        await released;
+
+        Assert.True(session.IsLoaded);
+        Assert.Equal("Stopped.", chat.Entries[^1].Failure);
+    }
+
+    [Fact]
     public async Task FlippingThinkingModeRebuildsTheEngineAtTheNextQuestion()
     {
         // The mode is a child-process argument, so the Settings toggle can only take effect
