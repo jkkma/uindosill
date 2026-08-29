@@ -63,7 +63,23 @@ param(
 
     # The PyTorch index to install from. Pinned as an argument rather than in the script because the
     # right one is a property of the driver on the target machine, not of this repository.
-    [string] $TorchIndex = 'https://download.pytorch.org/whl/cu130'
+    [string] $TorchIndex = 'https://download.pytorch.org/whl/cu130',
+
+    # Also zip the pack, split it into parts, and write the manifest a catalogue entry is made from.
+    [switch] $Package,
+
+    # Where -Package writes. Under packaging/ by default, which is gitignored for the same reason
+    # runs/ is: one channel of this product is already over 800 MB and none of it is an input.
+    [string] $PackageDirectory,
+
+    # Bytes per part. 512 MiB by default, and the default is a decision rather than a round number:
+    # **the whole zip was measured at 1,961,716,087 bytes on 2026-08-28, which clears GitHub's 2 GiB
+    # asset limit by 177 MB.** That is the same trap the win-cuda channel is in at 24 MB, on an
+    # artefact that only compresses to 66.2% because CUDA DLLs are already dense — so one torch point
+    # release could put it over, and the failure would arrive at release time. Parts remove the
+    # question, and they buy the thing that matters more for a 1.8 GB download over a domestic
+    # connection: a dropped transfer resumes at a part boundary instead of at zero.
+    [long] $PartSizeBytes = 512MB
 )
 
 $ErrorActionPreference = 'Stop'
@@ -163,3 +179,90 @@ foreach ($pkg in $PackPackages) {
 Write-Host ''
 Write-Host '  Point a run at it with UINDOSILL_PYTHON_CUDA, or unpack it as python-cuda beside the'
 Write-Host '  bundle under %LOCALAPPDATA%\Uindosill. The diariser reports the device it elected.'
+
+if (-not $Package) { return }
+
+# ---- Packaging: one zip, split into digested parts, and the manifest a catalogue entry is made from.
+
+if (-not $PackageDirectory) {
+    $PackageDirectory = Join-Path $repo 'packaging/python-cuda'
+}
+if (Test-Path -LiteralPath $PackageDirectory) {
+    Remove-Item -LiteralPath $PackageDirectory -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $PackageDirectory | Out-Null
+$PackageDirectory = (Resolve-Path -LiteralPath $PackageDirectory).Path
+
+$zipName = 'uindosill-python-cuda-win-x64.zip'
+$zipPath = Join-Path $PackageDirectory $zipName
+
+Write-Host ''
+Write-Note "compressing (about 45 s; CUDA DLLs only reach about 66%)"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+    $Destination, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+
+$zipBytes = (Get-Item -LiteralPath $zipPath).Length
+$wholeDigest = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+# **Split by reading, not by any archive format's own multi-volume support.** A `.zip.001` produced
+# this way is a byte range and nothing more, so the client reassembles by concatenation and needs no
+# archive library that understands spanning — and each part carries its own digest, which is what
+# makes a resumed download checkable rather than merely restartable.
+$parts = [System.Collections.Generic.List[object]]::new()
+$buffer = New-Object byte[] (4MB)
+$input = [System.IO.File]::OpenRead($zipPath)
+try {
+    $index = 0
+    while ($input.Position -lt $input.Length) {
+        $index++
+        $partName = '{0}.{1:d3}' -f $zipName, $index
+        $partPath = Join-Path $PackageDirectory $partName
+        $written = 0L
+        $output = [System.IO.File]::Create($partPath)
+        try {
+            while ($written -lt $PartSizeBytes -and $input.Position -lt $input.Length) {
+                $want = [math]::Min($buffer.Length, $PartSizeBytes - $written)
+                $read = $input.Read($buffer, 0, $want)
+                if ($read -le 0) { break }
+                $output.Write($buffer, 0, $read)
+                $written += $read
+            }
+        } finally { $output.Dispose() }
+
+        $parts.Add([pscustomobject]@{
+            fileName  = $partName
+            sizeBytes = $written
+            sha256    = (Get-FileHash -LiteralPath $partPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        })
+        Write-Note ("part {0}: {1,12:N0} bytes" -f $index, $written)
+    }
+} finally { $input.Dispose() }
+
+# The zip itself is not shipped — the parts are — so it is removed rather than left to be uploaded
+# by mistake beside them, which would double the release's weight for nothing.
+Remove-Item -LiteralPath $zipPath -Force
+
+$reassembled = ($parts | Measure-Object sizeBytes -Sum).Sum
+if ($reassembled -ne $zipBytes) {
+    throw "The parts total $reassembled bytes and the zip was $zipBytes. The split lost data."
+}
+
+$manifest = [ordered]@{
+    archiveName     = $zipName
+    archiveBytes    = $zipBytes
+    archiveSha256   = $wholeDigest
+    unpackedBytes   = $bytes
+    torchVersion    = $torchVersion
+    packages        = [ordered]@{}
+    parts           = $parts
+}
+foreach ($pkg in $PackPackages) { $manifest.packages[$pkg] = $versions[$pkg] }
+$manifestPath = Join-Path $PackageDirectory 'manifest.json'
+$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+
+Write-Host ''
+Write-Host ("  zip   {0,15:N0} bytes ({1:N2} GB), {2:P1} of unpacked" -f $zipBytes, ($zipBytes/1GB), ($zipBytes/$bytes))
+Write-Host ("  parts {0,15:N0} in {1} file(s) of at most {2:N0} bytes" -f $reassembled, $parts.Count, $PartSizeBytes)
+Write-Host ("  sha256 {0}" -f $wholeDigest)
+Write-Host ("  manifest -> {0}" -f $manifestPath)
