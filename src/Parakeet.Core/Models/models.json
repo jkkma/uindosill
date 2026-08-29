@@ -362,39 +362,15 @@
       "attributionId": "google-gemma-4-26b-a4b-it-gguf",
       "recommended": false,
       "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\nThis is a big download and a big model: 15.8 GiB of weights, and it wants about 18 GB of memory free once it is running. On a computer with 16 GB of memory or less it will be slow or will not start at all, and the Models tab says so before you download it.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
-    },
-    {
-      "id": "gemma-4-26b-a4b-it-ud-iq4-xs",
-      "engine": "llama-server",
-      "task": "answering",
-      "family": "gemma-4-26B-A4B-it",
-      "displayName": "Answering questions (larger, smaller download)",
-      "quantisation": "UD-IQ4_XS",
-      "directory": "gemma-4-26b-a4b-it-ud-iq4-xs",
-      "files": [
-        {
-          "fileName": "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
-          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
-          "sizeBytes": 13597177568,
-          "sha256": "babd1e389d386352f71600765d37390f7dc993fbfad6725caccf996ffe34aecf"
-        },
-        {
-          "fileName": "mtp-gemma-4-26B-A4B-it.gguf",
-          "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/mtp-gemma-4-26B-A4B-it.gguf",
-          "sizeBytes": 461766816,
-          "sha256": "6326fb9f5e487aa8dcdd313a091e3c67724cb2a666ec3b7d2895b5b26d93ed1b"
-        }
-      ],
-      "verified": true,
-      "license": "Apache-2.0",
-      "attributionId": "google-gemma-4-26b-a4b-it-gguf",
-      "recommended": false,
-      "notes": "The same model as the one above, squeezed smaller so it fits on a computer with 16 GB of memory. Answers on the Ask tab, with a clickable timestamp behind every claim.\n\n12.7 GiB of weights. Measured on a 16 GB laptop it answers a question in about 40 seconds and every citation it produced pointed at real words in the recording.\n\nChoose this one if the larger version warns you that your computer is too small. On a machine with plenty of memory the larger one is the better answer."
     }
   ],
   "deferredComment": [
     "Files in the same repository whose digests are recorded so a later version does not have to",
     "re-derive them. They are NOT catalogue entries and this build cannot install or select them.",
+    "",
+    "Two reasons put a file here. The first is licensing, below. The second, from 2026-08-29,",
+    "is a quantisation withdrawn from the offer: its digests stay recorded so a later version",
+    "does not re-derive them, and nothing about the file changed — only whether it is offered.",
     "",
     "The reason they are not is licensing, not caution about quality. Every entry in \"models\"",
     "carries a licence and an attribution id that resolves against Attribution.ById, because the",
@@ -408,6 +384,15 @@
     "promote one, establish the licence, register the attribution, and move it into \"models\"."
   ],
   "deferred": [
+    {
+      "id": "gemma-4-26b-a4b-it-ud-iq4-xs",
+      "family": "gemma-4-26B-A4B-it",
+      "fileName": "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+      "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/c099eb48e663fd284577b04978a94ffccb261841/gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+      "sizeBytes": 13597177568,
+      "sha256": "babd1e389d386352f71600765d37390f7dc993fbfad6725caccf996ffe34aecf",
+      "purpose": "Withdrawn from the offer on 2026-08-29 by the maintainer. It was the third answering entry and the second of two at 26B-A4B, differing from the shipped UD-Q4_K_XL only in quantisation. Its drafting head is not orphaned: mtp-gemma-4-26B-A4B-it.gguf is the same file the UD-Q4_K_XL entry installs, and that entry still ships it. Note that several measured defaults were taken on THIS quant on the second machine, 2026-08-27/28 - the expert placement and context notes in LlamaServerOptions, AppSettings and ModelFit cite it by name. Those records stay accurate as history and now describe a file this build no longer offers."
+    },
     {
       "id": "nemotron-3.5-asr-streaming-0.6b-f16",
       "family": "nemotron-3.5-asr-streaming-0.6b",

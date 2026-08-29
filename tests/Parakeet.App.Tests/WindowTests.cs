@@ -867,8 +867,12 @@ public class TranscribeViewModelTests
         // here can be the model in use — and the drafting head beside it is what makes answers a
         // third faster. Both were listed as unaccounted-for, and deleting either would have cost
         // something the tab had just said was costing nothing.
+        // **These were the UD-IQ4_XS until 2026-08-29**, when that quantisation was withdrawn from
+        // the catalogue. The pairing under test is unchanged, which is why the swap is a rename
+        // rather than a rewrite: both 26B-A4B entries declare the same
+        // `mtp-gemma-4-26B-A4B-it.gguf`, so the head still belongs to a model the catalogue names.
         var directory = TestTemp.NewDirectory("uindosill-models");
-        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"), "weights");
+        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf"), "weights");
         File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "the head");
 
         var main = new MainWindowViewModel(
@@ -876,14 +880,14 @@ public class TranscribeViewModelTests
 
         // The head pairs with a model that is here, so it is accounted for and is not offered.
         var file = Assert.Single(main.Models.Sideloaded);
-        Assert.Equal("gemma-4-26B-A4B-it-UD-IQ4_XS.gguf", file.Name);
+        Assert.Equal("gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf", file.Name);
 
         // And the model itself is still listed — it really is not a catalogue entry *at this path*
         // — but it is no longer described as a file nothing accounts for. The catalogue declares
         // this name, under an entry that was simultaneously reading Not installed and offering to
         // download it. Being in the wrong folder is a different problem with a different answer.
         Assert.True(file.IsMisplaced);
-        Assert.Equal("gemma-4-26b-a4b-it-ud-iq4-xs", file.ClaimedBy?.Id);
+        Assert.Equal("gemma-4-26b-a4b-it-ud-q4-k-xl", file.ClaimedBy?.Id);
         Assert.DoesNotContain("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
         Assert.Contains("Move into place", main.Models.SideloadedSummary, StringComparison.Ordinal);
@@ -935,14 +939,14 @@ public class TranscribeViewModelTests
         // entry that declares those exact files — by name and to the byte — sat above reading Not
         // installed with a Download button. Both offers cost the user the bytes they already had.
         var directory = TestTemp.NewDirectory("uindosill-models");
-        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf"), "weights");
+        File.WriteAllText(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf"), "weights");
         File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "the head");
 
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
 
-        var entry = ModelCatalog.Default.Get("gemma-4-26b-a4b-it-ud-iq4-xs");
+        var entry = ModelCatalog.Default.Get("gemma-4-26b-a4b-it-ud-q4-k-xl");
         Assert.False(store.IsInstalled(entry));
 
         var file = Assert.Single(main.Models.Sideloaded);
@@ -955,7 +959,7 @@ public class TranscribeViewModelTests
         // file it declares is present, so filing the 12.66 GiB model and leaving its drafting head
         // in the root would have moved nearly everything and installed nothing.
         Assert.True(store.IsInstalled(entry));
-        Assert.False(File.Exists(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf")));
+        Assert.False(File.Exists(Path.Combine(directory, "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf")));
         Assert.False(File.Exists(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf")));
         Assert.Empty(main.Models.Sideloaded);
     }
@@ -965,14 +969,24 @@ public class TranscribeViewModelTests
     {
         // The other half: a head whose model has been removed drafts for nothing, occupies
         // hundreds of megabytes, and is exactly what this list exists to surface.
+        //
+        // **The head is a retired model's, and it has to be, which is a fact about `ClaimingEntry`
+        // rather than about this test.** It used the 26B-A4B head until 2026-08-29 and passed for a
+        // reason that was never the intended one: *two* entries declared that file, and a file
+        // declared more than once is deliberately left unclaimed because the catalogue cannot say
+        // which entry it belongs to. Shelving the UD-IQ4_XS quantisation left one claimant, so that
+        // head became correctly attributed and stopped being an orphan — which is an improvement to
+        // the window and the end of this fixture. A head no entry declares is the case the sentence
+        // under test is actually about.
         var directory = TestTemp.NewDirectory("uindosill-models");
-        File.WriteAllText(Path.Combine(directory, "mtp-gemma-4-26B-A4B-it.gguf"), "an orphan");
+        File.WriteAllText(Path.Combine(directory, "mtp-a-model-that-was-withdrawn.gguf"), "an orphan");
 
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
 
         var file = Assert.Single(main.Models.Sideloaded);
-        Assert.Equal("mtp-gemma-4-26B-A4B-it.gguf", file.Name);
+        Assert.Equal("mtp-a-model-that-was-withdrawn.gguf", file.Name);
+        Assert.Null(file.ClaimedBy);
 
         // Not a .gguf model anybody answers with, so the original sentence is the true one here.
         Assert.Contains("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
@@ -1017,11 +1031,17 @@ public class TranscribeViewModelTests
     [Fact]
     public void LoadSaysWhyItIsDarkOnAModelItCannotLoad()
     {
-        // The LOADED MODEL panel is the window's one ASR engine, and it used to be drawn inside the
-        // per-entry detail pane — so selecting Speaker labelling put a Backend picker and a dead
-        // Load button underneath it, reading as that model's backend. It is neither: the diariser
-        // picks its own provider inside the sidecar, and CanLoad has always required a
-        // transcription entry. The panel moved out of the pane, and the button now says so.
+        // The panel is the window's one ASR engine, and it used to be drawn inside the per-entry
+        // detail pane — so selecting Speaker labelling put a Backend picker and a dead Load button
+        // underneath it, reading as that model's backend. It is neither: the diariser picks its own
+        // provider inside the sidecar, and CanLoad has always required a transcription entry. The
+        // panel moved out of the pane, and the button now says so.
+        //
+        // **Moving it was only half the repair, finished 2026-08-29.** It was still called "LOADED
+        // MODEL" — which names no model in particular and reads as the one just clicked — so the
+        // hint had to open by explaining the panel before it could say anything useful. The panel
+        // is titled SPEECH RECOGNITION ENGINE now and explains itself; the hint says only the part
+        // a reader cannot see, which is where their model is actually used.
         var directory = TestTemp.NewDirectory("uindosill-models");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
@@ -1032,8 +1052,13 @@ public class TranscribeViewModelTests
         Assert.False(main.Models.CanLoad);
         var hint = main.Models.LoadHint;
         Assert.NotNull(hint);
-        Assert.Contains("turns speech into text", hint, StringComparison.Ordinal);
         Assert.Contains("'Label speakers'", hint, StringComparison.Ordinal);
+
+        // It no longer opens by describing the panel it sits in. That sentence was the title's
+        // failure showing through, and a hint that spends its first clause explaining the furniture
+        // is one the reader has to get past before it tells them anything.
+        Assert.DoesNotContain("This panel loads", hint, StringComparison.Ordinal);
+        Assert.DoesNotContain("turns speech into text", hint, StringComparison.Ordinal);
 
         // The translation entry gets its own opt-in named rather than the diariser's.
         main.Models.Selected = main.Models.Models.First(m => m.Descriptor.Task == ModelTask.Translation);

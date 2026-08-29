@@ -5757,3 +5757,56 @@ General control to its Advanced counterpart. The CLI has no equivalent of the sp
 less than it sounds: `--help` already names every flag.
 
 **1493 tests, no weights, no display, no network — 1486 passed and 7 skipped.**
+
+### Fixed 2026-08-29 — the engine panel stops looking like the model you clicked
+
+**Reported from the window: it appears on every model and does not make sense.** Selecting the
+answering model drew a panel headed LOADED MODEL saying "Nothing loaded — press Load", with a
+Backend picker reading Cuda, none of which applies to an answering model. The panel's own body text
+had to say so: *"This panel loads the model that turns speech into text. Answering questions does
+something else… and is never loaded here."*
+
+**A panel whose copy apologises for the panel is a naming problem, not a copy problem.** Almost
+everything in it is global — the loaded state, the backend picker, both notes are the recogniser's
+and the session's — and only the Load button depends on the selection. Called LOADED MODEL and
+placed under the entry somebody just clicked, it read as being about that entry.
+
+**This was half-fixed already, which is what made the diagnosis quick.** The panel used to be drawn
+*inside* the per-entry detail pane and was moved out for exactly this reason —
+`LoadSaysWhyItIsDarkOnAModelItCannotLoad` records that. Moving it was not enough while its title
+still named no model in particular. It is **SPEECH RECOGNITION ENGINE** now, and the hint is one
+sentence saying the only thing the reader could not already see: where their model *is* used.
+
+### Shelved 2026-08-29 — the 26B-A4B at UD-IQ4_XS, and the ambiguity that went with it
+
+**Withdrawn from the offer by the maintainer.** It was the third answering entry and the second at
+26B-A4B, differing from the shipped UD-Q4_K_XL only in quantisation. The file's digests move to
+`deferred`, whose comment previously said deferral was always about licensing and now records two
+reasons: that, and a quantisation withdrawn from the offer. Nothing about the file changed — only
+whether it is offered.
+
+**Shelving it fixed a real defect nobody had reported, and the tests are how that surfaced.**
+`ClaimingEntry` attributes a loose file to a catalogue entry only when **exactly one** entry
+declares it — a file declared twice is deliberately left unclaimed, because the catalogue cannot say
+which entry it belongs to. Both 26B-A4B entries declared the same drafting head
+`mtp-gemma-4-26B-A4B-it.gguf`, so a copy of it in the models folder was reported as belonging to
+nothing, under a Delete button, while the entry that installs it sat above. **One claimant remains,
+so the head is now correctly attributed.**
+
+**Which retired a test by making its case unreachable.** `AHeadWithNothingToDraftForIsStillDeadWeight`
+used that head and had been passing for a reason that was never the intended one: not because the
+head was an orphan, but because it was *ambiguous*. It now uses a head no entry declares, which is
+the case the sentence under test is actually about, and asserts `ClaimedBy` is null so the reason it
+passes is the reason it is named for.
+
+**What the shelving does not do**, and it is worth writing down rather than discovering later:
+several measured defaults were taken on this exact quantisation on the second machine, 2026-08-27
+and 28 — the expert-placement and context notes in `LlamaServerOptions`, `AppSettings` and
+`ModelFit` cite it by name. Those records stay accurate as history and now describe a file this
+build no longer offers. They were not rewritten: a measurement is a record of what was run, and
+editing it to name a model that was not the one measured would be the worse of the two errors.
+
+**1493 tests, no weights, no display, no network — 1486 passed and 7 skipped.** None added and four
+changed: two catalogue listings that enumerate every entry, and two fixtures repointed at the
+surviving sibling — a rename rather than a rewrite, since both entries declare the same head and the
+pairing under test is unchanged.
