@@ -270,7 +270,7 @@ That is a reading of upstream's documentation, not of an assembled wheel.
 | Jinja2 | 3.1.6 | BSD License | `jinja2-3.1.6.dist-info/licenses/LICENSE.txt` |
 | joblib | 1.5.3 | BSD-3-Clause | `joblib-1.5.3.dist-info/licenses/LICENSE.txt` |
 | julius | 0.2.8 | MIT License | `julius-0.2.8.dist-info/licenses/LICENSE` |
-| kiwisolver | 1.5.0 | ========================= | `kiwisolver-1.5.0.dist-info/licenses/LICENSE` |
+| kiwisolver | 1.5.1 | ========================= | `kiwisolver-1.5.1.dist-info/licenses/LICENSE` |
 | lightning | 2.6.5 | Apache-2.0 | `lightning-2.6.5.dist-info/licenses/LICENSE` |
 | lightning-utilities | 0.15.3 | Apache-2.0 | `lightning_utilities-0.15.3.dist-info/licenses/LICENSE` |
 | Mako | 1.4.1 | MIT | `mako-1.4.1.dist-info/licenses/LICENSE` |
