@@ -65,7 +65,7 @@ public class CudaPackTests
     {
         // Was TheShippedManifestIsUnverifiedUntilTheAssetsAreUploaded, an Assert.False standing as
         // a reminder to flip the flag in the same commit as the upload. The upload happened on
-        // 2026-08-29 for v1.0.0-rc.7, so the reminder is spent — and this is what it was really
+        // 2026-08-29 for v1.0.0-rc.8, so the reminder is spent — and this is what it was really
         // protecting. `verified` asserts the parts are fetchable; a flag set true over a baseUrl
         // still naming a tag nobody released is exactly the failure it exists to prevent, and it
         // would present to a user as four 404s after they agreed to a 1.8 GB download.
