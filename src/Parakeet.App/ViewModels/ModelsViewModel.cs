@@ -541,14 +541,20 @@ public sealed partial class ModelsViewModel : ObservableObject
                 {
                     ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
                     ModelTask.Translation => "'Translate to English' on the Transcribe tab",
-                    ModelTask.VoiceActivity => "'Neural speech detection' on the Settings tab",
+                    ModelTask.VoiceActivity => "'Neural speech detection' on the Advanced tab of Settings",
                     ModelTask.Answering => "the Ask tab, beside a finished transcript",
                     _ => "its own opt-in",
                 };
 
-                return $"This panel loads the model that turns speech into text. {model.DisplayName} does "
-                       + $"something else — it runs from {used}, alongside the recogniser, "
-                       + "and is never loaded here.";
+                // **This sentence used to open by explaining what the panel was**, because the panel
+                // was called "LOADED MODEL" and sat under the entry somebody had just clicked, so
+                // every non-transcription entry drew a paragraph apologising for the controls above
+                // it. That was the panel's title failing, not the hint's job: it is retitled
+                // "SPEECH RECOGNITION ENGINE" as of 2026-08-29 and now says what it is on its own,
+                // so what is left here is the only part the reader could not already see — where
+                // this model is actually used.
+                return $"{model.DisplayName} is not loaded here — it runs from {used}, alongside "
+                       + "the recogniser.";
             }
 
             return model.IsInstalled ? null : "Download it first.";

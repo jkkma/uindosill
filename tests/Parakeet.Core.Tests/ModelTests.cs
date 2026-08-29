@@ -305,8 +305,7 @@ public class ModelCatalogTests
             {
                 "gemma-4-12b-it-qat-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-q4-k-xl",
-                "gemma-4-26b-a4b-it-ud-iq4-xs",
-            },
+                            },
             catalog.AnsweringModels.Select(m => m.Id));
 
         // Exactly one answering entry may claim the default, and it is read per task: this is the

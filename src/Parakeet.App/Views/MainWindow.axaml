@@ -748,7 +748,7 @@
                  default with no way to see or change it. -->
             <Border Classes="tinted" Padding="14">
               <StackPanel Spacing="11">
-                <TextBlock Text="LOADED MODEL" Classes="section"
+                <TextBlock Text="SPEECH RECOGNITION ENGINE" Classes="section"
                            Foreground="{DynamicResource Matcha700Brush}" />
                 <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
 

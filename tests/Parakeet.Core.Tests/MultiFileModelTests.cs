@@ -119,8 +119,7 @@ public class MultiFileModelTests
                 "opus-mt-tc-bible-big-mul-en-fp32",
                 "gemma-4-12b-it-qat-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-q4-k-xl",
-                "gemma-4-26b-a4b-it-ud-iq4-xs",
-            },
+                            },
             ModelCatalog.Default.Models.Where(m => m.IsMultiFile).Select(m => m.Id));
 
         var multiFile = ModelCatalog.Default.Get("opus-mt-tc-bible-big-mul-en-fp32");
