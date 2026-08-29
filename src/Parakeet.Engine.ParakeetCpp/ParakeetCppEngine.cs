@@ -203,6 +203,30 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
                 throw new ParakeetNativeException(DescribeLoadFailure());
             }
 
+            // The one guarantee AllowBackendFallback=false exists to give, enforced on the answer
+            // rather than assumed of the request. Configure writes process-global settings that
+            // the resolver consumes on the first native call, and a process holds one build of
+            // the library — so this engine can complete its load on a backend it explicitly
+            // refused, either because another engine's Configure landed in between or because an
+            // earlier load already fixed the library. No shipped composition does either (the GUI
+            // runs one session with a process-fixed backend, the CLI one backend per process —
+            // bench builds an engine per batch size, all on that one backend with fallback at its
+            // default — and the doctor probes each backend in its own child process), but the API
+            // allows both, and a transcript whose
+            // provenance contradicts the caller's constraint is worse than a refusal. A library
+            // from a flat directory has no backend in its path and is left alone — an explicit
+            // directory is the caller taking control.
+            if (!_options.AllowBackendFallback
+                && ParakeetNativeLibrary.LoadedBackend is { } loadedBackend
+                && loadedBackend != _options.Backend)
+            {
+                handle.Dispose();
+                throw new ParakeetNativeException(
+                    $"The native library in this process is the {loadedBackend} build and {_options.Backend} was " +
+                    "demanded with fallback disabled. A process holds one build: run a conflicting backend demand " +
+                    "in its own process, the way the doctor's probes do.");
+            }
+
             _context = handle;
             ColdLoadDuration = stopwatch.Elapsed;
 

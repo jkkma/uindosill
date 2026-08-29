@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1529 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1545 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,7 +36,7 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Eight of those 1529 tests skip themselves.** Two are platform-specific: the Media Foundation
+**Eight of those 1545 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
 skips here while running on Linux. The other six are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:

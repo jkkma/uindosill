@@ -232,7 +232,7 @@ internal static class TranslateCommand
                 context.WriteError(
                     $"{stem}: {lostNumbers.Count} of {lines.Length} lines carry a number the English does not, " +
                     string.Join("; ", lostNumbers.Take(5)) +
-                    (lostNumbers.Count > 5 ? $"; and {lostNumbers.Count: 5} more" : string.Empty) +
+                    (lostNumbers.Count > 5 ? $"; and {lostNumbers.Count - 5} more" : string.Empty) +
                     ". A date or a quantity that changed in translation reads as confidently as one that did not.");
             }
 

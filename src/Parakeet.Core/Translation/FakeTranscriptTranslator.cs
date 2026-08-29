@@ -46,6 +46,13 @@ public sealed record FakeTranslatorOptions
     /// decode description into a transcript is exercised with no weights. Null to say nothing.
     /// </summary>
     public string? DecodeDescription { get; init; } = "canned, beam 1";
+
+    /// <summary>
+    /// Strip every digit from the translation, so the lost-numbers warning has something real to
+    /// find. A translation that loses a date is the failure <c>TranslationNumerals</c> exists to
+    /// flag, and an echoing fake can never produce one.
+    /// </summary>
+    public bool DropDigits { get; init; }
 }
 
 /// <summary>
@@ -169,6 +176,10 @@ public sealed class FakeTranscriptTranslator : ITranscriptTranslator
 
             var segment = segments[i];
             var text = segment.Text.Trim();
+            if (_options.DropDigits)
+            {
+                text = string.Concat(text.Where(c => !char.IsAsciiDigit(c)));
+            }
 
             yield return segment with
             {
