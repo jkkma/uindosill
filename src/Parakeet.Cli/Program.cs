@@ -201,7 +201,7 @@ namespace Parakeet.Cli
 
         internal static void WriteUsage(CliContext context)
         {
-            context.WriteLine($"uindosill {Version()} — local file transcription with NVIDIA Parakeet");
+            context.WriteLine($"uindosill {Version()}: local file transcription with NVIDIA Parakeet");
             context.WriteLine();
             context.WriteLine("Usage: uindosill <command> [options]");
             context.WriteLine();

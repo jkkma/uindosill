@@ -150,7 +150,7 @@ internal static class RetrieveCommand
             context.WriteLine($"? {question}");
             if (hits.Count == 0)
             {
-                context.WriteLine("  no window matches — the abstain path's input, not an error");
+                context.WriteLine("  no window matches: the abstain path's input, not an error");
                 continue;
             }
 

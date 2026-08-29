@@ -135,7 +135,7 @@ public static class SubtitleMux
 
         if (!MuxableFormats.Contains(format))
         {
-            refusal = $"A media file can carry subtitles, and '{format}' is not subtitles — "
+            refusal = $"A media file can carry subtitles, and '{format}' is not subtitles: "
                 + "only SRT and WebVTT go inside a recording. The rest stay as files beside it.";
             return false;
         }
@@ -225,8 +225,8 @@ public static class SubtitleMux
             }
 
             return format == "vtt-words"
-                ? "Word-by-word timing only survives in an MKV — an MP4 has no WebVTT track to put "
-                  + "it in — so this makes one. The audio and picture are copied across untouched."
+                ? "Word-by-word timing only survives in an MKV; an MP4 has no WebVTT track to put "
+                  + "it in, so this makes one. The audio and picture are copied across untouched."
                 : "WebVTT only goes inside an MKV, so this makes one rather than an MP4. The audio "
                   + "and picture are copied across untouched.";
         }

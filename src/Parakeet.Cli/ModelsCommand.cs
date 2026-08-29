@@ -58,7 +58,7 @@ internal static class ModelsCommand
             if (model.Task != ModelTask.Transcription)
             {
                 var task = model.Task == ModelTask.VoiceActivity ? "speech-detection" : model.Task.ToString().ToLowerInvariant();
-                marks.Add($"{task} model — not selectable for transcribe");
+                marks.Add($"{task} model: not selectable for transcribe");
             }
 
             if (!model.Verified)

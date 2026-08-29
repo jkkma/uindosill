@@ -92,7 +92,7 @@ internal static class DoctorCommand
         else if (context.Store.PathFor(detectionEntry) is var detectionPath && !File.Exists(detectionPath))
         {
             context.WriteLine(
-                $"  {detectionEntry.Id,-24} not installed — transcribe cuts on the energy gate until it is: " +
+                $"  {detectionEntry.Id,-24} not installed, transcribe cuts on the energy gate until it is: " +
                 $"uindosill models download {detectionEntry.Id}");
         }
         else
@@ -100,7 +100,7 @@ internal static class DoctorCommand
             try
             {
                 using var detector = new SileroSpeechDetector(detectionPath);
-                context.WriteLine($"  {detectionEntry.Id,-24} ok — {detector.Name}");
+                context.WriteLine($"  {detectionEntry.Id,-24} ok: {detector.Name}");
             }
             catch (SpeechDetectorException exception)
             {
@@ -133,7 +133,7 @@ internal static class DoctorCommand
             var install = Engine.LlamaServer.LlamaServerLocator.TryFind(backend);
             context.WriteLine(install is null
                 ? $"  {backend.ToString().ToLowerInvariant(),-8} not vendored"
-                : $"  {backend.ToString().ToLowerInvariant(),-8} vendored — {install.Directory}");
+                : $"  {backend.ToString().ToLowerInvariant(),-8} vendored: {install.Directory}");
         }
 
         var taken = Engine.LlamaServer.LlamaServerLocator.TryFind();
@@ -152,7 +152,7 @@ internal static class DoctorCommand
         context.WriteLine(
             "A backend reported as 'crashed at load' is the AVX2 static-initialiser failure: the binary was built " +
             "with an instruction-set baseline this CPU does not have, and it dies before any code of ours runs. " +
-            "Rebuild it with GGML_NATIVE=OFF (or GGML_CPU_ALL_VARIANTS for runtime dispatch) — no amount of " +
+            "Rebuild it with GGML_NATIVE=OFF (or GGML_CPU_ALL_VARIANTS for runtime dispatch); no amount of " +
             "handling in this process can catch it.");
 
         return ExitCodes.Success;
@@ -242,7 +242,7 @@ internal static class DoctorCommand
 
         if (process.ExitCode == 0)
         {
-            return "ok — " + stdout.Trim();
+            return "ok: " + stdout.Trim();
         }
 
         // A negative or signal-shaped exit code means the child died rather than exited.
@@ -250,12 +250,12 @@ internal static class DoctorCommand
         {
             return string.Create(
                 CultureInfo.InvariantCulture,
-                $"crashed at load (exit {process.ExitCode}) — see the note below");
+                $"crashed at load (exit {process.ExitCode}); see the note below");
         }
 
         var message = stderr.Trim();
         var firstLine = message.Split('\n', 2)[0];
-        return $"unavailable — {(firstLine.Length == 0 ? "no message" : firstLine)}";
+        return $"unavailable: {(firstLine.Length == 0 ? "no message" : firstLine)}";
     }
 
     /// <summary>The child half of <see cref="ProbeAsync"/>.</summary>
@@ -275,7 +275,7 @@ internal static class DoctorCommand
             if (ParakeetNativeLibrary.ShutdownBackendAvailable == false)
             {
                 context.WriteLine(
-                    "  no pk::shutdown_backend export — on cuda the process will abort with 0xC0000409 at " +
+                    "  no pk::shutdown_backend export: on cuda the process will abort with 0xC0000409 at " +
                     "exit after a good run (docs/GOTCHAS.md, gotcha 19)");
             }
 

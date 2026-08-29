@@ -1029,19 +1029,19 @@ public class TranscribeViewModelTests
     }
 
     [Fact]
-    public void LoadSaysWhyItIsDarkOnAModelItCannotLoad()
+    public void TheEnginePanelIsNotDrawnOnAModelItCannotLoad()
     {
         // The panel is the window's one ASR engine, and it used to be drawn inside the per-entry
-        // detail pane — so selecting Speaker labelling put a Backend picker and a dead Load button
+        // detail pane, so selecting Speaker labelling put a Backend picker and a dead Load button
         // underneath it, reading as that model's backend. It is neither: the diariser picks its own
-        // provider inside the sidecar, and CanLoad has always required a transcription entry. The
-        // panel moved out of the pane, and the button now says so.
+        // provider inside the sidecar, and CanLoad has always required a transcription entry.
         //
-        // **Moving it was only half the repair, finished 2026-08-29.** It was still called "LOADED
-        // MODEL" — which names no model in particular and reads as the one just clicked — so the
-        // hint had to open by explaining the panel before it could say anything useful. The panel
-        // is titled SPEECH RECOGNITION ENGINE now and explains itself; the hint says only the part
-        // a reader cannot see, which is where their model is actually used.
+        // **Three repairs, and only the third was the one asked for.** It moved out of the pane;
+        // then it was retitled, because "LOADED MODEL" names no model in particular and read as the
+        // one just clicked; and on 2026-08-29 it stopped being drawn at all under an entry it
+        // cannot load. The first two made an out-of-place panel honest about itself. The complaint
+        // was never what it claimed to be, it was that it appeared, so the hint that used to
+        // apologise for it is gone and the panel is simply absent.
         var directory = TestTemp.NewDirectory("uindosill-models");
         var main = new MainWindowViewModel(
             new FakeEngineProvider(), new LocalModelStore(directory), ModelCatalog.Default, player: new FakeMediaPlayer());
@@ -1050,22 +1050,24 @@ public class TranscribeViewModelTests
         main.Models.Selected = diariser;
 
         Assert.False(main.Models.CanLoad);
-        var hint = main.Models.LoadHint;
-        Assert.NotNull(hint);
-        Assert.Contains("'Label speakers'", hint, StringComparison.Ordinal);
+        Assert.False(main.Models.ShowEnginePanel);
 
-        // It no longer opens by describing the panel it sits in. That sentence was the title's
-        // failure showing through, and a hint that spends its first clause explaining the furniture
-        // is one the reader has to get past before it tells them anything.
-        Assert.DoesNotContain("This panel loads", hint, StringComparison.Ordinal);
-        Assert.DoesNotContain("turns speech into text", hint, StringComparison.Ordinal);
+        // No hint either: it would be text under a block nobody is looking at.
+        Assert.Null(main.Models.LoadHint);
 
-        // The translation entry gets its own opt-in named rather than the diariser's.
+        // What survives is the useful half, and it moved to the entry's own detail.
+        Assert.True(main.Models.HasWhereItRuns);
+        Assert.Contains("'Label speakers'", main.Models.WhereItRuns, StringComparison.Ordinal);
+
+        // The translation entry names its own opt-in rather than the diariser's.
         main.Models.Selected = main.Models.Models.First(m => m.Descriptor.Task == ModelTask.Translation);
-        Assert.Contains("'Translate to English'", main.Models.LoadHint, StringComparison.Ordinal);
+        Assert.False(main.Models.ShowEnginePanel);
+        Assert.Contains("'Translate to English'", main.Models.WhereItRuns, StringComparison.Ordinal);
 
-        // And a transcription entry that is simply not downloaded says that instead.
+        // And on a transcription entry the panel is back, with the hint that belongs to it.
         main.Models.Selected = main.Models.Models.First(m => m.IsTranscriptionModel);
+        Assert.True(main.Models.ShowEnginePanel);
+        Assert.False(main.Models.HasWhereItRuns);
         Assert.Equal("Download it first.", main.Models.LoadHint);
     }
 

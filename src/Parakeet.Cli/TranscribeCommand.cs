@@ -444,8 +444,8 @@ internal static class TranscribeCommand
             // Not a fallback — nothing is known either way. The library was found where its backend
             // cannot be read off its path, and until 2026-08-22 the requested one was recorded in
             // its place, which is how a flat CPU build became "vulkan" in a transcript's provenance.
-            return $"{how} but the native loader found its library in a directory with no backend name — a flat " +
-                   "layout, or the system search path — so which backend is running is not known and the " +
+            return $"{how} but the native loader found its library in a directory with no backend name, a flat " +
+                   "layout, or the system search path, so which backend is running is not known and the " +
                    "transcript records none.";
         }
 
@@ -704,7 +704,7 @@ internal static class TranscribeCommand
             return string.Create(
                 CultureInfo.InvariantCulture,
                 $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS was " +
-                $"judged not to be speech by {report.SpeechDetector} and was not decoded — music, ambience, or speech it " +
+                $"judged not to be speech by {report.SpeechDetector} and was not decoded: music, ambience, or speech it " +
                 $"missed. Re-run with --vad energy or --no-vad to decode it.");
         }
 

@@ -100,9 +100,9 @@ internal static class SpeechDetectorFactory
             // Neither is a usage error here, unlike under --vad neural: nobody asked for the
             // detector by name, so the run goes on with the gate and says why.
             context.WriteError(entries.Count == 0
-                ? "Speech detection: energy gate — the model catalogue has no speech-detection entry, so the neural " +
+                ? "Speech detection: energy gate. The model catalogue has no speech-detection entry, so the neural " +
                   "default has nothing to load."
-                : $"Speech detection: energy gate — the catalogue has {entries.Count} speech-detection entries and " +
+                : $"Speech detection: energy gate. The catalogue has {entries.Count} speech-detection entries and " +
                   "nothing says which is the default; --vad neural refuses for the same reason.");
             return null;
         }
@@ -113,7 +113,7 @@ internal static class SpeechDetectorFactory
         if (!File.Exists(path))
         {
             context.WriteError(
-                $"Speech detection: energy gate — the neural detector is the default, but its model '{descriptor.Id}' " +
+                $"Speech detection: energy gate. The neural detector is the default, but its model '{descriptor.Id}' " +
                 $"is not installed. 'uindosill models download {descriptor.Id}' " +
                 $"({ModelsCommand.Bytes(descriptor.TotalSizeBytes ?? 0)}) turns it on; --vad energy asks for the gate " +
                 "on purpose and silences this line.");
@@ -123,7 +123,7 @@ internal static class SpeechDetectorFactory
         var detector = Load(path, descriptor);
 
         context.WriteError(
-            $"Speech detection: {detector.Name} ({descriptor.Id}) — the default since 2026-08-23 whenever its model is " +
+            $"Speech detection: {detector.Name} ({descriptor.Id}), the default since 2026-08-23 whenever its model is " +
             "installed; --vad energy cuts on the gate instead. No figure in docs/UNPROVEN.md measured before " +
             "2026-08-23 describes this detector's segment boundaries.");
 

@@ -130,8 +130,8 @@ internal static class TranslatorFactory
         {
             context.WriteError(
                 "WARNING: translating on DirectML, which this project has not measured as faithful. On 32 FLEURS " +
-                "sentences at beam 6 it agreed with the CPU on 0 of 32 — the decoder falls into a repetition loop " +
-                "— at 21.5x slower. Treat this English as unverified.");
+                "sentences at beam 6 it agreed with the CPU on 0 of 32: the decoder falls into a repetition loop" +
+                ", at 21.5x slower. Treat this English as unverified.");
         }
 
         // `auto` tried something better first and it did not build — said once, with the reason,
@@ -140,7 +140,7 @@ internal static class TranslatorFactory
         if (translator is SidecarTranscriptTranslator { FellBackFrom.Count: > 0 } sidecar)
         {
             context.WriteError(
-                $"{request.BackendOption} auto passed over {string.Join("; ", sidecar.FellBackFrom)} — this run is on " +
+                $"{request.BackendOption} auto passed over {string.Join("; ", sidecar.FellBackFrom)}: this run is on " +
                 $"{translator.Capabilities.Backend.ToString().ToLowerInvariant()}.");
         }
 
@@ -181,7 +181,7 @@ internal static class TranslatorFactory
             "dml" or "directml" when request.AllowUnverifiedBackend => "dml",
             "dml" or "directml" => throw new CliUsageException(
                 $"{request.BackendOption} dml is refused. Measured on 32 FLEURS sentences at beam 6, DirectML " +
-                "agreed with the CPU on 0 of 32 translations — its decoder falls into a repetition loop — while " +
+                "agreed with the CPU on 0 of 32 translations, its decoder falls into a repetition loop, while " +
                 $"running 21.5x slower, so it is neither faithful nor fast. Add {request.BackendOption}-unverified " +
                 $"to measure it anyway, or use {request.BackendOption} webgpu, which returned the CPU's own " +
                 "translations on 32 of 32 at 1.30x the speed."),
@@ -391,7 +391,7 @@ internal static class TranslatorFactory
             throw new CliUsageException(
                 $"'{what}' is not a complete translation checkpoint: {string.Join(", ", missing)} " +
                 $"{(missing.Count == 1 ? "is" : "are")} missing from {directory}. Eight of the checkpoint's nine files " +
-                "are required — two graphs, two configs and four of the five tokenizer files — and a partial set " +
+                "are required: two graphs, two configs and four of the five tokenizer files. A partial set " +
                 "loads until it does not.");
         }
     }
