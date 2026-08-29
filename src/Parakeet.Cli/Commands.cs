@@ -499,7 +499,8 @@ internal static class Commands
         ],
         Details =
             "Models live under %LOCALAPPDATA% (or the platform equivalent), never in the install directory, so\n" +
-            "they survive updates and uninstalls. Override the location with UINDOSILL_MODELS_DIR.\n\n" +
+            "they survive updates. The folder is shared with the desktop application, whose uninstaller asks\n" +
+            "whether to delete it. Override the location with UINDOSILL_MODELS_DIR.\n\n" +
             "Entries marked 'unverified' have file names, sizes and digests that were never checked against the\n" +
             "live repository. Downloading one requires --allow-unverified, and 'models verify' prints the digest\n" +
             "of what actually arrived so it can be pinned in the catalogue.",

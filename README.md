@@ -137,7 +137,7 @@ rather than a convenience, since a test needing 670 MB of weights is a test CI w
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1514 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1515 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.
@@ -272,10 +272,13 @@ Three things worth knowing before downloading:
 **Nothing this application does unattended deletes a file on your disk.** That is a rule rather
 than an observation, and it decides how the folders are arranged: the application installs into
 `%LOCALAPPDATA%\UindosillDesktop`, everything you download lives in `%LOCALAPPDATA%\Uindosill`,
-and the second survives an update, a reinstall and an uninstall alike — measured byte-identical
-across an update against 4.3 GiB of weights. Weights go when you remove them on the Models tab.
-[GOTCHAS.md](docs/GOTCHAS.md) has the reasoning, including a cleanup feature that was tried and
-withdrawn for breaking it.
+and the second survives an update and a reinstall — measured byte-identical across an update
+against 4.3 GiB of weights. **Uninstalling is the one thing that can remove it, and it asks
+first**: a dialog naming the size and the folder, with keeping as the default answer, and nothing
+is deleted except on an explicit Yes. Below 64 MiB it does not ask at all. Weights also go when you
+remove them on the Models tab, which is the route that does not depend on that dialog appearing.
+[GOTCHAS.md](docs/GOTCHAS.md) has the reasoning, including the night this ran unattended and was
+withdrawn for breaking the rule above.
 
 The application asks GitHub once, at startup, whether a newer version exists. That is the only
 thing it does on the network unasked: it shows a notice, downloads nothing until you press the

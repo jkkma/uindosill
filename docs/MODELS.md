@@ -27,14 +27,17 @@ tab meaningful — the entry it installs, updates and removes is the one the app
 and `scripts/package-windows.ps1` verifies each bundled file against the same SHA-256 in
 `models.json` that a download is checked against, so the two copies are the same bytes either way.
 
-**Uninstalling the application does not touch this folder.** Nothing Uindosill does unattended
-deletes anything on your disk: an uninstaller cannot ask you about files you put somewhere
-yourself, and uninstall-then-reinstall is a repair people try — it should not cost gigabytes. So
-the weights survive an update, a reinstall and an uninstall alike, and clearing them out is a thing
-you do on the Models tab, which shows what is there and what it costs, or by deleting the folder.
+**Uninstalling the application asks about this folder, and keeps it unless you say otherwise.**
+Nothing Uindosill does unattended deletes anything on your disk: the folder is one people keep
+their own files in, and uninstall-then-reinstall is a repair people try — it should not silently
+cost gigabytes. So an update and a reinstall never touch it, and an uninstall puts the question to
+you, naming the size and the path with keeping as the default. Below 64 MiB it does not ask.
+Clearing it out is otherwise a thing you do on the Models tab, which shows what is there and what
+it costs, or by deleting the folder.
 
-An uninstall hook that removed the folder shipped for one night in `v1.0.0-rc.3` and was withdrawn;
-`docs/GOTCHAS.md` gotcha 8 says why, and `docs/PHASES.md` has the full account.
+A hook that removed the folder **without asking** shipped for one night in `v1.0.0-rc.3` and was
+withdrawn; the one that asks arrived on 2026-08-29. `docs/GOTCHAS.md` gotcha 8 says why the
+difference is the whole point, and `docs/PHASES.md` has the full account.
 
 ```bash
 uindosill models list
