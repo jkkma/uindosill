@@ -19,8 +19,9 @@ namespace Parakeet.App.Tests;
 /// </para>
 /// <para>
 /// The install itself is not exercised: it is 1.8 GB over a network, and it was driven end to end
-/// by hand against a local server on 2026-08-29. What is held here is that the button cannot be
-/// pressed when there is nothing to download, which is the state this build ships in.
+/// by hand against a local server on 2026-08-29. What is held here is that the button is live
+/// exactly where there is something to download and dead everywhere else, which since the pack was
+/// uploaded is a relationship rather than the single state this build used to ship in.
 /// </para>
 /// </remarks>
 public class CudaPackSettingsTests
@@ -59,7 +60,7 @@ public class CudaPackSettingsTests
     {
         // Was TheButtonIsDeadWhileTheManifestIsUnverified, whose Assert.False on the shipped
         // manifest was written to start failing the day a release carried the assets. That day was
-        // 2026-08-29 and v1.0.0-rc.7. What it guarded holds in both states, so it is asserted as
+        // 2026-08-29 and v1.0.0-rc.8. What it guarded holds in both states, so it is asserted as
         // the relationship rather than as either value: the button is live only where the pinned
         // flag says the parts exist, and never merely fails when pressed.
         var viewModel = NewViewModel();
