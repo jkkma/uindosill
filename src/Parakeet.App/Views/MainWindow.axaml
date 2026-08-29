@@ -858,8 +858,20 @@
                      "the three of them come to over 3 GiB", which was a count of catalogue
                      entries and a total that were both true on the day they were typed and
                      neither of which is a fact about the reader's disk. -->
-                <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
-                           Text="{Binding UninstallNotice}" />
+                <StackPanel Spacing="9">
+                  <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="520"
+                             Text="{Binding UninstallNotice}" />
+
+                  <!-- The notice was true and useless without this: it told a reader the
+                       weights outlive an uninstall and left them to select and Remove each
+                       entry in turn. Deliberately not an uninstall hook, which was built and
+                       withdrawn on 2026-08-23 as unreliable in a way nothing explained. A
+                       button is attended, which is the rule that survived that. -->
+                  <Button Name="RemoveAllModels" Classes="onPage"
+                          Content="Remove all downloaded models"
+                          HorizontalAlignment="Left"
+                          Command="{Binding RemoveAllCommand}" />
+                </StackPanel>
               </StackPanel>
             </Border>
            </StackPanel>
