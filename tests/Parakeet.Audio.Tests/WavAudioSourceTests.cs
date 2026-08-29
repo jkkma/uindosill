@@ -66,6 +66,29 @@ public class WavAudioSourceTests
     }
 
     [Fact]
+    public async Task Pcm16IsStreamedInBlocksAndStillRoundTripsAtAnyLength()
+    {
+        // The PCM16 writer joined its float sibling in block-streaming on 2026-08-29 (it held a
+        // second whole-file array with an int-overflowing length until then), and it earns the
+        // same test for the same reason: a length that is neither a block multiple nor small has
+        // to come back sample for sample, or an off-by-one in the offset arithmetic ships under
+        // a suite whose largest PCM16 file fits one block.
+        var expected = Ramp(100_001);
+        using var stream = new MemoryStream();
+        WavWriter.WritePcm16(stream, expected, 16_000);
+        stream.Position = 0;
+
+        await using var source = WavAudioSource.Create(stream);
+
+        Assert.Equal(100_001, source.FrameCount);
+        var actual = await ReadAllAsync(source);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i], actual[i], tolerance: 2f / 32768f);
+        }
+    }
+
+    [Fact]
     public async Task Float32IsStreamedInBlocksAndStillRoundTripsAtAnyLength()
     {
         // The writer encodes in 16 KB blocks rather than into a second whole-file array (which is

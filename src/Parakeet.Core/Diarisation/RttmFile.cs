@@ -29,7 +29,11 @@ public sealed record RttmDocument
 /// and tenth field are optional (md-eval's own examples have nine), and non-<c>SPEAKER</c> record
 /// types are skipped rather than fatal. What it is strict about is the shape of the numbers: a
 /// duration that does not parse, or is negative, stops the read — a scorer fed a guessed onset
-/// produces a confident wrong number, which is worse than no number.
+/// produces a confident wrong number, which is worse than no number. The optional tail is held to
+/// its own shape for the same reason: an eleventh field, or a word where a confidence belongs, is
+/// what a speaker label with a space in it looks like after the split, and reading field eight
+/// anyway would truncate that label at the space — merging two speakers into one and scoring the
+/// merge without a word.
 /// </remarks>
 public static class RttmFile
 {
@@ -83,10 +87,50 @@ public static class RttmFile
                 throw new FormatException($"RTTM line {lineNumber} has a negative duration ({fields[4]}).");
             }
 
+            // Each finite half fits a TimeSpan, but their sum is the turn's end and must too:
+            // past the range the tick conversion saturates rather than throwing, and a saturated
+            // end makes the turn's extent absurd with nothing said. Same rule as ParseSeconds.
+            if (onset + duration > TimeSpan.MaxValue.TotalSeconds)
+            {
+                throw new FormatException(
+                    $"RTTM line {lineNumber}: onset plus duration ({fields[3]} + {fields[4]}) is farther into a " +
+                    "recording than a time can represent.");
+            }
+
             var speaker = fields[7];
             if (speaker == NotApplicable)
             {
                 throw new FormatException($"RTTM line {lineNumber} names no speaker (field 8 is {NotApplicable}).");
+            }
+
+            // The optional tail's own shape check. A SPEAKER record has at most ten fields, and
+            // the ninth and tenth are a confidence and a lookahead time — <NA> or a number, in
+            // every file a tool writes. What else lands here is the rest of a speaker label with
+            // spaces in it, split into fields; taking field eight anyway would truncate that
+            // label at the first space, merging distinct speakers into one and scoring the merge
+            // without a word. Write refuses such labels going out; this is the same refusal
+            // coming in. Best-effort, and honestly so: a label whose second word is itself a
+            // number ("alice 2") splits into a tail this shape check cannot tell from a
+            // confidence, and still truncates — RTTM's format holds no answer for that one.
+            if (fields.Length > 10)
+            {
+                throw new FormatException(
+                    $"RTTM line {lineNumber} has {fields.Length} fields where a SPEAKER record has at most ten. " +
+                    "The usual cause is a speaker label containing spaces, which whitespace-splitting would " +
+                    "silently truncate; rename the speaker (underscores are the convention).");
+            }
+
+            for (var extra = 8; extra < fields.Length; extra++)
+            {
+                if (fields[extra] != NotApplicable
+                    && !double.TryParse(fields[extra], NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                {
+                    throw new FormatException(
+                        $"RTTM line {lineNumber}: field {extra + 1} ('{fields[extra]}') is neither {NotApplicable} " +
+                        "nor a number. The usual cause is a speaker label containing spaces, which " +
+                        "whitespace-splitting would silently truncate; rename the speaker " +
+                        "(underscores are the convention).");
+                }
             }
 
             if (!fileIds.Contains(fields[1], StringComparer.Ordinal))
@@ -111,6 +155,19 @@ public static class RttmFile
             || double.IsNaN(value) || double.IsInfinity(value))
         {
             throw new FormatException($"RTTM line {lineNumber}: {what} '{field}' is not a number of seconds.");
+        }
+
+        // Finite is not enough: the tick conversion these values are headed for saturates rather
+        // than throwing past TimeSpan's range in either direction, and a saturated onset makes
+        // Start == End == TimeSpan.MaxValue (or MinValue, for the negative sign) — a zero-length
+        // turn that contributes nothing to a score, silently. That is the same
+        // one-turn-quietly-missing failure the byte-order-mark handling above exists to prevent,
+        // and an onset with an exponent typo in it earns the same answer as one that does not
+        // parse: the read stops. Small negative onsets stay tolerated, as they always were.
+        if (value > TimeSpan.MaxValue.TotalSeconds || value < TimeSpan.MinValue.TotalSeconds)
+        {
+            throw new FormatException(
+                $"RTTM line {lineNumber}: {what} '{field}' is farther into a recording than a time can represent.");
         }
 
         return value;

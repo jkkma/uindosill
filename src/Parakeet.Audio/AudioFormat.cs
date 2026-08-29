@@ -143,15 +143,18 @@ public static class AudioFormatSniffer
 
         if (header.Length >= 2 && header[0] == 0xFF)
         {
-            // 12 sync bits then the layer field: MPEG audio layers I–III are mp3-ish, and the
-            // 0xF1/0xF9 pair is ADTS AAC.
+            // 12 sync bits then the layer field: MPEG audio layers I–III are mp3-ish, and layer
+            // bits of zero under a full 0xFFF sync are ADTS AAC. That is four second bytes, not
+            // two — 0xF0/0xF8 are the CRC-protected variants (protection_absent is the low bit)
+            // of the 0xF1/0xF9 this read until 2026-08-29, and a protected stream classified by
+            // the 0xE0 catch-all below was reported as a renamed mp3 that never was.
             var second = header[1];
             if ((second & 0xF6) is 0xF0 or 0xF2 or 0xF4 or 0xF6 && (second & 0x06) != 0x00)
             {
                 return AudioContainer.Mp3;
             }
 
-            if (second is 0xF1 or 0xF9)
+            if ((second & 0xF6) == 0xF0)
             {
                 return AudioContainer.Aac;
             }
