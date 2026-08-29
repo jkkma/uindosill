@@ -155,8 +155,9 @@ internal static class ParakeetJson
 
     /// <summary>
     /// The number of seconds under <paramref name="name"/>, or false when there is no number there.
-    /// A number that is negative or not finite is a time the engine did report, badly, and clamps
-    /// to zero as it always has; a field that is missing or is not a number is no time at all.
+    /// A number that is negative, not finite, or too far into TimeSpan's range to survive a rebase
+    /// is a time the engine did report, badly, and clamps to zero; a field that is missing or is
+    /// not a number is no time at all.
     /// </summary>
     private static bool TryReadSeconds(JsonElement element, string name, out TimeSpan time)
     {
@@ -168,6 +169,21 @@ internal static class ParakeetJson
 
         var seconds = value.GetDouble();
         if (!double.IsFinite(seconds) || seconds < 0)
+        {
+            return true;
+        }
+
+        // Huge-but-finite is the third shape of a badly reported time, and the one the check
+        // above misses: past TimeSpan's range the tick conversion below saturates to
+        // TimeSpan.MaxValue rather than throwing, and the first rebase onto a later segment's
+        // offset then overflows the TimeSpan addition — an exception type nothing in the
+        // pipeline speaks, aborting the whole transcription. Cut at half the range rather than
+        // at its edge, because the edge only moves the same abort one band down: a time just
+        // under MaxValue survives the conversion and still overflows the rebase. Half leaves
+        // the addition more headroom than any recording can consume, and everything past it is
+        // equally garbage. It clamps to zero with the others: a time the engine did report,
+        // badly.
+        if (seconds > TimeSpan.MaxValue.TotalSeconds / 2)
         {
             return true;
         }

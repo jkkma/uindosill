@@ -15,16 +15,27 @@ public static class WavWriter
         ArgumentOutOfRangeException.ThrowIfLessThan(sampleRate, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(channels, 1);
 
-        var data = new byte[samples.Length * 2];
-        for (var i = 0; i < samples.Length; i++)
-        {
-            var clamped = Math.Clamp(samples[i], -1f, 1f);
-            var value = (short)Math.Round(clamped * 32767f);
-            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(i * 2, 2), value);
-        }
+        // Header first and blocks after, the same shape as WriteFloat32 below and for its two
+        // reasons: the header is also where an over-large payload is refused, which should
+        // happen before any samples are copied, and a second whole-file byte array (which this
+        // held until 2026-08-29) is a second copy of the recording — with an int length that
+        // overflowed above a gigabyte of samples besides.
+        WriteRiffHeader(stream, (long)samples.Length * 2, sampleRate, channels, bitsPerSample: 16, formatTag: 1);
 
-        WriteRiffHeader(stream, data.Length, sampleRate, channels, bitsPerSample: 16, formatTag: 1);
-        stream.Write(data);
+        Span<byte> block = stackalloc byte[16 * 1024];
+        var perBlock = block.Length / 2;
+        for (var offset = 0; offset < samples.Length; offset += perBlock)
+        {
+            var count = Math.Min(perBlock, samples.Length - offset);
+            for (var i = 0; i < count; i++)
+            {
+                var clamped = Math.Clamp(samples[offset + i], -1f, 1f);
+                var value = (short)Math.Round(clamped * 32767f);
+                BinaryPrimitives.WriteInt16LittleEndian(block.Slice(i * 2, 2), value);
+            }
+
+            stream.Write(block[..(count * 2)]);
+        }
     }
 
     /// <summary>Writes 32-bit IEEE float, the format that survives a round trip unchanged.</summary>
@@ -71,6 +82,22 @@ public static class WavWriter
     private static void WriteRiffHeader(
         Stream stream, long dataLength, int sampleRate, int channels, int bitsPerSample, int formatTag)
     {
+        // The RIFF size fields are 32 bits, and past them the format simply ends. Written
+        // unchecked, both casts below wrap modulo 2^32 for a payload over ~4.29 GB — every
+        // sample byte still lands in the file, so what comes out is a header that lies about
+        // the data's length, and a reader that trusts a too-small declared size (this
+        // project's own WavAudioSource among them) reads back a fraction of the recording
+        // with no error anywhere. RF64 is the format that holds more and this writer does
+        // not speak it, so the honest answer is a refusal here, before a byte is written —
+        // not a truncation discovered hours of audio later.
+        if (36 + dataLength > uint.MaxValue)
+        {
+            throw new NotSupportedException(
+                $"{dataLength:N0} bytes of samples do not fit a RIFF header's 32-bit sizes (about 4 GiB — " +
+                "roughly 18 hours at 16 kHz mono float). A file this long needs RF64, which this writer " +
+                "does not produce.");
+        }
+
         var blockAlign = channels * bitsPerSample / 8;
         var byteRate = sampleRate * blockAlign;
 

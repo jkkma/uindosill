@@ -126,6 +126,19 @@ public class ParakeetJsonTests
     }
 
     [Fact]
+    public void TimesBeyondTimeSpanAreClampedToZeroRatherThanSaturating()
+    {
+        // Past TimeSpan's range the tick conversion saturates to TimeSpan.MaxValue rather than
+        // throwing, and rebasing that word onto any later segment's offset overflows the
+        // TimeSpan addition — aborting the whole transcription with an exception type nothing in
+        // the pipeline speaks. Clamped to zero with the negative and non-finite shapes instead.
+        var clips = ParakeetJson.ParseBatch("""[{"text":"x","words":[{"w":"x","start":1e12,"end":1e12}]}]""");
+
+        Assert.Equal(TimeSpan.Zero, clips[0].Words[0].Start);
+        Assert.Equal(TimeSpan.Zero, clips[0].Words[0].End);
+    }
+
+    [Fact]
     public void WordsWithoutTextAreDropped()
     {
         var clips = ParakeetJson.ParseBatch("""[{"text":"x","words":[{"start":0,"end":1},{"w":"kept","start":1,"end":2}]}]""");

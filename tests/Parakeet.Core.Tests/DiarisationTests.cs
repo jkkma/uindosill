@@ -407,11 +407,15 @@ public class RttmAndLabelTests
             "SPKR-INFO f 1 <NA> <NA> <NA> unknown host_a <NA>\n" +
             "SPEAKER f 1 0.5 2 <NA> <NA> host_a <NA>\r\n" +
             "\n" +
-            "SPEAKER   f 1   2.5  1.0 <NA> <NA> host_b <NA> <NA>\n");
+            "SPEAKER   f 1   2.5  1.0 <NA> <NA> host_b <NA> <NA>\n" +
+            // A real confidence in field nine, the shape md-eval's examples carry: the tail check
+            // that refuses a word there must keep accepting a number.
+            "SPEAKER f 1 3.5 1.0 <NA> <NA> host_a 0.83 <NA>\n");
 
-        Assert.Equal(2, parsed.Turns.Count);
+        Assert.Equal(3, parsed.Turns.Count);
         Assert.Equal(1, parsed.SkippedLines);
         Assert.Equal(TimeSpan.FromSeconds(3.5), parsed.Turns[1].End);
+        Assert.Equal("host_a", parsed.Turns[2].Speaker);
     }
 
     [Fact]
@@ -438,6 +442,11 @@ public class RttmAndLabelTests
     [InlineData("SPEAKER f 1 abc 2 <NA> <NA> host_a <NA> <NA>\n")]        // onset not a number
     [InlineData("SPEAKER f 1 0.5 -2 <NA> <NA> host_a <NA> <NA>\n")]       // negative duration
     [InlineData("SPEAKER f 1 0.5 2 <NA> <NA> <NA> <NA> <NA>\n")]          // no speaker
+    [InlineData("SPEAKER f 1 3e12 5.0 <NA> <NA> host_a <NA> <NA>\n")]     // onset past TimeSpan: would saturate to a zero-length turn that silently scores as nothing
+    [InlineData("SPEAKER f 1 -3e12 5.0 <NA> <NA> host_a <NA> <NA>\n")]    // the same typo with a sign: saturates the other way, to TimeSpan.MinValue
+    [InlineData("SPEAKER f 1 922300000000 1000000000 <NA> <NA> host_a <NA> <NA>\n")] // each half fits, the end does not
+    [InlineData("SPEAKER f 1 0.0 5.0 <NA> <NA> John Smith <NA> <NA>\n")]  // eleven fields: a speaker label with a space would truncate to 'John'
+    [InlineData("SPEAKER f 1 0.0 5.0 <NA> <NA> John Smith\n")]            // nine fields whose ninth is a word: the same label, shorter tail
     public void MalformedRttmIsRefusedNotGuessed(string content)
     {
         Assert.Throws<FormatException>(() => RttmFile.Parse(content));

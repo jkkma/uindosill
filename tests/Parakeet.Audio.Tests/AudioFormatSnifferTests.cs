@@ -59,8 +59,17 @@ public class AudioFormatSnifferTests
         Assert.Equal(AudioContainer.Mp3, AudioFormatSniffer.Detect(Header((byte)0xFF, (byte)0xFB)).Container);
 
     [Fact]
-    public void AdtsSyncIsAac() =>
-        Assert.Equal(AudioContainer.Aac, AudioFormatSniffer.Detect(Header((byte)0xFF, (byte)0xF1)).Container);
+    public void AdtsSyncIsAac()
+    {
+        // All four second bytes ADTS can put under its sync: MPEG-4 and MPEG-2, each with and
+        // without CRC protection (the low bit). 0xF0 and 0xF8 are the protected variants, and
+        // until 2026-08-29 they fell through to the raw-MPEG catch-all and came back as Mp3 —
+        // so a correctly named .aac file was reported as a renamed mp3 that never was.
+        foreach (var second in new byte[] { 0xF0, 0xF1, 0xF8, 0xF9 })
+        {
+            Assert.Equal(AudioContainer.Aac, AudioFormatSniffer.Detect(Header((byte)0xFF, second)).Container);
+        }
+    }
 
     [Fact]
     public void FtypBoxIsMp4() =>
