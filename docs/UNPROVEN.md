@@ -966,13 +966,27 @@ substitute for watching the process on a network.
 
 ### The update check has never found an update
 
-`VelopackUpdater` asks `GithubSource` for the release feed of `jkkma/uindosill`, and that repository
-has exactly one release — `v1.0.0-rc.3`, published 2026-08-23, marked prerelease, which the
-constructor's `prerelease: false` filters out before it is a candidate. Two draft releases were
-built and deleted on 2026-08-19 (below), and a draft is not a release for this purpose — `vpk`
-could not see one either. So the path from *a newer version exists* to *it is installed* has never run end to
-end: no `CheckForUpdatesAsync` has returned a non-null `UpdateInfo`, no `DownloadUpdatesAsync` has
-downloaded anything, and `ApplyUpdatesAndRestart` has never been called by this application.
+`VelopackUpdater` asks `GithubSource` for the release feed of `jkkma/uindosill`. That repository now
+has four releases — `v1.0.0-rc.3`, `-rc.6`, `-rc.8` and `-rc.9` — and **every one of them is marked
+prerelease**, because every version so far carries a hyphen and the release workflow marks such a
+release accordingly so that it does not become Latest for stable users.
+
+**Until 2026-08-29 the constructor passed `prerelease: false`**, which Velopack documents as *"only
+stable releases will be considered"*. The paragraph below said so from the day it was written, and
+the consequence went unstated: with no stable release in existence the candidate list was empty **by
+construction**, so three newer releases arrived after rc.3 and not one of them could have been found
+by any installed copy. The gap was never that a newer version had not been published. **Since
+2026-08-29 the flag is decided by the running version** — a prerelease build searches prereleases, a
+stable build does not — so the set is no longer empty for a release candidate, and somebody who
+installs 1.0.0 is still not offered rc.11.
+
+The path from *a newer version exists* to *it is installed* has still never run end to end: no
+`CheckForUpdatesAsync` has returned a non-null `UpdateInfo`, no `DownloadUpdatesAsync` has
+downloaded anything, and `ApplyUpdatesAndRestart` has never been called by this application. **No
+release that predates the fix can exercise it**, because the check runs inside the installed build,
+so the first release published *after* the one carrying it is the earliest that can. Two draft
+releases were built and deleted on 2026-08-19 (below), and a draft is not a release for this
+purpose — `vpk` could not see one either.
 
 What is tested is the layer above it: `tests/Parakeet.App.Tests/UpdateTests.cs` drives
 `UpdatesViewModel` against a fake updater and holds down the behaviour the decision specifies — a
