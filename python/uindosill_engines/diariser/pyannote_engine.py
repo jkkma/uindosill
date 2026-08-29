@@ -146,8 +146,10 @@ ONNX_SUBDIR = "onnx"
 ONNX_FILES = ("segmentation.onnx", "embedding.onnx")
 
 #: Execution providers reachable once the graphs exist. `cpu` and `cuda` are deliberately absent:
-#: they are torch devices here and keep the published path, and adding an ONNX spelling of the CPU
-#: would give two routes to one answer with no way to tell from a run which produced it.
+#: they are torch devices here rather than ONNX Runtime providers, and adding an ONNX spelling of
+#: the CPU would give two routes to one answer with no way to tell from a run which produced it.
+#: Membership of this mapping is what :meth:`PyannoteEngine.__init__` reads to tell the two
+#: vocabularies apart, so a torch device must never be added to it — see :data:`TORCH_AUTO_DEVICES`.
 ONNX_PROVIDERS = {
     "webgpu": ["WebGpuExecutionProvider", "CPUExecutionProvider"],
     "dml": ["DmlExecutionProvider", "CPUExecutionProvider"],
@@ -161,15 +163,42 @@ ONNX_PROVIDERS = {
 #: is left at ORT's default.
 ONNX_GRAPH_OPTIMISATION = {"dml": "ORT_DISABLE_ALL"}
 
-#: What `auto` elects where the graphs exist, best first, before `cpu` is appended behind it.
+#: Names in :data:`AUTO_ORDER` that are torch devices rather than ONNX Runtime providers. They are
+#: elected on a different question from the rest — whether this environment's torch can reach the
+#: device, not whether the wheel carries a provider and the derived graphs exist — which is why
+#: :func:`resolve_auto` branches on membership here rather than assuming every candidate is a graph.
+TORCH_AUTO_DEVICES = ("cuda",)
+
+#: What `auto` elects, best first, before `cpu` is appended behind it. A name here is a candidate
+#: rather than a prediction: :func:`resolve_auto` drops the ones this machine cannot offer and
+#: :meth:`PyannoteEngine.__init__` tries what is left in order.
+#:
+#: **`cuda` leads, as of 2026-08-28, and it is the only entry that moves both neural stages.** An
+#: ONNX provider seats the embedder alone and leaves segmentation in torch on the CPU; `cuda` is a
+#: torch device, so the whole pipeline moves and no derived graph is needed for it.
+#:
+#: It is first because it is faster by a wide margin and because it changes nothing. Measured on the
+#: RTX 5080 over `runs/der/stretches/two-hosts-three-guests-a.wav`, ten minutes at 16 kHz mono, with
+#: the same venv on both arms and only `--backend` differing: **99.1 s on the CPU against 7.6 s on
+#: CUDA, 13x**, and a repeat pair at 112.4 s and 8.7 s. The GPU did the work rather than registering
+#: for it — 93-94% utilisation, 274.8 W and about 5.4 GiB of VRAM under load, which no silent
+#: fallback produces.
+#:
+#: **And the labels do not move.** All four runs returned 244 turns, 5 speakers and 670.2 s of
+#: speech, byte-identical as RTTM apart from the file-id column. That is the rule this project
+#: applies to automatic selection — what it picks unasked reproduces what the CPU produced — met
+#: more strongly than WebGPU met it, and the CPU-against-CPU pair is what makes the identity mean
+#: something rather than being two samples of a process that varies anyway (`VBx.py:81` seeds from
+#: numpy's unseeded global generator; on this pipeline and this recording it does not bite).
+#:
+#: **What it does not establish**: no DER has been scored on any route here, so this is an
+#: equivalence result and not an accuracy one, and one recording is not a corpus. `docs/UNPROVEN.md`
+#: carries both gaps.
 #:
 #: **`dml` is deliberately absent.** It is wired and exported for, and it has never been executed on
 #: these graphs — the `ORT_DISABLE_ALL` precaution above is inherited from a different graph rather
 #: than earned on this one. An unmeasured provider belongs behind a name, not in the default.
-#:
-#: **`cuda` is absent because it is not an option here**: it is a torch device on this pipeline, and
-#: the bundled torch is the CPU build. It stays reachable by name where a CUDA torch exists.
-AUTO_ORDER = ["webgpu"]
+AUTO_ORDER = ["cuda", "webgpu"]
 
 
 def graphs_installed(model_dir: str) -> bool:
@@ -184,6 +213,27 @@ def graphs_installed(model_dir: str) -> bool:
     return all(os.path.isfile(os.path.join(onnx_dir, name)) for name in ONNX_FILES)
 
 
+def _torch_cuda_available() -> bool:
+    """Whether this environment's torch can reach a CUDA device.
+
+    **Wrapped rather than called inline for two reasons.** The election has to be readable where
+    torch is not installed — `scripts/check-diariser-auto.py` reads it on a machine with neither
+    torch nor onnxruntime, which is the same promise this module's deferred imports make everywhere
+    else — so an absent torch answers "no" instead of raising. And a torch whose CUDA libraries are
+    present but unusable can raise here rather than returning False; under `auto` the honest answer
+    to that is the next candidate, not a diariser that will not load. A *named* `cuda` still fails
+    loudly, because :meth:`PyannoteEngine._resolve_device` asks torch again on that path.
+    """
+    try:
+        import torch
+    except ImportError:
+        return False
+    try:
+        return bool(torch.cuda.is_available())
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def resolve_auto(model_dir: str | None = None) -> list[str]:
     """The providers `auto` will try for this model directory, best first.
 
@@ -193,25 +243,48 @@ def resolve_auto(model_dir: str | None = None) -> list[str]:
     even where no adapter can back it; only a session build settles it, and
     :class:`PyannoteEngine` falls through to the CPU when one refuses.
 
-    **It is `["cpu"]` whenever the graphs are absent, and that is most machines.** The graphs are a
-    derived artefact: nothing installs them, the catalogue does not fetch them, and the application
-    writes them into `<model-dir>/onnx/` only when somebody chooses the graphics row in Settings.
-    Electing WebGPU without them would mean either a refusal where the CPU would have worked or a
-    minute of silent export inside what looks like an ordinary load, and neither is a default.
+    **The two vocabularies are filtered on different questions**, which is why this is a loop rather
+    than one comprehension. A torch device in :data:`TORCH_AUTO_DEVICES` needs no derived graph and
+    is asked of torch; an ONNX provider needs both graphs present and its name in the wheel. Running
+    the graphs check over `cuda` was the bug this shape exists to prevent: it would have made the
+    fastest route on the machines that have it conditional on an export nothing installs.
 
-    **What this does not claim.** No DER has been scored on either route. What promoted WebGPU here
-    is that the two were run against each other on one five-minute recording and agreed to the
-    millisecond, which is an equivalence check and not an accuracy one — and the CPU route has no
-    DER of its own either, so the choice is not being made on accuracy grounds in either direction.
-    `docs/UNPROVEN.md` carries both gaps.
+    **It is `["cpu"]` on most machines, and now for one reason fewer.** The graphs are a derived
+    artefact: nothing installs them, the catalogue does not fetch them, and the application writes
+    them into `<model-dir>/onnx/` only when somebody chooses the graphics row in Settings. Electing
+    WebGPU without them would mean either a refusal where the CPU would have worked or a minute of
+    silent export inside what looks like an ordinary load, and neither is a default. `cuda` escapes
+    all of that and is still absent from most elections, because the shipped bundle pins the CPU
+    torch build — see `python/requirements-bundle.txt`.
+
+    **`onnxruntime` is imported only when an ONNX candidate is still in play**, so a machine electing
+    `cuda` pays nothing for a provider list it will not read.
+
+    **What this does not claim.** No DER has been scored on any route here. `cuda` was promoted on
+    an equivalence check — four runs, byte-identical RTTM, 13x faster, see :data:`AUTO_ORDER` — and
+    WebGPU on a coarser one, and neither is an accuracy result. `docs/UNPROVEN.md` carries the gaps.
     """
-    if not model_dir or not graphs_installed(model_dir):
-        return ["cpu"]
+    elected: list[str] = []
+    available: set[str] | None = None
 
-    import onnxruntime as ort
+    for name in AUTO_ORDER:
+        if name in TORCH_AUTO_DEVICES:
+            if _torch_cuda_available():
+                elected.append(name)
+            continue
 
-    available = set(ort.get_available_providers())
-    return [p for p in AUTO_ORDER if ONNX_PROVIDERS[p][0] in available] + ["cpu"]
+        if not model_dir or not graphs_installed(model_dir):
+            continue
+
+        if available is None:
+            import onnxruntime as ort
+
+            available = set(ort.get_available_providers())
+
+        if ONNX_PROVIDERS[name][0] in available:
+            elected.append(name)
+
+    return elected + ["cpu"]
 
 #: The environment variable upstream reads to decide whether to export a span. Named here rather
 #: than written inline at its one call site so that the grep for it lands on this comment.
@@ -368,9 +441,12 @@ class PyannoteEngine:
         self._profile = profile
         self._model_dir = model_dir
 
-        # An ONNX provider is not a torch device, so the pipeline stays on the CPU either way: the
-        # featuriser, the powerset decoding, the PLDA and the VBx clustering are all torch or numpy
-        # and none of them moves. What moves is the two neural forwards, and only those.
+        # **The two routes move different amounts of the pipeline, and that is the whole shape of
+        # this block.** An ONNX provider is not a torch device, so on that route the pipeline stays
+        # on the CPU: the featuriser, the powerset decoding, the PLDA and the VBx clustering are all
+        # torch or numpy and none of them moves, and what moves is one neural forward. A torch
+        # device moves everything `pipeline.to()` reaches, which is why `cuda` is worth 13x where an
+        # ONNX provider is worth about 2x — see :data:`AUTO_ORDER` for the measurement.
         #
         # **`auto` is elected here and not by the caller**, because the election turns on whether
         # this model directory's graphs exist and this is the first place the directory is known.
@@ -393,8 +469,22 @@ class PyannoteEngine:
         tolerant = provider == "auto"
 
         elected = "cpu"
+        torch_device: Any = None
         for candidate in candidates:
             if candidate not in ONNX_PROVIDERS:
+                # **Resolved inside the loop so that a torch device can be fallen through too.** It
+                # was resolved after the loop until 2026-08-28, which was harmless while `cpu` was
+                # the only torch candidate `auto` could reach and stopped being so the moment `cuda`
+                # joined it: a raise there ended the load outright, where the shortlist's whole
+                # contract is that `auto` tries the next thing. A named device still raises, by the
+                # same `tolerant` rule the ONNX branch below uses.
+                try:
+                    torch_device = self._resolve_device(candidate)
+                except Exception as exc:  # noqa: BLE001
+                    if not tolerant:
+                        raise
+                    self.fell_back_from.append(f"{candidate}: {exc}"[:300])
+                    continue
                 elected = candidate
                 break
             self._pipeline.to(torch.device("cpu"))
@@ -420,7 +510,11 @@ class PyannoteEngine:
             self.segmentation_backend = f"torch:{self.device}"
             self.embedding_backend = f"onnx:{elected}"
         else:
-            device = self._resolve_device(elected)
+            # Resolved in the loop above. It is None only where every torch candidate was fallen
+            # through, which cannot happen for `auto` — `resolve_auto` ends its shortlist with `cpu`
+            # and that one does not fail — and is asked again here rather than asserted, because a
+            # future candidate that ends the loop some other way should not silently become the CPU.
+            device = torch_device if torch_device is not None else self._resolve_device(elected)
             if device is not None:
                 self._pipeline.to(device)
             self.device = str(device) if device is not None else "cpu"

@@ -203,11 +203,13 @@ internal static class Commands
                 Name = "speaker-backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Which torch device the diariser runs on: cpu, or cuda on a machine whose torch build has it — the " +
-                       "bundle installs the CPU one. Unset means auto, which is the cpu. webgpu and dml name " +
-                       "ONNX Runtime execution providers and are refused rather than quietly given the cpu, " +
-                       "because this pipeline is torch on both stages with no ONNX route for them to select. " +
-                       "Whether the device moves the speaker labels here has not been measured.",
+                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it — the bundle " +
+                       "installs the CPU one. Unset means auto, which elects cuda where torch can reach it and " +
+                       "the cpu otherwise. webgpu and dml name ONNX Runtime execution providers and move the " +
+                       "speaker embedder alone, leaving segmentation in torch; they need graphs the app derives " +
+                       "from Settings and are refused rather than quietly given the cpu when those are absent. " +
+                       "cuda needs no graphs and moves both stages: measured 13x the cpu on one ten-minute " +
+                       "recording, byte-identical turns. No DER has been scored on any route.",
             },
             new OptionSpec
             {
@@ -356,11 +358,13 @@ internal static class Commands
                 Name = "backend",
                 TakesValue = true,
                 ValueName = "name",
-                Help = "Which torch device the diariser runs on: cpu, or cuda on a machine whose torch build has it — the " +
-                       "bundle installs the CPU one. Unset means auto, which is the cpu. webgpu and dml name " +
-                       "ONNX Runtime execution providers and are refused rather than quietly given the cpu, " +
-                       "because this pipeline is torch on both stages with no ONNX route for them to select. " +
-                       "Whether the device moves the speaker labels here has not been measured.",
+                Help = "Where the diariser runs: cpu, or cuda on a machine whose torch build has it — the bundle " +
+                       "installs the CPU one. Unset means auto, which elects cuda where torch can reach it and " +
+                       "the cpu otherwise. webgpu and dml name ONNX Runtime execution providers and move the " +
+                       "speaker embedder alone, leaving segmentation in torch; they need graphs the app derives " +
+                       "from Settings and are refused rather than quietly given the cpu when those are absent. " +
+                       "cuda needs no graphs and moves both stages: measured 13x the cpu on one ten-minute " +
+                       "recording, byte-identical turns. No DER has been scored on any route.",
             },
             new OptionSpec
             {
