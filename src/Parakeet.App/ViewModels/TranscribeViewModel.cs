@@ -1936,7 +1936,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (report?.LooksLikeMissedSpeech == true)
         {
-            return "There is audio here but no speech was detected. Try 'fixed windows' on the Settings tab, " +
+            return "There is audio here but no speech was detected. Try 'fixed windows' on the Advanced tab of Settings, " +
                    "which decodes everything instead of trusting the detector.";
         }
 
@@ -1944,9 +1944,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The command line's sentence for audible material the gate kept out of a transcript that is
-    /// not empty — quiet speech or a fan, which an energy detector cannot tell apart, so it gives
-    /// the amount and leaves the judgement to whoever knows what was recorded.
+    /// The window's sentence for audible material the segmenter kept out of a transcript that is
+    /// not empty. The gate and a detector fail in different directions and the sentence says which
+    /// ran — the same branch the command line takes, with this window's own remedies. Until
+    /// 2026-08-29 this said "sat below the voice-activity gate" unconditionally, in a window whose
+    /// default cutter is the neural detector: the common case blamed a gate that never ran and
+    /// recommended decoding what is usually the music bed the detector correctly kept out.
     /// </summary>
     private static string? DescribeUnsegmented(ITranscriptionEngine engine, TranscriptDocument document)
     {
@@ -1956,10 +1959,20 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return null;
         }
 
+        if (!string.Equals(report.SpeechDetector, StreamingSegmenter.EnergyGateName, StringComparison.Ordinal))
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS was " +
+                $"judged not to be speech by {report.SpeechDetector} and was not decoded: music, ambience, or speech it " +
+                $"missed. Untick 'Neural speech detection' on the Advanced tab of Settings to use the loudness gate, " +
+                $"or try 'fixed windows' there to decode everything.");
+        }
+
         return string.Create(
             CultureInfo.InvariantCulture,
             $"{report.UnsegmentedAudibleAudio.TotalSeconds:0.#} s of audio above {report.AudibleThresholdDb:0} dBFS sat below " +
             $"the voice-activity gate and was not decoded. If this is quiet speech over background noise, try " +
-            $"'fixed windows' on the Settings tab, which decodes everything.");
+            $"'fixed windows' on the Advanced tab of Settings, which decodes everything.");
     }
 }

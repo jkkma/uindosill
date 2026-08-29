@@ -112,6 +112,30 @@ public sealed class TranslateVerbTests
     }
 
     [Fact]
+    public async Task TheLostNumbersOverflowNamesTheRealRemainderNotALiteralFive()
+    {
+        // The tail read `{lostNumbers.Count: 5}` until 2026-08-29 — a format specifier where a
+        // subtraction was meant — and .NET renders a custom format with no digit placeholder as
+        // its literal text, so the warning said "and  5 more" whatever the count really was.
+        // Driven with a translator told to lose its digits, because an echoing fake never can.
+        using var harness = new Harness();
+        var lines = Enumerable.Range(1, 12).Select(i => $"Zeile mit Nummer {i}00.").ToArray();
+        var input = harness.Write("de.txt", lines);
+        await using var translator = new FakeTranscriptTranslator(new FakeTranslatorOptions { DropDigits = true });
+
+        var exit = await TranslateCommand.TranslateFilesAsync(
+            harness.Context, translator, [input], outputDirectory: null, id: null, CancellationToken.None);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains("12 of 12 lines carry a number", error, StringComparison.Ordinal);
+        Assert.Contains("and 7 more", error, StringComparison.Ordinal);
+
+        // The warning is a warning: the English is still written, digits and all lost.
+        Assert.True(File.Exists(harness.Path_("de.en.txt")));
+    }
+
+    [Fact]
     public async Task ADestinationThatIsAlsoAnInputIsRefusedBeforeItIsOverwritten()
     {
         // `translate a.txt a.en.txt`: the second input is the first one's output name, so it was
