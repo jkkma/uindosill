@@ -258,7 +258,7 @@ public sealed class SideloadedItemViewModel
         ? string.Empty
         : ClaimedEntryInstalled
             ? $"a second copy of “{model.DisplayName}”, which is installed"
-            : $"belongs to “{model.DisplayName}” — wrong folder";
+            : $"belongs to “{model.DisplayName}” - wrong folder";
 
     /// <summary>Whether there is anything to say under the name. Bound rather than converted.</summary>
     public bool HasPlacementLabel => PlacementLabel.Length > 0;
@@ -456,7 +456,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 // to press a button they do not need is the same defect as one that hides a button
                 // they do — and this one had the additional problem of describing a refusal that no
                 // longer happens.
-                return "Nothing loaded. Transcribing loads it — press Load first only if you want "
+                return "Nothing loaded. Transcribing loads it - press Load first only if you want "
                        + "to choose the backend.";
             }
 
@@ -474,7 +474,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 : _session.LoadedBackend is null
                     ? "  ⚠ The library was found outside a backend directory, so which backend is running is not known."
                     : _session.LoadedBackend != requested
-                        ? $"  ⚠ {requested.ToString().ToLowerInvariant()} was requested — the native loader fell back."
+                        ? $"  ⚠ {requested.ToString().ToLowerInvariant()} was requested - the native loader fell back."
                         : string.Empty;
 
             return $"Loaded: {name} on {backend}{took}.{fellBack}";
@@ -490,7 +490,7 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// than offering a control that silently does nothing.
     /// </summary>
     public string BackendNote => _session?.IsBackendFixed == true
-        ? "The backend is fixed for this process once a model has loaded — restart to change it."
+        ? "The backend is fixed for this process once a model has loaded - restart to change it."
         : "Choose the backend before loading. It cannot be changed again without restarting.";
 
     public bool CanLoad =>
@@ -553,7 +553,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 // "SPEECH RECOGNITION ENGINE" as of 2026-08-29 and now says what it is on its own,
                 // so what is left here is the only part the reader could not already see — where
                 // this model is actually used.
-                return $"{model.DisplayName} is not loaded here — it runs from {used}, alongside "
+                return $"{model.DisplayName} is not loaded here - it runs from {used}, alongside "
                        + "the recogniser.";
             }
 
@@ -690,7 +690,7 @@ public sealed partial class ModelsViewModel : ObservableObject
             else
             {
 #if DEBUG
-                StatusMessage = "Installed. Not checked against a published digest — pin these in the catalogue: " +
+                StatusMessage = "Installed. Not checked against a published digest - pin these in the catalogue: " +
                                 string.Join("; ", result.Files.Select(f => $"{f.FileName} {f.Sha256}"));
 #else
                 StatusMessage = "Installed. This one could not be checked against a published fingerprint, "
@@ -873,7 +873,7 @@ public sealed partial class ModelsViewModel : ObservableObject
             if (strays.Count > 0)
             {
                 var summary = $"{DescribeCount(strays)} here "
-                    + $"({ByteSize.Describe(strays.Sum(f => f.SizeBytes))}) that no entry above accounts for — "
+                    + $"({ByteSize.Describe(strays.Sum(f => f.SizeBytes))}) that no entry above accounts for - "
                     + "weights from an older version of Uindosill, or things put here by hand.";
 
                 // **It used to end "Nothing uses them", and that became untrue.** The Ask tab picks
@@ -887,7 +887,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                     f.Name.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
                     && !DraftModelLocator.IsDraftHead(f.Name))
                     ? summary + " The Ask tab answers with a .gguf from this folder, so one of these may "
-                        + "be the model it is using — the Ask tab's own settings say which."
+                        + "be the model it is using - the Ask tab's own settings say which."
                     : summary + " Nothing uses them.");
             }
 
@@ -897,7 +897,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 sentences.Add(
                     $"{misplaced.Count} file{(one ? " is" : "s are")} the weights of an entry above "
                     + $"({ByteSize.Describe(misplaced.Sum(f => f.SizeBytes))}), sitting in this folder "
-                    + $"instead of in the entry's own — which is why that entry reads Not installed and "
+                    + $"instead of in the entry's own - which is why that entry reads Not installed and "
                     + $"offers to download {(one ? "it" : "them")} again. Move into place files "
                     + $"{(one ? "it" : "them")} where the entry expects {(one ? "it" : "them")}, and "
                     + "nothing is downloaded.");
@@ -909,7 +909,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 sentences.Add(
                     $"{duplicates.Count} more ({ByteSize.Describe(duplicates.Sum(f => f.SizeBytes))}) "
                     + $"{(one ? "duplicates an entry" : "duplicate entries")} already installed, whose own "
-                    + $"folder holds the copy in use — so {(one ? "it is" : "they are")} the spare.");
+                    + $"folder holds the copy in use - so {(one ? "it is" : "they are")} the spare.");
             }
 
             return string.Join(" ", sentences);
@@ -984,7 +984,7 @@ public sealed partial class ModelsViewModel : ObservableObject
             ? "Uninstalling Uindosill does not delete downloaded models. They live outside the "
               + "application folder, so they survive an update, a reinstall and an uninstall."
             : "Uninstalling Uindosill does not delete downloaded models. They live outside the "
-              + "application folder, so they survive an update, a reinstall and an uninstall — "
+              + "application folder, so they survive an update, a reinstall and an uninstall - "
               + $"what is in that folder now comes to {ByteSize.Describe(_installedBytes)}, and the "
               + "buttons above remove any of it you no longer want.";
 

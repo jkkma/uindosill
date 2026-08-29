@@ -136,7 +136,7 @@ public static class QuestionRouter
                 // The one case worth a sentence: the asker wanted the whole recording, did not
                 // get all of it, and would otherwise read a sampled answer as a complete one.
                 Notice = "This recording is long, so the answer below comes from an even sample "
-                    + "across all of it rather than every minute — it may miss things said in "
+                    + "across all of it rather than every minute - it may miss things said in "
                     + "between. For a pass over every word, switch answering to \"the whole "
                     + "transcript\" in Settings.",
             };

@@ -276,7 +276,7 @@ public sealed class ParakeetCppEngine : SegmentingTranscriptionEngine
 
         builder.AppendLine(
             "On Vulkan this is also what a device whose driver mishandles bf16 cooperative-matrix " +
-            $"support looks like — the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
+            $"support looks like - the same model then loads with {VulkanDisableBFloat16Variable}=1. " +
             "That workaround is on by default and was NOT applied to this run: either the option was " +
             "turned off, or the variable was already in the environment and left alone. Retrying in " +
             "this process is not possible, because the Vulkan device does not survive the failed " +

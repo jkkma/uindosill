@@ -173,8 +173,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </remarks>
     public string? TranslationPaneNotice =>
         IsShowingTranslation
-            ? "The English follows the recording a sentence at a time. Individual words are not marked here — "
-              + "translating loses which word was said when — so switch to Transcript for the word being spoken."
+            ? "The English follows the recording a sentence at a time. Individual words are not marked here - "
+              + "translating loses which word was said when - so switch to Transcript for the word being spoken."
             : null;
 
     public bool HasTranscript => Lines is { Count: > 0 };
@@ -241,7 +241,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </summary>
     public string? TranscriptNotice =>
         HasTranscript ? null
-        : SelectedRecording is null ? "Choose a recording — the Recordings button above opens the queue. Anything on the Transcribe tab is there, playable straight away."
+        : SelectedRecording is null ? "Choose a recording - the Recordings button above opens the queue. Anything on the Transcribe tab is there, playable straight away."
         : "This recording has not been transcribed yet. Run it on the Transcribe tab and its words will appear here, "
           + "each one a place in the recording you can click. It plays either way.";
 

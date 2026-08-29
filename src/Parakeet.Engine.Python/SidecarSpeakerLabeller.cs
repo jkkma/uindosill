@@ -350,7 +350,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         progress?.Report(new TranscriptionProgress
         {
             Stage = TranscriptionStage.LabellingSpeakers,
-            Detail = "Labelling speakers — starting the speaker model",
+            Detail = "Labelling speakers - starting the speaker model",
         });
 
         await LoadAsync(ct).ConfigureAwait(false);
@@ -374,7 +374,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                     // arriving at 0% under an unchanged status reads as the work starting over.
                     // Saying which half is running needs no ratio at all, which is what the
                     // objection to combining them was actually about.
-                    Detail = "Labelling speakers — working out who is speaking (2 of 2)",
+                    Detail = "Labelling speakers - working out who is speaking (2 of 2)",
                     Processed = total is { } known ? known * Math.Clamp(fraction, 0d, 1d) : TimeSpan.Zero,
                     Total = total,
                 });
@@ -538,7 +538,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                         progress.Report(new TranscriptionProgress
                         {
                             Stage = TranscriptionStage.LabellingSpeakers,
-                            Detail = "Labelling speakers — reading the audio again (1 of 2)",
+                            Detail = "Labelling speakers - reading the audio again (1 of 2)",
                             Processed = read,
                             Total = whole,
                         });
@@ -700,7 +700,7 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
                 $"The bundled Python's diariser reports a cap of {Describe(reported.MaxSpeakers)} speakers and " +
                 $"labels established to {Describe(reported.ReliableUpTo)}, and this build has been saying " +
                 $"{DescribeAlone(declared.MaxSpeakers)} and {Describe(declared.ReliableUpTo)}. Those " +
-                "numbers are what the warnings before a run are written from, so the two halves are out of step — " +
+                "numbers are what the warnings before a run are written from, so the two halves are out of step - " +
                 "reinstall rather than mixing them.");
         }
     }

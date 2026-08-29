@@ -40,7 +40,7 @@ public sealed record MitAttribution : IModelAttribution
             Title,
             $"Creator: {Creator}",
             $"Copyright: {CopyrightNotice}",
-            $"Licence: MIT License, {LicenceUri} — the permission notice and disclaimer ship with this application at {LicencePath}.",
+            $"Licence: MIT License, {LicenceUri} - the permission notice and disclaimer ship with this application at {LicencePath}.",
             $"Source: {MaterialUri}",
             $"Modifications: {ModificationNotice}",
         ]);

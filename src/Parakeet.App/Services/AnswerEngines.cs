@@ -287,7 +287,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             return new AnswerEngineAvailability
             {
                 WhyNot = "Asking needs a language model. Put a model file (.gguf) into the models "
-                    + "folder — the About window shows where that is — and come back here.",
+                    + "folder - the About window shows where that is - and come back here.",
             };
         }
 
@@ -300,7 +300,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         // the chat verbatim, so it is user copy, not a developer's assertion.
         var model = FindModelFile()
             ?? throw new InvalidOperationException(
-                "The language model file is gone from the models folder. Put a .gguf file back — "
+                "The language model file is gone from the models folder. Put a .gguf file back - "
                 + "the About window shows where the folder is.");
 
         return new LlamaServerAnswerEngine(new LlamaServerOptions

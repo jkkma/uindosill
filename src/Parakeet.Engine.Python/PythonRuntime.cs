@@ -258,7 +258,7 @@ public static class PythonRuntime
             "The bundled Python is not at " + applicationBundle + " or " + userDataBundle + ". " +
             "Speaker labelling and translation run in one, so neither is available until it is " +
             "there. The desktop installer carries a bundle and the command-line zip does not, so " +
-            $"unpack the separate bundle download at the second path — or set {InterpreterVariable} " +
+            $"unpack the separate bundle download at the second path - or set {InterpreterVariable} " +
             "to a bundle directory, or to an interpreter with this project's requirements installed.");
     }
 
@@ -289,7 +289,7 @@ public static class PythonRuntime
             {
                 throw new PythonSidecarException(
                     $"{InterpreterVariable} names the directory {interpreterOverride}, which is read " +
-                    $"as a bundle — but there is no {ExecutableName} in it. A bundle holds the " +
+                    $"as a bundle - but there is no {ExecutableName} in it. A bundle holds the " +
                     "interpreter at its root; point the variable at an interpreter file instead if " +
                     "that is what it is.");
             }
@@ -342,7 +342,7 @@ public static class PythonRuntime
             {
                 throw new PythonSidecarException(
                     $"{PackagesVariable} names the package root {packageRoot}, and the interpreter still comes " +
-                    $"from the bundle beside the application — but there is no {ExecutableName} at {interpreter}. " +
+                    $"from the bundle beside the application - but there is no {ExecutableName} at {interpreter}. " +
                     $"Set {InterpreterVariable} as well if the interpreter lives somewhere else.");
             }
 

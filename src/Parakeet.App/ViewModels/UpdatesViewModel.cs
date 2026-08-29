@@ -62,8 +62,8 @@ public sealed partial class UpdatesViewModel : ObservableObject
 
         _status = updater.IsInstalled
             ? "No check has run yet."
-            : "This copy was not installed by the installer — a build from source, or the zip unpacked by "
-              + "hand — so there is nothing here to update. Newer versions are on the releases page.";
+            : "This copy was not installed by the installer - a build from source, or the zip unpacked by "
+              + "hand - so there is nothing here to update. Newer versions are on the releases page.";
     }
 
     /// <summary>What this build calls itself, shown whether or not anything newer exists.</summary>
@@ -144,7 +144,7 @@ public sealed partial class UpdatesViewModel : ObservableObject
         {
             AvailableVersion = await _updater.CheckAsync(ct).ConfigureAwait(true);
             Status = AvailableVersion is null
-                ? $"Up to date — this is {CurrentVersion}."
+                ? $"Up to date - this is {CurrentVersion}."
                 : Notice;
         }
         catch (OperationCanceledException)

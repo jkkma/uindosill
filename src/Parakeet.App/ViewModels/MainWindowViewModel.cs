@@ -338,7 +338,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (Transcribe.IsRunning)
         {
-            Transcribe.StatusMessage = "Closing — waiting for the segment being decoded to finish…";
+            Transcribe.StatusMessage = "Closing - waiting for the segment being decoded to finish…";
             Transcribe.CancelCommand.Execute(null);
 
             while (Transcribe.IsRunning)
@@ -728,21 +728,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public string AskModelExplanation =>
-        "Which model answers your questions. Bigger is not always slower — a mixture-of-experts "
+        "Which model answers your questions. Bigger is not always slower - a mixture-of-experts "
         + "model can answer faster than a smaller dense one. Whichever you pick is used from your "
         + "next question.";
 
     public string AskModeExplanation =>
         "Deciding from your question sends summaries and \"what are the main topics\" across the "
-        + "whole recording, and everything else through the parts that matched — which is faster. "
+        + "whole recording, and everything else through the parts that matched - which is faster. "
         + "A long recording is covered by an even sample of it rather than read minute by minute, "
         + "and the answer says so; reading every word of a long one is only done when you ask for "
         + "it, because it can take a while.";
 
     public string AskExpertPlacementExplanation =>
         "Some models split their work into experts and run only a few of them for each word. They "
-        + "are fastest on a graphics card with room to hold them; where there is no room — "
-        + "graphics built into the processor, or a model bigger than the card — they run from "
+        + "are fastest on a graphics card with room to hold them; where there is no room - "
+        + "graphics built into the processor, or a model bigger than the card - they run from "
         + "system memory instead, and a model that tries anyway may fail to start. Automatic "
         + "weighs the model against your graphics. Dense models are unaffected either way, and "
         + "whichever you pick is used from your next question.";
@@ -820,9 +820,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public IReadOnlyList<DiarisationBatchSizeChoice> DiarisationBatchSizes { get; } =
     [
         new(null, "The model's own setting"),
-        new(8, "8 windows — least memory"),
+        new(8, "8 windows - least memory"),
         new(16, "16 windows"),
-        new(32, "32 windows — most memory"),
+        new(32, "32 windows - most memory"),
     ];
 
     /// <summary>The twin of the above.</summary>
@@ -1153,7 +1153,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool CanUpdateTools => !IsUpdatingTools;
 
     public string ToolsExplanation =>
-        "YouTube changes how it serves audio, and yt-dlp changes to keep up — often weekly. This "
+        "YouTube changes how it serves audio, and yt-dlp changes to keep up - often weekly. This "
         + "fetches the newest yt-dlp and Deno straight from the people who publish them, checks "
         + "each one against the fingerprint they publish beside it, and keeps the copy that came "
         + "with Uindosill untouched underneath. If an update ever goes wrong, the versions that "
@@ -1200,7 +1200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                     if (status.Problem is { Length: > 0 } problem)
                     {
-                        report.Add($"{name}: could not check — {problem}");
+                        report.Add($"{name}: could not check - {problem}");
                         continue;
                     }
 
