@@ -1805,15 +1805,166 @@
            beside the queue they run over. All are settings; all are more use next to the thing
            they change than in a drawer with everything else. -->
       <TabItem Header="Settings">
-        <ScrollViewer Margin="26,22" DataContext="{Binding Transcribe}"
-                      x:DataType="vm:TranscribeViewModel">
-          <StackPanel Spacing="15" MaxWidth="700" HorizontalAlignment="Left">
+        <DockPanel Margin="26,22">
 
+          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12" MaxWidth="700"
+                      HorizontalAlignment="Left">
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="How a recording is cut up before it is decoded, and how speaker labelling runs. Switching speaker labels and translation on is on the Transcribe tab." />
+                       Text="Everyday choices are on General. Advanced holds the knobs that change how the work is actually done, named there by what they really are. Switching speaker labels and translation on is on the Transcribe tab." />
+          </StackPanel>
 
+          <!-- Two sub-tabs rather than one long page, added 2026-08-29. The page had grown to
+               five sections in which a button anyone might press (update yt-dlp when YouTube
+               breaks it) sat between a segment cap and an expert-placement picker. The split is
+               by one rule: Advanced is anything that can make the output worse, refuse to load,
+               or that needs a measurement to set correctly. Everything else is General.
+
+               Two headings appear on both tabs, and that is the rule applied rather than a
+               failure of it: the graphics offer and the access token are things a person needs
+               to get speaker labelling working at all, while the device picker and the batch
+               size are ways to break it. Splitting the heading is more honest than putting
+               either half in the wrong place. -->
+          <TabControl Name="SettingsSubTabs">
+
+            <TabItem Header="General">
+              <ScrollViewer>
+                <StackPanel Spacing="15" MaxWidth="700" HorizontalAlignment="Left" Margin="0,14,0,0">
+
+              <StackPanel Spacing="9"
+                          DataContext="{Binding $parent[Window].DataContext}"
+                          x:DataType="vm:MainWindowViewModel">
+              <!-- yt-dlp and Deno. The one place this product fetches something newer than it
+                   shipped with, and the reason is that a pinned yt-dlp has a shelf life of weeks:
+                   YouTube changes what it serves and yt-dlp changes to match. Everything else here
+                   is pinned and verified against a hash committed in the repository; this is
+                   verified against the hash the publisher serves beside the download, which is
+                   weaker and is the trade being made. See ToolUpdater.
+
+                   No IsVisible: unlike the CUDA block this applies to every machine, and a build
+                   that vendored neither tool says so in the line under the button rather than
+                   hiding a control whose absence would be its own puzzle. -->
+              <TextBlock Text="DOWNLOADING FROM LINKS" Classes="section" />
+
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding ToolsExplanation}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Update yt-dlp and Deno"
+                        Command="{Binding UpdateToolsCommand}" />
+                <TextBlock Text="{Binding ToolVersions}" Classes="meta" VerticalAlignment="Center" />
+              </StackPanel>
+
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         IsVisible="{Binding HasToolsMessage}"
+                         Text="{Binding ToolsMessage}" />
+
+              <TextBlock Text="SPEAKER LABELS" Classes="section" Margin="0,8,0,0" />
+
+              <!-- The CUDA pack. Drawn only on a machine whose driver has CUDA, or one that already
+                   has the pack — a computer that cannot use this is not shown a 1.8 GB download and
+                   is not told about one either, because a disabled row with an explanation is an
+                   advertisement for something that will never apply. `CudaDriverProbe` decides, and
+                   it asks nvcuda.dll rather than an adapter name; its third answer, "could not
+                   tell", counts as no.
+
+                   The button is separately disabled while the manifest is unverified, which is the
+                   state this build ships in: the digests describe a local build and no release
+                   asset has been uploaded, so there is nothing to download yet. The explanation
+                   says so in words rather than leaving a dead button unexplained. -->
+              <StackPanel Spacing="6" IsVisible="{Binding ShowCudaPack}">
+                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           Text="{Binding CudaPackExplanation}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8"
+                            IsVisible="{Binding CanOfferCudaPack}">
+                  <Button Content="Set up graphics acceleration"
+                          Command="{Binding InstallCudaPackCommand}" />
+                  <ProgressBar Width="160" VerticalAlignment="Center"
+                               Minimum="0" Maximum="1"
+                               Value="{Binding CudaPackProgress}"
+                               IsVisible="{Binding IsInstallingCudaPack}" />
+                </StackPanel>
+
+                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           IsVisible="{Binding HasCudaPackMessage}"
+                           Text="{Binding CudaPackMessage}" />
+              </StackPanel>
+              <!-- The access token for the speaker model whose download is gated. Here rather than
+                   on the Models tab because this is where the settings file is written, and beside
+                   the other speaker settings because it belongs to one of those models.
+
+                   PasswordChar so it is not left on screen or in a screenshot; RevealPassword is
+                   deliberately not offered, because the value can always be pasted again and a
+                   reveal toggle is one more place for it to be shown by accident. -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Hugging Face token" Classes="secondary" VerticalAlignment="Center" />
+                <TextBox Text="{Binding HuggingFaceToken}" MinWidth="260" PasswordChar="•"
+                         PlaceholderText="hf_…" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="One of the speaker models is only handed out to people who have accepted its terms. Open its page from the Models tab, accept them, then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
+
+              <TextBlock Text="ASKING" Classes="section" Margin="0,8,0,0" />
+              <DockPanel LastChildFill="True">
+                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,9,0"
+                              Content="Think before answering"
+                              IsChecked="{Binding AskThinking}" />
+                <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
+                           Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
+              </DockPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Model" Classes="secondary" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding AskModels}"
+                          SelectedItem="{Binding SelectedAskModel}" MinWidth="320" />
+              </StackPanel>
+              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="{Binding AskModelExplanation}" />
+
+            </StackPanel>
+
+            <!-- ── About ───────────────────────────────────────────────────────────────────────
+                 Where the Licences tab went on 2026-08-23. It was the fifth page of a five-page
+                 application and the one page nobody opens twice; a tab strip is for places you go,
+                 and a notice package is a thing you look up. It is here rather than anywhere else
+                 because a Settings page is where every desktop application in the world puts it,
+                 and being findable is the entire job of this button. -->
+            <StackPanel Spacing="9">
+              <TextBlock Text="ABOUT" Classes="section" />
+              <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
+                         HorizontalAlignment="Left" LineHeight="20"
+                         Text="Which build this is, the licences and notices that come with the models and the components it is built from, and the machine facts a bug report asks for." />
+              <Button Name="ShowAbout" Classes="onPage" Content="About Uindosill"
+                      HorizontalAlignment="Left" />
+            </StackPanel>
+
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Advanced">
+              <ScrollViewer>
+                <StackPanel Spacing="15" MaxWidth="700" HorizontalAlignment="Left" Margin="0,14,0,0">
+
+                  <!-- The one warning on this page, in the window&apos;s single amber, on the terms
+                       the Models tab&apos;s uninstall notice set. Not decoration: every control
+                       below can make a transcript worse, and three can stop a model loading. -->
+                  <Border Background="{DynamicResource WarningPanelBrush}"
+                          BorderBrush="{DynamicResource WarningPanelEdgeBrush}"
+                          BorderThickness="1" Padding="12,10">
+                    <StackPanel Orientation="Horizontal" Spacing="9">
+                      <Path Stroke="{DynamicResource StatusWarningBrush}" StrokeThickness="1.5"
+                            StrokeLineCap="Round" StrokeJoin="Round"
+                            Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
+                            Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
+                      <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="560"
+                                 Text="Leave these alone unless you know what they do. They change how the audio is cut, which arithmetic unit each model runs on, and how much it holds at once. A wrong choice makes transcripts worse or stops a model loading, and the effect is not always visible in the result. Every default here was measured; none of the alternatives has been." />
+                    </StackPanel>
+                  </Border>
+
+                  <StackPanel Spacing="15" DataContext="{Binding Transcribe}"
+                              x:DataType="vm:TranscribeViewModel">
             <!-- ── How the audio is cut ────────────────────────────────────────────────────── -->
             <StackPanel Spacing="9">
               <TextBlock Text="HOW THE AUDIO IS CUT" Classes="section" />
@@ -1867,49 +2018,16 @@
                  It would not have been a translation control either way: the translator behind
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="UseFixedWindows, MaxSegmentSeconds, UseNeuralSpeechDetection &#8212; the segmentation stage. The detector is Silero VAD through Parakeet.Engine.SileroVad; fixed windows bypass it entirely. These three are not written to settings.json and reset when the window closes." />
+                  </StackPanel>
 
             <Separator />
 
-            <!-- ── Speaker labels ─────────────────────────────────────────────────────────────
-                 Two settings that belong to the diariser rather than to the recogniser, which is
-                 why they are here and not on the backend row above: that row is parakeet.cpp's —
-                 Vulkan, CUDA, CPU — and the speaker models run on a different runtime whose
-                 providers are WebGPU, CUDA and CPU. The two lists overlap only in the word "CPU"
-                 and mean different things by it, so one control for both would offer each half
-                 backends it has no path to. Until these existed the window passed a fixed
-                 "automatic" and WebGPU was unreachable from it.
-
-                 Reaching the window's data context for the same reason the ask block below does:
-                 this is where the settings file is written. -->
-            <StackPanel Spacing="9"
-                        DataContext="{Binding $parent[Window].DataContext}"
-                        x:DataType="vm:MainWindowViewModel">
-              <!-- yt-dlp and Deno. The one place this product fetches something newer than it
-                   shipped with, and the reason is that a pinned yt-dlp has a shelf life of weeks:
-                   YouTube changes what it serves and yt-dlp changes to match. Everything else here
-                   is pinned and verified against a hash committed in the repository; this is
-                   verified against the hash the publisher serves beside the download, which is
-                   weaker and is the trade being made. See ToolUpdater.
-
-                   No IsVisible: unlike the CUDA block this applies to every machine, and a build
-                   that vendored neither tool says so in the line under the button rather than
-                   hiding a control whose absence would be its own puzzle. -->
-              <TextBlock Text="DOWNLOADING FROM LINKS" Classes="section" />
-
-              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="{Binding ToolsExplanation}" />
-
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Update yt-dlp and Deno"
-                        Command="{Binding UpdateToolsCommand}" />
-                <TextBlock Text="{Binding ToolVersions}" Classes="meta" VerticalAlignment="Center" />
-              </StackPanel>
-
-              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         IsVisible="{Binding HasToolsMessage}"
-                         Text="{Binding ToolsMessage}" />
-
-              <TextBlock Text="SPEAKER LABELS" Classes="section" Margin="0,8,0,0" />
+              <StackPanel Spacing="9"
+                          DataContext="{Binding $parent[Window].DataContext}"
+                          x:DataType="vm:MainWindowViewModel">
+              <TextBlock Text="SPEAKER LABELS" Classes="section" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Run on" Classes="secondary" VerticalAlignment="Center" />
@@ -1918,37 +2036,8 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
-
-              <!-- The CUDA pack. Drawn only on a machine whose driver has CUDA, or one that already
-                   has the pack — a computer that cannot use this is not shown a 1.8 GB download and
-                   is not told about one either, because a disabled row with an explanation is an
-                   advertisement for something that will never apply. `CudaDriverProbe` decides, and
-                   it asks nvcuda.dll rather than an adapter name; its third answer, "could not
-                   tell", counts as no.
-
-                   The button is separately disabled while the manifest is unverified, which is the
-                   state this build ships in: the digests describe a local build and no release
-                   asset has been uploaded, so there is nothing to download yet. The explanation
-                   says so in words rather than leaving a dead button unexplained. -->
-              <StackPanel Spacing="6" IsVisible="{Binding ShowCudaPack}">
-                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                           Text="{Binding CudaPackExplanation}" />
-
-                <StackPanel Orientation="Horizontal" Spacing="8"
-                            IsVisible="{Binding CanOfferCudaPack}">
-                  <Button Content="Set up graphics acceleration"
-                          Command="{Binding InstallCudaPackCommand}" />
-                  <ProgressBar Width="160" VerticalAlignment="Center"
-                               Minimum="0" Maximum="1"
-                               Value="{Binding CudaPackProgress}"
-                               IsVisible="{Binding IsInstallingCudaPack}" />
-                </StackPanel>
-
-                <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                           IsVisible="{Binding HasCudaPackMessage}"
-                           Text="{Binding CudaPackMessage}" />
-              </StackPanel>
-
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="diarisationProvider &#8212; auto, cpu or cuda name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. The CLI spells it --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting
@@ -1956,22 +2045,6 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          IsVisible="{Binding HasSpeakerGraphsMessage}"
                          Text="{Binding SpeakerGraphsMessage}" />
-
-              <!-- The access token for the speaker model whose download is gated. Here rather than
-                   on the Models tab because this is where the settings file is written, and beside
-                   the other speaker settings because it belongs to one of those models.
-
-                   PasswordChar so it is not left on screen or in a screenshot; RevealPassword is
-                   deliberately not offered, because the value can always be pasted again and a
-                   reveal toggle is one more place for it to be shown by accident. -->
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Hugging Face token" Classes="secondary" VerticalAlignment="Center" />
-                <TextBox Text="{Binding HuggingFaceToken}" MinWidth="260" PasswordChar="•"
-                         PlaceholderText="hf_…" />
-              </StackPanel>
-              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="One of the speaker models is only handed out to people who have accepted its terms. Open its page from the Models tab, accept them, then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
-
               <!-- Disabled with the reason beside it rather than hidden, on the speech-detection
                    row's terms: a control that vanishes when a different model is picked reads as a
                    bug, and the reason is one a person can act on from the Models tab. -->
@@ -1986,33 +2059,16 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationBatchSizeExplanation}" />
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="diarisationBatchSize &#8212; pyannote&apos;s segmentation_batch_size and embedding_batch_size, set together. Unset leaves the checkpoint&apos;s own value. A memory setting, not a speed one." />
             </StackPanel>
 
             <Separator />
 
-            <!-- ── Asking ─────────────────────────────────────────────────────────────────────
-                 The ask settings, and they reach past this page's Transcribe data context to
-                 the window's, where the settings file is written. The panel reads them at each
-                 question, so the hints can promise "next question" honestly. -->
-            <StackPanel Spacing="9"
-                        DataContext="{Binding $parent[Window].DataContext}"
-                        x:DataType="vm:MainWindowViewModel">
+              <StackPanel Spacing="9"
+                          DataContext="{Binding $parent[Window].DataContext}"
+                          x:DataType="vm:MainWindowViewModel">
               <TextBlock Text="ASKING" Classes="section" />
-              <DockPanel LastChildFill="True">
-                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,9,0"
-                              Content="Think before answering"
-                              IsChecked="{Binding AskThinking}" />
-                <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
-                           Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
-              </DockPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Model" Classes="secondary" VerticalAlignment="Center" />
-                <ComboBox ItemsSource="{Binding AskModels}"
-                          SelectedItem="{Binding SelectedAskModel}" MinWidth="320" />
-              </StackPanel>
-              <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="{Binding AskModelExplanation}" />
-
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Answer from" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskModes}"
@@ -2021,6 +2077,8 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskModeExplanation}" />
 
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="askMode &#8212; the router: automatic lets each question choose between the transcript and the model&apos;s own knowledge." />
               <!-- How much evidence an answer is built from. A setting rather than a new default
                    because only half of the trade has been measured: the time it saves is large and
                    repeatable, and what it costs in finding the right part of the recording is not
@@ -2033,6 +2091,8 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="Answers are built from the parts of the recording that best match your question. Searching more of it takes longer — on a laptop, roughly twice as long — and searching less may miss the part that held the answer." />
 
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="askEvidence &#8212; how much of the transcript is searched per question. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
@@ -2045,27 +2105,16 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="askExpertPlacement &#8212; where a mixture-of-experts model&apos;s expert tensors are held. Automatic asks the Vulkan loader whether this machine&apos;s graphics is discrete or integrated." />
             </StackPanel>
 
-            <Separator />
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
 
-            <!-- ── About ───────────────────────────────────────────────────────────────────────
-                 Where the Licences tab went on 2026-08-23. It was the fifth page of a five-page
-                 application and the one page nobody opens twice; a tab strip is for places you go,
-                 and a notice package is a thing you look up. It is here rather than anywhere else
-                 because a Settings page is where every desktop application in the world puts it,
-                 and being findable is the entire job of this button. -->
-            <StackPanel Spacing="9">
-              <TextBlock Text="ABOUT" Classes="section" />
-              <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
-                         HorizontalAlignment="Left" LineHeight="20"
-                         Text="Which build this is, the licences and notices that come with the models and the components it is built from, and the machine facts a bug report asks for." />
-              <Button Name="ShowAbout" Classes="onPage" Content="About Uindosill"
-                      HorizontalAlignment="Left" />
-            </StackPanel>
-
-          </StackPanel>
-        </ScrollViewer>
+          </TabControl>
+        </DockPanel>
       </TabItem>
 
     </TabControl>
