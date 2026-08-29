@@ -468,7 +468,7 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             {
                 // A probe still hanging at the deadline is the timeout, with the stall named.
                 throw new TimeoutException(
-                    $"llama-server did not become healthy within {timeout.TotalSeconds.ToString("F0", CultureInfo.InvariantCulture)} s - a /health probe was accepted and then stalled. Its last lines:\n{OutputTail}");
+                    $"llama-server did not become healthy within {timeout.TotalSeconds.ToString("F0", CultureInfo.InvariantCulture)} s: a /health probe was accepted and then stalled. Its last lines:\n{OutputTail}");
             }
 
             if (DateTime.UtcNow > deadline)

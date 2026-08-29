@@ -394,7 +394,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// says so rather than inviting a gesture <see cref="AddFiles"/> would refuse.
     /// </summary>
     public string DropHint => IsRunning
-        ? "Adding files is off while a batch runs - press Cancel, or wait for it to finish."
+        ? "Adding files is off while a batch runs: press Cancel, or wait for it to finish."
         : "Drop audio or video files here";
 
     /// <summary>Extensions this build can actually open, for the file picker and the drop hint.</summary>
@@ -471,7 +471,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     public string? SpeechDetectionHint =>
         !CanUseNeuralSpeechDetection ? _engines.DescribeUnavailable(ModelTask.VoiceActivity)
-        : UseFixedWindows ? "Fixed windows are on, so no detector runs - untick that to cut on speech."
+        : UseFixedWindows ? "Fixed windows are on, so no detector runs: untick that to cut on speech."
         : null;
 
     /// <summary>
@@ -757,7 +757,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (ExportableFormat is not { } format)
             {
-                return "Tick SRT or WebVTT under Output formats, on the Transcribe tab - those are the two a "
+                return "Tick SRT or WebVTT under Output formats, on the Transcribe tab, those are the two a "
                     + "recording can carry.";
             }
 
@@ -953,7 +953,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
                 if (ticked.Contains(TranscriptFormats.WordTimedVtt.Id, StringComparer.Ordinal))
                 {
-                    skipped.Add("no word-timed English, because translation does not carry word timings - that file describes the spoken transcript only");
+                    skipped.Add("no word-timed English, because translation does not carry word timings, that file describes the spoken transcript only");
                 }
 
                 written.AddRange(await TranscriptWriter.WriteAsync(english, new TranscriptionJob
@@ -969,7 +969,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             var where = outputDirectory is null ? "beside the recording" : $"in {outputDirectory}";
             _exportResult = $"Wrote {written.Count} file{(written.Count == 1 ? string.Empty : "s")} {where}"
-                + (skipped.Count > 0 ? $" - {string.Join("; ", skipped)}." : ".");
+                + (skipped.Count > 0 ? $", {string.Join("; ", skipped)}." : ".");
         }
         catch (OperationCanceledException)
         {
@@ -1074,7 +1074,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// front of them is full.
     /// </summary>
     public string? StartHint =>
-        !IsModelLoaded && !IsModelInstalled ? "No model is installed - open the Models tab and download one."
+        !IsModelLoaded && !IsModelInstalled ? "No model is installed: open the Models tab and download one."
         : HasJobs && !HasWorkToDo ? "Every file here is transcribed. 'Run again' runs them a second time; Clear empties the queue."
         : null;
 
@@ -1117,7 +1117,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (IsRunning)
         {
-            StatusMessage = "A batch is running - press Cancel, or wait for it to finish, before adding files.";
+            StatusMessage = "A batch is running: press Cancel, or wait for it to finish, before adding files.";
             return;
         }
 
@@ -1195,7 +1195,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             {
                 UrlStatus = report.Fraction is { } fraction
                     ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                        $"{report.Stage} - {fraction * 100:F0}%")
+                        $"{report.Stage}: {fraction * 100:F0}%")
                     : report.Stage;
             });
 
@@ -1341,7 +1341,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (!HasWorkToDo)
         {
-            StatusMessage = "Every file here is transcribed already - press 'Run again' to run them a second time.";
+            StatusMessage = "Every file here is transcribed already: press 'Run again' to run them a second time.";
             return;
         }
 
@@ -1620,7 +1620,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             if (incomplete.Count > 0)
             {
                 var missing = incomplete.SelectMany(r => r.FailedPasses).Select(f => f.Pass.Product).Distinct();
-                ran += $" {incomplete.Count} of them written without {string.Join(" or ", missing)} - the row says why.";
+                ran += $" {incomplete.Count} of them written without {string.Join(" or ", missing)}: the row says why.";
             }
 
             // What was skipped is said out loud. A queue of four reporting that it finished one is
@@ -1930,7 +1930,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         if (report?.IsDigitalSilence == true)
         {
-            return "This track is digitally silent - every sample is zero. If it should have sound, the wrong " +
+            return "This track is digitally silent: every sample is zero. If it should have sound, the wrong " +
                    "track or the wrong input was recorded.";
         }
 

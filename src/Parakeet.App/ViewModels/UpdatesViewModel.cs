@@ -62,12 +62,29 @@ public sealed partial class UpdatesViewModel : ObservableObject
 
         _status = updater.IsInstalled
             ? "No check has run yet."
-            : "This copy was not installed by the installer - a build from source, or the zip unpacked by "
-              + "hand - so there is nothing here to update. Newer versions are on the releases page.";
+            : "This copy was not installed by the installer: a build from source, or the zip unpacked by "
+              + "hand: so there is nothing here to update. Newer versions are on the releases page.";
     }
 
     /// <summary>What this build calls itself, shown whether or not anything newer exists.</summary>
     public string CurrentVersion => _updater.CurrentVersion;
+
+    /// <summary>
+    /// The version line at the top of the tab, or empty for a build that has no version to state.
+    /// </summary>
+    /// <remarks>
+    /// <b>The tab read "This is version not installed." until 2026-08-29.</b> `CurrentVersion`
+    /// falls back to the words "not installed" when Velopack has no installed version, which reads
+    /// correctly in the update banner ("This is not installed.") and becomes a broken sentence the
+    /// moment it is dropped into "This is version {0}." A fallback that is prose cannot be used
+    /// where a number is expected, so the sentence is built here rather than by a StringFormat that
+    /// cannot know the difference. Empty for a source build, because the panel immediately below
+    /// already explains that case at length and saying it twice is worse than saying it once.
+    /// </remarks>
+    public string VersionLine => IsSupported ? $"This is version {CurrentVersion}." : string.Empty;
+
+    /// <summary>Whether <see cref="VersionLine"/> has anything to say.</summary>
+    public bool HasVersionLine => VersionLine.Length > 0;
 
     /// <summary>False for a build that did not arrive through the installer.</summary>
     public bool IsSupported => _updater.IsInstalled;
@@ -144,7 +161,7 @@ public sealed partial class UpdatesViewModel : ObservableObject
         {
             AvailableVersion = await _updater.CheckAsync(ct).ConfigureAwait(true);
             Status = AvailableVersion is null
-                ? $"Up to date - this is {CurrentVersion}."
+                ? $"Up to date: this is {CurrentVersion}."
                 : Notice;
         }
         catch (OperationCanceledException)

@@ -312,7 +312,7 @@
                            VerticalAlignment="Center" Margin="0,0,10,0" />
                 <TextBox Grid.Column="1" Name="LinkBox" Text="{Binding Url}"
                          IsEnabled="{Binding CanAddUrl}"
-                         PlaceholderText="Paste a video or podcast link - the audio is downloaded and transcribed" />
+                         PlaceholderText="Paste a video or podcast link: the audio is downloaded and transcribed" />
                 <Button Grid.Column="2" Name="FetchLink" Classes="primary" Content="Fetch"
                         Margin="8,0,0,0"
                         Command="{Binding FetchUrlCommand}"
@@ -1040,7 +1040,7 @@
 
             <TextBlock Text="Updates" Classes="title" />
 
-            <TextBlock Text="{Binding CurrentVersion, StringFormat='This is version {0}.'}"
+            <TextBlock Text="{Binding VersionLine}" IsVisible="{Binding HasVersionLine}"
                        FontSize="13" />
 
             <Border Classes="tinted" Padding="14,12">
@@ -1065,7 +1065,7 @@
             <Separator />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
-                       Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network - downloading a model - you start yourself." />
+                       Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network, downloading a model, you start yourself." />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
                        Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose and are not touched by an update, or by uninstalling." />
@@ -1383,7 +1383,7 @@
               <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,11,0,0"
                     IsEnabled="{Binding HasTranscript}">
                 <TextBox Grid.Column="0" Name="SearchBox" Text="{Binding SearchTerm}"
-                         PlaceholderText="Find a word - Enter for the next one" />
+                         PlaceholderText="Find a word: Enter for the next one" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
                             Margin="9,0,0,0" VerticalAlignment="Center">
                   <TextBlock Name="SearchSummary" Text="{Binding SearchSummary}" Classes="meta"
@@ -1501,7 +1501,7 @@
                        maintainer's plan): local-only, transient, and the model never attributes
                        speech — three promises about what this panel does not do. -->
                   <TextBlock Classes="fine secondary" TextWrapping="Wrap"
-                             Text="Answers arrive as short bullets, each carrying the moment it came from - a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it, and the model never says who spoke - speaker names stay on the transcript." />
+                             Text="Answers arrive as short bullets, each carrying the moment it came from, a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it, and the model never says who spoke, speaker names stay on the transcript." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -2012,7 +2012,7 @@
                    paragraph nobody can act on. -->
               <TextBlock Name="SegmentationNote" Classes="fine meta" MaxWidth="640"
                          HorizontalAlignment="Left"
-                         Text="Every recording is cut into segments of at most 30 seconds before it is decoded - the recogniser loses accuracy on longer stretches - so a cap above 30 has no effect." />
+                         Text="Every recording is cut into segments of at most 30 seconds before it is decoded, because the recogniser loses accuracy on longer stretches. A cap above 30 has no effect." />
             </StackPanel>
 
             <!-- There is no spoken-language picker on this page, and that is a decision rather than
@@ -2029,7 +2029,7 @@
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="UseFixedWindows, MaxSegmentSeconds, UseNeuralSpeechDetection - the segmentation stage. The detector is Silero VAD through Parakeet.Engine.SileroVad; fixed windows bypass it entirely. These three are not written to settings.json and reset when the window closes." />
+                         Text="UseFixedWindows, MaxSegmentSeconds and UseNeuralSpeechDetection are the segmentation stage. The detector is Silero VAD through Parakeet.Engine.SileroVad; fixed windows bypass it entirely. These three are not written to settings.json and reset when the window closes." />
                   </StackPanel>
 
             <Separator />
@@ -2047,7 +2047,7 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationProvider - auto, cpu or cuda name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. The CLI spells it --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
+                         Text="diarisationProvider takes auto, cpu or cuda, which name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. The CLI spells it --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting
@@ -2070,7 +2070,7 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationBatchSizeExplanation}" />
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationBatchSize - pyannote&apos;s segmentation_batch_size and embedding_batch_size, set together. Unset leaves the checkpoint&apos;s own value. A memory setting, not a speed one." />
+                         Text="diarisationBatchSize is pyannote&apos;s segmentation_batch_size and embedding_batch_size, set together. Unset leaves the checkpoint&apos;s own value. A memory setting, not a speed one." />
             </StackPanel>
 
             <Separator />
@@ -2088,7 +2088,7 @@
                          Text="{Binding AskModeExplanation}" />
 
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askMode - the router: automatic lets each question choose between the transcript and the model&apos;s own knowledge." />
+                         Text="askMode is the router. Automatic lets each question choose between the transcript and the model&apos;s own knowledge." />
               <!-- How much evidence an answer is built from. A setting rather than a new default
                    because only half of the trade has been measured: the time it saves is large and
                    repeatable, and what it costs in finding the right part of the recording is not
@@ -2099,10 +2099,10 @@
                           SelectedItem="{Binding SelectedAskEvidence}" MinWidth="240" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="Answers are built from the parts of the recording that best match your question. Searching more of it takes longer - on a laptop, roughly twice as long - and searching less may miss the part that held the answer." />
+                         Text="Answers are built from the parts of the recording that best match your question. Searching more of it takes longer (on a laptop, roughly twice as long), and searching less may miss the part that held the answer." />
 
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askEvidence - how much of the transcript is searched per question. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
+                         Text="askEvidence is how much of the transcript is searched per question. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
@@ -2116,7 +2116,7 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askExpertPlacement - sets --cpu-moe on the llama-server child: whether a mixture-of-experts model&apos;s expert tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA it leaves placement to the loader, which was measured holding that model at 22.4 tok/s with nothing offloaded. Both explicit choices apply on CUDA and Vulkan; none applies on the CPU backend, where the weights are in system memory already." />
+                         Text="askExpertPlacement sets --cpu-moe on the llama-server child, deciding whether a mixture-of-experts model&apos;s expert tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA it leaves placement to the loader, which was measured holding that model at 22.4 tok/s with nothing offloaded. Both explicit choices apply on CUDA and Vulkan; none applies on the CPU backend, where the weights are in system memory already." />
             </StackPanel>
 
                 </StackPanel>

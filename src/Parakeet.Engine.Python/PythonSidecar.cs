@@ -219,7 +219,7 @@ public sealed class PythonSidecar : IAsyncDisposable
             {
                 throw new PythonSidecarException(
                     $"The Python engines speak protocol {protocol} and this build speaks {ProtocolVersion}. " +
-                    "The bundled Python and the application are out of step - reinstall rather than mixing them.");
+                    "The bundled Python and the application are out of step, reinstall rather than mixing them.");
             }
         }
         catch (Exception exc)

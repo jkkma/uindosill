@@ -393,7 +393,7 @@ public sealed partial class JobViewModel : ObservableObject
         Status = result.State switch
         {
             JobState.Completed when result.OutputFiles.Count > 0 =>
-                $"Done - {result.OutputFiles.Count} file{(result.OutputFiles.Count == 1 ? string.Empty : "s")}{without}",
+                $"Done: {result.OutputFiles.Count} file{(result.OutputFiles.Count == 1 ? string.Empty : "s")}{without}",
             JobState.Completed => "Done" + without,
             JobState.Failed => "Failed",
             JobState.Cancelled => "Cancelled",
