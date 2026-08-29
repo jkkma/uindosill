@@ -5343,3 +5343,56 @@ and might want the opposite trade — is unmeasured.
 seating is inside the sidecar, which the C# suite drives through a fake, and the election guard
 `scripts/check-diariser-auto.py` covers `resolve_auto` rather than what a route seats once elected.
 The evidence for this change is the measurement, not the suite.
+
+### Decided 2026-08-28 — `auto` elects CUDA where torch has it, and the desktop stops being unmeasured
+
+**The entry above closes saying the desktop is unmeasured and might want the opposite trade. It
+does, by a wide margin, and this is that measurement.** An ONNX provider seats one neural stage; a
+torch device moves both and the featuriser with them. On the RTX 5080 over the same ten-minute
+16 kHz stretch, one venv, only `--backend` differing: **99.1 s on the CPU against 7.6 s on CUDA,
+13x**, with a repeat pair at 112.4 s and 8.7 s. WebGPU's best on the second machine was about 2x.
+
+**It changes nothing about the answer, which is the condition for electing it.** Six runs — two CPU,
+two CUDA, and `auto` in each venv — returned 244 turns, 5 speakers and 670.2 s of speech, and their
+RTTMs are byte-identical but for the file-id column each was given. **The CPU-against-CPU pair is
+the control that makes that a result**: `VBx.py:81` seeds from numpy's unseeded global generator, so
+cross-device identity without it could have been luck. WebGPU was promoted on a coarser check than
+this one.
+
+**The GPU did the work rather than registering for it** — 93–94% utilisation, 274.8 W, ~5.4 GiB of
+VRAM, sampled through `nvidia-smi`. That is the torch-side answer to the question `placement.py`
+exists to ask on the ONNX side, where a registered provider can own no nodes and say nothing.
+
+**The election had to grow a second question, not a third entry.** `AUTO_ORDER` now mixes
+vocabularies: `cuda` is a torch device and `webgpu` an ONNX Runtime provider, filtered on
+*different* facts — whether torch reaches a device, against whether the wheel carries a provider and
+the derived graphs exist. Running the graphs check over `cuda` would have made the fastest route
+conditional on an export nothing installs, which is the bug `TORCH_AUTO_DEVICES` and the loop in
+`resolve_auto` exist to prevent. `onnxruntime` is now imported only when an ONNX candidate is still
+in play.
+
+**A torch device is fallen through like any other candidate now.** It was resolved after the
+election loop, where a raise ended the load — harmless while `cpu` was the only torch candidate
+`auto` could reach, and not once `cuda` joined it. A *named* `cuda` still fails loudly.
+
+**Nothing shipped changes, and that is not a hedge.** The bundle pins the CPU torch build, so an
+installed copy still elects the CPU — measured, at 111.0 s through `auto` on `pyannote-venv`,
+against 8.1 s through `auto` on a venv whose only differing line is the torch index (`whl/cpu` →
+`whl/cu130`, giving torch **2.13.0+cu130**: the pinned version in its CUDA build, so the three
+packages that decide the translator's decode are untouched). What this buys is a machine that
+installed a CUDA torch itself, which today is one desktop.
+
+**What is not established.** No DER on any route, here or anywhere — the identity says the routes
+agree, not that any is right, and the speaker gate stays unmet by the shipping product. One
+recording, one machine, one card, four speakers on a podcast cut; byte-identity here does not
+generalise to overlap-heavy meeting audio or to the hour the product already warns about. The
+determinism is observed rather than guaranteed. A 7.6-second load is not a thermal figure.
+`docs/UNPROVEN.md` § *CUDA joined the diariser's `auto`* carries all of it, and
+`runs/diariser-cuda/20260828-equivalence-5080/` the artefacts.
+
+**1448 tests, no weights, no display, no network — 1441 passed and 7 skipped.** None new, and one
+changed: `DiariseCommandTests` asserted the help said the device's effect on labels "has not been
+measured", which this makes false, so it now asserts the gap that is still open — no DER. The
+election guard `scripts/check-diariser-auto.py` grew nine cases and now stubs torch as well as
+onnxruntime, because a guard whose answer depends on which venv ran it is not a guard; it returns
+the same result under system Python, `pyannote-venv` and `pyannote-cuda-venv`.

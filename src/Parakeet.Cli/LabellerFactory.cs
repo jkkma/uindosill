@@ -19,7 +19,12 @@ internal sealed record LabellerRequest
     /// <summary>Torch intra-op threads, or 0 for the diariser's own default.</summary>
     public int Threads { get; init; }
 
-    /// <summary>The torch device, or null for <c>auto</c>, which is the cpu.</summary>
+    /// <summary>
+    /// The device or ONNX provider, or null for <c>auto</c>. Since 2026-08-28 <c>auto</c> elects
+    /// <c>cuda</c> where this environment's torch can reach it and the cpu otherwise, so it is no
+    /// longer a synonym for the cpu — the shipped bundle pins the CPU torch build, which is why it
+    /// still resolves that way on an installed copy.
+    /// </summary>
     public string? Backend { get; init; }
 
     /// <summary>
@@ -241,7 +246,7 @@ internal static class LabellerFactory
             _ => throw new CliUsageException(
                 $"Unknown diariser backend '{asked}' for {request.BackendOption}. Choose cpu or cuda for the torch " +
                 "pipeline, or webgpu or dml where the exported graphs are installed, or leave it unset for auto, " +
-                "which is the cpu."),
+                "which elects cuda where torch can reach it and the cpu otherwise."),
         };
     }
 

@@ -310,6 +310,13 @@ public class DiariseCommandTests
         // And that it does not quietly inherit the retired engine's evidence. The only diarisation
         // figures this project has published were measured on that engine, and none of them
         // describes what a reader of this help would be running.
-        Assert.Contains("has not been measured", help, StringComparison.Ordinal);
+        //
+        // **This asserted the bare words "has not been measured" until 2026-08-28**, when `cuda`
+        // joined the diariser's `auto` on a measurement and the help gained one — 13x, and turns
+        // byte-identical to the CPU's over one ten-minute recording. A blanket "not measured" would
+        // now be false, so the guard names the gap that is actually still open instead. The claim
+        // under test is unchanged: the help must not offer accuracy evidence this project does not
+        // have, and a speed figure and an equivalence check are neither of them a DER.
+        Assert.Contains("No DER has been scored", help, StringComparison.Ordinal);
     }
 }

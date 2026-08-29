@@ -6671,7 +6671,64 @@ executed concurrently and their timings are discarded rather than reported** —
 sharing this iGPU measured 215.0 s against the same configuration's 135.8 s alone, which is the size
 of the error that would have been. `dml` remains unexecuted on these graphs, so nothing here says
 which stage it would want. Nothing was measured on the desktop, where a CUDA torch would move
-fbank as well and this whole trade may come out differently.
+fbank as well and this whole trade may come out differently. **The section below is that
+measurement, taken 2026-08-28, and the trade does come out differently.**
+
+### CUDA joined the diariser's `auto` on an equivalence check — measured 2026-08-28, this desktop
+
+**What was run.** RTX 5080, driver 616.56, CUDA UMD 13.4; `pyannote-cuda-venv`, a venv built from
+`python/requirements-bundle.txt` with one line changed — the torch index from `whl/cpu` to
+`whl/cu130` — giving **torch 2.13.0+cu130**, the pinned version in its CUDA build, with every other
+pin identical to the bundle's and `onnxruntime-webgpu` left alone. Both arms ran in that one venv
+through `uindosill diarise`, so the only variable is `--backend`.
+`runs/der/stretches/two-hosts-three-guests-a.wav`, 600.0 s, 16 kHz mono.
+
+| run | decode | vs realtime | turns | speakers |
+|---|---|---|---|---|
+| cpu | 99.1 s | 6x | 244 | 5 |
+| cpu (repeat) | 112.4 s | 5x | 244 | 5 |
+| cuda | **7.6 s** | **79x** | 244 | 5 |
+| cuda (repeat) | **8.7 s** | **69x** | 244 | 5 |
+| `auto`, CUDA torch | 8.1 s | 74x | 244 | 5 |
+| `auto`, CPU torch (`pyannote-venv`) | 111.0 s | 5x | 244 | 5 |
+
+**All six RTTMs are byte-identical** apart from the file-id column, which differs only because each
+run was given its own `--id`. Same boundaries, same labels, 670.2 s of speech throughout.
+
+**The CPU-against-CPU pair is what makes that mean anything**, and it is the control the WebGPU
+promotion did not have. `VBx.py:81` seeds its variational EM from numpy's unseeded global generator
+(gotcha 37), so identical output across two devices could have been luck; two CPU runs agreeing
+byte-for-byte says the pipeline is deterministic here and the cross-device identity is a result
+rather than a coincidence. It is not a claim that the clustering is seeded — only that on this
+recording it does not vary.
+
+**The GPU did the work rather than registering for it**, which is the failure `placement.py` exists
+to catch on the ONNX side and which nothing checks on the torch side: 93–94% utilisation, 274.8 W
+peak and about 5.4 GiB of VRAM under load, sampled at 5 s through `nvidia-smi`. Peak temperature was
+43 °C, which says the run is too short to be a thermal measurement rather than that the card is
+cool. Artefacts in `runs/diariser-cuda/20260828-equivalence-5080/`.
+
+**Why this moved `AUTO_ORDER` and the WebGPU result did not move it as far.** An ONNX provider seats
+the embedder alone and leaves segmentation in torch; `cuda` is a torch device, so `pipeline.to()`
+moves both neural stages and the featuriser with them. That is the difference between about 2x on
+the second machine and 13x here, and it is why `cuda` leads the shortlist.
+
+**What this does not establish, and it is most of what matters.**
+
+- **No DER.** Not on CUDA, not on the CPU, not on WebGPU. This says the routes agree with each
+  other on one recording; it says nothing about whether any of them is right. The speaker gate
+  remains unmet by the shipping product, exactly as the entry below says.
+- **One recording, one machine, one card.** Four speakers by the pipeline's own count on a
+  ten-minute podcast cut. Byte-identity here does not generalise to a corpus, to overlap-heavy
+  meeting audio, or to a recording long enough to reach the hour the product already warns about.
+- **Nothing shipped changes.** The bundle pins the CPU torch build, so an installed copy still
+  elects the CPU — the `auto`-on-`pyannote-venv` row above is that case, and it is unchanged at
+  111.0 s. What this buys is a machine that installed a CUDA torch itself, which today is one
+  desktop.
+- **The determinism is not guaranteed, only observed.** A different recording could sit a merge
+  close enough to a threshold for float ordering to tip it, which is precisely what separated torch
+  from ONNX Runtime on the second machine — 565 frames of 300,000. Nothing here bounds that.
+- **No power or thermal figure worth quoting.** A 7.6-second load does not characterise the card.
 
 ### Not proven — and this list got longer rather than shorter
 
@@ -6744,9 +6801,17 @@ an absent row. Two corrections had landed on that filter on 2026-08-27 alone, wh
 how easy the control is to get wrong.
 
 **Restoring it means asking torch rather than ONNX Runtime** — a sidecar op reporting
-`torch.cuda.is_available()`, wired where the ONNX probe used to be. Nothing does that today.
+`torch.cuda.is_available()`, wired where the ONNX probe used to be.
 `AvailableDiariserProvidersAsync` still probes ONNX Runtime and is still correct about the
 translator, which is why it was kept; nothing on the diariser path reads it.
+
+**As of 2026-08-28 the sidecar asks that question, and the window still cannot hear the answer.**
+`resolve_auto` calls `_torch_cuda_available()` to decide whether `auto` elects `cuda`, so the probe
+this section asks for exists — inside the election, with no op exposing it. The gap is therefore
+narrower and unchanged in kind: `auto` is now safe on a machine without CUDA, because it asks before
+electing, while the explicitly-chosen **CUDA row is still offered unconditionally** and still fails
+at load. Wiring the picker to a new op is the work; a caller that wanted it today would have to
+start a sidecar to learn what `resolve_auto` already knows.
 
 ### The shelving was checked against the real sidecar, and ES2004a reproduces bit for bit
 
