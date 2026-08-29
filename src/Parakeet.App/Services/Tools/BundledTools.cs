@@ -161,6 +161,18 @@ public static class BundledTools
             yield return Path.GetFullPath(fromEnvironment);
         }
 
+        // **An updated copy wins over the vendored one, and that ordering is the whole mechanism.**
+        // yt-dlp is the one pinned binary with a shelf life of weeks — YouTube changes and yt-dlp
+        // changes to match — so Settings can fetch a newer one, and it lands here rather than in
+        // the application directory. Writing there would need elevation and would be reverted by
+        // the next Velopack update; this way the shipped build stays exactly as it shipped, and
+        // deleting this one directory restores the pinned binaries.
+        //
+        // Deliberately *after* the environment override: a developer who has said where the tools
+        // are means it, and a stale update in their profile must not quietly win over the answer
+        // they gave. See `ToolUpdater`.
+        yield return ToolUpdater.UserToolsDirectory;
+
         var baseDirectory = AppContext.BaseDirectory;
 
         yield return Path.Combine(baseDirectory, "native", "win-x64", "tools");
