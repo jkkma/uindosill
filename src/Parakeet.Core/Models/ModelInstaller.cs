@@ -420,8 +420,69 @@ public sealed class ModelInstaller : IDisposable
 
         var partPath = finalPath + PartSuffix;
         var metaPath = finalPath + PartSuffix + ".json";
-        var resumeOffset = DetermineResumeOffset(partPath, metaPath, file.Url);
-        var resumed = resumeOffset > 0;
+
+        // **A dropped connection is retried here, and until 2026-08-29 it took the process with
+        // it.** Hugging Face ended a response after 149 KB of a 6.3 GB file; `HttpIOException`
+        // came out of the read loop, matched neither of the window's two catch clauses, and
+        // terminated the application from inside an async command. Two things were wrong and this
+        // is the first: a transport failure is the *expected* case over hours of downloading, and
+        // everything needed to survive it — the `.part` file, the resume metadata, the range
+        // request — was already built and simply never used for this.
+        //
+        // **Retrying costs nothing because it resumes.** Each attempt re-reads the offset off
+        // disk, so a connection that died at 149 KB asks for `Range: bytes=149148-` rather than
+        // starting again. An attempt that makes progress resets the budget, which is what stops a
+        // slow, flaky link from exhausting the count while it is still moving forward.
+        // Carried out of the attempt so the verification below reads what the *successful*
+        // attempt saw: `resumed` is reported to the caller, `total` is what the length and digest
+        // checks are made against.
+        long total = 0;
+        var resumed = false;
+
+        const int MaxAttempts = 5;
+        var attempt = 0;
+        while (true)
+        {
+            var resumeOffsetBefore = DetermineResumeOffset(partPath, metaPath, file.Url);
+            try
+            {
+                await AttemptAsync(resumeOffsetBefore).ConfigureAwait(false);
+                break;
+            }
+            catch (Exception exception) when (IsTransient(exception) && !ct.IsCancellationRequested)
+            {
+                // Progress since the last attempt buys a fresh budget rather than counting against
+                // it: the failure being retried is a connection that dies periodically, not a
+                // request that cannot be served.
+                var after = DetermineResumeOffset(partPath, metaPath, file.Url);
+                if (after > resumeOffsetBefore)
+                {
+                    attempt = 0;
+                }
+
+                if (++attempt >= MaxAttempts)
+                {
+                    throw new ModelInstallException(
+                        $"The download of {file.FileName} kept being cut off — {MaxAttempts} attempts, " +
+                        $"the last after {after:N0} of {file.SizeBytes ?? 0:N0} bytes. What arrived is " +
+                        "kept, so starting again resumes rather than restarting. " +
+                        exception.Message,
+                        exception);
+                }
+
+                // Short, growing, and capped. **Starting at 500 ms rather than 2 s** because the
+                // failure being waited out is usually a single cut response rather than a service
+                // that is down: the first retry succeeding half a second later is invisible to
+                // somebody watching a progress bar, where two seconds reads as a stall. The cap is
+                // what covers the other case, and the attempt budget is what ends it.
+                var backoff = TimeSpan.FromMilliseconds(Math.Min(8000, 250 * (1 << attempt)));
+                await Task.Delay(backoff, ct).ConfigureAwait(false);
+            }
+        }
+
+        async Task AttemptAsync(long resumeOffset)
+        {
+            resumed = resumeOffset > 0;
 
         progress?.Report(Shape(ModelInstallPhase.Connecting, resumeOffset, file.SizeBytes, null, resumed));
 
@@ -443,7 +504,6 @@ public sealed class ModelInstaller : IDisposable
 
         using var response = await SendAsync(request, model, file, ct).ConfigureAwait(false);
 
-        long total;
         if (resumeOffset > 0 && response.StatusCode == HttpStatusCode.PartialContent)
         {
             total = response.Content.Headers.ContentRange?.Length
@@ -470,6 +530,7 @@ public sealed class ModelInstaller : IDisposable
         WriteResumeMetadata(metaPath, file.Url, response.Headers.ETag?.ToString(), total);
 
         await DownloadAsync(response, partPath, resumeOffset, resumed, Shape, progress, total, ct).ConfigureAwait(false);
+        }
 
         var actualSize = new FileInfo(partPath).Length;
         progress?.Report(Shape(ModelInstallPhase.Verifying, actualSize, total > 0 ? total : null, null, resumed));
@@ -653,6 +714,36 @@ public sealed class ModelInstaller : IDisposable
 
         await destination.FlushAsync(ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Whether a failure is the connection rather than the request, and so worth another attempt.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Deliberately narrow.</b> A 404, a 401 on a gated repository, a digest that disagrees and
+    /// a disk with no room left are all failures that will fail again in four seconds, and retrying
+    /// them turns a clear message into the same message five times slower.
+    /// <see cref="ModelInstallException"/> is excluded for exactly that reason: it is this class's
+    /// own word for "this is settled".
+    /// </para>
+    /// <para>
+    /// <b><see cref="HttpIOException"/> is the case that prompted this</b> and it is not obvious
+    /// from its name: it derives from <see cref="IOException"/>, so it is caught by the clause
+    /// below, and a response that ends early — which is what Hugging Face did after 149 KB of a
+    /// 6.3 GB file on 2026-08-29 — arrives as one. <see cref="TaskCanceledException"/> is included
+    /// only when the caller's own token is not the reason: an <see cref="HttpClient"/> timeout
+    /// presents as a cancellation with nobody having cancelled anything, and the caller's real
+    /// cancellation is filtered out at the catch site rather than here.
+    /// </para>
+    /// </remarks>
+    private static bool IsTransient(Exception exception) => exception switch
+    {
+        ModelInstallException => false,
+        OperationCanceledException => true,
+        HttpRequestException => true,
+        IOException => true,
+        _ => false,
+    };
 
     private static long DetermineResumeOffset(string partPath, string metaPath, Uri url)
     {
