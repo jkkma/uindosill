@@ -124,8 +124,30 @@ if ($FromVenv) {
         'https://download.pytorch.org/whl/cpu', $TorchIndex) |
         Set-Content -LiteralPath $cudaRequirements -NoNewline
 
+    # The same constraints the bundle is built under, which is what makes the pack's digests
+    # reproducible rather than merely recorded. The three packages this pack actually carries are
+    # the three the lock deliberately leaves out, so constraining here binds everything around them
+    # and nothing about the CUDA build itself: torch's version still comes from
+    # requirements-bundle.txt and its `+cu` suffix still comes from -TorchIndex.
+    #
+    # It matters here even though only three directories are kept. Those three are resolved against
+    # everything else in the closure, so a transitive that moved could change which torch wheel
+    # satisfies the set. A pack built from a drifting closure is how this one came out 27,649 bytes
+    # larger than its own pin on 2026-08-29 with an unchanged torch.
+    $lock = Join-Path $repo 'python/requirements-bundle.lock.txt'
+    $pipArgs = @('-m', 'pip', 'install', '--target', $staging, '-r', $cudaRequirements)
+    if (Test-Path -LiteralPath $lock) {
+        $pipArgs += @('-c', $lock)
+        Write-Note "constrained by $(Split-Path -Leaf $lock)"
+    }
+    else {
+        Write-Warning ("$lock is missing, so this pack's closure will resolve to whatever is " +
+                       "current and its digests will not be reproducible. Regenerate it with " +
+                       "scripts/bundle-python.ps1 -WriteLock.")
+    }
+
     Write-Note "installing $requirements against $TorchIndex (this downloads about 3 GB)"
-    & $HostPython -m pip install --target $staging -r $cudaRequirements
+    & $HostPython @pipArgs
     if ($LASTEXITCODE -ne 0) { throw 'pip install failed; the pack is incomplete.' }
     $source = $staging
 }
