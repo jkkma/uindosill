@@ -99,6 +99,34 @@ public class UninstallPromptTests
     }
 
     [Fact]
+    public void TheTitleAsksTheSameQuestionAsTheBody()
+    {
+        // The title, the body and the buttons all have to ask the same question. MB_YESNO cannot
+        // relabel its buttons, and the title is the line a reader skims, so a title asking whether
+        // to *keep* the files over buttons where Yes deletes them would be an inverted control:
+        // the skimming reader presses Yes meaning the opposite of what happens, and what happens
+        // is irreversible. This keeps the three in step.
+        var message = UninstallPrompt.Message(25_670_000_000, @"C:\x\Uindosill");
+
+        Assert.EndsWith("Delete them?", message, StringComparison.Ordinal);
+        Assert.Contains("delete", UninstallPrompt.Caption, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("keep", UninstallPrompt.Caption, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheQuestionSaysWhatHappensIfNobodyAnswers()
+    {
+        // Measured against a real uninstall: the callback runs inside Velopack's 30-second budget,
+        // an unanswered dialog is closed when that expires, and the uninstall finishes with the
+        // files untouched. Walking away is therefore the safe outcome, and somebody who did not
+        // expect the dialog should be able to read that rather than having to guess at it.
+        var message = UninstallPrompt.Message(25_670_000_000, @"C:\x\Uindosill");
+
+        Assert.Contains("do not answer", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("kept", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void KeepAndDeleteAreDistinctAndNothingToAskIsNeither()
     {
         // Collapsing NothingToAsk into Keep would read the same at the call site today and would
