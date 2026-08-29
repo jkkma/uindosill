@@ -302,7 +302,13 @@ jobs:
           # A prerelease tag has to be marked as one. GitHub does not infer it from the tag name, so
           # an unmarked rc becomes the repository's Latest release — which the default update channel
           # would then offer to every stable user.
-          flags=(--generate-notes)
+          # The asset list is nine files whose names do not explain themselves, and a release body
+          # that is nothing but "Full Changelog" leaves a first-time downloader guessing between
+          # two installers, a CLI zip, an interpreter zip that only CLI users need, four numbered
+          # parts and the update feed. .github/release-notes.md is that guide, and it carries no
+          # byte counts so it cannot go stale against the assets beside it. gh prepends it and
+          # --generate-notes still appends the commit changelog underneath.
+          flags=(--generate-notes --notes-file "$GITHUB_WORKSPACE/.github/release-notes.md")
           if [ "$PRERELEASE" = "true" ]; then
             flags+=(--prerelease)
           fi
