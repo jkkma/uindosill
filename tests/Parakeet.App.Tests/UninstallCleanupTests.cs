@@ -223,4 +223,51 @@ public class UninstallCleanupTests
 
         Directory.Delete(root, recursive: true);
     }
+
+    // ---- The walk that deliberately does not happen in this process ---------------------------
+
+    [Fact]
+    public void TheScheduledCommandRemovesExactlyTheDirectoryTheGuardsAllowed()
+    {
+        // Run no longer walks the tree itself: it resolves a target and hands it to a detached
+        // command. So what has to be held down is that the command names the directory the guards
+        // approved, quoted, and nothing above it.
+        var root = TestTemp.NewDirectory("uindosill-scheduled");
+        var data = Path.Combine(root, UserDataPaths.DirectoryName);
+        Directory.CreateDirectory(data);
+
+        var target = UninstallCleanup.ResolvedTarget(data, Path.Combine(root, "UindosillDesktop"));
+
+        Assert.NotNull(target);
+        var command = UninstallCleanup.DeleteCommandFor(target!.FullName);
+
+        Assert.Contains("\"" + target.FullName + "\"", command, StringComparison.Ordinal);
+        Assert.Contains("rd /s /q", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"" + root + "\"", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheScheduledCommandWaitsForTheUninstallerToBeGone()
+    {
+        // Three seconds, which is Velopack's own choice for the delayed removal of its install
+        // directory. The uninstaller is still working when the hook returns, and starting a walk
+        // at that moment buys a race for nothing.
+        var command = UninstallCleanup.DeleteCommandFor(Path.Combine("C:", "x", "Uindosill"));
+
+        Assert.Contains("/T 3", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AGuardThatRefusesLeavesNothingToSchedule()
+    {
+        // The guards run before anything is scheduled rather than inside the command, because a
+        // detached shell cannot be told to reconsider. A refused target is a null, and that null is
+        // what stops Run scheduling anything at all.
+        var root = TestTemp.NewDirectory("uindosill-refused");
+        var wrongName = Path.Combine(root, "NotTheProduct");
+        Directory.CreateDirectory(wrongName);
+
+        Assert.Null(UninstallCleanup.ResolvedTarget(wrongName, Path.Combine(root, "UindosillDesktop")));
+        Assert.Null(UninstallCleanup.ResolvedTarget(Path.Combine(root, "Uindosill"), root));
+    }
 }
