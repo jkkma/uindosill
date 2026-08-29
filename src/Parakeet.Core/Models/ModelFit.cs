@@ -82,7 +82,7 @@ public static class ModelFit
         var have = (totalPhysicalBytes / (double)(1024 * 1024 * 1024)).ToString("F0", culture);
 
         return $"This one is probably too big for this computer. It wants about {needed} GB of memory "
-            + $"once it is loaded and this machine has {have} GB. You can still download it - it may "
+            + $"once it is loaded and this machine has {have} GB. You can still download it, it may "
             + "run slowly by swapping to disk, or it may not load at all. A smaller version of the same "
             + "model will answer faster here.";
     }

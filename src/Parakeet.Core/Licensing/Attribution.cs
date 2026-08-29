@@ -430,7 +430,7 @@ public static class Attributions
                 + "hosts neither the original checkpoint nor the conversion, and installs Unsloth's copy by "
                 + "URL.",
             SourceNoticeFinding =
-                "Both upstream repositories were read on 2026-08-27 - google/gemma-4-26B-A4B-it and "
+                "Both upstream repositories were read on 2026-08-27, google/gemma-4-26B-A4B-it and "
                 + "unsloth/gemma-4-26B-A4B-it-GGUF at revision c099eb48e6. Neither ships a NOTICE file, so "
                 + "§4(d) has nothing to reproduce, and neither carries a copyright, patent or trademark "
                 + "notice, so none is reproduced here rather than one being invented. The attribution "
@@ -469,7 +469,7 @@ public static class Attributions
                 + "neither the original checkpoint nor the conversion, and installs Unsloth's copy by "
                 + "URL.",
             SourceNoticeFinding =
-                "Both upstream repositories were read on 2026-08-28 - google/gemma-4-12B-it and "
+                "Both upstream repositories were read on 2026-08-28, google/gemma-4-12B-it and "
                 + "unsloth/gemma-4-12B-it-qat-GGUF at revision 980b060c40. Neither ships a NOTICE "
                 + "file, so §4(d) has nothing to reproduce, and neither carries a copyright, patent "
                 + "or trademark notice, so none is reproduced here rather than one being invented. "
@@ -613,8 +613,8 @@ public static class Attributions
         "left on 2026-08-27**: the NVIDIA Open Model License terminated automatically on filing patent or " +
         "copyright litigation over the model, and the weights it covered are retired.",
 
-        "The translation checkpoint's own card disclaims its coverage list - \"for a large number of " +
-        "language pairs it will not work at all\" - so the language tags on that entry are list " +
+        "The translation checkpoint's own card disclaims its coverage list, \"for a large number of " +
+        "language pairs it will not work at all\": so the language tags on that entry are list " +
         "membership rather than a quality claim, and the product must not present them as one. Measured " +
         "on FLEURS into English, 23 of the 24 clear this project's own bar and Slovak falls below it " +
         "by 0.74.",
@@ -636,7 +636,7 @@ public static class Attributions
         // It is phrased as a caution rather than as a licence term, because that is what it now is.
         "Speaker diarisation is voice biometrics: it works by telling people's voices apart, which several " +
         "jurisdictions treat as processing biometric information and which may require the consent of the " +
-        "people recorded. No licence in this product imposes that - it is the law of the place the recording " +
+        "people recorded. No licence in this product imposes that, it is the law of the place the recording " +
         "was made, and it is the user's responsibility on their own material. Said here because this list is " +
         "what the CLI and the About window render, and because it was carried as a licence term until the " +
         "weights that carried it were retired.",
@@ -666,7 +666,7 @@ public static class Attributions
                 "Copyright (c) 2023-2026 The ggml authors. Run as a separate process serving the " +
                 "language model the Ask panel questions, and killed when the panel lets it go. The " +
                 "release archives ship no licence file, so the MIT text is fetched from the source " +
-                "tree at the pinned tag and travels beside the binaries - docs/NATIVE-BINARIES.md " +
+                "tree at the pinned tag and travels beside the binaries, docs/NATIVE-BINARIES.md " +
                 "holds the pin and the digests.",
         },
         new ComponentLicence
@@ -707,7 +707,7 @@ public static class Attributions
             Uri = new Uri("https://ffmpeg.org"),
             Notes =
                 "Shipped only by builds that vendor the muxer. Run as a separate process to put a transcript " +
-                "inside a recording as a subtitle track, which copies every stream and encodes nothing - so " +
+                "inside a recording as a subtitle track, which copies every stream and encodes nothing, so " +
                 "the LGPL build is enough and the GPL one, which would be GPLv3, is deliberately not used. A " +
                 "separate program rather than a linked library, so unlike libmpv it does not reach this " +
                 "application's own terms. Its licence text travels beside the binary; see " +
@@ -716,13 +716,13 @@ public static class Attributions
         new ComponentLicence
         {
             Component = "libmpv (mpv media player), and the FFmpeg and other libraries linked into it",
-            License = "GPL-2.0-or-later - copyleft, and the reason a build carrying it is distributed under the GPL",
+            License = "GPL-2.0-or-later: copyleft, and the reason a build carrying it is distributed under the GPL",
             Uri = new Uri("https://github.com/mpv-player/mpv"),
             Notes =
                 "Shipped only by builds that vendor the video player; a build without it draws no picture and " +
                 "contains no GPL component. Uindosill's own source is MIT, but a distribution including this " +
                 "binary is GPLv2-or-later as a whole. The licence text, mpv's copyright summary and the written " +
-                "offer naming where the corresponding source lives travel beside the binary - see " +
+                "offer naming where the corresponding source lives travel beside the binary, see " +
                 "licences/mpv-WRITTEN-OFFER.txt and docs/LICENSING.md.",
         },
         new ComponentLicence
@@ -802,7 +802,7 @@ public static class Attributions
         new ComponentLicence
         {
             Component = "Bundled CPython 3.12.10 and the Python packages the engines run in",
-            License = "PSF License (CPython) and the packages' own - see docs/LICENSING.md",
+            License = "PSF License (CPython) and the packages' own: see docs/LICENSING.md",
             Uri = new Uri("https://docs.python.org/3/license.html"),
             Notes =
                 "The speaker labelling and English opt-ins run out of process in an interpreter that " +
@@ -833,7 +833,7 @@ public static class Attributions
         new ComponentLicence
         {
             Component = "NVIDIA CUDA runtime (cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll)",
-            License = "NVIDIA CUDA Toolkit EULA - proprietary, not MIT; redistributable under Attachment A",
+            License = "NVIDIA CUDA Toolkit EULA: proprietary, not MIT; redistributable under Attachment A",
             Uri = new Uri("https://docs.nvidia.com/cuda/eula/index.html"),
             Notes =
                 "Shipped only by builds that vendor the opt-in CUDA backend; the CPU and Vulkan backends " +

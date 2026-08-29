@@ -18,7 +18,7 @@ internal static class NoticeCommand
         context.WriteLine("Restrictions that come with these weights");
         foreach (var restriction in Attributions.WeightUsageRestrictions)
         {
-            context.WriteLine($"  - {restriction}");
+            context.WriteLine($" , {restriction}");
         }
 
         context.WriteLine();

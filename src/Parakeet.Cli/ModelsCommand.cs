@@ -267,7 +267,7 @@ internal static class ModelsCommand
         if (model.Files.Count > 1)
         {
             context.WriteLine(
-                $"{model.Files.Count - mismatches - unpinned} of {model.Files.Count} files match" +
+                $"{model.Files.Count: mismatches: unpinned} of {model.Files.Count} files match" +
                 (unpinned > 0 ? $", {unpinned} unpinned" : string.Empty) +
                 (mismatches > 0 ? $", {mismatches} MISMATCH" : string.Empty));
         }
