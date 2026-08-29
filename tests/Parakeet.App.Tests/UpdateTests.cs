@@ -284,4 +284,28 @@ public class UpdatesViewModelTests
         Assert.Contains("could not be installed", viewModel.Status, StringComparison.Ordinal);
         Assert.Contains("the disk is full", viewModel.Status, StringComparison.Ordinal);
     }
+
+    [Theory]
+    // A release candidate looks for release candidates. Every version this project has published
+    // carries a hyphen, and GitHub marks each one a prerelease, so a build that declined to search
+    // them would be searching a set with nothing in it.
+    [InlineData("1.0.0-rc.9", true)]
+    [InlineData("1.0.0-rc.10", true)]
+    [InlineData("2.1.3-beta.1", true)]
+    // The prerelease label ends at the build metadata, and metadata is not a label. `1.0.0+<sha>`
+    // is the shape this project's own assemblies carry, and it is stable.
+    [InlineData("1.0.0-rc.9+5fb4a10", true)]
+    [InlineData("1.0.0+5fb4a10e85f00e91ab5b2b8d3512c62441b8a68e", false)]
+    // A stable build stays on stable, which is the whole reason this is not simply `true`: somebody
+    // who installed 1.0.0 is not offered the next candidate.
+    [InlineData("1.0.0", false)]
+    [InlineData("2.0.1", false)]
+    // Not installed, so no version and no train. A run from source behaves as it always did.
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void ABuildTracksTheTrainItIsOn(string? version, bool expected)
+    {
+        Assert.Equal(expected, VelopackUpdater.TracksPrereleases(version));
+    }
 }
