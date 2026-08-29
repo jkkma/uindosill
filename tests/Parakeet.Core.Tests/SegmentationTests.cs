@@ -115,6 +115,24 @@ public class StreamingSegmenterTests
         var covered = segments.Sum(s => s.Duration.TotalSeconds);
         Assert.InRange(covered, report.TotalAudio.TotalSeconds - 0.1, report.TotalAudio.TotalSeconds + 0.1);
         Assert.Equal(TimeSpan.Zero, segments[0].Start);
+
+        // Every frame is speech by fiat here, and the flag says so — until 2026-08-29 every emit
+        // site passed true and the property's documented distinction could never be observed.
+        Assert.All(segments, s => Assert.False(s.SpeechDetected));
+    }
+
+    [Fact]
+    public void DetectedSpeechCarriesTheFlagIncludingAcrossACapCut()
+    {
+        // The cap places the cut but the gate affirmed the content, so a forced cut inside
+        // continuous detected speech stays SpeechDetected — false is reserved for segments
+        // nothing affirmed, which is fixed-window mode's whole output.
+        var samples = TestAudio.Build((70, true));
+        var options = VoiceActivityOptions.Default with { MaxSegmentLength = TimeSpan.FromSeconds(30) };
+        var (segments, _) = Run(samples, options);
+
+        Assert.True(segments.Count >= 2);
+        Assert.All(segments, s => Assert.True(s.SpeechDetected));
     }
 
     [Fact]

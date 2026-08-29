@@ -79,7 +79,7 @@ public abstract class SegmentingTranscriptionEngine : ITranscriptionEngine
 
         await LoadAsync(ct).ConfigureAwait(false);
 
-        var vad = options.VoiceActivity with { MaxSegmentLength = options.MaxSegmentLength };
+        var vad = options.SegmentationOptions();
 
         // One detector stream per recording, at the recording's own rate, closed with it: the
         // detector keeps context and state across windows, and two files sharing one stream would

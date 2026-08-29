@@ -128,17 +128,23 @@ public sealed class FakeTranscriptionEngine : SegmentingTranscriptionEngine
             DecodedSegmentCount++;
             results.Add(_options.ReturnEmptyText
                 ? new DecodedSegment { Text = string.Empty }
-                : Compose(segment));
+                : Compose(segment, options));
         }
 
         return results;
     }
 
-    private DecodedSegment Compose(AudioSegment segment)
+    private DecodedSegment Compose(AudioSegment segment, TranscriptionOptions options)
     {
         var phrase = _options.Phrases[Math.Abs(segment.Index) % _options.Phrases.Count];
 
-        if (!_options.EmitWordTimestamps)
+        // Both flags, because they answer different questions: EmitWordTimestamps is this fake's
+        // own knob for simulating a model that produces no word timings, while WordTimestamps is
+        // the caller's request on the options record — and the real engine honours the request
+        // (ParakeetCppEngine returns no words when it is off). A fake that emitted words anyway
+        // would pass tests, over word-dependent behaviour, that the real path fails; that is
+        // exactly the fake-more-forgiving-than-the-device gap this class exists to close.
+        if (!_options.EmitWordTimestamps || !options.WordTimestamps)
         {
             return new DecodedSegment { Text = phrase };
         }

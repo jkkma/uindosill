@@ -26,6 +26,60 @@ public class FakeEngineTests
     }
 
     [Fact]
+    public async Task WordTimestampsOffMeansNoWordsFromTheFakeAsFromTheRealEngine()
+    {
+        // The real engine honours the request — ParakeetCppEngine returns no words when the
+        // option is off — and until 2026-08-29 the fake consulted only its own EmitWordTimestamps
+        // knob and emitted them anyway. A fake more forgiving than the device is how tests pass
+        // over behaviour the real path does not have.
+        var audio = new ArrayAudioSource(TestAudio.Build((0.4, false), (2, true), (0.4, false)));
+        await using var engine = new FakeTranscriptionEngine();
+
+        var document = await TranscriptionRunner.RunAsync(
+            engine, audio, TranscriptionOptions.Default with { WordTimestamps = false });
+
+        Assert.NotEmpty(document.Segments);
+        Assert.All(document.Segments, s => Assert.Empty(s.Words));
+    }
+
+    [Fact]
+    public async Task ProcessingTimeExcludesAColdEnginesModelLoad()
+    {
+        // ProcessingTime is documented as excluding model load and is what every published
+        // real-time factor divides by. A cold engine handed straight to the runner used to pay
+        // its load inside the stopwatch — every shipping caller pre-loads, so nothing noticed —
+        // and the runner now loads first, which a pre-loading caller cannot feel (LoadAsync is
+        // idempotent). Two seconds of load against a decode of milliseconds keeps this exact
+        // without racing the clock.
+        var audio = new ArrayAudioSource(TestAudio.Build((0.3, false), (1, true), (0.3, false)));
+        await using var engine = new FakeTranscriptionEngine(new FakeEngineOptions
+        {
+            LoadDelay = TimeSpan.FromSeconds(2),
+        });
+
+        var document = await TranscriptionRunner.RunAsync(engine, audio);
+
+        Assert.True(document.ProcessingTime < TimeSpan.FromSeconds(1),
+            $"ProcessingTime was {document.ProcessingTime}; the 2 s model load leaked into the figure.");
+    }
+
+    [Fact]
+    public async Task InvalidOptionsAreRefusedBeforeAColdEngineLoads()
+    {
+        // The other half of the load-before-stopwatch fix, which alone would have moved the load
+        // AHEAD of validation: TranscribeAsync's own Validate lives in a lazy iterator that runs
+        // only at the first MoveNext, so the runner has to refuse a typo before it pays for a
+        // model. A typo must never cost a multi-hundred-megabyte load.
+        var audio = new ArrayAudioSource(TestAudio.Build((1, true)));
+        await using var engine = new FakeTranscriptionEngine();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => TranscriptionRunner.RunAsync(
+            engine, audio, TranscriptionOptions.Default with { ThreadCount = 0 }));
+
+        Assert.Equal(0, engine.LoadCount);
+    }
+
+    [Fact]
     public async Task TheDecodeTimeIsTheModelsShareAndTheProcessingTimeIsTheWholePass()
     {
         // A source that is slow to read and an engine that decodes in no time: the wall figure
@@ -576,6 +630,33 @@ public class OptionsValidationTests
     {
         var options = TranscriptionOptions.Default with { MaxSegmentLength = TimeSpan.FromMinutes(30) };
         Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
+    }
+
+    [Fact]
+    public void ASegmentCapUnderTheSplitSearchWindowIsHonouredNotRefused()
+    {
+        // A three-second cap with the default four-second forced-split window used to pass this
+        // validation and then throw from inside the decode iterator, after the model had loaded,
+        // naming ForcedSplitSearchWindow — a knob the caller never set and one the segmenter
+        // clamps to fit regardless. The derivation now shrinks the window under the cap, so the
+        // cap means what it says.
+        var options = TranscriptionOptions.Default with { MaxSegmentLength = TimeSpan.FromSeconds(3) };
+        options.Validate();
+
+        var derived = options.SegmentationOptions();
+        Assert.Equal(TimeSpan.FromSeconds(3), derived.MaxSegmentLength);
+        Assert.True(derived.ForcedSplitSearchWindow < derived.MaxSegmentLength);
+        derived.Validate();
+    }
+
+    [Fact]
+    public void ASegmentCapTooShortForFourFramesIsRefusedHereAndNamedAsTheCap()
+    {
+        // The one derivable failure that remains: a cap that cannot hold four detector frames.
+        // It fails at Validate(), before any model loads, attributed to the setting that was set.
+        var options = TranscriptionOptions.Default with { MaxSegmentLength = TimeSpan.FromMilliseconds(50) };
+        var refusal = Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
+        Assert.Equal(nameof(TranscriptionOptions.MaxSegmentLength), refusal.ParamName);
     }
 
     [Fact]

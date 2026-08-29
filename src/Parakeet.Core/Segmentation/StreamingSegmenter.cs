@@ -173,7 +173,9 @@ public sealed class StreamingSegmenter
 
         if (_state == State.Speech || _speechRun > 0)
         {
-            EmitFrames(_frameDb.Count, completed, speechDetected: true);
+            // In fixed-window mode this branch always holds — every frame is speech by fiat —
+            // and the flag says so rather than claiming a detection nothing made.
+            EmitFrames(_frameDb.Count, completed, speechDetected: _options.Enabled);
         }
 
         // The padding above is measurement scaffolding, not audio. Left in place it makes the
@@ -386,7 +388,12 @@ public sealed class StreamingSegmenter
         if (_frameDb.Count >= _maxSegmentFrames)
         {
             var cut = FindQuietestFrame(_frameDb.Count - _splitSearchFrames, _frameDb.Count);
-            EmitFrames(cut + 1, completed, speechDetected: true);
+
+            // A cap cut mid-utterance is still detected speech — the clock placed the cut, the
+            // detector affirmed the content — so the flag follows the mode, not the cut: in
+            // fixed-window mode, where every segment but the flush's tail lands here and speech
+            // is by fiat, it is false, which is the distinction the property documents.
+            EmitFrames(cut + 1, completed, speechDetected: _options.Enabled);
 
             // Still mid-utterance; the remaining tail carries whatever silence run it had.
             _silenceRun = Math.Min(_silenceRun, _frameDb.Count);
