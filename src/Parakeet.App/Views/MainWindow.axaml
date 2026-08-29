@@ -2106,7 +2106,7 @@
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askExpertPlacement &#8212; where a mixture-of-experts model&apos;s expert tensors are held. Automatic asks the Vulkan loader whether this machine&apos;s graphics is discrete or integrated." />
+                         Text="askExpertPlacement &#8212; sets --cpu-moe on the llama-server child: whether a mixture-of-experts model&apos;s expert tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA it leaves placement to the loader, which was measured holding that model at 22.4 tok/s with nothing offloaded. Both explicit choices apply on CUDA and Vulkan; none applies on the CPU backend, where the weights are in system memory already." />
             </StackPanel>
 
                 </StackPanel>

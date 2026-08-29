@@ -93,6 +93,11 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         // The loader is asked only when its answer decides something: on the Vulkan backend, with
         // the placement left automatic. Creating an instance loads every installed driver, and a
         // CUDA or CPU child has no reason to pay for that.
+        //
+        // **Still Vulkan-only after 2026-08-29, though CUDA now honours the picker.** What CUDA
+        // gained is the two *explicit* placements, and neither asks the loader anything — the fit
+        // rule that would need a device size is deliberately not used there. See
+        // `BuildEnvironment` for why.
         var automatic = install.Backend == ComputeBackend.Vulkan
             && options.ExpertPlacement == MoeExpertPlacement.Automatic;
         var graphics = automatic ? VulkanDeviceProbe.Describe() : null;
@@ -281,20 +286,55 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         long modelBytes = 0)
     {
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Genuinely Vulkan's, and the reason this block existed at all: a ggml-vulkan environment
+        // variable working around the bfloat16 path (parakeet.cpp issue #62's neighbour).
         if (backend == ComputeBackend.Vulkan)
         {
             environment["GGML_VK_DISABLE_BFLOAT16"] = "1";
+        }
 
-            if (ExpertsGoToSystemMemory(placement, graphics, modelBytes))
+        // **The picker reached nothing on CUDA until 2026-08-29, and now it does.** Expert
+        // placement was written inside the Vulkan block above rather than beside it, because the
+        // measurement that produced it was a Vulkan/UMA failure — so choosing "System memory" on a
+        // CUDA machine set no environment at all and changed nothing, which is the silently-inert
+        // control this window refuses to ship everywhere else. The vendored CUDA drop takes the
+        // same flags (`--cpu-moe`, `--n-cpu-moe`, `--no-host` are all in its `--help`, checked
+        // 2026-08-29), so nothing about the binary required that.
+        //
+        // **`Automatic` deliberately does NOT use the fit rule on CUDA**, and this is the part
+        // that was nearly got wrong. The rule wants the file plus a quarter of it plus a gibibyte
+        // — about 20.8 GiB for the 26B-A4B at UD-Q4_K_XL — and its allowance was anchored to a
+        // Vulkan/UMA measurement. Applied to a discrete card it offloads models that run perfectly
+        // well: measured 2026-08-29 on an RTX 5080, that model loads on CUDA with no offload at
+        // all, using 15,731 MiB of 16,303 MiB and generating at 22.4 tok/s. Part of the file never
+        // reaches the card — VRAM used is some 493 MiB *below* the file size, and that figure
+        // already includes the KV cache — so "does the file fit in VRAM" is the wrong question
+        // here in a way it is not on a UMA split. Until there is a discrete-card measurement of
+        // what "does not fit" costs, `Automatic` on CUDA keeps doing what it was measured doing.
+        var offloadExperts = backend switch
+        {
+            ComputeBackend.Cpu => false,
+            ComputeBackend.Vulkan => ExpertsGoToSystemMemory(placement, graphics, modelBytes),
+            _ => placement == MoeExpertPlacement.SystemMemory,
+        };
+
+        if (offloadExperts)
+        {
+            // Mixture-of-experts weights stay in system memory. Measured on the second machine's
+            // Vulkan 2026-08-24 (docs/UNPROVEN.md): a 26B-class mixture that runs comfortably with
+            // this cannot load at all without it.
+            environment["LLAMA_ARG_CPU_MOE"] = "1";
+
+            // **`--no-host` stays Vulkan's, and that is the half of "both or neither" that was
+            // actually about the backend.** The overflow it fixes is a UMA driver splitting its
+            // memory into two ~7.8 GiB heaps, where "CPU" placement lands in the pinned heap and
+            // exceeds it; a discrete card has no such split, so setting it here would be carrying
+            // a workaround to hardware that does not have the fault. `--cpu-moe` without
+            // `--no-host` is the combination measured to fail *on that UMA machine*, which is a
+            // statement about that machine rather than about the pair of flags.
+            if (backend == ComputeBackend.Vulkan)
             {
-                // Mixture-of-experts weights stay in system memory, and the pinned host buffer is
-                // bypassed — measured 2026-08-24 on the second machine (docs/UNPROVEN.md): a UMA
-                // driver splits its memory into two ~7.8 GiB heaps, "CPU" placement resolves to
-                // the pinned heap without --no-host and overflows it, and a 26B-class mixture
-                // that runs comfortably with these knobs cannot load at all without them. Both
-                // or neither: --cpu-moe without --no-host is the overflow, which is the one
-                // combination measured to fail.
-                environment["LLAMA_ARG_CPU_MOE"] = "1";
                 environment["LLAMA_ARG_NO_HOST"] = "1";
             }
         }

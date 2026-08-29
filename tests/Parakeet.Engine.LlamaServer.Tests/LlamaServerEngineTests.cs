@@ -280,23 +280,62 @@ public class LlamaServerArgumentTests
     }
 
     [Fact]
-    public void ThePlacementDecidesNothingOffVulkan()
+    public void ThePlacementDecidesNothingOnTheProcessor()
     {
-        // The pair is a Vulkan-backend knob. A CUDA or CPU child gets no environment at all,
-        // whatever the picker says, whatever the loader reports and whatever the model measures.
-        foreach (var backend in new[] { ComputeBackend.Cpu, ComputeBackend.Cuda })
+        // Nothing to place: on a CPU child every weight is already in system memory, so the pair
+        // would name a move with nowhere to go. This is the half of the old
+        // `ThePlacementDecidesNothingOffVulkan` that survived.
+        foreach (var placement in new[]
         {
-            foreach (var placement in new[]
-            {
-                MoeExpertPlacement.Automatic,
-                MoeExpertPlacement.Device,
-                MoeExpertPlacement.SystemMemory,
-            })
-            {
-                Assert.Empty(LlamaServerProcess.BuildEnvironment(
-                    backend, new Dictionary<string, string>(), placement, Card(8), Model(14)));
-            }
+            MoeExpertPlacement.Automatic,
+            MoeExpertPlacement.Device,
+            MoeExpertPlacement.SystemMemory,
+        })
+        {
+            Assert.Empty(LlamaServerProcess.BuildEnvironment(
+                ComputeBackend.Cpu, new Dictionary<string, string>(), placement, Card(8), Model(14)));
         }
+    }
+
+    [Fact]
+    public void AutomaticOnCudaLeavesTheExpertsWhereTheLoaderPutsThem()
+    {
+        // **The fit rule is deliberately not applied on CUDA, and this test is the measurement
+        // that decided it.** Extending it there was written and then withdrawn on 2026-08-29:
+        // `FitsOnDevice` wants the file plus a quarter of it plus a gibibyte — about 20.8 GiB for
+        // the 26B-A4B at UD-Q4_K_XL — so on a 15.92 GiB card it says "does not fit" and offloads.
+        // The card disagrees. Measured that day on an RTX 5080, that model loads on CUDA with no
+        // offload at all: 15,731 MiB of 16,303 MiB and 22.4 tok/s. Part of the file never reaches
+        // the card, so VRAM used comes in *below* the file size even with the KV cache counted.
+        //
+        // Offloading it would have moved 13.4 GiB of experts to system RAM to fix a problem the
+        // machine does not have. Until there is a discrete-card measurement of what "does not fit"
+        // actually costs, automatic here keeps doing what was measured working.
+        Assert.Empty(LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Cuda, new Dictionary<string, string>(),
+            MoeExpertPlacement.Automatic, Card(8), Model(14)));
+
+        Assert.Empty(LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Cuda, new Dictionary<string, string>(),
+            MoeExpertPlacement.Automatic, Card(24), Model(1)));
+    }
+
+    [Fact]
+    public void ThePickerReachesTheCudaChildRatherThanDoingNothing()
+    {
+        // A control that silently does nothing is what this window refuses to ship, and the
+        // Expert layers picker was one on every CUDA machine. Both explicit choices now decide
+        // something there: System memory offloads a model that would have fitted, and Device
+        // keeps one that would not.
+        var forcedOff = LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Cuda, new Dictionary<string, string>(),
+            MoeExpertPlacement.SystemMemory, Card(24), Model(1));
+        Assert.Equal("1", forcedOff["LLAMA_ARG_CPU_MOE"]);
+        Assert.DoesNotContain("LLAMA_ARG_NO_HOST", forcedOff.Keys);
+
+        Assert.Empty(LlamaServerProcess.BuildEnvironment(
+            ComputeBackend.Cuda, new Dictionary<string, string>(),
+            MoeExpertPlacement.Device, Card(8), Model(14)));
     }
 
     [Fact]
