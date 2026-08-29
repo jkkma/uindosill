@@ -452,15 +452,18 @@ class PyannoteEngine:
         # this model directory's graphs exist and this is the first place the directory is known.
         #
         # **Only `auto` tolerates a failure.** A provider that registers can still fail to build a
-        # session, and a diariser that falls through to the CPU is better than one that will not
+        # session, a device torch reports available can still refuse the weights, and a diariser
+        # that falls through to the CPU is better than one that will not
         # load — but somebody who *typed* `webgpu` and silently got the CPU has been told nothing,
         # so a named provider still raises. That is the whole difference between the two paths, and
         # it is why `tolerant` is bound to how the list was built rather than to what is in it.
         #
-        # Falling through is safe because `_install_onnx_route` is atomic against the pipeline: it
-        # swaps the two `forward` attributes as its last two statements, so every refusal above them
-        # — missing graphs, an absent provider, a session that would not build, a graph ORT seated
-        # somewhere other than where it was asked — leaves the pipeline exactly as it found it.
+        # Falling through is safe because `_install_onnx_route` is atomic against the pipeline: the
+        # embedding `forward` swap and the sessions assignment are its last two statements (it was
+        # two swaps until segmentation went back to torch on 2026-08-28), so every refusal above
+        # them — missing graphs, an absent provider, a session that would not build, a graph ORT
+        # seated somewhere other than where it was asked — leaves the pipeline exactly as it found
+        # it.
         # Named for the `fellBackFrom` field it becomes, because a run that landed on the CPU
         # because WebGPU would not initialise must be able to say so: that is the one fact which
         # explains its speed, and it is known only here, at the moment it stops being true.
@@ -472,19 +475,36 @@ class PyannoteEngine:
         torch_device: Any = None
         for candidate in candidates:
             if candidate not in ONNX_PROVIDERS:
-                # **Resolved inside the loop so that a torch device can be fallen through too.** It
-                # was resolved after the loop until 2026-08-28, which was harmless while `cpu` was
-                # the only torch candidate `auto` could reach and stopped being so the moment `cuda`
-                # joined it: a raise there ended the load outright, where the shortlist's whole
-                # contract is that `auto` tries the next thing. A named device still raises, by the
-                # same `tolerant` rule the ONNX branch below uses.
+                # **Resolved and moved inside the loop so that a torch device can be fallen
+                # through too.** Resolution came inside on 2026-08-28 — a raise after the loop
+                # ended the load outright, where the shortlist's whole contract is that `auto`
+                # tries the next thing — and the move followed on 2026-08-29, because the gap
+                # between the two was a real machine state: for `cuda`, `_resolve_device` asks
+                # `torch.cuda.is_available()`, a driver query that creates no context, and the
+                # first call that actually touches the device is the `.to()` — which fails while
+                # `is_available()` is still true on a card whose memory another process holds, or
+                # whose context will not create after a reset. A load that raised there was
+                # exactly the failure this loop exists to absorb. A named device still raises, by
+                # the same `tolerant` rule the ONNX branch below uses.
                 try:
-                    torch_device = self._resolve_device(candidate)
+                    device = self._resolve_device(candidate)
+                    if device is not None:
+                        self._pipeline.to(device)
                 except Exception as exc:  # noqa: BLE001
                     if not tolerant:
                         raise
                     self.fell_back_from.append(f"{candidate}: {exc}"[:300])
+                    # A move that failed part-way leaves whatever it had already copied on the
+                    # device it was aiming for; the next candidate starts from a whole pipeline
+                    # on the CPU, not from that. The cache release afterwards returns the blocks
+                    # torch's allocator would otherwise keep for a run that will never use them —
+                    # on the very card whose problem may have been memory. (The context itself
+                    # cannot be returned; a no-op where CUDA never initialised.)
+                    self._pipeline.to(torch.device("cpu"))
+                    if candidate == "cuda":
+                        torch.cuda.empty_cache()
                     continue
+                torch_device = device
                 elected = candidate
                 break
             self._pipeline.to(torch.device("cpu"))
@@ -510,13 +530,16 @@ class PyannoteEngine:
             self.segmentation_backend = f"torch:{self.device}"
             self.embedding_backend = f"onnx:{elected}"
         else:
-            # Resolved in the loop above. It is None only where every torch candidate was fallen
-            # through, which cannot happen for `auto` — `resolve_auto` ends its shortlist with `cpu`
-            # and that one does not fail — and is asked again here rather than asserted, because a
-            # future candidate that ends the loop some other way should not silently become the CPU.
-            device = torch_device if torch_device is not None else self._resolve_device(elected)
-            if device is not None:
-                self._pipeline.to(device)
+            # Resolved and moved in the loop above. It is None only where every torch candidate
+            # was fallen through, which cannot happen for `auto` — `resolve_auto` ends its
+            # shortlist with `cpu` and that one does not fail — and is asked and moved again here
+            # rather than asserted, because a future candidate that ends the loop some other way
+            # should not silently become the CPU.
+            device = torch_device
+            if device is None:
+                device = self._resolve_device(elected)
+                if device is not None:
+                    self._pipeline.to(device)
             self.device = str(device) if device is not None else "cpu"
 
             # **One runtime, both stages** on the torch path: both neural stages are torch on the
