@@ -864,9 +864,10 @@
 
                   <!-- The notice was true and useless without this: it told a reader the
                        weights outlive an uninstall and left them to select and Remove each
-                       entry in turn. Deliberately not an uninstall hook, which was built and
-                       withdrawn on 2026-08-23 as unreliable in a way nothing explained. A
-                       button is attended, which is the rule that survived that. -->
+                       entry in turn. It stayed when the uninstaller learned to ask on
+                       2026-08-29, because this route does not depend on that callback firing
+                       and reaches below the 64 MiB under which nothing is asked at all. A
+                       button is attended, and so is a dialog. -->
                   <Button Name="RemoveAllModels" Classes="onPage"
                           Content="Remove all downloaded models"
                           HorizontalAlignment="Left"
@@ -1080,7 +1081,7 @@
                        Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network, downloading a model, you start yourself." />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
-                       Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose and are not touched by an update, or by uninstalling." />
+                       Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose, so an update never touches them. Uninstalling asks before it removes them." />
 
           </StackPanel>
         </ScrollViewer>

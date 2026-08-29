@@ -836,7 +836,7 @@ the correct outcome for it. On a current build the intended outcome is different
   `Update.exe` can apply that delta is untested — and it is exactly the thing velopack/velopack#1008
   reports broken for bsdiff deltas in this version line.
 
-### ~~The uninstall cleanup hook has never run on a real machine~~ — it ran, it was unreliable, and the feature is gone
+### ~~The uninstall cleanup hook has never run on a real machine~~ — it ran, it was unreliable, it was removed, and on 2026-08-29 it came back asking first
 
 **Superseded 2026-08-23, the same night.** The section below was written before any installer
 carried the hook. It then ran on a real machine and behaved in two incompatible ways on the same
@@ -846,8 +846,14 @@ explain the difference was tested and eliminated — scale, an exception in the 
 -1 and is reported as a failure, not as success), a reparse point, missing assembly metadata, a lost
 registration, and Velopack declining to invoke the hook at all. **The failure never reproduced, and
 the feature was removed rather than shipped in that state** (`docs/PHASES.md`, *Removed
-2026-08-23*). What is left proven is only the negative: nothing this application does unattended
-deletes a user's files, because there is no longer any code that does.
+2026-08-23*). What that left proven was only the negative: nothing this application does unattended
+deletes a user's files, because no code did.
+
+**That sentence is still true, and no longer for that reason.** On 2026-08-29 the hook came back
+with a modal question in front of it, so the deletion is *attended* rather than absent — see
+**The uninstaller asks, and no real uninstall has ever seen it** at the end of this document. The
+98 ms mystery recorded below is unchanged, unexplained, and is precisely what that design is built
+to fail towards.
 
 **The behaviour that replaced it is measured, on a locally packed installer, 2026-08-23.** A real
 `vpk` package of the post-removal build, installed silently, with a 2,000-file decoy planted where
@@ -7031,3 +7037,43 @@ asked. **This is the first time any model has been scored against that set.**
   asks (86.8 s, 71.2 s) are cheap only because `cache_prompt` reuses the prefix.
 - **Nothing was measured at any other quantisation of the 12B**, nor with the Q4_0 head the
   publisher ships as its default beside the weights.
+
+## The uninstaller asks, and no real uninstall has ever seen it — noted 2026-08-29
+
+Since 2026-08-29 `Program.cs` registers Velopack's `OnBeforeUninstallFastCallback` again, and it
+puts a `MessageBoxW` question in front of the delete: `UninstallPrompt.Ask` measures
+`%LOCALAPPDATA%\Uindosill`, and only an explicit Yes reaches `UninstallCleanup`. `docs/GOTCHAS.md`
+gotcha 8 has the design and the two dates behind it.
+
+**What is proven.** That the decision logic is right at every boundary, and that the delete and its
+guards work against rebuilt directory trees: `UninstallPromptTests` and `UninstallCleanupTests`,
+including the real lock semantics on Windows and a real symbolic link elsewhere. That the window
+never promises the question where it will not be asked, held against
+`UninstallPrompt.AskAboveBytes` itself rather than a retyped number.
+
+**What is not.** No `Update.exe --uninstall` has ever invoked any of it. This is the same gap the
+2026-08-23 hook carried, in the same place, and nothing about adding a dialog narrows it.
+Unobserved, specifically:
+
+- **That the dialog appears at all.** It rides on the exact callback measured on 2026-08-23
+  returning in **98 ms having done nothing**, on the same machine and build that deleted 4.64 GB in
+  another run, with six causes eliminated by experiment and the failure never reproducing.
+  **Reproducing that no-op is still the prerequisite, and it has not been reproduced.** A machine
+  where the callback is inert shows a completed uninstall, no question, and an intact data
+  directory — which is also exactly what a correct Keep looks like.
+- **That `MessageBoxW` is reachable from inside that callback on a real uninstall.** It needs no UI
+  toolkit, which is why it was chosen, but nothing has watched it draw from a process Velopack
+  spawned for an uninstall.
+- **What the 30-second fast-callback budget does to a human.** The budget is documented, not
+  measured here. Somebody away from the keyboard, or a Yes answered late over tens of gigabytes,
+  reaches the boundary; whether Velopack then kills the process mid-delete, and what a half-deleted
+  `models\` directory does to the next install, is untested. `ModelInstaller` clears an existing
+  entry directory before its staging move, so the expected outcome is a re-download rather than a
+  corrupt entry, but that is reasoning from the code and not an observation.
+- **The wording, on a real screen.** Nobody has read the dialog on an Installed apps click. The
+  tests assert either side of it, because it blocks on a human and cannot be exercised.
+
+The proof is the 2026-08-19 procedure rerun on a current build, twice: hash the weights, install,
+uninstall and answer No, and find `%LOCALAPPDATA%\Uindosill` byte-identical; then again answering
+Yes, and find it gone. Until somebody does that, **"uninstalling asks" is a claim about code paths,
+not about a machine** — and so is "and keeps them unless you say otherwise".

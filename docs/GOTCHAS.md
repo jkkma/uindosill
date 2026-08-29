@@ -114,15 +114,14 @@ and an install/update/uninstall on a real desktop with every weight hashed befor
 (`docs/UNPROVEN.md`). Setting the id to `Uindosill` fails four of the five tests; that was checked by
 doing it, not assumed.
 
-**Uninstall leaves the data, and that is now a decision rather than an omission.** For one night —
+**Uninstall asks about the data, and that decision has two dates on it.** For one night —
 2026-08-23 — the application registered Velopack's before-uninstall hook and deleted
-`%LOCALAPPDATA%\Uindosill` wholesale. It was removed the same night. Three reasons, any one
-sufficient:
+`%LOCALAPPDATA%\Uindosill` wholesale, unattended. It was removed the same night. Three reasons, any
+one sufficient:
 
 - **People keep their own files in that folder.** The Models tab offers to remove "weights from an
-  older version of Uindosill, or files put here by hand", so the product knows they are there. An
-  uninstaller runs unattended and cannot ask anyone anything, and a recursive delete over a
-  directory like that can take something irreplaceable.
+  older version of Uindosill, or files put here by hand", so the product knows they are there, and
+  a recursive delete over a directory like that can take something irreplaceable.
 - **Uninstall-then-reinstall is the first repair anybody tries**, and the hook silently made it cost
   a 3.9 GB re-download.
 - **It did not work, and nobody could find out why.** Invoked directly, the same build deleted the
@@ -132,12 +131,31 @@ sufficient:
   **Unpredictable and destructive is the worst pairing a feature can have.**
 
 An allowlist version — delete only the catalogue's own entries, `settings.json` and the interpreter
-bundle, leaving anything unrecognised — was written and also dropped. It is genuinely safe against
-the first reason, but the second and third stand, and code nothing calls is worse than no code.
+bundle, leaving anything unrecognised — was written and also dropped: the second and third reasons
+stood, and code nothing calls is worse than no code.
 
-**The rule this leaves behind: nothing this application does unattended may delete a user's files.**
-Removing weights is a thing a person does on the Models tab, where they can see what is there and
-what it costs, before they uninstall. `docs/PHASES.md` records the whole episode.
+**On 2026-08-29 the hook came back, asking first.** The first two reasons are about the deletion
+being *silent*, and a question answers both. The sentence that had stood in `Program.cs` as a
+reason — that an uninstaller "cannot ask anybody anything" — was an assumption nobody had tested,
+and it is false. `OnBeforeUninstallFastCallback` cannot show an *Avalonia* dialog, because it runs
+from `VelopackApp.Run()` before the toolkit is up and on a build about to be deleted; `MessageBoxW`
+is in `user32`, needs no toolkit, blocks, and returns an answer. `UninstallPrompt` names the size
+and the path, leads with the reinstall case, and defaults to keeping. Below 64 MiB it asks nothing,
+because a dialog nobody needed is its own defect.
+
+**The third reason is not answered, so the design fails towards it.** Nothing explains the 98 ms
+no-op and nothing here fixes it. Every failure lands on the previous day's behaviour instead: no
+interactive desktop, a refused call, an exception, a callback that never fires, an answer that is
+not an explicit Yes — each leaves the downloads exactly where they are. **The only path that deletes
+anything is a human pressing Yes**, and `UninstallCleanup` keeps every guard it was written with:
+the directory must carry the expected name, must not contain the install root, a link is unlinked
+rather than followed, and a file that will not delete strands only itself.
+
+**The rule is unchanged: nothing this application does unattended may delete a user's files.** A
+dialog is attended, and so is the Models tab's *Remove all downloaded models*, which is the route
+that does not depend on the callback firing and the only one below the threshold where nothing is
+asked. `docs/PHASES.md` records both episodes; `docs/UNPROVEN.md` records that no real uninstall has
+ever exercised either of them.
 
 ## 9. Pin `SelfContained` in the project, not the CI workflow
 

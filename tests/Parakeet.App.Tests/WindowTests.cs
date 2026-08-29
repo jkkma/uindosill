@@ -1017,14 +1017,16 @@ public class TranscribeViewModelTests
             main.Models.UninstallNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("the three of them", main.Models.UninstallNotice, StringComparison.Ordinal);
 
-        // And it still says the weights outlive an uninstall, which is true: the hook that
-        // deleted them existed for one night and was withdrawn. This is the only place the
-        // window tells anyone what becomes of gigabytes of their disk, so it is asserted rather
-        // than trusted. **It now also has to say what to do about it** — the wording stated the
-        // survival and stopped, which left a reader who had decided to uninstall with one Remove
-        // per entry and no hint that this was the only place it happens.
-        Assert.Contains("leaves them behind", main.Models.UninstallNotice, StringComparison.Ordinal);
-        Assert.Contains("remove it here first", main.Models.UninstallNotice, StringComparison.Ordinal);
+        // And it still says the weights outlive an update and a reinstall. This is the only place
+        // the window tells anyone what becomes of gigabytes of their disk, so it is asserted rather
+        // than trusted. What it must NOT say at this size is that uninstalling will ask: this
+        // fixture's file is a few bytes long, and below UninstallPrompt.AskAboveBytes the
+        // uninstaller is silent, so promising a question here would be the same kind of untruth the
+        // 2026-08-29 rewrite removed. The wording for a folder large enough to get the question is
+        // held by RemoveAllModelsTests, which reaches it without the disk.
+        Assert.Contains("survive an update and a reinstall", main.Models.UninstallNotice, StringComparison.Ordinal);
+        Assert.Contains("Remove them here", main.Models.UninstallNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("asks whether to delete", main.Models.UninstallNotice, StringComparison.Ordinal);
 
         main.Models.SelectedSideloaded = file;
         Assert.True(main.Models.CanRemoveSideloaded);

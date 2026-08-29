@@ -819,18 +819,21 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Added 2026-08-29, because the folder notice was true and useless.</b> It said the weights
-    /// survive an uninstall, which they do, and left a reader who had just decided to uninstall with
-    /// six entries to select and Remove one at a time. Tens of gigabytes stay behind when somebody
-    /// does not know to do that, and "it is in the notice" is not a defence when the notice frames
-    /// the survival as a feature.
+    /// <b>Added 2026-08-29, because the folder notice was true and useless.</b> It stated that the
+    /// weights outlive an uninstall and stopped, leaving a reader who had just decided to uninstall
+    /// with six entries to select and Remove one at a time. Tens of gigabytes stay behind when
+    /// somebody does not know to do that, and "it is in the notice" is not a defence when the notice
+    /// frames the survival as a feature.
     /// </para>
     /// <para>
-    /// <b>Deliberately not an uninstall hook.</b> One was built and withdrawn on 2026-08-23: run
-    /// directly it deleted the data directory, run by the uninstaller it returned in 98 ms having
-    /// deleted nothing, and six causes were eliminated by experiment without the failure ever
-    /// reproducing. The rule that came out of that is the one this obeys: nothing this product does
-    /// unattended deletes a user's files. A button is attended.
+    /// <b>It stayed when the uninstaller learned to ask, later the same day.</b> The hook built and
+    /// withdrawn on 2026-08-23 deleted silently; the one that replaced it asks first
+    /// (<see cref="UninstallPrompt"/>). This button is still the route that does not depend on any
+    /// of that: it is for somebody already looking at the folder, it works below the prompt's
+    /// <see cref="UninstallPrompt.AskAboveBytes"/> threshold where nothing is asked at all, and it
+    /// is the only route left on a machine where the callback does the nothing it was once measured
+    /// doing. The rule both obey is unchanged: nothing this product does unattended deletes a user's
+    /// files. A button is attended, and so is a dialog.
     /// </para>
     /// <para>
     /// <b>Catalogue entries only.</b> What else is in the folder is offered separately by
@@ -1086,20 +1089,44 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// </para>
     /// <para>
     /// For one night it said the opposite — an uninstall hook deleted the folder, and this line was
-    /// rewritten to match. Both the hook and that wording are gone: nothing this application does
-    /// unattended deletes anybody's disk, so the sentence is back to the true one, and the folder's
-    /// path is above it for whoever wants to clear it out by hand.
+    /// rewritten to match. Then the hook came back on 2026-08-29 *asking* first, so the sentence
+    /// changed a third time, and this is why it is now three sentences rather than one.
+    /// </para>
+    /// <para>
+    /// <b>The threshold is <see cref="UninstallPrompt.AskAboveBytes"/> and not a number typed
+    /// here.</b> Below it the uninstaller says nothing and deletes nothing, so a window promising a
+    /// question that will not be asked would be a worse lie than the one this replaced. Above it the
+    /// implication holds in the direction that matters: the models are inside the directory the
+    /// prompt measures, so a models total over the threshold puts the directory over it too, and the
+    /// question is certain to be asked. A redirected <c>UINDOSILL_MODELS_DIR</c> can break that the
+    /// other way, and errs towards warning about a deletion that will not reach them.
     /// </para>
     /// </remarks>
-    public string UninstallNotice =>
-        _installedBytes == 0
-            ? "Downloaded models live outside the application folder, so they survive an "
-              + "update and a reinstall. There are none here at the moment."
-            : "Downloaded models live outside the application folder. That is what lets them "
-              + "survive an update and a reinstall, and it also means uninstalling Uindosill "
-              + $"leaves them behind. There is {ByteSize.Describe(_installedBytes)} in that "
-              + "folder now. If you are uninstalling, remove it here first: nothing else "
-              + "will.";
+    public string UninstallNotice => NoticeFor(_installedBytes);
+
+    /// <summary>
+    /// The notice for a given folder total, separated from the property so the three branches can
+    /// be exercised without writing 64 MiB to a test's disk.
+    /// </summary>
+    internal static string NoticeFor(long installedBytes)
+    {
+        if (installedBytes == 0)
+        {
+            return "Downloaded models live outside the application folder, so they survive an "
+                + "update and a reinstall. There are none here at the moment.";
+        }
+
+        var here = $"There is {ByteSize.Describe(installedBytes)} in that folder now. ";
+
+        return installedBytes > UninstallPrompt.AskAboveBytes
+            ? "Downloaded models live outside the application folder, so an update and a "
+              + "reinstall never touch them. " + here
+              + "Uninstalling Uindosill asks whether to delete them, and keeps them unless "
+              + "you answer Yes. You can also remove them here."
+            : "Downloaded models live outside the application folder, so they survive an "
+              + "update and a reinstall. " + here
+              + "Remove them here if you want the space back.";
+    }
 
     /// <summary>Whether there is a sideloaded file selected to delete.</summary>
     public bool CanRemoveSideloaded => SelectedSideloaded is not null && !IsTranscribing;
