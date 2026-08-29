@@ -248,11 +248,15 @@ if ($reassembled -ne $zipBytes) {
     throw "The parts total $reassembled bytes and the zip was $zipBytes. The split lost data."
 }
 
+# **`[long]` on every byte count, and it is not belt and braces.** `Measure-Object -Sum` returns a
+# Double, so `$bytes` serialises as `2965027252.0` — which `System.Text.Json` refuses to read as an
+# Int64, and the refusal arrives in `CudaPackManifest.Parse` rather than here. Caught 2026-08-29 by
+# driving the installer against a manifest this script had written.
 $manifest = [ordered]@{
     archiveName     = $zipName
-    archiveBytes    = $zipBytes
+    archiveBytes    = [long] $zipBytes
     archiveSha256   = $wholeDigest
-    unpackedBytes   = $bytes
+    unpackedBytes   = [long] $bytes
     torchVersion    = $torchVersion
     packages        = [ordered]@{}
     parts           = $parts
