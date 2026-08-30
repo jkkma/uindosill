@@ -216,6 +216,16 @@ public static class TranscriptWindowBuilder
     /// The window for an explicit 1-based segment run — the same construction retrieval uses,
     /// exposed so a caller resolving a citation can render the run it names.
     /// </summary>
+    /// <remarks>
+    /// A labelled segment opens with its speaker — <c>Speaker 1: …</c>, or the reader's name
+    /// where the document carries one — written once per turn, not once per segment. The
+    /// maintainer's decision of 2026-08-30, reversing 2026-08-24's: the model may now say who
+    /// said a thing, so the evidence has to say it first. An unlabelled transcript renders
+    /// byte-identically to what it always did, and the quote check stays consistent by
+    /// construction, because <c>CitationValidator</c> renders the cited span through this same
+    /// method. A labelled segment after an unlabelled one repeats its label even when the voice
+    /// never changed, because the gap left the turn ambiguous.
+    /// </remarks>
     public static TranscriptWindow FromRun(TranscriptDocument document, int firstSegment, int lastSegment)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -224,12 +234,17 @@ public static class TranscriptWindowBuilder
         ArgumentOutOfRangeException.ThrowIfGreaterThan(lastSegment, document.Segments.Count);
 
         var run = new List<string>();
+        string? voice = null;
         for (var i = firstSegment - 1; i < lastSegment; i++)
         {
             var segment = document.Segments[i];
             if (!segment.IsEmpty)
             {
-                run.Add(segment.Text.Trim());
+                var text = segment.Text.Trim();
+                run.Add(segment.Speaker is { } speaker && speaker != voice
+                    ? speaker + ": " + text
+                    : text);
+                voice = segment.Speaker;
             }
         }
 

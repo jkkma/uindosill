@@ -222,7 +222,12 @@ public sealed partial class JobViewModel : ObservableObject
     public TranscriptDocument? NamedTranslation() =>
         TranslatedDocument?.WithSpeakerNames(RenamedVoices());
 
-    private Dictionary<string, string> RenamedVoices() =>
+    /// <summary>
+    /// The reader's names for the labelled voices, label → name, renamed rows only. Public since
+    /// 2026-08-30 for the Ask panel, which runs its questions over the named document so the
+    /// model attributes claims in the reader's own names rather than in labels they renamed away.
+    /// </summary>
+    public Dictionary<string, string> RenamedVoices() =>
         Speakers
             .Where(voice => voice.IsRenamed)
             .ToDictionary(voice => voice.Label, voice => voice.Name, StringComparer.Ordinal);
