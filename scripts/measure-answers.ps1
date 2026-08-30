@@ -37,9 +37,11 @@
     supplied: segment count and a SHA-256 over each segment's start, end and text. Ids are only
     meaningful against one transcript, and the wrong-transcript failure mode — same audio,
     different model, every id silently pointing at different words — has to be caught before any
-    number exists, not after. This script is the canonical implementation of that hash:
-    per segment, the invariant-culture '0.######' rendering of start and of end, then the text,
-    each followed by one LF, all UTF-8, in order.
+    number exists, not after. The hash: per segment, the invariant-culture '0.######' rendering
+    of start and of end, then the text, each followed by one LF, all UTF-8, in order. Its other
+    implementation is TranscriptDocument.SegmentsSha256() (the copy text's transcript pin,
+    2026-08-30); a shared vector in the suite holds the two together, so a change to either
+    fails a test rather than quietly unpinning every labelled set.
 
     -PrintPin computes and prints the pin block for a transcript and exits — the labelling
     session's helper, so the pin in questions.json is pasted rather than typed.

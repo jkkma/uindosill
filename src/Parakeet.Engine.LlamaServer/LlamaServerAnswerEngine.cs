@@ -71,6 +71,11 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         await _loading.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Re-checked under the semaphore: a dispose can land between the entry check and
+            // here, and a load that proceeded past it would hand its child to an engine nothing
+            // will ever dispose again.
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             if (_server is { HasExited: false })
             {
                 return;
@@ -104,9 +109,20 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_server is not { HasExited: false } server)
+        if (_server is not { } server)
         {
             throw new InvalidOperationException("Ask before load. Call LoadAsync first.");
+        }
+
+        // A loaded child that died while the panel sat idle — a driver reset, the CUDA-teardown
+        // class this repository documents — is not "ask before load", and telling a user who did
+        // load to call LoadAsync was a false notice with the real diagnostic dropped (found
+        // 2026-08-30). The tail is the crash notice; the caller's recovery path reloads.
+        if (server.HasExited)
+        {
+            throw new InvalidOperationException(
+                "llama-server died while idle; the next question reloads it. Its last lines:\n"
+                + await server.DrainedOutputTailAsync().ConfigureAwait(false));
         }
 
         // The abstain path is mechanical, not the model's to decide: an empty transcript, or an
@@ -189,6 +205,7 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         var prefillTokens = 0;
         int? prefillTotal = null;
         var endedCleanly = false;
+        string? finishReason = null;
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
 
         // The loop advances by hand rather than await foreach so a transport failure can be told
@@ -211,7 +228,9 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             catch (Exception failure) when (failure is IOException or HttpRequestException && server.HasExited)
             {
                 throw new InvalidOperationException(
-                    $"llama-server died mid-answer. Its last lines:\n{server.OutputTail}", failure);
+                    "llama-server died mid-answer. Its last lines:\n"
+                    + await server.DrainedOutputTailAsync().ConfigureAwait(false),
+                    failure);
             }
 
             if (payload == "[DONE]")
@@ -312,6 +331,7 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
                 if (choice.TryGetProperty("finish_reason", out var finish)
                     && finish.ValueKind == JsonValueKind.String)
                 {
+                    finishReason = finish.GetString();
                     endedCleanly = true;
                 }
             }
@@ -330,7 +350,8 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         if (server.HasExited)
         {
             throw new InvalidOperationException(
-                $"llama-server died mid-answer. Its last lines:\n{server.OutputTail}");
+                "llama-server died mid-answer. Its last lines:\n"
+                + await server.DrainedOutputTailAsync().ConfigureAwait(false));
         }
 
         // The stream closing with neither a stop chunk nor [DONE], under a child that still
@@ -341,6 +362,18 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         {
             throw new InvalidOperationException(
                 $"llama-server's answer stream ended before the answer did. Its last lines:\n{server.OutputTail}");
+        }
+
+        // "length" is the server saying the token cap cut the answer off, not that the answer
+        // ended — and a capped stream parses as bullets, a half-sentence rendering as a complete
+        // claim with no notice anywhere, which is the same failure the guard above refuses
+        // (found 2026-08-30). The cap being reached by real models is in the record: the
+        // product-path gauntlet's filler-to-the-cap runs.
+        if (finishReason == "length")
+        {
+            throw new InvalidOperationException(
+                $"The answer hit its {maxTokens}-token cap before it finished. A larger answer or "
+                + "thinking budget is the fix; rendering the cut-off text as a complete answer is not.");
         }
     }
 
@@ -447,13 +480,26 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
             return;
         }
 
+        // Serialised with the load, for the same reason the load serialises with itself: a
+        // dispose landing mid-LoadAsync used to see no server yet, kill nothing, and dispose the
+        // semaphore the loader was about to release — the started child leaked for as long as
+        // the host lived, and the loader crashed on the disposed semaphore (found 2026-08-30).
+        // Waiting here takes the semaphore after the loader's finally, so the child it started
+        // is the one killed below.
         _disposed = true;
-        if (_server is not null)
+        await _loading.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await _server.DisposeAsync().ConfigureAwait(false);
-            _server = null;
+            if (_server is not null)
+            {
+                await _server.DisposeAsync().ConfigureAwait(false);
+                _server = null;
+            }
         }
-
-        _loading.Dispose();
+        finally
+        {
+            _loading.Release();
+            _loading.Dispose();
+        }
     }
 }

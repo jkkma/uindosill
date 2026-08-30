@@ -204,4 +204,32 @@ public sealed record TranscriptDocument
     /// </summary>
     public IEnumerable<TranscriptWord> LowConfidenceWords(float threshold) =>
         Segments.SelectMany(s => s.Words).Where(w => w.Confidence is { } c && c < threshold);
+
+    /// <summary>
+    /// The segmentation's identity: a SHA-256 over the segments — per segment the start and the
+    /// end in seconds as the JSON export renders them (three decimals, no trailing zeros), then
+    /// the text, each followed by one LF, all UTF-8, in order. A segment id is only meaningful
+    /// against one segmentation — the same audio transcribed again by another model gives ids
+    /// that point at different words while looking perfectly fine — so this is what decision 5's
+    /// transcript pin and the question sets' pin against `scripts/measure-answers.ps1` both
+    /// hash. That script is this algorithm's other implementation; it hashes the exported JSON,
+    /// which is why the times go through the JSON writer's own rounding here — a tick-exact
+    /// rendering disagreed with it on any boundary off the millisecond grid — and the two are
+    /// held together by a shared vector in the suite, so a change to either fails a test rather
+    /// than quietly unpinning every labelled set.
+    /// </summary>
+    public string SegmentsSha256()
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var segment in Segments)
+        {
+            builder.Append(Formatting.JsonTranscriptFormatter.FormatSeconds(segment.Start)).Append('\n');
+            builder.Append(Formatting.JsonTranscriptFormatter.FormatSeconds(segment.End)).Append('\n');
+            builder.Append(segment.Text).Append('\n');
+        }
+
+        var hash = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(builder.ToString()));
+        return Convert.ToHexStringLower(hash);
+    }
 }

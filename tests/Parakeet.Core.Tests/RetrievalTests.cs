@@ -201,6 +201,32 @@ public class TranscriptWindowBuilderTests
     }
 
     [Fact]
+    public void AHandEditedCoverStillTilesEachSegmentExactlyOnce()
+    {
+        // Out-of-time-order segments used to hand a grid position the whole [smallest..largest]
+        // id run, swallowing segments whose midpoints lived in another position — the same text
+        // sent twice in one prompt, in the one shape whose contract is no overlap (found
+        // 2026-08-30). Each scatter is its own citable run instead.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "early opening" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(100), End = TimeSpan.FromSeconds(110), Text = "late aside" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(20), End = TimeSpan.FromSeconds(30), Text = "early follow-up" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(110), End = TimeSpan.FromSeconds(120), Text = "late closing" },
+            ],
+        };
+
+        var windows = TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
+
+        for (var id = 1; id <= 4; id++)
+        {
+            Assert.Equal(1, windows.Count(w => w.FirstSegment <= id && id <= w.LastSegment));
+        }
+    }
+
+    [Fact]
     public void TheWideVariantMakesLongerWindows()
     {
         var document = Transcript([.. Enumerable.Range(0, 30).Select(i => $"segment number {i}")]);

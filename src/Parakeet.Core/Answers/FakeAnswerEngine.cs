@@ -187,26 +187,32 @@ public sealed class FakeAnswerEngine : IAnswerEngine
 
         var evidence = request.Evidence;
 
-        // The overview opens with the framing sentence its prompt asks for, cited to where the
-        // recording starts — so the panel's lead, its chips and its copy text are all exercised
-        // without a model, and a fake that skipped it would let the shape ship untested.
-        if (request.Mode is AnswerMode.WholeTranscript or AnswerMode.Survey)
-        {
-            yield return "This recording covers several things ";
-            yield return $"[{evidence[0].CitationId}]\n";
-        }
+        // Every mode opens with the framing sentence its prompt asks for — retrieval included,
+        // since 2026-08-25 — cited to the first window, so the panel's lead, its chips and its
+        // copy text are all exercised without a model, and in the default mode too, where this
+        // fake used to withhold the lead the real prompt requires (found 2026-08-30).
+        yield return "This recording covers several things ";
+        yield return $"[{evidence[0].CitationId}]\n";
 
-        // One bullet per evidence window, citing the window's own run and quoting its first
-        // words verbatim — so the quote check has something true to verify.
+        // One bullet per evidence window, citing the window's own run — and quoting its first
+        // words verbatim only where the real prompt asks for a quote at all: the
+        // whole-transcript and survey paths dropped the «…» requirement on 2026-08-25 (citation
+        // trust there is resolve-only), so the fake hands those modes the cited, quoteless
+        // bullets the panel really gets.
+        var quoted = request.Mode is not (AnswerMode.WholeTranscript or AnswerMode.Survey);
         var labels = new[] { "First", "Second", "Third", "Fourth", "Fifth" };
         for (var i = 0; i < evidence.Count && i < labels.Length; i++)
         {
             var window = evidence[i];
-            var words = SearchTokenizer.Tokenize(window.Text);
-            var quote = string.Join(' ', words.Take(4));
 
             yield return $"- {labels[i]}: the recording covers this ";
-            yield return _options.StraightQuotes ? $"\"{quote}\" " : $"«{quote}» ";
+            if (quoted)
+            {
+                var words = SearchTokenizer.Tokenize(window.Text);
+                var quote = string.Join(' ', words.Take(4));
+                yield return _options.StraightQuotes ? $"\"{quote}\" " : $"«{quote}» ";
+            }
+
             yield return $"[{window.CitationId}]\n";
         }
 

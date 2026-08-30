@@ -339,12 +339,17 @@ public sealed partial class JobViewModel : ObservableObject
         TranslationProvenance = null;
         Transcript = string.Empty;
         TranslatedTranscript = string.Empty;
+
+        // Documents before lines: clearing the line collections is what the ask panel listens
+        // to, and its refresh re-reads the documents — cleared afterwards, it kept the discarded
+        // transcript live, its citation chips seeking into a run the row no longer showed
+        // (found 2026-08-30).
+        Document = null;
+        TranslatedDocument = null;
         Lines.Clear();
         TranslatedLines.Clear();
         Speakers.Clear();
         OutputFiles.Clear();
-        Document = null;
-        TranslatedDocument = null;
         OnPropertyChanged(nameof(CanExport));
     }
 

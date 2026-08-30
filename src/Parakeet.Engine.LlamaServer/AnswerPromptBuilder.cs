@@ -131,7 +131,12 @@ public static class AnswerPromptBuilder
         builder.Append(whole ? "parts" : "evidence");
         builder.Append(" that support it, in square brackets, ");
         builder.Append("exactly as they appear below — for example [S12-S15].");
-        builder.Append(whole ? " Cite every part where a point is discussed, not only the first.\n" : "\n");
+
+        // "the parts", not "every part": the grammar admits five ids on a line, and "every"
+        // demanded an enumeration a topic discussed in six parts could not sample (found
+        // 2026-08-30) — the same contract-mismatch class this file's own remarks forbid. The
+        // steer away from citing only the opening survives the word.
+        builder.Append(whole ? " Cite the parts where a point is discussed, not only the first.\n" : "\n");
 
         builder.Append("Never write a timestamp, a time of day, or a duration.\n");
         if (requireQuote)
@@ -239,8 +244,10 @@ public static class AnswerPromptBuilder
         // The lead has a production wherever the prompt asks for one, and that is this file's
         // stated principle rather than tidiness: prompt and grammar are two statements of one
         // contract, and an instruction the grammar makes unsamplable steers the model toward an
-        // output it cannot produce — measured as degraded answers, not as nothing.
-        var root = wantLead ? "lead bullet{1,8}" : "bullet{1,8}";
+        // output it cannot produce — measured as degraded answers, not as nothing. The bullets
+        // go to zero for the same reason: the retrieval prompt says a complete opening sentence
+        // may stand alone, and bullet{1,8} forced a padding bullet after it (found 2026-08-30).
+        var root = wantLead ? "lead bullet{0,8}" : "bullet{1,8}";
 
         var builder = new StringBuilder();
         builder.Append(allowAbstain

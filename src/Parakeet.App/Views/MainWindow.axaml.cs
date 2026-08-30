@@ -39,6 +39,12 @@ public partial class MainWindow : Window
     /// the reader was looking when it moved. -1 when nothing has been played.</summary>
     private int _played = -1;
 
+    /// <summary>The chat entry collection the scroll-follow is wired to, and its handler — held
+    /// so a DataContext change unhooks the old pair before wiring the new.</summary>
+    private System.Collections.ObjectModel.ObservableCollection<ChatEntryViewModel>? _followedEntries;
+
+    private System.Collections.Specialized.NotifyCollectionChangedEventHandler? _followEntries;
+
     /// <summary>The Ask view model this window is currently listening to, so it can stop.</summary>
     private ViewModels.AskViewModel? _watching;
 
@@ -186,14 +192,25 @@ public partial class MainWindow : Window
 
             // A question lands at the bottom of a conversation that may already fill the pane.
             // On the collection change the new row is not laid out yet, so the scroll is posted
-            // behind the layout pass, the same arrangement the transcript follow uses.
-            viewModel.Ask.Chat.Entries.CollectionChanged += (_, _) =>
+            // behind the layout pass, the same arrangement the transcript follow uses. Unhooked
+            // from the previous view model's collection first, the discipline the player wiring
+            // below already keeps: the handler captures the window, so a subscription left on a
+            // replaced view model pinned it alive and stacked a duplicate scroll per change when
+            // the same one came back (found 2026-08-30).
+            if (_followedEntries is not null && _followEntries is not null)
+            {
+                _followedEntries.CollectionChanged -= _followEntries;
+            }
+
+            _followEntries = (_, _) =>
             {
                 if (this.FindControl<ScrollViewer>("AskChatScroll") is { } scroll)
                 {
                     Dispatcher.UIThread.Post(scroll.ScrollToEnd, DispatcherPriority.Background);
                 }
             };
+            _followedEntries = viewModel.Ask.Chat.Entries;
+            _followedEntries.CollectionChanged += _followEntries;
         };
     }
 

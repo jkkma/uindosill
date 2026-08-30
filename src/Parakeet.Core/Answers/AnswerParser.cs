@@ -56,15 +56,21 @@ public static class AnswerParser
                 continue;
             }
 
-            if (IsSentinelLine(line))
+            var bullet = ParseBullet(line, out var marked);
+            if (bullet is null)
             {
-                abstained = true;
                 continue;
             }
 
-            var bullet = ParseBullet(line);
-            if (bullet is null)
+            // The sentinel is judged on the parsed bullet, not the raw line, so the dressing a
+            // post-hoc model puts on it — a marker, emphasis, punctuation, an admitted-uncited
+            // [?] — comes off through the same machinery that takes it off everything else.
+            // "**NOT_IN_TRANSCRIPT**." defeated the raw-line check: the period blocked the
+            // asterisk trim, and the raw token rendered as the answer's framing sentence
+            // (found 2026-08-30).
+            if (IsSentinelBullet(bullet))
             {
+                abstained = true;
                 continue;
             }
 
@@ -72,10 +78,7 @@ public static class AnswerParser
             // been seen, a later unmarked line is a claim the model forgot to mark, not a second
             // framing sentence. Only the first such line is taken — a model that writes three
             // paragraphs of preamble has written claims, and they are marked as claims.
-            if (allowLead
-                && lead is null
-                && bullets.Count == 0
-                && !line.StartsWith("- ", StringComparison.Ordinal))
+            if (allowLead && lead is null && bullets.Count == 0 && !marked)
             {
                 lead = bullet;
                 continue;
@@ -96,38 +99,91 @@ public static class AnswerParser
     }
 
     /// <summary>
-    /// The sentinel as a whole line, tolerating the dressing a post-hoc model puts on it — a
-    /// bullet marker, bold or italic marks, terminal punctuation — because rendering the raw
-    /// internal token as a claim is worse than reading it generously. A sentinel <em>inside</em>
-    /// prose stays inert: only a line that is nothing but the token counts.
+    /// The sentinel as a whole bullet, tolerating the dressing a post-hoc model puts on it — a
+    /// bullet marker, bold or italic marks, terminal punctuation, an admitted-uncited <c>[?]</c> —
+    /// because rendering the raw internal token as a claim is worse than reading it generously.
+    /// The marks come off until none are left: bold and a period stack, and a single-pass trim
+    /// stops at whichever is outermost. A sentinel <em>inside</em> prose stays inert, and one
+    /// beside a real citation stands as the bullet it claims to be — the citation is the
+    /// checkable half, and the validator gets to see it.
     /// </summary>
-    private static bool IsSentinelLine(string line)
+    private static bool IsSentinelBullet(AnswerBullet bullet)
     {
-        var candidate = line;
-        if (candidate.StartsWith("- ", StringComparison.Ordinal))
+        if (bullet.Label is not null
+            || bullet.Quote is not null
+            || !bullet.Citations.All(c => c.IsUncitedMarker))
         {
-            candidate = candidate[2..].Trim();
+            return false;
         }
 
-        candidate = candidate.Trim('*', '_').TrimEnd('.', '!').Trim();
+        var candidate = bullet.Text;
+        string before;
+        do
+        {
+            before = candidate;
+            candidate = candidate.Trim('*', '_').TrimEnd('.', '!').Trim();
+        }
+        while (candidate != before);
+
         return candidate == AbstainSentinel;
     }
 
-    private static AnswerBullet? ParseBullet(string line)
+    /// <summary>
+    /// Strips the list marker a claim line wears, recognising the shapes an ungrammared model
+    /// actually writes — <c>- </c>, <c>* </c>, <c>• </c>, <c>– </c>, <c>1. </c>, <c>1) </c> —
+    /// because the lead/claim split keys on the marker: a numbered list whose marker went
+    /// unrecognised had its first claim promoted to the framing sentence, and every later claim
+    /// rendered with its number still on (found 2026-08-30).
+    /// </summary>
+    private static bool TryStripBulletMarker(string line, out string body)
     {
-        var body = line.StartsWith("- ", StringComparison.Ordinal) ? line[2..]
-            : line == "-" ? string.Empty
-            : line;
+        if (line is "-" or "*")
+        {
+            body = string.Empty;
+            return true;
+        }
+
+        if (line.Length >= 2 && line[1] == ' ' && line[0] is '-' or '*' or '•' or '–')
+        {
+            body = line[2..].TrimStart();
+            return true;
+        }
+
+        // Two digits at most: the grammar caps a list at eight, and "2024. " opening a framing
+        // sentence is a year, not the two-thousand-and-twenty-fourth claim.
+        var digits = 0;
+        while (digits < line.Length && digits < 2 && char.IsAsciiDigit(line[digits]))
+        {
+            digits++;
+        }
+
+        if (digits > 0
+            && digits + 1 < line.Length
+            && line[digits] is '.' or ')'
+            && line[digits + 1] == ' ')
+        {
+            body = line[(digits + 2)..].TrimStart();
+            return true;
+        }
+
+        body = line;
+        return false;
+    }
+
+    private static AnswerBullet? ParseBullet(string line, out bool marked)
+    {
+        marked = TryStripBulletMarker(line, out var body);
 
         var (text, citations) = ExtractCitations(body);
-        var (remaining, quote) = ExtractQuote(text);
+        var (remaining, quote, quoteStart) = ExtractQuote(text);
 
         // Guillemets are the answer's reserved quote marks — the grammar excludes them from free
         // text — so any left in the prose after the one quote was lifted are re-marked as plain
-        // quotes rather than rendering dressed as the verified one.
+        // quotes rather than rendering dressed as the verified one. A char-for-char swap: the
+        // quote's position, which the label search below stops at, survives it.
         remaining = remaining.Replace('«', '“').Replace('»', '”');
 
-        var (finalText, label) = ExtractLabel(remaining);
+        var (finalText, label) = ExtractLabel(remaining, quoteStart);
 
         if (finalText.Length == 0 && citations.Count == 0 && quote is null)
         {
@@ -142,6 +198,14 @@ public static class AnswerParser
             Citations = citations,
         };
     }
+
+    /// <summary>
+    /// Marks the hole a lifted citation leaves in the text, for <see cref="Collapse"/> to close.
+    /// The repair used to run everywhere and ate the model's own spacing — "as .csv" rendered
+    /// "as.csv" (found 2026-08-30) — so the hole is marked where it is made, and closed only
+    /// there.
+    /// </summary>
+    private const char CitationHole = '\0';
 
     private static (string Text, IReadOnlyList<Citation> Citations) ExtractCitations(string body)
     {
@@ -175,6 +239,8 @@ public static class AnswerParser
                 {
                     citations.Add(Citation.Parse(part));
                 }
+
+                text.Append(CitationHole);
             }
             else
             {
@@ -200,30 +266,33 @@ public static class AnswerParser
     /// than as the model's own words, and <see cref="CitationValidator"/> still checks it against
     /// the cited span — what changes is only that the sentence survives.
     /// </remarks>
-    private static (string Text, string? Quote) ExtractQuote(string text)
+    private static (string Text, string? Quote, int QuoteStart) ExtractQuote(string text)
     {
         var open = text.IndexOf('«', StringComparison.Ordinal);
         if (open < 0)
         {
-            return (text, null);
+            return (text, null, -1);
         }
 
         var close = text.IndexOf('»', open + 1);
         if (close < 0)
         {
-            return (text, null);
+            return (text, null, -1);
         }
 
         var quote = text[(open + 1)..close].Trim();
-        return (text, quote.Length == 0 ? null : quote);
+        return quote.Length == 0 ? (text, null, -1) : (text, quote, open);
     }
 
-    private static (string Text, string? Label) ExtractLabel(string text)
+    private static (string Text, string? Label) ExtractLabel(string text, int quoteStart)
     {
         // The grammar's label: up to forty characters before ": ", with brackets and colons
-        // excluded by construction — the first ": " found guarantees the colon exclusion.
+        // excluded by construction. The quote is transcript speech and says what it likes —
+        // «wait: no» opening a bullet had its own colon read as the label separator, splitting
+        // the quote across the label chip and the claim (found 2026-08-30) — so the search stops
+        // where the quote starts.
         var separator = text.IndexOf(": ", StringComparison.Ordinal);
-        if (separator is <= 0 or > 40)
+        if (separator is <= 0 or > 40 || (quoteStart >= 0 && separator >= quoteStart))
         {
             return (text, null);
         }
@@ -241,8 +310,19 @@ public static class AnswerParser
     {
         var builder = new StringBuilder(text.Length);
         var pendingSpace = false;
+        var pendingHole = false;
         foreach (var ch in text)
         {
+            if (ch == CitationHole)
+            {
+                // Only the marker: the space in front of a lifted citation is real whitespace
+                // and sets pendingSpace itself, while a citation sitting flush in the sentence —
+                // "worked[S1]!" — left no space to repair, and treating the hole as one wrote a
+                // space the model never produced (found 2026-08-30).
+                pendingHole = true;
+                continue;
+            }
+
             if (char.IsWhiteSpace(ch))
             {
                 pendingSpace = builder.Length > 0;
@@ -253,10 +333,11 @@ public static class AnswerParser
             {
                 // A citation lifted from mid-sentence leaves the space that was in front of it:
                 // "…the staging environment [S1-S4]." becomes "…the staging environment ." on
-                // screen. Only the period and the comma are closed up — a space before ; : ! ?
-                // is correct French typography, and the twenty-five languages are the
-                // requirement.
-                if (ch is not ('.' or ','))
+                // screen. Only a space a citation actually sat in is closed up — "as .csv" is
+                // the model's own spacing — and only before the period and the comma: a space
+                // before ; : ! ? is correct French typography, and the twenty-five languages
+                // are the requirement.
+                if (!(pendingHole && ch is '.' or ','))
                 {
                     builder.Append(' ');
                 }
@@ -267,8 +348,8 @@ public static class AnswerParser
             // A citation removed from between a comma and a full stop — "…on the PS2, [S1]." —
             // leaves ",.", which is our own damage and is not punctuation in any of them. A
             // separated citation list — "…refunds, [S1], [S2], [S3]." — leaves a run of commas
-            // by the same mechanism.
-            if (builder.Length > 0 && builder[^1] is ',' or ';')
+            // by the same mechanism. Punctuation the model stacked itself is left as written.
+            if (pendingHole && builder.Length > 0 && builder[^1] is ',' or ';')
             {
                 if (ch == '.')
                 {
@@ -281,9 +362,12 @@ public static class AnswerParser
             }
 
             builder.Append(ch);
+            pendingHole = false;
         }
 
-        // And a citation that ended the sentence leaves the comma before it dangling.
-        return builder.ToString().TrimEnd(' ', ',', ';');
+        // And a citation that ended the sentence leaves the comma before it dangling — but only
+        // a citation does; a bullet the model itself ended on a comma keeps it.
+        var collapsed = builder.ToString().TrimEnd(' ');
+        return pendingHole ? collapsed.TrimEnd(' ', ',', ';') : collapsed;
     }
 }

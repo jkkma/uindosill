@@ -415,10 +415,15 @@ public sealed class FakeAnswerEngineProvider : IAnswerEngineProvider
     /// <summary>What the panel said the last engine's prompt would roughly measure.</summary>
     public int LastPromptChars { get; private set; }
 
+    /// <summary>Settable for the same reason as <see cref="ThinkingMode"/>: the panel drops a
+    /// held engine when the picked model changes, and that behaviour needs driving without a
+    /// models folder.</summary>
+    public string ModelFileName { get; set; } = "fake-answer-model.gguf";
+
     public AnswerEngineAvailability Check() => new()
     {
         WhyNot = _whyNot,
-        ModelFileName = _whyNot is null ? "fake-answer-model.gguf" : null,
+        ModelFileName = _whyNot is null ? ModelFileName : null,
     };
 
     public IAnswerEngine Create(int promptChars = 0)

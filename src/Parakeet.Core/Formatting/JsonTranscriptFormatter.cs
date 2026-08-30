@@ -272,6 +272,15 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
     private static decimal Round(float value, int digits) =>
         Math.Round((decimal)value, digits, MidpointRounding.AwayFromZero);
 
+    /// <summary>
+    /// The writer's three-decimal seconds in the pin's rendering — <c>0.######</c>, so no
+    /// trailing zeros — which is how <c>scripts/measure-answers.ps1</c> re-renders the JSON it
+    /// hashes. <see cref="Transcription.TranscriptDocument.SegmentsSha256"/> hashes through this
+    /// method so the in-memory document and its JSON export hash identically: tick-exact times
+    /// hashed directly disagreed with the exported three-decimal ones on any segment boundary
+    /// off the millisecond grid, which the last segment of nearly every real recording is
+    /// (found 2026-08-30).
+    /// </summary>
     internal static string FormatSeconds(TimeSpan value) =>
-        Seconds(value).ToString(CultureInfo.InvariantCulture);
+        Seconds(value).ToString("0.######", CultureInfo.InvariantCulture);
 }
