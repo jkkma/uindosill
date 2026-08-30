@@ -630,9 +630,12 @@ public class AnswerPromptBuilderTests
         // Zero bullets after the lead, because the retrieval prompt invites exactly that: "if
         // that sentence answers the question completely, write nothing more". bullet{1,8}
         // forced a padding bullet after a complete one-sentence answer (found 2026-08-30).
+        // Twelve at the top for the same contract reason, from the other direction: the
+        // whole-transcript prompt asks for a bullet per takeaway, and the ninth bullet it asks
+        // for must not be unsamplable (2026-08-30).
         var withLead = AnswerPromptBuilder.BuildGrammar(evidence, wantLead: true)!;
         Assert.Contains("lead ::=", withLead, StringComparison.Ordinal);
-        Assert.Contains("root ::= abstain | lead bullet{0,8}", withLead, StringComparison.Ordinal);
+        Assert.Contains("root ::= abstain | lead bullet{0,12}", withLead, StringComparison.Ordinal);
 
         var without = AnswerPromptBuilder.BuildGrammar(evidence)!;
         Assert.DoesNotContain("lead", without, StringComparison.Ordinal);

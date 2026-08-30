@@ -106,6 +106,18 @@ public static class AnswerPromptBuilder
             builder.Append("Group related points under one bullet, and draw on the whole recording ");
             builder.Append("rather than its opening.\n");
 
+            // Two steers toward the takeaways, added 2026-08-30. Without them the overview reads
+            // as a genre description: on one real recording it flattened the comparisons the
+            // speakers drew by name into category labels, and dropped the two most repeatable
+            // points in it — an on-record assurance and a prediction — while five bullets of
+            // description all survived. Salience was the one axis the wording never asked for.
+            builder.Append("Keep the proper names the transcript uses — people, titles, other ");
+            builder.Append("works — and when the speakers describe something by comparing it to ");
+            builder.Append("a named work, keep the name rather than a genre word.\n");
+            builder.Append("A promise, assurance, prediction or announcement made in the ");
+            builder.Append("recording is a point of its own: say who made it and what ");
+            builder.Append("they said.\n");
+
             // The topic-label instruction invites section headings, and a heading is a line that
             // asserts nothing, cites nothing, and therefore renders as an unsupported claim —
             // observed 2026-08-25, "Development costs:" and "Financial impact and industry
@@ -247,7 +259,11 @@ public static class AnswerPromptBuilder
         // output it cannot produce — measured as degraded answers, not as nothing. The bullets
         // go to zero for the same reason: the retrieval prompt says a complete opening sentence
         // may stand alone, and bullet{1,8} forced a padding bullet after it (found 2026-08-30).
-        var root = wantLead ? "lead bullet{0,8}" : "bullet{1,8}";
+        // Twelve, not eight, since 2026-08-30: the whole-transcript prompt now asks for a bullet
+        // per takeaway, and the same recording that wrote five descriptive bullets under the old
+        // wording wrote eleven under the new one — a ninth bullet the prompt just asked for must
+        // not be the thing the grammar forbids.
+        var root = wantLead ? "lead bullet{0,12}" : "bullet{1,12}";
 
         var builder = new StringBuilder();
         builder.Append(allowAbstain
