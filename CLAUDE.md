@@ -99,6 +99,9 @@ backend. `docs/UNPROVEN.md` is the record; read it before quoting any figure fro
 That applies to your own output too. Verify a claim before writing it into a document, and when a
 check is not possible from here, say so rather than reasoning to a confident answer.
 
+The other document to read before fighting a strange failure is `docs/GOTCHAS.md` — a catalogue
+of measured traps, several about the very harnesses named above.
+
 ## Where output goes
 
 Everything under `runs/` is gitignored, and so are transcripts and audio at the repository root.
