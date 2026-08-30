@@ -54,14 +54,34 @@ public static class SurveyWindowSelector
         }
 
         // Windows are not the same size, so the count that fits cannot be divided out — it is
-        // searched for. Downward from the average-sized estimate, which is at most a few steps
-        // wrong and never loops long: the first count whose actual text fits, wins.
+        // searched for, in whichever direction the average-sized estimate is wrong. Downward
+        // only used to be the whole search, and a cover whose spread subsets run smaller than
+        // the global average was handed fewer windows than the budget allowed (found
+        // 2026-08-30); now the first count whose actual text fits keeps widening until the
+        // budget says stop.
         var average = Math.Max(1, Total(cover) / cover.Count);
         var estimate = Math.Clamp(budgetChars / average, 1, cover.Count);
 
-        for (var take = estimate; take >= 1; take--)
+        var picked = EvenlySpread(cover, estimate);
+        if (Total(picked) <= budgetChars)
         {
-            var picked = EvenlySpread(cover, take);
+            for (var take = estimate + 1; take <= cover.Count; take++)
+            {
+                var wider = EvenlySpread(cover, take);
+                if (Total(wider) > budgetChars)
+                {
+                    break;
+                }
+
+                picked = wider;
+            }
+
+            return picked;
+        }
+
+        for (var take = estimate - 1; take >= 1; take--)
+        {
+            picked = EvenlySpread(cover, take);
             if (Total(picked) <= budgetChars)
             {
                 return picked;

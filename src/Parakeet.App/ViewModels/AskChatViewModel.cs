@@ -49,6 +49,7 @@ public sealed partial class AskChatViewModel : ObservableObject
     private bool _engineThinking;
     private int _engineContextTokens;
     private MoeExpertPlacement _enginePlacement;
+    private string? _engineModelFile;
     private JobViewModel? _recording;
     private TranscriptDocument? _document;
     private IReadOnlyList<TranscriptWindow>? _windows;
@@ -402,12 +403,17 @@ public sealed partial class AskChatViewModel : ObservableObject
         // and a whole-transcript context kept past its ask is a KV cache the machine feels for
         // nothing — retrieval's need is the budget's floor, so leaving the mode shrinks it back.
         // The expert placement is a third fact of that same kind, and the most literally so: it
-        // is nothing but the child's environment, fixed at the moment the process starts.
+        // is nothing but the child's environment, fixed at the moment the process starts. The
+        // model file is the fourth, and was missing from this list until 2026-08-30: Settings
+        // promises the picked model "is used from your next question", and an engine kept
+        // whatever the picker said made that line false until some unrelated teardown.
         var contextTokens = AnswerContextBudget.ContextTokensFor(promptChars);
+        var modelFile = _provider!.Check().ModelFileName;
         if (_engine is not null
-            && (_engineThinking != _provider!.ThinkingMode
+            && (_engineThinking != _provider.ThinkingMode
                 || _engineContextTokens != contextTokens
-                || _enginePlacement != _provider.ExpertPlacement))
+                || _enginePlacement != _provider.ExpertPlacement
+                || !string.Equals(_engineModelFile, modelFile, StringComparison.OrdinalIgnoreCase)))
         {
             await _engine.DisposeAsync().ConfigureAwait(true);
             _engine = null;
@@ -422,13 +428,11 @@ public sealed partial class AskChatViewModel : ObservableObject
         // taken after it.
         ct.ThrowIfCancellationRequested();
 
-        if (_engine is not null)
-        {
-            return;
-        }
-
         // R9, the decided half: the transcription model is always unloaded when the chat opens.
-        // Always — not per model, not behind arithmetic about what would fit beside what.
+        // Always — not per model, not behind arithmetic about what would fit beside what, and
+        // not only when the engine is cold: this sat below the reuse return until 2026-08-30,
+        // so a Models-tab load between questions put the transcriber back beside the resident
+        // child and every later ask sailed past the rule it exists to keep.
         if (_session is { IsLoaded: true })
         {
             await _session.UnloadAsync().ConfigureAwait(true);
@@ -436,14 +440,34 @@ public sealed partial class AskChatViewModel : ObservableObject
                 + "model. Transcribing again reloads it.";
         }
 
+        if (_engine is not null)
+        {
+            return;
+        }
+
         entry.Status = "Loading the model: a large one takes a while…";
-        _engineThinking = _provider!.ThinkingMode;
+        _engineThinking = _provider.ThinkingMode;
         _engineContextTokens = contextTokens;
         _enginePlacement = _provider.ExpertPlacement;
+
+        // Read again, not reused from the drop check above: the dispose and unload awaits are
+        // real yields, and a Settings pick changed inside one would load the new file while the
+        // bookkeeping recorded the old name — the next question then killing a healthy child to
+        // reload the very same model. Nothing yields between this read and Create's own
+        // resolution, so the two agree.
+        _engineModelFile = _provider.Check().ModelFileName;
         var engine = _provider.Create(promptChars);
         try
         {
             await engine.LoadAsync(ct).ConfigureAwait(true);
+
+            // Observed before the engine is published, on purpose: a release landing in the
+            // load's final unwind — a transcription start, a recording switch — cancels a token
+            // the load may never look at again, and an engine published past that kept the child
+            // resident through the very transcription that evicted it (found 2026-08-30).
+            // Between this check and the assignment nothing awaits, so on the UI thread the
+            // publish is atomic against ReleaseEngineAsync.
+            ct.ThrowIfCancellationRequested();
         }
         catch
         {
@@ -745,10 +769,17 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             text.Append(bullet.Bullet.Text);
 
             // The same caveats the panel shows, because an email carries no tooltip and a claim
-            // must not read more confident away from the application than inside it.
+            // must not read more confident away from the application than inside it. All three
+            // of the panel's cases, since 2026-08-30: the checked-and-failed quote, the quote
+            // with no resolving span to check against — the [?]-with-quote bullet a real 9B
+            // produced — and quoted words outside the convention that were never lifted at all.
             if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
             {
                 text.Append(" [the quoted words are not at the time cited]");
+            }
+            else if (bullet.Bullet.Quote is not null && bullet.QuoteFound is null)
+            {
+                text.Append(" [quote not checked: no place in the recording to check it against]");
             }
             else if (bullet.Bullet.Quote is null
                 && bullet.Bullet.Text.AsSpan().IndexOfAny('"', '“', '”') >= 0)
@@ -762,11 +793,19 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         text.AppendLine();
         text.Append(ModelLine).AppendLine();
 
+        // The transcript pin, from decision 5: source name and ASR provenance alone cannot say
+        // *which segmentation* the timestamps above resolve against — transcribe the same audio
+        // again with another model and the same ids point at different words while looking
+        // perfectly fine. The segment count and hash prefix are what distinguish them, in the
+        // lab pin's own rendering (12 hex chars, `scripts/measure-answers.ps1`). Absent from
+        // this line until 2026-08-30, in the one export the feature has.
         var askedOf = document.SourceName ?? "the open recording";
         var transcriber = document.ModelId is { } asr
             ? $"{asr}{(document.Quantisation is { } q ? $" ({q})" : string.Empty)}"
             : "an unknown model";
         text.Append("Asked of ").Append(askedOf)
+            .Append(" (").Append(document.Segments.Count.ToString(CultureInfo.InvariantCulture))
+            .Append(" segments, sha256 ").Append(document.SegmentsSha256().AsSpan(0, 12)).Append("…)")
             .Append(document.IsTranslated ? ", in its English translation, transcribed by " : ", transcribed by ")
             .Append(transcriber)
             .Append(" on ")

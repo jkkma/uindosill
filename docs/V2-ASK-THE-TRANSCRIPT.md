@@ -80,6 +80,16 @@ decoding, which is why the comparison there tracks GBNF; decision 3's retrieval 
 the model cites, so a retrieved segment is citable by construction; and decision 6's strongest test
 — every citation resolves — stops being a check run afterwards and becomes the mechanism.
 
+**Corrected 2026-08-30 — the constraint is available, and the shipped default does not use it.**
+"It is", above, stopped describing the product on 2026-08-25 and this register never said so: the
+shipped decode is template-only at temperature 0 with the grammar off — the one configuration the
+2026-08-24/25 sessions measured clean (`docs/UNPROVEN.md`) — and citation trust in it is the
+parser's and validator's, post-hoc: parse, resolve, and render what does not resolve as
+unresolved. The rule's substance survives untouched — the model still never writes a timestamp,
+and an id still resolves or renders as `[?]` — but the mechanism sentence overstated: where the
+model can be constrained, it *can be* (`LlamaServerOptions.UseGrammar`, kept as the measured tool
+for models whose output does not terminate without it), and the default deliberately is not.
+
 ### Not in v2: who said it
 
 **The pipeline gained a notion of a speaker after this was written, and the rule below survives
@@ -1154,6 +1164,17 @@ that"* — a claim about the recording, when the truth is a claim about the tier
 explanation instead, and the abstention stays reserved for a question the right tier really could
 not answer.
 
+**Corrected 2026-08-30 — above the affordability rule it surveys now.** "It retrieves and says
+why" stopped being the behaviour on 2026-08-27, when the third tier landed: a global question over
+a recording that will not fit is answered from an even, position-spread sample of all of it
+(`AnswerMode.Survey`, `SurveyWindowSelector`), the prompt stating the gaps and the panel carrying
+a notice that the answer may miss what was said in between — rather than from the eight windows a
+scorer with nothing to rank on happened to like. The handled consequence above survives beneath
+it: a sample with nothing in it still gets the explanation rather than the abstention. The same
+stretch of days left more of this register behind — the drafting-head default and the catalogue's
+recommended answering entry (both 2026-08-28) are recorded in `docs/UNPROVEN.md`, the code and its
+tests rather than here; this block is the register's pointer to them.
+
 The setting became three-way — decide from my question (shipped), the parts that matched, the
 whole transcript — and the one-day-old boolean migrates: a stored *true* was a deliberate choice
 and becomes the fixed whole-transcript setting, a stored *false* was the default nobody touched
@@ -1274,7 +1295,8 @@ assumption with a measurement pointing the other way on both halves.
 grammar in the default mode, and think-before-answering as a Settings toggle, off by default
 on its measured cost, UNPROVEN's dated block — so the blocking fact is retired in form;
 gpt-oss under the new pairing is unmeasured, and the gauntlet re-runs before the speed option
-is treated as live.)
+is treated as live. The grammar default flipped off the very next day — the 2026-08-30
+correction under *The model never writes a timestamp* is the record.)
 
 **The measurement exists, is vendor-neutral, and works on both machines.** Verified on the laptop
 2026-08-16 with `Get-Counter -ListSet`: `\GPU Process Memory(pid_<pid>_luid_…_phys_N)\Dedicated
@@ -1407,6 +1429,12 @@ five things, one more than the paragraph above asks for:
 5. **Copy to the clipboard emits the same rendered form, marker included.** "Somebody copies
    half of it into an email" is the scenario this decision was written for, and copy is how it
    happens.
+
+**Item 3's gap closed 2026-08-30.** `TranscriptDocument.SegmentsSha256()` is the identity item 3
+said was missing — the same per-segment start/end/text hash `scripts/measure-answers.ps1` pins
+question sets with, the two implementations held together by a shared vector in the suite — and
+the copied form's "Asked of" line now carries it as segment count and hash prefix beside the
+source name and both provenances.
 
 Why transient: a chat is a conversation, saved answers accumulate against transcripts that get
 regenerated, and every saved answer is a saved liability with no WER behind it. Among the

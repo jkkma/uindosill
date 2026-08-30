@@ -137,7 +137,25 @@ public static class TranscriptWindowBuilder
             }
         }
 
+        // The last non-empty id strictly before each one, so a run knows whether the id gap
+        // ahead of it holds real speech: empty segments are bridged — the run renders past them
+        // exactly as it always did — while a non-empty segment whose midpoint lives in another
+        // window splits the run rather than being swallowed into this one's text and rendered
+        // twice across the cover (found 2026-08-30, on the out-of-time-order files the grid
+        // above already declares supported).
+        var previousNonEmpty = new int[document.Segments.Count + 1];
+        var lastSeen = 0;
+        for (var id = 1; id <= document.Segments.Count; id++)
+        {
+            previousNonEmpty[id] = lastSeen;
+            if (!document.Segments[id - 1].IsEmpty)
+            {
+                lastSeen = id;
+            }
+        }
+
         var seen = new HashSet<(int First, int Last)>();
+        var ids = new List<int>();
         for (var k = 0; ; k++)
         {
             var windowStart = k * options.Stride;
@@ -147,36 +165,48 @@ public static class TranscriptWindowBuilder
             }
 
             var windowEnd = windowStart + options.WindowLength;
-            var first = 0;
-            var lastId = 0;
+            ids.Clear();
             foreach (var (id, midpoint) in midpoints)
             {
                 if (midpoint >= windowStart && midpoint < windowEnd)
                 {
-                    if (first == 0)
-                    {
-                        first = id;
-                    }
-
-                    lastId = id;
+                    ids.Add(id);
                 }
             }
 
-            if (first == 0)
+            if (ids.Count == 0)
             {
                 continue;
             }
 
-            // Sparse audio can hand more than one grid position the same run — and with a stride
-            // under half the length, not necessarily consecutive ones. A duplicate window would
-            // count its terms twice in every document-frequency figure, so the run set is the
-            // check, not the neighbour.
-            if (!seen.Add((first, lastId)))
+            // One window per contiguous run the grid position holds. In time order every
+            // position holds exactly one; a hand-edited file can scatter a position's segments,
+            // and each scatter is its own citable run.
+            var runStart = ids[0];
+            var runEnd = ids[0];
+            for (var i = 1; i <= ids.Count; i++)
             {
-                continue;
-            }
+                if (i < ids.Count && previousNonEmpty[ids[i]] == runEnd)
+                {
+                    runEnd = ids[i];
+                    continue;
+                }
 
-            windows.Add(FromRun(document, first, lastId));
+                // Sparse audio can hand more than one grid position the same run — and with a
+                // stride under half the length, not necessarily consecutive ones. A duplicate
+                // window would count its terms twice in every document-frequency figure, so the
+                // run set is the check, not the neighbour.
+                if (seen.Add((runStart, runEnd)))
+                {
+                    windows.Add(FromRun(document, runStart, runEnd));
+                }
+
+                if (i < ids.Count)
+                {
+                    runStart = ids[i];
+                    runEnd = ids[i];
+                }
+            }
         }
 
         return windows;

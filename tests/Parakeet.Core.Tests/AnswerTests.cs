@@ -195,20 +195,39 @@ public class AnswerParserTests
     [InlineData("**NOT_IN_TRANSCRIPT**")]
     [InlineData("- NOT_IN_TRANSCRIPT")]
     [InlineData("_NOT_IN_TRANSCRIPT_")]
+    [InlineData("**NOT_IN_TRANSCRIPT**.")]
+    [InlineData("- **NOT_IN_TRANSCRIPT**.")]
+    [InlineData("NOT_IN_TRANSCRIPT [?]")]
     public void ANearMissSentinelLineAbstainsInsteadOfRenderingTheRawToken(string line)
     {
-        // The post-hoc path's dressing — punctuation, bold, a bullet marker — must not turn the
-        // internal token into a rendered claim.
-        var answer = AnswerParser.Parse(line + "\n");
+        // The post-hoc path's dressing — punctuation, bold, a bullet marker, an admitted-uncited
+        // [?] — must not turn the internal token into a rendered claim. The stacked shapes are
+        // the regression: bold-then-period defeated a single-pass trim, and [?] defeated a check
+        // that ran before citation extraction, so both rendered the raw token as the answer's
+        // framing sentence (found 2026-08-30).
+        var answer = AnswerParser.Parse(line + "\n", allowLead: true);
 
         Assert.True(answer.Abstained);
         Assert.Empty(answer.Bullets);
+        Assert.Null(answer.Lead);
     }
 
     [Fact]
     public void TheSentinelInsideProseStaysInert()
     {
         var answer = AnswerParser.Parse("- NOT_IN_TRANSCRIPT is what it replies when unsure [S1]\n");
+
+        Assert.False(answer.Abstained);
+        Assert.Single(answer.Bullets);
+    }
+
+    [Fact]
+    public void TheSentinelBesideARealCitationStandsAsTheBulletItClaimsToBe()
+    {
+        // An abstention citing a segment is a contradiction, and the citation is the checkable
+        // half: the line stays a bullet so the validator gets to see it, exactly as a sentinel
+        // beside other bullets already loses to them.
+        var answer = AnswerParser.Parse("NOT_IN_TRANSCRIPT [S3]\n");
 
         Assert.False(answer.Abstained);
         Assert.Single(answer.Bullets);
@@ -278,6 +297,47 @@ public class AnswerParserTests
     }
 
     [Fact]
+    public void TheModelsOwnSpacingBeforePunctuationIsNotOurDebris()
+    {
+        // The debris repair used to run everywhere, not just where a citation was lifted, and
+        // ate the space in front of any word that starts with a period — "as .csv" rendered
+        // "as.csv", and "Yes, .NET" lost its comma too (found 2026-08-30). Only the hole a
+        // citation actually left is closed.
+        Assert.Equal(
+            "They export the results as .csv files",
+            AnswerParser.Parse("- They export the results as .csv files [S3]\n").Bullets[0].Text);
+
+        Assert.Equal(
+            "Yes, .NET was chosen",
+            AnswerParser.Parse("- Yes, .NET was chosen [S2]\n").Bullets[0].Text);
+
+        // And a bullet the model itself ended on a comma keeps it — only a lifted citation
+        // leaves a dangling one.
+        Assert.Equal(
+            "It trailed off with a comma,",
+            AnswerParser.Parse("- It trailed off with a comma,\n").Bullets[0].Text);
+    }
+
+    [Fact]
+    public void ACitationSittingFlushInTheSentenceLeavesNoSpaceBehind()
+    {
+        // A citation with no whitespace around it left no hole to close, and the first cut of
+        // the hole marker treated it as a space anyway — "It worked !" for "It worked[S1]!"
+        // (found 2026-08-30). The lift removes the citation and nothing else.
+        Assert.Equal(
+            "It worked!",
+            AnswerParser.Parse("- It worked[S1]!\n").Bullets[0].Text);
+
+        Assert.Equal(
+            "Adoption hit 60%!",
+            AnswerParser.Parse("- Adoption hit 60%[S2]!\n").Bullets[0].Text);
+
+        Assert.Equal(
+            "The budget doubled ().",
+            AnswerParser.Parse("- The budget doubled ([S1]).\n").Bullets[0].Text);
+    }
+
+    [Fact]
     public void ProseBracketsAreNotCitations()
     {
         // The transcript's own conventions reach answers: [inaudible], [laughs]. Only
@@ -319,6 +379,118 @@ public class AnswerParserTests
         var bullet = Assert.Single(answer.Bullets);
         Assert.Null(bullet.Label);
         Assert.Equal(text, bullet.Text);
+    }
+
+    [Fact]
+    public void AColonInsideTheQuoteIsTheTranscriptTalkingNotALabel()
+    {
+        // The quote is speech and says what it likes. Its own ": " used to be read as the label
+        // separator, splitting the quote across the label chip and the claim — label
+        // "He said “wait" beside text "no”" (found 2026-08-30).
+        var spoken = AnswerParser.Parse("- He said «wait: no» [S1]\n");
+        var bullet = Assert.Single(spoken.Bullets);
+        Assert.Null(bullet.Label);
+        Assert.Equal("wait: no", bullet.Quote);
+        Assert.Equal("He said “wait: no”", bullet.Text);
+
+        // Opening the bullet on the quote is the same shape harder.
+        var opening = AnswerParser.Parse("- «Grade: A» is how they put it [S2]\n");
+        Assert.Null(opening.Bullets[0].Label);
+        Assert.Equal("Grade: A", opening.Bullets[0].Quote);
+
+        // A label in front of a colon-carrying quote is still a label.
+        var labelled = AnswerParser.Parse("- Verdict: he said «wait: no» [S1]\n");
+        Assert.Equal("Verdict", labelled.Bullets[0].Label);
+        Assert.Equal("wait: no", labelled.Bullets[0].Quote);
+    }
+
+    [Fact]
+    public void AStarOrNumberMarkedListIsAListNotALeadAndAClaim()
+    {
+        // The ungrammared decode writes whatever markdown habit the model has. "1." and "* "
+        // used to fail the marker test, so the first claim was promoted to the framing sentence
+        // and every later claim kept its literal number (found 2026-08-30).
+        var numbered = AnswerParser.Parse("1. The budget ran over [S2]\n2. Hiring was frozen [S5]\n", allowLead: true);
+        Assert.Null(numbered.Lead);
+        Assert.Equal(2, numbered.Bullets.Count);
+        Assert.Equal("The budget ran over", numbered.Bullets[0].Text);
+        Assert.Equal("Hiring was frozen", numbered.Bullets[1].Text);
+
+        var starred = AnswerParser.Parse("* One thing [S1]\n* Another [S2]\n", allowLead: true);
+        Assert.Null(starred.Lead);
+        Assert.Equal(2, starred.Bullets.Count);
+        Assert.Equal("One thing", starred.Bullets[0].Text);
+
+        // A framing sentence that opens with a year is a lead, not the two-thousand-and-
+        // twenty-fourth claim.
+        var year = AnswerParser.Parse("2024. That is the year under discussion [S1]\n- One claim [S2]\n", allowLead: true);
+        Assert.NotNull(year.Lead);
+        Assert.Equal("2024. That is the year under discussion", year.Lead!.Text);
+    }
+}
+
+/// <summary>Decision 5's transcript pin: the segmentation's identity, shared with the lab.</summary>
+public class TranscriptPinTests
+{
+    [Fact]
+    public void ThePinMatchesTheLabScriptsHashOnASharedVector()
+    {
+        // The expected value was computed by scripts/measure-answers.ps1's own StringBuilder
+        // loop over these two segments — the script and SegmentsSha256() are two
+        // implementations of one algorithm, and this vector is what holds them together. A
+        // question set pins a transcript by this hash, so an implementation drift would
+        // silently unpin every labelled set.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the meeting opened" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20.5), Text = "maria presented" },
+            ],
+        };
+
+        Assert.Equal(
+            "978febcd5f8a613d1607c0c91f19f1f66e24d808c01bd6e4b8971d2e1bcbfbf1",
+            document.SegmentsSha256());
+    }
+
+    [Fact]
+    public void ThePinHashesTheExportsRoundedTimesNotTheTickExactOnes()
+    {
+        // The script hashes the exported JSON, whose times the writer rounds to three decimals
+        // — and the last segment of nearly every real recording ends off the millisecond grid,
+        // because the flush trims to the file's actual final sample. Hashed tick-exact, this
+        // segment rendered "27.716062" here and "27.716" in the lab, one differing line changing
+        // the whole SHA-256 and the wrong-transcript check firing on a matching pair (found
+        // 2026-08-30). The expected value is the script's own loop over the rounded rendering.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(27.7160625), Text = "then they adjourned" },
+            ],
+        };
+
+        Assert.Equal(
+            "e09d7399efd676c31f4071821fb83245c66da8569219f4a8fa09bc8a53b147ff",
+            document.SegmentsSha256());
+    }
+
+    [Fact]
+    public void ADifferentSegmentationIsADifferentPin()
+    {
+        // The failure the pin exists to catch: same audio, another model, every id pointing at
+        // different words while looking perfectly fine.
+        var one = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the meeting opened" }],
+        };
+        var other = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(9), Text = "the meeting opened" }],
+        };
+
+        Assert.NotEqual(one.SegmentsSha256(), other.SegmentsSha256());
     }
 }
 

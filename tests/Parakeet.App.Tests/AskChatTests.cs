@@ -194,7 +194,10 @@ public class AskChatTests
             },
             source: spoken);
 
-        var (chat, _, _) = Chat(job);
+        // Pinned to retrieval: it is the one mode whose prompt still asks for a quote, and the
+        // quote is what makes the decision observable here.
+        var (chat, provider, _) = Chat(job);
+        provider.ModePreference = AskModePreference.Retrieval;
         await AskAsync(chat, "good morning everyone");
 
         var entry = Assert.Single(chat.Entries);
@@ -387,6 +390,101 @@ public class AskChatTests
     }
 
     [Fact]
+    public async Task ChangingTheAskModelRebuildsTheEngineAtTheNextQuestion()
+    {
+        // Settings promises the picked model "is used from your next question" — the same
+        // promise the thinking and placement controls above make and honour, and the least
+        // negotiable of the set: the engine serves one file for its whole life. The comparison
+        // skipped the model until 2026-08-30, so a mid-chat pick stayed inert until some
+        // unrelated teardown, with only the provenance line telling on it.
+        var (chat, provider, _) = Chat();
+
+        await AskAsync(chat, "what about the axolotl?");
+        Assert.Equal(1, provider.Created);
+
+        provider.ModelFileName = "some-other-model.gguf";
+        await AskAsync(chat, "and the budget?");
+        Assert.Equal(2, provider.Created);
+
+        // Unchanged between questions keeps the child, exactly as the other dials do.
+        await AskAsync(chat, "who presented?");
+        Assert.Equal(2, provider.Created);
+    }
+
+    [Fact]
+    public async Task ALoadOnTheModelsTabBetweenQuestionsIsUnloadedByTheNextAsk()
+    {
+        // R9 says always — and the reuse fast path used to return before the unload, so a
+        // transcriber loaded from the Models tab between questions stayed resident beside the
+        // held engine for the rest of the session (found 2026-08-30). The next ask keeps its
+        // engine and still enforces the rule, saying so.
+        var session = new ModelSession(new FakeEngineProvider());
+        var (chat, provider, _) = Chat(session: session);
+
+        await AskAsync(chat, "what about the budget review?");
+        Assert.Equal(1, provider.Created);
+
+        await session.LoadAsync(new EngineSelection { Model = ModelCatalog.Default.Recommended });
+        Assert.True(session.IsLoaded);
+
+        await AskAsync(chat, "and the axolotl?");
+        Assert.Equal(1, provider.Created);
+        Assert.False(session.IsLoaded);
+        Assert.Contains("unloaded to make room", chat.ResidencyNotice, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public async Task AReleaseLandingInTheLoadsFinalUnwindStillEvictsTheEngine()
+    {
+        // The gate is released before the transcription starts, so the load completes without
+        // ever observing the cancel — the unwind ordering where ReleaseEngineAsync used to find
+        // no engine, dispose nothing, and the load then published a child that sat resident
+        // through the very transcription that evicted it (found 2026-08-30). The publish-guard
+        // is the only look that can catch it, and the dispatcher makes the ordering real: the
+        // release runs before the load's posted continuation does.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (chat, provider, _) = Chat(options: new FakeAnswerOptions { LoadGate = gate.Task });
+
+        chat.QuestionText = "what about the axolotl?";
+        var asking = chat.AskCommand.ExecuteAsync(null);
+        Assert.True(chat.IsAsking);
+
+        gate.SetResult();
+        var released = chat.OnTranscriptionStartedAsync();
+        await asking;
+        await released;
+
+        Assert.Equal("Stopped.", Assert.Single(chat.Entries).Failure);
+
+        // The proof the engine did not survive the unwind: the next question builds afresh.
+        await AskAsync(chat, "and the budget?");
+        Assert.Equal(2, provider.Created);
+    }
+
+    [Fact]
+    public void ResetNullsTheDocumentsBeforeTheLinesAnnounceTheClear()
+    {
+        // The ask panel hears the line collections clear and re-reads the documents. Nulled
+        // after the clear, they left the chat live over — its citation chips seeking into — a
+        // transcript the row no longer showed (found 2026-08-30). The ordering is the contract,
+        // so the ordering is what this pins.
+        var job = Transcribed();
+        var heardClear = false;
+        TranscriptDocument? documentAtTheClear = job.Document;
+        job.Lines.CollectionChanged += (_, _) =>
+        {
+            heardClear = true;
+            documentAtTheClear = job.Document;
+        };
+
+        job.Reset();
+
+        Assert.True(heardClear);
+        Assert.Null(documentAtTheClear);
+        Assert.Null(job.TranslatedDocument);
+    }
+
+    [Fact]
     public async Task WholeTranscriptModeSendsTheRecordingTiledOnceWithNoSourceRows()
     {
         // The opt-in the register's decision 3 names: no retrieval — every question is global to
@@ -440,18 +538,19 @@ public class AskChatTests
     }
 
     [Fact]
-    public async Task RetrievalAnswersHaveNoLeadAndStrayProseStaysAMarkedClaim()
+    public async Task RetrievalAnswersOpenWithTheLeadTheirPromptAsksFor()
     {
-        // The lead is a shape the whole-transcript prompt asks for. In retrieval mode prose
-        // ahead of the bullets was never asked for, so it keeps rendering as the uncited claim
-        // it is rather than being promoted to unmarked prose.
+        // The opening sentence has belonged to both modes since 2026-08-25, and the fake now
+        // hands retrieval one too — this panel shape shipped exercised only on the overview
+        // path until 2026-08-30. Where a lead was not asked for, stray prose keeps rendering
+        // as the uncited claim it is rather than being promoted to unmarked prose.
         var (chat, _, _) = Chat();
 
         await AskAsync(chat, "what about the axolotl?");
 
         var entry = Assert.Single(chat.Entries);
-        Assert.False(entry.HasLead);
-        Assert.Null(entry.Lead);
+        Assert.True(entry.HasLead);
+        Assert.NotNull(entry.Lead);
 
         var parsed = AnswerParser.Parse("Here is what I found\n- A claim [S1]\n");
         Assert.Null(parsed.Lead);
@@ -816,6 +915,11 @@ public class AskChatTests
         Assert.Contains("fake-answer-model", copied, StringComparison.Ordinal);
         Assert.Contains("parakeet-tdt-0.6b-v3-q8_0", copied, StringComparison.Ordinal);
         Assert.Contains("/tmp/a.wav", copied, StringComparison.Ordinal);
+
+        // And the transcript pin (decision 5): the segmentation the timestamps resolve against,
+        // as segment count and hash prefix — the source name and ASR model alone cannot say
+        // which segmentation, and a re-transcription moves every id while looking fine.
+        Assert.Contains("(3 segments, sha256 ", copied, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1014,6 +1118,75 @@ public class AskChatTests
 
         Assert.NotNull(copied);
         Assert.Contains("[the quoted words here were not checked]", copied, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheUncheckableQuoteCaveatTravelsIntoTheEmailToo()
+    {
+        // The third of the panel's three quote states — a «quote» whose only citation is [?],
+        // so there was no span to check it against — showed its caveat on screen and dropped it
+        // from the copy until 2026-08-30, letting the same sentence read more confident away
+        // from the application than inside it. The shape is real 9B output, not a hypothetical.
+        var transcript = new TranscriptDocument
+        {
+            SourceName = "meeting.wav",
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved" }],
+        };
+
+        string? copied = null;
+        var entry = new ChatEntryViewModel("q", text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        });
+
+        var answer = AnswerParser.Parse("- Something ungrounded «the budget was approved» [?]\n");
+        entry.Complete(answer, CitationValidator.Validate(answer, transcript), [], transcript, _ => { });
+        entry.CopyCommand.Execute(null);
+
+        Assert.NotNull(copied);
+        Assert.Contains("[quote not checked: no place in the recording to check it against]", copied, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWhoSaidQuestionYieldsARangeAndAQuoteNeverAName()
+    {
+        // Decision 6's in-suite bullet, unexercised until 2026-08-30. The transcript carries the
+        // diariser's label and a reader-typed name, and neither reaches the evidence — the
+        // 2026-08-24 no-speaker-labels decision — so neither can reach the answer: what arrives
+        // is a range that seeks and a quote, and the render's speaker chips are where the reader
+        // learns who spoke, as the diariser's claim rather than the model's.
+        var path = "/tmp/diarised.wav";
+        var job = new JobViewModel(path);
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                SourceName = path,
+                AudioDuration = TimeSpan.FromSeconds(20),
+                Segments =
+                [
+                    new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved this morning", Speaker = "Maria" },
+                    new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Text = "then everyone adjourned for lunch", Speaker = "SPEAKER_01" },
+                ],
+            },
+        });
+
+        var (chat, _, _) = Chat(job);
+        await AskAsync(chat, "who said the budget was approved?");
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.True(entry.HasBullets);
+        Assert.Contains(entry.Bullets.SelectMany(b => b.Citations), c => c.IsResolved);
+        Assert.Contains(entry.Bullets, b => b.Quote is not null);
+
+        var rendered = string.Join('\n',
+            entry.Bullets.Select(b => b.Text + " " + b.Quote).Append(entry.Lead?.Text ?? string.Empty));
+        Assert.DoesNotContain("Maria", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("SPEAKER", rendered, StringComparison.Ordinal);
     }
 
     [Fact]

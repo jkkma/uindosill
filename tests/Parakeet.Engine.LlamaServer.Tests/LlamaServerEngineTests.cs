@@ -425,6 +425,37 @@ public class AnswerPromptBuilderTests
     }
 
     [Fact]
+    public void EvidenceLinesCarryNoSpeakerLabels()
+    {
+        // The maintainer's 2026-08-24 decision binds this builder: an evidence line is
+        // "[S12-S15] text" and nothing more — no diariser label, no reader-typed name — so the
+        // model is never in a position to attribute speech. It held structurally (window text is
+        // built from Segment.Text alone) and nothing pinned it until 2026-08-30: a change
+        // folding speaker chips into window text would have broken a dated decision without
+        // failing anything.
+        var transcript = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved", Speaker = "Maria" },
+                new TranscriptSegment { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Text = "then we adjourned", Speaker = "SPEAKER_01" },
+            ],
+        };
+
+        var (instruction, userContent) = AnswerPromptBuilder.BuildMessages(new AskRequest
+        {
+            Question = "who said the budget was approved?",
+            Transcript = transcript,
+            Evidence = [TranscriptWindowBuilder.FromRun(transcript, 1, 2)],
+        });
+
+        Assert.Contains("[S1-S2] the budget was approved then we adjourned", userContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("Maria", userContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("SPEAKER", userContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("Maria", instruction, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheMessagesSplitTheContractWithoutChangingIt()
     {
         // The chat form: rules in the system message, evidence and question in the user
@@ -483,7 +514,10 @@ public class AnswerPromptBuilderTests
         Assert.Contains("complete transcript", instruction, StringComparison.Ordinal);
         Assert.Contains("short topic label", instruction, StringComparison.Ordinal);
         Assert.Contains("whole recording", instruction, StringComparison.Ordinal);
-        Assert.Contains("Cite every part", instruction, StringComparison.Ordinal);
+        // "the parts", not "every part": the grammar admits five ids on a line, and "every"
+        // demanded an enumeration a topic in six parts could not sample under it.
+        Assert.Contains("Cite the parts", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cite every part", instruction, StringComparison.Ordinal);
         Assert.Contains("Never write a timestamp", instruction, StringComparison.Ordinal);
 
         // The evidence is the transcript here, and it says so.
@@ -497,7 +531,7 @@ public class AnswerPromptBuilderTests
         var (retrieval, _) = AnswerPromptBuilder.BuildMessages(Request());
         Assert.Contains("from transcript evidence", retrieval, StringComparison.Ordinal);
         Assert.Contains("short topic label", retrieval, StringComparison.Ordinal);
-        Assert.DoesNotContain("Cite every part", retrieval, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cite the parts", retrieval, StringComparison.Ordinal);
         Assert.DoesNotContain("draw on the whole recording", retrieval, StringComparison.Ordinal);
         Assert.Contains("make sense on its own", retrieval, StringComparison.Ordinal);
 
@@ -593,9 +627,12 @@ public class AnswerPromptBuilderTests
         // one, is the same defect as an abstain instruction with no abstain production.
         var evidence = Request().Evidence;
 
+        // Zero bullets after the lead, because the retrieval prompt invites exactly that: "if
+        // that sentence answers the question completely, write nothing more". bullet{1,8}
+        // forced a padding bullet after a complete one-sentence answer (found 2026-08-30).
         var withLead = AnswerPromptBuilder.BuildGrammar(evidence, wantLead: true)!;
         Assert.Contains("lead ::=", withLead, StringComparison.Ordinal);
-        Assert.Contains("root ::= abstain | lead bullet{1,8}", withLead, StringComparison.Ordinal);
+        Assert.Contains("root ::= abstain | lead bullet{0,8}", withLead, StringComparison.Ordinal);
 
         var without = AnswerPromptBuilder.BuildGrammar(evidence)!;
         Assert.DoesNotContain("lead", without, StringComparison.Ordinal);
@@ -821,7 +858,12 @@ public sealed class LlamaServerIntegrationTests
             Backend = backend,
             ServerRoot = serverRoot,
             ContextSize = 4096,
-            MaxAnswerTokens = 256,
+
+            // The shipped default, not the old 256. The 0.6B may still fill it: under the
+            // grammar its eight-bullet budget runs to whatever cap it is given (256 and 1,024
+            // both, measured on the first CUDA runs of the length guard, 2026-08-30), and the
+            // stream loop below says how that is read.
+            MaxAnswerTokens = 1_024,
 
             // Pinned on: this test asserts the GRAMMAR's guarantee (every citation resolves),
             // which only holds when the grammar decodes. The shipped default is ungrammared
@@ -843,9 +885,22 @@ public sealed class LlamaServerIntegrationTests
             ],
         };
 
-        await foreach (var chunk in engine.AskAsync(request, ct: TestContext.Current.CancellationToken))
+        // A chatty prop model can fill any cap, and since 2026-08-30 the engine refuses a
+        // length-capped stream rather than rendering it as a complete answer. Either ending
+        // proves what this test asserts — that the grammar's ids are the only ids — so the cap
+        // refusal is tolerated, what streamed before it is validated all the same, and any
+        // other failure still fails. Termination is the neighbouring thinking-mode test's
+        // subject, on the path that ships; it is not the grammar path's to promise.
+        try
         {
-            chunks.Add(chunk);
+            await foreach (var chunk in engine.AskAsync(request, ct: TestContext.Current.CancellationToken))
+            {
+                chunks.Add(chunk);
+            }
+        }
+        catch (InvalidOperationException refused) when (
+            refused.Message.Contains("token cap", StringComparison.Ordinal))
+        {
         }
 
         var text = string.Concat(chunks);

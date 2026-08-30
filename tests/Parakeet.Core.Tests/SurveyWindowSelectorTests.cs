@@ -123,4 +123,34 @@ public class SurveyWindowSelectorTests
             picked.Sum(w => w.Text.Length) <= 20_000,
             $"picked {picked.Sum(w => w.Text.Length)} chars against a 20,000 budget");
     }
+
+    [Fact]
+    public void AFewGiantWindowsDoNotStarveTheSampleOfAllTheSmallOnes()
+    {
+        // One minute of rapid exchange inflates the average every other window is estimated by.
+        // The search used to walk only downward from that estimate, so a cover whose spread
+        // subsets dodge the giant came back windows short of what the budget really allowed —
+        // here, one window where more than ten fit (found 2026-08-30).
+        var segments = new List<TranscriptSegment>();
+        for (var i = 0; i < 21; i++)
+        {
+            segments.Add(new TranscriptSegment
+            {
+                Start = TimeSpan.FromSeconds(i * 60),
+                End = TimeSpan.FromSeconds((i * 60) + 60),
+                Text = new string('x', i == 1 ? 10_000 : 10),
+            });
+        }
+
+        var cover = TranscriptWindowBuilder.Build(
+            new TranscriptDocument { Segments = segments, AudioDuration = TimeSpan.FromSeconds(21 * 60) },
+            TranscriptWindowOptions.Cover);
+
+        var picked = SurveyWindowSelector.Select(cover, 150);
+
+        Assert.True(picked.Count >= 10, $"only {picked.Count} windows of the >=10 that fit");
+        Assert.True(picked.Sum(w => w.Text.Length) <= 150);
+        Assert.Equal(cover[0].FirstSegment, picked[0].FirstSegment);
+        Assert.Equal(cover[^1].LastSegment, picked[^1].LastSegment);
+    }
 }

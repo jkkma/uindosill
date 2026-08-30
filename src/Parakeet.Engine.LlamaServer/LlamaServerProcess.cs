@@ -53,6 +53,31 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// The output tail once the exited child's redirected streams have drained.
+    /// <see cref="HasExited"/> turns true before the last DataReceived callbacks have run, and
+    /// the line most worth quoting — the bind failure, the "error loading model" — is exactly
+    /// the one still sitting in the pipe at that moment (found 2026-08-30). Bounded: after two
+    /// seconds the tail as it stands beats no notice at all.
+    /// </summary>
+    public async Task<string> DrainedOutputTailAsync()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await _process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+            // No process is associated any more; the tail is all there will ever be.
+        }
+
+        return OutputTail;
+    }
+
     public static async Task<LlamaServerProcess> StartAsync(
         LlamaServerInstall install, LlamaServerOptions options, CancellationToken ct = default)
     {
@@ -120,7 +145,11 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
 
             var inJob = KillOnCloseJob.TryAssign(process);
 
-            var client = new HttpClient
+            // No proxy, explicitly: environment proxies apply to 127.0.0.1 too — .NET gives
+            // loopback no exemption of its own, and the WinInet "<local>" bypass matches only
+            // dot-less hostnames — so on a machine behind HTTP_PROXY every /health probe and
+            // every ask was routed at a proxy that has no route back (found 2026-08-30).
+            var client = new HttpClient(new SocketsHttpHandler { UseProxy = false })
             {
                 BaseAddress = new Uri(FormattableString.Invariant($"http://127.0.0.1:{port}/")),
                 // Streams run as long as an answer takes; per-request cancellation is the timeout.
@@ -434,7 +463,8 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             if (_process.HasExited)
             {
                 throw new InvalidOperationException(
-                    $"llama-server exited with code {_process.ExitCode} before it became healthy. Its last lines:\n{OutputTail}");
+                    $"llama-server exited with code {_process.ExitCode} before it became healthy. "
+                    + $"Its last lines:\n{await DrainedOutputTailAsync().ConfigureAwait(false)}");
             }
 
             try

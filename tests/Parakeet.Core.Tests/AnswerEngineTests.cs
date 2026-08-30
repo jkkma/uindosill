@@ -60,12 +60,16 @@ public class AnswerEngineTests
             Evidence = [windows[0], windows[2]],
         });
 
-        var answer = AnswerParser.Parse(text);
+        // Parsed as the app parses it: every mode asks for an opening sentence (2026-08-25),
+        // so every mode reads one back — the fake included.
+        var answer = AnswerParser.Parse(text, allowLead: true);
         Assert.False(answer.Abstained);
+        Assert.NotNull(answer.Lead);
         Assert.Equal(3, answer.Bullets.Count);
 
         var validation = CitationValidator.Validate(answer, transcript);
         Assert.True(validation.AllCitationsPass);
+        Assert.NotNull(validation.Lead);
 
         // The quote came from the cited span, so the strictest check the validator has is
         // exercised end to end — QuoteMatches, not merely null.
