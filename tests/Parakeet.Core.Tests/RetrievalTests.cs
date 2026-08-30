@@ -247,6 +247,34 @@ public class TranscriptWindowBuilderTests
     }
 
     [Fact]
+    public void FromRunWritesEachVoiceOncePerTurnAndRepeatsItAfterAGap()
+    {
+        // The maintainer's decision of 2026-08-30, reversing 2026-08-24's: the evidence says who
+        // is speaking, so the model can. One label per turn, not per segment; a labelled segment
+        // after an unlabelled one repeats its label, because the gap left the turn ambiguous —
+        // and the label is whatever the document carries, a reader's name included.
+        var document = Transcript("one", "two", "three", "four", "five");
+        document = document with
+        {
+            Segments =
+            [
+                document.Segments[0] with { Speaker = "Speaker 1" },
+                document.Segments[1] with { Speaker = "Speaker 1" },
+                document.Segments[2] with { Speaker = "Ada" },
+                document.Segments[3] with { Speaker = null },
+                document.Segments[4] with { Speaker = "Ada" },
+            ],
+        };
+
+        Assert.Equal(
+            "Speaker 1: one two Ada: three four Ada: five",
+            TranscriptWindowBuilder.FromRun(document, 1, 5).Text);
+
+        // A transcript that was never labelled renders byte-identically to what it always did.
+        Assert.Equal("one two", TranscriptWindowBuilder.FromRun(Transcript("one", "two"), 1, 2).Text);
+    }
+
+    [Fact]
     public void FromRunRefusesIdsOutsideTheTranscript()
     {
         var document = Transcript("only one");

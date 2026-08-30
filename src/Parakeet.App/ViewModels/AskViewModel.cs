@@ -230,8 +230,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </remarks>
     public string? RenameNotice =>
         Speakers is { } voices && voices.Any(v => v.IsRenamed)
-            ? "Names are for reading here. The transcript files already written keep the diariser's "
-              + "own labels, and a new run starts over."
+            ? "Names are for reading here, and answers on the Ask tab use them. The transcript "
+              + "files already written keep the diariser's own labels, and a new run starts over."
             : null;
 
     /// <summary>

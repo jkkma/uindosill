@@ -425,14 +425,14 @@ public class AnswerPromptBuilderTests
     }
 
     [Fact]
-    public void EvidenceLinesCarryNoSpeakerLabels()
+    public void EvidenceLinesCarrySpeakerLabelsAndTheInstructionAsksForAttribution()
     {
-        // The maintainer's 2026-08-24 decision binds this builder: an evidence line is
-        // "[S12-S15] text" and nothing more — no diariser label, no reader-typed name — so the
-        // model is never in a position to attribute speech. It held structurally (window text is
-        // built from Segment.Text alone) and nothing pinned it until 2026-08-30: a change
-        // folding speaker chips into window text would have broken a dated decision without
-        // failing anything.
+        // The maintainer's 2026-08-30 decision, reversing 2026-08-24's, whose pin stood exactly
+        // here: the evidence now says who is speaking — the diariser's label or the reader's
+        // name, written once per turn by FromRun — and the instruction asks the model to
+        // attribute in those names. Both halves are asserted together because they are one
+        // contract: labels without the instruction leave attribution to chance, and the
+        // instruction without labels invites invented names.
         var transcript = new TranscriptDocument
         {
             Segments =
@@ -449,10 +449,16 @@ public class AnswerPromptBuilderTests
             Evidence = [TranscriptWindowBuilder.FromRun(transcript, 1, 2)],
         });
 
-        Assert.Contains("[S1-S2] the budget was approved then we adjourned", userContent, StringComparison.Ordinal);
-        Assert.DoesNotContain("Maria", userContent, StringComparison.Ordinal);
-        Assert.DoesNotContain("SPEAKER", userContent, StringComparison.Ordinal);
-        Assert.DoesNotContain("Maria", instruction, StringComparison.Ordinal);
+        Assert.Contains(
+            "[S1-S2] Maria: the budget was approved SPEAKER_01: then we adjourned",
+            userContent, StringComparison.Ordinal);
+        Assert.Contains("marks who is speaking", instruction, StringComparison.Ordinal);
+
+        // A transcript that was never labelled gets the exact prompt it always did: no labels
+        // in the evidence, and no attribution instruction over evidence that names nobody.
+        var (plain, plainContent) = AnswerPromptBuilder.BuildMessages(Request());
+        Assert.DoesNotContain("who is speaking", plain, StringComparison.Ordinal);
+        Assert.Contains("[S1-S2] first stretch of speech second stretch", plainContent, StringComparison.Ordinal);
     }
 
     [Fact]

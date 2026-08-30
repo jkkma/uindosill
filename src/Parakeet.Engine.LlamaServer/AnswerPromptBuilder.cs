@@ -10,13 +10,19 @@ namespace Parakeet.Engine.LlamaServer;
 /// the grammar makes any other shape unsamplable — including any id that is not live.
 /// </summary>
 /// <remarks>
-/// The evidence lines carry no speaker labels — decided by the maintainer 2026-08-24, the
-/// register's question 2: a resolved citation scrolls to cues that already wear their chips, so
-/// the reader sees who spoke without the model ever being in a position to say it. The language
-/// line appears only when the caller knows a language, and that is the decided shape (register,
-/// 2026-08-24): the transcript's language is the request hint or nothing, so a hintless
-/// transcript gets the unlocalised prompt and no claim is made about the answer's language.
-/// Citation tokens stay ASCII whatever the language, so the grammar never has to know it.
+/// The evidence lines carry speaker labels since 2026-08-30 — the maintainer's decision,
+/// reversing 2026-08-24's (the register's question 2). The old shape kept the model out of a
+/// position to say who spoke and let the citation chips carry it; what that bought was answers
+/// no one could attribute without clicking, where the ask this reverses it for was an answer
+/// that reads like a report: who said what, in whose name. The labels are the document's own —
+/// <c>Speaker 1</c>, or the reader's name where they have renamed a voice — written into the
+/// window text by <c>TranscriptWindowBuilder.FromRun</c> once per turn, and the attribution
+/// instruction below appears only when the transcript is labelled at all, so an unlabelled
+/// transcript gets the exact prompt it always did. The language line appears only when the
+/// caller knows a language, and that is the decided shape (register, 2026-08-24): the
+/// transcript's language is the request hint or nothing, so a hintless transcript gets the
+/// unlocalised prompt and no claim is made about the answer's language. Citation tokens stay
+/// ASCII whatever the language, so the grammar never has to know it.
 /// </remarks>
 public static class AnswerPromptBuilder
 {
@@ -137,6 +143,26 @@ public static class AnswerPromptBuilder
             builder.Append("Otherwise add short bullets, one claim per line, starting with \"- \", ");
             builder.Append("each saying enough to make sense on its own, and each with a short ");
             builder.Append("topic label followed by \": \" when the bullets are about different things.\n");
+
+            // What a bullet's text is made of, added 2026-08-30: without this the model built
+            // every bullet out of the transcript's own wording — four bullets of pasted speech
+            // fragments, disfluencies and all, under labels that told a reader nothing — where
+            // the same evidence reported in the model's words reads as an answer. The quote
+            // instruction rides directly under it because the two are halves of one shape —
+            // your words, then the transcript's few words as evidence. What that buys was
+            // measured small: on the template-only path the shipped model ignored the «»
+            // convention from either position (its quotes were ASCII, and unverified, before
+            // this change too), so the instruction's real audience is the grammar path, where
+            // the quote production enforces what it asks.
+            builder.Append("Write each bullet in your own words, reporting what was said as a ");
+            builder.Append("claim — never build the bullet's text out of the transcript's ");
+            builder.Append("wording.\n");
+            if (requireQuote)
+            {
+                builder.Append("Then end the bullet with a short verbatim quote from the ");
+                builder.Append("transcript inside «» — the few words that best carry the point ");
+                builder.Append("— as the evidence for the claim, not a repeat of it.\n");
+            }
         }
 
         builder.Append("Every line ends with the ids of the ");
@@ -150,10 +176,26 @@ public static class AnswerPromptBuilder
         // steer away from citing only the opening survives the word.
         builder.Append(whole ? " Cite the parts where a point is discussed, not only the first.\n" : "\n");
 
-        builder.Append("Never write a timestamp, a time of day, or a duration.\n");
-        if (requireQuote)
+        // Only when the transcript is labelled at all: an unlabelled one gets the exact prompt
+        // it always did, and an instruction to attribute over evidence that names nobody would
+        // be an invitation to invent the names.
+        if (request.Transcript.Segments.Any(segment => segment.Speaker is not null))
         {
-            builder.Append("Quote the transcript verbatim inside «» in each bullet.\n");
+            builder.Append("The transcript marks who is speaking. Say who said what, using the ");
+            builder.Append("speakers' names exactly as the transcript writes them.\n");
+        }
+
+        builder.Append("Never write a timestamp, a time of day, or a duration.\n");
+
+        // Retrieval's quote instruction moved up beside the own-words line on 2026-08-30; this
+        // one keeps the prompt-grammar contract for the other shape, because a whole-transcript
+        // caller that turns quotes on still needs the prompt to ask for what the grammar will
+        // require. The shipped engine never does — see its requireQuote derivation.
+        if (requireQuote && whole)
+        {
+            builder.Append("Support each bullet with a short verbatim quote from the transcript ");
+            builder.Append("inside «» — the few words that best carry the point, not whole ");
+            builder.Append("sentences of it.\n");
         }
 
         builder.Append("A claim you cannot support from the ");

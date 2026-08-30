@@ -55,6 +55,9 @@ public sealed partial class AskChatViewModel : ObservableObject
     private IReadOnlyList<TranscriptWindow>? _windows;
     private IReadOnlyList<TranscriptWindow>? _coverWindows;
     private Bm25Retriever? _retriever;
+
+    /// <summary>The rename map the evidence caches above were built under; see AskCore.</summary>
+    private IReadOnlyDictionary<string, string>? _windowNames;
     private CancellationTokenSource? _asking;
 
     [ObservableProperty]
@@ -160,6 +163,7 @@ public sealed partial class AskChatViewModel : ObservableObject
             _windows = null;
             _coverWindows = null;
             _retriever = null;
+            _windowNames = null;
             Entries.Clear();
             OnPropertyChanged(nameof(HasEntries));
         }
@@ -219,6 +223,24 @@ public sealed partial class AskChatViewModel : ObservableObject
             // the same window and for the same reason — it decides the context the child is
             // started with, so it has to happen before anything is started.
             entry.Status = "Searching the transcript…";
+
+            // The ask runs over the named document, so a voice the reader renamed to "Ada" is
+            // "Ada" in the window text and in what the model attributes to it — the same map the
+            // exports use, applied fresh per question exactly as they apply it. The evidence
+            // caches are keyed on it: a rename between questions rebuilds the windows rather
+            // than answering over labels the reader no longer uses. Naming changes no citation
+            // id, no time and no transcript pin, so nothing a chip resolves moves.
+            var names = _recording?.RenamedVoices();
+            if (!NamesMatch(_windowNames, names))
+            {
+                _windows = null;
+                _retriever = null;
+                _coverWindows = null;
+            }
+
+            _windowNames = names;
+            document = document.WithSpeakerNames(names);
+
             _windows ??= TranscriptWindowBuilder.Build(document);
             _retriever ??= new Bm25Retriever(_windows);
             _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
@@ -375,6 +397,36 @@ public sealed partial class AskChatViewModel : ObservableObject
             _asking = null;
             IsAsking = false;
         }
+    }
+
+    /// <summary>
+    /// Whether two rename maps name every voice the same. Null and empty are one state — nobody
+    /// has renamed anything — so a panel that never sees a rename never rebuilds its caches.
+    /// </summary>
+    private static bool NamesMatch(
+        IReadOnlyDictionary<string, string>? built, IReadOnlyDictionary<string, string>? current)
+    {
+        var builtCount = built?.Count ?? 0;
+        var currentCount = current?.Count ?? 0;
+        if (builtCount != currentCount)
+        {
+            return false;
+        }
+
+        if (builtCount == 0)
+        {
+            return true;
+        }
+
+        foreach (var (label, name) in built!)
+        {
+            if (!current!.TryGetValue(label, out var other) || !string.Equals(name, other, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
