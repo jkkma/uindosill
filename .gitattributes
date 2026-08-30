@@ -46,6 +46,13 @@ python/uindosill_engines/translator/parity-sources.json text eol=lf
 # claim would look false to exactly the person taking the trouble to verify it.
 attic/sortformer/uindosill_engines/_vendor/** text eol=lf
 
+# The gated-test reminder hook, which sh runs straight from the working copy — including on the
+# maintainer's machines, where the default conversion would check it out CRLF and sh would read
+# the 0x0D as part of every line: assignments grow a trailing CR, and the JSON the hook emits
+# carries it into the reminder text. The hook simply never fires wrong-endinged on Linux, so this
+# is the rare rule protecting the Windows checkout rather than somebody else's clone.
+.claude/hooks/*.sh text eol=lf
+
 # The two embedded typefaces. TrueType begins with a version tag full of NUL bytes, so git's
 # text-or-binary sniff gets these right on its own — but the rule above exists because that sniff
 # is a heuristic, and a font checked out with its 0x0A bytes rewritten is a font that fails to

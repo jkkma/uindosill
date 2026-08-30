@@ -11,6 +11,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/gated-test-reminder.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking gated-test obligations"
+          }
+        ]
+      }
     ]
   }
 }
