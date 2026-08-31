@@ -1070,6 +1070,16 @@ step to watch on that release is *Seed the previous release so deltas can be bui
 "No releases found" again, deltas are silently not being built and every user is re-downloading the
 whole application.
 
+**The step has now been watched across the rc series, and it finds prereleases no better than
+drafts.** The v1.0.0-rc.10 run (2026-08-29) reported "No releases found" for both channels with
+the rc.9 release published 38 minutes earlier, and the v1.0.0-rc.11 run (2026-08-31) reported the
+same with rc.10 up and intact — so no rc has ever shipped a delta, and every rc-to-rc update is a
+full re-download. That is consistent with what Velopack documents for its GitHub source's default,
+the same "only stable releases" behaviour the updater's constructor had to opt out of above; the
+flag `vpk download github` would need has not been tried, so cause is read from the docs rather
+than proven. What it firms up is the sentence above: the delta path first runs on the **second
+stable** release, and an rc observing "No releases found" is the expected shape, not the alarm.
+
 ### Packing a Windows release on Linux is documented, and has never been run here
 
 `vpk`'s `[win]` directive cross-builds a Windows package from any host, Velopack's docs say so
