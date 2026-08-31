@@ -35,6 +35,32 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void TheCudaPackRefusalIsAbsentUntilGivenAndSurvivesARoundTrip()
+    {
+        var path = TempFile();
+        try
+        {
+            // Nobody has said no as shipped, and the launch start stays on offer.
+            Assert.False(new AppSettingsStore(path).Load().CudaPackAutoInstallDeclined);
+
+            Assert.True(new AppSettingsStore(path).Save(
+                new AppSettings { CudaPackAutoInstallDeclined = true }));
+            Assert.True(new AppSettingsStore(path).Load().CudaPackAutoInstallDeclined);
+
+            // And back to the default the key leaves the file entirely: false and absent are one
+            // state — the same one-shape rule as the optional keys — so a default-channel user's
+            // file never mentions a CUDA download they were never offered.
+            Assert.True(new AppSettingsStore(path).Save(new AppSettings()));
+            Assert.DoesNotContain("cudaPackAutoInstallDeclined", File.ReadAllText(path),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AskThinkingIsOffAsShippedAndSurvivesARoundTrip()
     {
         var path = TempFile();

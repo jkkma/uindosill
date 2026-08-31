@@ -255,6 +255,29 @@ public sealed record AppSettings
     public MoeExpertPlacement AskExpertPlacement { get; init; } = MoeExpertPlacement.Automatic;
 
     /// <summary>
+    /// Whether the user has stopped the CUDA pack install that a launch of the win-cuda flavour
+    /// starts by itself — a refusal every later launch honours.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Set by one gesture only: the Stop button on a running pack install.</b> The win-cuda
+    /// channel cannot carry the pack inside its installer — its Setup.exe was measured at
+    /// 1,998,899,901 bytes against GitHub's 2,147,483,648-byte asset limit, with the pack 1.8 GB
+    /// compressed on its own — so a launch of that flavour starts the download itself where the
+    /// machine could use it. Somebody who stops it has answered that offer, and a launch that
+    /// started it again anyway would be the same 1.8 GB nagging on every start. Closing the
+    /// window mid-download is not a stop and records nothing: the next launch resumes it, which
+    /// is what lets the set-up finish across sessions without anybody minding it.
+    /// </para>
+    /// <para>
+    /// <b>The Settings row never reads this.</b> It keeps offering the pack and resumes from
+    /// whatever was kept — a refusal of the self-start is not a refusal of the feature. Nothing
+    /// in the product sets this back to false; installing the pack makes it moot.
+    /// </para>
+    /// </remarks>
+    public bool CudaPackAutoInstallDeclined { get; init; }
+
+    /// <summary>
     /// The output folder the user last chose, or null when they never have — blank in the box,
     /// files beside each input.
     /// </summary>
@@ -326,6 +349,7 @@ public sealed class AppSettingsStore
                 DiarisationBatchSize = ReadDiarisationBatchSize(root),
                 AskExpertPlacement = ReadExpertPlacement(root),
                 Backend = ReadBackend(root),
+                CudaPackAutoInstallDeclined = ReadBool(root, "cudaPackAutoInstallDeclined", AppSettings.Default.CudaPackAutoInstallDeclined),
                 OutputDirectory = ReadString(root, "outputDirectory"),
             };
         }
@@ -391,6 +415,14 @@ public sealed class AppSettingsStore
             if (settings.Backend is { } backend)
             {
                 values["backend"] = backend.ToString().ToLowerInvariant();
+            }
+
+            // Written only once somebody has stopped the self-started install: false and absent
+            // are the same state — the launch start remains on offer — so the key appears only in
+            // the file of a user who has said no, the same one-shape rule as the optionals below.
+            if (settings.CudaPackAutoInstallDeclined)
+            {
+                values["cudaPackAutoInstallDeclined"] = true;
             }
 
             // Omitted when blank for the same reason as the backend: "never chosen" and "cleared"
