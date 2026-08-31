@@ -29,15 +29,21 @@ verbs refuse to run and say why; everything else in the CLI works without it.
 
 ## Optional: NVIDIA acceleration for speaker labelling
 
-**You do not download these files yourself.** The `uindosill-python-cuda-win-x64.zip.001` to `.004`
-files and `manifest.json` are the CUDA build of PyTorch, and the application fetches them for you:
-open **Settings, Advanced** and press the button. The row is offered only on a machine whose driver
-actually reports CUDA, and pressing it downloads about 1.8 GB, checks every part against the digest
-this release pins, and unpacks it. A connection that drops resumes where it stopped instead of
-starting again.
+**You do not download this yourself.** The CUDA build of PyTorch is a separate download of about
+1.8 GB that the application manages for you: every part is checked against the digest the
+application pins, and a connection that drops resumes where it stopped instead of starting again.
+It travels as four numbered parts because a single 1.8 GB asset leaves too little room under
+GitHub's 2 GiB per-file limit, and the application knows which release carries them — not
+necessarily this page.
 
-They sit here as four parts rather than one file because a single 1.8 GB asset leaves too little
-room under GitHub's 2 GiB per-file limit. That is a packaging detail, not something to do by hand.
+The CUDA flavour sets this up by itself: on a machine whose driver actually reports CUDA, the
+launch starts the download, visible in a strip above the tabs. Pressing **Stop** there is
+remembered, and no later launch starts it again; closing the application instead merely pauses
+it, and the next launch carries on. The default flavour never starts it by itself.
+
+The manual path on either flavour — and the way back after a Stop — is the **Set up graphics
+acceleration** button on **Settings, General**, offered only on a machine whose driver reports
+CUDA.
 
 On one ten-minute recording this was about 13 times faster than the processor and produced exactly
 the same speakers and the same boundaries. That is a speed result. No accuracy figure is claimed
@@ -64,5 +70,8 @@ folder, and keeps the files unless you explicitly answer Yes.
 
 `UindosillDesktop-*.nupkg` and `releases.*.json` are the update feed. The application fetches them
 for you when it updates itself. There is nothing useful to do with them by hand.
+
+`uindosill-python-cuda-win-x64.zip.001` to `.004` and `manifest.json`, when they appear here, are
+the CUDA pack described above — also fetched by the application, never by hand.
 
 ---
