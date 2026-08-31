@@ -889,7 +889,7 @@ public partial class MainWindow : Window
         // Running for as long as the window is open, rather than only while the Ask tab is
         // showing: a recording keeps playing when somebody switches to Transcribe, and a transport
         // whose clock stops while the sound carries on is worse than no clock. A tick that finds
-        // nothing moved raises nothing, so the cost of it on the other four tabs is a comparison.
+        // nothing moved raises nothing, so the cost of it on every other tab is a comparison.
         _transport.Start();
 
         if (DataContext is MainWindowViewModel viewModel)

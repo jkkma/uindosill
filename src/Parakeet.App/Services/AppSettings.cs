@@ -191,33 +191,36 @@ public sealed record AppSettings
     public string? HuggingFaceToken { get; init; }
 
     /// <summary>
-    /// Which execution provider labels speakers, or null for <c>auto</c> — the choice this project
-    /// makes when nobody has, which on both diarisers reproduces the path their published figures
-    /// describe.
+    /// Which execution provider labels speakers, or null for <c>auto</c> — a shortlist the sidecar
+    /// tries best-first rather than a single name.
     /// </summary>
     /// <remarks>
     /// <para>
     /// <b>Separate from <see cref="Backend"/>, and it cannot be folded into it.</b> That one is the
-    /// recogniser's, whose backends are parakeet.cpp's — Vulkan, CUDA, CPU. The diarisers run on
-    /// ONNX Runtime and torch, whose providers are <c>webgpu</c>, <c>cuda</c>, <c>cpu</c> and, for
-    /// the second diariser, <c>torch</c>. The two sets overlap only in the word "CPU" and mean
-    /// different runtimes even there. One control offering the union would offer Vulkan to a
-    /// diariser that has no Vulkan path and WebGPU to a recogniser that has none, which is why the
-    /// window went without a diariser picker until this setting existed.
+    /// recogniser's, whose backends are parakeet.cpp's — Vulkan, CUDA, CPU. The diariser is the
+    /// torch pyannote pipeline, whose providers are <c>cpu</c>, <c>cuda</c> and <c>webgpu</c> —
+    /// the last through two ONNX graphs the application derives for itself. The two sets overlap
+    /// only in the word "CPU" and mean different runtimes even there. One control offering the
+    /// union would offer Vulkan to a diariser that has no Vulkan path and WebGPU to a recogniser
+    /// that has none, which is why the window went without a diariser picker until this setting
+    /// existed.
     /// </para>
     /// <para>
-    /// <b>Null means auto, and auto is not "the fastest".</b> On the second diariser it resolves to
-    /// <c>torch</c> even though ONNX Runtime is measurably faster, because the ONNX embedder moves
-    /// the labels — 222 speaker turns against 225 — and this project's rule is that what it picks
-    /// unasked reproduces the figure it publishes. Naming a provider is how somebody takes the
-    /// other trade knowingly, and the window says so when they have.
+    /// <b>Null means auto, and auto is a shortlist.</b> Since 2026-08-28 the sidecar tries CUDA
+    /// where a torch with it is present (which is what the CUDA pack installs), then WebGPU where
+    /// the derived graphs exist, then the processor. Each promotion rests on a measured
+    /// equivalence — the same speakers and boundaries on what was tried — and none on accuracy:
+    /// no published figure exists for any route on this pipeline. Naming a provider is how
+    /// somebody refuses the shortlist knowingly, and a named provider refuses rather than
+    /// falling back.
     /// </para>
     /// </remarks>
     public string? DiarisationProvider { get; init; }
 
     /// <summary>
-    /// Windows of audio the second diariser batches together, or null for the checkpoint's own
-    /// value. Ignored by the first, whose batching is fixed by its exported graph.
+    /// Windows of audio the diariser batches together, or null for the checkpoint's own value.
+    /// (The retired ONNX diariser, whose batching was its exported graph's geometry, ignored
+    /// this; it is in <c>attic/sortformer/</c> and every shipping labeller reports a number.)
     /// </summary>
     /// <remarks>
     /// <para>
@@ -506,12 +509,13 @@ public sealed class AppSettingsStore
     public static IReadOnlyList<string> DiarisationProviders { get; } = ["auto", "cpu", "cuda", "webgpu"];
 
     /// <summary>
-    /// The batch sizes this window offers for the second diariser. Empty entry is the model's own.
+    /// The batch sizes this window offers for the diariser. Empty entry is the model's own.
     /// </summary>
     /// <remarks>
     /// The three the sweep of 2026-08-26 covered, and the reason not to offer arbitrary numbers:
-    /// these are the only sizes at which anything has been observed at all, and the observation that
-    /// survives — identical labels at all three — is what makes choosing between them safe.
+    /// these are the only sizes at which anything has been observed at all. The sweep was
+    /// DiariZen's — on the pyannote pipeline nothing has been observed at any of them, which the
+    /// picker's own explanation says.
     /// </remarks>
     public static IReadOnlyList<int> DiarisationBatchSizes { get; } = [8, 16, 32];
 

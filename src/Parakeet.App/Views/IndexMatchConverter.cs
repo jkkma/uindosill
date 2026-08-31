@@ -12,13 +12,13 @@ namespace Parakeet.App.Views;
 /// <para>
 /// Two things in this window are "one of a small fixed set", and both need the same conversion.
 ///
-/// The pill view-switcher is four <c>RadioButton</c>s rather than a <c>TabControl</c>'s own
+/// The pill view-switcher is six <c>RadioButton</c>s rather than a <c>TabControl</c>'s own
 /// headers, because the design puts it in the middle of the headerbar with the application name to
 /// its left and the window buttons to its right — a place a tab strip cannot reach. The pages
 /// still live in a <c>TabControl</c>, whose header strip is collapsed, so this is what keeps the
 /// two in step.
 ///
-/// The speaker chips in a transcript are the other: a closed set of four, selected by style class
+/// The speaker chips in a transcript are the other: a closed set of eight, selected by style class
 /// rather than by a brush on the view model, so the colours stay in the theme where every other
 /// colour in this application lives.
 /// </para>

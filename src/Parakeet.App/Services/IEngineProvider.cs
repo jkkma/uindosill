@@ -25,7 +25,8 @@ public sealed record EngineSelection
 /// <remarks>
 /// An interface rather than a constructor call so the headless UI tests exercise the real
 /// window, the real job queue and the real formatters against the canned engine. Without this
-/// seam the only way to test the application is to install 670 MB of weights in CI.
+/// seam the only way to test the application is to install the catalogue's full recogniser
+/// weights — 1.34 GiB — in CI.
 /// </remarks>
 public interface IEngineProvider
 {
@@ -483,11 +484,10 @@ public sealed class EngineProvider : IEngineProvider
     {
         (bool Installed, string? MissingModel) resolved = task switch
         {
-            // Two entries do this job, so the sentence describes the choice rather than one of
-            // them. It is only ever read when neither is installed, which is exactly the moment a
-            // reader needs to know there is a choice waiting.
+            // One entry does this job since the Sortformer entry went to attic/ on 2026-08-27, so
+            // the sentence describes it. It is only ever read when it is not installed.
             ModelTask.Diarisation => (DiarisationModel is not null,
-                "Speaker labelling needs its own model, which is not installed yet. Install one from the Models "
+                "Speaker labelling needs its own model, which is not installed yet. Install it from the Models "
                 + "tab: a 31 MiB download with no limit on the number of voices, which needs a free Hugging "
                 + "Face account before it can be fetched."),
             ModelTask.Translation => (TranslationModel is not null,

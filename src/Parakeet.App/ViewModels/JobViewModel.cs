@@ -470,7 +470,7 @@ public sealed partial class JobViewModel : ObservableObject
     /// </summary>
     /// <summary>
     /// Rebuilds one of the line collections from a finished document, assigning each speaker one
-    /// of the four chip styles in the order they are first heard.
+    /// of the eight chip styles in the order they are first heard.
     /// </summary>
     /// <remarks>
     /// The diariser numbers speakers in the order it first hears them, and this follows that same
@@ -483,10 +483,10 @@ public sealed partial class JobViewModel : ObservableObject
     /// switcher. A speaker whose every segment came back empty is the one case the two can differ,
     /// and an empty line is dropped from both.
     ///
-    /// The modulo is a backstop rather than a policy. Four is the diariser's architectural ceiling,
-    /// so a fifth speaker is not something this pipeline can produce; if one ever arrives it wraps
-    /// to the first chip rather than throwing, because a colour clash is a smaller failure than a
-    /// window that will not draw a transcript.
+    /// The modulo is a backstop rather than a policy. The shipping diariser has no speaker cap, so
+    /// the ninth speaker wraps to the first chip rather than throwing — a colour clash is a smaller
+    /// failure than a window that will not draw a transcript — and it wraps at the same eight as
+    /// <see cref="Voices"/>, so a backstop chip agrees with the palette the map was built from.
     /// </remarks>
     private static void Relines(
         TranscriptDocument document,
@@ -504,7 +504,7 @@ public sealed partial class JobViewModel : ObservableObject
                 // Not in the spoken document at all — which the translation contract forbids, since
                 // a translator may not change who said a segment — so a backstop rather than a path:
                 // the next chip, recorded so the next line of the same speaker agrees with this one.
-                voice = new SpeakerViewModel(speaker, chips.Count % 4);
+                voice = new SpeakerViewModel(speaker, chips.Count % 8);
                 chips[speaker] = voice;
             }
 
@@ -534,15 +534,16 @@ public sealed partial class JobViewModel : ObservableObject
         {
             if (!voices.ContainsKey(speaker))
             {
-                // **Eight since 2026-08-27, and it is still a wrap.** It was `% 4` because four was the ONNX
-        // diariser's architectural ceiling — a fifth speaker could not occur, so the modulo was
-        // unreachable rather than lossy. That engine is in `attic/sortformer/` and the pipeline that
-        // replaced it clusters with no cap, so five and more became ordinary; AMI-style meetings
-        // have five to seven. The palette grew to match (Theme/Controls.axaml), which moves the
-        // collision to the ninth speaker rather than removing it — and nine in one recording would
-        // repeat a colour while still reading a different name, which is the same graceful failure
-        // as before, further out.
-        voices[speaker] = new SpeakerViewModel(speaker, voices.Count % 8);
+                // **Eight since 2026-08-27, and it is still a wrap.** It was `% 4` because four
+                // was the ONNX diariser's architectural ceiling — a fifth speaker could not occur,
+                // so the modulo was unreachable rather than lossy. That engine is in
+                // `attic/sortformer/` and the pipeline that replaced it clusters with no cap, so
+                // five and more became ordinary; AMI-style meetings have five to seven. The
+                // palette grew to match (Theme/Controls.axaml), which moves the collision to the
+                // ninth speaker rather than removing it — and nine in one recording would repeat a
+                // colour while still reading a different name, which is the same graceful failure
+                // as before, further out.
+                voices[speaker] = new SpeakerViewModel(speaker, voices.Count % 8);
             }
         }
 

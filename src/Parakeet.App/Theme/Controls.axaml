@@ -434,9 +434,9 @@
     <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
   </Style>
 
-  <!-- Speaker labels: 6px, one of the four shapes that keeps a corner. Two fills then two
-       outlines, a closed set of four because four is the diariser's architectural ceiling
-       rather than a setting. -->
+  <!-- Speaker labels: 6px, one of the chip shapes that keeps a corner. Eight styles — four in
+       matcha, four in hues of their own; see the speaker-chips block below. The closed-set-of-four
+       rationale retired with the ONNX diariser on 2026-08-27. -->
   <Style Selector="Border.speaker">
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="CornerRadius" Value="6" />

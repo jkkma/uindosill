@@ -238,13 +238,13 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
     public bool Mentions(string term) => Text.Contains(term, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Which of the four chip styles this speaker gets, or -1 when there is no speaker.
+    /// Which of the eight chip styles this speaker gets, or -1 when there is no speaker.
     /// </summary>
     /// <remarks>
-    /// Four, and the set is closed, because four is the diariser's architectural ceiling rather
-    /// than a setting — so there is no fifth style to fall through to and no need for one. The
-    /// index is assigned in order of first appearance in the transcript, which is also the order
-    /// the diariser numbers speakers in.
+    /// Eight since 2026-08-27 — the four-speaker ceiling was the retired ONNX diariser's, and the
+    /// pyannote pipeline that replaced it has no cap, so a ninth speaker wraps back to the first
+    /// style (see <see cref="JobViewModel"/>). The index is assigned in order of first appearance
+    /// in the transcript, which is also the order the diariser numbers speakers in.
     /// </remarks>
     public int Chip => Voice?.Chip ?? -1;
 

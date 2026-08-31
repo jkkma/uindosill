@@ -56,7 +56,8 @@ public static class AnswerContextBudget
 /// <summary>
 /// Creates the engine behind the Ask panel — the same seam <see cref="IEngineProvider"/> is for
 /// transcription, for the same reason: the headless tests exercise the real panel, the real
-/// parser and the real validator against the canned engine, without a nine-gigabyte model in CI.
+/// parser and the real validator against the canned engine, without multi-gigabyte answering
+/// weights in CI.
 /// </summary>
 public interface IAnswerEngineProvider
 {

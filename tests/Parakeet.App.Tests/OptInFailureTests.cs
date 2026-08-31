@@ -130,7 +130,9 @@ public class OptInFailureTests
         Assert.Contains("no RTTM", viewModel.ExportNotice, StringComparison.Ordinal);
 
         // And the summary does not let "Finished" stand for "finished with speakers".
-        Assert.Contains("written without speaker labels", viewModel.StatusMessage, StringComparison.Ordinal);
+        // "Transcribed", not "written": the run put nothing on disk, and the summary must not
+        // send anyone looking for files Export has not written yet.
+        Assert.Contains("transcribed without speaker labels", viewModel.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]

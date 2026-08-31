@@ -55,7 +55,9 @@ public sealed record ToolStatus
     /// comparison that had to understand both would be two parsers written to answer a question the
     /// publisher already answers: the tag on the latest release <i>is</i> the newest one. An
     /// installed copy ahead of it — a nightly, or a hand-placed build — reports as different rather
-    /// than being silently downgraded, and the button says "reinstall" rather than "update".
+    /// than as current. Note what the one-button flow then does with that: pressing "Update yt-dlp
+    /// and Deno" replaces it with the publisher's release under an "Updating…" message, so an ahead
+    /// copy is downgraded by pressing it — there is no separate reinstall label.
     /// </remarks>
     public bool UpdateAvailable =>
         InstalledVersion is { Length: > 0 } installed

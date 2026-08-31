@@ -47,7 +47,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private AskEvidenceDepth _askEvidence;
 
-    /// <summary>The .gguf chosen for asking, or null for "the largest one there".</summary>
+    /// <summary>The .gguf chosen for asking, or null for "the recommended model, or the largest
+    /// there" — the catalogue's recommended answering entry when installed, the largest file
+    /// otherwise (<c>AnswerEngines.FindModelFile</c>).</summary>
     [ObservableProperty]
     private string? _askModelFileName;
 
@@ -701,7 +703,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            var rows = new List<AskModelChoice> { new(null, "The largest one there") };
+            var rows = new List<AskModelChoice> { new(null, "The recommended model, or the largest there") };
             if (_llamaAnswerEngines is { } provider)
             {
                 rows.AddRange(provider.AvailableModelFileNames().Select(name => new AskModelChoice(name, name)));
@@ -814,8 +816,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// invariant to the choice, which is what used to make choosing between them safe. The rows are
     /// kept because they are still plausible window counts and because removing the control would
     /// hide a setting the sidecar accepts; the explanation beside them no longer promises anything.
-    /// "Windows" rather than "batch" because the thing being counted is sixteen-second windows of
-    /// the recording, which is something a person can picture.
+    /// "Windows" rather than "batch" because the thing being counted is the segmentation windows of
+    /// the recording — ten seconds each on the shipping pyannote pipeline; sixteen was DiariZen's —
+    /// which is something a person can picture.
     /// </remarks>
     public IReadOnlyList<DiarisationBatchSizeChoice> DiarisationBatchSizes { get; } =
     [
@@ -863,22 +866,30 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             var offered = DiarisationProviders.Select(row => row.Provider).ToArray();
 
-            // **What automatic means gained a second state on 2026-08-28.** It was the processor
-            // unconditionally — the diariser is torch and the bundled torch is the CPU build — and
-            // the sidecar now elects WebGPU where the derived graphs exist. `SpeakerGraphsInstalled`
-            // is the same file check the graphics row uses to decide whether choosing it needs a
-            // preparation first, so the two cannot disagree about whether the graphs are there.
+            // **What automatic means gained a second state on 2026-08-28, and the CUDA pack makes
+            // a third.** It was the processor unconditionally — the diariser is torch and the
+            // bundled torch is the CPU build. The sidecar's auto is now a shortlist tried
+            // best-first: CUDA where a torch with it is present, which is what the pack installs,
+            // then WebGPU where the derived graphs exist, then the processor.
+            // `IsCudaPackInstalled` is the same check the General tab's pack block uses and
+            // `SpeakerGraphsInstalled` the same file check the graphics row uses, so the texts
+            // cannot disagree about what is on this machine.
             //
-            // "measured for accuracy" rather than "measured": the two routes *were* measured
-            // against each other and agreed, which is an equivalence and not an accuracy. No DER
-            // exists for either of them, so neither can be recommended over the other on accuracy.
-            var text = SpeakerGraphsInstalled
-                ? "Automatic is your graphics card, now that its one-time preparation has been "
-                    + "done. It uses your processor instead if the card turns out not to work. "
+            // "measured for accuracy" rather than "measured": the routes *were* measured against
+            // each other and agreed, which is an equivalence and not an accuracy. No DER exists
+            // for any of them, so none can be recommended over another on accuracy.
+            var text = IsCudaPackInstalled
+                ? "Automatic is your NVIDIA card, through the graphics pack installed on the "
+                    + "General tab — the Graphics (WebGPU) preparation is separate and not needed "
+                    + "for it. It uses your processor instead if the card turns out not to work. "
                     + "Nothing here has been measured for accuracy on any option."
-                : "Automatic is your processor. It becomes your graphics card once the one-time "
-                    + "preparation has been done, and goes back to the processor if the card turns "
-                    + "out not to work. Nothing here has been measured for accuracy on any option.";
+                : SpeakerGraphsInstalled
+                    ? "Automatic is your graphics card, now that its one-time preparation has been "
+                        + "done. It uses your processor instead if the card turns out not to work. "
+                        + "Nothing here has been measured for accuracy on any option."
+                    : "Automatic is your processor. It becomes your graphics card once the one-time "
+                        + "preparation has been done, and goes back to the processor if the card turns "
+                        + "out not to work. Nothing here has been measured for accuracy on any option.";
 
             if (offered.Contains("webgpu"))
             {
@@ -912,13 +923,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (offered.Contains("cuda"))
             {
-                // **The alternative sentence here was Sortformer's measurement**, taken on AMI
-                // test: "changes the labels in the same way". That engine went to
-                // `attic/sortformer/` on 2026-08-27 and `DiariserRunsInTorch` is unconditionally
-                // true now, so only one arm was ever reachable afterwards and the other is gone.
-                // Nothing has been measured on any provider for the pipeline that remains, which is
-                // what this says rather than borrowing a finding from a model nobody is choosing.
-                text += " CUDA runs on an NVIDIA card. Whether it changes the labels has not been checked.";
+                // **"Has not been checked" stood here until it stopped being true.** The check is
+                // docs/UNPROVEN.md's 2026-08-28 equivalence entry: six runs of the shipping
+                // pipeline on a ten-minute recording, processor against CUDA, every RTTM
+                // byte-identical — the same measurement the General tab's pack block quotes. One
+                // recording is not a promise, which is why this is the WebGPU sentence's hedge
+                // and not a guarantee.
+                text += " CUDA runs on an NVIDIA card. On the one recording tried it gave the same "
+                    + "speakers and the same times as the processor.";
             }
 
             // **No availability claim, because this list no longer makes one.** While the diariser
@@ -1269,6 +1281,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowCudaPack));
         OnPropertyChanged(nameof(CanInstallCudaPack));
         OnPropertyChanged(nameof(CudaPackExplanation));
+
+        // The Advanced tab's provider explanation reads the pack state too — its "Automatic"
+        // sentence names the NVIDIA card once the pack is in — so an install redraws it as well.
+        OnPropertyChanged(nameof(DiarisationProviderExplanation));
     }
 }
 

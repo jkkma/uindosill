@@ -108,10 +108,11 @@ public sealed class ModelCatalog
     /// with a Delete button under one description and a Download button under the other.
     /// </para>
     /// <para>
-    /// A list rather than one entry, because a name can be claimed twice: the two 26B answering
-    /// entries ship the same drafting head under the same name. That collision is also why a
-    /// multi-file entry gets a directory in the first place, so this cannot be flattened by
-    /// letting such files count as installed where they lie.
+    /// A list rather than one entry, because a name can be claimed twice: until 2026-08-29 the two
+    /// 26B answering entries shipped the same drafting head under the same name (the IQ4_XS quant
+    /// is deferred now, so that head has one claimant, but the shape stays for the next collision).
+    /// Such a collision is also why a multi-file entry gets a directory in the first place, so this
+    /// cannot be flattened by letting such files count as installed where they lie.
     /// </para>
     /// <para>
     /// Files whose manifest name carries a subpath are left out. They are declared to live one
