@@ -1520,7 +1520,13 @@ public class AskTabWindowTests
         window.UpdateLayout();
 
         Assert.True(notice.IsVisible);
-        Assert.Contains("keep the diariser's own labels", notice.Text, StringComparison.Ordinal);
+
+        // Both halves of what a rename does: exports from now on carry the name, and files
+        // exported earlier keep the labels they were written with (since 2026-08-30, when the
+        // notice stopped claiming files keep the diariser's own labels — exports render through
+        // the renamed view and always did).
+        Assert.Contains("files you export from now on carry them too", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("keep the labels they were written with", notice.Text, StringComparison.Ordinal);
     }
 
     /// <summary>Three segments over two speakers, which is what it takes to see a rename land on

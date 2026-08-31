@@ -189,7 +189,8 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
             }
         }
 
-        throw new SubtitleMuxException($"There are already a thousand files called {stem}.");
+        // 999: the original plus (2) through (999), which is what the loop above just proved exist.
+        throw new SubtitleMuxException($"There are already 999 files called {stem}.");
     }
 
     private static void Kill(Process process)

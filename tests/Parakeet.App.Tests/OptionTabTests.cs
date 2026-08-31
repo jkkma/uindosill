@@ -193,9 +193,12 @@ public class OptionTabTests
 
         Assert.Contains(warning, t => t.Contains("unless you know what they do", StringComparison.Ordinal));
 
-        // And that it does not overclaim in the other direction: the defaults were measured, the
-        // alternatives were not, and the copy says exactly that rather than "these are dangerous".
-        Assert.Contains(warning, t => t.Contains("none of the alternatives has been", StringComparison.Ordinal));
+        // And that it does not overclaim in the other direction: the defaults were measured, most
+        // alternatives were not, and the copy says exactly that rather than "these are dangerous"
+        // — or the blanket "none of the alternatives has been", which the same page contradicted
+        // three paragraphs later for the measured ones.
+        Assert.Contains(warning, t => t.Contains("Every default here was measured", StringComparison.Ordinal));
+        Assert.Contains(warning, t => t.Contains("Most alternatives have not been", StringComparison.Ordinal));
     }
 
     [AvaloniaFact]

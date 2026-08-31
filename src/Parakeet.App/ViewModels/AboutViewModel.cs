@@ -55,11 +55,16 @@ public sealed partial class AboutViewModel : ObservableObject
     /// The second sentence is the same promise the Updates tab makes, and it is here as well
     /// because this is where a person comes to find out what a program does on their network. The
     /// two must not drift: if the launch check ever stops being the only unprompted request, both
-    /// say so.
+    /// say so. "No account to transcribe" rather than "no account", because the speaker-labelling
+    /// model is gated by its maker behind a free Hugging Face account (since 2026-08-27, when the
+    /// pyannote entry became the only diariser) — an absolute here would be found out at that
+    /// download.
     /// </remarks>
     public string Summary =>
         "Uindosill turns recordings into text on this machine. The audio, the transcript and the " +
-        "models all stay on your own disk: nothing is uploaded, and there is no account to make.";
+        "models all stay on your own disk: nothing is uploaded, and no account is needed to " +
+        "transcribe. One optional download — the speaker labelling model — is gated by its maker " +
+        "and needs a free Hugging Face account; everything else fetches without one.";
 
     /// <inheritdoc cref="Summary" />
     public string NetworkNote =>

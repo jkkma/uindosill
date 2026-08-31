@@ -230,8 +230,9 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </remarks>
     public string? RenameNotice =>
         Speakers is { } voices && voices.Any(v => v.IsRenamed)
-            ? "Names are for reading here, and answers on the Ask tab use them. The transcript "
-              + "files already written keep the diariser's own labels, and a new run starts over."
+            ? "Names are for reading here; answers on the Ask tab use them, and files you export "
+              + "from now on carry them too. Files exported before the rename keep the labels they "
+              + "were written with, and a new run starts over."
             : null;
 
     /// <summary>
@@ -731,9 +732,10 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// Follows each voice, so that a rename raises the one thing on this class that depends on it.
     /// </summary>
     /// <remarks>
-    /// Four subscriptions at most — four is the diariser's architectural ceiling — which is why
-    /// this is a subscription per voice rather than anything cleverer. The chips themselves need
-    /// none of it: they bind through <c>Voice.Name</c> and hear the voice directly.
+    /// One subscription per voice — the diariser no longer caps the speaker count, but a
+    /// recording's voices number a handful — which is why this is a subscription per voice rather
+    /// than anything cleverer. The chips themselves need none of it: they bind through
+    /// <c>Voice.Name</c> and hear the voice directly.
     /// </remarks>
     private void Watch(IEnumerable<SpeakerViewModel>? voices)
     {

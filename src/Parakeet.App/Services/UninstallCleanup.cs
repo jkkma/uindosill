@@ -13,10 +13,11 @@ namespace Parakeet.App.Services;
 /// it and Velopack's own recursive uninstall delete cannot reach it — <c>docs/GOTCHAS.md</c>
 /// gotcha 8. The price of that separation is that nothing else ever removes the data: an
 /// uninstall would leave gigabytes of weights behind with no application left to say where they
-/// are or what they were for. This class is the other half of the bargain. <c>Program.cs</c>
-/// registers <see cref="Run"/> as the Velopack before-uninstall hook, so the data dies when the
-/// product does — but by this product's decision, behind guards, rather than by an installer
-/// deleting whatever directory shares its name.
+/// are or what they were for. This class is the other half of the bargain. <c>Program.cs</c> runs
+/// <see cref="Run"/> in the Velopack before-uninstall hook behind <c>UninstallPrompt.Ask</c>, so
+/// the data dies with the product only on an explicit Yes — the shipped answer on dismissal,
+/// timeout, or a desktop with nobody at it is Keep (the decision of 2026-08-29; the guards below
+/// apply either way) — rather than by an installer deleting whatever directory shares its name.
 /// </para>
 /// <para>
 /// Best effort by design, and out of the way by necessity. The hook runs inside Velopack's

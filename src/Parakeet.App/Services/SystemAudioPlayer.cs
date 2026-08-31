@@ -243,9 +243,13 @@ public sealed class SystemAudioPlayer : IMediaPlayer
 
             if (!OperatingSystem.IsWindows())
             {
+                // Not "use a WAVE file instead": playback itself goes through WASAPI, so on this
+                // platform a WAVE would open and decode and then fail in CreateOutput — steering
+                // somebody there hands them the opposite claim two clicks later.
                 throw new PlaybackException(
-                    $"'{name}' needs Media Foundation to decode, which exists only on Windows. " +
-                    "WAVE files play on any platform this build runs on.");
+                    $"'{name}' needs Media Foundation to decode, which exists only on Windows — " +
+                    "and playback itself goes through WASAPI, so no recording plays on this " +
+                    "platform. The transcript is readable here.");
             }
 
             return new MediaFoundationReader(path);

@@ -1015,11 +1015,11 @@
                  recording is beside its original with the words inside it, as a subtitle track
                  that any player will show.
 
-                 Which format goes in is read off the Output formats ticks on the Transcribe tab —
-                 somebody who chose "WebVTT (words)" has already said what they want their
+                 Which format goes in is read off the Output formats ticks above, on this Export
+                 page — somebody who chose "WebVTT (words)" has already said what they want their
                  transcript to be, and asking again at the moment they press a button is asking
-                 them to say it twice. The notice below names that page when no tickable format is
-                 on.
+                 them to say it twice. The notice below points back up at those ticks when no
+                 tickable format is on.
 
                  The line underneath is not decoration. It says the name of the file that will be
                  written before it is written, says what the container costs when it costs
@@ -1511,10 +1511,13 @@
                 <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,11,0,0"
                             IsVisible="{Binding !Chat.HasEntries}">
                   <!-- The second sentence is the non-goals, where a user will look (R13 in the
-                       maintainer's plan): local-only, transient, and the model never attributes
-                       speech — three promises about what this panel does not do. -->
+                       maintainer's plan): local-only and transient — two promises about what this
+                       panel does not do. The third promise that used to sit beside them, that the
+                       model never attributes speech, was withdrawn on 2026-08-30: AnswerPromptBuilder
+                       now labels the evidence and tells the model to use the transcript's names, so
+                       the sentence says what happens instead. -->
                   <TextBlock Classes="fine secondary" TextWrapping="Wrap"
-                             Text="Answers arrive as short bullets, each carrying the moment it came from, a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it, and the model never says who spoke, speaker names stay on the transcript." />
+                             Text="Answers arrive as short bullets, each carrying the moment it came from, a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it. When the transcript names speakers, answers say who said what using those names — the labels the diariser gave them, or the names you have typed over them." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -1916,7 +1919,7 @@
               </StackPanel>
               <!-- The access token for the speaker model whose download is gated. Here rather than
                    on the Models tab because this is where the settings file is written, and beside
-                   the other speaker settings because it belongs to one of those models.
+                   the other speaker settings because it belongs to that model.
 
                    PasswordChar so it is not left on screen or in a screenshot; RevealPassword is
                    deliberately not offered, because the value can always be pasted again and a
@@ -1927,7 +1930,7 @@
                          PlaceholderText="hf_…" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="One of the speaker models is only handed out to people who have accepted its terms. Open its page from the Models tab, accept them, then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
+                         Text="The speaker labelling model is only handed out to people who have accepted its terms. Accept them on its page at huggingface.co — the Models tab shows the exact name to search for — then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
 
               <TextBlock Text="ASKING" Classes="section" Margin="0,8,0,0" />
               <DockPanel LastChildFill="True">
@@ -1982,7 +1985,7 @@
                             Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
                             Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
                       <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="560"
-                                 Text="Leave these alone unless you know what they do. They change how the audio is cut, which arithmetic unit each model runs on, and how much it holds at once. A wrong choice makes transcripts worse or stops a model loading, and the effect is not always visible in the result. Every default here was measured; none of the alternatives has been." />
+                                 Text="Leave these alone unless you know what they do. They change how the audio is cut, which arithmetic unit each model runs on, and how much it holds at once. A wrong choice makes transcripts worse or stops a model loading, and the effect is not always visible in the result. Every default here was measured. Most alternatives have not been — where one has, the note under its control says which half of the trade the measurement covers." />
                     </StackPanel>
                   </Border>
 
@@ -2101,7 +2104,7 @@
                          Text="{Binding AskModeExplanation}" />
 
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askMode is the router. Automatic lets each question choose between the transcript and the model&apos;s own knowledge." />
+                         Text="askMode is the router. Automatic lets each question choose between the parts of the recording that matched and the whole transcript." />
               <!-- How much evidence an answer is built from. A setting rather than a new default
                    because only half of the trade has been measured: the time it saves is large and
                    repeatable, and what it costs in finding the right part of the recording is not

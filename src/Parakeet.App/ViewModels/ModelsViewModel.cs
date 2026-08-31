@@ -233,9 +233,10 @@ public sealed class SideloadedItemViewModel
     /// The catalogue entry that declares a file of this name, or null when nothing does.
     /// </summary>
     /// <remarks>
-    /// One entry, though a name can be declared by more than one — the two 26B answering entries
-    /// ship the same drafting head. Which of them a loose head belongs to is not decidable from the
-    /// head, so <see cref="ModelsViewModel"/> only sets this where the answer is single.
+    /// One entry, though the shape allows a name declared by more than one — until 2026-08-29 the
+    /// two 26B answering entries shipped the same drafting head, and which of them a loose head
+    /// belonged to was not decidable from the head. So <see cref="ModelsViewModel"/> only sets this
+    /// where the answer is single, which holds for the next collision too.
     /// </remarks>
     public ModelDescriptor? ClaimedBy { get; }
 
@@ -325,12 +326,22 @@ public sealed partial class ModelsViewModel : ObservableObject
             // not and leaves the reader to work out what it is for. The place is named with the
             // control, because the passes live on different tabs and a control named without its
             // page is a repair nobody can act on.
+            //
+            // Answering gets its own sentence: the three passes genuinely load at batch start
+            // beside the recogniser, and the answer engine is a child process loaded on demand
+            // after a transcript is finished — "alongside the recogniser" over that one would put
+            // two claims in one sentence that contradict each other.
+            if (model.Descriptor.Task == ModelTask.Answering)
+            {
+                return "Runs from the Ask tab, on a finished transcript, after the recogniser's "
+                    + "work is done. There is nothing to load here.";
+            }
+
             var used = model.Descriptor.Task switch
             {
                 ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
                 ModelTask.Translation => "'Translate to English' on the Transcribe tab",
                 ModelTask.VoiceActivity => "'Neural speech detection' on the Advanced tab of Settings",
-                ModelTask.Answering => "the Ask tab, beside a finished transcript",
                 _ => "its own opt-in",
             };
 
@@ -1063,11 +1074,13 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// name it — or names it twice.
     /// </summary>
     /// <remarks>
-    /// A name two entries declare is left unclaimed rather than guessed at. Both 26B answering
-    /// entries ship <c>mtp-gemma-4-26B-A4B-it.gguf</c>, and a loose head is not evidence of which
-    /// of them it came from; saying the wrong one and offering to file it there would be worse than
-    /// the silence this keeps. The model beside it is not consulted either, because a head that
-    /// pairs with a model on this disk never reaches here — it is filtered out one level up.
+    /// A name two entries declare is left unclaimed rather than guessed at: a loose file is not
+    /// evidence of which entry it came from, and saying the wrong one and offering to file it there
+    /// would be worse than the silence this keeps. Until 2026-08-29 both 26B answering entries
+    /// shipped <c>mtp-gemma-4-26B-A4B-it.gguf</c> and a loose head was left unclaimed; the IQ4_XS
+    /// quant is deferred now, so exactly one entry claims that head — the rule stays for the next
+    /// collision. The model beside it is not consulted either, because a head that pairs with a
+    /// model on this disk never reaches here — it is filtered out one level up.
     /// </remarks>
     private ModelDescriptor? ClaimingEntry(string fileName)
     {

@@ -23,11 +23,14 @@ namespace Parakeet.App.ViewModels;
 /// is the defect the shared chip map was introduced on 2026-08-22 to fix.
 /// </para>
 /// <para>
-/// <b>The name is for reading, and does not reach the files.</b> Nothing here is written back to a
-/// transcript on disk, and nothing survives the run: a second pass over the same audio need not
-/// give "Speaker 1" to the same person, so restoring a name would be this window asserting an
-/// identity it has no way to check. <see cref="AskViewModel.RenameNotice"/> is what says so, and it
-/// says so only once somebody has actually renamed something.
+/// <b>The name reaches a file only when Export renders one.</b> Both writing paths go through
+/// <see cref="JobViewModel"/>'s renamed view, so a file exported after a rename carries the typed
+/// name; what never happens is rewriting a file already on disk, and nothing survives the run: a
+/// second pass over the same audio need not give "Speaker 1" to the same person, so restoring a
+/// name would be this window asserting an identity it has no way to check. The two
+/// <c>RenameNotice</c>s — <see cref="AskViewModel.RenameNotice"/> and
+/// <see cref="TranscribeViewModel.RenameNotice"/> — each say their half, and only once somebody
+/// has actually renamed something.
 /// </para>
 /// </remarks>
 public sealed class SpeakerViewModel : ObservableObject

@@ -133,15 +133,16 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// What a name typed here does to what Export writes, said once somebody has typed one.
     /// </summary>
     /// <remarks>
-    /// Deliberately not the Ask tab's sentence. That one says names are "for reading here", which is
-    /// true where it stands and would be false over this button: the export path applies them. What
-    /// both have to say is that files already on disk keep the labels they were written with, and a
-    /// new run starts over — a name is not stored against the recording.
+    /// Deliberately not the Ask tab's sentence. That one leads with names being "for reading here",
+    /// the right emphasis where it stands; over this button the export path is the point, so this
+    /// one leads with the names going into the files. What both have to say is that files already
+    /// on disk keep the labels they were written with, and a new run starts over — a name is not
+    /// stored against the recording.
     /// </remarks>
     public string? RenameNotice =>
         Speakers is { } voices && voices.Any(v => v.IsRenamed)
             ? "These names go into the files Export writes from here. Files already written keep the "
-              + "diariser's own labels, and a new run starts over."
+              + "labels they were written with, and a new run starts over."
             : null;
 
     /// <summary>A tick under Output formats changes what Export writes and what would go inside the recording.</summary>
@@ -752,12 +753,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
             if (job.IsFromUrl)
             {
                 return "This one came from a link, so the recording here is the audio that was "
-                    + "downloaded. Its transcript sits beside it as a file.";
+                    + "downloaded, kept in a temporary folder. Use Export files above to write its "
+                    + "transcript wherever you want it.";
             }
 
             if (ExportableFormat is not { } format)
             {
-                return "Tick SRT or WebVTT under Output formats, on the Transcribe tab, those are the two a "
+                return "Tick SRT or WebVTT under Output formats above — those are the two a "
                     + "recording can carry.";
             }
 
@@ -1612,15 +1614,17 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 : $"Finished with {failed} failure{(failed == 1 ? string.Empty : "s")}" +
                   (cancelled > 0 ? $" and {cancelled} cancelled." : ".");
 
-            // A file written without a pass it asked for is finished and is not what was asked
-            // for, and a summary that said only "finished" would be the first to hide it. The row
-            // carries the reason; this names what is missing so that "Finished 3 files" cannot be
-            // read as three files with speakers.
+            // A transcript produced without a pass it asked for is finished and is not what was
+            // asked for, and a summary that said only "finished" would be the first to hide it.
+            // The row carries the reason; this names what is missing so that "Finished 3 files"
+            // cannot be read as three transcripts with speakers. "Transcribed", not "written" —
+            // a run puts nothing on disk, and a verb that says otherwise sends someone looking
+            // for files that Export has not written yet.
             var incomplete = results.Where(r => r.State == JobState.Completed && r.FailedPasses.Count > 0).ToList();
             if (incomplete.Count > 0)
             {
                 var missing = incomplete.SelectMany(r => r.FailedPasses).Select(f => f.Pass.Product).Distinct();
-                ran += $" {incomplete.Count} of them written without {string.Join(" or ", missing)}: the row says why.";
+                ran += $" {incomplete.Count} of them transcribed without {string.Join(" or ", missing)}: the row says why.";
             }
 
             // What was skipped is said out loud. A queue of four reporting that it finished one is
