@@ -1189,16 +1189,44 @@ public sealed partial class TranscribeViewModel : ObservableObject
         IsFetchingUrl = true;
         UrlStatus = "Reading the link";
 
+        // Progress<T> posts its callbacks through the ambient synchronisation context, so a report
+        // raised just before the fetch finished can arrive just after it — and would repaint the
+        // terminal status ("That link is already in the queue.", a refusal, "Cancelled.") as
+        // "Downloaded: 100%". The application's dispatcher happens to process the posts in the
+        // order they were made; that ordering belongs to the dispatcher, not to this method, and a
+        // context that runs posts concurrently reorders them. The same guard as JobViewModel.Apply,
+        // for the same reason: once the fetch has settled, a late report describes work that is
+        // over and says nothing.
+        var statusGate = new object();
+        var settled = false;
+
+        void Settle(string? status)
+        {
+            lock (statusGate)
+            {
+                settled = true;
+                UrlStatus = status;
+            }
+        }
+
         try
         {
             Directory.CreateDirectory(_downloadRoot);
 
             var progress = new Progress<Parakeet.App.Services.Tools.UrlFetchProgress>(report =>
             {
-                UrlStatus = report.Fraction is { } fraction
-                    ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                        $"{report.Stage}: {fraction * 100:F0}%")
-                    : report.Stage;
+                lock (statusGate)
+                {
+                    if (settled)
+                    {
+                        return;
+                    }
+
+                    UrlStatus = report.Fraction is { } fraction
+                        ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                            $"{report.Stage}: {fraction * 100:F0}%")
+                        : report.Stage;
+                }
             });
 
             var fetched = await _fetcher
@@ -1207,7 +1235,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (Jobs.Any(j => string.Equals(j.SourceUrl, fetched.SourceUrl, StringComparison.OrdinalIgnoreCase)))
             {
-                UrlStatus = "That link is already in the queue.";
+                Settle("That link is already in the queue.");
                 return;
             }
 
@@ -1219,17 +1247,17 @@ public sealed partial class TranscribeViewModel : ObservableObject
             });
 
             Url = string.Empty;
-            UrlStatus = null;
+            Settle(null);
             StatusMessage = $"Added “{fetched.Title}” from the link.";
             RefreshQueueState();
         }
         catch (OperationCanceledException)
         {
-            UrlStatus = "Cancelled.";
+            Settle("Cancelled.");
         }
         catch (Parakeet.App.Services.Tools.MediaFetchException ex)
         {
-            UrlStatus = ex.Message;
+            Settle(ex.Message);
         }
         finally
         {
