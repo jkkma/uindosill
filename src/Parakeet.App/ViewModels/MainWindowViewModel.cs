@@ -14,6 +14,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 {
     private readonly AppSettingsStore _settings;
 
+    /// <summary>
+    /// Which transcription backends are on disk, asked lazily: the launch's flavour question
+    /// (<see cref="HasCudaBackendOnDisk"/>) and the default backend both read it, and the tests
+    /// hand in an answer so neither depends on what this machine has vendored.
+    /// </summary>
+    private readonly Func<IReadOnlyList<ComputeBackend>> _backendsOnDisk;
+
     /// <summary>The real provider when this window built one, so the model picker can list what
     /// is on disk. Null under the fake provider the tests supply, and the picker is then empty
     /// but for its automatic row.</summary>
@@ -110,12 +117,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var modelCatalog = catalog ?? ModelCatalog.Default;
         _settings = settings ?? new AppSettingsStore();
 
+        _backendsOnDisk = backendsOnDisk ?? ParakeetNativeLibrary.BackendsPresentOnDisk;
+
         // The field, not the property: assigning the property here would fire OnBackendChanged and
         // write the file on every launch, including the launches where nothing was chosen.
         var loaded = _settings.Load();
         _backend = loaded.Backend
-            ?? ParakeetNativeLibrary.PreferredBackend(
-                backendsOnDisk?.Invoke() ?? ParakeetNativeLibrary.BackendsPresentOnDisk());
+            ?? ParakeetNativeLibrary.PreferredBackend(_backendsOnDisk());
         _askThinking = loaded.AskThinking;
         _askMode = loaded.AskMode;
         _askEvidence = loaded.AskEvidence;
@@ -991,6 +999,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCudaPackMessage))]
+    [NotifyPropertyChangedFor(nameof(CudaPackLaunchNotice))]
     private string? _cudaPackMessage;
 
     public bool HasCudaPackMessage => !string.IsNullOrWhiteSpace(CudaPackMessage);
@@ -1057,6 +1066,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanInstallCudaPack))]
+    [NotifyPropertyChangedFor(nameof(CudaPackLaunchNotice))]
+    [NotifyCanExecuteChangedFor(nameof(StopCudaPackInstallCommand))]
     private bool _isInstallingCudaPack;
 
     [ObservableProperty]
@@ -1123,7 +1134,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            CudaPackMessage = "Stopped. What was downloaded is kept, so starting again resumes.";
+            // The only thing that cancels this is the Stop button, and Stop records the refusal
+            // the launch start honours — so the sentence can promise quiet without checking who
+            // asked. See StopCudaPackInstall.
+            CudaPackMessage = "Stopped. What was downloaded is kept — the Set up graphics "
+                + "acceleration button in Settings resumes it — and it will not start again "
+                + "on its own.";
         }
         catch (Exception exception) when (exception is CudaPackException or ModelInstallException
                                               or IOException or HttpRequestException)
@@ -1135,6 +1151,114 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsInstallingCudaPack = false;
             RefreshCudaPack();
         }
+    }
+
+    // ---- The launch that starts the pack itself -------------------------------------------------
+    //
+    // **The win-cuda channel cannot carry the pack inside its installer** — the Setup.exe was
+    // measured at 1,998,899,901 bytes against GitHub's 2,147,483,648-byte asset limit, and the
+    // pack is 1.8 GB compressed on its own — so "part of that channel's install" has to mean the
+    // application finishing its own set-up: a launch of the CUDA flavour starts the download
+    // where the machine could use it, instead of leaving it as a Settings row somebody has to
+    // find. Decided 2026-08-30; docs/PHASES.md holds the decision and the alternatives priced.
+    //
+    // The flavour is read off the disk rather than off Velopack's channel name, on
+    // ParakeetNativeLibrary.BackendsPresentOnDisk's own reasoning: the cuda directory is exactly
+    // what that channel adds, and what the build can reach is the question being asked.
+
+    /// <summary>True when the CUDA transcription backend is on disk — what the win-cuda channel
+    /// adds and the default channel omits, and so how a build knows its flavour.</summary>
+    public bool HasCudaBackendOnDisk => _backendsOnDisk().Contains(ComputeBackend.Cuda);
+
+    /// <summary>
+    /// True where a launch would start the install by itself: the CUDA flavour on disk, the
+    /// button live (<see cref="CanInstallCudaPack"/>: a card the driver reports, nothing
+    /// installed yet, a verified manifest), and no recorded refusal.
+    /// </summary>
+    /// <remarks>
+    /// Held apart from <see cref="InstallCudaPackOnLaunch"/> so the decision can be asserted
+    /// without the 1.8 GB action behind it: the tests hold this against the button on any
+    /// machine, and only configurations that must refuse ever call the start.
+    /// </remarks>
+    public bool WouldInstallCudaPackOnLaunch =>
+        HasCudaBackendOnDisk
+        && CanInstallCudaPack
+        && !_settings.Load().CudaPackAutoInstallDeclined;
+
+    private bool _cudaPackLaunchStarted;
+
+    /// <summary>
+    /// Whether to draw the window-level strip: true once this launch has started the install by
+    /// itself, and for the rest of the session — the strip keeps the outcome (installed, stopped,
+    /// or the failure) rather than vanishing under the reader.
+    /// </summary>
+    public bool ShowCudaPackLaunchNotice => _cudaPackLaunchStarted;
+
+    /// <summary>
+    /// The strip's text: what is downloading and why while the install runs, and the outcome
+    /// alone after it — "Installed", "Stopped" and a failure each already say what happened, and
+    /// an intro in the present tense would sit wrongly beside all three.
+    /// </summary>
+    public string CudaPackLaunchNotice
+    {
+        get
+        {
+            var live = CudaPackMessage ?? string.Empty;
+            if (!IsInstallingCudaPack)
+            {
+                return live;
+            }
+
+            var manifest = CudaPackManifestOrNull;
+            var size = manifest is null
+                ? string.Empty
+                : $" ({ByteSize.Describe(manifest.TotalDownloadBytes)}, once)";
+
+            return $"Speaker labelling is downloading its graphics acceleration{size} so it can "
+                + $"run on your NVIDIA card. Everything else works while it arrives. {live}";
+        }
+    }
+
+    /// <summary>
+    /// Starts the install without being asked, where <see cref="WouldInstallCudaPackOnLaunch"/>
+    /// says a launch should. Returns whether it did — the window ignores the answer; the tests
+    /// read it.
+    /// </summary>
+    /// <remarks>
+    /// Once per launch, not per condition change: a manifest that becomes installable while the
+    /// window is open gets the Settings row, and the next launch. An interrupted download is the
+    /// case this quietly finishes — the installer resumes from the parts it kept, so closing the
+    /// window mid-fetch costs the bytes of the part in flight and nothing more.
+    /// </remarks>
+    public bool InstallCudaPackOnLaunch()
+    {
+        if (_cudaPackLaunchStarted || !WouldInstallCudaPackOnLaunch)
+        {
+            return false;
+        }
+
+        _cudaPackLaunchStarted = true;
+        OnPropertyChanged(nameof(ShowCudaPackLaunchNotice));
+
+        InstallCudaPackCommand.Execute(null);
+        return true;
+    }
+
+    /// <summary>
+    /// Stops the running install and records the refusal, so no later launch starts it again.
+    /// </summary>
+    /// <remarks>
+    /// The refusal is written before the cancel rather than inside the install's own cancel
+    /// handling, because the distinction matters: a window closed mid-download has said nothing
+    /// and resumes at the next launch, and only this gesture is somebody saying no. It refuses
+    /// the <i>self-start</i>, not the feature — the Settings button stays, resumes from what was
+    /// kept, and never reads the flag.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(IsInstallingCudaPack))]
+    private void StopCudaPackInstall()
+    {
+        _settings.Update(current => current with { CudaPackAutoInstallDeclined = true });
+        InstallCudaPackCommand.Cancel();
     }
 
     // ---- yt-dlp and Deno --------------------------------------------------------------------

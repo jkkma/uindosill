@@ -255,6 +255,40 @@
       </Grid>
     </Border>
 
+    <!-- ══ CUDA set-up notice ══════════════════════════════════════════════════════════════════
+         The CUDA flavour finishing its own set-up. The pack cannot ride inside that channel's
+         installer — the Setup.exe was measured at 1,998,899,901 bytes against GitHub's
+         2,147,483,648-byte asset limit, with the pack 1.8 GB on its own — so the launch starts
+         the download itself, and this strip is where a fetch nobody clicked for is visible and
+         stoppable from every tab. Drawn only once a launch has actually started one, and kept
+         for the session with the outcome — installed, stopped, or the failure — rather than
+         vanishing under the reader. Stopping records the refusal: later launches stay quiet,
+         and the Settings row keeps offering the resume.
+
+         The update notice's colours and placement, deliberately: both are the application
+         talking above the pages, and two dialects of banner would ask a reader to learn the
+         difference. -->
+    <Border DockPanel.Dock="Top"
+            Name="CudaPackNotice"
+            IsVisible="{Binding ShowCudaPackLaunchNotice}"
+            Background="{DynamicResource Matcha50Brush}"
+            BorderBrush="{DynamicResource Matcha200Brush}"
+            BorderThickness="0,0,0,1"
+            Padding="16,10">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding CudaPackLaunchNotice}"
+                   Foreground="{DynamicResource Matcha700Brush}"
+                   VerticalAlignment="Center" TextWrapping="Wrap" />
+        <ProgressBar Grid.Column="1" Width="140" VerticalAlignment="Center" Margin="12,0,0,0"
+                     Minimum="0" Maximum="1"
+                     Value="{Binding CudaPackProgress}"
+                     IsVisible="{Binding IsInstallingCudaPack}" />
+        <Button Grid.Column="2" Content="Stop" Margin="12,0,0,0"
+                Command="{Binding StopCudaPackInstallCommand}"
+                IsVisible="{Binding IsInstallingCudaPack}" />
+      </Grid>
+    </Border>
+
     <TabControl Name="Tabs" Classes="headless" SelectedIndex="{Binding SelectedTab}">
 
       <!-- ══ Transcribe ════════════════════════════════════════════════════════════════════════ -->
@@ -1895,10 +1929,16 @@
                    it asks nvcuda.dll rather than an adapter name; its third answer, "could not
                    tell", counts as no.
 
-                   The button is separately disabled while the manifest is unverified, which is the
-                   state this build ships in: the digests describe a local build and no release
-                   asset has been uploaded, so there is nothing to download yet. The explanation
-                   says so in words rather than leaving a dead button unexplained. -->
+                   The button is separately dead while the manifest is unverified — the flag that
+                   says the release assets really exist at the pinned URL, true since v1.0.0-rc.10
+                   and false again in any build whose pins have not been read back off an upload —
+                   and the explanation gives the reason in words rather than leaving a dead button
+                   unexplained.
+
+                   On the CUDA flavour this row is usually moot: the launch starts the install
+                   itself (see the CUDA set-up notice at the top of the window), and this stays as
+                   the manual path — the only one on the default channel, and the resume for
+                   somebody who pressed Stop. -->
               <StackPanel Spacing="6" IsVisible="{Binding ShowCudaPack}">
                 <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                            Text="{Binding CudaPackExplanation}" />
@@ -1911,6 +1951,9 @@
                                Minimum="0" Maximum="1"
                                Value="{Binding CudaPackProgress}"
                                IsVisible="{Binding IsInstallingCudaPack}" />
+                  <Button Content="Stop"
+                          Command="{Binding StopCudaPackInstallCommand}"
+                          IsVisible="{Binding IsInstallingCudaPack}" />
                 </StackPanel>
 
                 <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"

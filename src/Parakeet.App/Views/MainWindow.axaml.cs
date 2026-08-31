@@ -895,6 +895,14 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             _ = viewModel.Updates.CheckOnLaunchAsync();
+
+            // The CUDA flavour finishes its own set-up: the pack cannot ride inside that
+            // channel's installer (the 2 GiB release-asset limit; the strip's comment in the
+            // XAML carries the numbers), so the launch starts the download where the machine
+            // could use it and nobody has pressed Stop. Fire and forget on the update check's
+            // own terms — nothing about a 1.8 GB fetch belongs between the user and the window
+            // they opened — and the strip above the tabs is where it shows and stops.
+            viewModel.InstallCudaPackOnLaunch();
         }
     }
 
