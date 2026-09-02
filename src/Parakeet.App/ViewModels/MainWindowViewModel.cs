@@ -1171,17 +1171,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool HasCudaBackendOnDisk => _backendsOnDisk().Contains(ComputeBackend.Cuda);
 
     /// <summary>
-    /// True where a launch would start the install by itself: the CUDA flavour on disk, the
-    /// button live (<see cref="CanInstallCudaPack"/>: a card the driver reports, nothing
-    /// installed yet, a verified manifest), and no recorded refusal.
+    /// True where a launch would start the install by itself: an installed copy, the CUDA flavour
+    /// on disk, the button live (<see cref="CanInstallCudaPack"/>: a card the driver reports,
+    /// nothing installed yet, a verified manifest), and no recorded refusal.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Held apart from <see cref="InstallCudaPackOnLaunch"/> so the decision can be asserted
     /// without the 1.8 GB action behind it: the tests hold this against the button on any
     /// machine, and only configurations that must refuse ever call the start.
+    /// </para>
+    /// <para>
+    /// <b>An installed copy first, which is the same rule the other launch action already
+    /// keeps</b> — <c>UpdatesViewModel.CheckOnLaunchAsync</c> makes no request unless
+    /// <see cref="UpdatesViewModel.IsSupported"/>, so a build running out of <c>bin/</c> reaches
+    /// the network on neither path. The consent story this feature rests on is that the user
+    /// chose the win-cuda installer; a checkout with the cuda natives vendored chose nothing, and
+    /// on 2026-09-01 that distinction was measured rather than argued — the App suite, on a
+    /// machine with those natives and an NVIDIA driver, opened a window per test and fetched
+    /// 122 MB of the pack into the real <c>%LOCALAPPDATA%</c> before anyone noticed. The Settings
+    /// row is unaffected and stays the manual path, here as everywhere else.
+    /// </para>
     /// </remarks>
     public bool WouldInstallCudaPackOnLaunch =>
-        HasCudaBackendOnDisk
+        Updates.IsSupported
+        && HasCudaBackendOnDisk
         && CanInstallCudaPack
         && !_settings.Load().CudaPackAutoInstallDeclined;
 

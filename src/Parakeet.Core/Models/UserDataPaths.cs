@@ -36,13 +36,35 @@ public static class UserDataPaths
     /// </remarks>
     public const string DirectoryName = "Uindosill";
 
+    /// <summary>Environment variable that overrides the location, for portable installs and tests.</summary>
+    /// <remarks>
+    /// The models directory and the settings file have had one of these for as long as the suite
+    /// has needed to stay out of the user's files; everything else under this root had none, so a
+    /// caller that asked this class rather than one of those two reached the real profile whatever
+    /// a test had redirected. That was measured rather than reasoned about on 2026-09-01: the App
+    /// suite, on a machine with the cuda natives vendored and an NVIDIA driver, opened a window per
+    /// test and downloaded 122 MB of the CUDA pack into the maintainer's own
+    /// <c>%LOCALAPPDATA%\Uindosill</c> — <c>MainWindowViewModel.CudaPackRoot</c> is this method,
+    /// and neither redirect covered it. One variable here covers every caller of the one place,
+    /// present and future, which is the reasoning <c>TestUserData</c> already gives for redirecting
+    /// unconditionally rather than at each call site.
+    /// </remarks>
+    public const string DirectoryEnvironmentVariable = "UINDOSILL_USER_DATA_DIR";
+
     /// <summary>
     /// <c>%LOCALAPPDATA%\Uindosill</c> on Windows, and the XDG equivalent elsewhere, always resolved
     /// through the platform API so redirected and roaming profiles keep working — never a hardcoded
-    /// <c>%USERPROFILE%\.cache</c>, which is how managed Windows fleets get broken.
+    /// <c>%USERPROFILE%\.cache</c>, which is how managed Windows fleets get broken. Overridden
+    /// whole by <see cref="DirectoryEnvironmentVariable"/>, which the models directory and the
+    /// settings file then follow, because both are defined against this.
     /// </summary>
     public static string RootDirectory()
     {
+        if (Environment.GetEnvironmentVariable(DirectoryEnvironmentVariable) is { Length: > 0 } redirected)
+        {
+            return redirected;
+        }
+
         var localAppData = Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData,
             Environment.SpecialFolderOption.Create);
