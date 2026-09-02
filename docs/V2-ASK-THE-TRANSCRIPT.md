@@ -1396,9 +1396,10 @@ exception, by task rather than by size. The transcript tidy decided the same day
 (`docs/PHASES.md`, *Decided 2026-09-01*) runs its model beside the recogniser, cleaning lines as
 they arrive, and that model is the catalogue's tidying entry and nothing else — `gemma-4-E4B-it`
 at QAT UD-Q4_K_XL, 3.91 GiB, which the loader places as 2,493 MiB on the device and 1,872 MiB
-host-side. The pair was run on the second machine on 2026-09-01: both loaded, both ran, the
-recogniser 27% slower for the company and the tidy at 61% of its solo rate, 26% saved end to end on
-a ten-minute file (`docs/UNPROVEN.md`, *Gemma 4 E4B as a transcript tidy*). That is the first
+host-side. The pair was run on the second machine's Vulkan path on 2026-09-01: both loaded, both ran, the
+recogniser 26% slower beside it and the tidy at 61% of its solo rate; end to end on a ten-minute
+file, 26% of the combined time saved with the transcription 31% slower in that run
+(`docs/UNPROVEN.md`, *Gemma 4 E4B as a transcript tidy*). That is the first
 both-resident observation this decision has had for any pair, and it is why the exception is
 narrow: a model earns the seat by being measured in it, and the answering entries — 6.3 and
 15.8 GiB — have not been and are not. "Fits" there still means "ran"; no memory counter was read.

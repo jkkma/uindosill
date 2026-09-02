@@ -7162,17 +7162,19 @@ here confirms which tensors landed where. Health in 2.0–3.7 s from a warm disk
 `c566f6885963c83a0d868f9656287ed5d4f12a2b8f0c86a20524f89a96169ed2`, matching, loads with
 `--spec-type draft-mtp -md <head> -ngld 999` — the form the engine builds for the 12B's head. The
 head's README says the E4B aborts under CUDA flash attention and to run `-fa off`; on this driver
-at the server's default it ran. Upstream merged E2B/E4B drafting (`gemma4-assistant`) on
-2026-06-08, before the vendored tag.
+at the server's default it ran. The head's README names upstream PR #24282, merged 2026-06-08, as
+the build that first loads it (`gemma4-assistant`), which predates the vendored tag.
 
 **The input.** This machine's CSB384 transcript (`runs/20260816-033132-vulkan/`:
-`tdt-0.6b-v3-f16`, Vulkan, 10,523.4 s of audio in 332.4 s, RTF 0.0316, 29,920 words, 1,378
-segments) for the rewrite shapes, and `sample.m4a` — the 600.0 s cut every RTF figure in this
-file is quoted on, 1,795 words in 38 segments — for the runs beside the recogniser.
+`tdt-0.6b-v3-f16`, Vulkan, 10,523.4 s of audio in 332.4 s, RTF 0.0316, 29,920 whitespace-separated
+words of which 29,909 are timed, 1,378 segments) for the rewrite shapes, and `sample.m4a` — the
+ten-minute podcast cut that appears earlier in this file, 600.004 s of AAC, 1,795 words in 38
+segments — for the runs beside the recogniser.
 
 ### What is measured
 
-- **Chunks, three arms, one run each** (the shortest chunk three times, agreeing to 0.1 s):
+- **Chunks, three arms, one run each** (the shortest chunk three times, within 0.14 s, the cold
+  first run the outlier each time):
 
   | arm | 27 words, 8.3 s | 101 words, 29.0 s | 332 words, 115.5 s | 1,517 words, 529.3 s | decode |
   |---|---:|---:|---:|---:|---:|
@@ -7185,7 +7187,8 @@ file is quoted on, 1,795 words in 38 segments — for the runs beside the recogn
   rewrite mostly copies its input, so this is the head's best case, worth **1.8–2.1×** on decode
   against the 1.27× recorded above for the 12B answering questions. `ngram-simple` accepted 64%
   on the short utterance and 20–27% elsewhere: better than plain, short of the head, and free.
-  Every arm cleans 5.5–13× faster than the speech it reads.
+  Every arm in the table cleans 6–13× faster than the speech it reads; the cold first run of the
+  shortest chunk was 5.5×.
 - **One request per line, the shape an opt-in pass takes.** The first 200 segments, 1,769.8 s of
   speech, head on: **178.2 s sequentially (9.9× realtime, 6.0 min per hour of audio)** and
   **110.2 s with four requests in flight (16.1×, 3.7 min per hour)** — four slots buy 1.6×, not
@@ -7198,14 +7201,15 @@ file is quoted on, 1,795 words in 38 segments — for the runs beside the recogn
   change to a non-filler word. Over the 200 lines, **16 substituted, 493 deleted, 2 inserted of
   5,023** (18 / 497 / 3 with four in flight); over the 1,517-word chunk 2 / 105 / 0 of 1,496 plain
   and 3 / 112 / 0 with the head. The deletions are stutters, false starts, backchannels and *like*
-  — *like* alone is 68 of the 493. No line holding a real word came back empty; the thirteen lines
+  — *like* alone is 68 of the 493. No line holding a real word came back empty; the fifteen lines
   that were only *Um* or *Uh* came back empty. One line lost more than half its words (*Right. Like
   the the that that that one's the* → *Right. That one's the*); none grew.
 - **The sixteen substitutions, read in full, are the finding.** Five are normalisations the prompt
   forbade: *gonna* → *going to*, *you was yapping* → *you were* twice, *you've went* → *gone*, *is
   so much cooler* → *it's*. Four are repairs of recogniser fragments that happen to be right:
   *objec* → *object*, *the ol* → *the old*, *betterly* → *better*, *like one handed* →
-  *one-handed*. Three are guesses at fragments that may be wrong — *behtor* → *better*, *of I
+  *one-handed*. One is a hyphenation the normaliser counts as a substitution, *micro behaviors* →
+  *micro-behaviors*. Three are guesses at fragments that may be wrong — *behtor* → *better*, *of I
   don't want* → *if*, and *gonna have to hair about* → *worry about*, where the model invented the
   word. Two change meaning: *you fucking psychopaths out there* → *psychopath*, and *I love me some
   fucking* → *it*. One false-start repair changed the subject: *is going crazy* → *I'm going
@@ -7226,15 +7230,18 @@ file is quoted on, 1,795 words in 38 segments — for the runs beside the recogn
   |---|---|---|---|
   | recogniser alone, two runs | **22.8 s, 22.2 s** (RTF 0.038, 0.037; decode 17.9, 17.1 s) | — | — |
   | both on the 880M | **28.5 s** (RTF 0.047; decode 22.7 s) | 32 words/s, 1.1 lines/s | 52 words/s, 2.0 lines/s |
-  | E4B on the CPU cores | **44.9 s** (RTF 0.075; decode 35.8 s) | 26 words/s, 1.0 lines/s | 31 words/s |
+  | E4B on the CPU cores | **44.9 s** (RTF 0.075; decode 35.8 s) | 26 words/s, 1.0 lines/s | 33 words/s |
 
   **Both resident works, for this pair**: the E4B and the 1.34 GiB f16 recogniser loaded and ran
   together with no failure, the first both-resident observation decision 4 has had for any pair.
-  Sharing the adapter costs the recogniser 27% and the E4B 39%; ten threads of E4B on the cores
+  Sharing the adapter costs the recogniser 26% and the E4B 39%; ten threads of E4B on the cores
   instead starve the recogniser's own CPU work — the detector, the mel front end, the segmenter —
-  and double its time. The recogniser emits 63–80 words per second of wall here and the E4B
-  absorbs 32 beside it, so lines cleaned as they arrive trail by a backlog that grows for the whole
-  file: about 880 words, some 17 s, still queued when the recogniser finishes ten minutes.
+  and double its time (a separate solo launch of the E4B on the CPU gave 31 words/s, the
+  same-session control after the recogniser 33). The recogniser emits 63–80 words per second of
+  wall here and the E4B absorbs 32 beside it, so lines cleaned as they arrive trail by a backlog
+  that grows for the whole file — by arithmetic from those two rates rather than observation, and
+  with CSB384's lines standing in for the sample's, about 880 words, some 17 s, still queued when
+  the recogniser finishes ten minutes.
 - **End to end on the sample's own 38 lines**: sequential — recogniser 23.3 s, then the E4B's
   load 3.7 s, then the lines four in flight 31.4 s — **58.4 s**; tandem — the E4B loaded and warm
   before the clock, the recogniser and the same lines started together — **43.1 s**, the

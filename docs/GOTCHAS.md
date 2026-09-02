@@ -1008,9 +1008,12 @@ in flight, and one of the seven that differed had dropped a name; the same 1,496
 rewritten plain, with the MTP head and with `ngram-simple` differed by a few deletions and one or
 two substitutions. None of the differences was a new kind of edit, and all of them were words.
 
-The trap is the register's own earlier finding: the 12B's drafting head was recorded as "the same
-answer faster" because its citation checks came back unchanged (2026-08-27). That was a measured
-equivalence for that model on that workload, not a guarantee the flag carries. Anything that pairs
-a head with a model, or raises `-np` above one, and then claims the output is the same has to show
-it on the output — which is why the tidy's contract verifies every line against the spoken words
-rather than trusting the model to have copied them.
+The trap was already in the record. The 26B's drafting head was written up on 2026-08-27 as the
+same answer faster — every citation still resolved with it, as without — and the same table shows
+it wrote a different answer: 16 quotes verified against 17 and 47 citations against 52, in a
+session whose own noise-floor paragraph says a changed quote count is a real change in what the
+model wrote (`docs/UNPROVEN.md`, *The Ask tab is three times faster*). The 12B's head, 1.27x on
+2026-08-28, has the same standing: equivalent on what was checked, not identical. Anything that
+pairs a head with a model, or raises `-np` above one, and then claims the output is the same has
+to show it on the output — which is why the tidy's contract verifies every line against the spoken
+words rather than trusting the model to have copied them.
