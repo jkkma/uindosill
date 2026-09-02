@@ -996,3 +996,21 @@ the CPU provider and 1.907e-05 on WebGPU, flat across batch size. **The sweep is
 export script rather than a thing somebody did once**, and the same applies to any axis the traced
 example fixed by accident: the embedding's mask length and its fbank length are independent in the
 pipeline because `StatsPool` interpolates one to the other, so they are swept independently too.
+
+## 41. Greedy decoding is not byte-identical across drafting modes or slot batching, so "the same answer faster" is a measurement per model, not a property of the flag
+
+Temperature 0 is deterministic for a fixed graph. Speculative decoding verifies drafted tokens in a
+batch, and a server handling four requests at once batches their tokens together, and either
+changes which kernels run and in what order — so the argmax can land on a different token where two
+logits sit close. Measured on `gemma-4-E4B-it` on the second machine, 2026-09-01: the same 200
+transcript lines came back **identical on 193** between a sequential pass and one with four requests
+in flight, and one of the seven that differed had dropped a name; the same 1,496-word chunk
+rewritten plain, with the MTP head and with `ngram-simple` differed by a few deletions and one or
+two substitutions. None of the differences was a new kind of edit, and all of them were words.
+
+The trap is the register's own earlier finding: the 12B's drafting head was recorded as "the same
+answer faster" because its citation checks came back unchanged (2026-08-27). That was a measured
+equivalence for that model on that workload, not a guarantee the flag carries. Anything that pairs
+a head with a model, or raises `-np` above one, and then claims the output is the same has to show
+it on the output — which is why the tidy's contract verifies every line against the spoken words
+rather than trusting the model to have copied them.

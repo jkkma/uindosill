@@ -7135,3 +7135,129 @@ that release has to keep existing for the download to resolve.
 **Not established.** That anybody has installed the pack from the release. The end-to-end install
 was driven by hand against a local server on 2026-08-29; what is proven here is that the bytes a
 user would fetch are the bytes the manifest describes.
+
+## Gemma 4 E4B as a transcript tidy — measured 2026-09-01, second machine
+
+The question put to the record before anything was decided: can a small language model tidy a
+transcript — fillers, false starts and stutters out, punctuation and casing fixed, nothing else
+touched — fast enough to matter, and what does it change when it does? Second machine (Ryzen AI 9
+365 / Radeon 880M, 15.62 GiB; Vulkan reports 16,188 MiB with 15,379 MiB free at load), Vulkan, the
+vendored `llama-server` **b10603** under the engine's own child arguments — `-ngl 999`,
+`-b 4096 -ub 2048`, `--fit off`, `--jinja`, `--reasoning off`, the server's default flash
+attention, `GGML_VK_DISABLE_BFLOAT16=1` — except `-c 8192` in place of 16,384 and no API key; the
+server chose four slots with a unified cache on its own. Requests went to `/v1/chat/completions`
+at temperature 0 with `cache_prompt` on, under a system message asking for the rewrite and
+forbidding anything else. The record, every output text included, is
+`runs/20260901-190729-spike-vulkan/` (gitignored; on the Drive's runs-laptop folder).
+
+**The model.** `unsloth/gemma-4-E4B-it-qat-GGUF`'s `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf`,
+4,215,695,776 bytes, sha256
+`df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3`, matching the hub's LFS oid;
+Apache-2.0 on source and GGUF, the same quantisation family as the catalogue's 12B entry. The
+loader reads it as 7.46 B parameters, 3.91 GiB at 4.50 BPW, `n_ctx_train` 131,072, and puts
+**43/43 layers on the 880M**: 2,493 MiB in the device buffer and 1,872 MiB host-side — a split
+consistent with the per-layer embedding tables the model card calls lookup-only, though nothing
+here confirms which tensors landed where. Health in 2.0–3.7 s from a warm disk. Its drafting head,
+`MTP/mtp-gemma-4-E4B-it-Q8_0.gguf` from the same repository, 98,671,936 bytes, sha256
+`c566f6885963c83a0d868f9656287ed5d4f12a2b8f0c86a20524f89a96169ed2`, matching, loads with
+`--spec-type draft-mtp -md <head> -ngld 999` — the form the engine builds for the 12B's head. The
+head's README says the E4B aborts under CUDA flash attention and to run `-fa off`; on this driver
+at the server's default it ran. Upstream merged E2B/E4B drafting (`gemma4-assistant`) on
+2026-06-08, before the vendored tag.
+
+**The input.** This machine's CSB384 transcript (`runs/20260816-033132-vulkan/`:
+`tdt-0.6b-v3-f16`, Vulkan, 10,523.4 s of audio in 332.4 s, RTF 0.0316, 29,920 words, 1,378
+segments) for the rewrite shapes, and `sample.m4a` — the 600.0 s cut every RTF figure in this
+file is quoted on, 1,795 words in 38 segments — for the runs beside the recogniser.
+
+### What is measured
+
+- **Chunks, three arms, one run each** (the shortest chunk three times, agreeing to 0.1 s):
+
+  | arm | 27 words, 8.3 s | 101 words, 29.0 s | 332 words, 115.5 s | 1,517 words, 529.3 s | decode |
+  |---|---:|---:|---:|---:|---:|
+  | plain | 1.4 s | 4.8 s | 16.1 s | 79.6 s | 24.5–28.7 tok/s |
+  | the head | **0.7 s** | **2.6 s** | **9.2 s** | **45.7 s** | **44.3–59.8 tok/s** |
+  | `ngram-simple` | 0.6 s | 3.7 s | 12.9 s | 58.8 s | 33.6–74.0 tok/s |
+
+  Prefill 168 tok/s cold on a 44-token prompt and 310–472 tok/s on 142–2,002 tokens. The head
+  accepted **100%** of its drafts on the short utterance, 92.7%, 88.6% and 87.3% on the rest — a
+  rewrite mostly copies its input, so this is the head's best case, worth **1.8–2.1×** on decode
+  against the 1.27× recorded above for the 12B answering questions. `ngram-simple` accepted 64%
+  on the short utterance and 20–27% elsewhere: better than plain, short of the head, and free.
+  Every arm cleans 5.5–13× faster than the speech it reads.
+- **One request per line, the shape an opt-in pass takes.** The first 200 segments, 1,769.8 s of
+  speech, head on: **178.2 s sequentially (9.9× realtime, 6.0 min per hour of audio)** and
+  **110.2 s with four requests in flight (16.1×, 3.7 min per hour)** — four slots buy 1.6×, not
+  4×, on an adapter already busy with one sequence. Request medians 0.66 s and 1.74 s, p90 1.87 s
+  and 4.23 s. Every request stopped on its own; no line reached its token cap. Projected over the
+  2:55:23 episode: about 18 min sequential, 11 min with four in flight, against 5.5 min for the
+  transcription itself.
+- **What it changes, counted under `TranscriptNormalizer.WordErrorRateTokens`** — lower-cased,
+  non-alphanumerics stripped, the six filler tokens dropped on both sides, so every count is a
+  change to a non-filler word. Over the 200 lines, **16 substituted, 493 deleted, 2 inserted of
+  5,023** (18 / 497 / 3 with four in flight); over the 1,517-word chunk 2 / 105 / 0 of 1,496 plain
+  and 3 / 112 / 0 with the head. The deletions are stutters, false starts, backchannels and *like*
+  — *like* alone is 68 of the 493. No line holding a real word came back empty; the thirteen lines
+  that were only *Um* or *Uh* came back empty. One line lost more than half its words (*Right. Like
+  the the that that that one's the* → *Right. That one's the*); none grew.
+- **The sixteen substitutions, read in full, are the finding.** Five are normalisations the prompt
+  forbade: *gonna* → *going to*, *you was yapping* → *you were* twice, *you've went* → *gone*, *is
+  so much cooler* → *it's*. Four are repairs of recogniser fragments that happen to be right:
+  *objec* → *object*, *the ol* → *the old*, *betterly* → *better*, *like one handed* →
+  *one-handed*. Three are guesses at fragments that may be wrong — *behtor* → *better*, *of I
+  don't want* → *if*, and *gonna have to hair about* → *worry about*, where the model invented the
+  word. Two change meaning: *you fucking psychopaths out there* → *psychopath*, and *I love me some
+  fucking* → *it*. One false-start repair changed the subject: *is going crazy* → *I'm going
+  crazy*. In the chunk shape a self-correction was resolved toward the abandoned form (*That's a—
+  there's a new level* → *that's a new level*) and *punch* was dropped from *since uh punch mom's
+  doing the drop off*. At one substitution per ~300 words a three-hour recording would carry a
+  hundred, a handful wrong in ways a reader cannot see.
+- **Greedy is not byte-identical across drafting modes or slot batching.** 193 of 200 lines came
+  back identical between the sequential and the four-in-flight passes; of the seven that differed,
+  one dropped a name (*Punch Mom's* → *Mom's*) under batching. The three drafting arms differed
+  on the same chunk by a few deletions and one or two substitutions at temperature 0. Gotcha 41.
+- **Beside the recogniser, on one adapter.** The built CLI transcribing `sample.m4a` on Vulkan
+  with the neural detector on the CPU, while the E4B cleaned lines four in flight throughout; the
+  E4B's rate counted from request completions during the run and, as the same-session control, in
+  a 40 s window after it:
+
+  | arrangement | recogniser on the 600 s sample | E4B beside it | E4B alone, same session |
+  |---|---|---|---|
+  | recogniser alone, two runs | **22.8 s, 22.2 s** (RTF 0.038, 0.037; decode 17.9, 17.1 s) | — | — |
+  | both on the 880M | **28.5 s** (RTF 0.047; decode 22.7 s) | 32 words/s, 1.1 lines/s | 52 words/s, 2.0 lines/s |
+  | E4B on the CPU cores | **44.9 s** (RTF 0.075; decode 35.8 s) | 26 words/s, 1.0 lines/s | 31 words/s |
+
+  **Both resident works, for this pair**: the E4B and the 1.34 GiB f16 recogniser loaded and ran
+  together with no failure, the first both-resident observation decision 4 has had for any pair.
+  Sharing the adapter costs the recogniser 27% and the E4B 39%; ten threads of E4B on the cores
+  instead starve the recogniser's own CPU work — the detector, the mel front end, the segmenter —
+  and double its time. The recogniser emits 63–80 words per second of wall here and the E4B
+  absorbs 32 beside it, so lines cleaned as they arrive trail by a backlog that grows for the whole
+  file: about 880 words, some 17 s, still queued when the recogniser finishes ten minutes.
+- **End to end on the sample's own 38 lines**: sequential — recogniser 23.3 s, then the E4B's
+  load 3.7 s, then the lines four in flight 31.4 s — **58.4 s**; tandem — the E4B loaded and warm
+  before the clock, the recogniser and the same lines started together — **43.1 s**, the
+  recogniser finishing at 30.5 s inside it. **Tandem saves 15.3 s of 58.4 s, 26%, and the
+  transcript itself lands 7.2 s later than it would alone.**
+
+### What is unproven
+
+- **Quality against a reference.** No clean-transcript reference exists in this repository, and
+  the WER corpus's references are verbatim. Under `WordErrorRateTokens` a pass that only removed
+  fillers and fixed punctuation would leave WER unchanged, so the harness *can* score this pass —
+  the delta would count exactly the content words it changed, the refusal rate beside it — and
+  that run has not been made. Whether a self-correction resolved the wrong way is an error is a
+  judgement no harness makes.
+- **Memory with both resident.** "Fits" above means "ran"; nothing read a memory counter, and the
+  session's other allocations went unrecorded.
+- **The desktop, CUDA, any language but English, the E2B, the installed 12B or 26B as tidiers, and
+  the E4B's own audio input** — listed at the vendored tag's `docs/multimodal.md` for the E2B and
+  E4B through the mmproj, with the model card's 30-second cap per clip; none of it ran.
+- **The tandem timing flatters tandem twice**: the cleaner was handed every line at the start
+  rather than as the recogniser emitted it (it is the slower of the two, so its queue would not
+  have run dry after the first second), and neither arm counts reloading the recogniser for a
+  following file, which sequential pays and tandem does not.
+- **One run per arm**, except the recogniser alone and the shortest chunk. The per-line pass used
+  the recogniser's segments; the window's lines are sentence-cut and shorter, so a real pass sends
+  more, smaller requests than these figures did.

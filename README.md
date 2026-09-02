@@ -121,6 +121,7 @@ Three habits fall out of it, and they show up throughout the codebase:
 |---|---|---|
 | **v1** | File transcription, speaker labels, English translation, speech detection | Built. Released as a candidate |
 | **v2** | Ask the transcript: playback, cues, and a cited chat panel | Built. Which language model to recommend is still open — [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) |
+| **v2 — tidy** | Tidy up the transcript: a small language model takes out fillers and false starts beside the recogniser, every line checked word for word against what was spoken | Decided 2026-09-01, not built. Measured on one laptop first — [PHASES.md](docs/PHASES.md) |
 | **v3** | Push-to-talk dictation | Not built, not architected out — [V3-DICTATION.md](docs/V3-DICTATION.md) |
 
 That order is deliberate. The entire Win32 risk surface — global keyboard hooks that get flagged
