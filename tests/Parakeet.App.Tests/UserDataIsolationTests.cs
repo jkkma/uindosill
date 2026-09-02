@@ -19,8 +19,11 @@ public class UserDataIsolationTests
     [Fact]
     public void TheRedirectNamesTheVariablesTheProductReads()
     {
-        // TestUserData spells both names as literals because it is compiled into assemblies that
-        // cannot see these constants. This is where the two copies are held together.
+        // TestUserData spells all three names as literals because it is compiled into assemblies
+        // that cannot see these constants. This is where the copies are held together.
+        Assert.Equal(
+            TestUserData.RootDirectory,
+            Environment.GetEnvironmentVariable(UserDataPaths.DirectoryEnvironmentVariable));
         Assert.Equal(
             TestUserData.ModelsDirectory,
             Environment.GetEnvironmentVariable(LocalModelStore.DirectoryEnvironmentVariable));
@@ -33,11 +36,19 @@ public class UserDataIsolationTests
     public void AStoreThatWasGivenNothingCannotReachTheRealUserData()
     {
         // Both defaults, exercised the way the product exercises them — with no argument at all.
-        Assert.NotEqual(AppSettingsStore.DefaultPath(), new AppSettingsStore().Path);
-        Assert.NotEqual(LocalModelStore.DefaultRootDirectory(), new LocalModelStore().RootDirectory);
-
         Assert.StartsWith(TestUserData.RootDirectory, new AppSettingsStore().Path, StringComparison.Ordinal);
         Assert.StartsWith(TestUserData.RootDirectory, new LocalModelStore().RootDirectory, StringComparison.Ordinal);
+
+        // And the computed defaults themselves, which is the stronger statement and the one that
+        // replaced an inequality here on 2026-09-01. Holding the default apart from the instance
+        // said the variables were being read, but it also said the *default* still resolved to the
+        // real profile — true then, and the hole a third caller fell through: the CUDA pack asks
+        // UserDataPaths directly, where neither variable reached. The root is redirected now, so
+        // the two paths defined against it move with it and there is no default left that names
+        // somebody's own %LOCALAPPDATA%.
+        Assert.StartsWith(TestUserData.RootDirectory, UserDataPaths.RootDirectory(), StringComparison.Ordinal);
+        Assert.StartsWith(TestUserData.RootDirectory, AppSettingsStore.DefaultPath(), StringComparison.Ordinal);
+        Assert.StartsWith(TestUserData.RootDirectory, LocalModelStore.DefaultRootDirectory(), StringComparison.Ordinal);
     }
 
     [Fact]

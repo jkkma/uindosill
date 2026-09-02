@@ -19,10 +19,17 @@ namespace Parakeet.App.Tests;
 /// what the machine running the suite has vendored.
 /// </para>
 /// <para>
-/// What still varies by machine is the driver probe and whether the real user-data directory
-/// holds a pack, both inside <c>CanInstallCudaPack</c> — so, as in
+/// What still varies by machine is the driver probe inside <c>CanInstallCudaPack</c> — so, as in
 /// <see cref="CudaPackSettingsTests"/>, the assertions hold relationships rather than values
-/// wherever those two are in play.
+/// wherever it is in play. Whether a pack is already installed used to vary too, because that
+/// question was asked of the real user-data directory; since 2026-09-01 the root follows
+/// <c>UserDataPaths.DirectoryEnvironmentVariable</c> like everything else the suite redirects.
+/// </para>
+/// <para>
+/// <b>Every view model here is told it is an installed copy</b>, which is what a win-cuda user
+/// has and no test process is. That term went into the decision on 2026-09-01 after the suite was
+/// found starting the real download — so each refusal below has to refuse for its own reason
+/// rather than because the fake was left saying no.
 /// </para>
 /// </remarks>
 public class CudaPackLaunchStartTests
@@ -32,9 +39,14 @@ public class CudaPackLaunchStartTests
 
     private static MainWindowViewModel NewViewModel(
         AppSettingsStore settings, params ComputeBackend[] onDisk) =>
+        NewViewModel(settings, installedCopy: true, onDisk);
+
+    private static MainWindowViewModel NewViewModel(
+        AppSettingsStore settings, bool installedCopy, params ComputeBackend[] onDisk) =>
         new(new FakeEngineProvider(),
             new LocalModelStore(TestTemp.NewDirectory("uindosill-cudapack-launch")),
             ModelCatalog.Default,
+            updater: new FakeUpdater { IsInstalled = installedCopy },
             settings: settings,
             backendsOnDisk: () => onDisk);
 
@@ -73,14 +85,39 @@ public class CudaPackLaunchStartTests
     [Fact]
     public void TheLaunchStartFollowsTheSettingsButtonExactly()
     {
-        // On the CUDA flavour with nothing declined, the launch decision and the Settings
-        // button's liveness are one question: a machine the button is dead on — no card, no
-        // verified manifest, the pack already in — must not be started on, and a machine it is
-        // live on is exactly the one the launch should finish setting up. Asserted as the
-        // relationship because both sides genuinely vary with the machine running the suite.
+        // On the CUDA flavour of an installed copy with nothing declined, the launch decision and
+        // the Settings button's liveness are one question: a machine the button is dead on — no
+        // card, no verified manifest, the pack already in — must not be started on, and a machine
+        // it is live on is exactly the one the launch should finish setting up. Asserted as the
+        // relationship because the driver probe genuinely varies with the machine running the
+        // suite.
         var viewModel = NewViewModel(NewSettings(), ComputeBackend.Cuda);
 
         Assert.Equal(viewModel.CanInstallCudaPack, viewModel.WouldInstallCudaPackOnLaunch);
+    }
+
+    [Fact]
+    public void ACopyNoInstallerPutThereNeverStartsByItself()
+    {
+        // The refusal added 2026-09-01, and the reason it is not merely tidiness: this suite is
+        // such a copy, and on a machine with the cuda natives vendored and a card in it, every
+        // test that opened a window was starting the real 1.8 GB fetch into the real
+        // %LOCALAPPDATA%. The rule is the update check's own — an uninstalled copy reaches the
+        // network on neither launch path — and the consent story wants it besides: the argument
+        // for downloading unasked is that the user chose the win-cuda installer, which whoever is
+        // running out of bin/ did not.
+        //
+        // Over-determined on a cardless runner, where CanInstallCudaPack is false anyway; the
+        // test above is the one that holds the relationship where the card is real.
+        var viewModel = NewViewModel(
+            NewSettings(), installedCopy: false, ComputeBackend.Cpu, ComputeBackend.Vulkan, ComputeBackend.Cuda);
+
+        Assert.True(viewModel.HasCudaBackendOnDisk);
+        Assert.False(viewModel.WouldInstallCudaPackOnLaunch);
+
+        Assert.False(viewModel.InstallCudaPackOnLaunch());
+        Assert.False(viewModel.IsInstallingCudaPack);
+        Assert.False(viewModel.ShowCudaPackLaunchNotice);
     }
 
     [Fact]

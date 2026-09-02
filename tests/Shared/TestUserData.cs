@@ -28,8 +28,9 @@ namespace Parakeet.Tests;
 /// <para>
 /// The variable names are spelled out here rather than read from the constants that declare them,
 /// because this file is compiled into test assemblies that do not reference the assemblies those
-/// constants live in. <c>UserDataIsolationTests</c> in <c>Parakeet.App.Tests</c> references both
-/// and holds these two strings against <c>LocalModelStore.DirectoryEnvironmentVariable</c> and
+/// constants live in. <c>UserDataIsolationTests</c> in <c>Parakeet.App.Tests</c> references all
+/// three and holds these strings against <c>UserDataPaths.DirectoryEnvironmentVariable</c>,
+/// <c>LocalModelStore.DirectoryEnvironmentVariable</c> and
 /// <c>AppSettingsStore.PathEnvironmentVariable</c>, so the copies cannot drift apart unnoticed.
 /// </para>
 /// </remarks>
@@ -56,6 +57,12 @@ internal static class TestUserData
         RootDirectory = TestTemp.NewDirectory("user-data");
         Directory.CreateDirectory(ModelsDirectory);
 
+        // The root before the two paths under it, because everything else the product keeps here
+        // — the CUDA pack among them — asks UserDataPaths directly and had no variable to read.
+        // The two below are then redundant on paper, since both defaults are defined against this
+        // root; they stay because a store handed an explicit null still reads its own variable,
+        // and a redirect that only works through one route is one refactor from not working.
+        Environment.SetEnvironmentVariable("UINDOSILL_USER_DATA_DIR", RootDirectory);
         Environment.SetEnvironmentVariable("UINDOSILL_MODELS_DIR", ModelsDirectory);
         Environment.SetEnvironmentVariable("UINDOSILL_SETTINGS_PATH", SettingsPath);
     }
