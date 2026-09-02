@@ -90,10 +90,14 @@ public sealed record LlamaServerOptions
     /// <para>
     /// <b>Measured 2026-08-27 on the second machine</b>, the 26B-A4B at UD-IQ4_XS over thirteen
     /// retrieval questions: decode 7.66 -&gt; 10.11 tok/s and median wall 42.3 -&gt; 37.8 s, at
-    /// <b>71.7% draft acceptance</b>, with the citation checks unchanged (every citation resolved
-    /// either way, three of three adversarial questions abstained from). Unsloth claims 1.4–2.2x
-    /// for the same head; 1.32x is what this laptop gets, where decode is bounded by reading the
-    /// experts out of system memory rather than by arithmetic.
+    /// <b>71.7% draft acceptance</b>, with every citation resolving either way and three of three
+    /// adversarial questions abstained from — and not with the same answer: the head arm verified
+    /// 16 quotes against 17 and cited 47 spans against 52, in a session whose own noise floor says
+    /// a changed quote count is a real change in what the model wrote. Greedy decoding is not
+    /// byte-identical under drafting or slot batching (docs/GOTCHAS.md, 41); what a head is
+    /// measured to keep is the checks, never the bytes. Unsloth claims 1.4–2.2x for the same head;
+    /// 1.32x is what this laptop gets, where decode is bounded by reading the experts out of system
+    /// memory rather than by arithmetic.
     /// </para>
     /// <para>
     /// <b>Prompt-lookup drafting was measured and rejected in the same session</b>, which is why
