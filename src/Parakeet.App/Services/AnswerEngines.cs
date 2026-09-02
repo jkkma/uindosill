@@ -312,10 +312,14 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
             ExpertPlacement = ExpertPlacement,
 
             // A drafting head is used when one is sitting beside the model, and there is no
-            // setting for it: it is faster at the same answer rather than a different trade, so
-            // there is nothing for a person to weigh. Measured 2026-08-27 on the second machine —
-            // 1.32x on decode at 71.7% acceptance, citation checks unchanged (docs/UNPROVEN.md).
-            // Absent, this is null and the child decodes one token at a time as before.
+            // setting for it: it is faster at an answer that passes the same checks, so there is
+            // nothing for a person to weigh. Measured 2026-08-27 on the second machine — 1.32x on
+            // decode at 71.7% acceptance, every citation resolving and the adversarial questions
+            // abstained from either way (docs/UNPROVEN.md). Not the same answer, though: the head
+            // arm verified 16 quotes against 17 and cited 47 spans against 52, and greedy decoding
+            // is not byte-identical under drafting or slot batching (docs/GOTCHAS.md, 41), which
+            // is why nothing here claims identity, only that the checks held. Absent, this is null
+            // and the child decodes one token at a time as before.
             DraftModelPath = DraftModelLocator.FindBeside(model),
         });
     }
