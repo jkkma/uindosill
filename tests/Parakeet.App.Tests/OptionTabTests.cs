@@ -271,10 +271,11 @@ public class OptionTabTests
         Assert.True(englishTop < speakersTop,
             $"'Translate to English' (y={englishTop}) is drawn below 'Label speakers' (y={speakersTop})");
 
-        // Exactly those two ticks on the whole page: the formats are on Export with the button
-        // that writes them, the cut is on Settings, so a third checkbox here is a copy rather
-        // than a leftover.
-        Assert.Equal(2, window.GetVisualDescendants().OfType<CheckBox>().Count());
+        // Exactly the three opt-ins on the whole page — the tidy joined the two on 2026-09-02 —
+        // the formats are on Export with the button that writes them, the cut is on Settings, so
+        // a fourth checkbox here is a copy rather than a leftover.
+        Assert.NotNull(Drawn<CheckBox>(window, "TidyUpTranscript"));
+        Assert.Equal(3, window.GetVisualDescendants().OfType<CheckBox>().Count());
 
         var drawn = window.GetVisualDescendants().OfType<Control>()
             .Select(c => c.Name)

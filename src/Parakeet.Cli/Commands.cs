@@ -271,6 +271,41 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "tidy",
+                Help = "Tidy up the transcript beside the recogniser: a small language model takes fillers, stutters " +
+                       "and false starts out of each line as it arrives, and every line is checked word for word " +
+                       "against what was spoken — a rewrite that changes or adds a word is refused and the spoken line " +
+                       "kept. The tidied version is written beside the plain files with a .tidy infix (call.tidy.srt); " +
+                       "the plain files are what they always were. Needs the tidying model installed ('uindosill models " +
+                       "list'); with --fake it uses the canned tidier and needs nothing.",
+            },
+            new OptionSpec
+            {
+                Name = "tidy-model-path",
+                TakesValue = true,
+                ValueName = "file",
+                Help = "Serve this .gguf as the tidying model instead of the catalogue entry. A drafting head named " +
+                       "mtp-<model>.gguf beside it is used when there is one.",
+            },
+            new OptionSpec
+            {
+                Name = "tidy-backend",
+                TakesValue = true,
+                ValueName = "name",
+                Help = "Which llama-server drop runs the tidying model: cpu, vulkan or cuda. Default: the best one " +
+                       "vendored, cuda, then vulkan, then cpu. On the second machine the cpu arrangement starved the " +
+                       "recogniser and doubled its time; vulkan beside it is what was measured.",
+            },
+            new OptionSpec
+            {
+                Name = "tidy-server-root",
+                TakesValue = true,
+                ValueName = "dir",
+                Help = "Directory holding the llama-server drops, a native/win-x64/llm directory. Default: beside " +
+                       "this executable.",
+            },
+            new OptionSpec
+            {
                 Name = "quiet",
                 Short = 'q',
                 Help = "Suppress progress; print only results and errors.",

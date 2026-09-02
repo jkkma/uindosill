@@ -416,6 +416,10 @@ public class ShutdownTests
 
         public Parakeet.Core.Translation.ITranscriptTranslator? CreateTranslator() => _inner.CreateTranslator();
 
+        public bool SupportsTidying => _inner.SupportsTidying;
+
+        public Parakeet.Core.Tidying.ITranscriptTidier? CreateTidier() => _inner.CreateTidier();
+
         public bool SupportsNeuralSpeechDetection => _inner.SupportsNeuralSpeechDetection;
 
         public Parakeet.Core.Segmentation.ISpeechDetector? CreateSpeechDetector() => _inner.CreateSpeechDetector();

@@ -77,6 +77,9 @@ public sealed class ModelCatalog
     /// <summary>The entries the Ask tab may load to answer questions about a transcript.</summary>
     public IReadOnlyList<ModelDescriptor> AnsweringModels => _byTask[ModelTask.Answering];
 
+    /// <summary>The entries the tidy opt-in may load beside the recogniser. Never offered to the Ask tab.</summary>
+    public IReadOnlyList<ModelDescriptor> TidyingModels => _byTask[ModelTask.Tidying];
+
     /// <summary>
     /// The answering model the Ask panel serves when nobody has chosen one. Only ever a
     /// <see cref="ModelTask.Answering"/> entry, for the same reason <see cref="Recommended"/> is
@@ -455,8 +458,9 @@ public sealed class ModelCatalog
             "translation" => ModelTask.Translation,
             "voice-activity" => ModelTask.VoiceActivity,
             "answering" => ModelTask.Answering,
+            "tidying" => ModelTask.Tidying,
             _ => throw new InvalidDataException(
-                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation, translation, voice-activity and answering."),
+                $"Model '{id}' has task {(task is null ? value.ValueKind.ToString().ToLowerInvariant() : $"'{task}'")}; known tasks are transcription, diarisation, translation, voice-activity, answering and tidying."),
         };
     }
 

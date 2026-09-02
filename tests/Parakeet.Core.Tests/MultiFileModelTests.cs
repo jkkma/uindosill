@@ -112,6 +112,7 @@ public class MultiFileModelTests
         // same name and would overwrite each other at the store root.
         // **Five users since 2026-08-28**, the new one being the dense 12B, which installs its
         // weights and its own drafting head the same way and for the same reason.
+        // **Six since 2026-09-02**: the tidying E4B, weights and head in a directory of its own.
         Assert.Equal(
             new[]
             {
@@ -119,7 +120,8 @@ public class MultiFileModelTests
                 "opus-mt-tc-bible-big-mul-en-fp32",
                 "gemma-4-12b-it-qat-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-q4-k-xl",
-                            },
+                "gemma-4-e4b-it-qat-ud-q4-k-xl",
+            },
             ModelCatalog.Default.Models.Where(m => m.IsMultiFile).Select(m => m.Id));
 
         var multiFile = ModelCatalog.Default.Get("opus-mt-tc-bible-big-mul-en-fp32");

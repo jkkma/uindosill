@@ -151,7 +151,12 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// </summary>
     public void RefreshDocument()
     {
-        var document = _recording?.TranslatedDocument ?? _recording?.Document;
+        // The English when the recording has one, the tidied version when it has that, the
+        // transcript as spoken otherwise — the maintainer's decisions of 2026-08-24 and 2026-09-01.
+        // Under the tidy's contract a tidied quote is still spoken words in spoken order; the one
+        // place a quoted word may not be what was said is a low-confidence replacement, and the
+        // tidied document marks those.
+        var document = _recording?.TranslatedDocument ?? _recording?.TidiedDocument ?? _recording?.Document;
         if (!ReferenceEquals(document, _document))
         {
             // An in-flight ask was built over the document being replaced: its evidence, grammar

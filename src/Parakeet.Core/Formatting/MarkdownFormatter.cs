@@ -116,6 +116,18 @@ public sealed class MarkdownFormatter : ITranscriptFormatter
                 rows.Add(("Translation model", translationModel));
             }
 
+            // And which model tidied it, when one did: fillers and false starts out, every kept
+            // word a spoken one, and the few replaced ones marked in the JSON.
+            if (document.TidyModelId is { } tidyModel)
+            {
+                rows.Add(("Tidied by", tidyModel));
+            }
+
+            if (document.TidyBackend is { } tidyBackend)
+            {
+                rows.Add(("Tidy backend", tidyBackend.ToString().ToLowerInvariant()));
+            }
+
             if (document.TranslationBackend is { } translationBackend)
             {
                 rows.Add(("Translation backend", translationBackend.ToString().ToLowerInvariant()));

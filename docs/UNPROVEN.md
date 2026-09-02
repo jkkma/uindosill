@@ -7268,3 +7268,64 @@ segments — for the runs beside the recogniser.
 - **One run per arm**, except the recogniser alone and the shortest chunk. The per-line pass used
   the recogniser's segments; the window's lines are sentence-cut and shorter, so a real pass sends
   more, smaller requests than these figures did.
+
+### Built 2026-09-02, and what the build adds to the list
+
+The decision's ten parts are code (`docs/PHASES.md`, *Built 2026-09-02*). None of the figures
+above moved, and the build adds these to what is unproven:
+
+- **The shipped prompt is not the measured one.** The spike's instruction asked for a clean,
+  readable rewrite with nothing added; `TidyPromptBuilder.Instruction` adds that a word is never
+  replaced, reordered, expanded, contracted or corrected. Whether that lowers the refusal rate
+  under the contract, or changes nothing, has not been measured — it is one of the numbers the
+  WER-corpus run will produce.
+- **The built stage was timed beside the recogniser later the same day** — the 2026-09-02 block
+  below — after both entries had downloaded to the machine. Before that the shape had run only
+  through the canned tidier and the gated engine test on a Gemma 4 E4B at Q4_K_M, a smoke on a
+  different quantisation from which no figure is quoted.
+- **The door's admissions.** Nothing has yet counted how many of the sixteen measured
+  substitutions sat on a word below 0.45, so what the door admits — repairs, guesses, or both — is
+  still the WER run's to say. The contract without the door is one option away
+  (`TidyOptions.LowConfidenceThreshold = 0`).
+- **Word-by-word normalisation narrows the harness's.** The contract runs
+  `WordErrorRateTokens` per word so that tokens keep their owners, and its one cross-word rule —
+  a run of number words to digits — cannot fire; a rewrite that joins *eighty seven* into
+  *eighty-seven* is refused where the harness would score it a match. Conservative, and uncounted:
+  how often a real rewrite trips it is unknown.
+- **The window's swap and backlog are exercised only by the canned tidier.** The dimmed line, the
+  swap on landing and the "lines to go" count run in the suite against a tidier that answers
+  instantly; how they read at the measured 3.4 s median per line beside the recogniser has been
+  seen by nobody.
+
+### The built stage beside the recogniser — measured 2026-09-02, second machine, Vulkan
+
+`uindosill transcribe sample.m4a --backend vulkan --tidy` through the Release CLI, the catalogue's
+`tdt-0.6b-v3-f16` and `gemma-4-e4b-it-qat-ud-q4-k-xl` (weights and Q8_0 head) freshly installed
+and digest-verified, `llama-server` b10603 on Vulkan at the engine's flags plus `-c 8192 -np 4`.
+Silero not installed, so the energy gate cut the file: 77 segments, 1,806 words, mean 23 words a
+segment. Four arms alternating, one command each, the recogniser alone and with `--tidy`, twice;
+an earlier identical set lost its wall clocks and agrees on every text. The record is
+`runs/20260902-072339-tidy-vulkan-catalogue/` on the laptop and in the Drive's `runs-laptop`.
+
+| arm | command wall | recogniser processing | decode |
+|---|---:|---:|---:|
+| alone ×2 | 21.60 s, 20.36 s | 20.607 s, 19.297 s | 18.997 s, 17.567 s |
+| with `--tidy` ×2 | 65.27 s, 67.01 s | 26.608 s, 26.195 s | 24.394 s, 24.221 s |
+
+- **Recogniser 31% slower beside the E4B**: 19.9 s mean alone against 26.1 s in tandem, over
+  four runs each (19.3–20.6; 25.8–26.6).
+- **The tidied version lands about 45 s after the plain transcript would**: 65–67 s for the
+  command against 20–22 s, both loads inside the wall. Not the spike's 43.1 s: that arm handed
+  38 lines to a warm server at once, this one was fed 77 segments as they arrived, and the pace
+  is per request. **The sequential shape was not run on this segmentation**, so no saving is
+  claimed for tandem here; the spike's 58.4 s sequential on 38 lines is below this tandem on 77.
+- **Under the harness's normaliser: 1,741 tokens, 37 deleted (2.13%), 0 substituted,
+  0 inserted; 113 raw words removed, the other 76 being fillers the normaliser drops.** 44 of 77
+  lines changed, two single-*Um* lines emptied. **0 refusals, 0 words through the door** on a file
+  with ten segments below 0.45. Tidied text byte-identical across the four tandem runs; the
+  recogniser's output byte-identical across all eight runs.
+
+**Unproven after it:** the tandem-against-sequential saving on a real segmentation; the unit
+question (segments, joined segments, or sentence-runs) that the per-request pace raises; the
+neural detector's line count; the window's stage at these latencies; quality against a reference;
+the desktop and CUDA. One file, one machine.

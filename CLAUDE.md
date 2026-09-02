@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1576 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1611 tests, no weights, no display, no network
 pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -36,9 +36,9 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
-**Eight of those 1576 tests skip themselves.** Two are platform-specific: the Media Foundation
+**Nine of those 1611 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
-skips here while running on Linux. The other six are asked for by name, because a count that
+skips here while running on Linux. The other seven are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:
 
 ```bash
@@ -62,8 +62,8 @@ over a real file with the model installed beside them (it is the default detecto
 stderr line names it): the two tests say the graph loads and scores silence low at three sample
 rates, and nothing else in the suite runs the model.
 
-The last three are the v2 answer engine's, in `Parakeet.Engine.LlamaServer.Tests`, which need
-the vendored `llama-server` drop and a small GGUF, and skip unless both are named:
+The last four are the v2 language-model engine's, in `Parakeet.Engine.LlamaServer.Tests`, which
+need the vendored `llama-server` drop and a small GGUF, and skip unless both are named:
 
 ```bash
 UINDOSILL_LLM_SERVER_ROOT=<a native/win-x64/llm directory> UINDOSILL_LLM_TEST_MODEL=<path to a small .gguf> dotnet test Uindosill.slnx -c Release
@@ -71,7 +71,8 @@ UINDOSILL_LLM_SERVER_ROOT=<a native/win-x64/llm directory> UINDOSILL_LLM_TEST_MO
 
 **Run them after any change to `src/Parakeet.Engine.LlamaServer/`** — they drive a real child
 server end to end (load, health, an ask, parse, validate) on the CPU backend, one per mode: the
-grammar-constrained path, the think-before-answering path, and the whole-transcript path.
+grammar-constrained path, the think-before-answering path, the whole-transcript path, and the
+transcript tidy — four lines in flight, every one held to the delete-only contract.
 `UINDOSILL_LLM_TEST_BACKEND=vulkan` (or `cuda`) runs the same three on a machine that has one,
 which is the only place a child-process argument change is really tested. Nothing else in the
 suite starts the process.

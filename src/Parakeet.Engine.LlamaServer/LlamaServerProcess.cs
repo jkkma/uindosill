@@ -265,6 +265,12 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
             arguments.Add(flashAttention);
         }
 
+        if (options.ParallelSlots is { } slots)
+        {
+            arguments.Add("-np");
+            arguments.Add(slots.ToString(CultureInfo.InvariantCulture));
+        }
+
         if (options.DraftModelPath is { Length: > 0 } draft)
         {
             // Speculative decoding against the model's own multi-token-prediction head. The type

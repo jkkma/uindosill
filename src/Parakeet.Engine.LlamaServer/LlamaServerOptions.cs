@@ -136,6 +136,16 @@ public sealed record LlamaServerOptions
     /// from a cold disk.</summary>
     public TimeSpan LoadTimeout { get; init; } = TimeSpan.FromMinutes(3);
 
+    /// <summary>
+    /// How many requests the child serves at once — <c>-np</c> — or null for the server's own
+    /// default. The answer engine leaves it null: one question at a time. The tidy names four,
+    /// the number its four-in-flight pass was measured against (docs/UNPROVEN.md, *Gemma 4 E4B
+    /// as a transcript tidy*): the server chose four on its own that day, and naming it keeps the
+    /// measured shape rather than whatever a later build's default is. The context is shared
+    /// across the slots, so a tidy's 8,192 tokens is 2,048 per line in flight.
+    /// </summary>
+    public int? ParallelSlots { get; init; }
+
     /// <summary>Cap on generated tokens per answer.</summary>
     public int MaxAnswerTokens { get; init; } = 1_024;
 

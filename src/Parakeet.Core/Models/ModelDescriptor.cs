@@ -48,6 +48,16 @@ public enum ModelTask
     /// 2 MiB and 1.34 GiB and fit anywhere the application does.
     /// </remarks>
     Answering = 4,
+
+    /// <summary>
+    /// Fillers and false starts out of a transcript: what the "Tidy up the transcript" opt-in
+    /// loads, beside the recogniser. Never an ASR model, never a diariser, and never offered by
+    /// the Ask tab's picker — it has not been measured answering a question and the picker is not
+    /// the place to find out. Added 2026-09-02 with the E4B entry, under the decision of
+    /// 2026-09-01 (docs/PHASES.md): its own task rather than an answering entry, so the one model
+    /// measured resident beside the recogniser is the only one the tidy will ever load.
+    /// </summary>
+    Tidying = 5,
 }
 
 /// <summary>

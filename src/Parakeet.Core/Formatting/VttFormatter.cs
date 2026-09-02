@@ -80,6 +80,13 @@ public sealed class VttFormatter : ITranscriptFormatter
                    .Append(newLine).Append(newLine);
         }
 
+        if (document.TidyModelId is { } tidyModel)
+        {
+            builder.Append("NOTE Tidied by ").Append(tidyModel)
+                   .Append(". Fillers and false starts were taken out; every word kept is a spoken word, in spoken order.")
+                   .Append(newLine).Append(newLine);
+        }
+
         return builder.ToString();
     }
 }

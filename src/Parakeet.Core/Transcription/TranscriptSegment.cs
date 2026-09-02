@@ -20,6 +20,22 @@ public sealed record TranscriptWord
     /// </summary>
     public string? Speaker { get; init; }
 
+    /// <summary>
+    /// The spoken word this one replaced, when the tidy pass put a different word in its place;
+    /// null on every word that is what was said. Set only through the one door the tidy contract
+    /// has — a spoken word the recogniser itself doubted — so anything that quotes a tidied
+    /// transcript can say which words may not be what was said rather than verifying them.
+    /// </summary>
+    /// <remarks>
+    /// On the word rather than in a side table, because the word is what travels: through the
+    /// sentence splitter, into the JSON, and into the Ask tab's evidence. A table keyed by segment
+    /// and word index would be wrong the moment a segment was cut into sentences.
+    /// </remarks>
+    public string? ReplacedFrom { get; init; }
+
+    /// <summary>True when this word is a tidy replacement rather than what was spoken.</summary>
+    public bool IsReplacement => ReplacedFrom is not null;
+
     public TimeSpan Duration => End - Start;
 
     /// <summary>Shifts the word by <paramref name="offset"/>; used to lift segment-relative

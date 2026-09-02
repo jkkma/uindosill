@@ -329,6 +329,20 @@ public class ModelCatalogTests
         Assert.True(detector.IsFullyPinned);
         Assert.True(detector.Verified);
 
+        // And one tidying entry, added 2026-09-02 under the decision of the day before: the E4B
+        // at the quantisation and with the drafting head the tidy was measured with. Its own
+        // task, so the Ask tab's picker never offers it and the tidy never loads anything else.
+        var tidier = Assert.Single(catalog.TidyingModels);
+        Assert.Equal("gemma-4-e4b-it-qat-ud-q4-k-xl", tidier.Id);
+        Assert.Equal(ModelTask.Tidying, tidier.Task);
+        Assert.Equal("llama-server", tidier.Engine);
+        Assert.False(tidier.Recommended);
+        Assert.True(tidier.IsFullyPinned);
+        Assert.True(tidier.Verified);
+        Assert.Equal(2, tidier.Files.Count);
+        Assert.Equal(4215695776L + 98671936L, tidier.TotalSizeBytes);
+        Assert.DoesNotContain(catalog.AnsweringModels, m => m.Id == tidier.Id);
+
         Assert.All(catalog.TranscriptionModels, m => Assert.Equal(ModelTask.Transcription, m.Task));
         // Every entry lands in exactly one task's list. This is the assertion that catches a new
         // ModelTask member reaching no list at all — the enum's own remark warns that nothing
@@ -337,7 +351,7 @@ public class ModelCatalogTests
             catalog.Models.Count,
             catalog.TranscriptionModels.Count + catalog.DiarisationModels.Count
             + catalog.TranslationModels.Count + catalog.VoiceActivityModels.Count
-            + catalog.AnsweringModels.Count);
+            + catalog.AnsweringModels.Count + catalog.TidyingModels.Count);
     }
 
     [Fact]
@@ -401,7 +415,7 @@ public class ModelCatalogTests
 
         var ex = Assert.Throws<InvalidDataException>(() => ModelCatalog.Parse(json));
         Assert.Contains(
-            "known tasks are transcription, diarisation, translation, voice-activity and answering", ex.Message, StringComparison.Ordinal);
+            "known tasks are transcription, diarisation, translation, voice-activity, answering and tidying", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -447,6 +461,31 @@ public class ModelCatalogTests
         Assert.DoesNotContain(catalog.TranslationModels, m => m.Id == "llm");
         Assert.DoesNotContain(catalog.VoiceActivityModels, m => m.Id == "llm");
     }
+
+    [Fact]
+    public void ATidyingEntryReachesNoOtherTasksList()
+    {
+        var json = """
+            {"models":[
+            {"id":"asr","family":"p","displayName":"A","quantisation":"f16","fileName":"a.gguf","url":"https://e.com/a","license":"L","attributionId":"x","recommended":true},
+            {"id":"tidy","task":"tidying","family":"gemma","displayName":"T","quantisation":"UD-Q4_K_XL","fileName":"t.gguf","url":"https://e.com/t","license":"Apache-2.0","attributionId":"x"}]}
+            """;
+
+        var catalog = ModelCatalog.Parse(json);
+
+        Assert.Equal(["tidy"], catalog.TidyingModels.Select(m => m.Id));
+        Assert.Equal(ModelTask.Tidying, catalog.Get("tidy").Task);
+
+        // Not an answering entry: the Ask tab's picker reads that list and must never see it —
+        // the model has not been measured answering a question.
+        Assert.Empty(catalog.AnsweringModels);
+        Assert.Null(catalog.RecommendedAnswering);
+        Assert.Equal("asr", catalog.Recommended?.Id);
+        Assert.DoesNotContain(catalog.TranscriptionModels, m => m.Id == "tidy");
+        Assert.DoesNotContain(catalog.DiarisationModels, m => m.Id == "tidy");
+        Assert.DoesNotContain(catalog.TranslationModels, m => m.Id == "tidy");
+        Assert.DoesNotContain(catalog.VoiceActivityModels, m => m.Id == "tidy");
+    }
 }
 
 public class ModelFitTests
@@ -485,6 +524,17 @@ public class ModelFitTests
             """).Get("asr");
 
         Assert.Null(ModelFit.WhyItMightNotRun(asr, 1 * Gib));
+
+        // The tidying entry is the other language model, and the decision that added it says the
+        // warning applies to it as it does to the answering ones: 3.9 GiB plus the headroom is
+        // past a 4 GiB machine and inside an 8 GiB one.
+        var tidy = ModelCatalog.Parse("""
+            {"models":[{"id":"tidy","task":"tidying","family":"g","displayName":"T","quantisation":"q","fileName":"t.gguf",
+            "url":"https://e.com/t","sizeBytes":4215695776,"license":"Apache-2.0","attributionId":"x"}]}
+            """).Get("tidy");
+
+        Assert.NotNull(ModelFit.WhyItMightNotRun(tidy, 4 * Gib));
+        Assert.Null(ModelFit.WhyItMightNotRun(tidy, 8 * Gib));
     }
 
     [Fact]

@@ -162,6 +162,24 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                 {
                     writer.WriteString("translationDecode", translationDecode);
                 }
+
+                // Present only when the tidy ran. The words below are spoken words in spoken
+                // order except where a word carries "replacedFrom", and these fields are what
+                // says a second model edited the text at all.
+                if (document.TidyModelId is { } tidyModel)
+                {
+                    writer.WriteString("tidyModel", tidyModel);
+                }
+
+                if (document.TidyBackend is { } tidyBackend)
+                {
+                    writer.WriteString("tidyBackend", tidyBackend.ToString().ToLowerInvariant());
+                }
+
+                if (document.TidyRefusedSegments is { } tidyRefused)
+                {
+                    writer.WriteNumber("tidyRefusedSegments", tidyRefused);
+                }
             }
 
             writer.WriteString("text", document.Text);
@@ -201,6 +219,13 @@ public sealed class JsonTranscriptFormatter : ITranscriptFormatter
                         if (word.Speaker is { } wordSpeaker)
                         {
                             writer.WriteString("speaker", wordSpeaker);
+                        }
+
+                        // The one place a tidied word may not be what was said, and the reader
+                        // is told which and what was said instead.
+                        if (word.ReplacedFrom is { } replacedFrom)
+                        {
+                            writer.WriteString("replacedFrom", replacedFrom);
                         }
 
                         writer.WriteEndObject();

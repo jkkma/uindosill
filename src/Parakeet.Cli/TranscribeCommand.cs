@@ -5,6 +5,7 @@ using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Tidying;
 using Parakeet.Core.Translation;
 
 namespace Parakeet.Cli;
@@ -68,6 +69,7 @@ internal static class TranscribeCommand
         var quiet = parsed.HasFlag("quiet");
         var speakerOptions = BuildSpeakerOptions(parsed);
         var translationOptions = BuildTranslationOptions(parsed);
+        var tidyOptions = BuildTidyOptions(parsed);
 
         if (speakerOptions is null && formats.Contains(TranscriptFormats.Rttm.Id, StringComparer.OrdinalIgnoreCase))
         {
@@ -82,6 +84,14 @@ internal static class TranscribeCommand
         if (translationOptions is not null)
         {
             TranslatorFactory.Resolve(context, TranslationRequestFrom(parsed), formats);
+        }
+
+        // And the tidier, for the same reason: "the tidying model is not installed" and "no
+        // llama-server drop is vendored" are answers to --tidy, and they arrive before the
+        // recogniser's weights load.
+        if (tidyOptions is not null)
+        {
+            TidierFactory.Resolve(context, TidyRequestFrom(parsed, tidyOptions));
         }
 
         // Resolved before the ASR engine, and only resolved — the labeller itself is built below,
@@ -165,6 +175,13 @@ internal static class TranscribeCommand
             WarnAboutLanguageHint(context, parsed);
         }
 
+        // The tidier, loaded before any file is decoded: its child has to be healthy before the
+        // first segment arrives, because the stage feeds it segments as the recogniser produces
+        // them rather than after the file is done.
+        await using var tidier = tidyOptions is null
+            ? null
+            : await TidierFactory.CreateAsync(context, TidyRequestFrom(parsed, tidyOptions), ct).ConfigureAwait(false);
+
         WarnAboutThreads(context, parsed, engine);
 
         // Pre-tripped by --fake, which is the canned engine's whole point: it answers cpu whatever
@@ -195,7 +212,7 @@ internal static class TranscribeCommand
 
         var runner = new BatchTranscriptionRunner((job, progress, token) => RunOneAsync(
             context, engine, EnsureEngineLoadedAsync, labeller, translator, job, options, speakerOptions,
-            translationOptions, progress, quiet, token));
+            translationOptions, tidier, tidyOptions, progress, quiet, token));
 
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
@@ -284,6 +301,37 @@ internal static class TranscribeCommand
         Threads = ParseThreads(parsed.Value("translate-threads"), "--translate-threads"),
         Backend = parsed.Value("translate-backend"),
         AllowUnverifiedBackend = parsed.HasFlag("translate-backend-unverified"),
+    };
+
+    /// <summary>Null when <c>--tidy</c> was not given: the whole stage is behind that flag.</summary>
+    private static TidyOptions? BuildTidyOptions(ParsedCommandLine parsed)
+    {
+        if (!parsed.HasFlag("tidy"))
+        {
+            foreach (var flag in new[] { "tidy-model-path", "tidy-backend", "tidy-server-root" })
+            {
+                if (parsed.Value(flag) is { Length: > 0 })
+                {
+                    throw new CliUsageException($"--{flag} only means something with --tidy.");
+                }
+            }
+
+            return null;
+        }
+
+        var options = TidyOptions.Default;
+        options.Validate();
+        return options;
+    }
+
+    /// <summary>Which tidying model the flags ask for, resolved the same way twice — once up front, once for real.</summary>
+    private static TidierRequest TidyRequestFrom(ParsedCommandLine parsed, TidyOptions options) => new()
+    {
+        Fake = parsed.HasFlag("fake"),
+        ModelPath = parsed.Value("tidy-model-path"),
+        Backend = parsed.Value("tidy-backend") is { Length: > 0 } backend ? EngineFactory.ParseBackend(backend) : null,
+        ServerRoot = parsed.Value("tidy-server-root"),
+        Concurrency = options.Concurrency,
     };
 
     /// <summary>Null when <c>--translate</c> was not given: the whole pass is behind that flag.</summary>
@@ -478,6 +526,8 @@ internal static class TranscribeCommand
         TranscriptionOptions options,
         SpeakerLabellingOptions? speakerOptions,
         TranslationOptions? translationOptions,
+        ITranscriptTidier? tidier,
+        TidyOptions? tidyOptions,
         IProgress<TranscriptionProgress>? _,
         bool quiet,
         CancellationToken ct)
@@ -508,8 +558,20 @@ internal static class TranscribeCommand
             progress = new Progress<TranscriptionProgress>(p => WriteProgress(context, job, p));
         }
 
+        // The tidy stage, beside the recogniser: every segment goes to it as it is produced, a
+        // few are in flight against the model at any time, and the stage is completed after the
+        // other passes below — nothing here waits on it before the transcript is whole.
+        await using var stage = tidier is not null && tidyOptions is not null
+            ? new TidyStage(tidier, tidyOptions, ct: ct)
+            : null;
+
         var document = await TranscriptionRunner.RunAsync(
-            engine, audio, options, job.DisplayName, progress, ct).ConfigureAwait(false);
+            engine, audio, options, job.DisplayName, progress, ct,
+            onSegment: stage is null ? null : segment => stage.Enqueue(segment)).ConfigureAwait(false);
+
+        // The segments the stage was fed, before the speaker pass cuts them: the tidied version
+        // is assembled against these, then given the speakers.
+        var raw = document;
 
         // The two opt-in passes below can fail where the transcript did not — a file the sidecar
         // could not read, a segment refused for its length, a child that died — and when one does,
@@ -603,6 +665,37 @@ internal static class TranscribeCommand
             }
         }
 
+        // The tidy, last: its stage has been running since the first segment, and completing it
+        // here is a wait on whatever backlog the recogniser left it. A failure leaves the
+        // transcript whole, on the other passes' terms, and the tidied version is the spoken
+        // document's edit with the spoken document's speakers put on it.
+        TranscriptDocument? tidied = null;
+        string? tidyWarning = null;
+        if (stage is not null && tidier is not null)
+        {
+            TidySummary? summary = null;
+
+            async Task<TranscriptDocument> CompleteTidyAsync()
+            {
+                var outcomes = await stage.CompleteAsync().ConfigureAwait(false);
+                var (assembled, tidySummary) = TranscriptTidy.Assemble(raw, outcomes, tidier.Capabilities);
+                summary = tidySummary;
+                return TranscriptTidy.WithSpeakersOf(assembled, transcribed, speakerOptions);
+            }
+
+            var (result, failure) = await OptInPass.Tidy.RunAsync(raw, CompleteTidyAsync).ConfigureAwait(false);
+            if (failure is null)
+            {
+                tidied = result;
+                tidyWarning = summary?.Describe();
+            }
+            else
+            {
+                failures.Add(failure);
+                context.WriteError($"{job.InputPath}: {failure.Describe()}");
+            }
+        }
+
         if (!quiet && context.Interactive)
         {
             context.Error.Write('\r');
@@ -616,25 +709,38 @@ internal static class TranscribeCommand
         var files = await TranscriptWriter.WriteAsync(document, job.WithoutFailedPasses(failures), ct: ct)
             .ConfigureAwait(false);
 
+        // And the tidied version beside it, under the .tidy infix, when there is one. The plain
+        // files above are what they always were; this never replaces them.
+        if (tidied is not null)
+        {
+            var tidyFiles = await TranscriptWriter.WriteAsync(tidied, job.ForTidiedVersion(), ct: ct).ConfigureAwait(false);
+            files = [.. files, .. tidyFiles];
+        }
+
         return new JobResult
         {
             Job = job,
             State = JobState.Completed,
             Document = document,
+            TidiedDocument = tidied,
             OutputFiles = files,
             Elapsed = DateTimeOffset.UtcNow - started,
             FailedPasses = failures,
             // Silence wins when both apply: an empty transcript has no segments to flag, and the
             // reason it is empty is the only thing worth saying about it. A labeller at its speaker
             // cap is said after either, because it is about the names and not the words. A number
-            // the English lost is said last, because it is about one segment rather than the file.
+            // the English lost is said next, because it is about one segment rather than the file.
+            // What the tidy refused or replaced is said last: it is about the edited copy, not the
+            // transcript.
             Warning = Join(
                 Join(
                     Join(
-                        DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options),
-                        DescribeUnsegmented(engine, transcribed)),
-                    speakerWarning),
-                numeralWarning),
+                        Join(
+                            DescribeSilence(engine, transcribed) ?? DescribeAnomalies(transcribed, options),
+                            DescribeUnsegmented(engine, transcribed)),
+                        speakerWarning),
+                    numeralWarning),
+                tidyWarning),
         };
     }
 

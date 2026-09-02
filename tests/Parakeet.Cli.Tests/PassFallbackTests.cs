@@ -2,6 +2,7 @@ using Parakeet.Audio;
 using Parakeet.Core.Diarisation;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
+using Parakeet.Core.Tidying;
 using Parakeet.Core.Transcription;
 using Parakeet.Core.Translation;
 
@@ -64,7 +65,8 @@ public class PassFallbackTests
         public async Task<JobResult> RunAsync(
             TranscriptionJob job,
             ISpeakerLabeller? labeller,
-            ITranscriptTranslator? translator)
+            ITranscriptTranslator? translator,
+            ITranscriptTidier? tidier = null)
         {
             await using var engine = new FakeTranscriptionEngine(FakeEngineOptions.Default);
             return await TranscribeCommand.RunOneAsync(
@@ -77,6 +79,8 @@ public class PassFallbackTests
                 new TranscriptionOptions(),
                 labeller is null ? null : SpeakerLabellingOptions.Default,
                 translator is null ? null : TranslationOptions.Default,
+                tidier,
+                tidier is null ? null : TidyOptions.Default,
                 null,
                 quiet: true,
                 CancellationToken.None);
@@ -146,6 +150,68 @@ public class PassFallbackTests
         Assert.True(File.Exists(Path.ChangeExtension(input, ".txt")));
         Assert.False(File.Exists(Path.Combine(harness.Directory, "call.en.txt")));
         Assert.Contains("written without the English version", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATidierThatFailsOnAFileLeavesThePlainFilesAndWritesNoTidiedOnes()
+    {
+        using var harness = new Harness();
+        var input = harness.WriteWav("call.wav");
+
+        var job = new TranscriptionJob { InputPath = input, Formats = ["txt"] };
+        await using var tidier = new FakeTranscriptTidier(new FakeTidierOptions { FailOnTidy = true });
+
+        var result = await harness.RunAsync(job, labeller: null, translator: null, tidier);
+
+        // Completed, because the words are: the stage died beside the recogniser and the
+        // transcript it was reading is whole. Nothing named .tidy is written, and the row says so.
+        Assert.Equal(JobState.Completed, result.State);
+        Assert.Equal(OptInPass.Tidy, Assert.Single(result.FailedPasses).Pass);
+        Assert.Null(result.TidiedDocument);
+        Assert.Null(result.Document?.TidyModelId);
+
+        Assert.True(File.Exists(Path.ChangeExtension(input, ".txt")));
+        Assert.False(File.Exists(Path.Combine(harness.Directory, "call.tidy.txt")));
+        Assert.Contains("written without the tidied version", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("configured to fail on every line", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATidyThatRunsWritesTheTidiedVersionBesideThePlainFilesNeverOverThem()
+    {
+        using var harness = new Harness();
+        var input = harness.WriteWav("call.wav");
+
+        // With speakers too: the turns go on the tidied version from the one diarisation, and
+        // the turns-only format is written once, for the spoken document.
+        var job = new TranscriptionJob { InputPath = input, Formats = ["txt", "json", "rttm"] };
+        await using var labeller = new FakeSpeakerLabeller();
+        await using var tidier = new FakeTranscriptTidier();
+
+        var result = await harness.RunAsync(job, labeller, translator: null, tidier);
+
+        Assert.Equal(JobState.Completed, result.State);
+        Assert.Empty(result.FailedPasses);
+
+        // The spoken document is untidied; the tidied one is beside it with its provenance and
+        // the same speakers.
+        Assert.Null(result.Document?.TidyModelId);
+        var tidied = Assert.IsType<TranscriptDocument>(result.TidiedDocument);
+        Assert.Equal("fake-tidier", tidied.TidyModelId);
+        Assert.Equal(0, tidied.TidyRefusedSegments);
+        Assert.Equal(result.Document!.SpeakerTurns, tidied.SpeakerTurns);
+        Assert.Equal(result.Document.SpeakerModelId, tidied.SpeakerModelId);
+
+        var plain = Path.Combine(harness.Directory, "call.txt");
+        var tidy = Path.Combine(harness.Directory, "call.tidy.txt");
+        Assert.True(File.Exists(plain));
+        Assert.True(File.Exists(tidy));
+        Assert.True(File.Exists(Path.Combine(harness.Directory, "call.tidy.json")));
+        Assert.True(File.Exists(Path.Combine(harness.Directory, "call.rttm")));
+        Assert.False(File.Exists(Path.Combine(harness.Directory, "call.tidy.rttm")));
+        Assert.Contains(tidy, result.OutputFiles);
+        Assert.Contains("\"tidyModel\": \"fake-tidier\"", await File.ReadAllTextAsync(Path.Combine(harness.Directory, "call.tidy.json")), StringComparison.Ordinal);
+        Assert.DoesNotContain("tidyModel", await File.ReadAllTextAsync(Path.Combine(harness.Directory, "call.json")), StringComparison.Ordinal);
     }
 
     [Fact]

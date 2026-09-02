@@ -23,6 +23,13 @@ public enum TranscriptionStage
     /// file.
     /// </summary>
     Translating,
+
+    /// <summary>
+    /// The opt-in tidy: a small language model taking fillers and false starts out of each line,
+    /// beside the recogniser as the lines arrive or over the finished transcript. No audio is
+    /// read; progress is against the transcript's segments, as it is for translation.
+    /// </summary>
+    Tidying,
 }
 
 /// <summary>Progress of a single file. Immutable so it can cross threads freely.</summary>
