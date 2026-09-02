@@ -106,6 +106,7 @@ public sealed partial class ModelViewModel : ObservableObject
         ModelTask.Translation => "ENGLISH",
         ModelTask.VoiceActivity => "SPEECH",
         ModelTask.Answering => "ASK",
+        ModelTask.Tidying => "TIDY",
         _ => string.Empty,
     };
 
@@ -342,6 +343,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 ModelTask.Diarisation => "'Label speakers' on the Transcribe tab",
                 ModelTask.Translation => "'Translate to English' on the Transcribe tab",
                 ModelTask.VoiceActivity => "'Neural speech detection' on the Advanced tab of Settings",
+                ModelTask.Tidying => "'Tidy up the transcript' on the Transcribe tab",
                 _ => "its own opt-in",
             };
 

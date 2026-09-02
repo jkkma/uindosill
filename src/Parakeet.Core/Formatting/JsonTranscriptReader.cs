@@ -68,6 +68,9 @@ public static class JsonTranscriptReader
             TranslationModelId = OptionalString(root, "translationModel"),
             TranslationBackend = OptionalBackend(root, "translationBackend"),
             TranslationDecode = OptionalString(root, "translationDecode"),
+            TidyModelId = OptionalString(root, "tidyModel"),
+            TidyBackend = OptionalBackend(root, "tidyBackend"),
+            TidyRefusedSegments = OptionalInt(root, "tidyRefusedSegments"),
         };
     }
 
@@ -137,6 +140,7 @@ public static class JsonTranscriptReader
                 End = RequiredSeconds(word, "end", where),
                 Confidence = OptionalFloat(word, "conf"),
                 Speaker = OptionalString(word, "speaker"),
+                ReplacedFrom = OptionalString(word, "replacedFrom"),
             });
             index++;
         }

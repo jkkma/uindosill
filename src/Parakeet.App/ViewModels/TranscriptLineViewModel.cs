@@ -101,6 +101,15 @@ public sealed partial class TranscriptLineViewModel : ObservableObject
     [ObservableProperty]
     private bool _isCurrentMatch;
 
+    /// <summary>
+    /// True on a spoken line the tidy has not yet reached: the transcript area draws it at once
+    /// and swaps the tidied line in when it lands, and until then this is what tells a reader a
+    /// raw line from a tidied one (the maintainer's decision, 2026-09-01). Never true on a
+    /// finished row.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isProvisional;
+
     public TranscriptLineViewModel(
         SpeakerViewModel? voice,
         string text,

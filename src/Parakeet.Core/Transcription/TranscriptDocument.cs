@@ -173,6 +173,39 @@ public sealed record TranscriptDocument
     public bool IsTranslated => TranslatedTo is not null;
 
     /// <summary>
+    /// Which model tidied this transcript, when one did — fillers and false starts taken out under
+    /// the delete-only contract of <c>Tidying.TidyContract</c> — and null when the text is what
+    /// the recogniser wrote. Provenance on the same terms as <see cref="TranslationModelId"/>: a
+    /// tidied transcript is a second model's edit of a first model's output, and the words it
+    /// carries are spoken words in spoken order except where <see cref="TranscriptWord.ReplacedFrom"/>
+    /// says otherwise.
+    /// </summary>
+    public string? TidyModelId { get; init; }
+
+    /// <summary>
+    /// Which backend the tidying model ran on, when one ran. Beside <see cref="TidyModelId"/> for
+    /// the reason every other backend field is beside its model: greedy decoding is not
+    /// byte-identical across drafting modes or slot batching (docs/GOTCHAS.md, 41), so the pair
+    /// is the provenance.
+    /// </summary>
+    public ComputeBackend? TidyBackend { get; init; }
+
+    /// <summary>
+    /// How many segments the tidy pass refused and left as spoken, when it ran: the lines whose
+    /// rewrite was not a subsequence of the spoken words and did not go through the door. Null
+    /// when no tidy ran. A count rather than a list, because a refused line is indistinguishable
+    /// from an untouched one on purpose — both are the spoken text.
+    /// </summary>
+    public int? TidyRefusedSegments { get; init; }
+
+    /// <summary>True when a tidy pass ran, whether or not it changed anything.</summary>
+    public bool IsTidied => TidyModelId is not null;
+
+    /// <summary>Every word the tidy pass replaced, across every segment, in order.</summary>
+    public IEnumerable<TranscriptWord> ReplacedWords =>
+        Segments.SelectMany(s => s.Words).Where(w => w.IsReplacement);
+
+    /// <summary>
     /// Real-time factor: processing time divided by audio duration. Lower is faster.
     /// Null unless both durations are known and the audio is non-empty.
     /// </summary>

@@ -54,6 +54,12 @@
     <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
   </Style>
 
+  <!-- A spoken line whose tidy has not landed yet: dimmed, not hidden, so the words are there
+       to read and the reader can tell them from the tidied ones. -->
+  <Style Selector="SelectableTextBlock.provisional">
+    <Setter Property="Opacity" Value="0.55" />
+  </Style>
+
   <!-- Status lines, sizes, hints. -->
   <Style Selector="TextBlock.meta">
     <Setter Property="FontSize" Value="11" />

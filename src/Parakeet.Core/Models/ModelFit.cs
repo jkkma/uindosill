@@ -62,9 +62,11 @@ public static class ModelFit
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        // Only the answering entries are big enough for this to be a real question, and saying it
-        // about a 2 MiB speech detector on a small machine would be noise.
-        if (model.Task != ModelTask.Answering)
+        // Only the language-model entries are big enough for this to be a real question, and
+        // saying it about a 2 MiB speech detector on a small machine would be noise. The tidying
+        // entry is a 3.9 GiB language model, and the decision that added it (2026-09-01) says
+        // the warning applies to it as it does to the answering ones.
+        if (model.Task is not (ModelTask.Answering or ModelTask.Tidying))
         {
             return null;
         }

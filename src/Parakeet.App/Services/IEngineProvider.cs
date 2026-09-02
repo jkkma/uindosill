@@ -2,10 +2,12 @@ using Parakeet.Core.Diarisation;
 using Parakeet.Core.Models;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Tidying;
 using Parakeet.Core.Translation;
 using Parakeet.Engine.ParakeetCpp;
 using Parakeet.Engine.ParakeetCpp.Interop;
 using Parakeet.Engine.Python;
+using Parakeet.Engine.LlamaServer;
 using Parakeet.Engine.SileroVad;
 
 namespace Parakeet.App.Services;
@@ -190,6 +192,16 @@ public interface IEngineProvider
 
     /// <summary>The translator behind the English opt-in, or null when <see cref="SupportsTranslation"/> is false.</summary>
     ITranscriptTranslator? CreateTranslator();
+
+    /// <summary>
+    /// True when this provider can hand out a tidier: the tidying entry is installed and a
+    /// <c>llama-server</c> drop is vendored. Shown the way the other opt-ins are — a checkbox
+    /// disabled with a reason rather than hidden.
+    /// </summary>
+    bool SupportsTidying { get; }
+
+    /// <summary>The tidier behind "Tidy up the transcript", or null when <see cref="SupportsTidying"/> is false.</summary>
+    ITranscriptTidier? CreateTidier();
 
     /// <summary>
     /// True when this provider can hand out a neural speech detector for the segmenter. Shown the
@@ -496,6 +508,9 @@ public sealed class EngineProvider : IEngineProvider
             ModelTask.VoiceActivity => (VoiceActivityModel is not null,
                 "Neural speech detection needs its own model, which is not installed yet. Install it from the Models "
                 + "tab; it is a 2.2 MiB download and hears pauses under music that the loudness gate cannot."),
+            ModelTask.Tidying => (TidyingModel is not null,
+                "Tidying up the transcript needs its own model, which is not installed yet. Install it from the "
+                + "Models tab; it is a 3.9 GiB download and runs beside the speech recogniser."),
             // Not every task runs in the sidecar — transcription is parakeet.cpp — so an unhandled
             // one returns nothing rather than falling through to a sentence about a Python it does
             // not use, which would tell somebody to reinstall over a feature that is working.
@@ -516,6 +531,14 @@ public sealed class EngineProvider : IEngineProvider
         // The interpreter is the second question for the two sidecar opt-ins and for nothing else:
         // the speech detector runs in this process, so a missing Python is not its problem and a
         // sentence about one would send somebody to repair a thing that is not broken.
+        // The tidy's second question is the language-model engine rather than the Python: the
+        // model is served by the vendored llama-server, and a build without one has nothing to
+        // run it in.
+        if (task is ModelTask.Tidying && LlamaServerLocator.TryFind() is null)
+        {
+            return "The model is installed, but this build does not include the language-model engine that runs it.";
+        }
+
         if (task is ModelTask.Diarisation or ModelTask.Translation && !HasBundledPython)
         {
             // Not a download, and not something the Models tab can fix. The resolver's own reason
@@ -647,6 +670,46 @@ public sealed class EngineProvider : IEngineProvider
     }
 
     /// <summary>
+    /// True when the tidying entry is installed and a llama-server drop is vendored to run it.
+    /// </summary>
+    /// <remarks>
+    /// The same two-question shape as the sidecar opt-ins, with the engine in place of the
+    /// interpreter: the model is a download the Models tab can make, and the drop is part of the
+    /// build. Both are read at the moment they are asked, because the Models tab can add or remove
+    /// the entry while the window is open.
+    /// </remarks>
+    public bool SupportsTidying => TidyingModel is not null && LlamaServerLocator.TryFind() is not null;
+
+    private ModelDescriptor? TidyingModel =>
+        ModelCatalog.Default.TidyingModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
+            ? model
+            : null;
+
+    public ITranscriptTidier? CreateTidier()
+    {
+        if (TidyingModel is not { } model || LlamaServerLocator.TryFind() is null)
+        {
+            return null;
+        }
+
+        // The weights, never the head: the engine pairs the head with the weights beside it.
+        var weights = model.Files.FirstOrDefault(file => !DraftModelLocator.IsDraftHead(file.FileName));
+        if (weights is null)
+        {
+            return null;
+        }
+
+        // The best vendored drop, as the Ask tab takes it, and the measured number of lines in
+        // flight. The context, the slots and the head are decided in the one place the command
+        // line uses too.
+        return LlamaServerTranscriptTidier.Create(
+            Path.Combine(_store.PathFor(model), weights.FileName),
+            backend: null,
+            serverRoot: null,
+            TidyOptions.Default.Concurrency);
+    }
+
+    /// <summary>
     /// A no-op until a model has been loaded in this process — the native library is not loaded
     /// before then, so there is nothing to release and nothing is touched.
     /// </summary>
@@ -659,6 +722,7 @@ public sealed class FakeEngineProvider : IEngineProvider
     private readonly FakeEngineOptions _options;
     private readonly FakeSpeakerLabellerOptions _speakers;
     private readonly FakeTranslatorOptions _translator;
+    private readonly FakeTidierOptions _tidier;
 
     /// <summary>
     /// <paramref name="speakers"/> is how a test gives the canned labeller the shipping one's
@@ -670,12 +734,14 @@ public sealed class FakeEngineProvider : IEngineProvider
     public FakeEngineProvider(
         FakeEngineOptions? options = null,
         FakeSpeakerLabellerOptions? speakers = null,
-        FakeTranslatorOptions? translator = null)
+        FakeTranslatorOptions? translator = null,
+        FakeTidierOptions? tidier = null)
     {
         _options = options ?? FakeEngineOptions.Default;
         _speakers = speakers ?? FakeSpeakerLabellerOptions.Default;
         _speakers.Validate();
         _translator = translator ?? FakeTranslatorOptions.Default;
+        _tidier = tidier ?? FakeTidierOptions.Default;
     }
 
     /// <summary>How many times the backend was released, so a test can see that shutdown got here.</summary>
@@ -745,6 +811,11 @@ public sealed class FakeEngineProvider : IEngineProvider
     public bool SupportsTranslation => true;
 
     public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator(_translator);
+
+    /// <summary>The canned tidier, so the opt-in, the stage and the panes run end to end with no model in CI.</summary>
+    public bool SupportsTidying => true;
+
+    public ITranscriptTidier? CreateTidier() => new FakeTranscriptTidier(_tidier);
 
     /// <summary>
     /// The canned detector, so the speech-detection box runs end to end here with no graph in CI

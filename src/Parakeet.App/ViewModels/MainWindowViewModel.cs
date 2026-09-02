@@ -264,6 +264,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     case ModelTask.Translation:
                         Transcribe.RefreshTranslationAvailability();
                         break;
+                    case ModelTask.Tidying:
+                        Transcribe.RefreshTidyAvailability();
+                        break;
                     case ModelTask.VoiceActivity:
                         Transcribe.RefreshSpeechDetectionAvailability();
                         break;

@@ -1406,6 +1406,12 @@ narrow: a model earns the seat by being measured in it, and the answering entrie
 The desktop has run none of it, and the register lists a CUDA re-timing among what the tidy owes
 before it ships.
 
+Built 2026-09-02, the exception is enforced by construction rather than by a rule anything has to
+check: the window creates the tidier for one batch, loads it before the first file and disposes it
+with the batch, so its child lives exactly as long as the recogniser is working beside it; the Ask
+tab's model is a different child with a different provider and is never the one the tidy loads,
+because the tidying entry is not in the answering list the Ask tab reads.
+
 ### 5. What, if anything, is persisted
 
 Open, and mostly reframed. A chat is a conversation, not an artefact — so the first question is

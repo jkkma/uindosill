@@ -12,7 +12,8 @@ public static class TranscriptionRunner
         TranscriptionOptions? options = null,
         string? sourceName = null,
         IProgress<TranscriptionProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<TranscriptSegment>? onSegment = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(audio);
@@ -38,6 +39,10 @@ public static class TranscriptionRunner
         await foreach (var segment in engine.TranscribeAsync(audio, options, progress, ct).ConfigureAwait(false))
         {
             segments.Add(segment);
+
+            // The tidy stage reads the stream here, beside the recogniser, which is the tandem
+            // shape decided 2026-09-01; the finished document is assembled from the same list.
+            onSegment?.Invoke(segment);
         }
 
         stopwatch.Stop();

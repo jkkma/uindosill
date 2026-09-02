@@ -51,6 +51,19 @@ public sealed record TranscriptionJob
     public string DisplayName => Path.GetFileName(InputPath);
 
     /// <summary>
+    /// This job as the tidied version's: the <c>.tidy</c> infix in place of whatever stem suffix
+    /// the spoken run carries, and no turns-only format, because the turns are the spoken
+    /// document's fact and that file is written once, beside it.
+    /// </summary>
+    public TranscriptionJob ForTidiedVersion() => this with
+    {
+        StemSuffix = Tidying.TranscriptTidy.FileInfix,
+        Formats = Formats
+            .Where(id => !TranscriptFormats.TryGet(id, out var format) || !ReferenceEquals(format, TranscriptFormats.Rttm))
+            .ToList(),
+    };
+
+    /// <summary>
     /// This job with its outputs reduced to what a transcript written without the passes in
     /// <paramref name="failed"/> can honestly carry. A translation that did not happen means the
     /// plain stem rather than the <c>.en</c> one that promises English; speaker labels that did
@@ -90,6 +103,13 @@ public sealed record JobResult
 
     public TranscriptDocument? Document { get; init; }
 
+    /// <summary>
+    /// The tidied version, when the run tidied and the tidy did not fail; null otherwise. Beside
+    /// <see cref="Document"/> rather than in its place, because the tidy is an edited version of
+    /// the transcript and never replaces it — in the window, in the file names, and here.
+    /// </summary>
+    public TranscriptDocument? TidiedDocument { get; init; }
+
     /// <summary>Message shown to the user when <see cref="State"/> is <see cref="JobState.Failed"/>.</summary>
     public string? Error { get; init; }
 
@@ -112,8 +132,9 @@ public sealed record JobResult
 }
 
 /// <summary>
-/// One of the two opt-in passes over a finished transcript — speaker labels, the English version —
-/// and the policy for when it fails: the transcript is handed back as it was, with the reason.
+/// One of the opt-in passes over a transcript — speaker labels, the English version, the tidied
+/// version — and the policy for when it fails: the transcript is handed back as it was, with the
+/// reason.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -138,6 +159,14 @@ public sealed record OptInPass(string Name, string Product)
 
     /// <summary>The English pass: <see cref="Product"/> is "the English version".</summary>
     public static OptInPass Translation { get; } = new("Translation", "the English version");
+
+    /// <summary>
+    /// The tidy: <see cref="Product"/> is "the tidied version". A stage beside the recogniser
+    /// rather than a pass after it, but the policy is the same — a tidy that dies mid-file leaves
+    /// the transcript whole, on these terms, which is what the tandem decision (2026-09-01) named
+    /// as the construction's cost.
+    /// </summary>
+    public static OptInPass Tidy { get; } = new("Tidying", "the tidied version");
 
     /// <summary>
     /// Runs <paramref name="run"/> over <paramref name="document"/> and returns what it produced,

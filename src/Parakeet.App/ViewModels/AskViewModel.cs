@@ -153,10 +153,21 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public ObservableCollection<TranscriptLineViewModel>? Lines =>
         SelectedRecording is not { } job ? null
         : TranscriptPane == 1 && job.HasTranslation ? job.TranslatedLines
+        : TranscriptPane == 2 && job.HasTidy ? job.TidiedLines
         : job.Lines;
 
     /// <summary>Whether there is an English version of the open recording to switch to.</summary>
     public bool CanShowTranslation => SelectedRecording?.HasTranslation ?? false;
+
+    /// <summary>
+    /// Whether there is a tidied version of the open recording to switch to. Unlike the English
+    /// it marks the word being said: every kept word carries the time of the spoken word it came
+    /// from.
+    /// </summary>
+    public bool CanShowTidy => SelectedRecording?.HasTidy ?? false;
+
+    /// <summary>Whether there is anything to switch to at all — what draws the switcher.</summary>
+    public bool CanShowPanes => CanShowTranslation || CanShowTidy;
 
     /// <summary>Whether the pane being read is the English one.</summary>
     public bool IsShowingTranslation => TranscriptPane == 1 && CanShowTranslation;
@@ -179,7 +190,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
 
     public bool HasTranscript => Lines is { Count: > 0 };
 
-    /// <summary>Which pane is being read: 0 the transcript, 1 its English version.</summary>
+    /// <summary>Which pane is being read: 0 the transcript, 1 its English version, 2 the tidied one.</summary>
     /// <remarks>
     /// On this tab rather than on the row, for the reason the Transcribe tab gives for the same
     /// choice: moving down the queue keeps the pane a person picked instead of snapping back to the
@@ -571,6 +582,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         {
             job.Lines.CollectionChanged -= OnLinesChanged;
             job.TranslatedLines.CollectionChanged -= OnLinesChanged;
+            job.TidiedLines.CollectionChanged -= OnLinesChanged;
             job.PropertyChanged -= OnRecordingChanged;
 
             // And the voices, which is the subscription that would actually outlive this: a
@@ -599,6 +611,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         {
             oldValue.Lines.CollectionChanged -= OnLinesChanged;
             oldValue.TranslatedLines.CollectionChanged -= OnLinesChanged;
+            oldValue.TidiedLines.CollectionChanged -= OnLinesChanged;
             oldValue.PropertyChanged -= OnRecordingChanged;
             oldValue.Speakers.CollectionChanged -= OnSpeakersChanged;
             Unwatch(oldValue.Speakers);
@@ -608,9 +621,10 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         {
             newValue.Lines.CollectionChanged += OnLinesChanged;
 
-            // Both collections, because the English arrives long after the transcript did and on a
-            // row this tab may already be showing.
+            // Every pane's collection, because the English and the tidied version arrive after
+            // the transcript did and on a row this tab may already be showing.
             newValue.TranslatedLines.CollectionChanged += OnLinesChanged;
+            newValue.TidiedLines.CollectionChanged += OnLinesChanged;
             newValue.PropertyChanged += OnRecordingChanged;
             newValue.Speakers.CollectionChanged += OnSpeakersChanged;
             Watch(newValue.Speakers);
@@ -654,6 +668,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(TranscriptNotice));
         OnPropertyChanged(nameof(VideoNotice));
         OnPropertyChanged(nameof(CanShowTranslation));
+        OnPropertyChanged(nameof(CanShowTidy));
+        OnPropertyChanged(nameof(CanShowPanes));
         OnPropertyChanged(nameof(IsShowingTranslation));
         OnPropertyChanged(nameof(TranslationPaneNotice));
         OnPropertyChanged(nameof(Speakers));
@@ -683,18 +699,29 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     private void OnRecordingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(JobViewModel.HasTranslation)
-            && e.PropertyName != nameof(JobViewModel.TranslatedTranscript))
+            && e.PropertyName != nameof(JobViewModel.TranslatedTranscript)
+            && e.PropertyName != nameof(JobViewModel.HasTidy)
+            && e.PropertyName != nameof(JobViewModel.TidiedTranscript))
         {
             return;
         }
 
         OnPropertyChanged(nameof(CanShowTranslation));
+        OnPropertyChanged(nameof(CanShowTidy));
+        OnPropertyChanged(nameof(CanShowPanes));
 
+        // The English first when there is one, the tidied version otherwise: the pane the model
+        // is asked over (docs/V2-ASK-THE-TRANSCRIPT.md, decided 2026-08-24 and 2026-09-01) is the
+        // pane the reader is put on, once.
         if (CanShowTranslation && TranscriptPane == 0)
         {
             // Assigning raises OnTranscriptPaneChanged, which moves the lines, the highlight and
             // the search with it.
             TranscriptPane = 1;
+        }
+        else if (CanShowTidy && !CanShowTranslation && TranscriptPane == 0)
+        {
+            TranscriptPane = 2;
         }
         else
         {

@@ -451,6 +451,26 @@
                    the transcript below it and never the other opt-in. -->
               <StackPanel DockPanel.Dock="Top" Spacing="7" Margin="0,0,0,11">
 
+                <!-- The tidy opt-in, first because it grows nothing: a small language model takes
+                     fillers, stutters and false starts out of each line beside the recogniser, and
+                     every line is held to a delete-only contract against what was spoken. Off by
+                     default; disabled with a reason while its model or the engine is missing. -->
+                <Border Classes="tinted" Padding="10,8">
+                  <DockPanel LastChildFill="True">
+                    <CheckBox DockPanel.Dock="Left"
+                              Name="TidyUpTranscript"
+                              Content="Tidy up the transcript"
+                              FontWeight="SemiBold"
+                              Margin="0,0,9,0"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding TidyUpTranscript}"
+                              IsEnabled="{Binding CanTidy}" />
+                    <TextBlock Text="{Binding TidyHint}" Classes="meta" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding TidyHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </DockPanel>
+                </Border>
+
                 <!-- The English opt-in, drawn as the twin of the speaker one below: its own
                      tinted strip, off by default, disabled with a reason rather than hidden while
                      its model is not installed.
@@ -577,14 +597,21 @@
                    as a control belonging to the panel below. -->
               <Border DockPanel.Dock="Top" Classes="switcher" Name="TranscriptPaneSwitcher"
                       HorizontalAlignment="Left" Margin="0,0,0,9"
-                      IsVisible="{Binding CanShowTranslation}">
+                      IsVisible="{Binding CanShowPanes}">
                 <StackPanel Orientation="Horizontal">
                   <RadioButton Name="PaneTranscript" Classes="segment" GroupName="TranscriptPane"
                                Content="Transcript"
                                IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
                   <RadioButton Name="PaneEnglish" Classes="segment" GroupName="TranscriptPane"
                                Content="English"
+                               IsVisible="{Binding CanShowTranslation}"
                                IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+                  <!-- The tidied pane, labelled for what it is: an edited version of the
+                       transcript beside it, never in its place. -->
+                  <RadioButton Name="PaneTidied" Classes="segment" GroupName="TranscriptPane"
+                               Content="Tidied"
+                               IsVisible="{Binding CanShowTidy}"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=2}" />
                 </StackPanel>
               </Border>
 
@@ -618,7 +645,10 @@
                                   Classes.chip7="{Binding Chip, Converter={StaticResource IndexMatch}, ConverterParameter=7}">
                             <TextBlock Text="{Binding Voice.Name}" />
                           </Border>
+                          <!-- Dimmed while its tidy is still to come, so a reader can tell a
+                               raw line from a tidied one; plain the moment it lands. -->
                           <SelectableTextBlock Grid.Column="1" Text="{Binding Text}"
+                                               Classes.provisional="{Binding IsProvisional}"
                                                TextWrapping="Wrap" LineHeight="20.3" />
                         </Grid>
                       </DataTemplate>
@@ -1394,14 +1424,21 @@
                    once, so a reader who comes back to the transcript stays there. -->
               <Border DockPanel.Dock="Top" Classes="switcher" Name="AskPaneSwitcher"
                       HorizontalAlignment="Left" Margin="0,0,0,11"
-                      IsVisible="{Binding CanShowTranslation}">
+                      IsVisible="{Binding CanShowPanes}">
                 <StackPanel Orientation="Horizontal">
                   <RadioButton Name="AskPaneTranscript" Classes="segment" GroupName="AskPane"
                                Content="Transcript"
                                IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
                   <RadioButton Name="AskPaneEnglish" Classes="segment" GroupName="AskPane"
                                Content="English"
+                               IsVisible="{Binding CanShowTranslation}"
                                IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+                  <!-- The tidied pane keeps the word mark: every kept word carries the time of
+                       the spoken word it came from, which the English cannot. -->
+                  <RadioButton Name="AskPaneTidied" Classes="segment" GroupName="AskPane"
+                               Content="Tidied"
+                               IsVisible="{Binding CanShowTidy}"
+                               IsChecked="{Binding TranscriptPane, Converter={StaticResource IndexMatch}, ConverterParameter=2}" />
                 </StackPanel>
               </Border>
 

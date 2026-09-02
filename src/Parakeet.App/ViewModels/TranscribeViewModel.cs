@@ -13,6 +13,7 @@ using Parakeet.Core.Models;
 using Parakeet.Core.Muxing;
 using Parakeet.Core.Segmentation;
 using Parakeet.Core.Transcription;
+using Parakeet.Core.Tidying;
 using Parakeet.Core.Translation;
 
 namespace Parakeet.App.ViewModels;
@@ -300,7 +301,15 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private bool _translateToEnglish;
 
     /// <summary>
-    /// Which pane the transcript area is showing: 0 the transcript, 1 the English.
+    /// The tidy opt-in — "Tidy up the transcript". Off by default and off every time the window
+    /// opens, on the same terms as the other two: it loads a second model beside the recogniser
+    /// and costs the transcription some speed for the company.
+    /// </summary>
+    [ObservableProperty]
+    private bool _tidyUpTranscript;
+
+    /// <summary>
+    /// Which pane the transcript area is showing: 0 the transcript, 1 the English, 2 the tidied.
     /// </summary>
     /// <remarks>
     /// On the view model rather than on the row, so switching files keeps the pane a person chose
@@ -372,6 +381,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
         RefreshSpeakerAvailability();
         RefreshTranslationAvailability();
+        RefreshTidyAvailability();
         RefreshSpeechDetectionAvailability();
     }
 
@@ -684,9 +694,40 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>
     /// Whether the selected row has an English transcript to switch to, which is what decides
-    /// whether the pane switcher is drawn at all.
+    /// whether the English pill is drawn.
     /// </summary>
     public bool CanShowTranslation => SelectedJob?.HasTranslation ?? false;
+
+    /// <summary>Whether the selected row has a tidied transcript to switch to: the Tidied pill.</summary>
+    public bool CanShowTidy => SelectedJob?.HasTidy ?? false;
+
+    /// <summary>Whether there is anything to switch to at all, which is what draws the switcher.</summary>
+    public bool CanShowPanes => CanShowTranslation || CanShowTidy;
+
+    /// <summary>
+    /// Whether the tidy opt-in does anything. Disabled with a reason when it does not, on the
+    /// same terms as the other two.
+    /// </summary>
+    public bool CanTidy => _engines.SupportsTidying;
+
+    /// <summary>Why the tidy opt-in is off, when it is; null when it is available.</summary>
+    public string? TidyHint => CanTidy ? null : _engines.DescribeUnavailable(ModelTask.Tidying);
+
+    /// <summary>
+    /// Re-asks whether a tidier is available and brings the checkbox and its hint into line, on
+    /// the terms of <see cref="RefreshTranslationAvailability"/>: the view model outlives the
+    /// Models tab's installs and removals, and the box goes off when the entry goes away.
+    /// </summary>
+    public void RefreshTidyAvailability()
+    {
+        if (!_engines.SupportsTidying && TidyUpTranscript)
+        {
+            TidyUpTranscript = false;
+        }
+
+        OnPropertyChanged(nameof(CanTidy));
+        OnPropertyChanged(nameof(TidyHint));
+    }
 
     /// <summary>
     /// Which format would go inside the recording, or null when none of the selected ones can.
@@ -887,8 +928,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
             var english = job.TranslatedDocument is not null
                 ? $", and the English beside them as {TranslatedInfix} files"
                 : string.Empty;
+            var tidy = job.TidiedDocument is not null
+                ? $", and the tidied version beside them as {TranscriptTidy.FileInfix} files"
+                : string.Empty;
 
-            return $"Writes {job.DisplayName}'s transcript as {ticked} file{(ticked == 1 ? string.Empty : "s")} {where}{english}.";
+            return $"Writes {job.DisplayName}'s transcript as {ticked} file{(ticked == 1 ? string.Empty : "s")} {where}{english}{tidy}.";
         }
     }
 
@@ -967,6 +1011,20 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 }, ct: cancellationToken).ConfigureAwait(true));
             }
 
+            if (job.NamedTidy() is { } tidied)
+            {
+                // Every format but the turns-only one: the tidied words carry the spoken words'
+                // timings, so the word-timed file is written for it too, and the turns are the
+                // spoken document's fact, written once above.
+                written.AddRange(await TranscriptWriter.WriteAsync(tidied, new TranscriptionJob
+                {
+                    InputPath = job.Path,
+                    Formats = ticked.Where(id => id != TranscriptFormats.Rttm.Id).ToList(),
+                    OutputDirectory = outputDirectory,
+                    StemSuffix = TranscriptTidy.FileInfix,
+                }, ct: cancellationToken).ConfigureAwait(true));
+            }
+
             job.OutputFiles.AddRange(written);
 
             var where = outputDirectory is null ? "beside the recording" : $"in {outputDirectory}";
@@ -1000,6 +1058,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     public IEnumerable<TranscriptLineViewModel>? VisibleLines =>
         SelectedJob is not { } job ? null
         : TranscriptPane == 1 && job.HasTranslation ? job.TranslatedLines
+        : TranscriptPane == 2 && job.HasTidy ? job.TidiedLines
         : job.Lines;
 
     /// <summary>
@@ -1016,6 +1075,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private void RefreshTranscriptPane()
     {
         OnPropertyChanged(nameof(CanShowTranslation));
+        OnPropertyChanged(nameof(CanShowTidy));
+        OnPropertyChanged(nameof(CanShowPanes));
         OnPropertyChanged(nameof(VisibleLines));
         RefreshSpeakers();
     }
@@ -1440,6 +1501,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        if (TidyUpTranscript && !_engines.SupportsTidying)
+        {
+            RefreshTidyAvailability();
+            StatusMessage = "The tidying model is no longer installed. Download it again from the Models tab.";
+            return;
+        }
+
         // The diariser is a file on disk and can go away between opening the window and pressing
         // Start — the Models tab will remove it, since only the *loaded* transcription engine is
         // protected there. Asked again here rather than trusted from construction, because the
@@ -1564,6 +1632,20 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 return;
             }
 
+            // One tidier for the whole batch: its child is loaded once, before the first file,
+            // and sits beside the recogniser for every file — the residency exception decision 4
+            // grants this one model (docs/V2-ASK-THE-TRANSCRIPT.md, amended 2026-09-01).
+            await using var tidier = TidyUpTranscript && _engines.SupportsTidying
+                ? _engines.CreateTidier()
+                : null;
+
+            if (TidyUpTranscript && tidier is null)
+            {
+                StatusMessage = "The tidying model is no longer installed. Download it again from the Models tab.";
+                RefreshTidyAvailability();
+                return;
+            }
+
             // Loaded here, before a file is decoded, on the command line's terms (LabellerFactory
             // and TranslatorFactory do the same): a bundled Python that will not start, a
             // checkpoint that will not load, a provider that refuses — each is a sentence in the
@@ -1581,6 +1663,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
             {
                 StatusMessage = "Loading the translation model…";
                 await translator.LoadAsync(ct).ConfigureAwait(true);
+            }
+
+            if (tidier is not null)
+            {
+                StatusMessage = "Loading the tidying model…";
+                await tidier.LoadAsync(ct).ConfigureAwait(true);
             }
 
             StatusMessage = null;
@@ -1616,7 +1704,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             speakerOptions.Validate();
 
             var runner = new BatchTranscriptionRunner(
-                (job, _, token) => RunJobAsync(engine, labeller, translator, job, options, speakerOptions, token));
+                (job, _, token) => RunJobAsync(engine, labeller, translator, tidier, job, options, speakerOptions, token));
             var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(true);
 
             // The runner swallows per-file exceptions so the queue keeps going, which means a
@@ -1706,6 +1794,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         ITranscriptionEngine engine,
         ISpeakerLabeller? labeller,
         ITranscriptTranslator? translator,
+        ITranscriptTidier? tidier,
         TranscriptionJob job,
         TranscriptionOptions options,
         SpeakerLabellingOptions speakerOptions,
@@ -1737,6 +1826,67 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // showed a progress bar and nothing to read.
         var lined = 0;
 
+        // The tidy stage beside the recogniser, when the opt-in is on. Every segment goes to it as
+        // it arrives; a few are in flight against the model at any time; each comes back through
+        // the contract on a worker thread and is queued here, and Publish — which runs on this
+        // flow, where the collections are touched — swaps the tidied line in for the spoken one.
+        // The window shows the spoken line at once, marked, and swaps in the tidied one when it
+        // lands: the maintainer's choice of 2026-09-01 over a pane that trails the recogniser by a
+        // growing backlog.
+        var landed = new System.Collections.Concurrent.ConcurrentQueue<(int Index, TidyOutcome Outcome)>();
+        await using var stage = tidier is null
+            ? null
+            : new TidyStage(tidier, TidyOptions.Default, (index, outcome) => landed.Enqueue((index, outcome)), ct);
+
+        // Per segment index, the rows drawn for it, so a tidied line can find the spoken rows it
+        // replaces; and the outcomes that landed before their segment was drawn at all.
+        var rowsBySegment = new List<TranscriptLineViewModel[]>();
+        var landedEarly = new Dictionary<int, TidyOutcome>();
+
+        TranscriptLineViewModel[] RowsFor(TranscriptSegment segment, bool provisional)
+        {
+            var rows = TranscriptLineViewModel.LinesFor(segment, voice: null).ToArray();
+            foreach (var row in rows)
+            {
+                row.IsProvisional = provisional;
+            }
+
+            return rows;
+        }
+
+        void Swap(int index, TidyOutcome outcome)
+        {
+            var old = rowsBySegment[index];
+            if (!outcome.Accepted)
+            {
+                // The spoken line stays, and stops being provisional: this is what it will read.
+                foreach (var row in old)
+                {
+                    row.IsProvisional = false;
+                }
+
+                return;
+            }
+
+            var at = old.Length > 0 ? vm.Lines.IndexOf(old[0]) : -1;
+            foreach (var row in old)
+            {
+                vm.Lines.Remove(row);
+            }
+
+            var replacement = RowsFor(outcome.Segment, provisional: false);
+            rowsBySegment[index] = replacement;
+            if (at < 0)
+            {
+                at = vm.Lines.Count;
+            }
+
+            foreach (var row in replacement)
+            {
+                vm.Lines.Insert(at++, row);
+            }
+        }
+
         void Publish()
         {
             vm.Transcript = text.ToString();
@@ -1752,12 +1902,39 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 var segment = segments[lined];
                 if (segment.IsEmpty)
                 {
+                    rowsBySegment.Add([]);
                     continue;
                 }
 
-                foreach (var line in TranscriptLineViewModel.LinesFor(segment, voice: null))
+                // A segment whose tidy already landed is drawn tidied straight away; otherwise it
+                // is drawn as spoken and marked until its tidy arrives — or unmarked for good when
+                // there is no tidy running.
+                TranscriptLineViewModel[] rows;
+                if (landedEarly.Remove(lined, out var early) && early.Accepted)
+                {
+                    rows = RowsFor(early.Segment, provisional: false);
+                }
+                else
+                {
+                    rows = RowsFor(segment, provisional: stage is not null && early is null);
+                }
+
+                rowsBySegment.Add(rows);
+                foreach (var line in rows)
                 {
                     vm.Lines.Add(line);
+                }
+            }
+
+            while (landed.TryDequeue(out var arrival))
+            {
+                if (arrival.Index < rowsBySegment.Count)
+                {
+                    Swap(arrival.Index, arrival.Outcome);
+                }
+                else
+                {
+                    landedEarly[arrival.Index] = arrival.Outcome;
                 }
             }
 
@@ -1771,6 +1948,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         {
             segments.Add(segment);
             text.Append(segment.Text).Append(' ');
+            stage?.Enqueue(segment);
 
             if (lastPublished.ElapsedMilliseconds >= TranscriptRefreshMilliseconds)
             {
@@ -1792,6 +1970,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
             DecodeTime = (engine as SegmentingTranscriptionEngine)?.LastDecodeDuration,
             SpeechDetector = (engine as SegmentingTranscriptionEngine)?.LastSegmentationReport?.SpeechDetector,
         };
+
+        // The segments the stage was fed, before the speaker pass cuts them: the tidied version
+        // is assembled against these and given the speakers afterwards.
+        var raw = document;
 
         // Either opt-in pass can fail where the transcript did not, and when one does the transcript
         // is written and shown without it and the row says so — the command line's rule, for the
@@ -1903,6 +2085,46 @@ public sealed partial class TranscribeViewModel : ObservableObject
             }
         }
 
+        // The tidy, last: its stage has been running since the first segment, and what is waited
+        // for here is whatever backlog the recogniser left it — said in the row, with the count,
+        // because a queue that is never empty is the shape the tandem decision named. A failure
+        // leaves the transcript whole on the other passes' terms; the tidied version is the spoken
+        // document's edit with the spoken document's speakers put on it.
+        TranscriptDocument? tidied = null;
+        string? tidyWarning = null;
+        if (stage is not null && tidier is not null)
+        {
+            var completion = stage.CompleteAsync();
+            while (await Task.WhenAny(completion, Task.Delay(TranscriptRefreshMilliseconds, ct)).ConfigureAwait(true) != completion)
+            {
+                var pending = stage.Pending;
+                vm.BeginPass(pending == 1 ? "Tidying the last line" : $"Tidying, {pending} lines to go");
+                Publish();
+            }
+
+            TidySummary? summary = null;
+
+            async Task<TranscriptDocument> CompleteTidyAsync()
+            {
+                var outcomes = await completion.ConfigureAwait(true);
+                var (assembled, tidySummary) = TranscriptTidy.Assemble(raw, outcomes, tidier.Capabilities);
+                summary = tidySummary;
+                return TranscriptTidy.WithSpeakersOf(assembled, transcribed, speakerOptions);
+            }
+
+            var (tidyResult, failure) = await OptInPass.Tidy.RunAsync(raw, CompleteTidyAsync).ConfigureAwait(true);
+            if (failure is null)
+            {
+                tidied = tidyResult;
+                tidyWarning = summary?.Describe();
+                Publish();
+            }
+            else
+            {
+                failures.Add(failure);
+            }
+        }
+
         // Written as what it is — the spoken transcript under the plain name when the translation
         // failed, and with no turns-only format when the speakers did.
         var written = await TranscriptWriter.WriteAsync(document, job.WithoutFailedPasses(failures), ct: ct)
@@ -1914,20 +2136,32 @@ public sealed partial class TranscribeViewModel : ObservableObject
             Job = job,
             State = JobState.Completed,
             Document = document,
+            TidiedDocument = tidied,
             OutputFiles = written,
             Elapsed = DateTimeOffset.UtcNow - started,
             FailedPasses = failures,
 
             // Silence first, then the labeller at its cap, then what the translator's provider means
-            // for the English, then a number the English lost: the file, the names, the whole
-            // translation, one segment — widest first, as the command line orders them.
-            Warning = Join(Join(Join(silence, speakerWarning), translatorWarning), numeralWarning),
+            // for the English, then a number the English lost, then what the tidy refused or
+            // replaced: the file, the names, the whole translation, one segment, the edited copy —
+            // widest first, as the command line orders them.
+            Warning = Join(Join(Join(Join(silence, speakerWarning), translatorWarning), numeralWarning), tidyWarning),
         };
 
-        // The pane switcher is drawn for a row that has both documents; a row whose translation
-        // failed has one, so it gets no switcher rather than two panes of the same text.
+        // The pane switcher is drawn for a row that has more than one document; a row whose
+        // translation failed has one, so it gets no switcher rather than two panes of the same text.
         vm.Complete(result, translated ? transcribed : null);
         RefreshTranscriptPane();
+
+        // A reader who watched the tidied lines land is left reading them: Complete() rebuilds the
+        // spoken pane from the spoken document, so without this the text they were reading would
+        // snap back to the raw lines the moment the run ended. Once, and only from the spoken
+        // pane — a pane they chose is theirs.
+        if (tidied is not null && ReferenceEquals(SelectedJob, vm) && TranscriptPane == 0)
+        {
+            TranscriptPane = 2;
+        }
+
         return result;
     }
 

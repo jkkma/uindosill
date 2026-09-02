@@ -70,6 +70,10 @@ public sealed partial class JobViewModel : ObservableObject
     [ObservableProperty]
     private string? _translationProvenance;
 
+    /// <summary>Which model and backend tidied this row's transcript, or null on a run that did not tidy.</summary>
+    [ObservableProperty]
+    private string? _tidyProvenance;
+
     [ObservableProperty]
     private string _transcript = string.Empty;
 
@@ -87,6 +91,15 @@ public sealed partial class JobViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTranslation))]
     private string _translatedTranscript = string.Empty;
+
+    /// <summary>
+    /// The tidied transcript, when the run tidied, and empty when it did not. Beside
+    /// <see cref="Transcript"/> for the reason the English is: an edited version of the transcript
+    /// never replaces it, in the window or in the file names.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTidy))]
+    private string _tidiedTranscript = string.Empty;
 
     /// <summary>
     /// Serialises a progress report against completion. On the UI thread the two cannot interleave
@@ -164,6 +177,13 @@ public sealed partial class JobViewModel : ObservableObject
     public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> TranslatedLines { get; } = [];
 
     /// <summary>
+    /// The tidied transcript in the same shape, empty on a run that did not tidy. Unlike the
+    /// English these lines carry word timings — every kept word maps to the spoken word it came
+    /// from — so the Ask tab marks the word being said on this pane too.
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<TranscriptLineViewModel> TidiedLines { get; } = [];
+
+    /// <summary>
     /// The voices in this recording, in the order they are first heard — which is the order their
     /// colours were assigned in, and the order the diariser numbers them in.
     /// </summary>
@@ -204,6 +224,9 @@ public sealed partial class JobViewModel : ObservableObject
     /// </summary>
     public TranscriptDocument? TranslatedDocument { get; private set; }
 
+    /// <summary>The tidied document, kept when the run tidied so Export can write it; null otherwise.</summary>
+    public TranscriptDocument? TidiedDocument { get; private set; }
+
     /// <summary>Whether there is a transcript to put back inside the recording.</summary>
     public bool CanExport => Document is not null;
 
@@ -222,6 +245,10 @@ public sealed partial class JobViewModel : ObservableObject
     public TranscriptDocument? NamedTranslation() =>
         TranslatedDocument?.WithSpeakerNames(RenamedVoices());
 
+    /// <summary>The tidied document under the same names, or null when the run did not tidy.</summary>
+    public TranscriptDocument? NamedTidy() =>
+        TidiedDocument?.WithSpeakerNames(RenamedVoices());
+
     /// <summary>
     /// The reader's names for the labelled voices, label → name, renamed rows only. Public since
     /// 2026-08-30 for the Ask panel, which runs its questions over the named document so the
@@ -238,6 +265,9 @@ public sealed partial class JobViewModel : ObservableObject
     /// second pill.
     /// </summary>
     public bool HasTranslation => TranslatedTranscript.Length > 0;
+
+    /// <summary>Whether this row has a tidied transcript to switch to.</summary>
+    public bool HasTidy => TidiedTranscript.Length > 0;
 
     public bool IsFinished => State is JobState.Completed or JobState.Failed or JobState.Cancelled;
 
@@ -292,6 +322,7 @@ public sealed partial class JobViewModel : ObservableObject
             TranscriptionStage.Finalising => "Finishing",
             TranscriptionStage.LabellingSpeakers => "Labelling speakers",
             TranscriptionStage.Translating => "Translating",
+            TranscriptionStage.Tidying => "Tidying",
             _ => "Working",
         };
     }
@@ -342,8 +373,10 @@ public sealed partial class JobViewModel : ObservableObject
         Warning = null;
         SpeakerProvenance = null;
         TranslationProvenance = null;
+        TidyProvenance = null;
         Transcript = string.Empty;
         TranslatedTranscript = string.Empty;
+        TidiedTranscript = string.Empty;
 
         // Documents before lines: clearing the line collections is what the ask panel listens
         // to, and its refresh re-reads the documents — cleared afterwards, it kept the discarded
@@ -351,8 +384,10 @@ public sealed partial class JobViewModel : ObservableObject
         // (found 2026-08-30).
         Document = null;
         TranslatedDocument = null;
+        TidiedDocument = null;
         Lines.Clear();
         TranslatedLines.Clear();
+        TidiedLines.Clear();
         Speakers.Clear();
         OutputFiles.Clear();
         OnPropertyChanged(nameof(CanExport));
@@ -449,6 +484,7 @@ public sealed partial class JobViewModel : ObservableObject
 
             Document = spoken;
             TranslatedDocument = source is not null ? document : null;
+            TidiedDocument = result.TidiedDocument;
             OnPropertyChanged(nameof(CanExport));
 
             Transcript = Render(spoken);
@@ -458,6 +494,18 @@ public sealed partial class JobViewModel : ObservableObject
             {
                 TranslatedTranscript = Render(document);
                 Relines(document, chips, TranslatedLines);
+            }
+
+            // The tidied version, from the result rather than a parameter: it is an edit of the
+            // spoken document with the same speakers put on it, so the chips agree with the
+            // spoken pane's.
+            if (result.TidiedDocument is { } tidied)
+            {
+                TidyProvenance = tidied.TidyBackend is { } tidyBackend
+                    ? $"Tidied: {tidied.TidyModelId ?? "unnamed model"} on {tidyBackend.ToString().ToLowerInvariant()}"
+                    : null;
+                TidiedTranscript = Render(tidied);
+                Relines(tidied, chips, TidiedLines);
             }
         }
     }

@@ -361,6 +361,18 @@ public static class Attributions
     /// </remarks>
     public const string Gemma412BItQat = "google-gemma-4-12b-it-qat-gguf";
 
+    /// <summary>
+    /// The tidying model: Gemma 4 E4B, quantisation-aware trained, Apache-2.0, installed as a
+    /// third party's GGUF — the same family, publisher, converter and licence as
+    /// <see cref="Gemma412BItQat"/>, at a size that runs beside the recogniser.
+    /// </summary>
+    /// <remarks>
+    /// A third Gemma 4 entry because it is a third model, under a task of its own (docs/PHASES.md,
+    /// decided 2026-09-01): it is what the transcript tidy loads, and it is never offered to the
+    /// Ask tab. The upstream repositories were read on 2026-09-02 and both serve Apache-2.0.
+    /// </remarks>
+    public const string Gemma4E4BItQat = "google-gemma-4-e4b-it-qat-gguf";
+
     /// <summary>Where the Apache License 2.0 copy lives, relative to the repository root.</summary>
     public const string ApacheLicencePath = "licences/Apache-License-2.0.txt";
 
@@ -481,6 +493,44 @@ public static class Attributions
 
                 "GGUF conversion and dynamic quantisation by Unsloth: "
                 + "https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF",
+            ],
+            WarrantyDisclaimerNotice =
+                "The model is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
+                + "either express or implied (section 7 of the licence).",
+        },
+
+        [Gemma4E4BItQat] = new ApacheAttribution
+        {
+            Title = "Gemma 4 E4B instruction-tuned, quantisation-aware trained "
+                + "(language model weights, GGUF)",
+            Creator = "Google DeepMind",
+            LicenceStatement = "Apache License, Version 2.0,",
+            LicenceUri = new Uri("https://www.apache.org/licenses/LICENSE-2.0"),
+            LicencePath = ApacheLicencePath,
+            MaterialUri = new Uri("https://huggingface.co/google/gemma-4-E4B-it"),
+            ModificationNotice =
+                "Modified: Google DeepMind trained gemma-4-E4B-it and published the "
+                + "quantisation-aware-trained variant this is built from; a third party, Unsloth, "
+                + "converted it to the GGUF format and quantised it, with no retraining and no change "
+                + "to the architecture. The installed file is Unsloth's UD-Q4_K_XL dynamic "
+                + "quantisation of that variant, in which the weights are reduced to roughly four bits "
+                + "per value at a precision that varies per tensor. Installed beside it is the "
+                + "publisher's own multi-token-prediction head at Q8_0, which drafts tokens the model "
+                + "then verifies. Uindosill hosts neither the original checkpoint nor the conversion, "
+                + "and installs Unsloth's copy by URL.",
+            SourceNoticeFinding =
+                "Both upstream repositories were read on 2026-09-02, google/gemma-4-E4B-it and "
+                + "unsloth/gemma-4-E4B-it-qat-GGUF at revision 8c5a9e4fd5. Neither ships a NOTICE "
+                + "file, so §4(d) has nothing to reproduce, and neither carries a copyright, patent "
+                + "or trademark notice, so none is reproduced here rather than one being invented. "
+                + "The attribution notices they do carry are these:",
+            RetainedSourceNotices =
+            [
+                "Gemma is a family of open models built by Google DeepMind. Model page: "
+                + "https://huggingface.co/google/gemma-4-E4B-it",
+
+                "GGUF conversion and dynamic quantisation by Unsloth: "
+                + "https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF",
             ],
             WarrantyDisclaimerNotice =
                 "The model is provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, "
