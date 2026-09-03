@@ -1,4 +1,4 @@
-using Parakeet.Core.Formatting;
+﻿using Parakeet.Core.Formatting;
 
 namespace Parakeet.Cli;
 
@@ -275,7 +275,9 @@ internal static class Commands
                 Help = "Tidy up the transcript beside the recogniser: a small language model takes fillers, stutters " +
                        "and false starts out of each line as it arrives, and every line is checked word for word " +
                        "against what was spoken — a rewrite that changes or adds a word is refused and the spoken line " +
-                       "kept. The tidied version is written beside the plain files with a .tidy infix (call.tidy.srt); " +
+                       "kept. Deleting is what the tidy is for, so how much of a line may go is bounded too: a rewrite " +
+                       "that drops more than half of a line, or more than four words in a row, is refused as well. " +
+                       "The tidied version is written beside the plain files with a .tidy infix (call.tidy.srt); " +
                        "the plain files are what they always were. Needs the tidying model installed ('uindosill models " +
                        "list'); with --fake it uses the canned tidier and needs nothing.",
             },
