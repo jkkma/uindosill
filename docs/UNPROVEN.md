@@ -7387,11 +7387,25 @@ tidy removes 9.8% of what the recogniser wrote, 5.8% of what the normaliser keep
 - **Time**: 0.094 end to end — 3,776 s for 40,037 s of audio with the build, the hash check, both
   loads and the scoring inside it, 10.6× real time for transcription and tidy together. The
   recogniser's own `processingSec` summed to 1,634.6 s, RTF 0.041 beside the E4B, 138–203 s per
-  call. **No recogniser-alone arm ran on this corpus**, so the cost of the company over eleven
-  hours is not measured; the morning's +31% on the ten-minute sample is the only figure for it.
+  call.
+- **The recogniser-alone control, run afterwards the same night** (`scripts/measure-wer.ps1
+  -Backend vulkan -Models tdt-0.6b-v3-f16`, same corpus, same gate, same build;
+  `runs/wer/20260902-225514-vulkan-alone/`): 1,468.4 s wall, `processingSec` 1,465.7 s, **RTF
+  0.037**, 124–183 s per call. **The company costs the recogniser 11.5% over eleven hours** —
+  1,634.6 s against 1,465.7 s, per call 6.7% to 15.4% — not the 31% the ten-minute sample paid
+  in the morning; what separates the two is not measured (the E4B's load falls inside a short
+  run's wall, and the sample's cut is sparser, 7.7 segments a minute against 11.7). **The
+  recogniser's output is byte-identical alone and in company on all ten calls**, transcript
+  text, segment boundaries and timings alike, so the spoken row above is the recogniser's
+  whatever runs beside it. The whole command is 2.57× longer with the tidy — 2,308 s more over
+  11.12 h, 5.7 minutes per hour of audio against 2.2 — which is the tidy's own pace at one
+  request per segment, and the reason the unit question is measured next.
 
 **Unproven after it:** the same delta on the desktop under CUDA, the second condition; the delta
-under the neural detector on the whole corpus; the recogniser-alone control on this corpus and
-machine, and with it the tidy's pace over eleven hours; and which reference style the shipping
-criterion reads — the same tidy is +3.43 against one human transcript and −2.94 against the other,
-and that is a decision, recorded as one in `docs/PHASES.md`.
+under the neural detector on the whole corpus; why the company costs the recogniser 11.5% over
+the corpus and 31% on the ten-minute sample; and the tidy's sequential pace on this corpus,
+against which the tandem's 5.7 minutes per hour is a saving or is not. Which reference style the shipping
+criterion reads — the same tidy is +3.43 against one human transcript and −2.94 against the
+other — was a decision, not a measurement, and was taken the same night: the non-verbatim delta
+decides and the verbatim one is reported beside it (`docs/PHASES.md`, *Decided 2026-09-02, late
+evening*).

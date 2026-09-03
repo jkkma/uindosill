@@ -72,6 +72,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# The summaries are pasted into public documents, so numbers are formatted the same way on every
+# machine: 0.25, not 0,25 on a machine whose Windows speaks a comma-decimal language (gotcha 42).
+[Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+[Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::InvariantCulture
+
 # [TimeSpan]::Parse rejects "25:00:00.000" — hh is a 0-23 field there and a subtitle timecode's
 # hours deliberately do not wrap. Read the four fields directly instead.
 function ConvertFrom-VttTimecode([string] $value) {

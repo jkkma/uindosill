@@ -58,6 +58,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# The summaries are pasted into public documents, so numbers are formatted the same way on every
+# machine: 0.25, not 0,25 on a machine whose Windows speaks a comma-decimal language (gotcha 42).
+[Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+[Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::InvariantCulture
+
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
 
