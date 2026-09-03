@@ -1,4 +1,4 @@
-using Parakeet.Core.Formatting;
+﻿using Parakeet.Core.Formatting;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Tidying;
 using Parakeet.Core.Transcription;
@@ -184,6 +184,69 @@ public class TidyContractTests
         Assert.True(accepted.Accepted);
         Assert.True(accepted.Segment.IsEmpty);
         Assert.Empty(accepted.Segment.Words);
+    }
+
+    [Fact]
+    public void ALineLosingMoreThanHalfItsWordsIsRefusedAndTheCeilingIsSettable()
+    {
+        // Deleting is the one thing the contract lets a rewrite do, and until this ceiling it
+        // could do it without bound. Five of eight is past half, so the spoken line is kept.
+        var spoken = Spoken("other thing that just happened somebody was there");
+        var refused = TidyContract.Apply(spoken, "Somebody was there.", 0.45f);
+        Assert.False(refused.Accepted);
+        Assert.Contains("5 of the line's 8 spoken words", refused.Refusal, StringComparison.Ordinal);
+
+        // The same rewrite passes when the ceiling is opened, so it is the ceiling refusing it
+        // and not the alignment.
+        Assert.True(TidyContract.Apply(spoken, "Somebody was there.", 0.45f, maxDeletedFraction: 1d, maxConsecutiveDeletedWords: 8).Accepted);
+    }
+
+    [Fact]
+    public void AClauseOfFiveWordsInARowIsRefusedWhereTheSameCountScatteredIsNot()
+    {
+        // The measured shape of the failure: a clause is contiguous, a stutter is not, and the
+        // fraction cannot tell them apart because both can be the same share of the line.
+        var clause = Spoken("we anyone who passes away we own everything on that account today");
+        var refusedClause = TidyContract.Apply(clause, "We own everything on that account today.", 0.45f);
+        Assert.False(refusedClause.Accepted);
+        Assert.Contains("5 spoken words in a row", refusedClause.Refusal, StringComparison.Ordinal);
+
+        // Five words again, the same line length, but never more than two together.
+        var stutter = Spoken("i i think that that the design the the forcing you you to show it");
+        var accepted = TidyContract.Apply(stutter, "I think that the design forcing you to show it.", 0.45f);
+        Assert.True(accepted.Accepted, accepted.Refusal);
+        Assert.Equal(5, accepted.DeletedWords);
+    }
+
+    [Fact]
+    public void AFillerRunIsTransparentToTheConsecutiveCeiling()
+    {
+        // A filler between two dropped words neither breaks the run nor lengthens it: the words
+        // the normaliser cannot see are not the words being counted. Four content words in a row
+        // with an "um" among them is four, and stays inside the ceiling.
+        // Five content words in a row with an "um" among them: the run is five, not the two
+        // and three it would be if the filler broke it, and five of eleven is inside the
+        // fraction — so only the consecutive ceiling can be what refuses this.
+        var spoken = Spoken("so anyone who um passes away then we own it and that");
+        var outcome = TidyContract.Apply(spoken, "So we own it and that.", 0.45f);
+
+        Assert.False(outcome.Accepted);
+        Assert.Contains("5 spoken words in a row", outcome.Refusal, StringComparison.Ordinal);
+
+        // And it is the run refusing it: opened on that ceiling alone, the line passes.
+        var opened = TidyContract.Apply(spoken, "So we own it and that.", 0.45f, maxConsecutiveDeletedWords: 5);
+        Assert.True(opened.Accepted, opened.Refusal);
+    }
+
+    [Fact]
+    public void ALineOfNothingButFillerIsStillAllowedToTidyToNothing()
+    {
+        // The ceiling reads content words, and a line that has none is exempt: the record calls
+        // an empty rewrite right for a line that was only "um", and that must not change.
+        var outcome = TidyContract.Apply(Spoken("Um uh"), string.Empty, 0.45f);
+
+        Assert.True(outcome.Accepted, outcome.Refusal);
+        Assert.True(outcome.Segment.IsEmpty);
     }
 
     [Fact]
