@@ -50,7 +50,7 @@ public enum ModelTask
     Answering = 4,
 
     /// <summary>
-    /// Fillers and false starts out of a transcript: what the "Tidy up the transcript" opt-in
+    /// Fillers and false starts out of a transcript: what the "Clean up the transcript" opt-in
     /// loads, beside the recogniser. Never an ASR model, never a diariser, and never offered by
     /// the Ask tab's picker — it has not been measured answering a question and the picker is not
     /// the place to find out. Added 2026-09-02 with the E4B entry, under the decision of

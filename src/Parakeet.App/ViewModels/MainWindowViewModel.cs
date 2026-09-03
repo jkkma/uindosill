@@ -55,8 +55,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private AskEvidenceDepth _askEvidence;
 
     /// <summary>The .gguf chosen for asking, or null for "the recommended model, or the largest
-    /// there" — the catalogue's recommended answering entry when installed, the largest file
-    /// otherwise (<c>AnswerEngines.FindModelFile</c>).</summary>
+    /// if it is missing" — the catalogue's recommended answering entry when installed, the largest
+    /// file otherwise (<c>AnswerEngines.FindModelFile</c>).</summary>
     [ObservableProperty]
     private string? _askModelFileName;
 
@@ -714,7 +714,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            var rows = new List<AskModelChoice> { new(null, "The recommended model, or the largest there") };
+            // "or the largest" is a fallback and not a gloss on the recommendation, which the
+            // comma alone let it read as: the catalogue recommends a specific entry, and the
+            // largest file is only what happens when that entry is not installed.
+            var rows = new List<AskModelChoice> { new(null, "The recommended model, or the largest if it is missing") };
             if (_llamaAnswerEngines is { } provider)
             {
                 rows.AddRange(provider.AvailableModelFileNames().Select(name => new AskModelChoice(name, name)));
@@ -746,19 +749,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         + "next question.";
 
     public string AskModeExplanation =>
-        "Deciding from your question sends summaries and \"what are the main topics\" across the "
-        + "whole recording, and everything else through the parts that matched, which is faster. "
-        + "A long recording is covered by an even sample of it rather than read minute by minute, "
-        + "and the answer says so; reading every word of a long one is only done when you ask for "
-        + "it, because it can take a while.";
+        "The router. Automatic sends summaries and \"main topics\" to the whole transcript and "
+        + "everything else to the parts that matched, which is faster. A long transcript is "
+        + "covered by an even sample of it, and the answer says so.";
 
     public string AskExpertPlacementExplanation =>
-        "Some models split their work into experts and run only a few of them for each word. They "
-        + "are fastest on a graphics card with room to hold them; where there is no room, "
-        + "graphics built into the processor, or a model bigger than the card, they run from "
-        + "system memory instead, and a model that tries anyway may fail to start. Automatic "
-        + "weighs the model against your graphics. Dense models are unaffected either way, and "
-        + "whichever you pick is used from your next question.";
+        "Sets --cpu-moe on the llama-server child: whether a mixture-of-experts model's expert "
+        + "tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, "
+        + "so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA "
+        + "it leaves placement to the loader, measured holding that model at 22.4 tok/s with "
+        + "nothing offloaded. Dense models are unaffected, and none of it applies on the CPU "
+        + "backend. Used from your next question.";
 
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
@@ -964,10 +965,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // control now applies to the pyannote pipeline, on which neither has been measured — so both
     // sentences left rather than being re-pointed at a model they were never about.
     public string DiarisationBatchSizeExplanation =>
-        "How much of the recording the speaker model holds at once. Fewer windows need less memory, "
-        + "which is worth choosing if labelling a long recording runs the machine out of it; more "
-        + "windows need more. How much either costs on this model, and whether the setting changes "
-        + "the labels, has not been measured. Takes effect at your next recording.";
+        "pyannote's segmentation_batch_size and embedding_batch_size, set together — a memory "
+        + "setting, not a speed one. Fewer windows need less memory, which is worth choosing if "
+        + "labelling a long recording runs the machine out of it. Unset leaves the checkpoint's "
+        + "own value. Neither the cost nor whether it changes the labels has been measured. "
+        + "Takes effect at your next recording.";
 
     // ---- The CUDA pack ------------------------------------------------------------------------
     //
