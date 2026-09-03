@@ -141,7 +141,7 @@ Nothing a measurement produces belongs in the working tree. Each harness uses it
 it, named in its header — among them `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`,
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it,
 `measure-wer.ps1` writes `runs/wer/<timestamp>-<backend>/`, `measure-tidy-units.ps1` writes
-`runs/tidy-units/<timestamp>-<backend>/`, `measure-der.ps1` writes
+`runs/tidy-units/<timestamp>-<backend>/` and `…-<backend>-fake/` for its dry run, `measure-der.ps1` writes
 `runs/der/<timestamp>-<system>/` beside the cut stretches in `runs/der/stretches/`, and the v2
 pair write `runs/<timestamp>-answers-<backend>/` and `runs/<timestamp>-spike-<backend>/`.
 `export-translation-onnx.py` is not a harness but writes there for the same reason —
@@ -151,6 +151,13 @@ gigabytes.
 `packaging/` is the second such tree and is gitignored for the same reason: `package-windows.ps1`
 writes the publish, the packages and the release feed under it, and one channel alone is over
 800 MB. Nothing there is an input to anything — delete it whenever.
+
+`corpus/` is the third and is the opposite kind: gitignored input rather than output. Both WER
+harnesses fetch into it — `measure-wer.ps1` and `measure-tidy-units.ps1`, against the pins in
+`scripts/wer-corpus.json` — as `corpus/<manifest name>/{media,verbatim,nonverbatim}/`, byte count
+and SHA-256 checked against the manifest before anything is scored. It is a cache: deleting it
+costs a re-fetch and nothing else, and `-SkipVerify` on either harness trusts what is already
+there without re-hashing it.
 
 `scripts/lab.ps1` is one entry point for the scripts; run it bare to list them, each with the
 parameters its own script declares. A leading `!` in that listing marks a parameter the

@@ -206,6 +206,11 @@ try {
     if (-not (Test-Path -LiteralPath $exe)) { $exe = Join-Path $repo "src/Parakeet.Cli/bin/$Configuration/net10.0/uindosill" }
     if (-not (Test-Path -LiteralPath $exe)) { throw "Built executable not found. Run without -SkipBuild, or check bin/$Configuration/net10.0." }
 
+    # When the binary that ran was actually written. With -SkipBuild it can be any age, and the
+    # revision below is only the tree's — the two together are what say whether this run measured
+    # this revision or yesterday's binary wearing today's commit.
+    $cliBuiltAt = (Get-Item -LiteralPath $exe).LastWriteTime.ToString('o')
+
     if (-not $OutputDirectory) {
         $OutputDirectory = Join-Path $repo 'runs' 'wer' ("{0}-{1}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $Backend)
     }
@@ -235,13 +240,32 @@ try {
         # Not Windows, or CIM unavailable: the block stays partly empty rather than the run failing.
     }
 
+    # Which build produced this. A record that cannot name its revision cannot be put back beside
+    # the tree it came from, and a dirty tree means the CLI is not necessarily what HEAD says.
+    $revision = [ordered]@{ commit = $null; dirty = $null }
+    try {
+        if (Get-Command git -ErrorAction SilentlyContinue) {
+            $head = @(& git -C $repo rev-parse HEAD 2>$null) | Select-Object -First 1
+            if ($head) {
+                $revision.commit = ([string] $head).Trim()
+                $revision.dirty = (@(& git -C $repo status --porcelain 2>$null).Count -gt 0)
+            }
+        }
+    }
+    catch {
+        # No git on PATH, or not a checkout: the block stays empty rather than the run failing.
+    }
+
     Write-Host ''
     Write-Host '── machine ─────────────────────────────────────' -ForegroundColor Green
     Write-Host ("  os      {0}" -f $machine.os)
     Write-Host ("  cpu     {0}" -f $machine.cpu)
     Write-Host ("  gpu     {0}" -f ($machine.gpu -join ' | '))
     if ($machine.driver) { Write-Host ("  driver  {0}" -f $machine.driver) }
-    Write-Host ("  backend {0}" -f $Backend)
+    Write-Host ("  backend {0} — requested, not what loaded" -f $Backend)
+    if ($revision.commit) {
+        Write-Host ("  build   {0}{1}" -f $revision.commit.Substring(0, 12), $(if ($revision.dirty) { ' (tree dirty)' } else { '' }))
+    }
     Write-Host ("  output  {0}" -f $OutputDirectory)
 
     # ── transcribe and score, per model ─────────────────────────────────────────────────────────
@@ -471,6 +495,14 @@ try {
         tidy         = [bool] $Tidy
         tidyBackend  = $TidyBackend
         styles       = $Styles
+        # Which build produced this, and which of the two checks the run skipped. A record that
+        # names neither cannot say what it measured: -SkipBuild reuses whatever binary was already
+        # in bin/, which need not be this revision's, and -SkipVerify trusts the corpus on disk
+        # without re-hashing it against the manifest.
+        skipBuild    = [bool] $SkipBuild
+        skipVerify   = [bool] $SkipVerify
+        revision     = $revision
+        cliBuiltAt   = $cliBuiltAt
         models       = @($modelRows)
     }
     $summaryJson = Join-Path $OutputDirectory 'summary.json'
@@ -482,6 +514,19 @@ try {
     $lines.Add(("Machine: {0}; {1}; driver {2}. {3} files, {4:N2} h of audio. Normaliser: {5}." -f
         $machine.cpu, ($machine.gpu -join ' | '), $machine.driver, $entries.Count, ($totalAudioSeconds / 3600),
         $(if ($KeepFillers) { 'basic, fillers kept' } else { 'basic, fillers dropped' })))
+    $lines.Add('')
+    $werSwitches = [Collections.Generic.List[string]]::new()
+    if ($SkipBuild) { $werSwitches.Add('-SkipBuild') }
+    if ($SkipVerify) { $werSwitches.Add('-SkipVerify') }
+    $lines.Add(("{0} {1}{2}, from a revision this run reads as {3}. Switches: {4}." -f
+        $(if ($SkipBuild) { 'Ran the binary already in `bin/` — **this run built nothing** — last written' } else { 'Built' }),
+        $cliBuiltAt,
+        $(if ($SkipBuild) { '' } else { ' by this run' }),
+        $(if ($revision.commit) {
+            "``$($revision.commit)``" + $(if ($revision.dirty) { ' **with the working tree dirty**' } else { ', tree clean' })
+        }
+        else { 'unreadable' }),
+        $(if ($werSwitches.Count -gt 0) { $werSwitches -join ', ' } else { 'none' })))
     $lines.Add('')
     $header = '| Model | ' + (($Styles | ForEach-Object { "WER vs $_" }) -join ' | ') + ' | S / D / I (verbatim) | RTF (' + $Backend + ') |'
     $lines.Add($header)

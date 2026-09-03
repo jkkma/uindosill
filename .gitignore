@@ -40,8 +40,9 @@ tests/fixtures/large/
 # of JSON on its own.
 runs/
 
-# The WER reference corpus, fetched by scripts/measure-wer.ps1 against the pins in
-# scripts/wer-corpus.json: eleven hours of Earnings-22 audio and its human transcripts. The
+# The WER reference corpus, fetched against the pins in scripts/wer-corpus.json by both harnesses
+# that score against it — scripts/measure-wer.ps1 over the whole set, and scripts/measure-tidy-units.ps1
+# over the one call its arms run on: eleven hours of Earnings-22 audio and its human transcripts. The
 # manifest is committed; the corpus is not — it is 120 MB, someone else's, and re-fetchable.
 corpus/
 
