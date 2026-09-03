@@ -707,11 +707,23 @@ That is the whole obligation for libsndfile too. §6(b) may well have carried it
 separate and replaceable — but the offer covers both, so nothing here rests on a reading of
 6(b)(1) that a shipped copy is "already present on the user's computer system".
 
-**The second exit was taken the same day.** `librosa.filters.mel` in `diariser/feats.py` is now a
+**The second exit was taken the same day.** `librosa.filters.mel` in `diariser/feats.py` became a
 committed `mel-filterbank.npy`, librosa left `python/requirements-bundle.txt`, and **`soxr` left with
 it** — along with numba, llvmlite, pooch and audioread. An assembled bundle went from 108
 distributions and 1.40 GB to **99 and 1.26 GB**, and **nothing statically linked in this product is
 under the LGPL any more.**
+
+**Both of those files left `python/` the next day, and the conclusion above is unaffected.** On
+2026-08-27 `feats.py` and the `mel-filterbank.npy` that replaced its librosa call moved to
+`attic/sortformer/uindosill_engines/diariser/` with the engine that called them;
+`python/uindosill_engines/diariser/` holds `pyannote_engine.py`, `onnx_export.py` and `__init__.py`,
+and **the shipping diariser builds no filterbank of this project's own at all.**
+`PyannoteEngine.label` reads the host's 16 kHz mono WAV with `soundfile` and hands `pyannote.audio`
+an in-memory waveform; pyannote's own features are `torchaudio.functional.resample` and
+`torchaudio.compliance.kaldi`, both pure torch. What the sentence above turns on is not that file
+but the pins: librosa and `soxr` are absent from `python/requirements-bundle.txt`, which is where
+that file's own comment now says the reason has outlived the argument that removed it. **Re-adding
+librosa, for the diariser or for anything else, would reopen this.**
 
 **Two things had to be true first, and both were measured rather than argued.** *That the features
 do not move*: `librosa.filters.mel` at this project's parameters produces a `(128, 257)` float32
@@ -791,10 +803,16 @@ a later step that trims the bundle for size would break it silently. Two things 
 text read was the *installer* build's `LICENSE.txt` for that version rather than the embeddable
 zip's own, and the embeddable zip is the one that ships.
 
-**The vendored NeMo is the one part of the bundle whose obligation is already written down.**
-`python/uindosill_engines/_vendor/nemo/` holds two of NVIDIA's Apache-2.0 files and thirteen of this
-project's own; `NOTICE.md` carries the entry and the §4 check against it, and neither is repeated
-here.
+**The vendored NeMo was the one part of the bundle whose obligation was already written down — and
+it left the bundle on 2026-08-27.** `python/uindosill_engines/_vendor/nemo/` held two of NVIDIA's
+Apache-2.0 files and thirteen of this project's own; that tree moved to
+`attic/sortformer/uindosill_engines/_vendor/nemo/` with the diariser that imported it, the `_vendor/`
+directory is gone, and **no bundle carries NeMo now**. `NOTICE.md` carries the entry and the §4 check
+against it, and neither is repeated here — but read there, as here, as a statement about what the
+source tree still contains rather than about what an installer would ship. **This paragraph's claim
+was about the bundle, and to that extent it no longer holds**: what the Apache-2.0 reading now
+governs is a redistribution of this repository, which carries the files whether or not a bundle is
+ever built.
 
 **Nothing above is discharged.** No notice package has been assembled for any of it, no audit has
 been run, and `uindosill notice` and the About window say nothing about the Python. This section is

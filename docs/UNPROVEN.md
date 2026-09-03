@@ -5315,10 +5315,23 @@ project body, and the comment there records how to check.
 ## Playing a recording — built 2026-08-22, video added 2026-08-23, driven against real files both days
 
 The Ask tab plays the file it is showing, through **`SystemAudioPlayer` in
-`src/Parakeet.App/Services/IAudioPlayer.cs`**. **Nothing in the suite runs a line of it**, and that
-is structural rather than an oversight: it ends at WASAPI, which needs a Windows audio endpoint, and
-CI has none. Every test drives `FakeAudioPlayer`, a clock with no sound that moves only when it is
-told to.
+`src/Parakeet.App/Services/SystemAudioPlayer.cs`** — the sound-only player, which is what a build
+gets when libmpv is not vendored beside it; the video subsection below carries the selection.
+**Nothing in the suite runs a line of it**, and that is structural rather than an oversight: it ends
+at WASAPI, which needs a Windows audio endpoint, and CI has none. Every test drives
+`FakeMediaPlayer`, a clock with no sound that moves only when it is told to.
+
+**A note on those names, because this section was written the day before they changed.** On
+2026-08-23 one commit renamed `IAudioPlayer` to `IMediaPlayer`, `FakeAudioPlayer` to
+`FakeMediaPlayer` and `AudioPlaybackException` to `PlaybackException`, and gave the two
+implementations files of their own out of the one file all four types had shared — the interface
+and the exception stayed together in `IMediaPlayer.cs` — so what stood here as
+`Services/IAudioPlayer.cs` is `Services/SystemAudioPlayer.cs` now. **No playback logic travelled
+with the names**: read against that commit, the player gained six video members it answers with
+`false`, `(0, 0)` or nothing at all, and `Open`, `Play`, `Pause`, `Seek`, `Close` and `Dispose` are
+otherwise unchanged. So what this section establishes still describes the code in the tree, under
+the names above. `docs/PHASES.md` § *Decided 2026-08-23 — video plays through libmpv* carries the
+rename.
 
 So it was driven by hand instead, on the laptop (Ryzen AI 9 365, Radeon 880M, Windows 11), through a
 scratch program outside the repository, against three files chosen to cover both reader branches —
