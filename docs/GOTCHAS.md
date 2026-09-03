@@ -1025,7 +1025,9 @@ runs in es-PY; `"{0:N0}" -f 5599` is `5,599` on the one and `5.599` on the other
 summary.md of the tidy's WER-corpus run, 2026-09-02, carried both — a table reading `10,21%` and
 `5.599 / 1.924 / 2.846` — and a reader from the other machine, or a script, takes the second for a
 decimal. `summary.json` was untouched, because `ConvertTo-Json` is invariant, which is why the
-record was written from the JSON. `measure-wer.ps1` sets
-`[CultureInfo]::CurrentCulture = [CultureInfo]::InvariantCulture` before it formats anything, from
-the same day; any other script that formats with `-f` has the same exposure until it does. The
-trap is invisible on the machine that has it and on CI, which runs invariant.
+record was written from the JSON. `measure-der.ps1` had set the thread's culture invariant from
+the start; `measure-wer.ps1` and the other harnesses that write run records — `measure-transcribe`,
+`measure-second-machine`, `measure-translation-agreement`, `compare-transcripts`, `word-distance` —
+do the same from 2026-09-02, before they format anything. The vendoring and packaging scripts
+still format in the machine's locale, on purpose: their sizes are read by the person at the
+keyboard. The trap is invisible on the machine that has it and on CI, which runs invariant.

@@ -71,6 +71,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# The reports are pasted into public documents, so numbers are formatted the same way on every
+# machine: 0.25, not 0,25 on a machine whose Windows speaks a comma-decimal language (gotcha 42).
+[Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+[Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::InvariantCulture
+
 # ── the alignment, shared with the product ──────────────────────────────────────────────────────
 #
 # One implementation, tested in tests/Parakeet.Core.Tests, used by the CLI's `wer` command and by

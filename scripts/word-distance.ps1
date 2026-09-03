@@ -81,6 +81,11 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# The reports are pasted into public documents, so numbers are formatted the same way on every
+# machine: 0.25, not 0,25 on a machine whose Windows speaks a comma-decimal language (gotcha 42).
+[Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+[Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::InvariantCulture
+
 # From a PowerShell prompt, `-Candidates a.json,b.json` binds as an array. Through `pwsh -File` it
 # arrives as one string with commas in it, because the native command line has no array syntax and
 # the binder has nothing to split on. Both are reasonable ways to run this, and the second failing
