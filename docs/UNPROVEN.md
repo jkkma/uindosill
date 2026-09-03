@@ -7273,7 +7273,9 @@ segments — for the runs beside the recogniser.
   session's other allocations went unrecorded.
 - **The desktop, CUDA, any language but English, the E2B, the installed 12B or 26B as tidiers, and
   the E4B's own audio input** — listed at the vendored tag's `docs/multimodal.md` for the E2B and
-  E4B through the mmproj, with the model card's 30-second cap per clip; none of it ran.
+  E4B through the mmproj, with the model card's 30-second cap per clip; none of it ran then. The
+  desktop and CUDA have since — the two desktop blocks that close this section — and the
+  rest still has not.
 - **The tandem timing flatters tandem twice**: the cleaner was handed every line at the start
   rather than as the recogniser emitted it (it is the slower of the two, so its queue would not
   have run dry after the first second), and neither arm counts reloading the recogniser for a
@@ -7341,7 +7343,8 @@ an earlier identical set lost its wall clocks and agrees on every text. The reco
 **Unproven after it:** the tandem-against-sequential saving on a real segmentation; the unit
 question (segments, joined segments, or sentence-runs) that the per-request pace raises; the
 neural detector's line count; the window's stage at these latencies; quality against a reference;
-the desktop and CUDA. One file, one machine.
+the desktop and CUDA — re-timed there on 2026-09-03, on a corpus call rather than this file (*The
+request unit on the desktop*, below). One file, one machine.
 
 ### The delta on the ten-call WER corpus — measured 2026-09-02, second machine, Vulkan
 
@@ -7414,7 +7417,8 @@ tidy removes 9.8% of what the recogniser wrote, 5.8% of what the normaliser keep
   11.12 h, 5.7 minutes per hour of audio against 2.2 — which is the tidy's own pace at one
   request per segment, and the reason the unit question is measured next.
 
-**Unproven after it:** the same delta on the desktop under CUDA, the second condition; the delta
+**Unproven after it:** the same delta on the desktop under CUDA, the second condition — measured
+2026-09-03, +3.47 / −2.89 (*The delta on the ten-call WER corpus on the desktop*, below); the delta
 under the neural detector on the whole corpus; why the company costs the recogniser 11.5% over
 the corpus and 31% on the ten-minute sample; and the tidy's sequential pace on this corpus,
 against which the tandem's 5.7 minutes per hour is a saving or is not. Which reference style the shipping
@@ -7475,5 +7479,165 @@ Lag is the tidied version landing after the plain transcript, on the stage's clo
 
 **Unproven after it:** one call, one machine — the tiebreak call 4469088 has not been run; the
 retry of a refused run one segment at a time (about 27 extra requests on this call, 4% of the
-segment's 680), designed and not measured; the desktop under CUDA; and how the window's live
-swap reads when a joined run lands three or four lines at once.
+segment's 680), designed and not measured; the desktop under CUDA (measured 2026-09-03 — *The
+request unit on the desktop*, below); and how the window's live swap reads when a joined run
+lands three or four lines at once.
+
+### The request unit on the desktop — measured 2026-09-03, RTX 5080, CUDA
+
+The re-timing the second condition asks for (`docs/PHASES.md`, *Decided 2026-09-01 — the model
+sees the tidied pane*: the desktop re-times the pass and its tandem on CUDA): the same seven arms as the laptop's measurement above,
+on the same call, through the same harness — `scripts/measure-tidy-units.ps1 -Backend cuda -Vad
+energy`, **7.4 minutes for the seven arms** against the laptop's 38. Desktop (Ryzen 9 9950X, RTX
+5080 with 16 GB of its own; driver 616.56, as for the diariser's 2026-08-28 check, where the
+2026-08-16 baseline's was 610.88), CUDA for both models, the machine otherwise idle; `tdt-0.6b-v3-f16` and the catalogue's
+E4B with its Q8_0 head, both installed that morning and digest-verified against the catalogue —
+`%LOCALAPPDATA%\Uindosill` no longer existed on this machine, so nothing was warm; the vendored
+`llama-server` b10603's CUDA drop at the engine's flags plus `-c 8192 -np 4`, four in flight, a
+fresh server per arm, the server's own flash-attention default (the head's README warning about
+the E4B under CUDA flash attention did not bite here — seven loads, seven clean exits); the
+energy gate, named explicitly; call **4482383** (3,472 s, 680 segments), verified against the
+manifest; build `42135ec`, tree clean. The recogniser's transcript is byte-identical across all
+seven arms, spoken WER 9.43% / 11.86% (the laptop's Vulkan transcript: 9.45% / 11.83%; the
+2026-08-16 CUDA ladder scored this call at 9.43% against verbatim). `nvidia-smi` every 5 s
+throughout: 56 °C and 144.9 W at the peaks, 81 W on average, 7,761 MiB. The record is
+`runs/tidy-units/20260903-072113-cuda/` on the desktop and in the Drive's `runs-desktop`.
+
+All seven arms, in the order they ran, the segment's repeat folded into its tandem row (the pass
+shape's lag is its whole tidy):
+
+| arm | requests | recogniser | transcript at | tidied at | **lag** | refused units / segments | tidied WER v / nv | delta v / nv |
+|---|---:|---:|---:|---:|---:|---|---|---|
+| segment, pass *(first)* | 680 | 15.8 s | 15.8 s | 70.7 s | 54.9 s | 10 / 10 | 14.27% / 10.17% | +4.84 / −1.69 |
+| segment, tandem | 680 | 25.4 s | 25.4 s | 63.8 s | **38.4 s** (39.4 s on the repeat) | 12 / 12 (12 / 12) | 13.87% / 9.75% | +4.44 / −2.11 |
+| joined run, pass | 180 | 15.2 s | 15.2 s | 43.3 s | 28.1 s | 7 / 27 | 13.00% / 8.98% | +3.57 / −2.88 |
+| joined run, tandem | 180 | 25.9 s | 25.9 s | 37.9 s | **11.9 s** | 7 / 27 | 13.03% / 9.01% | +3.60 / −2.85 |
+| sentence-run, pass | 518 | 15.2 s | 15.2 s | 60.8 s | 45.6 s | 11 / 24 | 13.26% / 8.80% | +3.83 / −3.06 |
+| sentence-run, tandem | 518 | 25.5 s | 25.5 s | 56.7 s | **31.2 s** | 11 / 24 | 13.27% / 8.79% | +3.84 / −3.07 |
+
+- **The lag on CUDA is a fifth of the laptop's for the segment and the sentence-run, a seventh
+  for the joined run, in the same order.** Segment 38.4 s against 194.3 s on the laptop's Vulkan
+  path, joined run 11.9 s against 83.3 s, sentence-run 31.2 s against 155.5 s; the floor 1.0 s
+  against 1.5 s. Median request latency in tandem 0.32 s, 0.82 s
+  and 0.39 s where the laptop's segment took 1.7 s and its joined run 4.5 s.
+- **In the pass shape the tidy alone takes 54.9 s, 28.1 s and 45.6 s — 175, 342 and 211 spoken
+  words per second against the laptop's 63.6, 42.1 and 35.1 — and the segment changes ends.** On
+  the laptop the segment was the fastest pass (151 s against 229 s and 275 s); here it is the
+  slowest, and the joined run is the fastest in both shapes. Its 180 requests carry nearly four times the
+  words of a segment's 680 at twice the median latency (0.62 s against 0.30 s), so on this card a
+  request's cost is more its own than its words'.
+- **The recogniser pays 65–71% for the company on this card, where the laptop paid 16–20%**:
+  24.96–25.94 s in the four tandem arms against 15.15–15.16 s in the two warm pass arms (15.83 s
+  in the cold first arm) — RTF 0.0044 alone against 0.0072–0.0075 in tandem, both CUDA. In
+  seconds that is ten on a 58-minute call, against the laptop's seventeen to twenty-six; in
+  proportion it is three to four times the laptop's, because the recogniser here is eight times
+  faster and the tidy's share of the card does not shrink with it.
+- **Tandem still lands the tidied copy sooner than the pass would, by less than the lag suggests**:
+  segment 63.8 s against 70.7 s (9.9% of the combined time), joined run 37.9 s against 43.3 s
+  (12.5%), sentence-run 56.7 s against 60.8 s (6.7%). Derived the same way from the laptop's block
+  above, the segment's tandem there landed *after* its pass (about 343 s against 273–278 s) and the
+  two longer units ahead of theirs. The 26% of 2026-09-01 was a different file and a different
+  shape, and is not this comparison.
+- **Quality is the laptop's to within 0.12 points, five of the six pairs within 0.06.** Against
+  the edited transcript −2.11
+  (segment), −2.85 / −2.88 (joined run), −3.07 / −3.06 (sentence-run) against the laptop's −2.11,
+  −2.82 and −3.07; against the verbatim one +4.44, +3.60, +3.84 against +4.56, +3.62, +3.80. The
+  spoken text is near-identical rather than identical (9.43% / 11.86% against 9.45% / 11.83%), so
+  the deltas are on two transcripts of the same call, not one. Emptied lines 7, 13 and 10; words
+  through the door 2, 1 and 1.
+- **Every refusal in every arm was a substitution the recogniser was sure of**, two of them the
+  model turning a possessive into *its* or *It* — segment 12 and 12 on the repeat (10 in the pass
+  arm), joined run 7 requests taking 27 lines, sentence-run 11 taking 24, against the laptop's
+  10 (13), 7 / 27 and 11 / 25.
+- **The pass-versus-tandem spread is 5 words for the joined run and 12 for the sentence-run
+  (0.03 and 0.01 points) — and 45 words, 0.42 points, for the segment**, where the laptop saw 4 to
+  7 for every unit. The two segment tandem arms agree to 0.04 and 0.03 points (13.87% / 9.75% and
+  13.83% / 9.72%); the pass arm sits 0.40 to 0.45 points above both under either reference, with two fewer
+  refusals and forty more deletions. Greedy decoding under slot batching is not byte-identical (`docs/GOTCHAS.md`, 41), and
+  the pass shape fills its four slots from a full queue where tandem fills them as lines arrive;
+  whether that accounts for all 45 is not established. The rule reads each challenger's own spread,
+  so the verdict below did not touch it.
+- **By the rule as written the sentence-run qualifies and the joined run does not — the opposite
+  verdict to the laptop's, on the same rule and the same call.** Both clear the lag clause by far
+  more than the floor and hold the quality clause; on the third, the sentence-run's 24 refused
+  segments against the segment's 12 is exactly twice, within the clause, and the joined run's 27 is
+  over. On the laptop the segment's own count was 10 in the arm the rule reads (13 on the repeat)
+  and the same 25 and 27 fell outside. The clause turns on a count that moved by three between two
+  identical runs there and sits on its limit here. The harness printed *By the rule, the unit is
+  sentence*; the decision on how the clause should read (`docs/PHASES.md`, *Measured 2026-09-03 —
+  the request unit*) is not taken by this run, and nothing shipped changed.
+
+**Unproven after it:** one call on this card — the tiebreak call 4469088 has not been run on either
+machine; what the segment's 45-word spread is made of; the retry of a refused run one segment at a
+time, still designed and not measured; the neural detector's cut; and how the window's live swap
+reads at a 12-second lag.
+
+### The delta on the ten-call WER corpus on the desktop — measured 2026-09-03, RTX 5080, CUDA
+
+The second condition (`docs/PHASES.md`, *Decided 2026-09-01 — the model sees the tidied pane*),
+measured the same morning as the re-timing above and on the same launcher, straight after it: `scripts/measure-wer.ps1 -Backend
+cuda -Models tdt-0.6b-v3-f16 -Tidy -TidyBackend cuda -Vad energy`, one recogniser pass over the
+ten calls with the E4B beside it, both rows scored off the same transcripts. Desktop as above,
+driver 616.56, CUDA for both models, the same weights and drop, the energy gate named explicitly
+— the detector the laptop's delta and the 2026-08-16 baseline were both cut with. Every media
+file and reference matched its pinned byte count and SHA-256 before scoring. 747 s from launch to
+summary, 727.3 s of it the one `transcribe` command, exit code 0; build `42135ec`, tree clean.
+`nvidia-smi` every 5 s: 57 °C and 138.3 W at the peaks, 83 W on average, 7,849 MiB. The record is
+`runs/wer/20260903-072837-cuda/` on the desktop and in the Drive's `runs-desktop`.
+
+| | WER vs verbatim | S / D / I | WER vs non-verbatim | S / D / I |
+|---|---:|---|---:|---|
+| spoken | **10.21%** | 5,599 / 1,927 / 2,840 | **13.40%** | 4,493 / 1,079 / 7,320 |
+| tidied | **13.68%** | 5,451 / 6,743 / 1,693 | **10.51%** | 4,454 / 2,687 / 2,965 |
+| the tidy's delta | **+3.47** | | **−2.89** | |
+
+Reference words 101,509 and 96,181; the spoken transcripts are 102,422 normalised tokens and the
+tidied 96,459. Raw words 107,515 → 96,946, against the laptop's 107,516 → 96,994.
+
+- **The delta on the card is the laptop's to within a twentieth of a point: +3.47 against the
+  verbatim transcripts and −2.89 against the edited ones**, where the Vulkan path measured +3.43
+  and −2.94. The composition is the same deletions counted from opposite sides — against verbatim
+  1,927 → 6,743 with substitutions and insertions both down, against non-verbatim insertions
+  7,320 → 2,965 with deletions up 1,079 → 2,687 — and substitutions barely move under either. The
+  second condition is therefore met on the same reading as the first: the delta is negative
+  against the reference the criterion reads, and the composition says the contract held.
+- **The spoken row is the 2026-08-16 CUDA baseline byte for byte.** 10.21% / 13.40%,
+  5,599 / 1,927 / 2,840 and 4,493 / 1,079 / 7,320, per call the ladder's f16 column to two
+  decimals on every one of the ten — and the transcript text of every call is byte-identical to
+  the ladder's, the segments the same on nine, and on the tenth one line (4470684's first) whose
+  boundary is 30 ms apart and whose word timings and confidences moved with it. Eighteen days, a driver update (610.88 → 616.56) and the whole of the tidy's build
+  between the two runs.
+- **The contract on eleven hours of real calls, on the card: 7,788 lines, 138 refused** and kept
+  as spoken (1.8%), **172 emptied, 40 words through the door**, against the laptop's 7,786, 139,
+  171 and 39. Per call 3 to 21 refusals and 1 to 11 door words; the South African call 4469088
+  emptied 71 lines, the Indian call 4479944 none.
+- **Per call the direction is the laptop's**: nine of ten better against non-verbatim, the
+  exception the UK call 4483937 (+0.19 here, +0.10 there), nine of ten worse against verbatim,
+  the exception the Indian call 4479944 (−1.93 here, −1.90 there). The non-verbatim deltas run
+  −0.15 to −7.25 on the nine (the laptop's −0.15 to −7.28), the verbatim +1.76 to +5.80 (+1.76
+  to +5.75).
+- **Time: 0.019 of real time end to end, CUDA for both models — 747 s for 40,037 s of audio with
+  the build, the hash check, both loads and the scoring inside it, 54× real time for transcription
+  and tidy together**, against the laptop's 3,776 s, 0.094 and 10.6× on Vulkan. The recogniser's own `processingSec` summed to 298.6 s,
+  **RTF 0.0075 (CUDA) beside the E4B**, 23.8–38.5 s per call (0.0065–0.0083), where the laptop's
+  Vulkan path summed to 1,634.6 s at 0.041.
+- **The recogniser-alone control, run straight after on the same launcher** (`scripts/measure-wer.ps1
+  -Backend cuda -Models tdt-0.6b-v3-f16 -Vad energy`, same corpus, same gate, same build;
+  `runs/wer/20260903-074104-cuda/`): 184.1 s wall for the command, `processingSec` 183.1 s, **RTF
+  0.0046 (CUDA)**, 14.3–24.4 s per call (0.0039–0.0053); 46 °C and 102.7 W at the peaks, 4,074 MiB.
+  **The company costs the recogniser 63% over eleven hours on this card** — 298.6 s against
+  183.1 s, per call 49% to 78% — where the laptop paid 11.5%: the recogniser here is eight times
+  faster (183.1 s against the laptop's 1,465.7 s) and the tidy's share of the card does not
+  shrink with it. In seconds it is 115 over
+  11.12 h. **The recogniser's output is byte-identical alone and in company on all ten calls** —
+  text, segment boundaries, word timings and confidences alike — so the spoken row above is the
+  recogniser's whatever runs beside it, here as on the laptop. The whole command is 3.95× longer
+  with the tidy — 727.3 s against 184.1 s, 543 s more over 11.12 h — and on the basis the laptop's
+  2.57× was taken, launch to summary against the control's command wall, 4.06×: 1.12 minutes per
+  hour of audio against 0.28, where the laptop's was 5.7 minutes against 2.2. That is the tidy's pace at one request per
+  segment on this card; the request-unit measurement above says what the other two units do to
+  it on one call.
+
+**Unproven after it:** the delta under the neural detector on the whole corpus, on either machine;
+the tidy's sequential pace on this corpus, never run on either; the two longer units over the
+corpus rather than one call; and one card, one run — the corpus has been tidied once on it.
