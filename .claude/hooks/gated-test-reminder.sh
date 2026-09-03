@@ -32,7 +32,7 @@ case "$p" in
   *Parakeet.Engine.SileroVad*) add "CLAUDE.md: after any change to the Silero VAD engine, run the gated tests (UINDOSILL_SILERO_VAD=<path to silero_vad.onnx> dotnet test Uindosill.slnx -c Release) and drive 'uindosill transcribe' over a real file with the model installed - nothing else in the suite runs the graph." ;;
 esac
 case "$p" in
-  *Parakeet.Engine.LlamaServer*) add "CLAUDE.md: after any change to the llama-server engine, run the three gated end-to-end tests (UINDOSILL_LLM_SERVER_ROOT and UINDOSILL_LLM_TEST_MODEL set; add UINDOSILL_LLM_TEST_BACKEND=vulkan or cuda on a machine that has one - the only place child-process argument changes are really tested)." ;;
+  *Parakeet.Engine.LlamaServer*) add "CLAUDE.md: after any change to the llama-server engine, run the four gated end-to-end tests (UINDOSILL_LLM_SERVER_ROOT and UINDOSILL_LLM_TEST_MODEL set; add UINDOSILL_LLM_TEST_BACKEND=vulkan or cuda on a machine that has one - the only place child-process argument changes are really tested)." ;;
 esac
 case "$p" in
   *uindosill_engines/translator/*) add "CLAUDE.md: the translator has no CI coverage - drive the sidecar parity fixture by hand after this change: one load on CPU and one on webgpu, each reporting parity." ;;

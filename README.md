@@ -295,14 +295,14 @@ vendor's installer, because `dot.net` and every host it redirects to are refused
 policy there. A session in such a container builds the solution, runs the full suite and drives
 the `--fake` pipeline end to end. What it cannot do is transcribe anything real.
 
-**The scripts.** `scripts/` holds seventeen PowerShell tasks — five for vendoring, four
-measurement harnesses (speed and memory, the second machine, word error rate against human
-transcripts, diarisation error rate against hand-labelled speaker turns), two transcript
-comparisons, one that holds `uindosill translate` against the hypotheses the translation gate
-recorded, two for the v2 answer tier, one that moves run reports over rclone, one that assembles
-the bundled Python and one that builds the installer. `scripts/lab.ps1` is one entry point for
-them: run it bare to list the tasks, each with the parameters its own script declares. It
-dispatches and nothing else, so every task stays runnable on its own.
+**The scripts.** `scripts/` holds eighteen PowerShell tasks — five for vendoring, five measurement
+harnesses (speed and memory, the second machine, word error rate against human transcripts,
+diarisation error rate against hand-labelled speaker turns, and the tidy's request unit), two
+transcript comparisons, one that holds `uindosill translate` against the hypotheses the translation
+gate recorded, two for the v2 answer tier, one that moves run reports over rclone, one that
+assembles the bundled Python and one that builds the installer. `scripts/lab.ps1` is one entry
+point for them: run it bare to list the tasks, each with the parameters its own script declares.
+It dispatches and nothing else, so every task stays runnable on its own.
 
 They divide along the same container line. `compare-transcripts.ps1` and `word-distance.ps1` read
 transcript JSONs and need nothing else, so they run anywhere — they align two word streams by
