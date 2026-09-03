@@ -200,7 +200,7 @@ public interface IEngineProvider
     /// </summary>
     bool SupportsTidying { get; }
 
-    /// <summary>The tidier behind "Tidy up the transcript", or null when <see cref="SupportsTidying"/> is false.</summary>
+    /// <summary>The tidier behind "Clean up the transcript", or null when <see cref="SupportsTidying"/> is false.</summary>
     ITranscriptTidier? CreateTidier();
 
     /// <summary>

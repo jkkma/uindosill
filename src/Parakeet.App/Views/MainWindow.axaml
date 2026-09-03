@@ -459,7 +459,7 @@
                   <DockPanel LastChildFill="True">
                     <CheckBox DockPanel.Dock="Left"
                               Name="TidyUpTranscript"
-                              Content="Tidy up the transcript"
+                              Content="Clean up the transcript"
                               FontWeight="SemiBold"
                               Margin="0,0,9,0"
                               VerticalAlignment="Center"
@@ -2136,14 +2136,14 @@
               <TextBlock Text="SPEAKER LABELS" Classes="section" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Run on" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="diarisationProvider" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding DiarisationProviders}"
                           SelectedItem="{Binding SelectedDiarisationProvider}" MinWidth="200" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationProvider takes auto, cpu or cuda, which name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. The CLI spells it --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
+                         Text="Takes auto, cpu or cuda, which name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting
@@ -2155,7 +2155,7 @@
                    row's terms: a control that vanishes when a different model is picked reads as a
                    bug, and the reason is one a person can act on from the Models tab. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Audio held at once" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="diarisationBatchSize" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding DiarisationBatchSizes}"
                           SelectedItem="{Binding SelectedDiarisationBatchSize}" MinWidth="220"
                           IsEnabled="{Binding CanSetDiarisationBatchSize}" />
@@ -2165,8 +2165,6 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationBatchSizeExplanation}" />
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationBatchSize is pyannote&apos;s segmentation_batch_size and embedding_batch_size, set together. Unset leaves the checkpoint&apos;s own value. A memory setting, not a speed one." />
             </StackPanel>
 
             <Separator />
@@ -2176,43 +2174,35 @@
                           x:DataType="vm:MainWindowViewModel">
               <TextBlock Text="ASKING" Classes="section" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Answer from" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="askMode" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskModes}"
                           SelectedItem="{Binding SelectedAskMode}" MinWidth="200" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskModeExplanation}" />
-
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askMode is the router. Automatic lets each question choose between the parts of the recording that matched and the whole transcript." />
               <!-- How much evidence an answer is built from. A setting rather than a new default
                    because only half of the trade has been measured: the time it saves is large and
                    repeatable, and what it costs in finding the right part of the recording is not
                    yet known. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Searching" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="askEvidence" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskEvidenceLevels}"
                           SelectedItem="{Binding SelectedAskEvidence}" MinWidth="240" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="Answers are built from the parts of the recording that best match your question. Searching more of it takes longer (on a laptop, roughly twice as long), and searching less may miss the part that held the answer." />
-
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askEvidence is how much of the transcript is searched per question. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
+                         Text="How much of the transcript is searched per question. Searching more takes longer — on a laptop, roughly twice as long. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
                    with memory of its own should be holding them. Automatic asks the loader; the
                    two fixed rows are for a machine it reads wrongly. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Expert layers" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="askExpertPlacement" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskExpertPlacements}"
                           SelectedItem="{Binding SelectedAskExpertPlacement}" MinWidth="200" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askExpertPlacement sets --cpu-moe on the llama-server child, deciding whether a mixture-of-experts model&apos;s expert tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA it leaves placement to the loader, which was measured holding that model at 22.4 tok/s with nothing offloaded. Both explicit choices apply on CUDA and Vulkan; none applies on the CPU backend, where the weights are in system memory already." />
             </StackPanel>
 
                 </StackPanel>

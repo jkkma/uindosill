@@ -301,7 +301,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private bool _translateToEnglish;
 
     /// <summary>
-    /// The tidy opt-in — "Tidy up the transcript". Off by default and off every time the window
+    /// The tidy opt-in — "Clean up the transcript". Off by default and off every time the window
     /// opens, on the same terms as the other two: it loads a second model beside the recogniser
     /// and costs the transcription some speed for the company.
     /// </summary>

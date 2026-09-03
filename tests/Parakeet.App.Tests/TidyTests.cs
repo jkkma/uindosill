@@ -11,7 +11,7 @@ using Parakeet.Core.Tidying;
 namespace Parakeet.App.Tests;
 
 /// <summary>
-/// The window's half of "Tidy up the transcript": the opt-in, the stage beside the recogniser,
+/// The window's half of "Clean up the transcript": the opt-in, the stage beside the recogniser,
 /// and the pane that shows the result beside the transcript rather than instead of it.
 /// </summary>
 public class TidyTests
