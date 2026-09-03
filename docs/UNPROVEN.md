@@ -1,4 +1,4 @@
-# What is unproven
+﻿# What is unproven
 
 Read this before quoting any number from this repository.
 
@@ -7647,3 +7647,69 @@ the tidy's sequential pace on this corpus, never run on either; the joined run o
 rather than one call — the unit that ships since *Decided 2026-09-03*, whose corpus delta and
 refusal count over eleven hours have been measured on neither machine; and one card, one run —
 the corpus has been tidied once on it.
+
+### The deletions were unbounded — found on one call 2026-09-03, RTX 5080, CUDA
+
+**Not a harness run, and not on the corpus.** The shipped command driven by hand over one file to
+see the tidy work, hours after the joined run became the unit: `uindosill transcribe
+csb384-8438.m4a --tidy --tidy-trace`, CUDA for both models, build `3074ba8`, tree clean;
+`tdt-0.6b-v3-f16` and the catalogue's E4B with its Q8_0 head, four in flight, the energy gate;
+600 s of audio, 113 segments, the recogniser at **RTF 0.0102 (CUDA)**. `nvidia-smi` every 3 s
+through the first drive: 50 °C and 157 W at the peaks, 7,928 MiB. **There is no `runs/` record and
+no `summary.json`** — `measure-tidy-units.ps1` measures units and pace, not what a rewrite did to
+the words — so every figure below is read from the `--tidy-trace` JSON and from the two
+transcripts the run wrote, and the file is not one of the ten the WER corpus scores. The outputs
+went to a scratch directory and are not kept; the drive is reproducible from the line above.
+
+**What was found.** `TidyContract` bounds the *form* of an edit and never its *size*. An insertion
+is refused and a substitution the recogniser was sure of is refused; a deletion is the sanctioned
+operation and nothing counted how much of a line went. On this call the model read `we, anyone who
+passes away, we own everything on that account` as a stutter around the repeated *we* and removed
+the clause — five spoken words in a row, a clean subsequence, nothing to refuse it — and elsewhere
+took out a whole sentence, nine in a row. `DeletedWords` already counted the right thing, content
+words with fillers excluded, and was only ever summed and reported, never compared.
+
+**And three lines left the transcript altogether**, which is the joined run's half of it. The
+guard the contract documents per line — an empty rewrite is refused for a line that held content
+words — is evaluated in `Judge`, which under a run of several segments sees the composite. The run
+was not empty, so it never fired; the piece was, and was accepted with no words and no refusal.
+The window drops an empty segment from its line list (`Relines`' `!IsEmpty`), so the line was gone
+from the pane with nothing recorded anywhere. Under `--tidy-unit segment` the same call kept every
+one of them.
+
+The same call, three ways — the first two on `3074ba8`, the third on the ceiling that followed:
+
+| arm | requests | refused | lines kept as spoken | **lag** | lines emptied | of those, holding content |
+| --- | --- | --- | --- | --- | --- | --- |
+| joined run, as shipped that morning | 30 | 3 | 11 of 113 | **0.76 s** | 12 | **3** |
+| segment, the unit until that morning | 113 | 2 | 2 of 113 | 5.17 s | 10 | 0 |
+| joined run, with the ceiling | 30 | 9 | **35 of 113** | **0.41 s** | 8 | 0 |
+
+Every refusal in the first two arms was a substitution; neither refused anything for deleting.
+Aggregate deletion barely separates the units — 152 content words under the joined run against the
+segment's 145, over 44 and 49 changed lines — so **the joined run does not delete more, it deletes
+in worse places**, and no corpus figure can tell a clause from a stutter. (Those two counts are a
+reimplementation of the harness's per-word normalisation, not `TranscriptNormalizer` itself; it
+differs on hyphenated fillers, which is why `Mm-hmm.` shows in it as a content word and does not
+in the contract.)
+
+**What it changed.** `TidyOptions.MaxDeletedFraction` (0.5) and `MaxConsecutiveDeletedWords` (4),
+read together and applied **per piece** in both `TidyContract.Apply` overloads; a piece past either
+refuses its unit. Two of them because neither sees the other's failure: the proportions interleave
+— a legitimate stutter cleanup on this call sits at 43% of its line and the clause deletion at 33%
+— while every clause removed ran to five or more words in a row and every legitimate cleanup to
+four or fewer. With them in place all five losses above are kept as spoken and the only lines that
+empty are the eight that were nothing but *Um* or *Mm-hmm.*
+
+**The cost, on this call: 35 of 113 lines keep their spoken text where 11 did**, because a refused
+unit refuses every line it carries and a run holds up to seven. The lag improved to 0.41 s, since
+a refused unit skips the mapping.
+
+**Unproven after it:** everything above is one call, one machine, one card, with no reference
+transcript — no WER or chrF figure is claimed here and none of it touches the corpus deltas
+recorded above. Unmeasured: the corpus delta and refusal count under the joined run **with the
+ceiling**, which is now what ships and which no run has scored on either machine; whether 0.5 and
+4 are the right numbers anywhere but this call, on which they were fitted; what the ceiling costs
+the tidy's quality, since 35 lines kept as spoken is 24 more lines untidied than before it; and
+whether refusing the whole unit for one bad piece is the right shape under a seven-line run, which
+is the rule of *Decided 2026-09-02* applied to a unit that did not exist then.
