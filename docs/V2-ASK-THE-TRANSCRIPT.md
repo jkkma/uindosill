@@ -1,4 +1,4 @@
-# v2 — asking questions about a transcript
+﻿# v2 — asking questions about a transcript
 
 This is the decision register: what v2 is for, the one property that makes it harder than v1,
 and the questions that had to be answered before code was written. Where a question has evidence
@@ -1403,8 +1403,10 @@ file, 26% of the combined time saved with the transcription 31% slower in that r
 both-resident observation this decision has had for any pair, and it is why the exception is
 narrow: a model earns the seat by being measured in it, and the answering entries — 6.3 and
 15.8 GiB — have not been and are not. "Fits" there still means "ran"; no memory counter was read.
-The desktop has run none of it, and the register lists a CUDA re-timing among what the tidy owes
-before it ships.
+The desktop has run none of it. The register listed a CUDA re-timing among what the
+tidy owed before it ships; the desktop paid it on 2026-09-03 and both of the tidy's conditions are
+met (`docs/PHASES.md`, *Measured 2026-09-03, desktop*), so what the tidy owes now is the corpus
+delta under the unit and the ceiling it actually ships with.
 
 Built 2026-09-02, the exception is enforced by construction rather than by a rule anything has to
 check: the window creates the tidier for one batch, loads it before the first file and disposes it
