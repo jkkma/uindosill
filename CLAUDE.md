@@ -38,9 +38,11 @@ count are the three you would otherwise forget.
 
 The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
 change to the election in `python/uindosill_engines/diariser/pyannote_engine.py`** (`AUTO_ORDER`,
-`resolve_auto`), because it decides which arithmetic unit a user's diarisation runs on. Nothing in
-CI or the suite parses `scripts/*.ps1` either; after editing one, parse them all — the exit code
-is the number of errors, each named:
+`resolve_auto`), because it decides which arithmetic unit a user's diarisation runs on; the
+reminder hook runs it for you when that file is edited, and the rule stands for changes made any
+other way. Nothing in CI or the suite parses `scripts/*.ps1` either; the hook parses a script the
+moment it is edited, and before a commit parse them all — the exit code is the number of errors,
+each named:
 
 ```bash
 pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
@@ -107,9 +109,18 @@ a model, neither of which is in the clone. `--fake` exercises the whole pipeline
 context — read it, and reconcile by hand if it did not fast-forward, because the two machines work
 in tandem. A PostToolUse hook, `.claude/hooks/gated-test-reminder.sh`, prints the matching
 obligation from the section above when a gated path is edited, so a new gated test needs a rule
-there as well as a line here. The read-only `claims-auditor` agent sweeps the documents for the
-rule below and fixes nothing. Two user-invoked skills, `/new-engine` and `/wrap-runs`, sequence
-this file and defer to it wherever they disagree.
+there as well as a line here; where the check is cheap and needs nothing installed it runs it
+instead — an edit to the diariser's election file runs `check-diariser-auto.py`, and an edit to
+any `.ps1` parses that file. A PreToolUse hook, `.claude/hooks/attic-guard.sh`, asks before an
+edit lands under `attic/`, because a retired engine still has files named like the live ones. The
+read-only agents sweep and fix nothing: `claims-auditor` for the numbers, under the rule below;
+`reference-auditor` for the names — paths, scripts, counts and the dated pointers into PHASES —
+against the tree; `harness-reviewer` for a changed measurement script, against the gotchas the
+harnesses taught. The user-invoked skills sequence this file and defer to it wherever they
+disagree: `/new-engine`, `/wrap-runs`, `/preflight` (the build block above as one command, run
+the way CI runs it — a TRX log for the count script to read, and its self-check — plus a check
+that the reminder hook still mirrors it) and `/record-measurement` (a finished run into UNPROVEN,
+PHASES and the README rows, then `claims-auditor`).
 
 ## The rule this project runs on
 
