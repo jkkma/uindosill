@@ -101,6 +101,12 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// the missing transcript: a person who cannot ask at all should not first be sent off to
     /// transcribe something.
     /// </summary>
+    /// <remarks>
+    /// The missing transcript is two different nothings and they are said differently, the same
+    /// distinction <see cref="AskViewModel.TranscriptNotice"/> draws for the tab's other half: no
+    /// recording chosen, and one chosen that has not been transcribed. Both were "Transcribe this
+    /// recording first" until this was fixed, which pointed at a recording that was not there.
+    /// </remarks>
     public string? PanelNotice
     {
         get
@@ -113,6 +119,12 @@ public sealed partial class AskChatViewModel : ObservableObject
             if (_provider.Check() is { IsAvailable: false } unavailable)
             {
                 return unavailable.WhyNot;
+            }
+
+            if (_recording is null)
+            {
+                return "Choose a recording: the Recordings button above opens the queue. "
+                    + "A finished transcript is what questions are asked of.";
             }
 
             return _document is null
