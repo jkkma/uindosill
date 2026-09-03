@@ -73,6 +73,11 @@
     .\scripts\lab.ps1 wer -Backend vulkan -Models tdt-0.6b-v3-f16 -Tidy
 
 .EXAMPLE
+    # The tidy's request unit: segment, joined run and sentence-run, each in the pass shape and in
+    # tandem, on one call, with the lag and the deltas the decision rule reads.
+    .\scripts\lab.ps1 tidy-units -Backend vulkan
+
+.EXAMPLE
     # Does the shipping decode reproduce the English the translation gate was scored on? Start with
     # Spanish: 348 sentences is minutes, and a decode that is going to disagree disagrees there too.
     .\scripts\lab.ps1 agreement -Languages es
@@ -106,7 +111,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('vendor', 'vendor-llm', 'vendor-mpv', 'vendor-tools', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement', 'bundle')]
+    [ValidateSet('vendor', 'vendor-llm', 'vendor-mpv', 'vendor-tools', 'measure', 'machine', 'compare', 'word-distance', 'vendor-cuda', 'spike', 'answers', 'wer', 'drive', 'der', 'package', 'agreement', 'bundle', 'tidy-units')]
     [string] $Task,
 
     # --- measure / machine ---
@@ -121,6 +126,13 @@ param(
     [string] $MemoryCsv,
     [switch] $ColdVulkanAlreadySpent,
     [switch] $SkipBuild,
+
+    # --- tidy-units (and -Vad for wer) ---
+    [string] $File,
+    [string[]] $Units,
+    [string[]] $Shapes,
+    [ValidateSet('energy', 'neural')]
+    [string] $Vad,
 
     # --- compare / word-distance ---
     [string] $Reference,
@@ -277,6 +289,7 @@ $tasks = [ordered]@{
     'agreement'     = 'measure-translation-agreement.ps1'
     'package'       = 'package-windows.ps1'
     'bundle'        = 'bundle-python.ps1'
+    'tidy-units'    = 'measure-tidy-units.ps1'
 }
 
 # What this file declares, so the listing can mark anything a task takes and this cannot pass on.

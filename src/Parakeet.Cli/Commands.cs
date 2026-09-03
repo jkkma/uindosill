@@ -306,6 +306,34 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "tidy-unit",
+                TakesValue = true,
+                ValueName = "kind",
+                Help = "What one request to the tidying model carries: segment (one line as the recogniser cut it, " +
+                       "the default), run (whole lines joined until they hold 15 seconds of speech) or sentence " +
+                       "(pieces cut at sentence ends and joined across lines until a sentence ends, 30 seconds at " +
+                       "most). Every kind is held to the same word-for-word check. The two longer kinds exist to be " +
+                       "measured against the first; which one ships is decided by that measurement.",
+            },
+            new OptionSpec
+            {
+                Name = "tidy-shape",
+                TakesValue = true,
+                ValueName = "shape",
+                Help = "tandem (the tidy runs beside the recogniser, the default) or pass (it runs over the finished " +
+                       "transcript). The pass exists as the arm the tandem shape is measured against.",
+            },
+            new OptionSpec
+            {
+                Name = "tidy-trace",
+                TakesValue = true,
+                ValueName = "file",
+                Help = "Write a JSON record of every request the tidy made — what it carried, when it was queued, " +
+                       "sent and answered, and whether the check accepted it — with the moments the transcript and " +
+                       "the tidied version were complete. For measuring the tidy's pace; nothing else reads it.",
+            },
+            new OptionSpec
+            {
                 Name = "quiet",
                 Short = 'q',
                 Help = "Suppress progress; print only results and errors.",
