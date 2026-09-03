@@ -7409,3 +7409,58 @@ criterion reads — the same tidy is +3.43 against one human transcript and −2
 other — was a decision, not a measurement, and was taken the same night: the non-verbatim delta
 decides and the verbatim one is reported beside it (`docs/PHASES.md`, *Decided 2026-09-02, late
 evening*).
+
+### The request unit — measured 2026-09-03, second machine, Vulkan
+
+The measurement the decision of 2026-09-02 asked for before the unit is chosen: the unit one
+request to the tidying model carries, three kinds, each in the pass shape and in tandem, on one
+call, with the rule that picks a winner set in advance (`docs/PHASES.md`, *Decided 2026-09-02,
+late evening*). `scripts/measure-tidy-units.ps1 -Backend vulkan`, seven arms in 38 minutes —
+the segment's tandem arm twice, for the lag floor. Laptop, driver 32.0.13022.3006, AC power,
+Vulkan for both models, the machine otherwise idle; `tdt-0.6b-v3-f16` and the catalogue's E4B
+with its Q8_0 head, four in flight, a fresh `llama-server` per arm; the energy gate; call
+**4482383** (3,472 s, 680 segments), verified against the manifest. The recogniser's transcript
+is byte-identical across all seven arms. The record is `runs/tidy-units/20260903-004357-vulkan/`
+on the laptop and in the Drive's `runs-laptop`.
+
+The tandem arms, which the rule reads (the pass arms are in the record):
+
+| unit | requests | **lag** | tidy wall | recogniser | refused units / segments | tidied WER v / nv | delta v / nv |
+|---|---:|---:|---:|---:|---|---|---|
+| segment | 680 | **194.3 s** (192.8 s on the repeat) | 341.8 s | 148.3 s | 10 / 10 (13 / 13) | 14.01% / 9.72% | +4.56 / −2.11 |
+| joined run, ≥ 15 s | 180 | **83.3 s** | 226.5 s | 144.0 s | 7 / 27 | 13.07% / 9.01% | +3.62 / −2.82 |
+| sentence-run, ≤ 30 s | 517 | **155.5 s** | 300.6 s | 145.8 s | 11 / 25 | 13.25% / 8.76% | +3.80 / −3.07 |
+
+Lag is the tidied version landing after the plain transcript, on the stage's clock. Spoken WER
+9.45% / 11.83% in every arm.
+
+- **Fewer requests, sooner tidied.** The joined run lands the tidied copy 83 s after the plain
+  transcript against the segment's 194 s; the sentence-run 156 s. In the pass shape the tidy
+  alone takes 151 s, 229 s and 275 s respectively, at 63.6, 42.1 and 35.1 spoken words per
+  second: the joined run's requests are longer and slower each (median 4.5 s against 1.7 s in
+  tandem), and there are 180 of them rather than 680.
+- **Longer units tidy better under both references**: against the edited transcript −3.07
+  (sentence-run) and −2.82 (joined run) against the segment's −2.11; against the verbatim one
+  13.07% and 13.25% against 14.01%, with fewer deletions (579 and 614 against 666) that are the
+  right ones. A repetition that straddles a line break is invisible to a request carrying one
+  line.
+- **A refused unit refuses every line in it.** Every refusal in every arm was a substitution
+  the recogniser was sure of; no insertion, nothing across a line break. The joined run's 7
+  refused requests took 27 lines with them, the sentence-run's 11 took 25, where the segment's
+  10 stayed 10 — and 13 on the repeat, so the segment's own count moves by three between two
+  identical runs.
+- **Pass-versus-tandem spread**, the quality criterion's noise floor: 4 to 7 words of about
+  9,000 differ (0.04–0.08%), at most 0.03 WER points. **The lag floor is 1.5 s** (194.3 against
+  192.8). **The recogniser pays 16–20% for the company on this call** — 144.0–148.3 s in tandem
+  against 121.8–127.1 s in the pass arms, where it ran alone.
+- **The rule as written picks the segment.** Both longer units beat it on the lag by far more
+  than the floor and hold the quality criterion with room to spare, and both fail the third
+  clause — refused segments at most twice the segment's — by 27 and 25 against 10. That count
+  scales with the unit by construction, and the clause was a guard on the quality the second
+  clause measures directly. What follows for the rule is a decision, recorded as one in
+  `docs/PHASES.md`; nothing shipped changed on this run.
+
+**Unproven after it:** one call, one machine — the tiebreak call 4469088 has not been run; the
+retry of a refused run one segment at a time (about 27 extra requests on this call, 4% of the
+segment's 680), designed and not measured; the desktop under CUDA; and how the window's live
+swap reads when a joined run lands three or four lines at once.
