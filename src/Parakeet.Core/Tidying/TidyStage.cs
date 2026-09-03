@@ -21,8 +21,8 @@ namespace Parakeet.Core.Tidying;
 /// </para>
 /// <para>
 /// What one request carries is <see cref="TidyOptions.Unit"/>'s to say, through
-/// <see cref="TidyUnitShaper"/>: the shipped shape sends a segment, and the stage's outcomes are
-/// one per segment under every kind — a segment carried in pieces is assembled from them once
+/// <see cref="TidyUnitShaper"/>: the shipped unit is the joined run (docs/PHASES.md, *Decided
+/// 2026-09-03*; the segment until then), and the stage's outcomes are one per segment under every kind — a segment carried in pieces is assembled from them once
 /// the last has landed, and refused whole when any of its units was.
 /// </para>
 /// <para>

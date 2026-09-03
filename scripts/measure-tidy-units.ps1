@@ -22,8 +22,13 @@
     The rule, as decided: a unit replaces the segment when its tandem lag is shorter than the
     segment's by more than the segment's own run-to-run lag spread; its delta against the
     non-verbatim reference is no worse than the segment's by more than that unit's pass-versus-
-    tandem WER spread; and its refused segments are at most twice the segment's. If two qualify,
-    the shorter lag. The summary applies the rule and says so; it does not decide anything.
+    tandem WER spread; and its refused requests are at most twice the segment's — each of the three
+    read from the segment's first tandem arm, the repeat serving only the floor. If two qualify,
+    the shorter lag. The third clause counted refused segments until 2026-09-03 (docs/PHASES.md,
+    *Decided 2026-09-03*): a refused run refuses every line it carries, so that count scaled with
+    the unit by construction and the same rule picked a different unit on each machine; the
+    request is what the contract refuses, and the lines a refusal costs are still reported beside
+    it. The summary applies the rule and says so; it does not decide anything.
 
     Writes runs/tidy-units/<timestamp>-<backend>/summary.{json,md}, with each arm's transcripts,
     tidied transcripts and trace under <unit>-<shape>/ — <unit>-tandem-2 for the segment's repeat —
@@ -491,11 +496,14 @@ try {
             $spread = $spreads[$unit].werNonverbatimPoints
             $lagOk = $arm.lagSec -lt ($a1.lagSec - $verdict.lagFloorSec)
             $qualityOk = $arm.delta.nonverbatim -le ($a1.delta.nonverbatim + $spread)
-            $refusalOk = $arm.refusedSegments -le (2 * $a1.refusedSegments)
-            $verdict.notes += ("{0}: lag {1:F1} s against the segment's {2:F1} s ({3}); non-verbatim delta {4:+0.00;-0.00} against {5:+0.00;-0.00} with a spread of {6:F2} ({7}); refused {8} against {9} ({10})." -f
+            # Requests, not the lines they carry (docs/PHASES.md, *Decided 2026-09-03*): a refused run
+            # refuses every line in it, so a count of lines scales with the unit by construction.
+            $refusalOk = $arm.refusedUnits -le (2 * $a1.refusedUnits)
+            $verdict.notes += ("{0}: lag {1:F1} s against the segment's {2:F1} s ({3}); non-verbatim delta {4:+0.00;-0.00} against {5:+0.00;-0.00} with a spread of {6:F2} ({7}); refused {8} requests against {9} ({10}; {11} and {12} lines)." -f
                 $unit, $arm.lagSec, $a1.lagSec, $(if ($lagOk) { 'shorter by more than the floor' } else { 'not shorter by more than the floor' }),
                 $arm.delta.nonverbatim, $a1.delta.nonverbatim, $spread, $(if ($qualityOk) { 'holds' } else { 'does not hold' }),
-                $arm.refusedSegments, $a1.refusedSegments, $(if ($refusalOk) { 'within twice' } else { 'more than twice' }))
+                $arm.refusedUnits, $a1.refusedUnits, $(if ($refusalOk) { 'within twice' } else { 'more than twice' }),
+                $arm.refusedSegments, $a1.refusedSegments)
             if ($lagOk -and $qualityOk -and $refusalOk) { $qualifying.Add([pscustomobject]@{ unit = $unit; lagSec = $arm.lagSec }) }
         }
 
@@ -630,7 +638,7 @@ try {
         $lines.Add(("| {0} | {1} | {2} | {3:F2} | {4:F2} | {5:F2} |" -f $unit, $s.words.edits, $s.words.of, $s.words.percent, $s.werNonverbatimPoints, $s.werVerbatimPoints))
     }
     $lines.Add('')
-    $lines.Add('The rule (docs/PHASES.md, *Decided 2026-09-02, late evening*), applied:')
+    $lines.Add('The rule (docs/PHASES.md, *Decided 2026-09-02, late evening*; its refusal clause as amended *Decided 2026-09-03*), applied:')
     $lines.Add('')
     foreach ($note in $verdict.notes) { $lines.Add("- $note") }
     $lines.Add('')

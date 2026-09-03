@@ -309,11 +309,11 @@ internal static class Commands
                 Name = "tidy-unit",
                 TakesValue = true,
                 ValueName = "kind",
-                Help = "What one request to the tidying model carries: segment (one line as the recogniser cut it, " +
-                       "the default), run (whole lines joined until they hold 15 seconds of speech) or sentence " +
+                Help = "What one request to the tidying model carries: run (whole lines joined until they hold 15 " +
+                       "seconds of speech, the default), segment (one line as the recogniser cut it) or sentence " +
                        "(pieces cut at sentence ends and joined across lines until a sentence ends, 30 seconds at " +
-                       "most). Every kind is held to the same word-for-word check. The two longer kinds exist to be " +
-                       "measured against the first; which one ships is decided by that measurement.",
+                       "most). Every kind is held to the same word-for-word check. The run was chosen on 2026-09-03 " +
+                       "after all three were measured on both machines; the other two stay for measuring against it.",
             },
             new OptionSpec
             {

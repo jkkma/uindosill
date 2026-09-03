@@ -5,9 +5,10 @@ namespace Parakeet.Core.Tidying;
 /// <summary>
 /// What one request to the tidying model carries. The unit is the lever on the tidy's pace —
 /// a request costs its own prefill plus a decode that mostly copies its input, so the pace is
-/// bounded by the request count more than by the words — and which unit ships is decided by
-/// measurement (docs/PHASES.md, *Decided 2026-09-02, late evening*). The segment is the shipped
-/// shape until then; the other two are behind the measurement's options.
+/// bounded by the request count more than by the words — and which unit ships was decided by
+/// measurement (docs/PHASES.md, *Decided 2026-09-02, late evening* for the rule, *Decided
+/// 2026-09-03* for the verdict): the joined run ships, the segment was the unit until then, and
+/// the sentence-run stays behind the measurement's options.
 /// </summary>
 public enum TidyUnitKind
 {
@@ -77,7 +78,7 @@ public sealed record TidyUnit
     /// <summary>
     /// What is sent and judged: the pieces' words in order, their texts joined by single spaces,
     /// on the span from the first piece to the last. A unit of one whole segment is that segment
-    /// itself, so the shipped shape goes through the contract exactly as it did before units.
+    /// itself, so the segment unit goes through the contract exactly as it did before units.
     /// </summary>
     public required TranscriptSegment Composite { get; init; }
 
