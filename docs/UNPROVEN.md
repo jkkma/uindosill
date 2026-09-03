@@ -7425,7 +7425,7 @@ against which the tandem's 5.7 minutes per hour is a saving or is not. Which ref
 criterion reads — the same tidy is +3.43 against one human transcript and −2.94 against the
 other — was a decision, not a measurement, and was taken the same night: the non-verbatim delta
 decides and the verbatim one is reported beside it (`docs/PHASES.md`, *Decided 2026-09-02, late
-evening*).
+evening*). Everything above was measured with one request per line and before any bound on how much a rewrite may delete; the contract gained one on 2026-09-03 (*The deletions were unbounded*, below), so these figures describe an arrangement that no longer ships.
 
 ### The request unit — measured 2026-09-03, second machine, Vulkan
 
@@ -7483,7 +7483,7 @@ Lag is the tidied version landing after the plain transcript, on the stage's clo
 retry of a refused run one segment at a time (about 27 extra requests on this call, 4% of the
 segment's 680), designed and not measured; the desktop under CUDA (measured 2026-09-03 — *The
 request unit on the desktop*, below); and how the window's live swap reads when a joined run
-lands three or four lines at once.
+lands three or four lines at once. Everything above was measured with one request per line and before any bound on how much a rewrite may delete; the contract gained one on 2026-09-03 (*The deletions were unbounded*, below), so these figures describe an arrangement that no longer ships.
 
 ### The request unit on the desktop — measured 2026-09-03, RTX 5080, CUDA
 
@@ -7574,7 +7574,7 @@ shape's lag is its whole tidy):
 **Unproven after it:** one call on this card — the tiebreak call 4469088 has not been run on either
 machine; what the segment's 45-word spread is made of; the retry of a refused run one segment at a
 time, still designed and not measured; the neural detector's cut; and how the window's live swap
-reads at a 12-second lag.
+reads at a 12-second lag. Everything above was measured with one request per line and before any bound on how much a rewrite may delete; the contract gained one on 2026-09-03 (*The deletions were unbounded*, below), so these figures describe an arrangement that no longer ships.
 
 ### The delta on the ten-call WER corpus on the desktop — measured 2026-09-03, RTX 5080, CUDA
 
@@ -7646,7 +7646,7 @@ tidied 96,459. Raw words 107,515 → 96,946, against the laptop's 107,516 → 96
 the tidy's sequential pace on this corpus, never run on either; the joined run over the corpus
 rather than one call — the unit that ships since *Decided 2026-09-03*, whose corpus delta and
 refusal count over eleven hours have been measured on neither machine; and one card, one run —
-the corpus has been tidied once on it.
+the corpus has been tidied once on it. Everything above was measured with one request per line and before any bound on how much a rewrite may delete; the contract gained one on 2026-09-03 (*The deletions were unbounded*, below), so these figures describe an arrangement that no longer ships.
 
 ### The deletions were unbounded — found on one call 2026-09-03, RTX 5080, CUDA
 
