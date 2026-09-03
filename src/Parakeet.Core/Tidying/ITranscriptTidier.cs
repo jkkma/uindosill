@@ -40,8 +40,31 @@ public sealed record TidyOptions
     /// </summary>
     public int Concurrency { get; init; } = 4;
 
+    /// <summary>
+    /// What one request carries. The segment is the shipped shape; the other two exist for the
+    /// measurement that decides which ships (docs/PHASES.md, *Decided 2026-09-02, late evening*),
+    /// and nothing in the window asks for them.
+    /// </summary>
+    public TidyUnitKind Unit { get; init; } = TidyUnitKind.Segment;
+
+    /// <summary>
+    /// Beside the recogniser, the shipped shape, or after it. The pass exists for the same
+    /// measurement, as the arm the tandem shape is compared against.
+    /// </summary>
+    public TidyShape Shape { get; init; } = TidyShape.Tandem;
+
     public void Validate()
     {
+        if (!Enum.IsDefined(Unit))
+        {
+            throw new ArgumentOutOfRangeException(nameof(Unit), Unit, "Unknown unit kind.");
+        }
+
+        if (!Enum.IsDefined(Shape))
+        {
+            throw new ArgumentOutOfRangeException(nameof(Shape), Shape, "Unknown shape.");
+        }
+
         if (LowConfidenceThreshold is < 0f or > 1f || float.IsNaN(LowConfidenceThreshold))
         {
             throw new ArgumentOutOfRangeException(

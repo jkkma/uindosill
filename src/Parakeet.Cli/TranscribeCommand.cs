@@ -210,9 +210,10 @@ internal static class TranscribeCommand
             }
         }
 
+        var tidyTracePath = parsed.Value("tidy-trace");
         var runner = new BatchTranscriptionRunner((job, progress, token) => RunOneAsync(
             context, engine, EnsureEngineLoadedAsync, labeller, translator, job, options, speakerOptions,
-            translationOptions, tidier, tidyOptions, progress, quiet, token));
+            translationOptions, tidier, tidyOptions, progress, quiet, token, tidyTracePath));
 
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
@@ -308,7 +309,7 @@ internal static class TranscribeCommand
     {
         if (!parsed.HasFlag("tidy"))
         {
-            foreach (var flag in new[] { "tidy-model-path", "tidy-backend", "tidy-server-root" })
+            foreach (var flag in new[] { "tidy-model-path", "tidy-backend", "tidy-server-root", "tidy-unit", "tidy-shape", "tidy-trace" })
             {
                 if (parsed.Value(flag) is { Length: > 0 })
                 {
@@ -319,7 +320,22 @@ internal static class TranscribeCommand
             return null;
         }
 
-        var options = TidyOptions.Default;
+        var options = TidyOptions.Default with
+        {
+            Unit = parsed.Value("tidy-unit") switch
+            {
+                null or "" or "segment" => TidyUnitKind.Segment,
+                "run" => TidyUnitKind.JoinedRun,
+                "sentence" => TidyUnitKind.SentenceRun,
+                var other => throw new CliUsageException($"--tidy-unit takes segment, run or sentence, not '{other}'."),
+            },
+            Shape = parsed.Value("tidy-shape") switch
+            {
+                null or "" or "tandem" => TidyShape.Tandem,
+                "pass" => TidyShape.Pass,
+                var other => throw new CliUsageException($"--tidy-shape takes tandem or pass, not '{other}'."),
+            },
+        };
         options.Validate();
         return options;
     }
@@ -530,7 +546,8 @@ internal static class TranscribeCommand
         TidyOptions? tidyOptions,
         IProgress<TranscriptionProgress>? _,
         bool quiet,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? tidyTracePath = null)
     {
         var started = DateTimeOffset.UtcNow;
 
@@ -560,18 +577,32 @@ internal static class TranscribeCommand
 
         // The tidy stage, beside the recogniser: every segment goes to it as it is produced, a
         // few are in flight against the model at any time, and the stage is completed after the
-        // other passes below — nothing here waits on it before the transcript is whole.
+        // other passes below — nothing here waits on it before the transcript is whole. Under the
+        // pass shape the same stage is fed the finished transcript instead, all at once.
         await using var stage = tidier is not null && tidyOptions is not null
             ? new TidyStage(tidier, tidyOptions, ct: ct)
             : null;
+        var tandem = stage is not null && tidyOptions?.Shape == TidyShape.Tandem;
 
         var document = await TranscriptionRunner.RunAsync(
             engine, audio, options, job.DisplayName, progress, ct,
-            onSegment: stage is null ? null : segment => stage.Enqueue(segment)).ConfigureAwait(false);
+            onSegment: tandem ? segment => stage!.Enqueue(segment) : null).ConfigureAwait(false);
+
+        // On the stage's clock: when the plain transcript was complete, which is the moment the
+        // tidied version's lag behind it is measured from.
+        var transcriptCompleteAt = stage?.Elapsed;
 
         // The segments the stage was fed, before the speaker pass cuts them: the tidied version
         // is assembled against these, then given the speakers.
         var raw = document;
+
+        if (stage is not null && !tandem)
+        {
+            foreach (var segment in raw.Segments)
+            {
+                stage.Enqueue(segment);
+            }
+        }
 
         // The two opt-in passes below can fail where the transcript did not — a file the sidecar
         // could not read, a segment refused for its length, a child that died — and when one does,
@@ -693,6 +724,13 @@ internal static class TranscribeCommand
             {
                 failures.Add(failure);
                 context.WriteError($"{job.InputPath}: {failure.Describe()}");
+            }
+
+            if (tidyTracePath is { Length: > 0 })
+            {
+                await TidyTraceWriter.WriteAsync(
+                    tidyTracePath, stage, tidyOptions!, raw.Segments.Count, transcriptCompleteAt ?? TimeSpan.Zero,
+                    failure is null ? stage.Elapsed : null, ct).ConfigureAwait(false);
             }
         }
 

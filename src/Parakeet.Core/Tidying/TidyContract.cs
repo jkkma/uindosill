@@ -30,6 +30,31 @@ public sealed record TidyOutcome
 }
 
 /// <summary>
+/// What the contract made of one piece of a unit: the tidied words that fell on that piece's
+/// range, or the refusal the whole unit met. The stage assembles a segment's outcome from its
+/// pieces' once every one has landed.
+/// </summary>
+public sealed record TidyPieceOutcome
+{
+    public required TidyPiece Piece { get; init; }
+
+    public required bool Accepted { get; init; }
+
+    /// <summary>The tidied words on this piece, in order; empty when the piece tidied to nothing, and when its segment carried no timings.</summary>
+    public IReadOnlyList<TranscriptWord> Words { get; init; } = [];
+
+    /// <summary>The tidied text of this piece: its words joined by single spaces.</summary>
+    public string Text { get; init; } = string.Empty;
+
+    public int DeletedWords { get; init; }
+
+    /// <summary>Replacements on this piece, indexed into the piece's own segment's words.</summary>
+    public IReadOnlyList<TidyReplacement> Replacements { get; init; } = [];
+
+    public string? Refusal { get; init; }
+}
+
+/// <summary>
 /// The delete-only contract every tidied line is held to, decided 2026-09-01 (docs/PHASES.md).
 /// </summary>
 /// <remarks>
@@ -60,6 +85,14 @@ public sealed record TidyOutcome
 /// Where the spoken segment has no verified word timings, the tidied one has none either.
 /// </para>
 /// <para>
+/// <b>A unit of several pieces is judged as one line and cut back by the same mapping.</b> Each
+/// kept word belongs to the piece its spoken word came from; a word that borrows a neighbour's
+/// time goes with that neighbour. A rewrite word whose spoken words lie on two pieces — a
+/// hyphenation across the join — refuses the unit, and a refused unit refuses every piece in it,
+/// because a line kept as spoken beside a line tidied is what the shape decided on
+/// 2026-09-02 asked for rather than a partial tidy nobody measured.
+/// </para>
+/// <para>
 /// Word by word rather than over the whole line is a deliberate narrowing of the harness's
 /// normaliser: its one cross-word rule, joining a run of number words into digits, cannot apply,
 /// so <i>eighty seven</i> normalises to two tokens here where the harness scores one. Both sides
@@ -83,11 +116,7 @@ public static class TidyContract
     {
         ArgumentNullException.ThrowIfNull(spoken);
         ArgumentNullException.ThrowIfNull(candidate);
-
-        if (lowConfidenceThreshold is < 0f or > 1f || float.IsNaN(lowConfidenceThreshold))
-        {
-            throw new ArgumentOutOfRangeException(nameof(lowConfidenceThreshold), lowConfidenceThreshold, "Confidence threshold must be within [0, 1].");
-        }
+        ValidateThreshold(lowConfidenceThreshold);
 
         // The timed words when they spell the text, the text's own words otherwise. The second
         // case is a segment whose words the recogniser did not report or did not reproduce, and it
@@ -96,6 +125,220 @@ public static class TidyContract
         var spokenWords = timed
             ? spoken.Words.Select(w => w.Text.Trim()).ToArray()
             : SplitWords(spoken.Text);
+
+        var judged = Judge(spokenWords, timed ? spoken.Words : null, candidate, lowConfidenceThreshold);
+        if (judged.Refusal is { } why)
+        {
+            return Refused(spoken, why);
+        }
+
+        // The tidied text is the rewrite's words joined by single spaces, so that the words
+        // reproduce the text and the sentence splitter and the highlight can read it the way they
+        // read the spoken one.
+        var text = string.Join(' ', judged.CandidateWords);
+        var words = timed ? MapWords(spoken.Words, judged.CandidateWords, judged.Mapped, judged.Replaced) : [];
+
+        return new TidyOutcome
+        {
+            Accepted = true,
+            Segment = spoken with { Text = text, Words = words },
+            DeletedWords = judged.CountDeleted(0, spokenWords.Length),
+            Replacements = judged.Replacements,
+        };
+    }
+
+    /// <summary>
+    /// Holds <paramref name="candidate"/> to the contract against the whole of
+    /// <paramref name="unit"/> and cuts the result back to the unit's pieces: one outcome per
+    /// piece, in order, every one refused when the unit is.
+    /// </summary>
+    public static IReadOnlyList<TidyPieceOutcome> Apply(TidyUnit unit, string candidate, float lowConfidenceThreshold)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
+        ArgumentNullException.ThrowIfNull(candidate);
+        ValidateThreshold(lowConfidenceThreshold);
+
+        if (unit.IsSingleWholeSegment)
+        {
+            // The shipped shape, through the one path it always took.
+            var piece = unit.Pieces[0];
+            var outcome = Apply(piece.Segment, candidate, lowConfidenceThreshold);
+            return
+            [
+                new TidyPieceOutcome
+                {
+                    Piece = piece,
+                    Accepted = outcome.Accepted,
+                    Words = outcome.Segment.Words,
+                    Text = outcome.Segment.Text,
+                    DeletedWords = outcome.DeletedWords,
+                    Replacements = outcome.Replacements,
+                    Refusal = outcome.Refusal,
+                },
+            ];
+        }
+
+        var composite = unit.Composite;
+        var spokenWords = composite.Words.Select(w => w.Text.Trim()).ToArray();
+        var judged = Judge(spokenWords, composite.Words, candidate, lowConfidenceThreshold);
+        if (judged.Refusal is { } why)
+        {
+            return RefuseAll(unit, why);
+        }
+
+        // Which piece each spoken word of the composite belongs to, by the pieces' ranges.
+        var pieces = unit.Pieces;
+        var offsets = new int[pieces.Count + 1];
+        for (var p = 0; p < pieces.Count; p++)
+        {
+            offsets[p + 1] = offsets[p] + pieces[p].WordCount;
+        }
+
+        var pieceOfSpoken = new int[spokenWords.Length];
+        for (var p = 0; p < pieces.Count; p++)
+        {
+            for (var s = offsets[p]; s < offsets[p + 1]; s++)
+            {
+                pieceOfSpoken[s] = p;
+            }
+        }
+
+        // Which piece each rewrite word lands on: the piece of the spoken words it maps to, all of
+        // which must be on one piece; a word mapping to nothing goes with the neighbour whose time
+        // it borrows, earlier first, the way MapWords lends it.
+        var candidateWords = judged.CandidateWords;
+        var pieceOfCandidate = new int[candidateWords.Length];
+        Array.Fill(pieceOfCandidate, -1);
+        for (var c = 0; c < candidateWords.Length; c++)
+        {
+            if (judged.Mapped[c] is not { Count: > 0 } sources)
+            {
+                continue;
+            }
+
+            var piece = pieceOfSpoken[sources[0]];
+            foreach (var s in sources)
+            {
+                if (pieceOfSpoken[s] != piece)
+                {
+                    return RefuseAll(unit, $"the rewrite joined '{candidateWords[c]}' across a line break");
+                }
+            }
+
+            pieceOfCandidate[c] = piece;
+        }
+
+        for (var c = 0; c < candidateWords.Length; c++)
+        {
+            if (pieceOfCandidate[c] >= 0)
+            {
+                continue;
+            }
+
+            var neighbour = -1;
+            for (var k = c - 1; k >= 0 && neighbour < 0; k--) neighbour = pieceOfCandidate[k];
+            for (var k = c + 1; k < candidateWords.Length && neighbour < 0; k++) neighbour = judged.Mapped[k] is { Count: > 0 } ? pieceOfCandidate[k] : -1;
+
+            if (neighbour < 0)
+            {
+                // Nothing in the rewrite maps to anything spoken. For a unit that held words,
+                // there is no line to put the rewrite on.
+                if (judged.SpokenTokens > 0)
+                {
+                    return RefuseAll(unit, "the rewrite could not be placed on its lines");
+                }
+
+                break;
+            }
+
+            pieceOfCandidate[c] = neighbour;
+        }
+
+        var mappedWords = MapWords(composite.Words, candidateWords, judged.Mapped, judged.Replaced);
+        var outcomes = new List<TidyPieceOutcome>(pieces.Count);
+        for (var p = 0; p < pieces.Count; p++)
+        {
+            var words = new List<TranscriptWord>();
+            var texts = new List<string>();
+            for (var c = 0; c < candidateWords.Length; c++)
+            {
+                if (pieceOfCandidate[c] != p)
+                {
+                    continue;
+                }
+
+                texts.Add(candidateWords[c]);
+                if (c < mappedWords.Count)
+                {
+                    words.Add(mappedWords[c]);
+                }
+            }
+
+            var shift = pieces[p].WordStart - offsets[p];
+            var replacements = judged.Replacements
+                .Where(r => r.SpokenWordIndex >= offsets[p] && r.SpokenWordIndex < offsets[p + 1])
+                .Select(r => r with { SpokenWordIndex = r.SpokenWordIndex + shift })
+                .ToList();
+
+            outcomes.Add(new TidyPieceOutcome
+            {
+                Piece = pieces[p],
+                Accepted = true,
+                Words = words,
+                Text = string.Join(' ', texts),
+                DeletedWords = judged.CountDeleted(offsets[p], offsets[p + 1]),
+                Replacements = replacements,
+            });
+        }
+
+        return outcomes;
+    }
+
+    private static void ValidateThreshold(float lowConfidenceThreshold)
+    {
+        if (lowConfidenceThreshold is < 0f or > 1f || float.IsNaN(lowConfidenceThreshold))
+        {
+            throw new ArgumentOutOfRangeException(nameof(lowConfidenceThreshold), lowConfidenceThreshold, "Confidence threshold must be within [0, 1].");
+        }
+    }
+
+    /// <summary>The alignment and the door, over any line: what the two public entries share.</summary>
+    private sealed class Judgement
+    {
+        public string? Refusal { get; init; }
+
+        public string[] CandidateWords { get; init; } = [];
+
+        public List<int>[] Mapped { get; init; } = [];
+
+        public bool[] Replaced { get; init; } = [];
+
+        public bool[] Kept { get; init; } = [];
+
+        public int[] SpokenOwners { get; init; } = [];
+
+        public int SpokenTokens => SpokenOwners.Length;
+
+        public List<TidyReplacement> Replacements { get; init; } = [];
+
+        /// <summary>Spoken words in [from, to) that were dropped and that the normaliser could see.</summary>
+        public int CountDeleted(int from, int to)
+        {
+            var deleted = 0;
+            for (var s = from; s < to; s++)
+            {
+                if (!Kept[s] && OwnsAToken(SpokenOwners, s))
+                {
+                    deleted++;
+                }
+            }
+
+            return deleted;
+        }
+    }
+
+    private static Judgement Judge(string[] spokenWords, IReadOnlyList<TranscriptWord>? timedWords, string candidate, float lowConfidenceThreshold)
+    {
         var candidateWords = SplitWords(candidate);
 
         var spokenTokens = Tokenise(spokenWords, out var spokenOwners);
@@ -103,7 +346,7 @@ public static class TidyContract
 
         if (candidateTokens.Length == 0 && spokenTokens.Length > 0)
         {
-            return Refused(spoken, "the rewrite came back empty for a line that held words");
+            return new Judgement { Refusal = "the rewrite came back empty for a line that held words", SpokenOwners = spokenOwners };
         }
 
         var ops = WordAlignment.Align(spokenTokens, candidateTokens);
@@ -131,7 +374,11 @@ public static class TidyContract
                     break;
 
                 case AlignmentOpKind.Insert:
-                    return Refused(spoken, $"the rewrite added '{candidateWords[candidateOwners[op.HypothesisIndex]]}', which was not spoken");
+                    return new Judgement
+                    {
+                        Refusal = $"the rewrite added '{candidateWords[candidateOwners[op.HypothesisIndex]]}', which was not spoken",
+                        SpokenOwners = spokenOwners,
+                    };
 
                 case AlignmentOpKind.Substitute:
                 {
@@ -140,10 +387,14 @@ public static class TidyContract
 
                     // The door: only a timed word carries a confidence, and only one the
                     // recogniser doubted may be replaced.
-                    var confidence = timed ? spoken.Words[s].Confidence : null;
+                    var confidence = timedWords?[s].Confidence;
                     if (confidence is not { } doubted || doubted >= lowConfidenceThreshold)
                     {
-                        return Refused(spoken, $"the rewrite changed '{spokenWords[s]}' to '{candidateWords[c]}', and the recogniser was not in doubt about it");
+                        return new Judgement
+                        {
+                            Refusal = $"the rewrite changed '{spokenWords[s]}' to '{candidateWords[c]}', and the recogniser was not in doubt about it",
+                            SpokenOwners = spokenOwners,
+                        };
                     }
 
                     (mapped[c] ??= []).Add(s);
@@ -158,27 +409,13 @@ public static class TidyContract
             }
         }
 
-        var deleted = 0;
-        for (var s = 0; s < spokenWords.Length; s++)
+        return new Judgement
         {
-            if (!kept[s] && OwnsAToken(spokenOwners, s))
-            {
-                deleted++;
-            }
-        }
-
-        // The tidied text is the rewrite's words joined by single spaces, so that the words
-        // reproduce the text and the sentence splitter and the highlight can read it the way they
-        // read the spoken one.
-        var text = string.Join(' ', candidateWords);
-
-        var words = timed ? MapWords(spoken.Words, candidateWords, mapped, replaced) : [];
-
-        return new TidyOutcome
-        {
-            Accepted = true,
-            Segment = spoken with { Text = text, Words = words },
-            DeletedWords = deleted,
+            CandidateWords = candidateWords,
+            Mapped = mapped,
+            Replaced = replaced,
+            Kept = kept,
+            SpokenOwners = spokenOwners,
             Replacements = replacements,
         };
     }
@@ -189,6 +426,9 @@ public static class TidyContract
         Segment = spoken,
         Refusal = why,
     };
+
+    private static List<TidyPieceOutcome> RefuseAll(TidyUnit unit, string why) =>
+        unit.Pieces.Select(piece => new TidyPieceOutcome { Piece = piece, Accepted = false, Refusal = why }).ToList();
 
     private static string[] SplitWords(string text) =>
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
