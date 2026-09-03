@@ -413,8 +413,7 @@ public class TranscriptTidyTests
     public async Task ThePassTidiesEverySegmentAndStampsItsProvenance()
     {
         await using var tidier = new FakeTranscriptTidier(new FakeTidierOptions { Backend = ComputeBackend.Vulkan });
-        var reports = new List<TranscriptionProgress>();
-        var progress = new SynchronousProgress(reports.Add);
+        var progress = new SynchronousProgress();
 
         var (tidied, summary) = await TranscriptTidy.TidyAsync(Document(), tidier, progress: progress);
 
@@ -435,9 +434,14 @@ public class TranscriptTidyTests
         Assert.Equal(0, summary.ReplacedWords);
         Assert.Null(summary.Describe());
 
+        // Four workers report at once, so the reports are a set and not a sequence: there is no
+        // last one to ask about the total, and what the stage guarantees is one report per segment,
+        // each carrying a distinct count from the driver's Interlocked increment.
+        var reports = progress.Reported;
         Assert.Equal(3, reports.Count);
         Assert.All(reports, r => Assert.Equal(TranscriptionStage.Tidying, r.Stage));
-        Assert.Equal(3, reports[^1].SegmentsTotal);
+        Assert.All(reports, r => Assert.Equal(3, r.SegmentsTotal));
+        Assert.Equal([1, 2, 3], reports.Select(r => r.SegmentsCompleted).Order());
     }
 
     [Fact]
@@ -535,8 +539,34 @@ public class TranscriptTidyTests
         Assert.Contains("fake-tidier", markdown, StringComparison.Ordinal);
     }
 
-    private sealed class SynchronousProgress(Action<TranscriptionProgress> report) : IProgress<TranscriptionProgress>
+    /// <summary>
+    /// <see cref="Progress{T}"/> posts to a captured synchronisation context, and a test without
+    /// one gets its reports late or never; this records them on the spot. The lock is not
+    /// belt-and-braces: <see cref="TidyStage"/> calls its <c>onTidied</c> on a worker thread and
+    /// runs four at once, so a bare <c>List.Add</c> here drops reports under load — which is what
+    /// made the pass test flaky. What comes back is a snapshot, in landing order.
+    /// </summary>
+    private sealed class SynchronousProgress : IProgress<TranscriptionProgress>
     {
-        public void Report(TranscriptionProgress value) => report(value);
+        private readonly List<TranscriptionProgress> _reported = [];
+
+        public IReadOnlyList<TranscriptionProgress> Reported
+        {
+            get
+            {
+                lock (_reported)
+                {
+                    return [.. _reported];
+                }
+            }
+        }
+
+        public void Report(TranscriptionProgress value)
+        {
+            lock (_reported)
+            {
+                _reported.Add(value);
+            }
+        }
     }
 }
