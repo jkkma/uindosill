@@ -1017,3 +1017,15 @@ model wrote (`docs/UNPROVEN.md`, *The Ask tab is three times faster*). The 12B's
 pairs a head with a model, or raises `-np` above one, and then claims the output is the same has
 to show it on the output — which is why the tidy's contract verifies every line against the spoken
 words rather than trusting the model to have copied them.
+
+## 42. A PowerShell harness's `-f` follows the machine's culture, so a summary written on one machine is misread on another
+
+`"{0:F2}%" -f 10.213` is `10.21%` on the desktop and `10,21%` on the second machine, whose Windows
+runs in es-PY; `"{0:N0}" -f 5599` is `5,599` on the one and `5.599` on the other. The first
+summary.md of the tidy's WER-corpus run, 2026-09-02, carried both — a table reading `10,21%` and
+`5.599 / 1.924 / 2.846` — and a reader from the other machine, or a script, takes the second for a
+decimal. `summary.json` was untouched, because `ConvertTo-Json` is invariant, which is why the
+record was written from the JSON. `measure-wer.ps1` sets
+`[CultureInfo]::CurrentCulture = [CultureInfo]::InvariantCulture` before it formats anything, from
+the same day; any other script that formats with `-f` has the same exposure until it does. The
+trap is invisible on the machine that has it and on CI, which runs invariant.

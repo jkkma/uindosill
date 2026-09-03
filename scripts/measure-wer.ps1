@@ -23,6 +23,13 @@
     script keeps the counts, the rate, the audio duration and the decode time the transcript JSON
     reports, and writes runs/wer/<timestamp>-<backend>/summary.{json,md} beside the transcripts.
 
+    With -Tidy that same transcribe also runs the tidy stage beside the recogniser, so every plain
+    transcript gets a tidied one beside it under the .tidy infix, and both are scored against both
+    styles. The recogniser ran once for the pair: the two rows differ only in whether a language
+    model rewrote the lines, so the difference between them is the tidy's and nothing else's.
+    Refusals and the words admitted through the low-confidence door are counted from the tidied
+    transcripts themselves and reported per file beside the two rates.
+
     Read `uindosill wer --help` for exactly what the normalisation does and does not do before
     quoting a figure from here: it is not the leaderboard normaliser, so a number from this script
     is comparable to another number from this script and not to a published one. Real-time factors
@@ -39,6 +46,10 @@
 .EXAMPLE
     # A quick check on two calls, keeping filler words as words.
     .\scripts\measure-wer.ps1 -Backend cuda -Models tdt-0.6b-v3-f16 -Files 4474506,4485192 -KeepFillers
+
+.EXAMPLE
+    # What the transcript tidy does to the error rate: both styles, one recogniser pass.
+    .\scripts\measure-wer.ps1 -Backend vulkan -Models tdt-0.6b-v3-f16 -Tidy
 
 .EXAMPLE
     .\scripts\lab.ps1 wer -Backend cuda
@@ -66,6 +77,17 @@ param(
     [ValidateSet('verbatim', 'nonverbatim')]
     [string[]] $Styles = @('verbatim', 'nonverbatim'),
 
+    # Tidy each line beside the recogniser and score the tidied transcript against the same
+    # references, in the same run and off the same recogniser output. Needs the tidying model
+    # installed ('uindosill models list') and a llama-server drop vendored.
+    [switch] $Tidy,
+
+    # Which llama-server drop runs the tidying model: cpu, vulkan or cuda. Unset leaves it to the
+    # CLI, which takes the best vendored. On the second machine the cpu arrangement starved the
+    # recogniser and doubled its time, so this is not a choice to leave to chance on a long run.
+    [ValidateSet('cpu', 'vulkan', 'cuda')]
+    [string] $TidyBackend,
+
     # Score uh, um, hmm, mm, mhm and mmm as words on both sides instead of dropping them.
     [switch] $KeepFillers,
 
@@ -88,6 +110,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# The format operator follows the machine's culture, and these summaries are read on other
+# machines: on the second machine, which runs es-PY, `{0:F2}` wrote 10,21% and `{0:N0}` wrote
+# 5.599 into summary.md on 2026-09-02 (docs/GOTCHAS.md, 42). Invariant from here on, so a summary
+# reads the same wherever it was made; ConvertTo-Json was invariant already.
+[System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::InvariantCulture
 
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
@@ -197,6 +225,11 @@ try {
         if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
             $machine.driver = (& nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1 | Select-Object -First 1).ToString().Trim()
         }
+        if (-not $machine.driver) {
+            # No NVIDIA tools — the second machine's Radeon, or any card without them — so the
+            # adapter's own driver version, which is the figure docs/UNPROVEN.md names for it.
+            $machine.driver = (Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object -First 1).DriverVersion
+        }
     }
     catch {
         # Not Windows, or CIM unavailable: the block stays partly empty rather than the run failing.
@@ -216,6 +249,57 @@ try {
     $mediaPaths = @($entries | ForEach-Object { Join-Path $CorpusRoot 'media' "$($_.id).mp3" })
     $modelRows = [Collections.Generic.List[object]]::new()
 
+    # A rate is null in the JSON when the reference was empty; it never is here, but a null
+    # multiplied would stop the run over a bookkeeping detail rather than a measurement.
+    function ConvertTo-Percent($rate) { if ($null -eq $rate) { $null } else { [Math]::Round(100.0 * [double] $rate, 2) } }
+
+    # One set of transcripts against every reference style, kept per file and summed by the tool
+    # that publishes the figures. Called once for the spoken transcripts and, with -Tidy, again
+    # for the tidied ones; the second call writes its per-file rates under a prefixed key, so a
+    # file's two rates sit beside each other and the delta is subtraction, not a second run.
+    # -Into is filled rather than returned: an ordered dictionary is a reference, and a PowerShell
+    # function's return value is one pipeline surprise away from being something else.
+    function Measure-Styles {
+        param(
+            [string[]] $Hypotheses,
+            $PerFile,
+            $Into,
+            [string] $KeyPrefix = '',
+            [string] $What
+        )
+
+        foreach ($style in $Styles) {
+            $werArguments = @('wer', '--reference-dir', (Join-Path $CorpusRoot $style), '--json') + $(if ($KeepFillers) { @('--keep-fillers') } else { @() }) + $Hypotheses
+            $raw = & $exe @werArguments
+            if ($LASTEXITCODE -ne 0) { throw "wer failed for $What against $style (exit $LASTEXITCODE): $($raw -join ' ')" }
+            $scored = ($raw -join "`n") | ConvertFrom-Json
+
+            foreach ($h in @($scored.hypotheses)) {
+                $id = [IO.Path]::GetFileNameWithoutExtension([string] $h.path)
+                $PerFile[$id]["${KeyPrefix}wer_$style"] = ConvertTo-Percent $h.normalised.rate
+                $PerFile[$id]["${KeyPrefix}errors_$style"] = [ordered]@{
+                    referenceWords = $h.normalised.referenceWords
+                    substitutions  = $h.normalised.substitutions
+                    deletions      = $h.normalised.deletions
+                    insertions     = $h.normalised.insertions
+                    rawRate        = ConvertTo-Percent $h.raw.rate
+                }
+            }
+
+            $Into[$style] = [ordered]@{
+                referenceWords  = $scored.summed.normalised.referenceWords
+                hypothesisWords = $scored.summed.normalised.hypothesisWords
+                substitutions   = $scored.summed.normalised.substitutions
+                deletions       = $scored.summed.normalised.deletions
+                insertions      = $scored.summed.normalised.insertions
+                errors          = $scored.summed.normalised.errors
+                wer             = ConvertTo-Percent $scored.summed.normalised.rate
+                rawWer          = ConvertTo-Percent $scored.summed.raw.rate
+                normaliser      = $scored.normaliser
+            }
+        }
+    }
+
     foreach ($model in $Models) {
         $modelDirectory = Join-Path $OutputDirectory $model
         New-Item -ItemType Directory -Force -Path $modelDirectory | Out-Null
@@ -223,7 +307,10 @@ try {
         Write-Host ''
         Write-Host ("── {0} on {1} ─────────────────────────────" -f $model, $Backend) -ForegroundColor Green
 
-        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $(if ($Vad) { @('--vad', $Vad) } else { @() }) + $mediaPaths
+        # --tidy writes the tidied version beside the plain one; the plain files are what they
+        # always were, so the spoken row of this run is a spoken row whether or not -Tidy was given.
+        $tidyArguments = if ($Tidy) { @('--tidy') + $(if ($TidyBackend) { @('--tidy-backend', $TidyBackend) } else { @() }) } else { @() }
+        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $(if ($Vad) { @('--vad', $Vad) } else { @() }) + $tidyArguments + $mediaPaths
         $watch = [Diagnostics.Stopwatch]::StartNew()
         # Not redirected: a CUDA process whose streams are captured has hung on abort here before
         # (gotcha 19). Its own progress is suppressed with --quiet; the summary lines still print.
@@ -259,45 +346,62 @@ try {
                 # field existed, which means the gate (every WER before 2026-08-23 was the gate's).
                 speechDetector   = if ($document.PSObject.Properties.Name -contains 'speechDetector') { [string] $document.speechDetector } else { $null }
                 segments         = @($document.segments).Count
-                words            = (@($document.segments) | ForEach-Object { @($_.words).Count } | Measure-Object -Sum).Sum
+                words            = (@($document.segments) | ForEach-Object { if ($_.PSObject.Properties.Name -contains 'words') { @($_.words).Count } else { 0 } } | Measure-Object -Sum).Sum
             }
         }
 
         $hypotheses = @($perFile.Keys | ForEach-Object { Join-Path $modelDirectory "$_.json" })
         $styleResults = [ordered]@{}
-        foreach ($style in $Styles) {
-            $werArguments = @('wer', '--reference-dir', (Join-Path $CorpusRoot $style), '--json') + $(if ($KeepFillers) { @('--keep-fillers') } else { @() }) + $hypotheses
-            $raw = & $exe @werArguments
-            if ($LASTEXITCODE -ne 0) { throw "wer failed for $model against $style (exit $LASTEXITCODE): $($raw -join ' ')" }
-            $scored = ($raw -join "`n") | ConvertFrom-Json
+        Measure-Styles -Hypotheses $hypotheses -PerFile $perFile -Into $styleResults -What $model
 
-            # A rate is null in the JSON when the reference was empty; it never is here, but a null
-            # multiplied would stop the run over a bookkeeping detail rather than a measurement.
-            function ConvertTo-Percent($rate) { if ($null -eq $rate) { $null } else { [Math]::Round(100.0 * [double] $rate, 2) } }
-
-            foreach ($h in @($scored.hypotheses)) {
-                $id = [IO.Path]::GetFileNameWithoutExtension([string] $h.path)
-                $perFile[$id]["wer_$style"] = ConvertTo-Percent $h.normalised.rate
-                $perFile[$id]["errors_$style"] = [ordered]@{
-                    referenceWords = $h.normalised.referenceWords
-                    substitutions  = $h.normalised.substitutions
-                    deletions      = $h.normalised.deletions
-                    insertions     = $h.normalised.insertions
-                    rawRate        = ConvertTo-Percent $h.raw.rate
+        # The tidied transcripts, against the same references through the same command. `wer
+        # --reference-dir` finds a reference by exact file stem, and a tidied file's stem carries
+        # the .tidy infix, so the files are copied under their plain stems into a directory of
+        # their own rather than the matching being loosened in the tool for a harness's sake.
+        $tidyStyleResults = $null
+        $tidyPerFile = [ordered]@{}
+        if ($Tidy) {
+            $tidyScoringDirectory = Join-Path $modelDirectory 'tidied'
+            New-Item -ItemType Directory -Force -Path $tidyScoringDirectory | Out-Null
+            foreach ($id in @($perFile.Keys)) {
+                $written = Join-Path $modelDirectory "$id.tidy.json"
+                if (-not (Test-Path -LiteralPath $written)) {
+                    throw "No tidied transcript for $id, though -Tidy was asked for. Nothing is scored: a missing " +
+                          "tidied file is a pass that did not run, not a pass that changed nothing."
                 }
+                Copy-Item -LiteralPath $written -Destination (Join-Path $tidyScoringDirectory "$id.json") -Force
+
+                # What the tidy came to on this file, from the tidied transcript itself: the
+                # refusals it counts, and the words that came through the low-confidence door,
+                # each of which carries the spoken word it replaced.
+                $tidied = Get-Content -LiteralPath $written -Raw | ConvertFrom-Json
+
+                # A segment the tidy emptied — a line that was nothing but fillers — has no words
+                # left, and the writer omits an empty list rather than writing one, so the property
+                # is absent on it. Counting through a helper makes that a zero rather than a
+                # StrictMode failure after the transcription has already been paid for.
+                $tidySegments = @($tidied.segments)
+                function Get-Words($segment) {
+                    if ($segment.PSObject.Properties.Name -contains 'words') { @($segment.words) } else { @() }
+                }
+                $tidyPerFile[$id] = [ordered]@{
+                    id              = $id
+                    country         = $perFile[$id].country
+                    tidyModel       = if ($tidied.PSObject.Properties.Name -contains 'tidyModel') { [string] $tidied.tidyModel } else { $null }
+                    tidyBackend     = if ($tidied.PSObject.Properties.Name -contains 'tidyBackend') { [string] $tidied.tidyBackend } else { $null }
+                    segments        = $tidySegments.Count
+                    refusedSegments = if ($tidied.PSObject.Properties.Name -contains 'tidyRefusedSegments') { [int] $tidied.tidyRefusedSegments } else { $null }
+                    emptiedSegments = @($tidySegments | Where-Object { @(Get-Words $_).Count -eq 0 }).Count
+                    words           = ($tidySegments | ForEach-Object { @(Get-Words $_).Count } | Measure-Object -Sum).Sum
+                    replacedWords   = @($tidySegments | ForEach-Object { Get-Words $_ } |
+                        Where-Object { $_.PSObject.Properties.Name -contains 'replacedFrom' -and $null -ne $_.replacedFrom }).Count
+                }
+                $perFile[$id]['tidy'] = $tidyPerFile[$id]
             }
 
-            $styleResults[$style] = [ordered]@{
-                referenceWords  = $scored.summed.normalised.referenceWords
-                hypothesisWords = $scored.summed.normalised.hypothesisWords
-                substitutions   = $scored.summed.normalised.substitutions
-                deletions       = $scored.summed.normalised.deletions
-                insertions      = $scored.summed.normalised.insertions
-                errors          = $scored.summed.normalised.errors
-                wer             = ConvertTo-Percent $scored.summed.normalised.rate
-                rawWer          = ConvertTo-Percent $scored.summed.raw.rate
-                normaliser      = $scored.normaliser
-            }
+            $tidyStyleResults = [ordered]@{}
+            $tidyHypotheses = @($perFile.Keys | ForEach-Object { Join-Path $tidyScoringDirectory "$_.json" })
+            Measure-Styles -Hypotheses $tidyHypotheses -PerFile $perFile -Into $tidyStyleResults -KeyPrefix 'tidy_' -What "$model tidied"
         }
 
         $processingTotal = ($perFile.Values | ForEach-Object { $_.processingSeconds } | Where-Object { $null -ne $_ } | Measure-Object -Sum).Sum
@@ -313,6 +417,18 @@ try {
             realTimeFactor    = if ($audioTotal -gt 0) { [Math]::Round($processingTotal / $audioTotal, 4) } else { $null }
             wallSeconds       = [Math]::Round($watch.Elapsed.TotalSeconds, 1)
             styles            = $styleResults
+            tidy              = if ($Tidy) {
+                [ordered]@{
+                    styles          = $tidyStyleResults
+                    backend         = $TidyBackend
+                    model           = @($tidyPerFile.Values | ForEach-Object { $_.tidyModel } | Where-Object { $_ } | Select-Object -Unique)
+                    segments        = ($tidyPerFile.Values | ForEach-Object { $_.segments } | Measure-Object -Sum).Sum
+                    refusedSegments = ($tidyPerFile.Values | ForEach-Object { $_.refusedSegments } | Where-Object { $null -ne $_ } | Measure-Object -Sum).Sum
+                    emptiedSegments = ($tidyPerFile.Values | ForEach-Object { $_.emptiedSegments } | Measure-Object -Sum).Sum
+                    replacedWords   = ($tidyPerFile.Values | ForEach-Object { $_.replacedWords } | Measure-Object -Sum).Sum
+                    words           = ($tidyPerFile.Values | ForEach-Object { $_.words } | Measure-Object -Sum).Sum
+                }
+            } else { $null }
             perFile           = @($perFile.Values)
         }
         $modelRows.Add([PSCustomObject] $row)
@@ -321,6 +437,17 @@ try {
             $s = $styleResults[$style]
             Write-Host ("  {0,-12} WER {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0} over {5:N0} reference words; raw {6:F2}%)" -f
                 $style, $s.wer, $s.substitutions, $s.deletions, $s.insertions, $s.referenceWords, $s.rawWer)
+        }
+        if ($null -ne $tidyStyleResults) {
+            foreach ($style in $Styles) {
+                $t = $tidyStyleResults[$style]
+                $delta = $t.wer - $styleResults[$style].wer
+                Write-Host ("  {0,-12} WER {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0}; {5}{6:F2} points against the spoken transcript)" -f
+                    "$style tidy", $t.wer, $t.substitutions, $t.deletions, $t.insertions, $(if ($delta -ge 0) { '+' } else { '' }), $delta) -ForegroundColor Cyan
+            }
+            $t = $row.tidy
+            Write-Host ("  {0,-12} {1:N0} of {2:N0} lines refused and kept as spoken, {3:N0} emptied; {4:N0} words through the low-confidence door" -f
+                'contract', $t.refusedSegments, $t.segments, $t.emptiedSegments, $t.replacedWords)
         }
         if ($audioTotal -gt 0) {
             Write-Host ("  {0,-12} RTF {1:F4} on {2} (decode {3:N0} s for {4:N0} s of audio, from the transcripts' own processingSec)" -f
@@ -341,6 +468,8 @@ try {
             audioSeconds = [Math]::Round($totalAudioSeconds, 1)
         }
         keepFillers  = [bool] $KeepFillers
+        tidy         = [bool] $Tidy
+        tidyBackend  = $TidyBackend
         styles       = $Styles
         models       = @($modelRows)
     }
@@ -363,6 +492,18 @@ try {
         $firstStyle = $row.styles[$Styles[0]]
         $lines.Add(("| {0} | {1} | {2:N0} / {3:N0} / {4:N0} | {5:F4} |" -f $row.model, ($cells -join ' | '),
             $firstStyle.substitutions, $firstStyle.deletions, $firstStyle.insertions, $row.realTimeFactor))
+
+        if ($null -ne $row.tidy -and $null -ne $row.tidy.styles) {
+            $tidyCells = @($Styles | ForEach-Object { ("{0:F2}%" -f $row.tidy.styles[$_].wer) })
+            $tidyFirst = $row.tidy.styles[$Styles[0]]
+            $lines.Add(("| {0}, tidied | {1} | {2:N0} / {3:N0} / {4:N0} | — |" -f $row.model, ($tidyCells -join ' | '),
+                $tidyFirst.substitutions, $tidyFirst.deletions, $tidyFirst.insertions))
+            $deltaCells = @($Styles | ForEach-Object {
+                $d = $row.tidy.styles[$_].wer - $row.styles[$_].wer
+                ("**{0}{1:F2}**" -f $(if ($d -ge 0) { '+' } else { '' }), $d)
+            })
+            $lines.Add(("| the tidy's delta | {0} | | |" -f ($deltaCells -join ' | ')))
+        }
     }
     $lines.Add('')
     $lines.Add('Per file, WER vs ' + $Styles[0] + ':')
@@ -377,6 +518,28 @@ try {
         })
         $lines.Add(("| {0} | {1} | {2} |" -f $id, $entry.country, ($cells -join ' | ')))
     }
+    foreach ($row in $modelRows) {
+        if ($row.failed -or $null -eq $row.tidy -or $null -eq $row.tidy.styles) { continue }
+        $lines.Add('')
+        $lines.Add(("The tidy on {0}: {1} lines, {2} refused and kept as spoken, {3} emptied outright, {4} words through the low-confidence door." -f
+            $row.model, $row.tidy.segments, $row.tidy.refusedSegments, $row.tidy.emptiedSegments, $row.tidy.replacedWords))
+        $lines.Add(("Tidying model: {0}, on {1}." -f (($row.tidy.model -join ', ')), $(if ($row.tidy.backend) { $row.tidy.backend } else { 'the best drop vendored' })))
+        foreach ($style in $Styles) {
+            $lines.Add('')
+            $lines.Add(("Per file against the $style reference, spoken and tidied:"))
+            $lines.Add('')
+            $lines.Add('| File | Country | spoken | tidied | Δ | lines | refused | emptied | door |')
+            $lines.Add('|---|---|---|---|---|---|---|---|---|')
+            foreach ($file in $row.perFile) {
+                $d = $file["tidy_wer_$style"] - $file["wer_$style"]
+                $lines.Add(("| {0} | {1} | {2:F2}% | {3:F2}% | {4}{5:F2} | {6:N0} | {7:N0} | {8:N0} | {9:N0} |" -f
+                    $file.id, $file.country, $file["wer_$style"], $file["tidy_wer_$style"],
+                    $(if ($d -ge 0) { '+' } else { '' }), $d, $file.tidy.segments, $file.tidy.refusedSegments,
+                    $file.tidy.emptiedSegments, $file.tidy.replacedWords))
+            }
+        }
+    }
+
     $lines.Add('')
     $lines.Add('WER is (S + D + I) / reference words over tokens normalised the same way on both sides; see `uindosill wer --help`.')
     $lines.Add('Not comparable to leaderboard figures for the same model, which use a richer normaliser. RTF is from the')

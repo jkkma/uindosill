@@ -7329,3 +7329,69 @@ an earlier identical set lost its wall clocks and agrees on every text. The reco
 question (segments, joined segments, or sentence-runs) that the per-request pace raises; the
 neural detector's line count; the window's stage at these latencies; quality against a reference;
 the desktop and CUDA. One file, one machine.
+
+### The delta on the ten-call WER corpus — measured 2026-09-02, second machine, Vulkan
+
+The first of the two conditions the tidy owes (`docs/PHASES.md`, *Decided 2026-09-01*): the tidy
+against human transcripts under both reference styles, composition included, on the whole of
+Earnings-22 Subset 10 — ten calls, 40,037 s = 11.12 h. `scripts/measure-wer.ps1 -Backend vulkan
+-Models tdt-0.6b-v3-f16 -Tidy -TidyBackend vulkan`: one recogniser pass with the E4B tidying beside
+it, both rows scored off the same transcripts, so the difference is the tidy's and nothing else's.
+Laptop, driver 32.0.13022.3006, AC power, Vulkan for both models; `tdt-0.6b-v3-f16` and the
+catalogue's `gemma-4-e4b-it-qat-ud-q4-k-xl` with its Q8_0 head, four lines in flight; the energy
+gate, Silero not being installed on the machine — which is also the detector the 2026-08-16
+baseline was cut with. Every media file and reference matched its pinned byte count and SHA-256
+before scoring. 3,776.3 s wall from launch to summary, exit code 0. The record is
+`runs/wer/20260902-204819-vulkan-tidy/` on the laptop and in the Drive's `runs-laptop`.
+
+| | WER vs verbatim | S / D / I | WER vs non-verbatim | S / D / I |
+|---|---:|---|---:|---|
+| spoken | **10.21%** | 5,599 / 1,924 / 2,846 | **13.41%** | 4,488 / 1,078 / 7,328 |
+| tidied | **13.64%** | 5,464 / 6,688 / 1,691 | **10.47%** | 4,457 / 2,640 / 2,971 |
+| the tidy's delta | **+3.43** | | **−2.94** | |
+
+Reference words 101,509 and 96,181; the spoken transcripts are 102,431 normalised tokens and the
+tidied 96,512, within 0.4% of the non-verbatim reference's length. Raw words 107,516 → 96,994: the
+tidy removes 9.8% of what the recogniser wrote, 5.8% of what the normaliser keeps.
+
+- **Against the verbatim transcript the tidy reads 3.43 points worse, and all of it is
+  deletions** — 1,924 → 6,688 — while substitutions (5,599 → 5,464) and insertions (2,846 → 1,691)
+  both fall. That transcript writes down the stutters, false starts and repetitions the tidy
+  exists to remove, and each one removed is a deletion there.
+- **Against the non-verbatim transcript it reads 2.94 points better, and all of that is
+  insertions** — 7,328 → 2,971: the words removed were the ones the human editor had also removed.
+  Deletions rise (1,078 → 2,640), so some of what went was in the edited transcript too.
+- **Substitutions barely move under either reference**, which is what a delete-only contract
+  should produce; the 39 words through the low-confidence door are too few to show.
+- Per call the direction holds: nine of ten worse against verbatim (the exception the Indian call
+  4479944, better by 1.90 even there), nine of ten better against non-verbatim (the exception the
+  UK call 4483937, worse by 0.10). The verbatim deltas run +1.76 to +5.75 on the nine, the
+  non-verbatim −0.15 to −7.28.
+- **The spoken row is the desktop's baseline to two decimals.** The 2026-08-16 measurement
+  above, RTX 5080 under CUDA: 10.21% / 13.40%, S/D/I 5,599 / 1,927 / 2,840 and 4,493 / 1,079 /
+  7,320. This laptop under Vulkan, seventeen days later: 10.21% / 13.41%, 5,599 / 1,924 / 2,846
+  and 4,488 / 1,078 / 7,328, and per call within 0.04 points on every one of the ten. The spoken
+  side of the measurement is the recogniser's, not the machine's.
+- **The contract on eleven hours of real calls: 7,786 lines, 139 refused** and kept as spoken
+  (1.8%), **171 emptied** (lines that were nothing but fillers), **39 words through the door** on
+  1,800 lines carrying a word below 0.45 — 3 to 23 refusals and 1 to 10 door words per call, where
+  the ten-minute sample had refused nothing.
+- **The detector moves the baseline, not the delta — four calls, an aside.** Two earlier runs the
+  same afternoon had the Silero model available and cut with it (a one-call pilot and a run that
+  stopped after three calls). Their four calls, scored by hand under the same normaliser, against
+  this run's cut of the same calls: spoken WER lower under Silero on all four, by 0.21 to 1.72
+  points against verbatim (4453225: 12.15% against 13.87%); the tidy's delta within 0.6 points of
+  the gate's on every call under both styles, same direction; 539–796 lines against 680–1,215.
+  Four calls from other runs, not a measurement of the detector: the corpus has never been scored
+  under Silero, and these say it should be.
+- **Time**: 0.094 end to end — 3,776 s for 40,037 s of audio with the build, the hash check, both
+  loads and the scoring inside it, 10.6× real time for transcription and tidy together. The
+  recogniser's own `processingSec` summed to 1,634.6 s, RTF 0.041 beside the E4B, 138–203 s per
+  call. **No recogniser-alone arm ran on this corpus**, so the cost of the company over eleven
+  hours is not measured; the morning's +31% on the ten-minute sample is the only figure for it.
+
+**Unproven after it:** the same delta on the desktop under CUDA, the second condition; the delta
+under the neural detector on the whole corpus; the recogniser-alone control on this corpus and
+machine, and with it the tidy's pace over eleven hours; and which reference style the shipping
+criterion reads — the same tidy is +3.43 against one human transcript and −2.94 against the other,
+and that is a decision, recorded as one in `docs/PHASES.md`.
