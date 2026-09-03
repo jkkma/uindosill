@@ -202,8 +202,8 @@ src/
                                           doctor / notice / formats / wer / der / rttm / retrieve
   Parakeet.App/                 net10.0   Avalonia desktop UI
 python/
-  uindosill_engines/            the sidecar — serve.py + protocol.py, diariser/, translator/,
-                                and a vendored slice of NeMo under _vendor/
+  uindosill_engines/            the sidecar — serve.py + protocol.py + placement.py,
+                                diariser/ and translator/
 tools/
   FakeSidecar/                  net10.0   a scripted stand-in for that process, so the tests
                                           need no Python and still run on Linux

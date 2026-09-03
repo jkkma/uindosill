@@ -2132,6 +2132,14 @@ Media Foundation on Windows, sniffed from the magic bytes rather than the extens
 through WASAPI. **It costs no new package**: `NAudio.Wasapi` and `NAudio.Core` are already in the
 graph through `Parakeet.Audio`, which uses the first of them to decode.
 
+**`Services/IAudioPlayer.cs` is the name it shipped under, and the file is not there now.** The
+entry below dated 2026-08-23 records the interface becoming `IMediaPlayer`. What it does not record
+is that the file went with it: the two implementations moved into files of their own that day,
+leaving the interface and the exception together, so the player this paragraph describes is
+`Services/SystemAudioPlayer.cs` today. The rename moved no logic — the reader it opens through and
+the WASAPI output are the same code, and what the player gained is the video surface that entry
+describes. `docs/UNPROVEN.md` § *Playing a recording* carries the whole of it.
+
 **Taro arrived with it**, which is the condition `Theme/Tokens.axaml` had been stating since the
 design landed: nothing in v1 may draw it, and a brush that exists is a brush something will
 eventually use, so the ramp waited for a v2 surface to sit on. It was not picked. Each of the six
@@ -2191,12 +2199,13 @@ keyboard**: a `Slider` would have arrow keys, and this has none.
 **What the suite cannot reach, and what was done about it.** `SystemAudioPlayer` needs a Windows
 audio endpoint, which neither CI nor a headless run has. Everything the tab does — open, play, seek
 from a cue, follow the position, find a word, stop at the end — is exercised against
-`FakeAudioPlayer`, whose clock moves only when it is told to, so what the suite leaves untested is
-the device rather than the behaviour. **So the device was driven by hand the same day**, on the
-laptop, against three files covering both reader branches: an m4a and an mp3 through Media
-Foundation and a WAVE tone through the managed reader. On all three the endpoint opens, the clock
-advances at real time, pause holds it, a seek lands exactly and resumes, a seek while playing lands
-and carries on, and play at the end starts the recording over.
+`FakeAudioPlayer` — renamed `FakeMediaPlayer` on 2026-08-23 — whose clock moves only when it is
+told to, so what the suite leaves untested is the device rather than the behaviour. **So the
+device was driven by hand the same day**, on the laptop, against three files covering both reader
+branches: an m4a and an mp3 through Media Foundation and a WAVE tone through the managed reader. On
+all three the endpoint opens, the clock advances at real time, pause holds it, a seek lands exactly
+and resumes, a seek while playing lands and carries on, and play at the end starts the recording
+over.
 
 **That run found two defects, and both were in the same method.** Play at the end **only wrapped
 when the device had stopped by itself** — the wrap sat inside the branch that creates an output,
@@ -2284,12 +2293,13 @@ long-GOP file is whole seconds from the cue that was clicked — and a citation 
 sentence is this feature failing at the only thing it is for. Exact seeking decodes forward from the
 keyframe and costs milliseconds. Measured: a seek to 6.00 s landed at 6.00 s.
 
-**`IAudioPlayer` became `IMediaPlayer`**, gaining `CanDrawVideo`, `HasVideo`, `FrameReady`,
-`TryCopyFrame` and `SetVideoOutputSize`. Frames do not travel through property notifications —
-they arrive at the decoder's rate on the decoder's thread, and thirty a second is not what bindings
-are for — so the window subscribes to the player directly and blits into a `WriteableBitmap`, with
-a coalescing flag so a burst during a seek becomes one paint rather than a queue of stale ones.
-Everything else on the tab still goes through the properties it always did.
+**`IAudioPlayer` became `IMediaPlayer`**, gaining six members: `CanDrawVideo`, `HasVideo`,
+`FrameSize`, `FrameReady`, `TryCopyFrame` and `SetVideoOutputSize`. Frames do not travel through
+property notifications — they arrive at the decoder's rate on the decoder's thread, and thirty a
+second is not what bindings are for — so the window subscribes to the player directly and blits
+into a `WriteableBitmap`, with a coalescing flag so a burst during a seek becomes one paint rather
+than a queue of stale ones. Everything else on the tab still goes through the properties it always
+did.
 
 **Which player a build gets is decided by what is on disk**, the way the transcription backends are:
 `MediaPlayers.ForThisBuild()` returns the mpv player when the library is vendored and the Media
