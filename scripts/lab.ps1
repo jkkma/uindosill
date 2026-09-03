@@ -69,6 +69,10 @@
     .\scripts\lab.ps1 wer -Backend cpu -Models tdt-0.6b-v3-f16
 
 .EXAMPLE
+    # What the transcript tidy does to that error rate, both styles off one recogniser pass.
+    .\scripts\lab.ps1 wer -Backend vulkan -Models tdt-0.6b-v3-f16 -Tidy
+
+.EXAMPLE
     # Does the shipping decode reproduce the English the translation gate was scored on? Start with
     # Spanish: 348 sentences is minutes, and a decode that is going to disagree disagrees there too.
     .\scripts\lab.ps1 agreement -Languages es
@@ -186,6 +190,9 @@ param(
     [string[]] $Files,
     [ValidateSet('verbatim', 'nonverbatim')]
     [string[]] $Styles,
+    [switch] $Tidy,
+    [ValidateSet('cpu', 'vulkan', 'cuda')]
+    [string] $TidyBackend,
     [switch] $KeepFillers,
     [string] $ManifestPath,
     [string] $CorpusRoot,
