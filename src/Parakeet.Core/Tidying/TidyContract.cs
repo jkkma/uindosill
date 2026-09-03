@@ -160,7 +160,7 @@ public static class TidyContract
 
         if (unit.IsSingleWholeSegment)
         {
-            // The shipped shape, through the one path it always took.
+            // A whole segment, through the one path it always took — the shipped unit until 2026-09-03.
             var piece = unit.Pieces[0];
             var outcome = Apply(piece.Segment, candidate, lowConfidenceThreshold);
             return

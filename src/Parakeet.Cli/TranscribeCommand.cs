@@ -324,7 +324,8 @@ internal static class TranscribeCommand
         {
             Unit = parsed.Value("tidy-unit") switch
             {
-                null or "" or "segment" => TidyUnitKind.Segment,
+                null or "" => TidyOptions.Default.Unit,
+                "segment" => TidyUnitKind.Segment,
                 "run" => TidyUnitKind.JoinedRun,
                 "sentence" => TidyUnitKind.SentenceRun,
                 var other => throw new CliUsageException($"--tidy-unit takes segment, run or sentence, not '{other}'."),

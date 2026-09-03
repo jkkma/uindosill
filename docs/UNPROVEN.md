@@ -7475,7 +7475,9 @@ Lag is the tidied version landing after the plain transcript, on the stage's clo
   clause — refused segments at most twice the segment's — by 27 and 25 against 10. That count
   scales with the unit by construction, and the clause was a guard on the quality the second
   clause measures directly. What follows for the rule is a decision, recorded as one in
-  `docs/PHASES.md`; nothing shipped changed on this run.
+  `docs/PHASES.md`; nothing shipped changed on this run. Under the clause as decided later
+  (requests, not lines — *Decided 2026-09-03*), both longer units qualify here as well, 7 and 11
+  requests against 10, and the joined run wins on lag.
 
 **Unproven after it:** one call, one machine — the tiebreak call 4469088 has not been run; the
 retry of a refused run one segment at a time (about 27 extra requests on this call, 4% of the
@@ -7565,7 +7567,9 @@ shape's lag is its whole tidy):
   and the same 25 and 27 fell outside. The clause turns on a count that moved by three between two
   identical runs there and sits on its limit here. The harness printed *By the rule, the unit is
   sentence*; the decision on how the clause should read (`docs/PHASES.md`, *Measured 2026-09-03 —
-  the request unit*) is not taken by this run, and nothing shipped changed.
+  the request unit*) is not taken by this run, and nothing shipped changed. Taken later that
+  day (*Decided 2026-09-03*): the clause counts requests, under which the joined run's 7 against
+  12 qualifies too and wins on lag.
 
 **Unproven after it:** one call on this card — the tiebreak call 4469088 has not been run on either
 machine; what the segment's 45-word spread is made of; the retry of a refused run one segment at a
@@ -7639,5 +7643,7 @@ tidied 96,459. Raw words 107,515 → 96,946, against the laptop's 107,516 → 96
   it on one call.
 
 **Unproven after it:** the delta under the neural detector on the whole corpus, on either machine;
-the tidy's sequential pace on this corpus, never run on either; the two longer units over the
-corpus rather than one call; and one card, one run — the corpus has been tidied once on it.
+the tidy's sequential pace on this corpus, never run on either; the joined run over the corpus
+rather than one call — the unit that ships since *Decided 2026-09-03*, whose corpus delta and
+refusal count over eleven hours have been measured on neither machine; and one card, one run —
+the corpus has been tidied once on it.

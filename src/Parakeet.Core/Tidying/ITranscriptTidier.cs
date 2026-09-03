@@ -41,11 +41,16 @@ public sealed record TidyOptions
     public int Concurrency { get; init; } = 4;
 
     /// <summary>
-    /// What one request carries. The segment is the shipped shape; the other two exist for the
-    /// measurement that decides which ships (docs/PHASES.md, *Decided 2026-09-02, late evening*),
-    /// and nothing in the window asks for them.
+    /// What one request carries. The joined run — whole lines to fifteen seconds of speech — is
+    /// the shipped unit since the decision of 2026-09-03 (docs/PHASES.md, *Decided 2026-09-03*):
+    /// measured on both machines against the segment and the sentence-run, it landed the tidied
+    /// copy soonest (11.9 s after the plain transcript on the desktop's CUDA path, 83 s on the
+    /// laptop's Vulkan path, against the segment's 38 s and 194 s), tidied better under both
+    /// references, and under the refusal clause as decided — refused requests, not the lines they
+    /// carry — qualified on both. The segment was the shipped unit until then; the sentence-run
+    /// stays behind the measurement's options. Nothing in the window asks for either.
     /// </summary>
-    public TidyUnitKind Unit { get; init; } = TidyUnitKind.Segment;
+    public TidyUnitKind Unit { get; init; } = TidyUnitKind.JoinedRun;
 
     /// <summary>
     /// Beside the recogniser, the shipped shape, or after it. The pass exists for the same
