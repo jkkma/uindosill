@@ -1,4 +1,4 @@
-using Parakeet.Core.Tidying;
+﻿using Parakeet.Core.Tidying;
 using Parakeet.Core.Transcription;
 
 namespace Parakeet.Core.Tests;
@@ -209,6 +209,68 @@ public class TidyUnitTests
             Assert.False(o.Accepted);
             Assert.Contains("added 'big'", o.Refusal, StringComparison.Ordinal);
         });
+    }
+
+    [Fact]
+    public void APieceThatTidiesToNothingInsideANonEmptyRunRefusesTheUnit()
+    {
+        // The failure this ceiling was added for, from a real call: the run as a whole came back
+        // with words, so the empty-rewrite guard — which reads the composite — passed, while one
+        // line inside it went entirely. Accepted, the line left the transcript empty and the
+        // window's line list drops an empty segment, so it vanished with nothing refused.
+        var unit = TidyUnit.Of(
+        [
+            Whole(0, Timed(0, 0, "the cat sat on the mat")),
+            Whole(1, Timed(1, 6, "other thing that just happened")),
+        ]);
+
+        var outcomes = TidyContract.Apply(unit, "The cat sat on the mat.", 0.45f);
+
+        Assert.Equal(2, outcomes.Count);
+        Assert.All(outcomes, o =>
+        {
+            Assert.False(o.Accepted);
+            Assert.Contains("of the line's 5 spoken words", o.Refusal, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void AClauseLiftedOutOfOnePieceRefusesTheUnitThoughTheRunKeepsMostOfItsWords()
+    {
+        // The other half of the same call: a clause taken out of the middle of one line. The
+        // fraction alone does not catch it — the unit keeps most of its words, and so does the
+        // line — but five spoken words in a row are gone, which no stutter does.
+        var unit = TidyUnit.Of(
+        [
+            Whole(0, Timed(0, 0, "basically said we anyone who passes away we own everything")),
+            Whole(1, Timed(1, 11, "on that account")),
+        ]);
+
+        var outcomes = TidyContract.Apply(unit, "Basically said we own everything on that account.", 0.45f);
+
+        Assert.All(outcomes, o =>
+        {
+            Assert.False(o.Accepted);
+            Assert.Contains("5 spoken words in a row", o.Refusal, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void AScatteredStutterInsideARunIsStillTidiedAwayUnderBothCeilings()
+    {
+        // The ceilings must not cost the tidy what it is for. Four separate repetitions go, no
+        // run reaches five and no line loses half of itself, so the unit is accepted.
+        var unit = TidyUnit.Of(
+        [
+            Whole(0, Timed(0, 0, "i i think that the the design")),
+            Whole(1, Timed(1, 7, "forcing you to to show the the character")),
+        ]);
+
+        var outcomes = TidyContract.Apply(unit, "I think that the design forcing you to show the character.", 0.45f);
+
+        Assert.All(outcomes, o => Assert.True(o.Accepted, o.Refusal));
+        Assert.Equal("I think that the design", outcomes[0].Text);
+        Assert.Equal("forcing you to show the character.", outcomes[1].Text);
     }
 
     [Fact]

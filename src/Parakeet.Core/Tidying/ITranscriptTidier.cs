@@ -1,4 +1,4 @@
-using Parakeet.Core.Transcription;
+﻿using Parakeet.Core.Transcription;
 
 namespace Parakeet.Core.Tidying;
 
@@ -58,6 +58,32 @@ public sealed record TidyOptions
     /// </summary>
     public TidyShape Shape { get; init; } = TidyShape.Tandem;
 
+    /// <summary>
+    /// The most of a line's spoken words a rewrite may drop, as a fraction of the words the
+    /// normaliser can see. The contract admits deletions without bound, which is what the
+    /// delete-only shape is for; on real audio that let the model take out whole clauses and
+    /// whole lines, so the ceiling bounds how much of a line may go, not whether any of it may.
+    /// Half is what separated clause removal from stutter removal on the first call it was
+    /// measured against; the two ceilings are read together and either one refuses.
+    /// </summary>
+    public double MaxDeletedFraction { get; init; } = DefaultMaxDeletedFraction;
+
+    /// <summary>
+    /// The most spoken words in a row a rewrite may drop. A stutter is scattered and a clause is
+    /// contiguous, which is what this reads and <see cref="MaxDeletedFraction"/> cannot: on the
+    /// call this was measured against, every clause the model removed ran to five words or more
+    /// and every legitimate cleanup to four or fewer. Fillers are transparent — one between two
+    /// dropped words neither breaks the run nor extends it — because they are the words the
+    /// normaliser cannot see.
+    /// </summary>
+    public int MaxConsecutiveDeletedWords { get; init; } = DefaultMaxConsecutiveDeletedWords;
+
+    /// <summary>The default <see cref="MaxDeletedFraction"/>, a constant so the contract can take it as a parameter default.</summary>
+    public const double DefaultMaxDeletedFraction = 0.5;
+
+    /// <summary>The default <see cref="MaxConsecutiveDeletedWords"/>, a constant for the same reason.</summary>
+    public const int DefaultMaxConsecutiveDeletedWords = 4;
+
     public void Validate()
     {
         if (!Enum.IsDefined(Unit))
@@ -79,6 +105,18 @@ public sealed record TidyOptions
         if (Concurrency < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Concurrency), Concurrency, "At least one line must be in flight.");
+        }
+
+        if (MaxDeletedFraction is <= 0d or > 1d || double.IsNaN(MaxDeletedFraction))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxDeletedFraction), MaxDeletedFraction, "The deletion ceiling must be within (0, 1]: a line may not be forbidden every deletion.");
+        }
+
+        if (MaxConsecutiveDeletedWords < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxConsecutiveDeletedWords), MaxConsecutiveDeletedWords, "At least one word in a row must be droppable.");
         }
     }
 }

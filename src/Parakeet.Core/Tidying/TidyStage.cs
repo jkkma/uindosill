@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Threading.Channels;
 using Parakeet.Core.Transcription;
 
@@ -224,7 +224,12 @@ public sealed class TidyStage : IAsyncDisposable
         {
             var startedAt = _clock.Elapsed;
             var candidate = await _tidier.TidyLineAsync(unit.Composite.Text, ct).ConfigureAwait(false);
-            var outcomes = TidyContract.Apply(unit, candidate, _options.LowConfidenceThreshold);
+            var outcomes = TidyContract.Apply(
+                unit,
+                candidate,
+                _options.LowConfidenceThreshold,
+                _options.MaxDeletedFraction,
+                _options.MaxConsecutiveDeletedWords);
             var landedAt = _clock.Elapsed;
 
             lock (_gate)

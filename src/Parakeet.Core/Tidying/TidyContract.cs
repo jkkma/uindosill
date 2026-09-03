@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using Parakeet.Core.Text;
 using Parakeet.Core.Transcription;
 
@@ -112,7 +113,12 @@ public static class TidyContract
     /// Holds <paramref name="candidate"/> to the contract against <paramref name="spoken"/> and
     /// returns what the transcript should carry.
     /// </summary>
-    public static TidyOutcome Apply(TranscriptSegment spoken, string candidate, float lowConfidenceThreshold)
+    public static TidyOutcome Apply(
+        TranscriptSegment spoken,
+        string candidate,
+        float lowConfidenceThreshold,
+        double maxDeletedFraction = TidyOptions.DefaultMaxDeletedFraction,
+        int maxConsecutiveDeletedWords = TidyOptions.DefaultMaxConsecutiveDeletedWords)
     {
         ArgumentNullException.ThrowIfNull(spoken);
         ArgumentNullException.ThrowIfNull(candidate);
@@ -130,6 +136,11 @@ public static class TidyContract
         if (judged.Refusal is { } why)
         {
             return Refused(spoken, why);
+        }
+
+        if (DeletionRefusal(judged, 0, spokenWords.Length, maxDeletedFraction, maxConsecutiveDeletedWords) is { } tooMuch)
+        {
+            return Refused(spoken, tooMuch);
         }
 
         // The tidied text is the rewrite's words joined by single spaces, so that the words
@@ -152,7 +163,12 @@ public static class TidyContract
     /// <paramref name="unit"/> and cuts the result back to the unit's pieces: one outcome per
     /// piece, in order, every one refused when the unit is.
     /// </summary>
-    public static IReadOnlyList<TidyPieceOutcome> Apply(TidyUnit unit, string candidate, float lowConfidenceThreshold)
+    public static IReadOnlyList<TidyPieceOutcome> Apply(
+        TidyUnit unit,
+        string candidate,
+        float lowConfidenceThreshold,
+        double maxDeletedFraction = TidyOptions.DefaultMaxDeletedFraction,
+        int maxConsecutiveDeletedWords = TidyOptions.DefaultMaxConsecutiveDeletedWords)
     {
         ArgumentNullException.ThrowIfNull(unit);
         ArgumentNullException.ThrowIfNull(candidate);
@@ -162,7 +178,7 @@ public static class TidyContract
         {
             // A whole segment, through the one path it always took — the shipped unit until 2026-09-03.
             var piece = unit.Pieces[0];
-            var outcome = Apply(piece.Segment, candidate, lowConfidenceThreshold);
+            var outcome = Apply(piece.Segment, candidate, lowConfidenceThreshold, maxDeletedFraction, maxConsecutiveDeletedWords);
             return
             [
                 new TidyPieceOutcome
@@ -192,6 +208,19 @@ public static class TidyContract
         for (var p = 0; p < pieces.Count; p++)
         {
             offsets[p + 1] = offsets[p] + pieces[p].WordCount;
+        }
+
+        // The deletion ceiling, per piece rather than over the unit. Over the unit it cannot
+        // fire the way it must: a run of several lines is non-empty as a whole while one line
+        // inside it goes entirely, which is how a whole line came to vanish from a transcript
+        // with nothing refused. A piece past either ceiling refuses the unit, on the same rule
+        // as every other refusal here.
+        for (var p = 0; p < pieces.Count; p++)
+        {
+            if (DeletionRefusal(judged, offsets[p], offsets[p + 1], maxDeletedFraction, maxConsecutiveDeletedWords) is { } tooMuch)
+            {
+                return RefuseAll(unit, tooMuch);
+            }
         }
 
         var pieceOfSpoken = new int[spokenWords.Length];
@@ -335,6 +364,91 @@ public static class TidyContract
 
             return deleted;
         }
+
+        /// <summary>Spoken words in [from, to) the normaliser can see: the denominator the ceiling reads.</summary>
+        public int CountContent(int from, int to)
+        {
+            var content = 0;
+            for (var s = from; s < to; s++)
+            {
+                if (OwnsAToken(SpokenOwners, s))
+                {
+                    content++;
+                }
+            }
+
+            return content;
+        }
+
+        /// <summary>
+        /// The longest run of consecutive content words in [from, to) the rewrite dropped. A word
+        /// the normaliser cannot see is transparent: it neither breaks a run nor lengthens one,
+        /// so "we um anyone who passes away" counts five and not six.
+        /// </summary>
+        public int LongestDeletedRun(int from, int to)
+        {
+            var longest = 0;
+            var run = 0;
+            for (var s = from; s < to; s++)
+            {
+                if (!OwnsAToken(SpokenOwners, s))
+                {
+                    continue;
+                }
+
+                if (Kept[s])
+                {
+                    run = 0;
+                    continue;
+                }
+
+                run++;
+                if (run > longest)
+                {
+                    longest = run;
+                }
+            }
+
+            return longest;
+        }
+    }
+
+    /// <summary>
+    /// The deletion ceiling over one line's range, or null when the line is within it. The
+    /// contract's alignment bounds what a rewrite may do — delete only, but any amount — and
+    /// this bounds how much: a rewrite past either ceiling is refused and the spoken line kept.
+    /// </summary>
+    /// <remarks>
+    /// A line the normaliser sees no content in is exempt, because a line that was nothing but
+    /// "um" is entitled to tidy to nothing and the measurement calls that right. The two
+    /// ceilings answer different failures: the fraction catches a short line losing most of
+    /// itself, the run catches a clause lifted out of a long one, and neither catches both.
+    /// </remarks>
+    private static string? DeletionRefusal(Judgement judged, int from, int to, double maxFraction, int maxRun)
+    {
+        var content = judged.CountContent(from, to);
+        if (content == 0)
+        {
+            return null;
+        }
+
+        var deleted = judged.CountDeleted(from, to);
+        if (deleted > content * maxFraction)
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"the rewrite dropped {deleted} of the line's {content} spoken words, past the ceiling of {maxFraction:0.##} of a line");
+        }
+
+        var run = judged.LongestDeletedRun(from, to);
+        if (run > maxRun)
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"the rewrite dropped {run} spoken words in a row, past the ceiling of {maxRun}");
+        }
+
+        return null;
     }
 
     private static Judgement Judge(string[] spokenWords, IReadOnlyList<TranscriptWord>? timedWords, string candidate, float lowConfidenceThreshold)
