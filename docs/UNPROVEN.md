@@ -7713,3 +7713,50 @@ ceiling**, which is now what ships and which no run has scored on either machine
 the tidy's quality, since 35 lines kept as spoken is 24 more lines untidied than before it; and
 whether refusing the whole unit for one bad piece is the right shape under a seven-line run, which
 is the rule of *Decided 2026-09-02* applied to a unit that did not exist then.
+
+**The fraction described above is not the one that ships.** Later the same day it was found
+refusing stutter collapses — the deletions that are the word the rewrite keeps — and repetitions
+became transparent to its numerator (*The ceiling counted a stutter as a loss*, below). The run
+ceiling, which is what actually separated the clause from the cleanup here, is unchanged, and so
+is every figure above; but **35 of 113 describes the contract as it was for those few hours** and
+no run has scored its replacement.
+
+### The ceiling counted a stutter as a loss — found and changed 2026-09-03, nothing measured
+
+**Not a run of anything.** The entry above records a ceiling fitted on one call; this records what
+it did to the disfluency a tidy exists to remove, found by the maintainer driving the shipped
+window hours later and reporting that repetitions like *I I I I* and *y y you* survived it. The
+diagnosis is unit arithmetic over `TidyContract`, which is pure logic and needs neither a model nor
+a card, so **there is no backend to name here and no figure below is a measurement**.
+
+**What the fraction did.** `DeletionRefusal` reads dropped content words against
+`content * MaxDeletedFraction`, and a stammered line is mostly stutter, so the share is large for a
+rewrite that lost nothing. Against 0.5 and 4 as they shipped that morning, `I I I I think` → `I
+think` was refused for dropping 3 of 5 and `y y you` → `you` for dropping 2 of 3, while the same
+stutters on longer lines — `I I I I think we should go`, `y y you know what I mean` — were
+accepted. The denser the disfluency, the more certain it survived; and a piece past either ceiling
+refuses its unit, so one short stuttery segment kept up to fifteen seconds of tidied neighbours as
+spoken.
+
+**The proportion was never what separated the two failures, and this entry already said so.** Above:
+a legitimate stutter cleanup at 43% of its line against the clause deletion at 33%. The bad edit is
+the *lower* proportion. Contiguity separated them — five or more in a row against four or fewer —
+and it still does.
+
+**What changed.** A dropped word is transparent to the fraction when it repeats the nearest kept
+word on either side or is a proper prefix of it. `MaxConsecutiveDeletedWords` is untouched and
+still counts every dropped word, so the clause and the sentence above are refused exactly as
+before; `CountDeleted` is untouched, so `DeletedWords` still reports what actually went. Both
+ceilings keep the values they were fitted with — nothing was retuned, which is deliberate: fitting
+a new threshold to the two lines that prompted a complaint is the objection this record already
+makes to 0.5 and 4.
+
+**Unproven after it, and it is more than the change itself established.** No transcript was scored:
+no WER, no chrF, no corpus delta, no refusal count, and no drive of the shipped command. The
+reported symptom is gone on the file that prompted it — observed in the window, against no
+reference. **The 35-of-113 figure above describes the contract before this change** and no run has
+produced its replacement; *what the ceiling costs in tidying not done* is now a question about a
+different ceiling. Everything else the entry above leaves open is untouched: whether 0.5 and 4 hold
+off the call they were fitted on, the corpus delta under the joined run with a ceiling of any
+shape, and whether one bad piece should refuse a seven-line run — which this makes rarer without
+answering.
