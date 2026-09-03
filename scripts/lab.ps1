@@ -3,7 +3,7 @@
     One entry point for the measurement and vendoring scripts.
 
 .DESCRIPTION
-    Seventeen scripts with seventeen names and seventeen flag sets is sixteen names too many to
+    Eighteen scripts with eighteen names and eighteen flag sets is seventeen names too many to
     remember when you are switching between machines. This dispatches to them and nothing else: every task is
     still a script you can run directly, and this changes none of their behaviour.
 

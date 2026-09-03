@@ -28,7 +28,7 @@ so.
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
 dotnet test  Uindosill.slnx -c Release   # 1626 tests, no weights, no display, no network
-pwsh                                      # parses scripts/*.ps1; runs compare-transcripts.ps1
+python3 scripts/check-diariser-auto.py   # what the diariser's `auto` elects; CI runs it too
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
 
@@ -36,9 +36,19 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and the three that quote a
 count are the three you would otherwise forget.
 
+The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
+change to the election in `python/uindosill_engines/diariser/pyannote_engine.py`** (`AUTO_ORDER`,
+`resolve_auto`), because it decides which arithmetic unit a user's diarisation runs on. Nothing in
+CI or the suite parses `scripts/*.ps1` either; after editing one, parse them all — the exit code
+is the number of errors, each named:
+
+```bash
+pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
+```
+
 **Nine of those 1626 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
-skips here while running on Linux. The other seven are asked for by name, because a count that
+skips on Windows and runs on Linux. The other seven are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:
 
 ```bash
@@ -73,7 +83,7 @@ UINDOSILL_LLM_SERVER_ROOT=<a native/win-x64/llm directory> UINDOSILL_LLM_TEST_MO
 server end to end (load, health, an ask, parse, validate) on the CPU backend, one per mode: the
 grammar-constrained path, the think-before-answering path, the whole-transcript path, and the
 transcript tidy — four lines in flight, every one held to the delete-only contract.
-`UINDOSILL_LLM_TEST_BACKEND=vulkan` (or `cuda`) runs the same three on a machine that has one,
+`UINDOSILL_LLM_TEST_BACKEND=vulkan` (or `cuda`) runs the same four on a machine that has one,
 which is the only place a child-process argument change is really tested. Nothing else in the
 suite starts the process.
 
@@ -91,6 +101,16 @@ shipped a red build.
 What a container still cannot do is transcribe anything real: that needs the Windows natives and
 a model, neither of which is in the clone. `--fake` exercises the whole pipeline without them.
 
+## Session fixtures
+
+`.claude/` is committed. A SessionStart hook runs `git pull --ff-only` and its output lands in
+context — read it, and reconcile by hand if it did not fast-forward, because the two machines work
+in tandem. A PostToolUse hook, `.claude/hooks/gated-test-reminder.sh`, prints the matching
+obligation from the section above when a gated path is edited, so a new gated test needs a rule
+there as well as a line here. The read-only `claims-auditor` agent sweeps the documents for the
+rule below and fixes nothing. Two user-invoked skills, `/new-engine` and `/wrap-runs`, sequence
+this file and defer to it wherever they disagree.
+
 ## The rule this project runs on
 
 Every claim is either measured or explicitly marked unproven. When reporting a number, make sure
@@ -106,11 +126,13 @@ of measured traps, several about the very harnesses named above.
 ## Where output goes
 
 Everything under `runs/` is gitignored, and so are transcripts and audio at the repository root.
-Nothing a measurement produces belongs in the working tree. The four harnesses use different shapes
-inside it: `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`,
+Nothing a measurement produces belongs in the working tree. Each harness uses its own shape inside
+it, named in its header — among them `measure-transcribe.ps1` writes `runs/<timestamp>-<backend>/`,
 `measure-second-machine.ps1` writes `runs/<machine>/<backend>/` with a per-machine block beside it,
-`measure-wer.ps1` writes `runs/wer/<timestamp>-<backend>/`, and `measure-der.ps1` writes
-`runs/der/<timestamp>-<system>/` beside the cut stretches in `runs/der/stretches/`.
+`measure-wer.ps1` writes `runs/wer/<timestamp>-<backend>/`, `measure-tidy-units.ps1` writes
+`runs/tidy-units/<timestamp>-<backend>/`, `measure-der.ps1` writes
+`runs/der/<timestamp>-<system>/` beside the cut stretches in `runs/der/stretches/`, and the v2
+pair write `runs/<timestamp>-answers-<backend>/` and `runs/<timestamp>-spike-<backend>/`.
 `export-translation-onnx.py` is not a harness but writes there for the same reason —
 `runs/translation-onnx/<variant>/` with a `manifest.json` beside them, and the graphs run to
 gigabytes.
@@ -119,17 +141,21 @@ gigabytes.
 writes the publish, the packages and the release feed under it, and one channel alone is over
 800 MB. Nothing there is an input to anything — delete it whenever.
 
-`scripts/lab.ps1` is one entry point for the seventeen scripts; run it bare to list them.
+`scripts/lab.ps1` is one entry point for the scripts; run it bare to list them, each with the
+parameters its own script declares. A leading `!` in that listing marks a parameter the
+dispatcher does not forward — `measure-tidy-units.ps1 -Fake`, the harness's dry run, is one — so
+run that script directly to use it.
 
 Run reports cross machines through the maintainer's Drive, because `runs/` is gitignored and
-machine-local: after a measuring session, upload the new run summaries (and the JSONs, when they
-carry more than the summary) to the `runs-<machine>` folder there — `runs-laptop`,
-`runs-desktop` — beside the v2 handoff, and keep that folder's README index current, including its
-note on which working-tree changes are not yet pushed. Multi-MB artifacts do not fit the
-connector; list them in that README with how to regenerate them instead, and for byte-exact
-fixtures upload a generator validated against the pin rather than a copy. **No Drive URL or file
-id goes in this repository** — it is public; find the folder by name through the Drive connector,
-and if the connector is not authorized in your session, say so instead of skipping silently.
+machine-local: after a measuring session, push the new run summaries to the `runs-<machine>`
+folder there — `runs-laptop`, `runs-desktop` — beside the v2 handoff. The route copies each run's
+`summary.json`, `summary.md` and any markdown, and nothing else: transcripts and other multi-MB
+artifacts stay on the machine, so list them in the folder's README with how to regenerate them,
+and for byte-exact fixtures upload a generator validated against the pin rather than a copy. That
+README is `runs/README.md` on the machine and travels with the rest; keep it current, including
+its note on which working-tree changes are not yet pushed. **No Drive URL or file id goes in this
+repository** — it is public; find the folder by name through the Drive connector, and if the
+connector is not authorized in your session, say so instead of skipping silently.
 
 **Transfers go through rclone — `scripts/sync-drive.ps1`, or `lab.ps1 drive`.** Not through the
 Drive connector: its `create_file` takes content inline only, so uploading anything through it

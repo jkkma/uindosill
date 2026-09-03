@@ -14,9 +14,9 @@ one that needs fixing. Read that section first; this skill only sequences it.
 
 `runs/` is gitignored and machine-local, so git will not tell you — go by modification time
 against when the session started. The harnesses each use their own shape inside `runs/`
-(per-timestamp, per-machine, `wer/`, `der/` — CLAUDE.md lists all four, plus
-`runs/translation-onnx/`). Collect the new run summaries, and note which JSONs carry more than
-their summary does.
+(per-timestamp, per-machine, `wer/`, `der/`, `tidy-units/` — CLAUDE.md names the common ones, and
+each script's header names its own). Collect the new run summaries; the route carries each run's
+`summary.json`, `summary.md` and markdown, nothing else.
 
 ## 2. Name the machine
 
@@ -38,9 +38,9 @@ end there.
 
 ## 4. What travels and what does not
 
-- Run summaries: always. JSONs: when they carry more than the summary — rclone moves them
-  whatever their size (the multi-MB limit CLAUDE.md names belongs to the connector, which
-  carries no file bodies in this workflow anyway).
+- Run summaries: always — the route copies each run's `summary.json`, `summary.md` and any
+  markdown, and nothing else. Anything larger stays on the machine and goes in the README with
+  how to regenerate it.
 - Bulk regenerable artifacts — the gigabyte-scale exports and their kind — stay local: list
   them in the Drive folder's README with how to regenerate them instead.
 - Byte-exact fixtures: upload a generator validated against the pin, not a copy.
