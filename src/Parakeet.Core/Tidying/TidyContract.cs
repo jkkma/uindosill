@@ -344,6 +344,9 @@ public static class TidyContract
 
         public bool[] Kept { get; init; } = [];
 
+        /// <summary>The spoken words themselves, so the fraction ceiling can tell a repetition from a loss.</summary>
+        public string[] SpokenWords { get; init; } = [];
+
         public int[] SpokenOwners { get; init; } = [];
 
         public int SpokenTokens => SpokenOwners.Length;
@@ -364,6 +367,110 @@ public static class TidyContract
 
             return deleted;
         }
+
+        /// <summary>
+        /// Spoken words in [from, to) the rewrite dropped that were not repetitions of a word it
+        /// kept: the numerator the fraction ceiling reads.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The fraction ceiling asks what share of a line went. A stutter makes that share large
+        /// for a rewrite that lost nothing — <c>I I I I think</c> tidies to <c>I think</c> by
+        /// dropping three of five spoken words, and the three it drops are the word it keeps. The
+        /// ceiling read that as a short line losing most of itself and refused it, which is the
+        /// wrong answer for the one disfluency a tidy exists to remove, and the refusal took the
+        /// whole joined run with it.
+        /// </para>
+        /// <para>
+        /// So a dropped word is transparent here when it repeats the nearest word the rewrite kept
+        /// on either side, or is a false start of it — <c>y y you</c>, where the fragment is a
+        /// prefix of the word that follows. Both directions are asked because which copy of a
+        /// stutter the alignment keeps is its own business: it keeps the first in
+        /// <c>I I I I think</c> and the last in <c>y y you</c>.
+        /// </para>
+        /// <para>
+        /// This narrows the fraction's numerator and nothing else. The run ceiling still counts
+        /// every dropped word, repetition or not, so the clause and the sentence that
+        /// <c>docs/UNPROVEN.md</c> records under *The deletions were unbounded* are refused by it
+        /// exactly as before — neither is a repetition of what surrounds it, and both run to five
+        /// or more in a row. <see cref="CountDeleted"/> is unchanged, so the <c>DeletedWords</c>
+        /// a transcript reports still counts what actually went.
+        /// </para>
+        /// </remarks>
+        public int CountDeletedExcludingRepetitions(int from, int to)
+        {
+            var deleted = 0;
+            for (var s = from; s < to; s++)
+            {
+                if (!Kept[s] && OwnsAToken(SpokenOwners, s) && !RepeatsAKeptNeighbour(s, from, to))
+                {
+                    deleted++;
+                }
+            }
+
+            return deleted;
+        }
+
+        /// <summary>
+        /// Whether the dropped word at <paramref name="s"/> repeats — or is a false start of — the
+        /// nearest kept content word before or after it within [from, to).
+        /// </summary>
+        private bool RepeatsAKeptNeighbour(int s, int from, int to)
+        {
+            var word = NormalisedWord(s);
+            if (word.Length == 0)
+            {
+                return false;
+            }
+
+            for (var before = s - 1; before >= from; before--)
+            {
+                if (!OwnsAToken(SpokenOwners, before))
+                {
+                    continue;
+                }
+
+                if (Kept[before])
+                {
+                    if (IsRepetitionOf(word, NormalisedWord(before)))
+                    {
+                        return true;
+                    }
+                }
+
+                break;
+            }
+
+            for (var after = s + 1; after < to; after++)
+            {
+                if (!OwnsAToken(SpokenOwners, after))
+                {
+                    continue;
+                }
+
+                if (Kept[after])
+                {
+                    return IsRepetitionOf(word, NormalisedWord(after));
+                }
+
+                break;
+            }
+
+            return false;
+        }
+
+        /// <summary>The spoken word at <paramref name="s"/> as the normaliser sees it, tokens joined.</summary>
+        private string NormalisedWord(int s) =>
+            s < SpokenWords.Length
+                ? string.Concat(TranscriptNormalizer.WordErrorRateTokens(SpokenWords[s], keepFillers: false))
+                : string.Empty;
+
+        /// <summary>
+        /// Whether <paramref name="dropped"/> is the same word as <paramref name="kept"/> or a
+        /// false start of it. A proper prefix is the false start: <c>y</c> before <c>you</c>.
+        /// </summary>
+        private static bool IsRepetitionOf(string dropped, string kept) =>
+            kept.Length > 0 && kept.StartsWith(dropped, StringComparison.Ordinal);
 
         /// <summary>Spoken words in [from, to) the normaliser can see: the denominator the ceiling reads.</summary>
         public int CountContent(int from, int to)
@@ -432,12 +539,12 @@ public static class TidyContract
             return null;
         }
 
-        var deleted = judged.CountDeleted(from, to);
+        var deleted = judged.CountDeletedExcludingRepetitions(from, to);
         if (deleted > content * maxFraction)
         {
             return string.Create(
                 CultureInfo.InvariantCulture,
-                $"the rewrite dropped {deleted} of the line's {content} spoken words, past the ceiling of {maxFraction:0.##} of a line");
+                $"the rewrite dropped {deleted} of the line's {content} spoken words, not counting repetitions, past the ceiling of {maxFraction:0.##} of a line");
         }
 
         var run = judged.LongestDeletedRun(from, to);
@@ -529,6 +636,7 @@ public static class TidyContract
             Mapped = mapped,
             Replaced = replaced,
             Kept = kept,
+            SpokenWords = spokenWords,
             SpokenOwners = spokenOwners,
             Replacements = replacements,
         };
