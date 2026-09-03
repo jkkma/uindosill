@@ -202,6 +202,43 @@ public class TidyContractTests
     }
 
     [Fact]
+    public void AStutterCollapsedIntoTheWordItRepeatsIsInsideTheFractionCeiling()
+    {
+        // The fraction ceiling asks what share of a line went, and a stutter makes that share
+        // large for a rewrite that lost nothing: three of these five words are the word the
+        // rewrite keeps. Counting them refused the one disfluency a tidy exists to remove — and
+        // a refusal takes the whole joined run with it, so the cost was up to seven lines.
+        var stammer = Spoken("i i i i think");
+        var accepted = TidyContract.Apply(stammer, "I think.", 0.45f);
+        Assert.True(accepted.Accepted, accepted.Refusal);
+
+        // DeletedWords still counts what actually went: the exemption narrows the ceiling's
+        // numerator and not the transcript's report.
+        Assert.Equal(3, accepted.DeletedWords);
+
+        // A false start is the same thing unfinished, and the fragment is a prefix of the word
+        // that follows rather than a copy of the word before. Two of three is past the ceiling
+        // on the raw count.
+        var falseStart = Spoken("y y you");
+        var startAccepted = TidyContract.Apply(falseStart, "You.", 0.45f);
+        Assert.True(startAccepted.Accepted, startAccepted.Refusal);
+        Assert.Equal(2, startAccepted.DeletedWords);
+    }
+
+    [Fact]
+    public void AShortLineLosingWordsThatRepeatNothingIsStillRefused()
+    {
+        // The exemption is for repetitions only. Four of six here repeat nothing the rewrite
+        // kept, so the fraction still refuses — this is the failure the ceiling was added for,
+        // on a line short enough that the run ceiling alone would not have caught it.
+        var spoken = Spoken("the whole point was never that");
+        var refused = TidyContract.Apply(spoken, "The point.", 0.45f);
+
+        Assert.False(refused.Accepted);
+        Assert.Contains("not counting repetitions", refused.Refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AClauseOfFiveWordsInARowIsRefusedWhereTheSameCountScatteredIsNot()
     {
         // The measured shape of the failure: a clause is contiguous, a stutter is not, and the
