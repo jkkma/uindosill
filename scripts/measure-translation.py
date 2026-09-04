@@ -89,17 +89,31 @@ from pathlib import Path
 
 # The 25 languages parakeet-tdt-0.6b-v3 claims, mapped to FLEURS configs. English is the target and
 # the reference side rather than a row to score. es_419 is the only Spanish FLEURS publishes.
+#
+# `ja` is here because a second recogniser and a second translation checkpoint arrived on
+# 2026-09-04, not because the shipped translator claims it. Which languages a run scores is
+# `--languages`, and a checkpoint is only asked for the ones it was trained on: scoring
+# fugumt-ja-en on Bulgarian, or opus-mt on Japanese, measures nothing about either.
 FLEURS_CONFIGS = {
     "bg": "bg_bg", "cs": "cs_cz", "da": "da_dk", "de": "de_de", "el": "el_gr",
     "en": "en_us", "es": "es_419", "et": "et_ee", "fi": "fi_fi", "fr": "fr_fr",
     "hr": "hr_hr", "hu": "hu_hu", "it": "it_it", "lt": "lt_lt", "lv": "lv_lv",
     "mt": "mt_mt", "nl": "nl_nl", "pl": "pl_pl", "pt": "pt_br", "ro": "ro_ro",
     "ru": "ru_ru", "sk": "sk_sk", "sl": "sl_si", "sv": "sv_se", "uk": "uk_ua",
+    "ja": "ja_jp",
 }
 TARGET = "en"
 
 MODEL = "Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld"
+#: The token that names the target language, and `--target-token ""` for a checkpoint that has
+#: none. `staka/fugumt-ja-en` translates Japanese into English and nothing else; prefixing
+#: `>>eng<<` there would tokenise it as text and translate it. Rebound in main().
 TARGET_TOKEN = ">>eng<<"
+
+
+def mark(sentence: str) -> str:
+    """The sentence as the shipping path sends it: target token and a space, or neither."""
+    return f"{TARGET_TOKEN} {sentence}" if TARGET_TOKEN else sentence
 
 # Beam-6, not greedy. Over 44 real segments the 2026-08-19 spike measured greedy dropping content
 # beam-6 kept, at 2.1x to 2.3x the time. Scoring a decode nobody would ship is scoring nothing.
@@ -202,10 +216,13 @@ def translate(model, tokenizer, sentences: list[str], beams: int, batch_size: in
     started = time.perf_counter()
     for start in range(0, len(order), batch_size):
         indices = order[start:start + batch_size]
-        chunk = [f"{TARGET_TOKEN} {sentences[i]}" for i in indices]
+        chunk = [mark(sentences[i]) for i in indices]
         batch = tokenizer(chunk, return_tensors="pt", padding=True)
         with torch.no_grad():
-            generated = model.generate(**batch, num_beams=beams, max_new_tokens=512)
+            # The sidecar sets this, so a score from here describes what the product does. See
+            # `python/uindosill_engines/translator/engine.py` RENORMALIZE_LOGITS for why.
+            generated = model.generate(**batch, num_beams=beams, max_new_tokens=512,
+                                       renormalize_logits=True)
         for index, text in zip(indices, tokenizer.batch_decode(generated, skip_special_tokens=True)):
             outputs[index] = text
         done = min(start + batch_size, len(order))
@@ -275,6 +292,16 @@ def toolchain() -> dict:
 
 
 def main() -> int:
+    # This machine writes cp1252 to the console, and both the help text and a Japanese
+    # hypothesis contain characters it cannot encode — which kills the run at a print rather
+    # than at the work. Third script in this repository to need it.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    # Declared before the parser, whose default reads it — the same shape as
+    # export-translation-onnx.py, and a SyntaxError if it sits any lower.
+    global TARGET_TOKEN
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     root = Path(__file__).resolve().parent.parent
     # fp32-merged, because that is what ships as of 2026-08-20. int8 was dropped that day for the
@@ -290,6 +317,8 @@ def main() -> int:
     parser.add_argument("--split", default="test", choices=["test", "dev", "train"])
     parser.add_argument("--seed", type=int, default=20260820, help="sampling seed, recorded in the result")
     parser.add_argument("--num-beams", type=int, default=DEFAULT_BEAMS)
+    parser.add_argument("--target-token", default=TARGET_TOKEN,
+                        help='the target-language token, "" for a single-direction checkpoint')
     # One, and measured rather than assumed. Batching is normally free speed and here it is the
     # opposite: on the laptop's CPU the same 32 Spanish sentences took 12.75 s each at batch 16 and
     # 2.16 s each at batch 1, a factor of six the wrong way. A padded beam-search batch decodes
@@ -303,6 +332,7 @@ def main() -> int:
     parser.add_argument("--adequacy-rows", type=int, default=60)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
+    TARGET_TOKEN = args.target_token
 
     languages = ([code.strip() for code in args.languages.split(",") if code.strip()]
                  if args.languages else [code for code in FLEURS_CONFIGS if code != TARGET])
@@ -369,7 +399,7 @@ def main() -> int:
         if tokenizer is not None:
             keep = []
             for index, text in enumerate(sources):
-                length = len(tokenizer(f"{TARGET_TOKEN} {text}")["input_ids"])
+                length = len(tokenizer(mark(text))["input_ids"])
                 if length <= MAX_SOURCE_TOKENS:
                     keep.append(index)
                 else:
