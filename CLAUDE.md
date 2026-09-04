@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1667 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1672 tests, no weights, no display, no network
 python3 scripts/check-diariser-auto.py   # what the diariser's `auto` elects; CI runs it too
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -48,7 +48,7 @@ each named:
 pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
 ```
 
-**Nine of those 1667 tests skip themselves.** Two are platform-specific: the Media Foundation
+**Nine of those 1672 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
 skips on Windows and runs on Linux. The other seven are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:

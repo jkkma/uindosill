@@ -73,6 +73,49 @@ public sealed record SubtitleOptions
     /// <summary>Columns a line of a space-less script may occupy, two per full-width character.</summary>
     internal int MaxCjkColumns => Math.Max(2, MaxFullWidthCharactersPerLine * 2);
 
+    /// <summary>
+    /// Full-width characters a second a cue of a space-less script should not exceed — the reading
+    /// rate. Netflix's Japanese guide says 4 (7 for SDH); like the line length, it is their house
+    /// style rather than anything measured here.
+    ///
+    /// <para><b>Read what this can and cannot do before trusting it.</b> A cue's duration is its
+    /// share of the segment's characters, so every cue in a segment already runs at the segment's
+    /// own rate — which means the rate is a fact about how fast the person spoke, and no way of
+    /// cutting the text into cues can lower it. Subtitlers meet a rate limit by condensing the
+    /// words; this product must not, because the transcript is what was said.</para>
+    ///
+    /// <para>So this does exactly one thing: where a cue is followed by <b>silence</b>, it holds the
+    /// cue on screen into that silence until it reads at this rate or the next cue starts,
+    /// whichever comes first. On continuous speech there is no silence to take and the cue is
+    /// unchanged, which is the honest outcome rather than a failure — 74 characters spoken in 12.84
+    /// seconds cannot be read in fewer than 12.84 seconds' worth of screen time.</para>
+    /// </summary>
+    public double MaxFullWidthCharactersPerSecond { get; init; } = 4.0;
+
+    /// <summary>
+    /// How long <paramref name="lines"/> need on screen to read at
+    /// <see cref="MaxFullWidthCharactersPerSecond"/>, or <see cref="TimeSpan.Zero"/> for text this
+    /// rate does not govern.
+    /// </summary>
+    internal TimeSpan ReadingTimeFor(IReadOnlyList<string> lines)
+    {
+        if (MaxFullWidthCharactersPerSecond <= 0) return TimeSpan.Zero;
+
+        var columns = 0;
+        var breakable = false;
+        foreach (var line in lines)
+        {
+            breakable = breakable || CjkLineBreaking.ContainsBreakableScript(line);
+            columns += CjkLineBreaking.Columns(line);
+        }
+
+        // Latin subtitles have their own reading-rate conventions and this project has never set
+        // one; leaving them alone keeps every existing cue where it was.
+        if (!breakable || columns == 0) return TimeSpan.Zero;
+
+        return TimeSpan.FromSeconds(columns / 2.0 / MaxFullWidthCharactersPerSecond);
+    }
+
     public int MaxLines { get; init; } = 2;
 
     /// <summary>A cue longer than this is split even if it would fit on the lines.</summary>
@@ -742,10 +785,22 @@ public static class SubtitleCueBuilder
                 }
             }
 
-            var end = cue.End;
-            if (end - start < options.MinCueDuration)
+            // Two floors, and the larger wins: the readability minimum every cue gets, and — for a
+            // script this project sets a reading rate for — however long the text needs to be read
+            // at that rate. Both are requests rather than guarantees: the clamp below hands the
+            // next cue's start back, so a cue followed immediately by more speech keeps the
+            // duration the speech gave it. Silence is the only thing there is to take.
+            var floor = options.MinCueDuration;
+            var reading = options.ReadingTimeFor(cue.Lines);
+            if (reading > floor)
             {
-                end = start + options.MinCueDuration;
+                floor = reading;
+            }
+
+            var end = cue.End;
+            if (end - start < floor)
+            {
+                end = start + floor;
             }
 
             // Never push a cue over the start of the next one.
