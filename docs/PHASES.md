@@ -7365,3 +7365,44 @@ figures. The ONNX engine has not been loaded on CPU or WebGPU since the translat
 `CLAUDE.md` asks for. Criterion two is a person's and is unrated. **And there is no catalogue
 entry**: the graphs are 571.1 MiB in `runs/`, hosted nowhere, so nothing can be pinned and Japanese
 translation is not something a user can turn on yet.
+
+### Measured 2026-09-04, end to end — Japanese CER 5.54%, cascade penalty −4.01 chrF++, and the penalty is not on the same axis as the other two
+
+The first measurement of what a Japanese user would get. Everything before it was a component in
+isolation: the recogniser on six clips, the translator on reference text with no audio near it.
+`docs/UNPROVEN.md` has the caveats and `runs/ja-cascade/NOTES.md` the full record.
+
+**485 recordings covering 287 of FLEURS `ja_jp` test's 321 distinct sentences** — the split holds 650
+recordings of those 321 and the transcription's file list was taken while the archive was still
+downloading, so this is a large sample of the split rather than the split. Laptop; recogniser
+`parakeet-tdt_ctc-0.6b-ja` q8_0 on Vulkan with Silero, which is the shipping default rather than a
+tuned arm; translator the fp32 FuguMT export on the CPU at beam 6.
+
+**Recognition: CER 5.54% punctuation-stripped, 9.15% with punctuation kept**, over 24,157 reference
+characters, scored by `uindosill wer --cer` — the metric built the same morning, used rather than
+reimplemented. **The 3.6-point gap between those rows is the punctuation, and it is the more
+interesting number: the recogniser's Japanese punctuation is wrong about as often as its characters
+are.** Every published Japanese CER strips punctuation and cannot see it. Nothing here is comparable
+to NVIDIA's published 6.4, which is a different corpus, precision, runtime and recipe.
+
+**The cascade: chrF++ 52.47 from the reference Japanese, 48.46 from the transcript, penalty −4.01.**
+The 52.47 reproduces the translation harness's 52.53 on the 321 distinct sentences, weighted
+differently because a sentence recorded twice is scored twice; agreeing to six hundredths is a check
+on both runs.
+
+**Beside the two penalties this project already had, and the caveat is the finding.** Spanish −2.95
+chrF++ at 6.12% WER, German −4.34 at 9.93% WER, Japanese −4.01 at 5.54% **CER**. The x-axis is not
+the same axis: Japanese is scored by character and the other two by word, so the reading the
+2026-08-20 pair invited — that the penalty scales with recogniser error — **cannot be checked across
+these three rows**, and nothing licenses interpolating between them. What is established is
+narrower and real: on this corpus, in this configuration, the cascade costs Japanese about four
+chrF++ points, measured rather than borrowed from a Latin-script pair.
+
+**What it does not settle.** The shipped translator was installed today and not scored on `ja_jp`,
+so "FuguMT is better for Japanese" still rests on Helsinki's published figures. None of it ran
+through the application: `SidecarTranscriptTranslator.EnglishTargetToken` is a compile-time
+`">>eng<<"` and a single-direction checkpoint takes none, so making that per model is what stands
+between this measurement and a user. The WebGPU parity load `CLAUDE.md` requires after a translator
+change has still not run — the CPU load did and translates correctly, but this machine's interpreter
+carries an `onnxruntime` whose only providers are Azure and CPU. And FLEURS is read speech in a quiet
+room: no spontaneous Japanese, no overlap, no music, no telephone audio.

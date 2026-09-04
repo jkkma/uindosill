@@ -6560,6 +6560,74 @@ published figures rather than on this harness. And there is no catalogue entry: 
 - **Anything about Japanese-to-English quality in this product.** No ja→en figure of this project's
   own exists, at any beam width, on any corpus.
 
+## Japanese end to end — measured 2026-09-04, and the cascade penalty is not on the same axis as the other two
+
+The first measurement of what a Japanese user would get. Everything before it was a component alone.
+`runs/ja-cascade/NOTES.md` has the full record; `docs/PHASES.md` § *Measured 2026-09-04, end to end*
+has the entry.
+
+**485 recordings covering 287 of FLEURS `ja_jp` test's 321 distinct sentences** — the split holds 650
+recordings of those 321 and the file list was taken while the archive was still downloading, so this
+is a large sample of the split and not the split. Laptop. Recogniser
+`parakeet-tdt_ctc-0.6b-ja` q8_0 on **Vulkan** with Silero, the shipping default. Translator the fp32
+FuguMT export on the **CPU**, beam 6.
+
+**Recognition**, scored by `uindosill wer --cer`:
+
+| | |
+|---|---:|
+| reference characters | 24,157 |
+| **CER, punctuation removed** | **5.54%** |
+| CER, punctuation kept | 9.15% |
+| S / D / I | 738 / 330 / 270 |
+
+**This is not comparable to NVIDIA's published 6.4** — that is JSUT basic5000, fp32 through NeMo,
+under a recipe that expands numbers with `num2words`, against FLEURS at q8_0 through `parakeet.cpp`
+under this project's recipe. The 3.6-point gap between the two rows here is the punctuation, and it
+is the more interesting number: **the recogniser's Japanese punctuation is wrong about as often as
+its characters are**, which no published Japanese CER can see because all of them strip it.
+
+**Translation and the cascade**, sacreBLEU signature
+`nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`:
+
+| | chrF++ |
+|---|---:|
+| from the reference Japanese — a perfect transcript | 52.47 |
+| from the transcript — the cascade | 48.46 |
+| **cascade penalty** | **−4.01** |
+
+52.47 reproduces the 52.53 the translation harness reported on the 321 distinct sentences, weighted
+differently because a sentence recorded twice is scored twice. The two agreeing to six hundredths is
+a check on both.
+
+**Beside the two penalties this project already had, and the caveat is the point:**
+
+| pair | penalty | at |
+|---|---:|---|
+| Spanish → English | −2.95 chrF++ | 6.12% **WER** |
+| German → English | −4.34 chrF++ | 9.93% **WER** |
+| **Japanese → English** | **−4.01 chrF++** | **5.54% CER** |
+
+**The x-axis is not the same axis.** Japanese is scored by character and the other two by word, so
+the reading the 2026-08-20 pair invited — that the penalty scales with recogniser error — **cannot
+be checked across these three rows**, and nothing here licenses interpolating between them. What is
+established is narrower: on this corpus, in this configuration, the cascade costs Japanese about
+four chrF++ points.
+
+**What it does not establish:**
+
+- **The shipped translator on `ja_jp`.** It was installed today and not scored, so "FuguMT is better
+  for Japanese" still rests on Helsinki's published figures rather than on this harness.
+- **Any of it through the application.** The cascade was assembled from the CLI's transcripts and a
+  direct call to the translator, because `SidecarTranscriptTranslator.EnglishTargetToken` is a
+  compile-time `">>eng<<"` and a single-direction checkpoint takes none. A user cannot run this.
+- **The WebGPU parity load** `CLAUDE.md` requires after a translator change. The CPU load ran and
+  translates correctly; WebGPU could not, this machine's interpreter carrying an `onnxruntime` whose
+  only providers are `AzureExecutionProvider` and `CPUExecutionProvider`, and the bundled Python that
+  has WebGPU not being present in a build-from-source tree.
+- **Anything about real recordings.** FLEURS is read speech in a quiet room: no spontaneous Japanese,
+  no overlap, no music, no telephone audio. One machine, one backend each.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository
