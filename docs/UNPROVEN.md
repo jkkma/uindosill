@@ -6450,6 +6450,60 @@ numbers, and no NHK or ARIB document was obtained.
   plumbing rather than a measurement until a Japanese manifest exists.
 - **Nothing about the translation half.** No ja→en figure of this project's own exists.
 
+## FuguMT exports cleanly and decodes correctly only below beam 5 — found 2026-09-04
+
+`staka/fugumt-ja-en` is the Japanese-to-English checkpoint a survey recommended on the strength of
+its published scores (BLEU 23.2 on FLORES-200 devtest, Helsinki's External-MT leaderboard, scored
+2025-12-07 — **somebody else's number, on somebody else's harness**). Exporting it here found
+something no leaderboard figure would show.
+
+**The export is sound.** Same architecture as the shipped translator — `MarianMTModel`, 6 encoder
+and 6 decoder layers, d_model 512, vocab 32,001 — so `scripts/export-translation-onnx.py` takes it
+with a `--model` flag and no other change. fp32, split layout, ten files, **598,879,305 B = 571.1
+MiB**, manifest with per-file SHA-256 in `runs/translation-onnx/fugumt-ja-en/`. The smoke run
+reports **ONNX identical to fp32 PyTorch on 4 of 4 sentences**, which is the same standard the
+shipped export was held to.
+
+**It is the decode that is wrong, and it is wrong in PyTorch too**, so this is a property of the
+checkpoint under `transformers` 4.57.6 rather than of anything exported here. Beam width against the
+model card's own example, 猫はかわいいです。:
+
+| beam | output |
+|---:|---|
+| 1 | The cat is cute. |
+| 2 | The cat is cute. |
+| 3 | A cat is cute. |
+| 4 | A cat is cute. |
+| **6** | **The Cat is slurpy slurp slurb slur slur slur sl sl s s s s …** |
+| **12** | **Fespitis scuttica slutti slutti slutt slutt slut slut …** |
+
+At beam 6 a real sentence degenerates into a repetition loop that runs to `max_length`. The meaning
+is visibly present before it collapses — 群島や湖では、必ずしもヨットは必要ありません。 decodes at
+beam 1 to *"In archipelagos and lakes, yachts are not necessarily necessary."* and at beam 6 to
+*"Yaytting is not necessary for archipelectrified archipelectrified or swum-in-floor water-cloth
+water-cloth…"* — so the model is translating and the search is running away. `early_stopping`,
+`length_penalty=1.0` and `no_repeat_ngram_size=4` were each tried and none of them rescues it.
+`bad_words_ids=None` produces an empty string instead.
+
+**Why this matters more than a tuning note.** The shipping translation path decodes at **beam 6**,
+which is a measured decision — every figure in *Translating into English* was produced at it — and
+`NUM_BEAMS` is one module-level constant in the sidecar rather than a per-model setting. So this
+checkpoint cannot be added without either making the beam width per model or moving a number the
+existing translator's gate figures rest on. **That is a decision and it has not been taken.**
+
+**What is not established:**
+
+- **Why beam search fails.** `pad_token_id`, `decoder_start_token_id` and the single entry in
+  `bad_words_ids` are all token 32000, which is unusual and is the obvious suspect, but nothing here
+  has isolated it. No other `transformers` version was tried, and no bug report was searched for.
+- **Whether beam 1 to 4 is good enough to ship.** The outputs above read correctly; that is four
+  sentences read by eye, not a score. No corpus figure of this project's own exists for this
+  checkpoint at any beam width, and the published 23.2 was produced at neither.
+- **Whether the same defect affects the shipped translator.** It has never been decoded below beam 6
+  here, and nothing suggests it — but nothing has checked either.
+- **Anything about Japanese-to-English quality in this product.** No ja→en figure of this project's
+  own exists, at any beam width, on any corpus.
+
 ## The interface design, and the one claim in it that is not checked
 
 The design decided 2026-08-19 is recorded in `docs/PHASES.md`; its sources are off this repository
