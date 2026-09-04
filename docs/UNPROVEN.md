@@ -6491,11 +6491,35 @@ which is a measured decision — every figure in *Translating into English* was 
 checkpoint cannot be added without either making the beam width per model or moving a number the
 existing translator's gate figures rest on. **That is a decision and it has not been taken.**
 
-**What is not established:**
+### Root-caused and fixed the same day
 
-- **Why beam search fails.** `pad_token_id`, `decoder_start_token_id` and the single entry in
-  `bad_words_ids` are all token 32000, which is unusual and is the obvious suspect, but nothing here
-  has isolated it. No other `transformers` version was tried, and no bug report was searched for.
+**The suspect was right and the mechanism is arithmetic.** At the first decoder step this checkpoint
+puts effectively all of its mass on `<pad>` — logprob **0.000** — while every real token scores
+**−43.9 or worse**. `bad_words_ids` bans pad so it cannot be emitted, which leaves a distribution
+that is correctly *ordered* and no longer *normalised*: every continuation carries a constant of
+about −44. Beam search divides a hypothesis' cumulative score by its length, so that constant is
+**diluted by generating more tokens**, and the search runs away into repetition to reduce it. Greedy
+never normalises by length, which is exactly why greedy was always fine, and `length_penalty=0.0`
+truncating early is the same fact from the other side.
+
+`renormalize_logits=True` re-normalises after the processors run and **fixes it at beam 6 and at
+beam 12**: 猫はかわいいです。 decodes to "The cat is cute.", and バルセロナの公用語はカタルーニャ語と
+スペイン語です。 to "The official languages of Barcelona are Catalan and Spanish." — which is the
+FLEURS English reference almost word for word.
+
+**The shipped checkpoint is unaffected, and that was checked rather than reasoned.**
+`opus-mt-tc-bible-big-mul-deu_eng_nld` scores its correct first token at **−0.175** and pad at
+**−10.840**, so masking pad barely moves it and re-normalising does not move it at all. Its six
+parity sentences come back **identical with the flag on and off, and identical to the recorded
+`parity-reference.json`** — so every figure in *Translating into English* still describes what this
+code does. The flag is therefore set globally rather than per model.
+
+**What that verification is not.** It was run against the fp32 PyTorch checkpoint out of the
+Hugging Face cache, one sentence per decode as the sidecar does. **The ONNX engine was not loaded on
+CPU or on WebGPU**, which is what `CLAUDE.md` asks for after a translator change, because the
+shipped translation model is not installed on this machine. That load is owed.
+
+**What is not established:**
 - **Whether beam 1 to 4 is good enough to ship.** The outputs above read correctly; that is four
   sentences read by eye, not a score. No corpus figure of this project's own exists for this
   checkpoint at any beam width, and the published 23.2 was produced at neither.

@@ -50,6 +50,28 @@ MAX_NEW_TOKENS = 512
 LENGTH_PENALTY = 1.0
 EARLY_STOPPING = False
 
+#: Re-normalise the scores after the logits processors have run, so a beam's cumulative log
+#: probability is a log probability rather than whatever the processors left behind.
+#:
+#: **Measured 2026-09-04, and it is not a preference.** A Marian checkpoint's
+#: ``decoder_start_token_id`` is its pad token, and ``bad_words_ids`` bans that token so it cannot
+#: be emitted mid-sequence. Where the model puts most of its mass on pad at the first decoder step,
+#: masking it leaves a distribution that no longer sums to one — correctly *ordered*, but shifted
+#: down by a large constant. Beam search divides a hypothesis' cumulative score by its length, so
+#: that constant is diluted by generating more tokens, and the search runs away into repetition.
+#:
+#: ``staka/fugumt-ja-en`` is such a checkpoint: pad scores 0.000 at step one and every real token
+#: −44 or worse, and at beam 6 猫はかわいいです。 decodes to "The Cat is slurpy slurp slurb slur
+#: slur sl sl s s". With this flag it decodes to "The cat is cute." Greedy was always fine, because
+#: greedy does not normalise by length.
+#:
+#: **The shipped checkpoint is unaffected, and that was checked rather than assumed**:
+#: ``opus-mt-tc-bible-big-mul-deu_eng_nld`` scores its correct first token at −0.175 and pad at
+#: −10.840, so masking pad changes almost nothing and re-normalising changes nothing at all — its
+#: six recorded smoke sentences come back **identical** with the flag on and off. Every figure in
+#: ``docs/UNPROVEN.md`` § *Translating into English* therefore still describes what this code does.
+RENORMALIZE_LOGITS = True
+
 #: Execution providers the host may ask for, in the order ONNX Runtime is given them. Every one
 #: carries its own measurement; see :data:`AUTO_ORDER` for which are reachable without being named.
 PROVIDERS = {
@@ -248,6 +270,7 @@ class MarianEngine:
                 max_new_tokens=MAX_NEW_TOKENS,
                 length_penalty=LENGTH_PENALTY,
                 early_stopping=EARLY_STOPPING,
+                renormalize_logits=RENORMALIZE_LOGITS,
             )
 
         return self.tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
