@@ -598,13 +598,28 @@ public class AttributionTests
         Assert.Contains("github.com/ggml-org/llama.cpp", llama.Uri.ToString(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Coverage is per model, and the catalogue may not claim for one entry what another entry's
+    /// weights hear.
+    ///
+    /// <para>This used to assert that <b>no</b> entry claimed `ja`, which was right while the only
+    /// recogniser was `parakeet-tdt-0.6b-v3` and wrong the moment a Japanese one arrived on
+    /// 2026-09-04. What it was really guarding is that an entry never claims a script its own
+    /// weights cannot produce, so that is what it now checks — entry by entry, with the European
+    /// model still held to exactly the list it was held to before.</para>
+    /// </summary>
     [Fact]
-    public void LanguageClaimsDoNotIncludeScriptsTheModelCannotHandle()
+    public void NoEntryClaimsALanguageItsOwnWeightsDoNotCover()
     {
         var joined = string.Join(" ", Attributions.WeightUsageRestrictions);
+        Assert.Contains("Coverage is per model", joined, StringComparison.Ordinal);
         Assert.Contains("Chinese, Japanese, Korean", joined, StringComparison.Ordinal);
 
-        foreach (var model in Parakeet.Core.Models.ModelCatalog.Default.Models)
+        var catalogue = Parakeet.Core.Models.ModelCatalog.Default;
+
+        // The European recogniser, and every entry that is not the Japanese one, must claim none of
+        // the scripts parakeet-tdt-0.6b-v3 cannot produce.
+        foreach (var model in catalogue.Models.Where(m => m.Id != "parakeet-tdt-ctc-0.6b-ja-q8_0"))
         {
             Assert.DoesNotContain("zh", model.Languages);
             Assert.DoesNotContain("ja", model.Languages);
@@ -613,6 +628,15 @@ public class AttributionTests
             Assert.DoesNotContain("hi", model.Languages);
             Assert.DoesNotContain("th", model.Languages);
         }
+
+        // The Japanese recogniser hears Japanese and nothing else, so its list is exactly that —
+        // a second tag here would be the same false claim in the other direction.
+        var japanese = catalogue.Models.Single(m => m.Id == "parakeet-tdt-ctc-0.6b-ja-q8_0");
+        Assert.Equal(["ja"], japanese.Languages);
+
+        // And it must not become the default by accident: the recommended entry is the European one.
+        Assert.False(japanese.Recommended);
+        Assert.Equal("tdt-0.6b-v3-f16", catalogue.Recommended?.Id);
     }
 }
 

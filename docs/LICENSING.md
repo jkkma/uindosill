@@ -949,5 +949,7 @@ rider on it.
 ## Language claims are a licensing-adjacent honesty problem
 
 `parakeet-tdt-0.6b-v3` covers 25 European languages and does not cover Chinese, Japanese, Korean,
-Arabic, Hindi or Thai. Advertising them would be false rather than merely optimistic. A test asserts
-no catalogue entry claims those tags.
+Arabic, Hindi or Thai. `parakeet-tdt_ctc-0.6b-ja`, the second recogniser since 2026-09-04, covers
+Japanese and nothing else. Advertising either one's languages for the other would be false rather
+than merely optimistic, and the honesty problem does not shrink because there are now two entries —
+it moves from one list to a rule about lists. A test holds every entry to its own coverage.

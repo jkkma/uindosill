@@ -335,9 +335,11 @@ one value with the other.
 
 ## Which quantisation
 
-`parakeet-tdt-0.6b-v3` is the target: multilingual, 25 European languages. **No Chinese, Japanese,
-Korean, Arabic, Hindi or Thai** — do not promise them. A test asserts no catalogue entry claims those
-tags.
+`parakeet-tdt-0.6b-v3` is the target for European speech: multilingual, 25 languages. **No Chinese,
+Japanese, Korean, Arabic, Hindi or Thai** — do not promise them of that entry. Japanese has its own
+entry since 2026-09-04, `parakeet-tdt_ctc-0.6b-ja`, which covers Japanese and nothing else and is
+not the recommended one. A test holds each entry to its own coverage rather than holding the whole
+catalogue to one model's.
 
 | File | Size as the repository displays it |
 |---|---|

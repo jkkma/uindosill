@@ -1,4 +1,4 @@
-{
+﻿{
   "schema": 1,
   "comment": [
     "Model catalogue. Every entry here is pinned: the file name, byte size and SHA-256 were read",
@@ -18,8 +18,14 @@
     "them. Before 2026-08-20 the display name WAS the identifier, which meant the tab answered a",
     "question nobody had while leaving the obvious one unanswered.",
     "",
-    "This works because there is exactly one entry per task. A second transcription entry would make",
-    "Speech recognition ambiguous and needs a naming decision at that point, not a suffix bolted on.",
+    "That worked while there was exactly one entry per task. The second transcription entry arrived",
+    "on 2026-09-04, and the naming decision this comment demanded was taken rather than deferred:",
+    "both entries are named for what they hear - European speech recognition, Japanese speech",
+    "recognition - and neither is a suffix on the other. Transcription is the one task with no chip",
+    "beside the name in the Models tab, so the name is all a reader gets; leaving one of them called",
+    "\"Speech recognition\" would have implied it heard Japanese too, which is the kind of false label",
+    "this catalogue exists to avoid. Only one transcription entry is \"recommended\", so what a default",
+    "install offers has not moved.",
     "",
     "Renaming here does not touch attribution. The licence notices name their own material in",
     "Licensing/Attribution.cs, with creator, source URL and modification notice, and never read",
@@ -106,7 +112,7 @@
     {
       "id": "tdt-0.6b-v3-f16",
       "family": "parakeet-tdt-0.6b-v3",
-      "displayName": "Speech recognition",
+      "displayName": "European speech recognition",
       "quantisation": "f16",
       "fileName": "tdt-0.6b-v3-f16.gguf",
       "url": "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v3-f16.gguf",
@@ -144,6 +150,23 @@
         "uk"
       ],
       "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nMeasured against transcripts written by people, on real recordings of accented English business calls, roughly one word in ten comes out different. Clear speech and good microphones do better than that; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option, there is no smaller, faster version to trade accuracy for."
+    },
+    {
+      "id": "parakeet-tdt-ctc-0.6b-ja-q8_0",
+      "family": "parakeet-tdt_ctc-0.6b-ja",
+      "displayName": "Japanese speech recognition",
+      "quantisation": "q8_0",
+      "fileName": "parakeet-tdt_ctc-0.6b-ja.q8_0.gguf",
+      "url": "https://huggingface.co/Singla0009/Parakeet-TDT-0.6B-Japanese-GGUF/resolve/main/parakeet-tdt_ctc-0.6b-ja.q8_0.gguf",
+      "sizeBytes": 927021280,
+      "sha256": "e4de4f3e7d7f255edb8606d954fbe83e0df61b0f88839e8af7e53b0ea52dec8b",
+      "verified": true,
+      "license": "CC-BY-4.0",
+      "attributionId": "nvidia-parakeet-tdt-ctc-0.6b-ja",
+      "languages": [
+        "ja"
+      ],
+      "notes": "Turns Japanese speech into Japanese text, with punctuation. Pick it on this tab when the recording is Japanese; the European model above cannot hear Japanese at all, and this one hears nothing else.\n\nHow accurate it is here has not been measured. NVIDIA publishes about six characters in a hundred coming out wrong on read Japanese, on their own test recordings and their own way of counting, which is not this product's way of counting and not your recordings.\n\nTwo things are rougher than they are in European languages, and both are being worked on: subtitle lines are not broken the way Japanese subtitles normally are, and the karaoke-style word highlighting cannot follow along, because nothing in the transcript marks where one Japanese word ends and the next begins.\n\n884 MiB to download."
     },
     {
       "id": "pyannote-speaker-diarization-community-1",
