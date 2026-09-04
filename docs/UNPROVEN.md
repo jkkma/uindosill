@@ -6253,7 +6253,12 @@ reports it loading.
 **What none of it establishes:**
 
 - **Whether the detector's transcript is more or less correct than the gate's.** Word counts moved
-  by 1.4 % and 0.7 %; nothing scored either against a reference, on either file.
+  by 1.4 % and 0.7 %; nothing scored either against a reference, on either file. **Answered in part
+  on 2026-09-04** — see the block below: on eleven hours of earnings calls the detector scores
+  9.71 % against `--no-vad`'s 8.53 %, and against the gate's 10.21 % from a separate run on
+  2026-09-02. It is better than the gate and worse than no detector, on that corpus. Still
+  unanswered on the material this bullet was written about, which is the documentary with a bed
+  under the speech.
 - **Whether the thresholds are right for anything but the upstream demo.** 0.5 / 0.35 were not tuned
   here, and the podcast says they merge pauses the gate cuts at; `SpeechProbability` and
   `SilenceProbability` are options, and no value of them has been measured against another.
@@ -6269,6 +6274,161 @@ reports it loading.
 - **The segment cap is still there, and the podcast's detector run reached it** (longest 30.0 s)
   where the documentary's did not (21.7 s); the forced cut still lands at the quietest frame. A
   detector changes what is speech, not what happens when speech runs thirty seconds without a pause.
+
+### The first bullet above is answered, in the direction nobody expected — measured 2026-09-04, eleven hours, Vulkan
+
+The bullet said nothing had scored the detector's transcript against a reference. Something has now,
+and **on continuous speech the detector makes the transcript worse and the pass slower than running
+no detector at all.**
+
+What ran: `measure-wer.ps1 -Backend vulkan -Models tdt-0.6b-v3-f16 -SkipVerify`, twice from one
+process, once with `-Vad neural` and once with the `-Vad none` arm added the same day, which sends
+`--no-vad`. Corpus `earnings22-subset10` at commit `c05ab6fd8b4b`, all ten files, 40,037.3 s =
+11.12 h. Laptop, Ryzen AI 9 365 / Radeon 880M. Both arms at revision `d34a1196d520`, **working tree
+dirty** — the dirt being the arm itself. Fillers dropped, both reference styles, normaliser
+`basic, fillers dropped`. Every figure below is from the runs' `summary.json`.
+
+| | `-Vad neural` (the default) | `-Vad none` (`--no-vad`) |
+|---|---|---|
+| WER vs verbatim | 9.71 % | **8.53 %** |
+| WER vs non-verbatim | 12.81 % | **11.50 %** |
+| S / D / I (verbatim) | 5,355 / 1,825 / 2,674 | 4,473 / **1,917** / 2,273 |
+| errors (verbatim), over 101,509 reference words | 9,854 | 8,663 |
+| S / D / I (non-verbatim) | 4,239 / 953 / 7,130 | 3,390 / **991** / 6,675 |
+| raw WER (verbatim / non-verbatim) | 27.59 % / 27.91 % | 25.01 % / 24.31 % |
+| real-time factor, **Vulkan** | 0.0350 | **0.0201** |
+| transcribe wall | 23:24 | 13:26 |
+
+**Not one file carries it.** `--no-vad` is lower on **10 of 10** files against verbatim, by 0.19 to
+4.65 points, and on **9 of 10** against non-verbatim — the exception is `4474506` at +0.07. The
+largest gaps are `4482613` (−4.65 / −4.85) and `4453225` (−2.42 / −3.01).
+
+**The cost is substitutions and insertions, and deletions move the other way**: −882 S and −401 I
+against **+92 D** on verbatim, −849 / −455 against +38 on non-verbatim. So the detector is not
+losing speech that the control keeps; it is changing what the recogniser decides it heard. That is
+the same shape a Japanese probe found the same day on six FLEURS sentences, where cutting tighter
+cost punctuation and word choice — see *A Japanese recogniser runs on the shipping native* below.
+
+**Beside the energy gate, which is a different run and must be read as one.** The gate scored
+10.21 % / 13.41 % on this corpus, model and backend on 2026-09-02 (the spoken arm of
+`runs/wer/20260902-204819-vulkan-tidy/`). Set together the ordering is gate 10.21 → neural 9.71 →
+none 8.53, so **Silero is better than the gate, as this project believed, and not segmenting is
+better than either.** Only the two arms in the table were run as a controlled pair.
+
+**What this does not establish, and the first item is the whole caveat:**
+
+- **Nothing about the material the detector exists for.** Ten earnings calls are continuous speech
+  with almost no music, ambience or long silence — where a detector has least to offer, and close
+  to its worst case. The detector was adopted on a documentary with a bed under the speech, where
+  the gate never saw a pause and a segment ran to the cap. **That case is not measured here and
+  this corpus cannot measure it**, so nothing above is an argument for changing the default.
+- **One corpus, one model, one backend, one machine, one language.** No CUDA arm, no other
+  quantisation, no laptop-versus-desktop comparison of the effect.
+- **Why the control is faster is not decomposed.** Silero runs on the CPU in process and serialised,
+  and the segmented audio differs between arms, so the 0.0350 against 0.0201 mixes the detector's
+  own cost with a different quantity of audio reaching the decoder.
+- **Nothing about the app's checkbox.** Both arms are CLI runs; the window was not opened.
+- **`--no-vad` is not "no segmentation".** It cuts fixed windows at the quietest nearby frame. What
+  is removed is a detector deciding where speech is, not segmentation itself.
+
+## A Japanese recogniser runs on the shipping native — probed 2026-09-04, and nothing here is a shipping figure
+
+Japanese transcription is under consideration, and this is what was measured before anything was
+built. `docs/PHASES.md` § *Decided 2026-09-04* has the choices this informed.
+
+**The model is not a catalogue candidate and must never be pinned.**
+`Singla0009/Parakeet-TDT-0.6B-Japanese-GGUF`, `parakeet-tdt_ctc-0.6b-ja.q8_0.gguf`, 927,021,280 B,
+sha256 `e4de4f3e7d7f255edb8606d954fbe83e0df61b0f88839e8af7e53b0ea52dec8b`, size and digest checked
+on download against the Hub's LFS oid. It is a third party's conversion of
+`nvidia/parakeet-tdt_ctc-0.6b-ja` published without an f16, which is the catalogue's default shape.
+It was driven through `--model-path`, so `models.json` was never touched and no licence notice was
+invented for it. **Audio** six clips of FLEURS `ja_jp` test (`google/fleurs`, CC-BY-4.0) with their
+reference sentences. Laptop, Vulkan.
+
+**It loads into the vendored `parakeet.cpp` v0.5.0 and decodes, with no ABI change, no rebuild and
+no second runtime.** RTF 0.016–0.021 per clip on **Vulkan** — six clips of 7 to 14 s, no warm-up
+discipline, decode serialised with container handling. **That is not a benchmark** and must not be
+set beside any figure in this document that was measured as one.
+
+**Word grouping collapses.** Six segments produced six words, 1.00 per segment against the 22.01
+tokens per sentence the same word rule finds in FLEURS `en_us`, and **each word is the whole sentence carrying
+the segment's start and its last token's end**:
+
+```
+w='群島や湖では、必ずしもヨットは必要ありません。'  start=0  end=6.64  conf=0.7646
+```
+
+The cause was read out of the GGUF that produced it: **30 of its 3,072 SentencePiece pieces carry
+U+2581**, all thirty utterance-initial words (`▁この ▁これ ▁はい ▁私 ▁でも ▁また` …), and
+`group_words` starts a word only where a piece differs from its decoded text, which for this
+tokenizer means only where the meta-space is. **The word's end is its last token's, not the
+segment's** — 0→6.64 inside a 6.96 s segment, and earlier than the segment end on all six clips. So `*.words.vtt` is one `<c>` span for an entire
+11.52-second sentence, and per-word confidence becomes per-sentence confidence at the **minimum**
+over the sentence's tokens — one clip flagged whole at 0.4308. `runs/20260904-025131-ja-stage0-vulkan/UPSTREAM-ISSUE.md`
+has the verified root cause. **Upstream engagement was declined**, so this is fixed in a vendored
+patch or not at all; `docs/PHASES.md` records that.
+
+**Punctuation is emitted, which refutes what was expected.** 。 and 、 reach `txt`, `srt`, `vtt`
+and `json`. `is_ascii_punct` enumerating ASCII only does not cost the transcript its full stops.
+
+**Character error rate, on six sentences, under a recipe this repository chose.** Not comparable to
+NVIDIA's published 6.4 on JSUT basic5000, which strips punctuation and expands numbers with
+`num2words` on a different corpus:
+
+| detector | CER | CER, punctuation stripped |
+|---|---:|---:|
+| `--no-vad` | 6.57 % | **3.32 %** |
+| silero-vad, the shipping default | 9.34 % | 5.90 % |
+| energy gate | 15.57 % | 12.18 % |
+
+One clip scored **91.30 %** under the gate — decoded as 本当や水。 against a 23-character reference
+— 4.35 % under Silero and **0.00 %** with `--no-vad`. The detectors fall in the same order here as
+they do on the eleven hours of English above. **That is an ordering and not a comparison**: these
+are character rates on six sentences and those are word rates on eleven hours, and no figure from
+one belongs beside a figure from the other.
+
+**What the shipping text layer does to Japanese, measured against the code that ships.**
+`TranscriptNormalizer.WordErrorRateTokens` compiled out of the source tree with `Add-Type`, over
+every distinct sentence in each FLEURS test TSV:
+
+| corpus | sentences | tokens | tokens per sentence |
+|---|---:|---:|---:|
+| FLEURS `ja_jp` test | 321 | 1,139 | **3.55** |
+| FLEURS `en_us` test | 350 | 7,702 | **22.01** |
+
+A 6.2× denominator collapse: one wrong character costs about 28 % of a sentence. Two further
+defects reproduced directly — `彼を𠮟った` tokenises to `彼を | った`, because `char.IsLetterOrDigit`
+is false on both surrogates of U+20B9F, so a non-BMP kanji is deleted **and splits the word around
+it**; and `１２３` ≠ `123`, `ｶﾀｶﾅ` ≠ `カタカナ`, there being no NFKC fold. Both are why
+`TranscriptNormalizer.CharacterErrorRateTokens` enumerates `Rune` rather than `char`.
+
+`TidyContract.SplitWords` splits on whitespace, so over the same 321 sentences it finds **339
+tokens, 1.06 per sentence, with 310 of 321 lines (96.6 %) a single token**. At `content = 1` the
+rule `deleted > content * 0.5` forbids **every** deletion, so the tidy pass is a silent no-op on
+96.6 % of Japanese lines; on a two-token line it permits deleting one of two, and each token there
+is a whole clause. `MaxConsecutiveDeletedWords = 4` needs a run of five, and the longest line in
+the corpus is five tokens. **The contract that is the tidy's whole safety story does not hold on
+this script**, and no decision has been taken about what the word unit becomes.
+
+A 74-character sentence came out as **one unwrapped SRT line over 11.52 s**, because `WrapLines`
+splits on whitespace and an unspaced cue is one token. Netflix's Japanese Timed Text guide
+specifies 13 full-width characters per line, two lines, 4 characters per second — that is 2.8× the
+length and 1.6× the rate, on one line. **That guide is Netflix's and not a measured universal**; no
+NHK or ARIB document was obtained.
+
+**What none of this establishes:**
+
+- **Any accuracy claim about any shipping configuration.** Six sentences, one backend, one
+  quantisation, a model this project has not converted, a recipe of the probe's own choosing.
+- **Anything about the model this project would actually ship.** `nvidia/parakeet-tdt_ctc-0.6b-ja`
+  has not been converted here, and two of its GGUF values — `xscaling = true` and `preemph = 0.0`,
+  both read out of the third party's file — are outside every row of `parakeet.cpp`'s
+  `docs/parity.md`. Nothing has run `validate_vs_nemo.py` on Japanese audio.
+- **No real-time factor for any Japanese model on any named backend**, in the sense this document
+  means: the figures above are six short clips with no warm-up.
+- **No Japanese corpus.** `scripts/wer-corpus.json` is English, so `measure-wer.ps1 -Cer` is
+  plumbing rather than a measurement until a Japanese manifest exists.
+- **Nothing about the translation half.** No ja→en figure of this project's own exists.
 
 ## The interface design, and the one claim in it that is not checked
 
@@ -7398,8 +7558,11 @@ tidy removes 9.8% of what the recogniser wrote, 5.8% of what the normaliser keep
   this run's cut of the same calls: spoken WER lower under Silero on all four, by 0.21 to 1.72
   points against verbatim (4453225: 12.15% against 13.87%); the tidy's delta within 0.6 points of
   the gate's on every call under both styles, same direction; 539–796 lines against 680–1,215.
-  Four calls from other runs, not a measurement of the detector: the corpus has never been scored
-  under Silero, and these say it should be.
+  Four calls from other runs, not a measurement of the detector: the corpus had never been scored
+  under Silero, and these said it should be. **It was, on 2026-09-04** — 9.71% / 12.81% over all ten
+  calls, beside `--no-vad`'s 8.53% / 11.50%; see *The first bullet above is answered* in the speech
+  detector section. This aside's own four calls agree with it (4453225 at 12.15% is that run's
+  per-file figure exactly).
 - **Time**: 0.094 end to end — 3,776 s for 40,037 s of audio with the build, the hash check, both
   loads and the scoring inside it, 10.6× real time for transcription and tidy together. The
   recogniser's own `processingSec` summed to 1,634.6 s, RTF 0.041 beside the E4B, 138–203 s per

@@ -184,9 +184,12 @@ them are shapes. Counted by walking every subgraph with the `onnx` package on 20
 **The licence is MIT**, `Copyright (c) 2020-present Silero Team`; the permission text ships as
 `licences/silero-vad-LICENSE.txt` and `docs/LICENSING.md` has the reading. **What the model is for,
 what it costs and what it has been measured on** are in `docs/PHASES.md` and `docs/UNPROVEN.md`
-under 2026-08-23; the short form is that it cuts a recording at pauses the energy gate cannot hear
-under music, at a cost of a few percent of the pass, and that it was measured on one documentary and
-one podcast. Installed, it is the default in the app and on the command line alike; `--vad energy`
+under 2026-08-23 and 2026-09-04; the short form is that it cuts a recording at pauses the energy
+gate cannot hear under music, that it is not free — its own inference was 44% of a Vulkan pass and
+9.5% of a CPU one on the ten-minute podcast, and on eleven hours of earnings calls the whole pass
+took 0.0350 real-time against 0.0201 without it — and that what it has been measured on is one
+documentary, one podcast and that eleven-hour corpus, on which it scored 9.71% against `--no-vad`'s
+8.53%. The material it exists for, speech under music, has never been scored against a reference. Installed, it is the default in the app and on the command line alike; `--vad energy`
 asks for the gate, and a transcript's JSON names what cut it (`speechDetector`).
 
 ### Pins recorded for v3, deliberately unreachable
