@@ -332,6 +332,30 @@ public static class Attributions
 {
     public const string ParakeetTdt06BV3 = "nvidia-parakeet-tdt-0.6b-v3";
 
+    /// <summary>
+    /// The Japanese recogniser: NVIDIA's `parakeet-tdt_ctc-0.6b-ja`, CC BY 4.0, installed as a
+    /// third party's GGUF conversion.
+    /// </summary>
+    /// <remarks>
+    /// Same licence and the same obligations as <see cref="ParakeetTdt06BV3"/>, and a second
+    /// registration rather than a second quantisation of the first because it is a different model
+    /// trained on different material: a hybrid TDT-CTC over a 3,072-piece Japanese vocabulary,
+    /// from a separate upstream repository, sharing only an architecture family.
+    ///
+    /// <para><b>The conversion is somebody else's, and that is the part to read carefully.</b>
+    /// NVIDIA publishes the NeMo checkpoint; this project neither converted it nor hosts the
+    /// result, so the modification notice names the third party the way the Gemma entries do. The
+    /// bytes are pinned by size and SHA-256 read off the live repository, which is what makes an
+    /// unfamiliar publisher acceptable — the digest fixes the file, and a changed file fails to
+    /// install rather than installing quietly.</para>
+    ///
+    /// <para><b>What the pin does not establish</b>, and `docs/UNPROVEN.md` says it at length: no
+    /// one has validated this conversion against NeMo, and two of its GGUF values — `xscaling` and
+    /// `preemph` — fall outside every row of parakeet.cpp's own parity table. A digest proves the
+    /// file has not changed, not that it decodes what its author intended.</para>
+    /// </remarks>
+    public const string ParakeetTdtCtc06BJa = "nvidia-parakeet-tdt-ctc-0.6b-ja";
+
     public const string OpusMtBibleBigMulEn = "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx";
 
     /// <summary>
@@ -418,6 +442,32 @@ public static class Attributions
                 "Modified: the original NVIDIA NeMo checkpoint was converted to the GGUF format (f16, " +
                 "unquantised). Uindosill redistributes that converted file and does not redistribute the " +
                 "original checkpoint.",
+            LicenceStatement = "Creative Commons Attribution 4.0 International (CC BY 4.0),",
+            LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
+        },
+
+        // The Japanese recogniser. Same licence as the entry above and the same §3(a)(1)(B)
+        // obligation to indicate modifications — but here the modification is a third party's, so
+        // the notice says who did what to which file rather than claiming the conversion.
+        [ParakeetTdtCtc06BJa] = new CcByAttribution
+        {
+            Title = "Parakeet TDT-CTC 0.6B Japanese (speech recognition model weights)",
+            Creator = "NVIDIA Corporation",
+            CopyrightNotice = "Copyright (c) NVIDIA Corporation.",
+            LicenceNotice =
+                "This material is made available under the Creative Commons Attribution 4.0 International " +
+                "licence (CC BY 4.0).",
+            WarrantyDisclaimerNotice =
+                "The material is provided as-is and without warranties of any kind, express or implied, to the " +
+                "extent permitted under the CC BY 4.0 disclaimer of warranties and limitation of liability " +
+                "(section 5 of the licence).",
+            MaterialUri = new Uri("https://huggingface.co/nvidia/parakeet-tdt_ctc-0.6b-ja"),
+            ModificationNotice =
+                "Modified: NVIDIA trained parakeet-tdt_ctc-0.6b-ja; a third party converted it to the GGUF " +
+                "format and quantised it to q8_0, with no retraining and no change to the architecture. " +
+                "Uindosill redistributes neither file — the converted one is downloaded from that third " +
+                "party's repository and checked against a pinned size and SHA-256 — and does not " +
+                "redistribute the original NVIDIA checkpoint.",
             LicenceStatement = "Creative Commons Attribution 4.0 International (CC BY 4.0),",
             LicenceUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
         },
@@ -669,8 +719,15 @@ public static class Attributions
         "on FLEURS into English, 23 of the 24 clear this project's own bar and Slovak falls below it " +
         "by 0.74.",
 
-        "parakeet-tdt-0.6b-v3 covers 25 European languages. It does not cover Chinese, Japanese, Korean, " +
-        "Arabic, Hindi or Thai, and the product must not offer them.",
+        // Model-scoped from the day it was written, and that is why adding a Japanese entry did not
+        // reverse a product promise: the sentence named one checkpoint's coverage. It now reads per
+        // entry, because a second recogniser arrived on 2026-09-04 and a reader has to be able to
+        // tell which of the two hears what.
+        "Coverage is per model, and no entry may be offered for a language its own weights do not cover. " +
+        "parakeet-tdt-0.6b-v3 covers 25 European languages: it does not cover Chinese, Japanese, Korean, " +
+        "Arabic, Hindi or Thai, and must not be offered for them. parakeet-tdt_ctc-0.6b-ja covers Japanese " +
+        "and nothing else. Neither is a general recogniser, the catalogue names each for what it hears, " +
+        "and the product must not imply that installing one covers the other's languages.",
 
         // The one restriction that is about what the diariser does rather than about paperwork.
         //

@@ -39,9 +39,11 @@ quantisation are modifications.
   licence-locked or otherwise DRM-wrapped. There is no code path in this project that could do so.
 - **§2(b) withholds patent and trademark rights.** Nothing in this product may imply NVIDIA
   endorsement or sponsorship.
-- **Language coverage.** `parakeet-tdt-0.6b-v3` covers 25 European languages. It does not cover
-  Chinese, Japanese, Korean, Arabic, Hindi or Thai, and the product must not offer them. A test
-  asserts that no catalogue entry claims those tags.
+- **Language coverage, per model.** `parakeet-tdt-0.6b-v3` covers 25 European languages: it does
+  not cover Chinese, Japanese, Korean, Arabic, Hindi or Thai, and must not be offered for them.
+  `parakeet-tdt_ctc-0.6b-ja` covers Japanese and nothing else. Neither is a general recogniser, and
+  the product must not imply that installing one covers the other's languages. A test holds every
+  entry to its own coverage.
 
 ## Speaker diarisation weights — CC BY 4.0
 
