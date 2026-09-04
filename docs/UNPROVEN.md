@@ -6519,6 +6519,38 @@ Hugging Face cache, one sentence per decode as the sidecar does. **The ONNX engi
 CPU or on WebGPU**, which is what `CLAUDE.md` asks for after a translator change, because the
 shipped translation model is not installed on this machine. That load is owed.
 
+### Measured on FLEURS the same day — chrF++ 52.53, and no collapse in 321 sentences
+
+`scripts/measure-translation.py --languages ja --target-token "" --num-beams 6` over the exported
+fp32 graphs, FLEURS `ja_jp` test, **all 321 distinct sentences**, all 321 shared with `en_us`.
+chrF++ signature `nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`. Laptop CPU, 270 s.
+
+| scored | source-copy floor | chrF++ | margin | required | collapse | punct. run | gate |
+|---:|---:|---:|---:|---:|---:|---:|:--:|
+| 321 | 0.63 | **52.53** | **+51.90** | +44.37 | **0** | **0** | **PASS** |
+
+**This is the first Japanese-to-English figure this project has of its own.** Everything said about
+ja→en before it was somebody else's number on somebody else's harness.
+
+**It also measures the fix at corpus scale.** Before `renormalize_logits=True` every sentence
+degenerated at beam 6; **0 collapses and 0 trailing punctuation runs over 321** states that as a
+measurement rather than as four sentences read by eye.
+
+**The gate is weaker on a non-Latin script than the margin suggests, and that is arithmetic rather
+than a complaint.** The criterion is chrF++ of at least `45 − floor`, the floor being what echoing
+the source earns. For Dutch that floor is substantial and the bar is genuinely per-language. **For
+Japanese it is 0.63**, because kanji and kana share almost no character n-gram with Latin script, so
+the bar collapses to a flat 45 and the floor mechanism contributes nothing. Passing here is a weaker
+statement than passing on Dutch, and anything quoting +51.90 must say what it is a margin over.
+
+**What this run does not say:** it is the translation model alone — no audio, no recogniser, no
+segmentation — so it is **not the cascade**, and the measured cascade penalties (Spanish −2.95
+chrF++ at 6.12% WER, German −4.34 at 9.93%, 2026-08-20) are not known to transfer to a language
+scored by CER. The shipped translator was **not** scored on `ja_jp` here, its ONNX export not being
+installed on this machine, so "better than what ships, for Japanese" still rests on Helsinki's
+published figures rather than on this harness. And there is no catalogue entry: the graphs are
+571.1 MiB in `runs/`, hosted nowhere, so nothing can be pinned.
+
 **What is not established:**
 - **Whether beam 1 to 4 is good enough to ship.** The outputs above read correctly; that is four
   sentences read by eye, not a score. No corpus figure of this project's own exists for this

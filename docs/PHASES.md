@@ -7329,3 +7329,39 @@ The suite moves 1667 to 1672.
 would break at a phrase boundary, which needs a morphological analyser this product does not carry;
 and nothing here has been scored against a human-subtitled reference. 13 and 4 are both somebody's
 house style, and no NHK or ARIB document was obtained.
+
+### Measured 2026-09-04, later still — the first Japanese-to-English figure this project has of its own: chrF++ 52.53, and no collapse in 321 sentences
+
+`scripts/measure-translation.py --variant runs/translation-onnx/fugumt-ja-en/fp32 --languages ja
+--target-token "" --num-beams 6`, FLEURS `ja_jp` test, all 321 distinct sentences, all 321 shared
+with `en_us`, laptop CPU, 270 s. `docs/UNPROVEN.md` has the caveats.
+
+**chrF++ 52.53 against a source-copy floor of 0.63 — margin +51.90 where +44.37 was required, and
+the gate passes.** Everything this project had said about ja→en before today was somebody else's
+number on somebody else's harness.
+
+**0 collapses and 0 trailing punctuation runs over 321 sentences**, which is the same day's
+`renormalize_logits` fix measured at corpus scale rather than argued from four sentences read by
+eye. Before it, every sentence degenerated at beam 6.
+
+**The gate is weaker on a non-Latin script than that margin suggests.** The criterion is chrF++ of
+at least `45 − floor`, and the floor is what a hypothesis earns by echoing its own source. For Dutch
+the floor is substantial and the bar is genuinely per-language; for Japanese it is 0.63, because
+kanji and kana share almost no character n-gram with Latin script, so the bar is a flat 45 and the
+floor mechanism contributes nothing. **Passing on Japanese is a weaker statement than passing on
+Dutch**, and the harness now scores `ja` so the number is at least this project's own.
+
+Three changes made the run possible and are worth naming because each was a small honesty problem:
+the harness's target token is now an option, since a single-direction checkpoint takes none and
+`>>eng<<` would have been translated as text; it sets `renormalize_logits` so a score from it
+describes what the sidecar does; and `ja` joins its FLEURS map, with a comment saying that which
+languages a run scores is `--languages` and that asking a checkpoint for a language it was not
+trained on measures nothing.
+
+**What it does not settle.** It is the translation model alone — no audio, no recogniser — so it is
+not the cascade. The shipped translator was not scored on `ja_jp` here, its ONNX not being installed
+on this machine, so "better than what ships for Japanese" still rests on Helsinki's published
+figures. The ONNX engine has not been loaded on CPU or WebGPU since the translator changed, which
+`CLAUDE.md` asks for. Criterion two is a person's and is unrated. **And there is no catalogue
+entry**: the graphs are 571.1 MiB in `runs/`, hosted nowhere, so nothing can be pinned and Japanese
+translation is not something a user can turn on yet.
