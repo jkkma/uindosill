@@ -53,6 +53,26 @@ public sealed record SubtitleOptions
     /// <summary>Characters per line before wrapping. 42 is the usual broadcast limit.</summary>
     public int MaxLineLength { get; init; } = 42;
 
+    /// <summary>
+    /// Full-width characters per line for a script written without spaces between words — Japanese,
+    /// Chinese, Korean. Applies only to text <see cref="CjkLineBreaking.ContainsBreakableScript"/>
+    /// recognises; everything else uses <see cref="MaxLineLength"/> and is untouched by this.
+    ///
+    /// <para><b>13 is Netflix's number, not a measured universal.</b> Their Japanese Timed Text
+    /// Style Guide specifies 13 full-width characters per line horizontally, two lines, and four
+    /// characters per second. It is a defensible default and it is exposed here precisely because
+    /// it is somebody's house style: no NHK or ARIB guideline was obtained, and this project has
+    /// measured nothing about Japanese subtitle readability. `docs/UNPROVEN.md` says so.</para>
+    ///
+    /// <para>A half-width character counts half of one of these, which is what the guide means by
+    /// counting them as 0.5 — the breaker works in columns, two per full-width character, so this
+    /// limit is doubled on the way in.</para>
+    /// </summary>
+    public int MaxFullWidthCharactersPerLine { get; init; } = 13;
+
+    /// <summary>Columns a line of a space-less script may occupy, two per full-width character.</summary>
+    internal int MaxCjkColumns => Math.Max(2, MaxFullWidthCharactersPerLine * 2);
+
     public int MaxLines { get; init; } = 2;
 
     /// <summary>A cue longer than this is split even if it would fit on the lines.</summary>
@@ -96,6 +116,25 @@ public sealed record SubtitleOptions
     internal int CapacityFor(string? speaker) =>
         speaker is null ? Capacity : Math.Max(MaxLineLength, Capacity - SpeakerPrefix(speaker).Length);
 
+    /// <summary>
+    /// <see cref="CapacityFor(string?)"/> in the unit the text is actually measured in: columns for
+    /// a space-less script, characters for everything else. The two are not interchangeable — 84
+    /// characters and 84 columns are different amounts of Japanese — so the caller that splits text
+    /// asks with the text in hand rather than assuming.
+    /// </summary>
+    internal int CapacityFor(string? speaker, string text)
+    {
+        if (!CjkLineBreaking.ContainsBreakableScript(text))
+        {
+            return CapacityFor(speaker);
+        }
+
+        var full = MaxCjkColumns * MaxLines;
+        return speaker is null
+            ? full
+            : Math.Max(MaxCjkColumns, full - CjkLineBreaking.Columns(SpeakerPrefix(speaker)));
+    }
+
     public void Validate()
     {
         if (MaxLineLength < 8)
@@ -106,6 +145,14 @@ public sealed record SubtitleOptions
         if (MaxLines < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(MaxLines), MaxLines, "A cue needs at least one line.");
+        }
+
+        if (MaxFullWidthCharactersPerLine < 4)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxFullWidthCharactersPerLine),
+                MaxFullWidthCharactersPerLine,
+                "A line of a space-less script needs at least four full-width characters.");
         }
 
         if (MaxCueDuration <= TimeSpan.Zero)
@@ -151,7 +198,7 @@ public static class SubtitleCueBuilder
                 continue;
             }
 
-            if (segment.Words.Count > 0)
+            if (segment.Words.Count > 0 && !WordsAreTooCoarseToCutWith(segment))
             {
                 AppendWordTimedCues(cues, segment, options);
             }
@@ -419,7 +466,7 @@ public static class SubtitleCueBuilder
     private static void AppendProportionalCues(List<SubtitleCue> cues, TranscriptSegment segment, SubtitleOptions options)
     {
         var duration = segment.Duration > TimeSpan.Zero ? segment.Duration : options.MinCueDuration;
-        var chunks = SplitByCapacityAndTime(segment.Text, options.CapacityFor(segment.Speaker), duration, options.MaxCueDuration);
+        var chunks = SplitByCapacityAndTime(segment.Text, options.CapacityFor(segment.Speaker, segment.Text), duration, options.MaxCueDuration);
         if (chunks.Count == 0)
         {
             return;
@@ -504,6 +551,14 @@ public static class SubtitleCueBuilder
 
     private static List<string> SplitByCapacity(string text, int capacity)
     {
+        // Same reason as WrapLines: a space-less script offers this loop no word to break at, so
+        // one chunk comes back however long it is and every cue built from it overflows. Cut it
+        // between characters instead, to whatever a full cue of lines can hold.
+        if (CjkLineBreaking.ContainsBreakableScript(text))
+        {
+            return CjkLineBreaking.SplitByColumns(text, capacity);
+        }
+
         var chunks = new List<string>();
         var current = new List<string>();
         var length = 0;
@@ -536,8 +591,48 @@ public static class SubtitleCueBuilder
     /// A word longer than the line limit is left intact: hyphenating a URL or a long German
     /// compound does more damage than an over-long line.
     /// </summary>
+    /// <summary>
+    /// True when a segment's words are too coarse to cut a cue with — one "word" carrying a whole
+    /// sentence of a script that has no spaces in it.
+    ///
+    /// <para><b>Why this is not a workaround.</b> The word path exists to cut cues at word
+    /// boundaries and to hand the word-timed writer a word per span. On Japanese,
+    /// <c>parakeet.cpp</c>'s <c>group_words</c> finds no boundary at all — measured 2026-09-04, six
+    /// segments produced six "words", each the entire sentence, because the rule starts a word only
+    /// at a SentencePiece meta-space and 30 of that model's 3,072 pieces carry one. A word that is
+    /// the sentence is a segment-level timing wearing a word's name, and feeding it to the word
+    /// path yields one cue, one line, and one span over eleven seconds.</para>
+    ///
+    /// <para>So it goes to the proportional path, which is this project's existing and honest
+    /// handling of exactly this situation: split the text by capacity, time each piece by its share
+    /// of the characters, and emit <b>no</b> word timings rather than character-share timings
+    /// dressed up as measured ones. The word-timed writer already renders such a cue as plain
+    /// text, so stripping its tags still reproduces the plain <c>vtt</c> byte for byte.</para>
+    ///
+    /// <para>The test is deliberately narrow — a space-less script, and a single word covering
+    /// substantially the whole segment. A model that does report Japanese word boundaries produces
+    /// more than one word and keeps the word path, which is the outcome to want.</para>
+    /// </summary>
+    private static bool WordsAreTooCoarseToCutWith(TranscriptSegment segment)
+    {
+        if (segment.Words.Count != 1) return false;
+        if (!CjkLineBreaking.ContainsBreakableScript(segment.Text)) return false;
+
+        var word = segment.Words[0].Text.Trim();
+        return word.Length * 2 >= segment.Text.Trim().Length;
+    }
+
     private static List<string> WrapLines(string text, SubtitleOptions options)
     {
+        // A script with no spaces between its words has nothing for the token wrap below to break
+        // at, so the whole line comes back whole however long it is. Break it between characters
+        // instead, under the kinsoku rules. Text without such a character never reaches this and
+        // takes the path it always took.
+        if (CjkLineBreaking.ContainsBreakableScript(text))
+        {
+            return CjkLineBreaking.Wrap(text, options.MaxCjkColumns, options.MaxLines);
+        }
+
         var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0)
         {

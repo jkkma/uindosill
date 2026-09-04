@@ -26,7 +26,7 @@
 | | |
 |---|---|
 | **Transcribe** | Audio and video files, locally, with NVIDIA Parakeet TDT 0.6B v3 through [`parakeet.cpp`](https://github.com/mudler/parakeet.cpp) — 25 European languages, on CPU, Vulkan or CUDA. Seven output formats: `txt`, `md`, `srt`, `vtt`, word-timed `vtt-words` for karaoke-style highlighting, `json` with timestamps, and `rttm`. |
-| **Japanese** | A second recogniser, opt-in and not installed by default: `parakeet-tdt_ctc-0.6b-ja` (884 MiB, CC BY 4.0), picked on the Models tab, on the same native and the same three backends. It punctuates. **Its accuracy here has not been measured** — NVIDIA publishes about 6 characters in 100 wrong on read Japanese under their own recipe, which is neither this project's recipe nor your recordings. Two things are rougher than in European languages, and the product says so rather than letting you find out: subtitle lines are not broken to Japanese convention, and word-timed `vtt-words` cannot follow along, because nothing in the transcript marks where one Japanese word ends and the next begins. [PHASES.md](docs/PHASES.md) has why. |
+| **Japanese** | A second recogniser, opt-in and not installed by default: `parakeet-tdt_ctc-0.6b-ja` (884 MiB, CC BY 4.0), picked on the Models tab, on the same native and the same three backends. It punctuates. **Its accuracy here has not been measured** — NVIDIA publishes about 6 characters in 100 wrong on read Japanese under their own recipe, which is neither this project's recipe nor your recordings. Subtitles are broken the Japanese way — 13 full-width characters a line, two lines, under kinsoku shori, so no line opens on a 。 or a 、 — with 13 taken from Netflix's Japanese style guide and exposed as a setting, because it is somebody's house style and not a measured universal. What word-timed `vtt-words` cannot do is follow along: nothing in the transcript marks where one Japanese word ends and the next begins, so those cues carry no word timings at all rather than one span over a whole sentence. [PHASES.md](docs/PHASES.md) has why. |
 | **Paste a link** | A URL behaves like a file: the audio track is downloaded and queued. On the Ask tab the picture streams from the link rather than landing on disk, so a three-hour video costs megabytes instead of gigabytes. |
 | **Label who spoke** | Opt-in, off by default. `pyannote/speaker-diarization-community-1` adds `Speaker 1:` to every format and unlocks `rttm`. It clusters rather than tracks, so there is **no ceiling on how many voices** it can separate — and it has been scored on **one meeting**, not on a corpus, which the product says rather than leaving you to assume. |
 | **Translate to English** | Opt-in. A Marian checkpoint exported here to ONNX, decoded at beam 6. The English arrives *beside* the transcript rather than instead of it, sentence for sentence, with the same speakers on both sides. |
@@ -140,7 +140,7 @@ rather than a convenience, since a test needing 670 MB of weights is a test CI w
 
 ```bash
 dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1656 tests, no weights needed, runs on Linux
+dotnet test  Uindosill.slnx          # 1667 tests, no weights needed, runs on Linux
 
 # See the whole pipeline work without a model: real WAVE parsing, real segmentation,
 # real subtitle output, canned words.

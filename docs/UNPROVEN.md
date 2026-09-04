@@ -6416,6 +6416,15 @@ specifies 13 full-width characters per line, two lines, 4 characters per second 
 length and 1.6× the rate, on one line. **That guide is Netflix's and not a measured universal**; no
 NHK or ARIB document was obtained.
 
+**Fixed the same day, and the rate half of it is not.** `CjkLineBreaking` breaks between characters
+under kinsoku shori, and that same sentence now comes out as **three cues of two 13-character
+lines** — `docs/PHASES.md` § *Built 2026-09-04, later*. What that does not fix is the reading rate:
+those cues run at about 5.8 characters a second against the guide's 4, because the cue's duration
+comes from its share of the characters and nothing yet splits a cue for being too fast. Nor does it
+know where a Japanese word ends — the break lands mid-word (カタ / ルーニャ) where a human
+subtitler would break at a phrase boundary, which needs a morphological analyser this product does
+not carry. Both are unmeasured against any reference, and 13 is still Netflix's number.
+
 **What none of this establishes:**
 
 - **Any accuracy claim about any shipping configuration.** Six sentences, one backend, one

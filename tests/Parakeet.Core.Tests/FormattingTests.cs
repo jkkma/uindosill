@@ -1065,3 +1065,192 @@ public class WordTimedVttFormatterTests
         return count;
     }
 }
+
+/// <summary>
+/// Line breaking for a script written without spaces between its words. Every assertion here is
+/// about Japanese, and the first one is about Latin: the whole change is gated on the text, and
+/// what English subtitles look like must not move by a byte.
+/// </summary>
+public class CjkSubtitleTests
+{
+    /// <summary>A Japanese segment as this recogniser actually reports one: one word, whole sentence.</summary>
+    private static TranscriptSegment Japanese(string text, double seconds = 12.0)
+    {
+        return new TranscriptSegment
+        {
+            Start = TimeSpan.Zero,
+            End = TimeSpan.FromSeconds(seconds),
+            Text = text,
+            Words =
+            [
+                new TranscriptWord
+                {
+                    Text = text,
+                    Start = TimeSpan.Zero,
+                    End = TimeSpan.FromSeconds(seconds),
+                    Confidence = 0.76f,
+                },
+            ],
+        };
+    }
+
+    private static IReadOnlyList<string> AllLines(TranscriptSegment segment) =>
+        [.. SubtitleCueBuilder.Build([segment], SubtitleOptions.Default).SelectMany(c => c.Lines)];
+
+    [Fact]
+    public void LatinSubtitlesAreUntouched()
+    {
+        // The gate. Text with no full-width character never reaches the new path, so a plain
+        // English document formats exactly as it did before any of this existed.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                new TranscriptSegment
+                {
+                    Start = TimeSpan.Zero,
+                    End = TimeSpan.FromSeconds(8),
+                    Text = "the quick brown fox jumped over the lazy dog and kept running for a while longer",
+                },
+            ],
+        };
+
+        // Not a golden string — the byte-level guard is the seven hundred formatting tests either
+        // side of this one, which pass unchanged. What this asserts is the gate itself: English is
+        // not breakable script, so it cannot reach the character path, and it still wraps at spaces
+        // inside the Latin limit with every word intact.
+        Assert.False(CjkLineBreaking.ContainsBreakableScript(document.Segments[0].Text));
+
+        var lines = SubtitleCueBuilder.Build(document.Segments, SubtitleOptions.Default)
+            .SelectMany(c => c.Lines)
+            .ToList();
+
+        Assert.All(lines, line => Assert.True(
+            line.Length <= SubtitleOptions.Default.MaxLineLength, $"line of {line.Length}: {line}"));
+        Assert.Equal(document.Segments[0].Text, string.Join(" ", lines));
+    }
+
+    [Fact]
+    public void AJapaneseSentenceIsBrokenIntoLinesInsteadOfOneLongOne()
+    {
+        // Measured 2026-09-04: this exact sentence came out as a single 74-character SubRip line
+        // running 11.52 s, because the wrap breaks at spaces and Japanese has none.
+        var lines = AllLines(Japanese("バルセロナの公用語は、カタルーニャ語とスペイン語で、約半数がカタルーニャ語を好み、大多数がカタルーニャ語を理解し、ほぼ全員がスペイン語を知っています。"));
+
+        Assert.True(lines.Count > 1, "the sentence was not broken at all");
+        Assert.All(lines, line => Assert.True(
+            line.Length <= SubtitleOptions.Default.MaxFullWidthCharactersPerLine,
+            $"line of {line.Length} full-width characters: {line}"));
+    }
+
+    [Fact]
+    public void NoLineBeginsWithAMarkThatMayNotBeginOne()
+    {
+        // Kinsoku shori: 。and 、and closing brackets never start a line, and neither do the small
+        // kana or the long-vowel mark. A greedy break lands on one of these constantly.
+        var lines = AllLines(Japanese(
+            "これは、テストです。ここで、区切ります。小さいゃゅょっも、行頭には来ません。ラーメンとコーヒーとビール。"));
+
+        const string NeverFirst = "。、）」』！？ーぁぃぅぇぉっゃゅょ";
+        Assert.All(lines, line => Assert.False(
+            NeverFirst.Contains(line[0], StringComparison.Ordinal),
+            $"line begins with a mark that may not begin one: {line}"));
+    }
+
+    [Fact]
+    public void NoLineEndsWithAMarkThatMayNotEndOne()
+    {
+        var lines = AllLines(Japanese("彼は「おはようございます」と言いました。それから「さようなら」と言いました。"));
+
+        const string NeverLast = "「（『【〈《";
+        Assert.All(lines, line => Assert.False(
+            NeverLast.Contains(line[^1], StringComparison.Ordinal),
+            $"line ends with a mark that may not end one: {line}"));
+    }
+
+    [Fact]
+    public void ANonBmpKanjiIsNeverSplitAcrossTwoLines()
+    {
+        // U+20B9F is one character and two UTF-16 code units. Breaking between its surrogates puts
+        // a replacement character at the end of one line and another at the start of the next.
+        var kanji = char.ConvertFromUtf32(0x20B9F);
+        var text = string.Concat(Enumerable.Repeat("彼を" + kanji + "った", 6));
+
+        foreach (var line in AllLines(Japanese(text)))
+        {
+            Assert.False(char.IsLowSurrogate(line[0]), "a line began on a low surrogate");
+            Assert.False(char.IsHighSurrogate(line[^1]), "a line ended on a high surrogate");
+        }
+    }
+
+    [Fact]
+    public void HalfWidthCharactersCountAsHalfOfAFullWidthOne()
+    {
+        // The guide counts a half-width character as 0.5; the breaker works in columns, two per
+        // full-width character. A line of digits therefore holds about twice as many.
+        Assert.Equal(2, CjkLineBreaking.Columns("あ"));
+        Assert.Equal(1, CjkLineBreaking.Columns("a"));
+        Assert.Equal(2, CjkLineBreaking.Columns(char.ConvertFromUtf32(0x20B9F)));
+        Assert.Equal(4, CjkLineBreaking.Columns("あiu"));   // 2 + 1 + 1
+    }
+
+    [Fact]
+    public void TheBreakerOnlyClaimsTextItCanActuallyBreak()
+    {
+        Assert.False(CjkLineBreaking.ContainsBreakableScript("plain english, punctuated."));
+        Assert.False(CjkLineBreaking.ContainsBreakableScript(string.Empty));
+        Assert.True(CjkLineBreaking.ContainsBreakableScript("日本語"));
+        Assert.True(CjkLineBreaking.ContainsBreakableScript("mixed 日本語 text"));
+    }
+
+    [Fact]
+    public void AWordThatIsTheWholeSentenceEmitsNoWordTimingsRatherThanOneSpanOverEverything()
+    {
+        // The recogniser reports one "word" per Japanese segment, which is a segment-level timing
+        // wearing a word's name. The cue keeps no per-line word list, so the word-timed writer
+        // renders the cue as plain text instead of one <c> span across eleven seconds.
+        var cues = SubtitleCueBuilder.Build(
+            [Japanese("群島や湖では、必ずしもヨットは必要ありません。")],
+            SubtitleOptions.Default);
+
+        Assert.All(cues, cue => Assert.Empty(cue.LineWords));
+    }
+
+    [Fact]
+    public void StrippingTheTagsStillReproducesThePlainVttForJapanese()
+    {
+        // The invariant the whole format rests on, on the path this change added. It holds because
+        // a cue with no word list is written as plain text by both formatters.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                Japanese("バルセロナの公用語は、カタルーニャ語とスペイン語で、約半数がカタルーニャ語を好み、大多数がカタルーニャ語を理解します。"),
+            ],
+        };
+
+        Assert.Equal(
+            TranscriptFormats.Vtt.Format(document),
+            StripTags(TranscriptFormats.WordTimedVtt.Format(document)));
+    }
+
+    [Fact]
+    public void EveryCharacterOfTheSentenceSurvivesTheWrap()
+    {
+        // Losing text is never a legal way to make a line fit.
+        const string Sentence = "その長いあごには70本以上の鋭い歯が並び、口蓋には別の歯列があり、つまりここを通ったら逃げ道はないということになります。";
+
+        var joined = string.Concat(AllLines(Japanese(Sentence)));
+        Assert.Equal(Sentence, joined);
+    }
+
+    [Fact]
+    public void AnUnreadablyNarrowLineIsRefused()
+    {
+        var options = SubtitleOptions.Default with { MaxFullWidthCharactersPerLine = 3 };
+        Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
+    }
+
+    private static string StripTags(string vtt) =>
+        System.Text.RegularExpressions.Regex.Replace(vtt, "<[^>]*>", string.Empty);
+}
