@@ -7138,3 +7138,113 @@ the window and not scored against anything; there is no reference transcript, no
 figure, and no refusal count. What the tidy owes is unchanged from the entry above but for one
 item — *what the ceiling costs in tidying not done* is now a question about a different ceiling,
 and the 35-of-113 figure that quantified it describes the contract before this change.
+
+### Built 2026-09-04 — a character error rate, because the word rule has no denominator for a language written without spaces
+
+Nothing here is a Japanese figure. It is the instrument a Japanese figure would need, built before
+any claim was made with it, and one control arm for the harness.
+
+**`CharacterErrorRate` in `Parakeet.Core.Text`**, beside `WordErrorRate` and shaped like it: counts
+summed rather than rates averaged for a corpus, NaN over an empty reference, and `WordAlignment`
+reused rather than a second Levenshtein — that alignment compares strings ordinally and does not
+care that each one is a single character, so the character path inherits the divide-and-conquer, the
+prefix and suffix trimming, and the brute-force oracle its tests hold it to.
+
+**`TranscriptNormalizer.CharacterErrorRateTokens`** is the recipe: ASCII annotations stripped, then
+NFKC, then whitespace dropped, then punctuation removed unless asked for, then an invariant
+lower-case, **enumerated as `Rune` and not `char`**. The rune part is the substance:
+`char.IsLetterOrDigit` is false on both surrogates of a non-BMP character, so the word rule deletes
+𠮟 (U+20B9F) and cuts the word in two. The ordering of the first two steps is deliberate — NFKC
+turns the full-width `（）` Japanese uses in running text into ASCII parentheses, so normalising
+before stripping would read 聖域（神社）を as a transcriber's note and delete a word the speaker
+said. A test holds it.
+
+The class documentation says what it is not: not NVIDIA's recipe, which expands numbers with
+`num2words`; not kotoba-whisper's, which runs `BasicTextNormalizer` then deletes spaces; not
+Reazon's, which is unpublished. And that a character rate and a word rate must never share a table
+column, a sentence or an entry in `docs/UNPROVEN.md`.
+
+**`uindosill wer --cer`** exposes it, with `--keep-punctuation` for the second axis, and refuses two
+combinations rather than printing a wrong number quietly: `--keep-punctuation` without `--cer`,
+since the word rule removes punctuation while splitting tokens and cannot keep it, and
+`--keep-fillers` with it, since dropping a filler needs a word to recognise. The unit travels with
+the numbers — `WordErrorRateResult` and `CharacterErrorRateResult` stay distinct types so mixing
+them is deliberate, an internal `ErrorCounts` is the one place they meet, and the JSON gains
+`metric` and `unit`, emits unit-neutral `reference`/`hypothesis`, and **omits `referenceWords`
+entirely in character mode** so a consumer expecting it fails loudly instead of reading characters
+as words. `measure-wer.ps1 -Cer` follows the same rule down to every rendered label.
+
+**`measure-wer.ps1 -Vad none`** is the other half: it sends `--no-vad`, which cuts fixed windows at
+the quietest nearby frame and lets no detector decide where speech is. It exists because nothing in
+`docs/UNPROVEN.md` had ever compared a detector against not segmenting on the same audio in any
+language. What it found is the entry below.
+
+Six CLI tests and fifteen in Core, all on the real entry point or the real classes. The suite moves
+1635 to 1656. The word path was checked rather than assumed: the same call re-scored after the key
+rename returns 9.73% / 14.22% with S 642 / D 174 / I 245, the figures it gave before any of this.
+
+**`scripts/wer-corpus.json` is English**, so `-Cer` is plumbing and not a measurement. A Japanese
+character error rate needs a Japanese manifest, and none exists.
+
+### Measured 2026-09-04 — the speech detector costs 1.18 points of word error rate over eleven hours, and the material it was adopted for is still unmeasured
+
+Two arms over `earnings22-subset10` — 11.12 h, `tdt-0.6b-v3-f16`, Vulkan, laptop, one process, back
+to back, nothing else changed. `docs/UNPROVEN.md` has every figure and the caveats.
+
+The shipping default scores **9.71% / 12.81%** against the two reference styles; `--no-vad` scores
+**8.53% / 11.50%** at **RTF 0.0201 on Vulkan against 0.0350**. Better on **10 of 10** files against
+verbatim and 9 of 10 against non-verbatim, the exception +0.07. The cost is **substitutions and
+insertions while deletions move the other way** — −882 S, −401 I, **+92 D** — so the detector is not
+losing speech the control keeps; it changes what the recogniser decides it heard. Beside the energy
+gate's 10.21% from 2026-09-02, a separate run on the same corpus and backend, the ordering is gate
+→ neural → none: **Silero is better than the gate, as this project believed, and not segmenting is
+better than either.**
+
+**This changes no default and is not an argument for changing one.** Ten earnings calls are
+continuous speech with almost no music, ambience or long silence — where a detector has least to
+offer and close to its worst case. The detector was adopted on a documentary with a bed under the
+speech, where the gate never saw a pause and a segment ran to the cap, and **that case is not
+measured here and this corpus cannot measure it.** It answers, in part, the first item of the
+2026-08-23 entry's own list of what it did not establish; the rest of that list stands.
+
+Owed before any default moves: the music-bed case, the desktop's CUDA arm, the other four
+quantisations, and a decomposition of why the control is faster — Silero runs serialised on the CPU
+and the two arms send different quantities of audio to the decoder, so 0.0350 against 0.0201 mixes
+the two.
+
+### Decided 2026-09-04 — Japanese is scoped, the recogniser is chosen on evidence rather than on the lead, and upstream is not to be approached
+
+Japanese transcription and Japanese-to-English translation are under consideration for the release.
+A researched survey and a probe informed four decisions; the probe is in `docs/UNPROVEN.md`.
+**No exit criterion has been ratified and this feature has no roadmap row**, deliberately: nothing
+here commits to shipping it.
+
+**The recogniser is `nvidia/parakeet-tdt_ctc-0.6b-ja`**, which is trained on ReazonSpeech v2.0, is
+CC-BY-4.0 — the licence `Licensing/Attribution.cs` already implements — punctuates natively, and
+rides the `parakeet.cpp` this project already vendors. **The maintainer's own lead,
+`reazon-research/reazonspeech-nemo-v2`, was not taken**: it specifies `rel_pos_local_attn` with
+`global_tokens: 1`, which `parakeet.cpp` does not implement and does not read, so it converts
+without error, loads without error, emits plausible Japanese and decodes with the wrong attention —
+and it is last of Reazon's three on every published Japanese test set. `reazonspeech-k2-v2` has the
+best published CER of the three and official ONNX that the existing sidecar could load, but its
+`tokens.txt` contains no 。、？！「」 at all, and Reazon's own scoring strips punctuation from both
+sides, so the table that ranks it first cannot see what it cannot type.
+
+**Translation is a cascade into `staka/fugumt-ja-en`**, not end-to-end: an end-to-end model emits
+English instead of the transcript, and the product shows both side by side with the same speakers
+and the Japanese timings. The shipped `opus-mt-tc-bible-big-mul-en` does contain `jpn` and would
+run today, at a published BLEU of 4.8 on newstest2021 — Helsinki's own leaderboard figure for that
+exact checkpoint, not anything measured here — and the catalogue's 25-language clamp is the only thing
+between a user and that. fugumt would be the catalogue's first CC-BY-SA entry, which
+`docs/LICENSING.md` has not yet been asked about.
+
+**Upstream is not to be approached.** Agent-written issues and pull requests are not welcome at
+`mudler/parakeet.cpp`, so the word-grouping defect the probe found is fixed in this project's own
+vendored drop — with the NeMo-parity obligation that carries — or Japanese ships with
+segment-level timings and the product says so. There is no third route: none of it is fixable in
+C#. The verified root cause is kept with the probe's run report and is not to be filed.
+
+**`Licensing/Attribution.cs`'s sentence that Japanese must not be offered is model-scoped**, naming
+`parakeet-tdt-0.6b-v3` and its 25 European languages, so it becomes a per-entry coverage statement
+rather than a reversed product promise — but it, the test asserting it, and four documents quoting
+it all change before any Japanese entry ships.
