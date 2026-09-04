@@ -6342,7 +6342,14 @@ sha256 `e4de4f3e7d7f255edb8606d954fbe83e0df61b0f88839e8af7e53b0ea52dec8b`, size 
 on download against the Hub's LFS oid. It is a third party's conversion of
 `nvidia/parakeet-tdt_ctc-0.6b-ja` published without an f16, which is the catalogue's default shape.
 It was driven through `--model-path`, so `models.json` was never touched and no licence notice was
-invented for it. **Audio** six clips of FLEURS `ja_jp` test (`google/fleurs`, CC-BY-4.0) with their
+invented for it.
+
+> **This paragraph was overtaken the same morning and is kept as what the probe decided.**
+> `models.json` pins that exact URL, size and digest as `parakeet-tdt-ctc-0.6b-ja-q8_0`, marked
+> `verified`, and the entry ships (*Shipped 2026-09-04* in `docs/PHASES.md`). **What no document
+> records is why the objection was set aside** — the conversion is still a third party's and still
+> has no f16. The reversal is in the code and not in the record, and that gap is the finding rather
+> than the pin itself. **Audio** six clips of FLEURS `ja_jp` test (`google/fleurs`, CC-BY-4.0) with their
 reference sentences. Laptop, Vulkan.
 
 **It loads into the vendored `parakeet.cpp` v0.5.0 and decodes, with no ABI change, no rebuild and
