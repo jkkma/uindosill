@@ -7254,7 +7254,48 @@ C#. The verified root cause is kept with the probe's run report and is not to be
 **`Licensing/Attribution.cs`'s sentence that Japanese must not be offered is model-scoped**, naming
 `parakeet-tdt-0.6b-v3` and its 25 European languages, so it becomes a per-entry coverage statement
 rather than a reversed product promise — but it, the test asserting it, and four documents quoting
-it all change before any Japanese entry ships.
+it all change before any Japanese entry ships. **They changed the same morning** (*Shipped
+2026-09-04*): `Attribution.cs` carries a second entry, `PipelineTests` asserts per-entry coverage,
+and the entry is in the catalogue.
+
+### Shipped 2026-09-04 — the Japanese recogniser is in the catalogue, and the naming decision `models.json` had been demanding is taken
+
+The morning's scoping decision named a recogniser; this put it where a user can reach it, hours
+before the subtitle and reading-rate work below. Recorded here after the fact: the change landed in
+the code and the documents on 2026-09-04 without an entry in this log, which is why the probe's
+"must never be pinned" stood unanswered in `docs/UNPROVEN.md` until it was annotated.
+
+**The entry is `parakeet-tdt-ctc-0.6b-ja-q8_0`**, family `parakeet-tdt_ctc-0.6b-ja`, shown as
+**Japanese speech recognition**, opt-in and not installed by default. It pins
+`Singla0009/Parakeet-TDT-0.6B-Japanese-GGUF` at 927,021,280 B — 884 MiB — with sha256
+`e4de4f3e…`, marked `verified`, CC-BY-4.0, `languages` exactly `["ja"]`.
+`uindosill models download parakeet-tdt-ctc-0.6b-ja-q8_0` installs it against that pin.
+
+**The application needed no wiring, which is the part worth recording because it was the risk.**
+`MainWindowViewModel` already prefers `Models.SelectedDescriptor` when it is a transcription entry
+and falls back to `ModelCatalog.Recommended`, so a second entry became selectable the moment it was
+in the data. The catalogue's `languages` array was never a functional gate — it feeds the Models tab
+and the translator's source list — so nothing was gating Japanese except the absence of a model.
+
+**The naming decision was taken rather than deferred.** `models.json`'s own comment had said since
+2026-08-20 that a second transcription entry would make *Speech recognition* ambiguous and needed a
+naming decision at that point rather than a suffix bolted on. Transcription is the one task with no
+chip beside its name, so the two entries are **European speech recognition** and **Japanese speech
+recognition** — neither a suffix on the other.
+
+**The coverage sentence became per-entry, as the scoping decision required.** `Attribution.cs`
+carries a second attribution, `Licensing.ParakeetTdtCtc06BJa`; `PipelineTests` now asserts that the
+European entry claims none of Chinese, Japanese, Korean and that the Japanese entry's list is
+exactly Japanese, so each entry is held to its own coverage rather than the product carrying a
+promise about languages.
+
+**What this entry does not settle, and it is the reason it exists.** The probe of the same morning
+recorded that this file "is not a catalogue candidate and must never be pinned", on the grounds that
+it is a third party's conversion of `nvidia/parakeet-tdt_ctc-0.6b-ja` published without an f16.
+**Both grounds still hold and the pin exists anyway.** No document records why the objection was set
+aside — not this log, not `docs/UNPROVEN.md`, not the licensing note — so the reversal lives in the
+code alone. Whether that is a considered trade or an oversight is the maintainer's to say, and until
+they do, the pin and the objection sit in the record together.
 
 ### Built 2026-09-04, later — Japanese subtitles break between characters, under kinsoku, and a cue with no word boundaries stops pretending it has them
 
