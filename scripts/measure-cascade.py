@@ -616,7 +616,7 @@ def main() -> int:
 
     result = {
         "producedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "model": harness.MODEL,
+        "model": harness.manifest_model(args.variant),
         "variant": str(args.variant),
         "variantManifest": harness.manifest_digests(args.variant),
         "corpus": {"dataset": "google/fleurs", "split": "test", "revision": FLEURS_REVISION,
@@ -637,8 +637,12 @@ def main() -> int:
     lines = [
         "# The cascade penalty — what ASR error costs the translation",
         "",
-        f"Produced {result['producedAt']}, {args.variant.name}, beam-{args.num_beams}, batch "
-        f"{args.batch_size}, ASR on the CPU.",
+        # The translator names itself; the recogniser cannot. `transcribe` above drives the CLI
+        # against whatever ASR entry is installed on the machine, with no model argument to record,
+        # so this line is honest about the half it knows and silent about the half it does not.
+        f"{harness.checkpoint_phrase(result)} — layout `{args.variant.name}`.",
+        f"Produced {result['producedAt']}, beam-{args.num_beams}, batch {args.batch_size}, "
+        "ASR on the CPU.",
         "",
         "Both arms are computed in this run over the same sentence ids, so the difference between "
         "them is the recogniser and nothing else.",

@@ -104,6 +104,9 @@ FLEURS_CONFIGS = {
 }
 TARGET = "en"
 
+#: The default export's checkpoint, and **not** what a run scored: `--variant` points at whichever
+#: graphs are being measured, and this constant knows nothing about that. What was scored comes from
+#: the export's own manifest — see `manifest_model`.
 MODEL = "Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld"
 #: The token that names the target language, and `--target-token ""` for a checkpoint that has
 #: none. `staka/fugumt-ja-en` translates Japanese into English and nothing else; prefixing
@@ -480,7 +483,7 @@ def main() -> int:
 
     result = {
         "producedAt": datetime.now(timezone.utc).isoformat(),
-        "model": MODEL,
+        "model": manifest_model(args.variant),
         "variant": str(args.variant),
         "variantManifest": manifest_digests(args.variant),
         "corpus": {"dataset": "google/fleurs", "split": args.split, "files": corpus},
@@ -513,6 +516,32 @@ def main() -> int:
     return 0
 
 
+def manifest_model(variant: Path) -> str | None:
+    """The checkpoint the scored artefact was exported from, read from the export's own manifest.
+
+    Not `MODEL`. That constant is the *default* export's checkpoint, and recording it unconditionally
+    is how the 2026-09-04 `fugumt-ja-en` run came to name Helsinki's many-to-English checkpoint as
+    the model it scored — a run record naming weights it never loaded. The manifest is written by
+    `export-translation-onnx.py` beside the variants it produced and names what went in, so it is
+    the one place that knows.
+
+    `None` when no manifest sits beside the variant, and `None` when the manifest beside it does not
+    describe *this* variant — a hand-assembled or renamed directory under `runs/translation-onnx/`
+    would otherwise inherit the sibling manifest's checkpoint, which is the same error in a quieter
+    form. A field that is absent is a fact about the record; a field that names the wrong checkpoint
+    is not.
+    """
+    manifest = variant.parent / "manifest.json"
+    if not manifest.exists():
+        return None
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    if variant.name not in data.get("variants", {}):
+        return None
+
+    return data.get("model")
+
+
 def manifest_digests(variant: Path) -> dict | None:
     """What the scored artefact was, read from the export's own manifest if it is beside it."""
     manifest = variant.parent / "manifest.json"
@@ -532,11 +561,32 @@ def manifest_digests(variant: Path) -> dict | None:
     }
 
 
+def checkpoint_phrase(result: dict) -> str:
+    """Which weights produced a score, for the summary rather than only the JSON.
+
+    `summary.md` is what the Drive route carries between machines (`CLAUDE.md` § *Where output
+    goes*), and `translation-quality.json` is not, so a summary naming only its variant directory
+    arrives on the other machine unable to say which checkpoint the number describes — `fp32` is a
+    layout, not an identity. Shared with `measure-cascade.py` so the two summaries say it alike.
+
+    Absent rather than guessed when no manifest describes the variant — see `manifest_model`.
+    """
+    checkpoint = result.get("model")
+    if not checkpoint:
+        return "Checkpoint **not recorded**: no export manifest beside this variant describes it"
+
+    revision = (result.get("variantManifest") or {}).get("revision")
+    return f"Checkpoint `{checkpoint}`" + (f", revision `{revision}`" if revision else "")
+
+
 def write_summary(path: Path, result: dict) -> None:
     scored = {code: entry for code, entry in result["languages"].items() if "chrF2pp" in entry}
+    provenance = checkpoint_phrase(result)
+
     lines = [
         f"# Translation into English — {result['variant']}",
         "",
+        f"{provenance}.",
         f"chrF++ against the per-language source-copy floor. Metric signature `{result['metric']['signature']}`.",
         f"FLEURS `{result['corpus']['split']}`, {result['sampling']['sentencesPerLanguage']} sentences per "
         f"language, seed {result['sampling']['seed']}, beam-{result['decode']['numBeams']}.",
