@@ -351,6 +351,201 @@ public class TranscriptNormalizerTests
             Thread.CurrentThread.CurrentCulture = original;
         }
     }
+
+    [Fact]
+    public void CerTokensAreOneCharacterEachWhereTheWordRuleFindsTwoTokensInAWholeSentence()
+    {
+        const string sentence = "これは日本語の文です。単語の切れ目はありません。";
+
+        // The reason the character metric exists. The word rule splits only where the sentence
+        // punctuates, so a whole Japanese sentence is a denominator of two.
+        Assert.Equal(2, TranscriptNormalizer.WordErrorRateTokens(sentence, keepFillers: false).Length);
+
+        var characters = TranscriptNormalizer.CharacterErrorRateTokens(sentence, keepPunctuation: false);
+        Assert.Equal(22, characters.Length);
+        Assert.All(characters, token => Assert.Single(token.EnumerateRunes()));
+    }
+
+    [Fact]
+    public void CerTokensKeepANonBmpKanjiThatTheWordRuleDeletesAndSplitsAround()
+    {
+        var text = "彼を" + char.ConvertFromUtf32(0x20B9F) + "った";
+
+        // char.IsLetterOrDigit is false on both surrogates, so the word rule loses the kanji and
+        // cuts the word in two. 𠮟 and 𠮷 are surname characters.
+        Assert.Equal(new[] { "彼を", "った" }, TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: false));
+
+        var characters = TranscriptNormalizer.CharacterErrorRateTokens(text, keepPunctuation: false);
+        Assert.Equal(5, characters.Length);
+        Assert.Equal(char.ConvertFromUtf32(0x20B9F), characters[2]);
+    }
+
+    [Fact]
+    public void CerTokensFoldWidthAndCompatibilityFormsThatTheWordRuleLeavesDifferent()
+    {
+        Assert.Equal(
+            TranscriptNormalizer.CharacterErrorRateTokens("123", keepPunctuation: false),
+            TranscriptNormalizer.CharacterErrorRateTokens("１２３", keepPunctuation: false));
+        Assert.Equal(
+            TranscriptNormalizer.CharacterErrorRateTokens("カタカナ", keepPunctuation: false),
+            TranscriptNormalizer.CharacterErrorRateTokens("ｶﾀｶﾅ", keepPunctuation: false));
+
+        // The word rule folds neither, which is why a score from one is not a score from the other.
+        Assert.NotEqual(
+            TranscriptNormalizer.WordErrorRateTokens("123", keepFillers: false),
+            TranscriptNormalizer.WordErrorRateTokens("１２３", keepFillers: false));
+    }
+
+    [Fact]
+    public void CerTokensDropWhitespaceSoASpacedHypothesisScoresAsAnUnspacedOne()
+    {
+        Assert.Equal(
+            TranscriptNormalizer.CharacterErrorRateTokens("日本語の文", keepPunctuation: false),
+            TranscriptNormalizer.CharacterErrorRateTokens(" 日本 語 の 文 ", keepPunctuation: false));
+    }
+
+    [Fact]
+    public void CerTokensDropJapanesePunctuationUnlessAsked()
+    {
+        const string sentence = "また、北側に行くなら。";
+
+        Assert.DoesNotContain("、", TranscriptNormalizer.CharacterErrorRateTokens(sentence, keepPunctuation: false));
+        Assert.Contains("、", TranscriptNormalizer.CharacterErrorRateTokens(sentence, keepPunctuation: true));
+        Assert.Contains("。", TranscriptNormalizer.CharacterErrorRateTokens(sentence, keepPunctuation: true));
+    }
+
+    [Fact]
+    public void CerTokensStripAsciiAnnotationsBeforeNormalisingSoFullWidthParenthesesKeepTheirWords()
+    {
+        // NFKC turns （） into ASCII parentheses. Normalising first would read this as a
+        // transcriber's annotation and delete 神社, which is a word the speaker said.
+        Assert.Equal(
+            new[] { "聖", "域", "神", "社", "を" },
+            TranscriptNormalizer.CharacterErrorRateTokens("聖域（神社）を", keepPunctuation: false));
+
+        // An ASCII-bracketed annotation is still removed, as it is for the word rule.
+        Assert.Equal(
+            new[] { "聖", "域", "を" },
+            TranscriptNormalizer.CharacterErrorRateTokens("聖域[inaudible]を", keepPunctuation: false));
+    }
+
+    [Fact]
+    public void CerTokensDoNotDependOnTheCurrentCulture()
+    {
+        var original = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            // Turkish lower-cases I to a dotless i; the invariant fold must win.
+            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("tr-TR");
+            Assert.Equal(new[] { "i", "s" }, TranscriptNormalizer.CharacterErrorRateTokens("IS", keepPunctuation: false));
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void CerTokensRejectNull()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => TranscriptNormalizer.CharacterErrorRateTokens(null!, keepPunctuation: false));
+    }
+}
+
+public class CharacterErrorRateTests
+{
+    private static string[] Characters(string text) =>
+        TranscriptNormalizer.CharacterErrorRateTokens(text, keepPunctuation: false);
+
+    [Fact]
+    public void CountsSubstitutionsDeletionsAndInsertionsAgainstTheReferenceLength()
+    {
+        var reference = Characters("あいうえお");
+
+        var substituted = CharacterErrorRate.Score(reference, Characters("あいうえか"));
+        Assert.Equal(5, substituted.ReferenceCharacters);
+        Assert.Equal(5, substituted.HypothesisCharacters);
+        Assert.Equal(1, substituted.Substitutions);
+        Assert.Equal(0, substituted.Deletions);
+        Assert.Equal(0, substituted.Insertions);
+        Assert.Equal(1.0 / 5.0, substituted.Rate, 10);
+
+        Assert.Equal(1, CharacterErrorRate.Score(reference, Characters("あいうえ")).Deletions);
+        Assert.Equal(1, CharacterErrorRate.Score(reference, Characters("あいうえおか")).Insertions);
+    }
+
+    [Fact]
+    public void TheProbesRealSubstitutionCostsTwoCharactersRatherThanAWholeSentence()
+    {
+        // 反転 -> 判定, from the Japanese probe on 2026-09-04. The word metric scores this as one
+        // wrong token out of one; the character metric sees two wrong characters out of 32.
+        var result = CharacterErrorRate.Score(
+            Characters("ロスビー数が小さいほど磁気反転に関して星の活性が低下するわけです。"),
+            Characters("ロスビー数が小さいほど磁気判定に関して星の活性が低下するわけです。"));
+
+        Assert.Equal(32, result.ReferenceCharacters);
+        Assert.Equal(2, result.Substitutions);
+        Assert.Equal(0, result.Deletions);
+        Assert.Equal(0, result.Insertions);
+        Assert.Equal(2.0 / 32.0, result.Rate, 10);
+    }
+
+    [Fact]
+    public void APerfectHypothesisScoresZero()
+    {
+        var characters = Characters("群島や湖では、必ずしもヨットは必要ありません。");
+        Assert.Equal(0.0, CharacterErrorRate.Score(characters, characters).Rate);
+    }
+
+    [Fact]
+    public void AnEmptyReferenceHasNoRate()
+    {
+        var result = CharacterErrorRate.Score(Array.Empty<string>(), Characters("なにか"));
+
+        Assert.Equal(3, result.Insertions);
+        Assert.True(double.IsNaN(result.Rate));
+    }
+
+    [Fact]
+    public void TheRateCanExceedOne()
+    {
+        var result = CharacterErrorRate.Score(Characters("あ"), Characters("かきく"));
+
+        Assert.Equal(1, result.Substitutions);
+        Assert.Equal(2, result.Insertions);
+        Assert.Equal(3.0, result.Rate, 10);
+    }
+
+    [Fact]
+    public void AggregateSumsCountsRatherThanAveragingRates()
+    {
+        var longFile = new CharacterErrorRateResult
+        {
+            ReferenceCharacters = 900, HypothesisCharacters = 900, Substitutions = 90, Deletions = 0, Insertions = 0,
+        };
+        var shortFile = new CharacterErrorRateResult
+        {
+            ReferenceCharacters = 100, HypothesisCharacters = 100, Substitutions = 50, Deletions = 0, Insertions = 0,
+        };
+
+        var corpus = CharacterErrorRate.Aggregate(new[] { longFile, shortFile });
+
+        Assert.Equal(1000, corpus.ReferenceCharacters);
+        Assert.Equal(140, corpus.Errors);
+        // 0.14, not the 0.30 a mean of the two rates would give.
+        Assert.Equal(0.14, corpus.Rate, 10);
+    }
+
+    [Fact]
+    public void NullArgumentsAreRejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => CharacterErrorRate.Score(null!, Array.Empty<string>()));
+        Assert.Throws<ArgumentNullException>(() => CharacterErrorRate.Score(Array.Empty<string>(), null!));
+        Assert.Throws<ArgumentNullException>(() => CharacterErrorRate.Aggregate(null!));
+        Assert.Throws<ArgumentException>(
+            () => CharacterErrorRate.Aggregate(new CharacterErrorRateResult[] { null! }));
+    }
 }
 
 public class WordErrorRateTests

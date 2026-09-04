@@ -183,6 +183,71 @@ public static class TranscriptNormalizer
         ch == '’' || ch == '‘' || ch == '‛' || ch == '´' || ch == '`';
 
     /// <summary>
+    /// Text to characters for scoring a language written without spaces between words, where
+    /// <see cref="WordErrorRateTokens"/> has no denominator to work with. The rules, in order,
+    /// applied to both sides alike:
+    /// <list type="number">
+    /// <item>Anything inside ASCII <c>[...]</c>, <c>&lt;...&gt;</c> or <c>(...)</c> is removed, as
+    /// in the word rule — transcriber annotations, not speech.</item>
+    /// <item>NFKC. This folds the width and compatibility distinctions that are a writing
+    /// convention rather than a recognition difference: <c>１２３</c> becomes <c>123</c> and
+    /// <c>ｶﾀｶﾅ</c> becomes <c>カタカナ</c>, which the word rule does not do and which cost real
+    /// errors when it was measured.</item>
+    /// <item>Whitespace is dropped entirely rather than kept as a separator, which is what the
+    /// published Japanese recipes do and is the only choice that makes a score independent of
+    /// whether a model emits spaces at all.</item>
+    /// <item>Unless <paramref name="keepPunctuation"/> is set, anything that is not a letter or a
+    /// digit is dropped — punctuation, symbols and marks alike.</item>
+    /// <item>Lower-cased culture-invariantly, so the machine's locale cannot change a score and
+    /// so Latin text embedded in Japanese is treated as the word rule treats it.</item>
+    /// </list>
+    ///
+    /// <para><b>Runs are enumerated as <see cref="Rune"/>, not <c>char</c>, and that is the
+    /// point.</b> <c>char.IsLetterOrDigit</c> is false on both surrogates of a non-BMP character,
+    /// so the word rule deletes <c>𠮟</c> (U+20B9F) and splits the word around it — 彼を𠮟った
+    /// tokenises to 彼を and った. 𠮟 and 𠮷 are surname characters, so that is a real defect and
+    /// not a curiosity.</para>
+    ///
+    /// <para><b>The ordering of steps 1 and 2 is deliberate and reversing it loses words.</b>
+    /// Annotation stripping matches ASCII brackets only and runs first, because NFKC turns the
+    /// full-width <c>（）</c> that Japanese uses as ordinary punctuation in running text into
+    /// ASCII parentheses. Normalising first would see 聖域（神社）を and delete 神社 as though it
+    /// were a transcriber's note.</para>
+    ///
+    /// <para><b>This is not any published recipe, and a figure from it is not comparable to a
+    /// published one.</b> NVIDIA's Japanese card strips punctuation and expands numbers with
+    /// <c>num2words</c>; kotoba-whisper runs <c>BasicTextNormalizer</c> and then deletes spaces;
+    /// Reazon publishes no recipe at all. Two labs scoring the same <c>whisper-large-v3</c> differ
+    /// by 0.08 on JSUT and 0.32 on Common Voice 8.0 for reasons of recipe alone. What a figure from
+    /// here is comparable to is another figure computed the same way, which is what a quantisation
+    /// ladder or a backend comparison needs. Anything quoting one must say which recipe it used.
+    /// </para>
+    ///
+    /// <para>Not done, and it matters when reading a score: hiragana and katakana are not folded
+    /// to one another and a kanji spelling is not folded to its kana spelling, so 顎 against あご
+    /// and わけです against 訳です each count as errors. NFKC cannot fold either. The published
+    /// headroom there is 2.4 to 3.1 absolute points (Karita, Sproat and Ishikawa, CAWL 2023,
+    /// arXiv:2306.04530), and this project has not measured it.</para>
+    /// </summary>
+    public static string[] CharacterErrorRateTokens(string text, bool keepPunctuation)
+    {
+        if (text is null) throw new ArgumentNullException(nameof(text));
+
+        var stripped = RemoveBracketed(text).Normalize(NormalizationForm.FormKC);
+        var tokens = new List<string>();
+
+        foreach (var rune in stripped.EnumerateRunes())
+        {
+            if (Rune.IsWhiteSpace(rune)) continue;
+            if (!keepPunctuation && !Rune.IsLetterOrDigit(rune)) continue;
+
+            tokens.Add(Rune.ToLowerInvariant(rune).ToString());
+        }
+
+        return tokens.ToArray();
+    }
+
+    /// <summary>
     /// English cardinal number words to digits, over an already-tokenised, lower-cased sequence.
     /// Deliberately small: units, teens, tens, hundred, and the thousand/million/billion/trillion
     /// scales, <c>point</c> followed by digit words, and <c>and</c> inside a number that has
