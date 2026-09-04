@@ -6416,14 +6416,25 @@ specifies 13 full-width characters per line, two lines, 4 characters per second 
 length and 1.6× the rate, on one line. **That guide is Netflix's and not a measured universal**; no
 NHK or ARIB document was obtained.
 
-**Fixed the same day, and the rate half of it is not.** `CjkLineBreaking` breaks between characters
-under kinsoku shori, and that same sentence now comes out as **three cues of two 13-character
-lines** — `docs/PHASES.md` § *Built 2026-09-04, later*. What that does not fix is the reading rate:
-those cues run at about 5.8 characters a second against the guide's 4, because the cue's duration
-comes from its share of the characters and nothing yet splits a cue for being too fast. Nor does it
-know where a Japanese word ends — the break lands mid-word (カタ / ルーニャ) where a human
-subtitler would break at a phrase boundary, which needs a morphological analyser this product does
-not carry. Both are unmeasured against any reference, and 13 is still Netflix's number.
+**Fixed the same day.** `CjkLineBreaking` breaks between characters under kinsoku shori, and that
+same sentence now comes out as **three cues of two 13-character lines** — `docs/PHASES.md`
+§ *Built 2026-09-04, later*.
+
+**The reading rate was looked at next, and the arithmetic is the finding.** Netflix's guide asks for
+4 full-width characters a second; those cues run at about 5.8. That cannot be fixed by cutting the
+text differently: a cue's duration is its share of the segment's characters, so **every cue in a
+segment already runs at the segment's own rate**, and the rate is a fact about how fast the person
+spoke — 74 characters in 12.84 seconds. Subtitlers meet a rate limit by condensing the words, which
+this product must not do. So what ships holds a cue on screen into the **silence** that follows it,
+until it reads at the rate or the next cue starts, whichever comes first. On the sentence above,
+cues 1 and 2 are unchanged — more speech follows immediately, and there is nothing to take — and
+cue 3 runs to 14.652 s instead of 12.840. **On continuous speech the rule does nothing, and that is
+the honest outcome rather than a failure.**
+
+Still not fixed, and not measured: the break lands mid-word (カタ / ルーニャ) where a subtitler
+would break at a phrase boundary, which needs a morphological analyser this product does not carry.
+Nothing here has been scored against a human-subtitled reference, 13 and 4 are both Netflix's
+numbers, and no NHK or ARIB document was obtained.
 
 **What none of this establishes:**
 

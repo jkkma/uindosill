@@ -1251,6 +1251,105 @@ public class CjkSubtitleTests
         Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
     }
 
+
+    [Fact]
+    public void ACueFollowedBySilenceIsHeldUntilItCanBeRead()
+    {
+        // Eight full-width characters spoken in one second read at eight a second, twice the rate
+        // the guide allows. Two seconds of silence follow, and the cue takes what it needs of them.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                Japanese("これは速いです。", seconds: 1.0),
+                new TranscriptSegment
+                {
+                    Start = TimeSpan.FromSeconds(6),
+                    End = TimeSpan.FromSeconds(8),
+                    Text = "ゆっくり。",
+                    Words =
+                    [
+                        new TranscriptWord
+                        {
+                            Text = "ゆっくり。",
+                            Start = TimeSpan.FromSeconds(6),
+                            End = TimeSpan.FromSeconds(8),
+                            Confidence = 0.8f,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var first = SubtitleCueBuilder.Build(document.Segments, SubtitleOptions.Default)[0];
+
+        // 8 characters at 4 a second is two seconds, and there is room for it before the next cue.
+        Assert.Equal(TimeSpan.FromSeconds(2), first.End - first.Start);
+    }
+
+    [Fact]
+    public void ACueFollowedImmediatelyByMoreSpeechKeepsTheDurationTheSpeechGaveIt()
+    {
+        // The honest limit, and the reason the option's documentation says so at length: the rate
+        // is how fast the person spoke. There is no silence here to take, so nothing moves, and no
+        // cue is pushed over the start of the next one.
+        var document = new TranscriptDocument
+        {
+            Segments =
+            [
+                Japanese("これは速いです。", seconds: 1.0),
+                new TranscriptSegment
+                {
+                    Start = TimeSpan.FromSeconds(1),
+                    End = TimeSpan.FromSeconds(2),
+                    Text = "すぐ次が来ます。",
+                    Words =
+                    [
+                        new TranscriptWord
+                        {
+                            Text = "すぐ次が来ます。",
+                            Start = TimeSpan.FromSeconds(1),
+                            End = TimeSpan.FromSeconds(2),
+                            Confidence = 0.8f,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var cues = SubtitleCueBuilder.Build(document.Segments, SubtitleOptions.Default);
+
+        Assert.True(cues[0].End <= cues[1].Start, "a cue was pushed over the start of the next one");
+        Assert.True(cues[0].End - cues[0].Start < TimeSpan.FromSeconds(2), "the cue took time that was not silent");
+    }
+
+    [Fact]
+    public void TheReadingRateLeavesLatinCuesAlone()
+    {
+        // English has its own conventions and this project has never set one, so the rate governs
+        // nothing here and every existing cue keeps its time.
+        Assert.Equal(TimeSpan.Zero, SubtitleOptions.Default.ReadingTimeFor(["the quick brown fox jumped over it"]));
+        Assert.True(SubtitleOptions.Default.ReadingTimeFor(["これは日本語です。"]) > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void TheReadingRateIsCountedInFullWidthCharacters()
+    {
+        // Twelve full-width characters at four a second is three seconds; half-width characters
+        // count half, so twelve of those are half the time.
+        Assert.Equal(TimeSpan.FromSeconds(3), SubtitleOptions.Default.ReadingTimeFor(["あいうえおかきくけこさし"]));
+
+        var mixed = SubtitleOptions.Default.ReadingTimeFor(["あ12"]);
+        Assert.Equal(TimeSpan.FromSeconds(0.5), mixed);
+    }
+
+    [Fact]
+    public void ARateOfZeroTurnsTheRuleOff()
+    {
+        var options = SubtitleOptions.Default with { MaxFullWidthCharactersPerSecond = 0 };
+        Assert.Equal(TimeSpan.Zero, options.ReadingTimeFor(["これは日本語です。"]));
+    }
+
     private static string StripTags(string vtt) =>
         System.Text.RegularExpressions.Regex.Replace(vtt, "<[^>]*>", string.Empty);
 }
