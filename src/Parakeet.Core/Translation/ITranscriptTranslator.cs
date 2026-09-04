@@ -74,17 +74,28 @@ public sealed record TranslatorCapabilities
     public ComputeBackend Backend { get; init; } = ComputeBackend.Cpu;
 
     /// <summary>
-    /// The target-language token every source string this model reads must begin with.
+    /// The target-language token every source string this model reads must begin with, or null
+    /// when the checkpoint reads none.
     /// </summary>
     /// <remarks>
-    /// Not a convention a caller remembers: measured on 2026-08-19, the recommended checkpoint
+    /// <para>
+    /// Not a convention a caller remembers: measured on 2026-08-19, the many-to-one checkpoint
     /// handed the same Spanish segments without <c>&gt;&gt;eng&lt;&lt;</c> returned fluent German —
     /// its first declared target — rather than an error. A forgotten prefix therefore produces
     /// confident output in the wrong language that no downstream check would catch, so the token
     /// is declared here and applied by <see cref="TranslationRequest.Build"/>, which is the only
     /// way a source string is built.
+    /// </para>
+    /// <para>
+    /// Null is the other declaration, and it is required rather than defaulted so that every
+    /// translator states one or the other. The Japanese checkpoint added 2026-09-04 reads one
+    /// language into one; its vocabulary has no <c>&gt;&gt;eng&lt;&lt;</c>, and given the token it
+    /// tokenises it as text and translates it. The sidecar reports which kind a loaded checkpoint is
+    /// from its vocabulary, the catalogue declares which kind it should be, and a disagreement is
+    /// refused at load rather than decoded.
+    /// </para>
     /// </remarks>
-    public required string TargetToken { get; init; }
+    public required string? TargetToken { get; init; }
 
     /// <summary>
     /// True when the model has to be told which language it is reading. False for the family this

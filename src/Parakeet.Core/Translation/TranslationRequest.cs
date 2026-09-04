@@ -8,11 +8,20 @@ namespace Parakeet.Core.Translation;
 /// text the caller asked to be carried with it.
 /// </summary>
 /// <remarks>
+/// <para>
 /// This type exists so that no translator ever builds a source string by hand. The target-language
-/// token is mandatory and its absence is invisible — the recommended checkpoint given Spanish
-/// without <c>&gt;&gt;eng&lt;&lt;</c> returns fluent German rather than an error — so the marking
-/// belongs at the seam, where forgetting it is not an option a translator has, rather than in a
-/// comment every implementation is trusted to have read.
+/// token is mandatory where the checkpoint reads one and its absence is invisible — the
+/// many-to-one checkpoint given Spanish without <c>&gt;&gt;eng&lt;&lt;</c> returns fluent German
+/// rather than an error — so the marking belongs at the seam, where forgetting it is not an option
+/// a translator has, rather than in a comment every implementation is trusted to have read.
+/// </para>
+/// <para>
+/// <b>A checkpoint that reads no token is a declaration, not an omission.</b> The Japanese
+/// checkpoint added 2026-09-04 translates one language into one and its vocabulary has no
+/// <c>&gt;&gt;eng&lt;&lt;</c>; given the token, it tokenises it as text and translates it. So a
+/// translator whose capabilities carry a null token gets bare sources, and only a null says that —
+/// a blank is still refused, because blank is the shape a forgotten token takes.
+/// </para>
 /// </remarks>
 public sealed record TranslationRequest
 {
@@ -20,8 +29,8 @@ public sealed record TranslationRequest
     public required int SegmentIndex { get; init; }
 
     /// <summary>
-    /// What the model reads. Always begins with the translator's target token; built only by
-    /// <see cref="Build"/>.
+    /// What the model reads. Begins with the translator's target token when it declares one;
+    /// built only by <see cref="Build"/>.
     /// </summary>
     public required string Source { get; init; }
 
@@ -35,21 +44,23 @@ public sealed record TranslationRequest
 
     /// <summary>
     /// Builds one request per segment, in order, marking every source with
-    /// <paramref name="targetToken"/>.
+    /// <paramref name="targetToken"/> — or marking none, when the translator declares it reads no
+    /// token by passing null.
     /// </summary>
     /// <remarks>
     /// A blank token is refused rather than defaulted. Defaulting it would produce a source string
     /// that looks right, decodes without complaint and comes back in the wrong language, which is
-    /// the exact failure the token exists to prevent.
+    /// the exact failure the token exists to prevent. Null is not blank: it is what a
+    /// single-direction checkpoint's capabilities carry, and the only way to get a bare source.
     /// </remarks>
     public static IReadOnlyList<TranslationRequest> Build(
         IReadOnlyList<TranscriptSegment> segments,
         TranslationOptions options,
-        string targetToken)
+        string? targetToken)
     {
         ArgumentNullException.ThrowIfNull(segments);
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetToken);
+        RequireTokenOrNone(targetToken);
         options.Validate();
 
         var requests = new List<TranslationRequest>(segments.Count);
@@ -101,20 +112,39 @@ public sealed record TranslationRequest
     /// chrF++ figures describe is a test rather than a memory.
     /// </para>
     /// </remarks>
-    public static string Mark(string text, string targetToken)
+    public static string Mark(string text, string? targetToken)
     {
         ArgumentNullException.ThrowIfNull(text);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetToken);
+        RequireTokenOrNone(targetToken);
 
-        return $"{targetToken} {GermanNumberWords.ToDigits(text).Trim()}";
+        var normalised = GermanNumberWords.ToDigits(text).Trim();
+        return targetToken is null ? normalised : $"{targetToken} {normalised}";
     }
 
-    /// <summary>True when <paramref name="source"/> carries <paramref name="targetToken"/>.</summary>
-    public static bool IsMarked(string source, string targetToken)
+    /// <summary>
+    /// True when <paramref name="source"/> carries <paramref name="targetToken"/> — or when there
+    /// is no token to carry.
+    /// </summary>
+    public static bool IsMarked(string source, string? targetToken)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetToken);
+        RequireTokenOrNone(targetToken);
 
-        return source.StartsWith(targetToken, StringComparison.Ordinal);
+        return targetToken is null || source.StartsWith(targetToken, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Null means the checkpoint reads no token and is allowed; blank means somebody forgot one
+    /// and is not.
+    /// </summary>
+    private static void RequireTokenOrNone(string? targetToken)
+    {
+        if (targetToken is not null && string.IsNullOrWhiteSpace(targetToken))
+        {
+            throw new ArgumentException(
+                "A blank target token is a forgotten one, not a declaration that the checkpoint reads none: " +
+                "pass null for a single-direction checkpoint.",
+                nameof(targetToken));
+        }
     }
 }

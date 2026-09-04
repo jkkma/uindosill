@@ -242,6 +242,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // the batch fails. The two tabs are siblings and neither should know about the other, so
         // the wiring is here, where they are both already known.
         //
+        // Which recogniser is highlighted decides which translator the English opt-in would run —
+        // the European one's transcripts go to one entry and the Japanese one's to another, since
+        // 2026-09-04 — so the opt-in is re-asked whenever the highlight moves, not only when a
+        // download lands.
+        Models.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ModelsViewModel.Selected))
+            {
+                Transcribe.RefreshTranslationAvailability();
+            }
+        };
+
         // By task, and each to its own refresh: the diariser and the translator are separate
         // downloads that come and go independently, and one call for both would light a checkbox
         // whose model is still missing.

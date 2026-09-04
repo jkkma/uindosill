@@ -34,6 +34,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
+#: The target-language token this product's many-to-one checkpoints read, as one vocabulary piece.
+#: Whether a loaded checkpoint has it is reported to the host (:attr:`MarianEngine.target_token`);
+#: the host puts it on every source, or on none, and this side never prepends it.
+TARGET_TOKEN = ">>eng<<"
+
 #: Beam width. Six — see the module docstring, and do not take it from the config file.
 NUM_BEAMS = 6
 
@@ -197,18 +202,31 @@ class MarianEngine:
                 f"asked for {wanted} and onnxruntime registered {wrong}. The provider did not "
                 "initialise; running on the CPU instead would be silent and is refused.")
 
-        # The two fields `generation_config.json` contributes to the decode, checked rather than
-        # assumed present. They are what make the search the one the gate was scored with, they are
-        # the only part of it that does not come from the constants above, and a checkpoint that
-        # lost them would translate fluently and differently. Read from the model rather than the
-        # file so that what is checked is what `generate` will actually use.
+        # The three fields `generation_config.json` contributes to the decode, checked against the
+        # checkpoint's own `config.json` rather than assumed present. They are what make the search
+        # the one the gate was scored with, they are the only part of it that does not come from the
+        # constants above, and a checkpoint that lost them would translate fluently and differently.
+        # Read from the model rather than the file so that what is checked is what `generate` will
+        # actually use.
+        #
+        # The rule is Marian's own and both shipped checkpoints follow it: decoding starts on the pad
+        # token, that token is banned from being emitted (`bad_words_ids`), and the end token is
+        # forced at the length cap. `opus-mt-tc-bible-big-mul-deu_eng_nld` has pad 58433 and eos
+        # 430; `fugumt-ja-en` has pad 32000 and eos 0. Until 2026-09-04 the first pair stood here as
+        # constants, which refused every other checkpoint — including the one measured to be better
+        # on Japanese — for having a different vocabulary rather than a different decode. What is
+        # most often behind a mismatch is a missing `generation_config.json`: `optimum` then builds
+        # one from `config.json`, which carries no `bad_words_ids`, and the pad ban disappears.
+        config = self.model.config
         generation = self.model.generation_config
-        if generation.bad_words_ids != [[58433]] or generation.forced_eos_token_id != 430:
+        pad, eos = int(config.pad_token_id), int(config.eos_token_id)
+        expected = {"bad_words_ids": [[pad]], "decoder_start_token_id": pad, "forced_eos_token_id": eos}
+        actual = {name: getattr(generation, name, None) for name in expected}
+        if actual != expected:
             raise RuntimeError(
-                f"{model_dir} declares bad_words_ids={generation.bad_words_ids} and "
-                f"forced_eos_token_id={generation.forced_eos_token_id}; the checkpoint every published "
-                "figure was produced on declares [[58433]] and 430. This is a different decode, so it "
-                "would translate fluently and differently and nothing downstream would notice.")
+                f"{model_dir} declares {actual}, where its own config.json (pad_token_id {pad}, "
+                f"eos_token_id {eos}) says the decode should be {expected}. This is a different decode, "
+                "so it would translate fluently and differently and nothing downstream would notice.")
 
         self.provider = provider
         self.graph_optimization = graph_optimization
@@ -247,6 +265,29 @@ class MarianEngine:
         the number.
         """
         return int(self.tokenizer.model_max_length)
+
+    @property
+    def vocab_size(self) -> int:
+        """How many pieces the checkpoint's vocabulary has.
+
+        The one identity a checkpoint directory reliably carries — the exports write no name into
+        `config.json` — and what the parity fixture is matched on: the two checkpoints this project
+        ships differ by 26,433 pieces.
+        """
+        return int(self.model.config.vocab_size)
+
+    @property
+    def target_token(self) -> str | None:
+        """The token every source must begin with, or None when the checkpoint takes none.
+
+        Read off the vocabulary rather than declared. A many-to-one Marian checkpoint carries its
+        targets as single vocabulary pieces — `>>eng<<` is entry 693 of the shipped one — and a
+        single-direction checkpoint has no such piece, so `>>eng<<` given to it would be tokenised
+        as text and translated. The host decides what to do with the answer: it checks it against
+        what the catalogue declares and refuses a disagreement. This side only reports what the
+        vocabulary holds.
+        """
+        return TARGET_TOKEN if TARGET_TOKEN in self.tokenizer.get_vocab() else None
 
     def count(self, source: str) -> int:
         """How many tokens the model would read. The one question only the tokenizer can answer."""

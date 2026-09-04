@@ -42,6 +42,27 @@ public sealed record SidecarTranslatorOptions
     /// disclaims its coverage list in as many words.
     /// </remarks>
     public IReadOnlyList<string> SourceLanguages { get; init; } = [];
+
+    /// <summary>
+    /// The target token the catalogue declares for this checkpoint — <c>&gt;&gt;eng&lt;&lt;</c> for
+    /// the many-to-one family, null for a single-direction one — when a catalogue entry is what is
+    /// being loaded. Meaningful only while <see cref="HasDeclaredTargetToken"/> is true.
+    /// </summary>
+    /// <remarks>
+    /// Checked at load against what the sidecar reads off the vocabulary, and a disagreement is
+    /// refused rather than decoded: a catalogue that says an entry needs the token when its
+    /// vocabulary has no such piece would have the token translated as text, and one that says it
+    /// needs none when it does would get fluent German. Neither is an error anything downstream
+    /// would see.
+    /// </remarks>
+    public string? DeclaredTargetToken { get; init; }
+
+    /// <summary>
+    /// True when <see cref="DeclaredTargetToken"/> is a declaration rather than merely unset. A
+    /// checkpoint loaded from a bare directory has no catalogue entry to declare one, and the
+    /// sidecar's reading of the vocabulary then stands alone.
+    /// </summary>
+    public bool HasDeclaredTargetToken { get; init; }
 }
 
 /// <summary>
@@ -148,14 +169,23 @@ public sealed record TranslationParityResult
 public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
 {
     /// <summary>
-    /// The token every source must carry. One vocabulary entry, id 693, not three punctuation marks
-    /// and a word.
+    /// The token every source must carry on the many-to-one family. One vocabulary entry, id 693,
+    /// not three punctuation marks and a word.
     /// </summary>
     /// <remarks>
-    /// Declared on this side rather than reported by the sidecar because it is policy: measured
-    /// 2026-08-19, the recommended checkpoint handed Spanish without it returned fluent German —
-    /// its first declared target — rather than an error, so the marking belongs at the seam where
-    /// forgetting it is not an option a translator has.
+    /// <para>
+    /// The marking is policy and stays on this side: measured 2026-08-19, the many-to-one
+    /// checkpoint handed Spanish without it returned fluent German — its first declared target —
+    /// rather than an error, so the token goes on at the seam where forgetting it is not an option
+    /// a translator has.
+    /// </para>
+    /// <para>
+    /// <b>Which checkpoints need it is not policy, and since 2026-09-04 it is not a constant.</b>
+    /// The sidecar reports at load whether the loaded vocabulary holds this piece, the catalogue
+    /// declares whether it should, and the two disagreeing is refused. Until the load has answered,
+    /// the capabilities carry what the catalogue declared — or this, for a checkpoint loaded from a
+    /// bare directory with nothing to declare it.
+    /// </para>
     /// </remarks>
     public const string EnglishTargetToken = ">>eng<<";
 
@@ -198,9 +228,10 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
             // nothing writes a translator backend into a transcript's provenance before the load
             // that corrects it — see LoadAsync.
             Backend = ExecutionProviders.Parse(options.Provider),
-            TargetToken = EnglishTargetToken,
+            TargetToken = options.HasDeclaredTargetToken ? options.DeclaredTargetToken : EnglishTargetToken,
 
-            // Many-to-one: it is told the target and never the source, which is what makes it
+            // Never told the source: the many-to-one family is told the target and nothing else,
+            // and the single-direction one is told nothing at all. Both are what makes them
             // drivable by a pipeline that cannot detect what it just transcribed.
             RequiresSourceLanguage = false,
             PreservesWordTimings = false,
@@ -269,6 +300,7 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
             }, null, ct).ConfigureAwait(false);
 
             Apply(reply.GetProperty("capabilities"));
+            ApplyTargetToken(reply.GetProperty("capabilities"));
 
             // Every backend but the CPU is checked against the committed reference before it is
             // used, on the diariser's terms and for the same reason: `auto` selects WebGPU, WebGPU
@@ -321,8 +353,16 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
 
         if (!reply.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)
         {
-            // No fixture committed: nothing was compared and nothing failed, and the null says so.
-            return null;
+            // No fixture for this checkpoint: nothing was compared, and until 2026-09-04 the null
+            // said so — silently. With one fixture per checkpoint that silence became a trap: a
+            // bundle synced before the Japanese reference existed loaded that checkpoint on WebGPU
+            // with no line to say it had been checked against nothing. So it is now the same
+            // "could not be run" result a crashed check gives, with the sidecar's reason, which the
+            // callers print as a warning: the English is unverified rather than known wrong.
+            var missing = reply.TryGetProperty("reason", out var why) && why.ValueKind == JsonValueKind.String
+                ? why.GetString()
+                : "the sidecar has no parity fixture for this checkpoint";
+            return new TranslationParityResult { Passed = false, Ran = false, Reason = missing };
         }
 
         var differing = new List<string>();
@@ -353,6 +393,45 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
     }
 
     /// <summary>Takes the sidecar's word for what loaded, over this side's expectation of it.</summary>
+    /// <summary>
+    /// What the vocabulary says about the target token, held to what the catalogue declared.
+    /// </summary>
+    /// <remarks>
+    /// The sidecar answers <c>targetToken</c> with the token when the loaded vocabulary holds it as
+    /// one piece and null when it does not. A declaration that disagrees is refused here, before a
+    /// single source is built, because both wrong answers decode without complaint: a token the
+    /// vocabulary lacks is tokenised as text and translated, and a token withheld from a
+    /// many-to-one checkpoint returns its first declared target. A sidecar that does not answer at
+    /// all — one older than the field — leaves the declaration standing, which is what it would
+    /// have done anyway.
+    /// </remarks>
+    private void ApplyTargetToken(JsonElement capabilities)
+    {
+        if (!capabilities.TryGetProperty("targetToken", out var token))
+        {
+            return;
+        }
+
+        var reported = token.ValueKind == JsonValueKind.String ? token.GetString() : null;
+        if (reported is { Length: 0 })
+        {
+            reported = null;
+        }
+
+        if (_options.HasDeclaredTargetToken && !string.Equals(reported, _options.DeclaredTargetToken, StringComparison.Ordinal))
+        {
+            var declared = _options.DeclaredTargetToken is { } d ? $"'{d}'" : "no target token";
+            var found = reported is { } r ? $"'{r}'" : "no such token";
+            throw new PythonSidecarException(
+                $"The catalogue declares that '{Capabilities.ModelId ?? _options.ModelDirectory}' reads {declared} in " +
+                $"front of every source, and the checkpoint's vocabulary has {found}. One of them is wrong, and " +
+                "neither mistake produces an error: a token the vocabulary lacks is translated as text, and a " +
+                "many-to-one checkpoint given none writes its first declared target. Refused rather than decoded.");
+        }
+
+        Capabilities = Capabilities with { TargetToken = reported };
+    }
+
     private void Apply(JsonElement capabilities)
     {
         Capabilities = Capabilities with

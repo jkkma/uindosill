@@ -349,6 +349,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsModelLoaded));
                 OnPropertyChanged(nameof(CanStart));
                 OnPropertyChanged(nameof(StartHint));
+
+                // A load changes which recogniser is resident, and since 2026-09-04 that decides
+                // which translator the English opt-in would run and whether it is installed.
+                RefreshTranslationAvailability();
             };
         }
 
@@ -644,10 +648,18 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// Whether the English opt-in does anything. Disabled with a reason when it does not, on the
     /// same terms as the speaker one.
     /// </summary>
-    public bool CanTranslate => _engines.SupportsTranslation;
+    public bool CanTranslate => _engines.SupportsTranslation(TranslationRecogniser);
 
     /// <summary>The twin of <see cref="SpeakerHint"/>, and for the same two reasons.</summary>
-    public string? TranslationHint => CanTranslate ? null : _engines.DescribeUnavailable(ModelTask.Translation);
+    public string? TranslationHint => CanTranslate ? null : _engines.DescribeUnavailableTranslation(TranslationRecogniser);
+
+    /// <summary>
+    /// The recogniser whose transcripts the English opt-in would translate, which since
+    /// 2026-09-04 decides which translator runs: the loaded one where a session has a model
+    /// resident, because that is what Start runs, and otherwise the selection Start would load.
+    /// </summary>
+    private ModelDescriptor? TranslationRecogniser =>
+        _session is { IsLoaded: true, Model: { } loaded } ? loaded : _selection().Model;
 
     /// <summary>
     /// Re-asks whether there are weights for Start to load, after the Models tab has installed or
@@ -683,7 +695,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </remarks>
     public void RefreshTranslationAvailability()
     {
-        if (!_engines.SupportsTranslation && TranslateToEnglish)
+        if (!_engines.SupportsTranslation(TranslationRecogniser) && TranslateToEnglish)
         {
             TranslateToEnglish = false;
         }
@@ -1493,8 +1505,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // that can now see the finished document instead of predicting it.
 
         // The Models tab can remove the translation entry while this window is open, and a ticked
-        // box with nothing behind it would run a batch that quietly delivers no English.
-        if (TranslateToEnglish && !_engines.SupportsTranslation)
+        // box with nothing behind it would run a batch that quietly delivers no English. Asked of
+        // the recogniser that is now loaded, which is the one whose language decides the translator.
+        if (TranslateToEnglish && !_engines.SupportsTranslation(TranslationRecogniser))
         {
             RefreshTranslationAvailability();
             StatusMessage = "The translation model is no longer installed. Download it again from the Models tab.";
@@ -1621,8 +1634,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             // One translator for the whole batch, on the same terms as the labeller: 1.34 GiB of
             // graphs loaded once rather than per file, and disposed with the batch.
-            await using var translator = TranslateToEnglish && _engines.SupportsTranslation
-                ? _engines.CreateTranslator()
+            await using var translator = TranslateToEnglish && _engines.SupportsTranslation(TranslationRecogniser)
+                ? _engines.CreateTranslator(TranslationRecogniser)
                 : null;
 
             if (TranslateToEnglish && translator is null)

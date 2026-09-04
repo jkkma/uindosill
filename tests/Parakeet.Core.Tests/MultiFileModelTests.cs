@@ -113,11 +113,14 @@ public class MultiFileModelTests
         // **Five users since 2026-08-28**, the new one being the dense 12B, which installs its
         // weights and its own drafting head the same way and for the same reason.
         // **Six since 2026-09-02**: the tidying E4B, weights and head in a directory of its own.
+        // **Seven since 2026-09-04**: the Japanese translator, the same nine-file shape as the
+        // European one, in a directory of its own.
         Assert.Equal(
             new[]
             {
                 "pyannote-speaker-diarization-community-1",
                 "opus-mt-tc-bible-big-mul-en-fp32",
+                "fugumt-ja-en-fp32",
                 "gemma-4-12b-it-qat-ud-q4-k-xl",
                 "gemma-4-26b-a4b-it-ud-q4-k-xl",
                 "gemma-4-e4b-it-qat-ud-q4-k-xl",

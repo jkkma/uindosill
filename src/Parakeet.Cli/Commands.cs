@@ -225,7 +225,9 @@ internal static class Commands
                 Name = "translate-model",
                 TakesValue = true,
                 ValueName = "id",
-                Help = "Catalogue id of the translation model. Default: the only translation entry there is.",
+                Help = "Catalogue id of the translation model. Default: the one that reads every language the " +
+                       "speech model writes, so the Japanese recogniser gets the Japanese translator and the " +
+                       "European one gets the European translator. Name one to override that.",
             },
             new OptionSpec
             {
@@ -487,7 +489,9 @@ internal static class Commands
                 Short = 'm',
                 TakesValue = true,
                 ValueName = "id",
-                Help = "Catalogue id of the translation model. Default: the only translation entry there is.",
+                Help = "Catalogue id of the translation model. Default: the only translation entry installed. " +
+                       "With more than one installed this is required, because a text file does not say " +
+                       "which language it is in; 'transcribe --translate' chooses by the speech model instead.",
             },
             new OptionSpec
             {

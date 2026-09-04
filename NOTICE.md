@@ -130,6 +130,36 @@ The attribution notices it **does** carry are retained, per §4(c):
   No 101070350. We are also grateful for the generous computational resources and IT infrastructure
   provided by CSC -- IT Center for Science, Finland, and the EuroHPC supercomputer LUMI."
 
+## Japanese translation weights — CC BY-SA 4.0
+
+**FuguMT ja-en (Japanese-to-English machine translation model weights)**
+
+- **Creator:** staka (s-taka on GitHub), the author of FuguMT — https://github.com/s-taka/fugumt.
+  The card designates no other name; CC BY-SA 4.0 §3(a)(1)(A)(i) allows identification by a
+  designated pseudonym.
+- **Copyright:** the upstream repository was read at the pinned revision `f7ce1128` on 2026-09-04 —
+  its file listing and every text file in it — and it carries no copyright notice, so none is
+  reproduced here rather than one being invented.
+- **Licence:** Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0),
+  https://creativecommons.org/licenses/by-sa/4.0/legalcode — a link rather than a copy, which is
+  what §3(a)(1)(C) asks for.
+- **Source:** https://huggingface.co/staka/fugumt-ja-en
+- **Modifications (§3(a)(1)(B)):** the original Marian checkpoint at revision `f7ce1128` was exported
+  to ONNX in the merged decoder layout by `scripts/export-translation-onnx.py`, which splits it into
+  an encoder graph and a decoder graph with past key values exposed. The weights are unchanged and
+  unquantised — float32 in, float32 out. Uindosill downloads the exported graphs from its own
+  repository and does not redistribute the original checkpoint.
+- **ShareAlike (§3(b)):** the export is an adaptation and is licensed under CC BY-SA 4.0, the same
+  licence as the original, with no additional terms; it is published at
+  https://huggingface.co/jkkma/fugumt-ja-en-onnx with the licence linked from its card and from a
+  `LICENSE` file beside the graphs.
+- **Warranty:** the material is provided as-is and without warranties of any kind, express or
+  implied, to the extent permitted under the CC BY-SA 4.0 disclaimer of warranties and limitation of
+  liability (§5).
+
+What ShareAlike reaches on this project's reading, and what it does not, is in `docs/LICENSING.md`;
+no lawyer has read it.
+
 ## Speech-detection weights — MIT
 
 **Silero VAD v5 (voice activity detection model, `silero_vad.onnx`)**

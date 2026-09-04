@@ -6722,12 +6722,85 @@ must not be read against either of FuguMT's.
   remains declined with finality for v1.0.
 - **Anything through the application.** Japanese translation cannot be turned on:
   `SidecarTranscriptTranslator.EnglishTargetToken` is a compile-time `">>eng<<"`, and for the shipped
-  checkpoint the catalogue's 25-language clamp is what stands in the way instead.
+  checkpoint the catalogue's 25-language clamp is what stands in the way instead. **Half refuted
+  the same night, and the other half built past.** Nothing in the code read the catalogue's
+  language list as a gate — `SourceLanguages` was assigned in two places and consulted by nothing,
+  and `uindosill translate` turned three Japanese lines into correct English through the shipped
+  checkpoint with no change at all (`runs/20260904-223049-ja-translate-cli-cpu/NOTES.md`, laptop,
+  CPU). The compile-time token was real, and it became a per-checkpoint declaration that night;
+  § *Japanese translation ships on FuguMT* below has what shipped and what was run.
 - **The cascade for this checkpoint.** The −4.01 penalty of the same day was measured through
   FuguMT; no audio reached the shipped translator here, and a penalty is not known to transfer
   between checkpoints.
 - **Any backend but the CPU.** The WebGPU parity load `CLAUDE.md` requires after a translator change
-  has still not run on this machine, for the provider reason above.
+  has still not run on this machine, for the provider reason above. **Run the same night**, for
+  both checkpoints, 6 of 6 each — the section below.
+
+## Japanese translation ships on FuguMT — decided and built 2026-09-04, night
+
+**Decided by the maintainer that night, on the evening's like-for-like figures:** CC BY-SA 4.0 is
+acceptable in the catalogue; FuguMT ships in v1.0 as a second translation entry; the translator is
+chosen by the selected recogniser, with no picker; the export is published from this machine under
+`jkkma`. `docs/PHASES.md` § *Decided and built 2026-09-04, night* has the entry and what the build
+changed. Everything below is the laptop.
+
+**What is measured:**
+
+- **The merged export is faithful, and scores what the split one scored.** The sidecar loads the
+  merged decoder layout and the morning's 52.53 was scored on the split one, so the artefact that
+  ships was exported again — `scripts/export-translation-onnx.py --model staka/fugumt-ja-en
+  --target-token "" --smoke-set ja --variants fp32-merged --smoke`, 39 s — and held to fp32 PyTorch
+  on four Japanese sentences at beam 6 with `renormalize_logits`, which the smoke now sets as the
+  sidecar does: **identical on 4 of 4**, no degeneration. Then scored on the harness: **chrF++ 52.53
+  on all 321 FLEURS `ja_jp` sentences, margin +51.90 against +44.37 required, zero collapses, PASS**
+  (`runs/translation/20260904-230026-fp32-merged/`) — to the digit what the split layout scored at
+  18:28. Nine files, 378,339,764 bytes, 360.8 MiB against the split layout's 571.1, because the split
+  layout stores the decoder's weights twice.
+- **The published bytes are the measured bytes.** Uploaded to `huggingface.co/jkkma/fugumt-ja-en-onnx`
+  at commit `9e075eec`. The Hub's LFS digests for the four large files equal the local SHA-256s, and
+  `uindosill models download fugumt-ja-en-fp32` fetched all nine from the pinned URLs and verified
+  every size and digest before assembling the directory.
+- **The parity fixtures, one per checkpoint.** The Japanese reference was computed on the CPU through
+  the repository's engine — six sentences: four real outputs of the Japanese recogniser from the
+  morning's run, errors included, and two written — and self-checks 6 of 6. The many-to-one
+  checkpoint's committed reference still reproduces 6 of 6 on the CPU through the per-checkpoint
+  engine, so the vocabulary-derived token and the config-derived decode check changed nothing for it.
+  **On WebGPU both pass 6 of 6**, through the shipped `onnxruntime-webgpu` 1.27.0 wheel — a copy of
+  the 2026-08-26 bundle with the repository's current engine — which is the parity load `CLAUDE.md`
+  asks for, run for both. **The first attempt did not check the Japanese one**: the bundle copy had
+  been synced before its reference existed, the sidecar answered "no fixture", and the host said
+  nothing, by design. That silence is now the same warning a crashed check gives, and the packaging
+  scripts require the Japanese fixture the way they require the first.
+- **The command line, end to end.** `uindosill translate --model fugumt-ja-en-fp32` turned three
+  Japanese lines into English on the CPU and again on WebGPU, identically — *The cat is cute. /
+  There is a meeting in Tokyo today. / Please translate this recording into English.* — and with
+  two translators installed and none named it refuses and lists both. `uindosill transcribe --model
+  parakeet-tdt-ctc-0.6b-ja-q8_0 --translate` over three FLEURS recordings chose the Japanese
+  translator by itself: each transcript's provenance names `fugumt-ja-en-fp32`, `cpu` and the beam-6
+  decode, and all three came back as English, the recogniser on Vulkan. Record and outputs in
+  `runs/20260904-fugumt-ships/`.
+- **The application starts on the new catalogue** with a Python beside it, its Transcribe tab
+  offering the English opt-in, live, for the default recogniser — the window captured passively
+  through `PrintWindow`, no input sent. The App's own suite holds the selection against fakes: the
+  opt-in disabled with a sentence naming the Japanese translator when the Japanese recogniser is
+  selected and that translator is not installed, and on when it is.
+
+**What is not:**
+
+- **A person clicking through the application.** Selecting the Japanese recogniser, ticking the
+  opt-in and pressing Start were not driven from here — a session launches the desktop and does not
+  click on it — so the window past launch rests on the view-model tests and on the command line,
+  which share the seam. The maintainer's click-through is the remaining check.
+- **Adequacy.** No human has rated a Japanese output, and the gate's second criterion stays declined.
+- **Timing.** Every seconds figure here is one run under uncontrolled load. The CLI's 0.32 s/line on
+  the CPU and 0.14 on WebGPU over three sentences describe nothing.
+- **CUDA.** Not tried on this machine, which has none; the desktop owes it, with the parity fixture
+  now there to hold it to.
+- **The German number rewrite on Japanese.** `TranslationRequest.Mark` still runs `GermanNumberWords`
+  on every source, Japanese included. Its no-op claim was measured on the 25 European FLEURS configs
+  and not on `ja_jp`; every Japanese sentence that went through the seam here came back as the direct
+  engine translates it, which says the sources were untouched for those, and the corpus-wide test
+  has not been extended to Japanese.
 
 ## The interface design, and the one claim in it that is not checked
 

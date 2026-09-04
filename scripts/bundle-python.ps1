@@ -318,7 +318,12 @@ foreach ($required in @(
     # built for the diariser again, its reference belongs back on this list and on
     # package-windows.ps1's.
     'uindosill_engines/translator/parity-reference.json',
-    'uindosill_engines/translator/parity-sources.json')) {
+    'uindosill_engines/translator/parity-sources.json',
+    # One fixture per translation checkpoint since 2026-09-04, and the Japanese one is on this list
+    # for the reason the first is: a bundle without it loads that checkpoint on WebGPU checked
+    # against nothing, which the host now reports as a warning rather than as silence.
+    'uindosill_engines/translator/parity-reference.fugumt-ja-en.json',
+    'uindosill_engines/translator/parity-sources.fugumt-ja-en.json')) {
     $path = Join-Path $Destination $required
     if ((-not (Test-Path -LiteralPath $path)) -or ((Get-Item -LiteralPath $path).Length -eq 0)) {
         # The parity references are on this list on purpose. Without one, the check that stands

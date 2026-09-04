@@ -227,6 +227,26 @@ public sealed record ModelDescriptor
     /// <summary>BCP-47 language tags the model claims. Empty when unconstrained or unknown.</summary>
     public IReadOnlyList<string> Languages { get; init; } = [];
 
+    /// <summary>
+    /// For a translation entry: the token the checkpoint needs in front of every source, such as
+    /// <c>&gt;&gt;eng&lt;&lt;</c>, or null when it reads none. Meaningless on every other task.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Declared in the catalogue rather than only read off the checkpoint, because it is a claim a
+    /// release engineer can review and the sidecar's reading of the vocabulary is what it is checked
+    /// against: a many-to-one Marian checkpoint carries its targets as vocabulary pieces and needs
+    /// one on every source, a single-direction one has no such piece and would translate the token
+    /// as text, and the two disagreeing about which kind an entry is gets refused at load.
+    /// </para>
+    /// <para>
+    /// Absent means null. That is safe here where it would not be on
+    /// <see cref="Translation.TranslationRequest.Build"/>, because the sidecar's answer is the
+    /// one that binds and the catalogue's is the one it is held to.
+    /// </para>
+    /// </remarks>
+    public string? TargetToken { get; init; }
+
     public bool Recommended { get; init; }
 
     /// <summary>Anything a user should know before choosing this file.</summary>

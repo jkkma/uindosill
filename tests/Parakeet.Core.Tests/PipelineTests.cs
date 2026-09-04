@@ -617,9 +617,11 @@ public class AttributionTests
 
         var catalogue = Parakeet.Core.Models.ModelCatalog.Default;
 
-        // The European recogniser, and every entry that is not the Japanese one, must claim none of
-        // the scripts parakeet-tdt-0.6b-v3 cannot produce.
-        foreach (var model in catalogue.Models.Where(m => m.Id != "parakeet-tdt-ctc-0.6b-ja-q8_0"))
+        // The European recogniser, and every entry that is not one of the two Japanese ones, must
+        // claim none of the scripts parakeet-tdt-0.6b-v3 cannot produce. The Japanese translator
+        // joined the recogniser on 2026-09-04: it reads what that recogniser writes and nothing else.
+        var japaneseEntries = new[] { "parakeet-tdt-ctc-0.6b-ja-q8_0", "fugumt-ja-en-fp32" };
+        foreach (var model in catalogue.Models.Where(m => !japaneseEntries.Contains(m.Id)))
         {
             Assert.DoesNotContain("zh", model.Languages);
             Assert.DoesNotContain("ja", model.Languages);
@@ -633,6 +635,12 @@ public class AttributionTests
         // a second tag here would be the same false claim in the other direction.
         var japanese = catalogue.Models.Single(m => m.Id == "parakeet-tdt-ctc-0.6b-ja-q8_0");
         Assert.Equal(["ja"], japanese.Languages);
+
+        // And its translator reads Japanese and nothing else, for the same reason in the other
+        // direction: a second tag would route another recogniser's transcripts to a checkpoint that
+        // cannot read them, and it would decode them without a complaint.
+        var translator = catalogue.Models.Single(m => m.Id == "fugumt-ja-en-fp32");
+        Assert.Equal(["ja"], translator.Languages);
 
         // And it must not become the default by accident: the recommended entry is the European one.
         Assert.False(japanese.Recommended);

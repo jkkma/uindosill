@@ -24,9 +24,18 @@ public class ModelCatalogTests
         Assert.All(
             catalog.TranscriptionModels,
             m => Assert.Equal("CC-BY-4.0", m.License));
-        Assert.All(
-            catalog.TranslationModels,
-            m => Assert.Equal("Apache-2.0", m.License));
+        // **The translators are asserted by id too, since 2026-09-04**, because the two are under
+        // different licences and the second is the catalogue's first ShareAlike entry: CC BY-SA 4.0
+        // section 3(b) binds the export this project publishes, where Apache-2.0 binds nothing of
+        // the kind. An `Assert.All` over the task would have to name one and pass while the other
+        // drifted.
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["opus-mt-tc-bible-big-mul-en-fp32"] = "Apache-2.0",
+                ["fugumt-ja-en-fp32"] = "CC-BY-SA-4.0",
+            },
+            catalog.TranslationModels.ToDictionary(m => m.Id, m => m.License));
 
         // **The diarisers are asserted by id, because the two are under different licences and the
         // difference is the point.** Sortformer is the NVIDIA Open Model License — a notice of a
@@ -289,12 +298,28 @@ public class ModelCatalogTests
             catalog.DiarisationModels.Select(m => m.Id));
         Assert.All(catalog.DiarisationModels, m => Assert.False(m.Recommended));
 
-        // And one translation entry, added 2026-08-20 once there was a decode loop to read it.
-        // None of these may be Recommended: that property picks the default ASR model, and a model
-        // that cannot transcribe becoming the default is the failure the discriminator exists to stop.
-        var translator = Assert.Single(catalog.TranslationModels);
-        Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", translator.Id);
-        Assert.False(translator.Recommended);
+        // And two translation entries: the many-to-one one added 2026-08-20 once there was a decode
+        // loop to read it, and the Japanese one added 2026-09-04, one per recogniser. None of these
+        // may be Recommended: that property picks the default ASR model, and a model that cannot
+        // transcribe becoming the default is the failure the discriminator exists to stop.
+        Assert.Equal(
+            new[] { "opus-mt-tc-bible-big-mul-en-fp32", "fugumt-ja-en-fp32" },
+            catalog.TranslationModels.Select(m => m.Id));
+        Assert.All(catalog.TranslationModels, m => Assert.False(m.Recommended));
+
+        // Each recogniser has exactly one translator that reads what it writes, and the token each
+        // needs in front of a source is declared: the many-to-one checkpoint's, and none for the
+        // single-direction one. A translator chosen by the wrong list would decode without a
+        // complaint, which is why the pairing is pinned here rather than left to the lists.
+        var european = catalog.TranslationModelsFor(catalog.Get("tdt-0.6b-v3-f16").Languages);
+        Assert.Equal(">>eng<<", Assert.Single(european).TargetToken);
+        Assert.Equal("opus-mt-tc-bible-big-mul-en-fp32", european[0].Id);
+
+        var japanese = catalog.TranslationModelsFor(catalog.Get("parakeet-tdt-ctc-0.6b-ja-q8_0").Languages);
+        Assert.Null(Assert.Single(japanese).TargetToken);
+        Assert.Equal("fugumt-ja-en-fp32", japanese[0].Id);
+
+        Assert.Empty(catalog.TranslationModelsFor([]));
 
         // And three answering entries. Two arrived 2026-08-27 — one model at two quantisations,
         // because the vendor-recommended one does not fit a 16 GiB machine and the smaller one is

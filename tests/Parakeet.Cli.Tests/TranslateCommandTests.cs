@@ -307,6 +307,124 @@ public class TranslateCommandTests
         }
         """;
 
+    /// <summary>
+    /// The shape the catalogue has had since 2026-09-04: two recognisers and two translators, one
+    /// per recogniser, distinguished by the languages each lists.
+    /// </summary>
+    private const string CatalogueWithTwoTranslators = """
+        {
+          "schema": 1,
+          "models": [
+            {
+              "id": "asr-eu", "family": "f", "displayName": "European speech recognition", "quantisation": "f16", "fileName": "eu.gguf",
+              "url": "https://example.test/eu.gguf", "sizeBytes": 10, "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "verified": true, "license": "CC-BY-4.0", "attributionId": "nvidia-parakeet-tdt-0.6b-v3", "recommended": true,
+              "languages": ["de", "es"]
+            },
+            {
+              "id": "asr-ja", "family": "g", "displayName": "Japanese speech recognition", "quantisation": "q8_0", "fileName": "ja.gguf",
+              "url": "https://example.test/ja.gguf", "sizeBytes": 10, "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "verified": true, "license": "CC-BY-4.0", "attributionId": "nvidia-parakeet-tdt-ctc-0.6b-ja", "recommended": false,
+              "languages": ["ja"]
+            },
+            {
+              "id": "mt-eu", "task": "translation", "family": "opus-mt", "displayName": "European to English translation", "quantisation": "fp32", "fileName": "eu.onnx",
+              "url": "https://example.test/eu.onnx", "sizeBytes": 10, "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "verified": true, "license": "Apache-2.0", "attributionId": "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx", "recommended": false,
+              "languages": ["de", "es", "en"], "targetToken": ">>eng<<"
+            },
+            {
+              "id": "mt-ja", "task": "translation", "family": "fugumt-ja-en", "displayName": "Japanese to English translation", "quantisation": "fp32", "fileName": "ja.onnx",
+              "url": "https://example.test/ja.onnx", "sizeBytes": 10, "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "verified": true, "license": "CC-BY-SA-4.0", "attributionId": "staka-fugumt-ja-en-onnx", "recommended": false,
+              "languages": ["ja"]
+            }
+          ]
+        }
+        """;
+
+    [Fact]
+    public async Task TranscribeChoosesTheTranslatorThatReadsWhatTheRecogniserWrites()
+    {
+        // The recogniser is the one thing the pipeline knows about the language of what it is
+        // translating, so the translator follows it: the Japanese recogniser gets the Japanese
+        // translator, the European one the European translator, and the default recogniser the
+        // same as naming it. Proved by which entry the pre-flight reports as not installed — that
+        // refusal comes before any model loads, and it names the entry that was chosen.
+        using var harness = new Harness(ModelCatalog.Parse(CatalogueWithTwoTranslators));
+        var input = harness.WriteWav("call.wav", 6);
+
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("transcribe", "--translate", "--model", "asr-ja", input));
+        Assert.Contains("'mt-ja' is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("transcribe", "--translate", "--model", "asr-eu", input));
+        Assert.Contains("'mt-eu' is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("transcribe", "--translate", input));
+        Assert.Contains("'mt-eu' is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+
+        // Naming one outright still wins, whichever recogniser is in play.
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(
+            ExitCodes.UsageError,
+            await harness.RunAsync("transcribe", "--translate", "--model", "asr-ja", "--translate-model", "mt-eu", input));
+        Assert.Contains("'mt-eu' is not installed", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TranscribeRefusesToChooseATranslatorForARecogniserThatDeclaresNoLanguages()
+    {
+        // A model file given by path has no catalogue entry and so declares nothing; with two
+        // translators to choose between, guessing would be a translator decoding the wrong language
+        // without a complaint, so the answer is to ask.
+        using var harness = new Harness(ModelCatalog.Parse(CatalogueWithTwoTranslators));
+        var input = harness.WriteWav("call.wav", 6);
+
+        Assert.Equal(
+            ExitCodes.UsageError,
+            await harness.RunAsync("transcribe", "--translate", "--model-path", harness.Path_("side.gguf"), input));
+        Assert.Contains("does not say which languages it writes", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("--translate-model", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATextFileDoesNotSayItsLanguageSoTranslateFallsBackToTheOnlyTranslatorInstalled()
+    {
+        // No recogniser behind a text file, so the choice is by what is installed: none is a
+        // download to make, one is the answer, and two is a question only the user can settle.
+        // Proved by the checkpoint-completeness refusal, which names the entry that was chosen and
+        // comes before any Python starts.
+        var catalog = ModelCatalog.Parse(CatalogueWithTwoTranslators);
+        using var harness = new Harness(catalog);
+        var input = harness.Write("ja.txt", "猫はかわいいです。\n");
+
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("translate", input));
+        Assert.Contains("none of them is", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("mt-ja (ja)", harness.Error.ToString(), StringComparison.Ordinal);
+
+        var japanese = catalog.Get("mt-ja");
+        Directory.CreateDirectory(Path.GetDirectoryName(harness.Context.Store.PathFor(japanese))!);
+        File.WriteAllText(harness.Context.Store.PathFor(japanese), "not really a checkpoint");
+
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("translate", input));
+        Assert.Contains("'mt-ja' is not a complete translation checkpoint", harness.Error.ToString(), StringComparison.Ordinal);
+
+        var european = catalog.Get("mt-eu");
+        File.WriteAllText(harness.Context.Store.PathFor(european), "not really a checkpoint");
+
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("translate", input));
+        Assert.Contains("2 translation models are installed", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("--model", harness.Error.ToString(), StringComparison.Ordinal);
+
+        harness.Error.GetStringBuilder().Clear();
+        Assert.Equal(ExitCodes.UsageError, await harness.RunAsync("translate", "--model", "mt-eu", input));
+        Assert.Contains("'mt-eu' is not a complete translation checkpoint", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ATranslationEntryIsNeverSelectableAsAnAsrModelOrADiariser()
     {

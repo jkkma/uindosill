@@ -1,7 +1,10 @@
 {
  "_": "The sources the parity check translates. Taken verbatim from tests/fixtures/translation/marian-tokenizer.json so the two files cannot drift, and duplicated here rather than read from there because a sidecar that reaches into the test tree stops working the day the tree is packaged. They already carry the target token, which is the shape the host sends. One of them is NOT what the host would send: the German case keeps 'neunzehnhundertneunundzwanzig' where TranslationRequest.Mark rewrites compound number words to digits before sending. That is deliberate — it is the fixture's hardest tokenisation, and this check is about whether a provider reproduces the CPU on a given string rather than about which strings the product produces.",
+ "family": "opus-mt-tc-bible-big-mul-deu_eng_nld",
  "model": "Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld",
  "revision": "bb1ef830d540449c89c7ee5b9ea5b1fc666db3d5",
+ "vocabSize": 58434,
+ "targetToken": ">>eng<<",
  "sources": [
   ">>eng<< Caracas es la capital y la ciudad más poblada de Venezuela.",
   ">>eng<< Desde el siglo XIX es considerada el centro del poder político y económico de Venezuela.",

@@ -27,7 +27,7 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1672 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1682 tests, no weights, no display, no network
 python3 scripts/check-diariser-auto.py   # what the diariser's `auto` elects; CI runs it too
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
@@ -48,7 +48,7 @@ each named:
 pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
 ```
 
-**Nine of those 1672 tests skip themselves.** Two are platform-specific: the Media Foundation
+**Nine of those 1682 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
 skips on Windows and runs on Linux. The other seven are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:
@@ -91,10 +91,14 @@ suite starts the process.
 
 **The seven checkpoint tests that used to sit beside it went to `attic/` on 2026-08-21** with the
 C# translator they exercised. Nothing in the suite now reads real translation weights, and nothing
-replaces them: the sidecar's own translation parity fixture is a smoke test that needs a checkpoint
-and a Python, so it runs at load on a real machine rather than in CI. **After any change to
-`python/uindosill_engines/translator/`, drive it by hand** — a load on the CPU and a load on
-`webgpu`, each reporting `parity` — because the suite cannot.
+replaces them: the sidecar's own translation parity fixtures — one per checkpoint since 2026-09-04,
+chosen by vocabulary size — are a smoke test that needs a checkpoint and a Python, so they run at
+load on a real machine rather than in CI. **After any change to
+`python/uindosill_engines/translator/`, drive them by hand** — for each translation checkpoint, a
+load on the CPU and a load on `webgpu`, each reporting `parity` — because the suite cannot. The
+product path skips the check on the CPU, since the CPU is what the reference is, so the CPU load is
+`parity.check` through the engine directly; the `webgpu` one is `uindosill translate --backend
+webgpu`, which is silent when it passes and warns when it does not.
 
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have

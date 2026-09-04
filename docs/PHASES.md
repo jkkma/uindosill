@@ -41,7 +41,7 @@ engine.
 
 *Exit:* `dotnet test` green on Linux with no weights present.
 
-**Status:** met. 1672 tests, no weights, no display, no network — **1663 passed and 9 skipped**, and
+**Status:** met. 1682 tests, no weights, no display, no network — **1673 passed and 9 skipped**, and
 that pair is the same on every machine, which took a correction to make true. One skip is the Media
 Foundation extension list, which is platform-specific. The other reads a FLEURS snapshot and is
 asked for by name, for the reason below.
@@ -90,7 +90,7 @@ converter the speaker measurement is scored with.
 
 *Exit:* usable on its own; `bench` reproduces Phase 0.
 
-**Status:** usable, tested end to end against the canned engine (134 of the project's 192 CLI
+**Status:** usable, tested end to end against the canned engine (137 of the project's 195 CLI
 tests drive the real entry point; the other 58 never construct it — 18 on the backend default and
 the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an engine option,
 17 parser unit tests, 9 checking those two flags against the real command specs through
@@ -2781,7 +2781,7 @@ that happens this repository's answer to "how good is the speaker labelling" is 
 | 3 — CLI | Usable on its own | Yes (against the canned engine) |
 | 4 — UI | A human transcribes a real file on Windows | Yes |
 | 5 — ship | Signed, updating installer | **Installer done, signing dropped from v1.** Two Velopack channels, a `v*` tag workflow, and an in-app update check; installed, updated and uninstalled on the desktop 2026-08-19 with the weights hashed and unchanged throughout. Unsigned by decision. **Published 2026-08-23: `v1.0.0-rc.3`, a public prerelease — the first real release, and the first packed with the Python bundle.** v1.0 itself is not tagged; the desktop end-to-end on the rc stands between them |
-| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU — **retired to `attic/` on 2026-08-21**; the decode is `transformers.generate` itself again, in a bundled Python, at the same settings, defaulting to WebGPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. **The weights were published to Hugging Face on 2026-08-20 and the entry is verified against the nine LFS oids the repository publishes**, with the Apache-2.0 §4(c) and §4(d) checks done before the upload rather than after — no NOTICE file upstream, no copyright line anywhere, and four attribution notices retained. The first real multi-file install ran the same day: staged, hashed, 9 of 9 verified, and the graphs then loaded out of that assembled directory. **The cascade penalty is measured** — Spanish −2.95 and German −4.34 chrF++ against ASR word error rates of 6.12% and 9.93% — recorded and deliberately not gated. **The window's half landed 2026-08-20**: an "English version" opt-in drawn as the twin of the speaker one — its own tinted strip, off by default, disabled with a reason while the entry is not installed — and a Transcript/English pill switcher over the transcript pane, drawn only for a row that has both. The window keeps the transcript as the engine wrote it beside the English rather than replacing it, which is what the switcher switches between; outputs take the same `.en` infix the command line gives them, and `vtt-words` is refused under the opt-in there too. **No spoken-language picker was added, and that is the second time the answer has come out that way** — the translator is many-to-one and never told its source, and the ASR's hint is inert on this catalogue (`docs/UNPROVEN.md` § *The language hint*), so a control for it would change nothing. **Decided 2026-08-23: the adequacy check is declined with finality — v1.0 ships with criterion two unperformed and the gate unpassed by its own definition, documented rather than redefined.** **The checkpoint was scored on a 25th language on 2026-09-04** (*Measured 2026-09-04, evening*): chrF++ **46.47** on FLEURS `ja_jp`, margin +45.84 over a 0.63 floor against +44.37 required, zero collapses — **a gate pass on a language outside the gate set**, which leaves the 23-of-24 result untouched and gives the Japanese feature a measured alternative to a second checkpoint. Still outstanding: a real-time factor for a translation pass over real audio; an interrupted install, which nothing has exercised; and, new with that score, **whether Japanese ships on this checkpoint behind a lifted 25-language clamp or on `staka/fugumt-ja-en` 6.06 chrF++ above it** — a decision nothing has taken, priced in *Measured 2026-09-04, evening*. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not, and § *The shipped translator on Japanese* has the 25th |
+| translation | **Three criteria, all must hold — two ratified 2026-08-19 before any score existed, the third and the margins on 2026-08-20 with the first scores.** **(1)** chrF++ into English clears the **per-language source-copy floor** — what a hypothesis scores by echoing its untranslated source — by a per-language margin, because one number across 25 languages would be a different bar in each. **(2)** A **human adequacy check on the Spanish → English driving case**, rated for adequacy and flagged for output that is not English. Nothing anchors this from outside: no published chrF++ or BLEU for any candidate on FLEURS X→en at a stated signature was found, so unlike the DER gate it is anchored from inside its own measurement, and the corpus is FLEURS pinned by digest with both metric signatures printed on every run. Opt-in aboard v1.0. | **Seam built 2026-08-19, artefact exported 2026-08-20, criterion one scored in all 24 languages 2026-08-20.** The route is decided — `opus-mt-tc-bible-big-mul-deu_eng_nld`, apache-2.0, exported in-house to ONNX, CPU-only in v1 — and a spike on 2026-08-19 settled four things ahead of the code: the `>>eng<<` target token is mandatory and its absence returns fluent German, greedy decoding drops content beam-6 keeps over 44 real segments, English input passes through byte-identical, and an int8 export was thought to weigh 227 MiB or 404 MiB. The parts that need no model landed the same day — the `ITranscriptTranslator` contract with the target token and the dropped word timings as enforced invariants, the canned translator, `ModelTask.Translation` and its manifest word, and `--translate` on the CLI wired to the fake. **The ONNX export exists as of 2026-08-20** and replaces the last of those four: `scripts/export-translation-onnx.py` produces **nine files** in the merged layout — two graphs with past-key-values exposed, two configs, and a five-file tokenizer — at **1369.1 MiB fp32, 345.9 MiB int8, or 694.3 MiB int8 with the embedding tables left in fp32**, and **fp32-merged is what ships as of 2026-08-20**, int8 having been dropped that day on speed, on a silent GPU collapse and on the export smoke, without a quality score ever being taken of it. The recorded `optimum` failure was CPython 3.14 giving `functools.partial` the descriptor protocol, not a library skew, and a twelve-line shim defeats it. fp32 reproduces the PyTorch reference string-identically on all 44 recorded segments; int8 changes most of them and collapses into a repetition loop on one. **The multi-file catalogue schema landed the same day** — an entry may be a set of files in a directory of its own, installed all-or-nothing through a staging directory, with per-file pins and per-file resume; no entry uses it yet because no asset has been uploaded. **The harness landed 2026-08-20 and computed criterion one's bar in every language** — the per-language source-copy floors run 2.00 (Ukrainian) to 23.10 (French) on FLEURS test, an 11.5x spread that is why the gate refuses a single number. **Criterion two is unperformed and the gate is therefore not passed.** **Criterion one is scored and its bar is set**: `margin_L = 45 − floor_L` plus zero collapses, ratified 2026-08-20, **23 of 24 languages pass and Slovak fails by 0.74**. `fp32-merged` over FLEURS `test` in full, beam-6, on the desktop's CPU — 8,149 sentences in 1.40 h, chrF++ from **44.26** (Slovak, the outlier the record predicted from its absence in the sibling card's source list) to **68.52** (Portuguese), margins over floor +28.15 to +60.53, median +42.76, and **zero collapses** against 31 trailing-punctuation runs. **The decode loop landed the same day** — a SentencePiece tokenizer and a port of transformers 4.57.6's beam search in C#, driving the pinned graphs at beam 6 on the CPU — **retired to `attic/` on 2026-08-21**; the decode is `transformers.generate` itself again, in a bundled Python, at the same settings, defaulting to WebGPU, held to the 8,149 hypotheses the gate run itself recorded (§ *Built 2026-08-20 — the decode loop*). `models.json` gained its first multi-file entry, nine files pinned by size and digest and marked unverified because no release asset has been uploaded. **The weights were published to Hugging Face on 2026-08-20 and the entry is verified against the nine LFS oids the repository publishes**, with the Apache-2.0 §4(c) and §4(d) checks done before the upload rather than after — no NOTICE file upstream, no copyright line anywhere, and four attribution notices retained. The first real multi-file install ran the same day: staged, hashed, 9 of 9 verified, and the graphs then loaded out of that assembled directory. **The cascade penalty is measured** — Spanish −2.95 and German −4.34 chrF++ against ASR word error rates of 6.12% and 9.93% — recorded and deliberately not gated. **The window's half landed 2026-08-20**: an "English version" opt-in drawn as the twin of the speaker one — its own tinted strip, off by default, disabled with a reason while the entry is not installed — and a Transcript/English pill switcher over the transcript pane, drawn only for a row that has both. The window keeps the transcript as the engine wrote it beside the English rather than replacing it, which is what the switcher switches between; outputs take the same `.en` infix the command line gives them, and `vtt-words` is refused under the opt-in there too. **No spoken-language picker was added, and that is the second time the answer has come out that way** — the translator is many-to-one and never told its source, and the ASR's hint is inert on this catalogue (`docs/UNPROVEN.md` § *The language hint*), so a control for it would change nothing. **Decided 2026-08-23: the adequacy check is declined with finality — v1.0 ships with criterion two unperformed and the gate unpassed by its own definition, documented rather than redefined.** **The checkpoint was scored on a 25th language on 2026-09-04** (*Measured 2026-09-04, evening*): chrF++ **46.47** on FLEURS `ja_jp`, margin +45.84 over a 0.63 floor against +44.37 required, zero collapses — **a gate pass on a language outside the gate set**, which leaves the 23-of-24 result untouched and gives the Japanese feature a measured alternative to a second checkpoint. Still outstanding: a real-time factor for a translation pass over real audio; an interrupted install, which nothing has exercised; and, new with that score, **Japanese ships on `staka/fugumt-ja-en` — decided and built 2026-09-04, night** (*Decided and built 2026-09-04, night*): a second translation entry the recogniser chooses, the target token a per-checkpoint declaration held to the vocabulary at load, the parity fixture per checkpoint, and the export published under CC BY-SA 4.0 as the catalogue's first ShareAlike entry. `docs/UNPROVEN.md` § *Translating into English* has what is measured and what is not, and § *The shipped translator on Japanese* has the 25th |
 | speakers | **AMI test DER within 5 points of the best published figure on the same audio at the same convention** — pyannote 3.1's 18.8 on Mix-Headset at collar 0 with overlap scored, so ≤ 23.8; collar 0 because half-width and total-width definitions agree there, which is what makes the comparison convention-proof — with this project's own headline (collar 0.25 pyannote semantics, 0.125 s either side, overlap included) reported beside it. **NOTSOFAR-1 is the crosstalk check** (39% of union speech overlapped, against AMI's 14.58%), and it is a meeting corpus too, so both of the gate's corpora are now in the target domain. **VoxConverse left the gate on 2026-08-18 when the domain narrowed to meetings** — see the narrowing below; it was the web-video and beyond-four-speakers check, and web video is no longer a target. **Podcasts are ungated**, for want of any labelled material. The 5-point margin was **ratified 2026-08-18**, before any candidate had been scored at this convention. **Second criterion, added 2026-08-18: mean |speakers found − speakers in reference| ≤ 1.0 over the AMI test set — both criteria must hold.** Opt-in aboard v1.0. | Instrument built and validated, AMI dev and test set up and verified, seam in; sherpa-onnx 1.13.5 measured 2026-08-18 and **fails on AMI**, held out — 25.05% with NeMo TitaNet-L and 25.77% with 3D-Speaker ERes2Net, hyperparameters chosen on the 18 dev meetings and applied unchanged to the 16 test meetings; its threshold, min_duration, six embedders and int8 segmentation are all swept, so the toolkit's knob space is exhausted. **Streaming Sortformer 4spk v2.1, ONNX, measured 2026-08-18 on the desktop, CPU only: the gate PASSES on both criteria** — AMI test **16.33%** at collar 0 with overlap against ≤ 23.8, and speaker error **0.06** against ≤ 1.0, tuned on the 18 dev meetings and applied unchanged to the 16 test meetings, test scored once. NOTSOFAR-1 and VoxConverse still untouched, and **VoxConverse can no longer serve as this candidate's beyond-four check** — see below. **The C# port landed 2026-08-19 and reproduces it: AMI test 16.3368% against the Python reference's 16.3324%, 0.0044 points apart, same speaker error 0.06, both gate criteria hold.** Shipped as the opt-in in the CLI and the app, then **retired to `attic/` on 2026-08-21** when the engine moved into a bundled Python: what ships now is the Python the reference was taken from, so the figure the product carries is **16.3324%** on the CPU and 16.3319% on WebGPU, and the 0.0044 divergence between the CLI and the window closed with it. **Measured 2026-08-20 on whole podcasts and it does not transfer**: all four episodes returned four labels whether there were 2, 3, 5 or 7 speakers — the cap explains the last two and over-segmentation explains the first two — and a duration ladder over one episode puts the count right to 50 minutes and wrong from an hour, against AMI meetings averaging about half an hour. AMI dev re-scored the same day is 8.62% at collar 0.25 with 0.94% confusion and 4-of-4 speaker agreement on all eighteen, so this is a long-recording limit rather than a bad model. Nothing was re-tuned; the product now warns before the run, past an hour and on a count above the cap. No DER exists for any podcast and the cap is still unpriced. **NOTSOFAR-1, decided 2026-08-23: scored after v1.0 — an obligation recorded under *After v1*, not a waiver.** **Shelved 2026-08-27: this whole row describes an engine that is now in `attic/sortformer/`.** Speaker labelling is `pyannote/speaker-diarization-community-1` alone and **has not been scored against this gate** — one of the sixteen test meetings, ES2004a, scored 14.38% at collar 0.25 and 18.76% at collar 0 with 5 speakers against 4 on 2026-08-27, which is not the protocol and is not comparable to a sixteen-meeting mean — so the gate stands unmet by the shipping product rather than passed. See the section above, and `docs/UNPROVEN.md` |
 | v2 — ask | A human asks three questions of a real transcript on Windows and follows a citation into the audio — the revised plan's Stage 4 exit criterion | **Built end to end 2026-08-23/24 on the laptop; the human run is still owed.** The five stages landed in order: the transcript reader and keyboard seeking (Stage 1's remnants); windowed BM25 and the citation machinery — parser, validator, the rule that the model never writes a timestamp (Stage 2); `IAnswerEngine` over a vendored `llama-server` child at b10603, run green on cpu and vulkan under a gated test with a digest-pinned 0.6B (Stage 3); the chat panel wired, streaming, citing and abstaining, with R9 enforced in both directions (Stage 4); and the vulkan drop in both installer channels with the MIT text travelling and the channel read-back holding it (Stage 5). The three register questions v1 created were all taken 2026-08-24: the English pane, no speaker labels, the hint or nothing. Nothing recommends a model — decision 2 holds until the CSB384 measurements run — so the panel serves a GGUF the user supplies. The open tail is in `docs/UNPROVEN.md`: the human exit criterion, the thirty labelled questions and recall@10, the desktop's first CUDA run, and the cudart decision the win-cuda channel waits on |
 | v2 — tidy | The tidy ships when its delta on the ten-call WER corpus has been measured under both reference styles — composition included, since the contract allows deletions and forbids everything but doubted words — and the desktop has re-timed the pass and its tandem on CUDA | **Decided 2026-09-01; built 2026-09-02; both conditions measured by 2026-09-03; decided the same day to ship opt-in with the joined run as its unit; not yet in a release.** Measured first, on the second machine's Vulkan path: `gemma-4-E4B-it` tidies at 3.7 min per hour of audio with four requests in flight, saves 26% of the combined time run beside the recogniser on a ten-minute file at the cost of a transcription 31% slower in that run, and before any contract changes one word in ~300 — `docs/UNPROVEN.md`, *Gemma 4 E4B as a transcript tidy*. Built the next day, every part of the decision from the contract to the pane (*Built 2026-09-02*), and run beside the real recogniser the same evening (*Measured 2026-09-02*): the contract held on 77 of 77 lines with nothing refused, the recogniser was 31% slower for the company, and the tidied version landed 45 s after the plain one on the ten-minute sample — the line count, not the words, sets that pace, which was the open question then. The corpus delta followed the same evening (*Measured 2026-09-02, evening*): +3.43 against the verbatim transcripts, −2.94 against the edited ones, the spoken row reproducing the desktop's baseline to two decimals, the composition all deletions one way and insertions the other. The criterion reads the non-verbatim delta with the verbatim one reported beside it (*Decided 2026-09-02, late evening*), so the first condition is met on Vulkan. The unit the stage sends was measured across three units on 2026-09-03 (*Measured 2026-09-03 — the request unit*): joined runs land the tidied copy 83 s after the plain transcript against the segment's 194 s and tidy better under both references, but a refused run refuses every line in it, and by the rule as written the segment stays on that clause alone — how the clause should read is the decision now open. The desktop's CUDA delta and re-timing followed the same morning (*Measured 2026-09-03, desktop*): the delta is the laptop's to a twentieth of a point, +3.47 / −2.89, on a spoken transcript whose text is byte-identical to the 2026-08-16 baseline's, so the second condition is met on the same reading; the tandem lag is a fifth of the laptop's or less and the tandem still lands first, by 7–12% of the combined time rather than the spike's 26%; the recogniser pays 63% for the company over the corpus where the laptop paid 11.5%; and the same rule picks the sentence-run there and the segment on the laptop, on a refused count that moves by three between identical runs. The decisions followed the same day (*Decided 2026-09-03*): the clause counts refused requests, under which both longer units qualify on both machines and the joined run wins on lag; the joined run is the unit the stage sends; the tidy ships opt-in; and the tandem stays the default on every card. Driving the shipped command over one file the same day found what the unit change had opened (*Found and fixed 2026-09-03*): the contract bounded the form of an edit and never its size, so the model lifted a clause out of a line and a whole sentence out of another, and — the joined run's own half of it — the per-line empty guard, which lives where a run is judged as a composite, let three lines empty and vanish from the pane, their own units accepted and no refusal recorded for them — that arm refused three requests, none of them the ones carrying those lines. `MaxDeletedFraction` (0.5) and `MaxConsecutiveDeletedWords` (4) now bound it per piece; the same call then keeps all five, at 35 of 113 lines untidied against 11. Still owed: the corpus delta and refusal count under the joined run **with the ceiling**, never scored on either machine and no longer described by the figures the ship criterion read; whether 0.5 and 4 hold off the one call they were fitted on; what the ceiling costs in tidying not done; whether one bad piece should refuse a seven-line run; and the tag. The ceiling was amended later the same day (*Found and fixed 2026-09-03, later*): it had been refusing stutter collapses, the deletions that are the word the rewrite keeps, so repetitions became transparent to the fraction's numerator while the run ceiling and both shipped values stayed as they were — the reported symptom is gone on the file that prompted it, observed and not scored, and the 35-of-113 above describes the contract before it |
@@ -2869,9 +2869,9 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** `CLAUDE.md`'s second
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** `CLAUDE.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
-pattern `scripts/check-test-counts.py` looks for; it is reworded to `1672 tests` so the guard now
+pattern `scripts/check-test-counts.py` looks for; it is reworded to `1682 tests` so the guard now
 covers it.
 
 ### Built 2026-08-23 — a transcript goes back inside the recording, and ffmpeg is vendored to do it
@@ -2955,7 +2955,7 @@ wiring decision rather than an accident of where a file was put.
 **What it adds to an installer: about 114 MB**, the largest thing this product vendors after the
 models.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Built 2026-08-23 — the English is readable on the Ask tab, and the splitter stops fighting the clock
 
@@ -2999,7 +2999,7 @@ completed, when the remembered height is already the right one. Ticking between 
 reproduces it, and removing the guard now fails with "the picture did not keep the size it was
 dragged to".
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Built 2026-08-23 — the Ask tab reads by the sentence, and why its lines were thirty seconds long
 
@@ -3056,7 +3056,7 @@ subtitle files still break cues mid-sentence — 24 % of the German cues and 29 
 on this file open in lower case — because `SubtitleCueBuilder` reads characters and seconds and not
 punctuation; a punctuation-aware cue was offered and declined for now.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Built 2026-08-23 — a neural speech detector, as an opt-in, because the gate cannot hear a pause under music
 
@@ -3146,7 +3146,7 @@ one, and read `speechDetector` to know which you got. Nothing was re-measured; t
 are the measurement of the change itself, and "opt-in" in the paragraphs above is history on both
 routes.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Two of the four
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Two of the four
 by-name skips are the detector's, which skip unless `UINDOSILL_SILERO_VAD` names the graph; run
 against it on this machine they pass.
 
@@ -3186,7 +3186,7 @@ text each (478 where there were 285 on the documentary's gate segmentation), and
 measured. And not the word mark — a translated sentence still carries no word times, and the English
 pane still marks no word.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Built 2026-08-23 — subtitles and the window's lines drop the sentence-final full stop
 
@@ -3203,7 +3203,7 @@ Markdown, which carry the text as the model wrote it. An abbreviation that ends 
 (`Mr.`) loses its stop too; the cut is the defect there. A presentation rule, held by tests; nothing
 to measure.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Decided 2026-08-23 — the translator's `auto` prefers CUDA where the wheel carries it, and IO binding turns out to crash on the machine it was supposed to speed up
 
@@ -3251,7 +3251,7 @@ diariser on the CPU, because that venv's wheel has no WebGPU and the diariser's 
 include CUDA — the two engines' GPU preferences do not currently meet in one venv, and that is
 recorded rather than resolved.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** The C# suite does
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
 exactly the arrangement `CLAUDE.md` records for the translator.
 
@@ -3342,7 +3342,7 @@ The real trap is the mirror image and it is a testing one — `Assert.NotNull(Fi
 for a control the window never draws, and `Assert.Null` cannot detect a control duplicated onto a
 second tab. That is gotcha 31, and the tests that ask about drawing now ask the visual tree.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Twenty-two new, and
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Twenty-two new, and
 they add up: seven for the About window's three panes and its chrome, six holding every switcher
 pill against the page it names — six hand-written converter parameters that nothing else checked —
 two for the headerbar measurement above, two asserting each new page carries controls that write
@@ -3372,7 +3372,7 @@ screen.
 The forwarding line above the transcript now names only what is still elsewhere — the outputs on
 Export, the cut on Settings — and the status messages that pointed at the Settings tab for 'Label
 speakers', 'How many speakers' and the English opt-in point at the controls on the reader's own
-page instead. **1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** The
+page instead. **1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** The
 count is unchanged: the page assertions moved with the controls rather than multiplying, the order
 of the two strips is pinned by drawn geometry rather than markup order, and the English opt-in's
 write-through test came back from Settings with its page index.
@@ -3407,7 +3407,7 @@ now follows its own tail while a batch fills it — stuck to the end only while 
 already there, disarmed by scrolling up, re-armed by scrolling back — and no headless test drives
 that scroll geometry. And the Ask tab's transport button lost its grey disabled disc for a pale
 taro one; both were checked by launching the application and looking, and neither by an
-assertion. **1672 tests, 1663 passed and 9 skipped, the count unchanged**: the file-writing
+assertion. **1682 tests, 1673 passed and 9 skipped, the count unchanged**: the file-writing
 assertions moved from Start's tests into export presses in the same tests, and the no-format and
 RTTM refusal tests became the skip-and-say tests of the same names' subjects.
 
@@ -3464,7 +3464,7 @@ ever invoked it, and a cleanup that swallows everything by design would look exa
 if it silently achieved nothing. The 2026-08-19 procedure rerun on a current build is the proof
 that is still owed.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Decided 2026-08-23 — what v1.0 ships without, and the release that comes first
 
@@ -3597,7 +3597,7 @@ design; an interactive installer with a directory picker would mean a different 
 different update story. What it gets instead is the icon and the splash, so the one window a user
 sees during an install is branded rather than bare.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Six of the new ones
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Six of the new ones
 are the uninstall cleanup's from 2026-08-23; the rest are this entry's: which ids may be bundled,
 that they are single-file entries the catalogue actually has, that the sum still fits under the
 asset limit, that a bundled graph counts as available, and that a downloaded copy wins over it.
@@ -3688,7 +3688,7 @@ publish is a few dozen files. They size the executable instead: about 98 MB with
 against a couple of megabytes without, which is the thing that actually differs. Trimming and
 NativeAOT stay off, and those reasons are unchanged — trimming cannot see through P/Invoke.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** No test changed: the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** No test changed: the
 suite builds without a RuntimeIdentifier, so nothing in it publishes single-file, and what this
 changes is the shape of a deployment rather than the behaviour of any code.
 
@@ -3772,7 +3772,7 @@ can actually verify, and keeps one `[?]` bullet so a renderer's uncited state ca
 unbuilt. The suite drives the whole seam end to end with no model: fake stream → the parser →
 the validator → every citation resolves against the transcript it was asked about.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped**, up from 1144;
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped**, up from 1144;
 `check-test-counts.py` agrees with every document that quotes a count.
 
 ### Built 2026-08-23, later — the second native stack is vendored and the engine runs on it
@@ -3824,7 +3824,7 @@ smuggled into prose when the first-token abstain window is missed, is in `docs/U
 pinned and unvendored, its `sm_120` reading is a scan of the b10448 build, and the desktop's
 first run remains the corroboration the register has been waiting for since 2026-08-16.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Decided 2026-08-24 — the model sees the English pane
 
@@ -3905,7 +3905,7 @@ machine is the exit criterion itself: a human asking three questions of a real t
 Windows and following a citation into the audio. `docs/UNPROVEN.md` says so where the tab's
 other unlooked-at work is recorded.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Built 2026-08-24 — the ask tier ships: Stage 5, and the second stack joins the channels
 
@@ -4019,8 +4019,8 @@ needle plant, the abstain row and the new summary block all exercised against a 
 CUDA). What the verb does not change: the recall *number* still waits on the thirty labelled
 questions, which are a person's session. Eight new CLI tests hold the seam — the top hit
 carrying the term's segment, order preserved across questions, the wide variant's shape, empty
-retrieval as success, and the three refusals. **1672 tests, no weights, no display, no network —
-1663 passed and 9 skipped**, up from 1262; 192 CLI tests.
+retrieval as success, and the three refusals. **1682 tests, no weights, no display, no network —
+1673 passed and 9 skipped**, up from 1262; 195 CLI tests.
 
 ### Decided 2026-08-24 — four decisions close the sitting
 
@@ -4085,8 +4085,8 @@ the product reads, that a store given nothing answers inside the redirect, and t
 construction which leaked now saves where it should — and one existing test was reading the
 override where it meant the default, so `ModelsAreNotStoredInTheInstallDirectory` now asks
 `LocalModelStore.DefaultRootDirectory()` the question it was written to ask. Proved by the run:
-the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1672 tests, no
-weights, no display, no network — 1663 passed and 9 skipped.** `docs/GOTCHAS.md` gotcha 33
+the file's SHA-256 is unchanged across a full suite that previously rewrote it. **1682 tests, no
+weights, no display, no network — 1673 passed and 9 skipped.** `docs/GOTCHAS.md` gotcha 33
 carries the shape.
 
 Two 7-byte files, `decoy-a.gguf` and `decoy-b.onnx`, were found beside the weights in the same
@@ -4242,7 +4242,7 @@ reproduces the old behaviour on the only machine that has ever run an ask — so
 no-op everywhere it can be checked. No discrete-GPU Vulkan ask run exists with the pair off; the RTX 5080's Vulkan figures
 were taken on the lab script with a dense model, where `--cpu-moe` matches no tensors and the
 pair is a no-op either way. The two spike runs that would settle the other branch are named in
-`docs/UNPROVEN.md`. **1672 tests, 1663 passed and 9 skipped, 0 warnings**, and the gated engine
+`docs/UNPROVEN.md`. **1682 tests, 1673 passed and 9 skipped, 0 warnings**, and the gated engine
 trio green on cpu and vulkan against a real child with the probe in the start path.
 
 ### Built 2026-08-28 — the survey tier, and the Ask tab's headline feature starts working
@@ -4363,7 +4363,7 @@ are unaffected — they were taken with the flag explicitly on — and the same 
 cosmetic the overview path made common: a citation lifted from mid-sentence left the space in
 front of it, so "…the staging environment [S1-S4]." rendered as "…the staging environment .".
 Only the period and comma close up; a space before ; : ! ? is correct French typography.
-**1672 tests, 1663 passed and 9 skipped, 0 warnings**, the gated engine trio green on cpu and
+**1682 tests, 1673 passed and 9 skipped, 0 warnings**, the gated engine trio green on cpu and
 vulkan against a real child.
 
 ### Fixed 2026-08-25 — the suite gets one scratch root, and stops leaving 17,000 directories behind
@@ -4389,7 +4389,7 @@ something else. Measured rather than asserted, since a test cannot watch its own
 the `%TEMP%` entries were compared **by name** across a full suite — not by count, because a
 second worktree was running the same suite on this machine and its directories land in the same
 place — and the set came back identical, nothing added. That run's suite was unchanged by the
-change, and the count this document quotes is the current one — **1672 tests, 1663 passed and 9
+change, and the count this document quotes is the current one — **1682 tests, 1673 passed and 9
 skipped**; `docs/GOTCHAS.md` gotcha 34 carries the shape.
 
 The 17,140 already there are not deleted by any of this. About 1.06 GiB of that is research
@@ -5302,7 +5302,7 @@ says it once on stderr, as `TranslatorFactory` already did — and whose comment
 labeller did too. That is not an accuracy warning, which this engine still declines to make: it is a
 statement about which arithmetic unit ran.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** One new, the twin of
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** One new, the twin of
 the translator's: a scripted capabilities reply carrying a `fellBackFrom` entry must reach
 `SidecarSpeakerLabeller.FellBackFrom`. The election itself is in the sidecar, which the C# suite
 drives through a fake, so `scripts/check-diariser-auto.py` is what covers that and CI runs it.
@@ -5350,7 +5350,7 @@ variance, and the two runs discarded for having been executed concurrently. `dml
 unexecuted on these graphs, and the desktop — where a CUDA torch would carry fbank to the GPU too
 and might want the opposite trade — is unmeasured.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** None new: the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** None new: the
 seating is inside the sidecar, which the C# suite drives through a fake, and the election guard
 `scripts/check-diariser-auto.py` covers `resolve_auto` rather than what a route seats once elected.
 The evidence for this change is the measurement, not the suite.
@@ -5401,7 +5401,7 @@ determinism is observed rather than guaranteed. A 7.6-second load is not a therm
 `docs/UNPROVEN.md` § *CUDA joined the diariser's `auto`* carries all of it, and
 `runs/diariser-cuda/20260828-equivalence-5080/` the artefacts.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** None new, and one
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** None new, and one
 changed: `DiariseCommandTests` asserted the help said the device's effect on labels "has not been
 measured", which this makes false, so it now asserts the gap that is still open — no DER. The
 election guard `scripts/check-diariser-auto.py` grew nine cases and now stubs torch as well as
@@ -5461,7 +5461,7 @@ is unknown — which is a real question for the download design and not a detail
 tested against a *mismatched* pack, where the overlay's torch version differs from the bundle's pin;
 the script refuses to build a non-CUDA pack but nothing checks the pair at run time.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Seven new, all on
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Seven new, all on
 the resolution: the two places and their order, the variable, a bundle with no pack, a directory
 holding no torch, and a pack found alongside an interpreter named by `UINDOSILL_PYTHON` — the last
 being the case the `with` expression in `Resolve` exists for, since the environment branch returns
@@ -5524,7 +5524,7 @@ overlay's torch version differs from the bundle's pin — the builder refuses to
 pack, and there is still no run-time check of the pair. The probe's `Present` branch is unreachable
 in CI and is held only by the hand check above.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Four new, all on the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Four new, all on the
 probe, and deliberately only the machine-independent part of it: that it answers rather than throws,
 that a device count above zero implies `Present` and nothing else does, that the two negative answers
 stay distinct, and that a second probe agrees with the first — which is the fault a Settings page
@@ -5598,7 +5598,7 @@ over a real connection, an interrupted one that resumes, and a disk that fills m
 untested. The 1.83 GB figure is one build of one pin set and nothing watches it. The probe's
 `Present` branch remains unreachable in CI.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Eighteen new: twelve
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Eighteen new: twelve
 on the manifest and the two refusals, six on the Settings block. The app ones assert the
 *relationship* between the probe, the installed state and the row's visibility rather than any of
 their values, because CI has no card and the maintainer's desktop has one, and a test whose answer
@@ -5647,7 +5647,7 @@ behind and ran on past 268 MiB, on the same URL a `curl` range request had alrea
 4.2 MB/s — so the failure was a transient server-side drop throughout, and the defect was never
 being able to take one.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Four new, all on the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Four new, all on the
 retry, and they are the first tests this repository has ever had over `ModelInstaller`'s transport.
 
 ### Built 2026-08-29 — one button for yt-dlp and Deno, and the one pin this product lets go of
@@ -5706,7 +5706,7 @@ a schedule or tells a user their yt-dlp is old — the button has to be pressed,
 that breaks on YouTube's timetable rather than ours is a real limitation and not a design. There is
 no rollback beyond deleting the directory, and no way to pick a version.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Ten new, all on the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Ten new, all on the
 reasoning that happens before a working binary is replaced: both checksum shapes read off the real
 releases, a missing asset and a missing `Hash` line both refused, and the version comparison
 including the `v` that would otherwise re-download 42 MB every press. The download itself is not in
@@ -5767,7 +5767,7 @@ General — which is the right default and still a choice nobody can change. Not
 General control to its Advanced counterpart. The CLI has no equivalent of the split, which matters
 less than it sounds: `--help` already names every flag.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.**
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.**
 
 ### Fixed 2026-08-29 — the engine panel stops looking like the model you clicked
 
@@ -5817,7 +5817,7 @@ and 28 — the expert-placement and context notes in `LlamaServerOptions`, `AppS
 build no longer offers. They were not rewritten: a measurement is a record of what was run, and
 editing it to name a model that was not the one measured would be the worse of the two errors.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** None added and four
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** None added and four
 changed: two catalogue listings that enumerate every entry, and two fixtures repointed at the
 surviving sibling — a rename rather than a rewrite, since both entries declare the same head and the
 pairing under test is unchanged.
@@ -5863,7 +5863,7 @@ of data, of which `*_exps` are **13.43 GiB — 84.8%** — and everything else 2
 why an A4B mixture is a good candidate for offload when offload is needed, and it is the number that
 would make the trade worth measuring on a card that genuinely cannot hold one.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Two new and one
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Two new and one
 rewritten. The rewritten one asserted that placement decided nothing off Vulkan, which was the
 defect; it now covers the CPU backend, where the claim is still true and for a reason — every weight
 is in system memory already, so the pair would name a move with nowhere to go. The new pair cover
@@ -5918,7 +5918,7 @@ speech."* made the header contain a bullet marker;
 speech." now. **That is the argument for reviewing a mechanical substitution rather than trusting
 it**, and the only collision of its kind in 108.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** None added; two
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** None added; two
 assertions followed the copy they mirror.
 
 ### Built 2026-08-29 - the models come off the disk in one action, and the uninstaller still cannot ask
@@ -5963,7 +5963,7 @@ uninstall on a machine - which is why this entry stops here rather than guessing
 without opening the application first still leaves the models behind. The button narrows that to
 people who never open the Models tab; it does not close it.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Six new, on the one
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Six new, on the one
 action in this window that deletes tens of gigabytes on a single click: that it removes every
 installed entry, that it reports what it freed rather than only that it worked, that a loaded model
 is left alone and named, that it is refused mid-batch, and that the notice tells somebody
@@ -6011,7 +6011,7 @@ appeared on a real Installed apps click, because that needs a real package, a re
 real uninstall on a machine, and the 98 ms failure it rides on is exactly the thing that does not
 reproduce on demand. The register and the tests both say so rather than implying otherwise.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Thirteen new: seven
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Thirteen new: seven
 on the prompt's decisions and its wording, six restored with `UninstallCleanup`. The dialog itself
 is not exercised and cannot be, since it blocks on a human, so what is tested is everything either
 side of it - whether asking is warranted at all, and whether the text tells somebody reinstalling to
@@ -6067,7 +6067,7 @@ nobody had written down: a Yes answered late against tens of gigabytes reaches t
 fast-callback budget, and what a half-deleted `models\` directory costs is reasoned rather than
 observed.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** One new, on the
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** One new, on the
 three branches against the threshold the uninstaller itself uses. Three changed: two that asserted
 the retired wording, and one renamed for the branch it actually reaches.
 
@@ -6127,7 +6127,7 @@ the 2,147,483,648-byte ceiling** and 100,079 bytes larger than rc.6. The read-ba
 download* quotes the digest `2a056a0d…` for the local install it describes. That observation stands
 as what was run that day; it is simply no longer the artefact anybody can fetch.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** None added; three
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** None added; three
 rewritten as described, and one renamed with them.
 
 ### Fixed 2026-08-29 - the bundled Python's closure stops floating, after it cost three things in one afternoon
@@ -6193,7 +6193,7 @@ twice on two machines and compared, and the wheels are still fetched from PyPI r
 vendored, so this removes version drift and not every source of difference. What is established is
 the resolution above: the same versions, in the same set, on this machine, under the lock.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** None added: the
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** None added: the
 suite does not assemble a Python bundle, and the checks that matter here are the two resolves above
 and `collect-python-notices.py`, which CI already runs against the bundle every release builds.
 
@@ -6212,7 +6212,7 @@ dialog is closed when that expires. Measured on a real uninstall the same day: t
 in place, 14,625 of 14,625 and byte-identical. Walking away is the safe outcome and the text now
 says so rather than leaving a reader to guess.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Two new: one that
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Two new: one that
 the title and the body point the same way, one that the text says what an unanswered dialog does.
 
 ### Fixed 2026-08-29 - the update check searches the train the build is on
@@ -6243,7 +6243,7 @@ hyphen out of the metadata would put every stable build on the candidate train.
 release published before this one can be rescued by it: the earliest release that can exercise the
 path is the one after the release that carries it.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Ten new, all on the
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Ten new, all on the
 one decision, including the two shapes that would each break it in a different direction.
 
 ### Fixed 2026-08-29 - three ways a fault or a cancel at the wrong moment took an engine down
@@ -6277,7 +6277,7 @@ the ask; but the continuation carried on to unload the session, disposing the tr
 under the batch that had just borrowed it, mid-decode. The same re-check the load window already
 had, at the other window that needed it.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Two new — the
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Two new — the
 mid-write cancel and the transcription-during-dispose interleaving — each run against the code it
 pins as that code stood, and each fails there the way the defect says it should: a timeout where
 the hang was, an unloaded session where the batch's engine went.
@@ -6353,7 +6353,7 @@ not to throw — an unlistable `torch/lib` reads as unhealthy instead. And the n
 had been spliced so that it absorbed the token-limit test's closing assertion; both stand whole
 again, with the nothing-was-written check back where it belonged.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Sixteen new
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Sixteen new
 across eight suites — the refusals, the clamps, the derived-options contract, the flag semantics,
 the cold-load exclusion, the overflow arithmetic, the concurrent start, the gutted pack, and the
 block-streamed PCM16 — and the CUDA-pack fixtures now stage `torch/lib` the way a real pack ships
@@ -6400,7 +6400,7 @@ through this deletes anything the person did not answer Yes to.
 5.26 GB `win-cuda` install directory took about four minutes on the desktop, measured, and that is
 Velopack's own work rather than this product's. The bug was never the duration.
 
-**1672 tests, no weights, no display, no network - 1663 passed and 9 skipped.** Three new: that the
+**1682 tests, no weights, no display, no network - 1673 passed and 9 skipped.** Three new: that the
 scheduled command names exactly the directory the guards approved and nothing above it, that it
 waits before starting, and that a refused target schedules nothing at all. The six that held the
 synchronous walk are unchanged and still hold it, because it is still the definition the detached
@@ -6470,7 +6470,7 @@ composes were driven end to end on 2026-08-29 against a local server and the shi
 strip has likewise not been seen stacked under a live update notice; both are top-docked borders
 and nothing has displayed the pair.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** Six new: the
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** Six new: the
 default flavour never starts by itself; a recorded stop keeps every later launch quiet; on the
 CUDA flavour the launch decision equals the Settings button exactly, asserted as the relationship
 because both sides vary with the machine running the suite; Stop lands the refusal in the file;
@@ -6527,7 +6527,7 @@ proved the variable was read *and* conceded that the default still resolved to s
 `%LOCALAPPDATA%`. Both defaults now land under the run's own directory, and the test says so
 instead.
 
-**1672 tests, no weights, no display, no network — 1663 passed and 9 skipped.** One new — a copy
+**1682 tests, no weights, no display, no network — 1673 passed and 9 skipped.** One new — a copy
 no installer put there never starts by itself — and the previously failing layout test passes
 without being touched, which is the check that the strip was the whole of what shrank the column.
 `CudaPackLaunchStartTests` now tells every view model it is an installed copy, so each of its
@@ -6913,7 +6913,7 @@ only behind options the window never sets.
   180 joined runs the plan projected, and the dry run's summary went nowhere.
 
 Thirteen unit tests hold the shaper, the cut-back and the stage to the cases above, and two
-end-to-end tests drive the options through the entry point; the suite is **1672 tests, 1663
+end-to-end tests drive the options through the entry point; the suite is **1682 tests, 1673
 passed and 9 skipped**, built at Release with 0 warnings. The measuring hour has not run.
 
 ### Measured 2026-09-03 — the request unit: the longer units win the lag and the quality, and fail the refusal clause; the rule needs a decision
@@ -7505,3 +7505,61 @@ translator change having still not run on this machine. And nothing here is a ti
 same 321 sentences through the same FuguMT graphs took 270.2 s and 117.8 s in two runs, a 2.3x
 spread on identical work with the scores reproducing to the digit, because the harness does not
 control machine load.
+
+### Decided and built 2026-09-04, night — Japanese translation ships on FuguMT: four decisions, a second translation entry, and the token that stopped being a constant
+
+**The decisions, the maintainer's, on the evening's like-for-like figures.** (1) CC BY-SA 4.0 is
+acceptable in the catalogue: the first ShareAlike entry. (2) FuguMT ships in v1.0 as a second
+translation entry rather than the shipped checkpoint behind a lifted clamp — the 6.06 chrF++ is
+real, the shipped checkpoint's Japanese was the narrowest gate pass of the 25 languages measured, at
++1.47 over the bar with three stuck-punctuation runs in 321 sentences, and that headroom is smaller
+than every cascade penalty this project has measured, where FuguMT's own cascade figure, 48.46,
+stays above the bar. (3) The translator is chosen by the selected recogniser, with no picker — the
+third time the no-spoken-language-picker answer has come out that way. (4) The export is published
+from this machine under `jkkma`.
+
+**What was found first: the clamp was prose.** Before anything was built, one run settled whether
+Japanese already translated. `uindosill translate` over three Japanese lines through the shipped
+checkpoint returned correct English with no change (`runs/20260904-223049-ja-translate-cli-cpu/`),
+and a read of every consumer showed `SourceLanguages` assigned in two places and read by nothing:
+the "25-language clamp" the evening's entries described was the catalogue's language list and the
+sentences around it, not a gate. The compile-time target token was the one real obstacle, and the
+UNPROVEN sentence that said the clamp stood in the way is annotated rather than deleted.
+
+**What the build changed.**
+
+- **The target token is a per-checkpoint declaration.** `models.json` declares `targetToken` on the
+  many-to-one entry and none on the Japanese one; the sidecar reports at load whether the loaded
+  vocabulary holds `>>eng<<` as one piece; the host refuses a disagreement
+  (`SidecarTranscriptTranslator.ApplyTargetToken`) before a source is built; and
+  `TranslationRequest.Build` marks every source or none, with null a declaration and blank still
+  refused. `TranslatorCapabilities.TargetToken` is nullable and required, so every translator states
+  one or the other.
+- **The decode check is per checkpoint.** The engine held `bad_words_ids` and `forced_eos_token_id`
+  to the shipped checkpoint's numbers, which refused every other checkpoint for having a different
+  vocabulary; it now holds them to the checkpoint's own `config.json` — decoding starts on pad, pad
+  is banned, the end token is forced — which both checkpoints satisfy and a lost
+  `generation_config.json` does not.
+- **The parity fixture is per checkpoint**, chosen by vocabulary size because the exports write no
+  name into `config.json`; a checkpoint with no fixture now warns rather than loading in silence, a
+  change the night's own slip forced (`docs/UNPROVEN.md` § *Japanese translation ships on FuguMT*),
+  and the two packaging scripts require the Japanese fixture as they require the first.
+- **Selection by recogniser.** `ModelCatalog.TranslationModelsFor` returns the entries whose language
+  list covers a recogniser's. `transcribe --translate` and the window use it; `translate`, text with
+  no recogniser behind it, falls back to the only entry installed and asks for `--model` with two;
+  a recogniser that declares no languages — a sideloaded one — is refused rather than guessed for.
+  The window re-asks whenever the Models tab's highlight moves or the session loads a model.
+- **The catalogue.** `fugumt-ja-en-fp32`: nine files, 360.8 MiB, pinned by size and digest at commit
+  `9e075eec` of `jkkma/fugumt-ja-en-onnx` and verified on install. The many-to-one entry is renamed
+  *European to English translation* beside *Japanese to English translation*, the morning's naming
+  decision applied to the second task that has two entries.
+- **The licence.** `CcBySaAttribution` — CC BY's seven elements and a required ShareAlike statement —
+  in `Attribution.cs`, `NOTICE.md`, the export's card and `docs/LICENSING.md`, which records what was
+  read at the pinned revision (no LICENSE, no NOTICE, no copyright notice, a creator designated only
+  by pseudonym) and this project's reading of what ShareAlike reaches. No lawyer has read it.
+- **Ten tests**, 1673 passing and 9 skipped, and the export script's smoke decodes with
+  `renormalize_logits` as the sidecar does, so it compares two decodes rather than two collapses.
+
+**What it does not settle** is in `docs/UNPROVEN.md` § *Japanese translation ships on FuguMT*: no
+person has clicked through the window from here, no person has rated the English, no timing is a
+figure, and the desktop owes the CUDA arm.
