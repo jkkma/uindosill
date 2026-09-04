@@ -114,12 +114,27 @@ import sys
 import time
 from pathlib import Path
 
+# The default checkpoint, and `--model` overrides it. A second Marian checkpoint arrived on
+# 2026-09-04 — `staka/fugumt-ja-en`, Japanese into English — and it is the same architecture, the
+# same file shape and the same exporter; only the name and the target token differ. Both are
+# rebound in `main` rather than threaded through every function below, because this is a one-shot
+# tool whose functions all read one checkpoint per run.
 MODEL = "Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld"
 
-# Measured 2026-08-19 and not optional: without the target token the same Spanish segments come back
-# as fluent German, the checkpoint's first declared target, and nothing downstream would catch it.
-# TranslationRequest.Build in Parakeet.Core is where C# puts it on.
+# Measured 2026-08-19 and not optional *for a multilingual checkpoint*: without the target token the
+# same Spanish segments come back as fluent German, the checkpoint's first declared target, and
+# nothing downstream would catch it. TranslationRequest.Build in Parakeet.Core is where C# puts it on.
+#
+# A single-direction checkpoint has no such token and must not be given one: `fugumt-ja-en`
+# translates Japanese into English and nothing else, and `>>eng<<` would be tokenised as text and
+# translated. `--target-token ""` is how that is asked for, and the manifest records which it was so
+# the artefact says what it needs rather than the reader remembering.
 TARGET_TOKEN = ">>eng<<"
+
+
+def mark(sentence: str) -> str:
+    """The sentence exactly as the shipping path sends it: target token and a space, or neither."""
+    return f"{TARGET_TOKEN} {sentence}" if TARGET_TOKEN else sentence
 
 # The embedding lookup is a Gather over an initialiser. ORT's dynamic quantiser takes Gather by
 # default, which is the 227 MiB end of the spread; dropping it from the operator set is the 404 MiB
@@ -177,14 +192,31 @@ VARIANTS = {
 # a CC BY-SA 4.0 narration of the German article on Ralf Dahrendorf, transcribed 2026-08-19); the
 # rest exercise what the spike found: English passthrough, the German-numbers-as-words interaction,
 # and a segment short enough that beam search has somewhere to go.
-SMOKE_SENTENCES = [
-    ("es", "Caracas es la capital y la ciudad más poblada de Venezuela."),
-    ("es", "Desde el siglo XIX es considerada el centro del poder político y económico de Venezuela."),
-    ("es", "Se encuentra ubicada en la zona centro."),
-    ("de", "Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren."),
-    ("de", "Die Funktion sozialer Konflikte ist das Thema seines Buches."),
-    ("en", "This sentence is already in English and should pass through unchanged."),
-]
+# The smoke set has to be in a language the checkpoint under test actually reads. The European set
+# is the one every recorded figure was produced with and stays the default; the Japanese set arrived
+# with `staka/fugumt-ja-en` on 2026-09-04 and is FLEURS ja_jp test sentences, chosen because their
+# reference English is on hand and a reader can see whether the output means anything.
+#
+# The smoke measures ONNX against PyTorch on the SAME checkpoint, so a mismatched set would still
+# produce a valid parity number — and an unreadable one. `--smoke-set` picks.
+SMOKE_SETS = {
+    "europe": [
+        ("es", "Caracas es la capital y la ciudad más poblada de Venezuela."),
+        ("es", "Desde el siglo XIX es considerada el centro del poder político y económico de Venezuela."),
+        ("es", "Se encuentra ubicada en la zona centro."),
+        ("de", "Ralf Dahrendorf wurde neunzehnhundertneunundzwanzig in Hamburg geboren."),
+        ("de", "Die Funktion sozialer Konflikte ist das Thema seines Buches."),
+        ("en", "This sentence is already in English and should pass through unchanged."),
+    ],
+    "ja": [
+        ("ja", "群島や湖では、必ずしもヨットは必要ありません。"),
+        ("ja", "バルセロナの公用語はカタルーニャ語とスペイン語です。"),
+        ("ja", "ロスビー数が小さいほど磁気反転に関して星の活性が低下するわけです。"),
+        ("ja", "また、北側に行くなら世界的に有名なマリア像の聖地を訪れましょう。"),
+    ],
+}
+
+SMOKE_SENTENCES = SMOKE_SETS["europe"]
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -469,7 +501,9 @@ def translate_with_onnx(directory: Path, sentences: list[str], num_beams: int) -
 def _generate(model, tokenizer, sentences: list[str], num_beams: int) -> tuple[list[str], float]:
     import torch
 
-    marked = [f"{TARGET_TOKEN} {sentence}" for sentence in sentences]
+    # A single-direction checkpoint takes no target token, and prefixing a space would be a
+    # tokenised difference from what the shipping path sends.
+    marked = [mark(sentence) for sentence in sentences]
     batch = tokenizer(marked, return_tensors="pt", padding=True)
     started = time.time()
     with torch.no_grad():
@@ -590,7 +624,7 @@ def write_tokenizer_fixture(path: Path) -> dict:
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
     cases = []
     for language, sentence in SMOKE_SENTENCES:
-        marked = f"{TARGET_TOKEN} {sentence}"
+        marked = mark(sentence)
         encoded = tokenizer(marked)
         cases.append({
             "language": language,
@@ -622,16 +656,33 @@ def write_tokenizer_fixture(path: Path) -> dict:
 # --------------------------------------------------------------------------------------------- #
 
 def main() -> int:
+    # A Japanese smoke set prints Japanese, and a Windows console in a non-UTF-8 locale kills the
+    # run at the print rather than at the work — after the export has already succeeded. Force it.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    # Declared before the parser, whose defaults read them. Every function below takes the
+    # checkpoint from the module rather than an argument, which is fine for a tool that exports
+    # one checkpoint per run and is why this is two lines instead of a signature change.
+    global MODEL, TARGET_TOKEN, SMOKE_SENTENCES
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     default_out = Path(__file__).resolve().parent.parent / "runs" / "translation-onnx"
     parser.add_argument("--out", type=Path, default=default_out,
                         help="where the artefacts go (default: runs/translation-onnx, gitignored)")
+    parser.add_argument("--model", default=MODEL,
+                        help=f"the checkpoint to export (default: {MODEL})")
+    parser.add_argument("--target-token", default=TARGET_TOKEN,
+                        help="the token that names the target language, empty for a single-direction "
+                             f"checkpoint such as staka/fugumt-ja-en (default: {TARGET_TOKEN})")
     parser.add_argument("--variants", default=",".join(VARIANTS),
                         help="comma-separated: " + ", ".join(VARIANTS))
     parser.add_argument("--list", action="store_true", help="print the variants and exit")
     parser.add_argument("--skip-export", action="store_true",
                         help="manifest, smoke and fixture against artefacts already on disk")
     parser.add_argument("--smoke", action="store_true", help="translate and diff against fp32 PyTorch")
+    parser.add_argument("--smoke-set", default="europe", choices=sorted(SMOKE_SETS),
+                        help="which sentences to smoke with; must be a language the checkpoint reads")
     parser.add_argument("--smoke-variants", default=None,
                         help="which variants to smoke (default: all that were built)")
     parser.add_argument("--num-beams", type=int, default=6,
@@ -641,6 +692,10 @@ def main() -> int:
     parser.add_argument("--tokenizer-fixture", type=Path, default=None,
                         help="write a committed token-id fixture to this path")
     args = parser.parse_args()
+
+    MODEL = args.model
+    TARGET_TOKEN = args.target_token
+    SMOKE_SENTENCES = SMOKE_SETS[args.smoke_set]
 
     if args.list:
         for name, variant in VARIANTS.items():
