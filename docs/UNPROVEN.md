@@ -6448,7 +6448,9 @@ numbers, and no NHK or ARIB document was obtained.
   means: the figures above are six short clips with no warm-up.
 - **No Japanese corpus.** `scripts/wer-corpus.json` is English, so `measure-wer.ps1 -Cer` is
   plumbing rather than a measurement until a Japanese manifest exists.
-- **Nothing about the translation half.** No ja→en figure of this project's own exists.
+- **Nothing about the translation half.** No ja→en figure of this project's own exists. **Overtaken
+  later the same day**, and this line is kept as what was true when the probe ran: three now exist —
+  FuguMT 52.53, the cascade 48.46, and the shipped checkpoint 46.47, all on FLEURS `ja_jp`.
 
 ## FuguMT exports cleanly and decodes correctly only below beam 5 — found 2026-09-04
 
@@ -6521,8 +6523,11 @@ shipped translation model is not installed on this machine. That load is owed.
 
 ### Measured on FLEURS the same day — chrF++ 52.53, and no collapse in 321 sentences
 
-`scripts/measure-translation.py --languages ja --target-token "" --num-beams 6` over the exported
-fp32 graphs, FLEURS `ja_jp` test, **all 321 distinct sentences**, all 321 shared with `en_us`.
+`scripts/measure-translation.py --variant runs/translation-onnx/fugumt-ja-en/fp32 --languages ja
+--target-token "" --num-beams 6`, FLEURS `ja_jp` test, **all 321 distinct sentences**, all 321
+shared with `en_us`. The `--variant` matters and was implicit here until a second Japanese run
+existed: without it the harness scores its default, `runs/translation-onnx/fp32-merged`, which is
+the shipped checkpoint and is exactly what *The shipped translator on Japanese* below did score.
 chrF++ signature `nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`. Laptop CPU, 270 s.
 
 | scored | source-copy floor | chrF++ | margin | required | collapse | punct. run | gate |
@@ -6548,17 +6553,27 @@ segmentation — so it is **not the cascade**, and the measured cascade penaltie
 chrF++ at 6.12% WER, German −4.34 at 9.93%, 2026-08-20) are not known to transfer to a language
 scored by CER. The shipped translator was **not** scored on `ja_jp` here, its ONNX export not being
 installed on this machine, so "better than what ships, for Japanese" still rests on Helsinki's
-published figures rather than on this harness. And there is no catalogue entry: the graphs are
+published figures rather than on this harness. **That was answered the same evening and the answer
+narrows this section's claim**: the shipped checkpoint scores chrF++ 46.47 on the same 321 sentences
+and passes the gate, so the margin FuguMT holds over it is 6.06 chrF++ rather than the ratio the
+published BLEU figures implied — see *The shipped translator on Japanese* below. And there is no
+catalogue entry: the graphs are
 571.1 MiB in `runs/`, hosted nowhere, so nothing can be pinned.
 
 **What is not established:**
 - **Whether beam 1 to 4 is good enough to ship.** The outputs above read correctly; that is four
   sentences read by eye, not a score. No corpus figure of this project's own exists for this
-  checkpoint at any beam width, and the published 23.2 was produced at neither.
+  checkpoint at any beam width, and the published 23.2 was produced at neither. **The beam-6 half of
+  that was answered hours later** — 52.53 over 321 sentences, in the subsection above — so what
+  stands open is beams 1 to 4, which remain unscored.
 - **Whether the same defect affects the shipped translator.** It has never been decoded below beam 6
   here, and nothing suggests it — but nothing has checked either.
 - **Anything about Japanese-to-English quality in this product.** No ja→en figure of this project's
-  own exists, at any beam width, on any corpus.
+  own exists, at any beam width, on any corpus. **Overtaken within the hour**, and kept as what was
+  true when this section was written: 52.53 followed on FLEURS `ja_jp` at beam 6, then the cascade's
+  48.46 and the shipped checkpoint's 46.47. What the line still gets right is *in this product* —
+  none of the three runs went through the application, and none of them is a quality judgement a
+  person has made.
 
 ## Japanese end to end — measured 2026-09-04, and the cascade penalty is not on the same axis as the other two
 
@@ -6617,7 +6632,11 @@ four chrF++ points.
 **What it does not establish:**
 
 - **The shipped translator on `ja_jp`.** It was installed today and not scored, so "FuguMT is better
-  for Japanese" still rests on Helsinki's published figures rather than on this harness.
+  for Japanese" still rests on Helsinki's published figures rather than on this harness. **Scored
+  the same evening** — chrF++ 46.47, gate PASS, 6.06 below FuguMT on the same 321 sentences (*The
+  shipped translator on Japanese*, below). The claim is now this harness's, and it is narrower than
+  the published gap: it says the dedicated checkpoint is better, not that the shipped one fails.
+  What no run here compares is the two *through the cascade* — the −4.01 above is FuguMT's alone.
 - **Any of it through the application.** The cascade was assembled from the CLI's transcripts and a
   direct call to the translator, because `SidecarTranscriptTranslator.EnglishTargetToken` is a
   compile-time `">>eng<<"` and a single-direction checkpoint takes none. A user cannot run this.
@@ -6627,6 +6646,81 @@ four chrF++ points.
   has WebGPU not being present in a build-from-source tree.
 - **Anything about real recordings.** FLEURS is read speech in a quiet room: no spontaneous Japanese,
   no overlap, no music, no telephone audio. One machine, one backend each.
+
+## The shipped translator on Japanese — measured 2026-09-04, evening, and it passes the gate
+
+The comparison that chose FuguMT was two published numbers. This is the same question asked of this
+project's own harness, and it does not reproduce the gap those numbers implied.
+`docs/PHASES.md` § *Measured 2026-09-04, evening* has the entry.
+
+`scripts/measure-translation.py --variant runs/translation-onnx/fp32-merged --languages ja
+--num-beams 6`, the target token left at its default `>>eng<<`. FLEURS `ja_jp` test
+(sha256 `5dd96435…`, 321 sentences) against `en_us` (sha256 `74c04623…`), **all 321 distinct
+sentences, all 321 shared with English**. Laptop, **CPU** — `onnxruntime` 1.29.0, whose only
+providers on this interpreter are Azure and CPU — `torch` 2.13.0+cpu, `transformers` 4.57.6,
+`sacrebleu` 2.6.0. Harness at `28eebd9` with a clean tree. chrF++ signature
+`nrefs:1|case:mixed|eff:yes|nc:6|nw:2|space:no|version:2.6.0`.
+
+| scored | source-copy floor | chrF++ | margin | required | collapse | punct. run | gate |
+|---:|---:|---:|---:|---:|---:|---:|:--:|
+| 321 | 0.63 | **46.47** | **+45.84** | +44.37 | **0** | 3 | **PASS** |
+
+**The shipped checkpoint clears the ratified bar on a language outside its gate set.** The gate is
+chrF++ of at least `45 − floor` with zero collapses; `opus-mt-tc-bible-big-mul-deu_eng_nld` is
+many-to-English with `mul` on its source side, and Japanese is not one of the 24 languages the
+2026-08-20 gate run scored. Nothing about that result changes — this is a 25th language, measured
+separately, and **it does not make the gate 24 of 25**.
+
+**Beside FuguMT, on identical footing:**
+
+| | `Helsinki-NLP/opus-mt-tc-bible-big-mul-deu_eng_nld` | `staka/fugumt-ja-en` |
+|---|---:|---:|
+| chrF++ | **46.47** | **52.53** |
+| margin over floor | +45.84 | +51.90 |
+| collapses | 0 | 0 |
+| trailing punctuation runs | 3 | 0 |
+
+Same corpus, same 321 sentences, same 0.63 floor, same required margin, beam 6, batch 1, same metric
+signature, same machine. The only differences are the variant and the target token — `>>eng<<` for
+the many-to-one checkpoint and none for the single-direction one, each correct for its own model.
+
+**The published gap is not this harness's gap, and neither figure is wrong.** The survey that chose
+FuguMT set Helsinki's own leaderboard BLEU of 4.8 on newstest2021 against FuguMT's 23.2 on
+FLORES-200 devtest — a ratio that reads as unusable against usable, and the reason the shipped
+checkpoint was never tried on Japanese. Here the difference is 6.06 chrF++ between two gate-passing
+scores. **These are not commensurable claims**: BLEU and chrF++ are different metrics, newstest2021
+and FLORES-200 and FLEURS are three different corpora, and a 6-point chrF++ gap cannot be set beside
+an 18-point BLEU gap. What is established is narrower and is this project's own — on FLEURS `ja_jp`,
+at beam 6, on the CPU, the shipped translator passes the gate for Japanese and the dedicated
+checkpoint scores 6.06 chrF++ above it.
+
+**The three punctuation runs are the decoder finishing and not stopping.** Two are `. ` repeated to
+`max_length` and one is `••` (U+2022); all three carry a complete, correct translation before the
+run begins — *"Curry is a dish that cooks meat and vegetables based on herbs and spices."* then two
+isolated bullets and a run of 31, counted rather than eyeballed. They cost none of the meaning and
+would still look broken in a subtitle, which is
+why the harness counts them apart from collapses and why the gate does not read them. FuguMT
+returned none over the same sentences.
+
+**Nothing here is a timing measurement.** This run reports 372.4 s, 1.16 s per sentence. The same
+321 sentences through the same FuguMT graphs on this machine took 270.2 s and 117.8 s in two runs —
+**a 2.3x spread on identical work**, the scores reproducing to the digit both times. The harness
+does not control machine load, so no seconds figure from these runs describes a model, and 1.16
+must not be read against either of FuguMT's.
+
+**What this does not establish:**
+
+- **That either checkpoint is better for a user.** chrF++ over read Wikipedia sentences is not
+  adequacy, no human has rated a Japanese output, and the gate's second criterion — a person's —
+  remains declined with finality for v1.0.
+- **Anything through the application.** Japanese translation cannot be turned on:
+  `SidecarTranscriptTranslator.EnglishTargetToken` is a compile-time `">>eng<<"`, and for the shipped
+  checkpoint the catalogue's 25-language clamp is what stands in the way instead.
+- **The cascade for this checkpoint.** The −4.01 penalty of the same day was measured through
+  FuguMT; no audio reached the shipped translator here, and a penalty is not known to transfer
+  between checkpoints.
+- **Any backend but the CPU.** The WebGPU parity load `CLAUDE.md` requires after a translator change
+  has still not run on this machine, for the provider reason above.
 
 ## The interface design, and the one claim in it that is not checked
 
