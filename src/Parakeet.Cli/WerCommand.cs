@@ -71,6 +71,8 @@ internal static partial class WerCommand
         }
 
         var keepFillers = parsed.HasFlag("keep-fillers");
+        var byCharacter = parsed.HasFlag("cer");
+        var keepPunctuation = parsed.HasFlag("keep-punctuation");
         var asJson = parsed.HasFlag("json");
         var format = parsed.Value("reference-format") ?? "auto";
         if (format is not ("auto" or "text" or "nlp"))
@@ -78,6 +80,37 @@ internal static partial class WerCommand
             context.WriteError($"--reference-format must be auto, text or nlp, got '{format}'.");
             return ExitCodes.UsageError;
         }
+
+        if (keepPunctuation && !byCharacter)
+        {
+            context.WriteError("--keep-punctuation applies to --cer only: the word rule removes punctuation as part of " +
+                               "splitting tokens and cannot keep it.");
+            return ExitCodes.UsageError;
+        }
+
+        if (keepFillers && byCharacter)
+        {
+            context.WriteError("--keep-fillers is a word rule and does not apply to --cer: dropping a filler needs a word " +
+                               "to recognise, and the character rule has none. Score without it, or drop --cer.");
+            return ExitCodes.UsageError;
+        }
+
+        // The two tokenisers and the two metrics stay paired here, once, so no path can normalise
+        // one way and score the other. `raw` is what the recipe removed: whitespace tokens before
+        // the word normalisation, and punctuation-bearing characters before the character strip.
+        string[] Normalise(string text) => byCharacter
+            ? TranscriptNormalizer.CharacterErrorRateTokens(text, keepPunctuation)
+            : TranscriptNormalizer.WordErrorRateTokens(text, keepFillers);
+
+        string[] Raw(string text) => byCharacter
+            ? TranscriptNormalizer.CharacterErrorRateTokens(text, keepPunctuation: true)
+            : RawTokens(text);
+
+        ErrorCounts ScoreRaw(string[] reference, string[] hypothesis) => byCharacter
+            ? ErrorCounts.Of(CharacterErrorRate.Score(reference, hypothesis))
+            : ErrorCounts.Of(WordErrorRate.Score(reference, hypothesis));
+
+        var unit = byCharacter ? "characters" : "words";
 
         // One reference for all, read once; or one per hypothesis, found by stem beside the others.
         var references = new Dictionary<string, Reference>(StringComparer.Ordinal);
@@ -87,7 +120,7 @@ internal static partial class WerCommand
             {
                 var nlp = format == "nlp" || (format == "auto" && Path.GetExtension(path).Equals(".nlp", StringComparison.OrdinalIgnoreCase));
                 var text = ReadReference(path, nlp);
-                reference = new Reference(path, TranscriptNormalizer.WordErrorRateTokens(text, keepFillers), RawTokens(text));
+                reference = new Reference(path, Normalise(text), Raw(text));
                 references.Add(path, reference);
             }
 
@@ -111,29 +144,27 @@ internal static partial class WerCommand
 
             var reference = LoadReference(referenceForThis);
             var hypothesis = ReadHypothesis(hypothesisPath);
-            var normalised = TranscriptNormalizer.WordErrorRateTokens(hypothesis, keepFillers);
-            var raw = RawTokens(hypothesis);
+            var normalised = Normalise(hypothesis);
+            var raw = Raw(hypothesis);
 
+            // Aligned once. The edit script is what --show renders, and the counts come off the
+            // same alignment rather than a second one — on eleven hours of transcript that matters,
+            // and by character there are six times as many tokens to align.
             var ops = WordAlignment.Align(reference.Normalised, normalised);
             var summary = WordAlignment.Summarize(ops);
-            var scoredNormalised = new WordErrorRateResult
-            {
-                ReferenceWords = reference.Normalised.Length,
-                HypothesisWords = normalised.Length,
-                Substitutions = summary.Substitutions,
-                Deletions = summary.Deletions,
-                Insertions = summary.Insertions,
-            };
+            var scoredNormalised = new ErrorCounts(
+                reference.Normalised.Length, normalised.Length,
+                summary.Substitutions, summary.Deletions, summary.Insertions, unit);
 
-            results.Add(new Scored(hypothesisPath, reference, scoredNormalised, WordErrorRate.Score(reference.Raw, raw), ops, normalised));
+            results.Add(new Scored(hypothesisPath, reference, scoredNormalised, ScoreRaw(reference.Raw, raw), ops, normalised));
         }
 
-        var total = WordErrorRate.Aggregate(results.Select(r => r.Normalised));
-        var totalRaw = WordErrorRate.Aggregate(results.Select(r => r.Raw));
+        var total = ErrorCounts.Sum(results.Select(r => r.Normalised), unit);
+        var totalRaw = ErrorCounts.Sum(results.Select(r => r.Raw), unit);
 
         if (asJson)
         {
-            WriteJson(context, keepFillers, results, total, totalRaw);
+            WriteJson(context, keepFillers, byCharacter, keepPunctuation, results, total, totalRaw);
             return ExitCodes.Success;
         }
 
@@ -142,30 +173,42 @@ internal static partial class WerCommand
             var only = references[referencePath];
             context.WriteLine($"reference   {referencePath}");
             context.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"            {only.Normalised.Length:N0} words after normalisation, {only.Raw.Length:N0} raw whitespace tokens"));
+                $"            {only.Normalised.Length:N0} {unit} after normalisation, {only.Raw.Length:N0} before it"));
         }
         else
         {
             context.WriteLine($"references  {referenceDirectory}: one per hypothesis, matched by file stem");
         }
 
-        context.WriteLine($"normaliser  lower-case, punctuation removed, hyphens split, brackets dropped, {(keepFillers ? "fillers kept" : "fillers (uh, um, hmm, mm, mhm, mmm) dropped")}");
-        context.WriteLine("            not the leaderboard normaliser: numbers, spellings and contractions are compared as written");
+        if (byCharacter)
+        {
+            context.WriteLine($"normaliser  NFKC, whitespace dropped, brackets dropped, {(keepPunctuation ? "punctuation kept" : "punctuation removed")}, lower-cased");
+            context.WriteLine("            characters are enumerated as runes, so a non-BMP kanji is one character and not two halves");
+            context.WriteLine("            not NVIDIA's, kotoba's or Reazon's recipe: a figure from here compares to another from here");
+            context.WriteLine("            CER and WER measure different things — never quote one beside the other");
+        }
+        else
+        {
+            context.WriteLine($"normaliser  lower-case, punctuation removed, hyphens split, brackets dropped, {(keepFillers ? "fillers kept" : "fillers (uh, um, hmm, mm, mhm, mmm) dropped")}");
+            context.WriteLine("            not the leaderboard normaliser: numbers, spellings and contractions are compared as written");
+        }
+
+        var metric = byCharacter ? "CER" : "WER";
         context.WriteLine();
-        context.WriteLine($"{"hypothesis",-40} {"ref words",9} {"words",8} {"WER",8} {"subs",7} {"dels",7} {"ins",7} {"raw WER",9}");
+        context.WriteLine($"{"hypothesis",-40} {"ref " + unit,9} {unit,8} {metric,8} {"subs",7} {"dels",7} {"ins",7} {"raw " + metric,9}");
 
         foreach (var scored in results)
         {
             var label = Path.GetFileName(scored.Path);
             if (label.Length > 40) label = label[^40..];
             context.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{label,-40} {scored.Normalised.ReferenceWords,9:N0} {scored.Normalised.HypothesisWords,8:N0} {Percent(scored.Normalised.Rate),8} {scored.Normalised.Substitutions,7:N0} {scored.Normalised.Deletions,7:N0} {scored.Normalised.Insertions,7:N0} {Percent(scored.Raw.Rate),9}"));
+                $"{label,-40} {scored.Normalised.Reference,9:N0} {scored.Normalised.Hypothesis,8:N0} {Percent(scored.Normalised.Rate),8} {scored.Normalised.Substitutions,7:N0} {scored.Normalised.Deletions,7:N0} {scored.Normalised.Insertions,7:N0} {Percent(scored.Raw.Rate),9}"));
         }
 
         if (results.Count > 1)
         {
             context.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{"(all, summed)",-40} {total.ReferenceWords,9:N0} {total.HypothesisWords,8:N0} {Percent(total.Rate),8} {total.Substitutions,7:N0} {total.Deletions,7:N0} {total.Insertions,7:N0} {Percent(totalRaw.Rate),9}"));
+                $"{"(all, summed)",-40} {total.Reference,9:N0} {total.Hypothesis,8:N0} {Percent(total.Rate),8} {total.Substitutions,7:N0} {total.Deletions,7:N0} {total.Insertions,7:N0} {Percent(totalRaw.Rate),9}"));
             if (referencePath is { Length: > 0 })
             {
                 context.WriteLine("            summed over the same reference each time, read it only if these hypotheses are different files of one corpus");
@@ -205,11 +248,55 @@ internal static partial class WerCommand
 
     private sealed record Reference(string Path, string[] Normalised, string[] Raw);
 
+    /// <summary>
+    /// One metric's counts carrying the unit they were counted in.
+    ///
+    /// <para><see cref="WordErrorRateResult"/> and <see cref="CharacterErrorRateResult"/> are
+    /// deliberately different types so that mixing a word rate and a character rate has to be a
+    /// decision rather than an accident. This is the one place the two meet, and it keeps the unit
+    /// with the numbers precisely so that nothing below can print a character rate under a "words"
+    /// heading — which is the mistake those two types exist to make hard.</para>
+    /// </summary>
+    private readonly record struct ErrorCounts(
+        int Reference, int Hypothesis, int Substitutions, int Deletions, int Insertions, string Unit)
+    {
+        public int Errors => Substitutions + Deletions + Insertions;
+
+        /// <summary>NaN over an empty reference, for the reason both metric types give.</summary>
+        public double Rate => Reference == 0 ? double.NaN : (double)Errors / Reference;
+
+        public static ErrorCounts Of(WordErrorRateResult r) => new(
+            r.ReferenceWords, r.HypothesisWords, r.Substitutions, r.Deletions, r.Insertions, "words");
+
+        public static ErrorCounts Of(CharacterErrorRateResult r) => new(
+            r.ReferenceCharacters, r.HypothesisCharacters, r.Substitutions, r.Deletions, r.Insertions, "characters");
+
+        /// <summary>
+        /// The corpus figure: counts summed, so a long file weighs more than a short one — the same
+        /// rule <see cref="WordErrorRate.Aggregate"/> and <see cref="CharacterErrorRate.Aggregate"/>
+        /// state, applied here to the unit-tagged view the printer needs.
+        /// </summary>
+        public static ErrorCounts Sum(IEnumerable<ErrorCounts> counts, string unit)
+        {
+            int reference = 0, hypothesis = 0, substitutions = 0, deletions = 0, insertions = 0;
+            foreach (var c in counts)
+            {
+                reference += c.Reference;
+                hypothesis += c.Hypothesis;
+                substitutions += c.Substitutions;
+                deletions += c.Deletions;
+                insertions += c.Insertions;
+            }
+
+            return new ErrorCounts(reference, hypothesis, substitutions, deletions, insertions, unit);
+        }
+    }
+
     private sealed record Scored(
         string Path,
         Reference Reference,
-        WordErrorRateResult Normalised,
-        WordErrorRateResult Raw,
+        ErrorCounts Normalised,
+        ErrorCounts Raw,
         IReadOnlyList<AlignmentOp> Ops,
         string[] HypothesisTokens);
 
@@ -370,13 +457,23 @@ internal static partial class WerCommand
     }
 
     private static void WriteJson(
-        CliContext context, bool keepFillers, List<Scored> results, WordErrorRateResult total, WordErrorRateResult totalRaw)
+        CliContext context, bool keepFillers, bool byCharacter, bool keepPunctuation,
+        List<Scored> results, ErrorCounts total, ErrorCounts totalRaw)
     {
         var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true }))
         {
             writer.WriteStartObject();
-            writer.WriteString("normaliser", keepFillers ? "basic, fillers kept" : "basic, fillers dropped");
+
+            // Which metric produced every number below. A reader that ignores this and assumes a
+            // word rate is the failure this field exists to prevent, which is also why the
+            // per-result counts carry their unit rather than a `referenceWords` key that would be
+            // a lie by half the time.
+            writer.WriteString("metric", byCharacter ? "cer" : "wer");
+            writer.WriteString("unit", byCharacter ? "characters" : "words");
+            writer.WriteString("normaliser", byCharacter
+                ? (keepPunctuation ? "nfkc, punctuation kept" : "nfkc, punctuation removed")
+                : (keepFillers ? "basic, fillers kept" : "basic, fillers dropped"));
             writer.WriteStartArray("hypotheses");
             foreach (var scored in results)
             {
@@ -399,11 +496,22 @@ internal static partial class WerCommand
         context.WriteLine(Encoding.UTF8.GetString(buffer.ToArray()));
     }
 
-    private static void WriteResult(Utf8JsonWriter writer, string name, WordErrorRateResult result)
+    private static void WriteResult(Utf8JsonWriter writer, string name, ErrorCounts result)
     {
         writer.WriteStartObject(name);
-        writer.WriteNumber("referenceWords", result.ReferenceWords);
-        writer.WriteNumber("hypothesisWords", result.HypothesisWords);
+        writer.WriteString("unit", result.Unit);
+        writer.WriteNumber("reference", result.Reference);
+        writer.WriteNumber("hypothesis", result.Hypothesis);
+
+        // Kept for readers written before the character metric existed, and emitted only where the
+        // name is true. In character mode there is no `referenceWords` key at all, so a consumer
+        // that silently expects one fails loudly instead of reading characters as words.
+        if (result.Unit == "words")
+        {
+            writer.WriteNumber("referenceWords", result.Reference);
+            writer.WriteNumber("hypothesisWords", result.Hypothesis);
+        }
+
         writer.WriteNumber("substitutions", result.Substitutions);
         writer.WriteNumber("deletions", result.Deletions);
         writer.WriteNumber("insertions", result.Insertions);

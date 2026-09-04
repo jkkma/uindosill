@@ -60,10 +60,19 @@ param(
     [ValidateSet('cpu', 'vulkan', 'cuda')]
     [string] $Backend = 'cuda',
 
-    # Which detector cuts the audio (energy | neural). Unset leaves it to the CLI, which since
+    # Which detector cuts the audio (energy | neural | none). Unset leaves it to the CLI, which since
     # 2026-08-23 is neural whenever its model is installed. Every WER recorded before that day is the
     # gate's — pass -Vad energy to reproduce one. Named per file in the summary as speechDetector.
-    [ValidateSet('energy', 'neural')]
+    #
+    # `none` is the control arm rather than a detector: it sends --no-vad, so the audio is cut into
+    # fixed windows at the quietest nearby frame and no detector decides anything. It exists because
+    # nothing in docs/UNPROVEN.md has ever compared a detector against not segmenting on the same
+    # audio in any language, and a Japanese probe on 2026-09-04 found the neural detector costing
+    # 2.6 CER points on six read sentences by cutting away the context a punctuation decision needs.
+    # That was six clips of one sentence each, which is the best possible case for not segmenting;
+    # this arm is how the question gets asked on eleven hours instead. The CLI reports the arm as
+    # `fixed windows`, so summary.json says which one ran without the caller being trusted.
+    [ValidateSet('energy', 'neural', 'none')]
     [string] $Vad,
 
     # Catalogue ids, in the order they run. The default is the whole ladder, f16 first, so the
@@ -91,6 +100,17 @@ param(
     # Score uh, um, hmm, mm, mhm and mmm as words on both sides instead of dropping them.
     [switch] $KeepFillers,
 
+    # Score by character instead of by word: `uindosill wer --cer`. The metric for a language
+    # written without spaces between its words, where the word rule has no denominator — measured
+    # 2026-09-04, it finds 3.55 tokens in a Japanese sentence against 22.01 in an English one.
+    #
+    # Every key this writes is named for the metric that produced it, so a summary.json can never
+    # be read as the other one: the rate lands under `cer` rather than `wer`, the per-file keys are
+    # `cer_<style>`, and each style block carries `metric`. Note the corpus in wer-corpus.json is
+    # English, so this switch is the plumbing rather than the measurement — a Japanese CER needs a
+    # Japanese manifest, which does not exist yet.
+    [switch] $Cer,
+
     [string] $ManifestPath,
 
     # Where the corpus lives. Default corpus/<manifest name>/ under the repository, gitignored.
@@ -116,6 +136,16 @@ Set-StrictMode -Version Latest
 # 5.599 into summary.md on 2026-09-02 (docs/GOTCHAS.md, 42). Invariant from here on, so a summary
 # reads the same wherever it was made; ConvertTo-Json was invariant already.
 [System.Globalization.CultureInfo]::CurrentCulture = [System.Globalization.CultureInfo]::InvariantCulture
+
+if ($Cer -and $KeepFillers) {
+    throw '-KeepFillers is a word rule and does not apply to -Cer: dropping a filler needs a word to recognise, and the character rule has none.'
+}
+
+# Which metric every key below is named for. Held in one variable so no path can label a rate with
+# the name of the other metric — the whole reason `uindosill wer` refuses to print them together.
+$metricKey = if ($Cer) { 'cer' } else { 'wer' }
+$metricName = $metricKey.ToUpperInvariant()
+$unitWord = if ($Cer) { 'characters' } else { 'words' }
 
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
@@ -293,16 +323,16 @@ try {
         )
 
         foreach ($style in $Styles) {
-            $werArguments = @('wer', '--reference-dir', (Join-Path $CorpusRoot $style), '--json') + $(if ($KeepFillers) { @('--keep-fillers') } else { @() }) + $Hypotheses
+            $werArguments = @('wer', '--reference-dir', (Join-Path $CorpusRoot $style), '--json') + $(if ($Cer) { @('--cer') } else { @() }) + $(if ($KeepFillers) { @('--keep-fillers') } else { @() }) + $Hypotheses
             $raw = & $exe @werArguments
             if ($LASTEXITCODE -ne 0) { throw "wer failed for $What against $style (exit $LASTEXITCODE): $($raw -join ' ')" }
             $scored = ($raw -join "`n") | ConvertFrom-Json
 
             foreach ($h in @($scored.hypotheses)) {
                 $id = [IO.Path]::GetFileNameWithoutExtension([string] $h.path)
-                $PerFile[$id]["${KeyPrefix}wer_$style"] = ConvertTo-Percent $h.normalised.rate
+                $PerFile[$id]["${KeyPrefix}${metricKey}_$style"] = ConvertTo-Percent $h.normalised.rate
                 $PerFile[$id]["${KeyPrefix}errors_$style"] = [ordered]@{
-                    referenceWords = $h.normalised.referenceWords
+                    reference      = $h.normalised.reference
                     substitutions  = $h.normalised.substitutions
                     deletions      = $h.normalised.deletions
                     insertions     = $h.normalised.insertions
@@ -311,14 +341,15 @@ try {
             }
 
             $Into[$style] = [ordered]@{
-                referenceWords  = $scored.summed.normalised.referenceWords
-                hypothesisWords = $scored.summed.normalised.hypothesisWords
+                reference       = $scored.summed.normalised.reference
+                hypothesis      = $scored.summed.normalised.hypothesis
                 substitutions   = $scored.summed.normalised.substitutions
                 deletions       = $scored.summed.normalised.deletions
                 insertions      = $scored.summed.normalised.insertions
                 errors          = $scored.summed.normalised.errors
-                wer             = ConvertTo-Percent $scored.summed.normalised.rate
-                rawWer          = ConvertTo-Percent $scored.summed.raw.rate
+                metric          = $metricKey
+                $metricKey  = ConvertTo-Percent $scored.summed.normalised.rate
+                raw             = ConvertTo-Percent $scored.summed.raw.rate
                 normaliser      = $scored.normaliser
             }
         }
@@ -334,7 +365,14 @@ try {
         # --tidy writes the tidied version beside the plain one; the plain files are what they
         # always were, so the spoken row of this run is a spoken row whether or not -Tidy was given.
         $tidyArguments = if ($Tidy) { @('--tidy') + $(if ($TidyBackend) { @('--tidy-backend', $TidyBackend) } else { @() }) } else { @() }
-        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $(if ($Vad) { @('--vad', $Vad) } else { @() }) + $tidyArguments + $mediaPaths
+        # `none` is not a detector name the CLI knows: it is the absence of one, and the CLI spells
+        # that --no-vad. Mapping it here keeps the harness's own vocabulary in one place.
+        $vadArguments =
+            if (-not $Vad)          { @() }
+            elseif ($Vad -eq 'none') { @('--no-vad') }
+            else                     { @('--vad', $Vad) }
+
+        $arguments = @('transcribe', '--backend', $Backend, '--model', $model, '-f', 'json,txt', '-o', $modelDirectory, '--overwrite', '--quiet') + $vadArguments + $tidyArguments + $mediaPaths
         $watch = [Diagnostics.Stopwatch]::StartNew()
         # Not redirected: a CUDA process whose streams are captured has hung on abort here before
         # (gotcha 19). Its own progress is suppressed with --quiet; the summary lines still print.
@@ -459,15 +497,15 @@ try {
 
         foreach ($style in $Styles) {
             $s = $styleResults[$style]
-            Write-Host ("  {0,-12} WER {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0} over {5:N0} reference words; raw {6:F2}%)" -f
-                $style, $s.wer, $s.substitutions, $s.deletions, $s.insertions, $s.referenceWords, $s.rawWer)
+            Write-Host ("  {0,-12} $metricName {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0} over {5:N0} reference $unitWord; raw {6:F2}%)" -f
+                $style, $s.$metricKey, $s.substitutions, $s.deletions, $s.insertions, $s.reference, $s.raw)
         }
         if ($null -ne $tidyStyleResults) {
             foreach ($style in $Styles) {
                 $t = $tidyStyleResults[$style]
-                $delta = $t.wer - $styleResults[$style].wer
-                Write-Host ("  {0,-12} WER {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0}; {5}{6:F2} points against the spoken transcript)" -f
-                    "$style tidy", $t.wer, $t.substitutions, $t.deletions, $t.insertions, $(if ($delta -ge 0) { '+' } else { '' }), $delta) -ForegroundColor Cyan
+                $delta = $t.$metricKey - $styleResults[$style].$metricKey
+                Write-Host ("  {0,-12} $metricName {1,6:F2}%  (S {2:N0} / D {3:N0} / I {4:N0}; {5}{6:F2} points against the spoken transcript)" -f
+                    "$style tidy", $t.$metricKey, $t.substitutions, $t.deletions, $t.insertions, $(if ($delta -ge 0) { '+' } else { '' }), $delta) -ForegroundColor Cyan
             }
             $t = $row.tidy
             Write-Host ("  {0,-12} {1:N0} of {2:N0} lines refused and kept as spoken, {3:N0} emptied; {4:N0} words through the low-confidence door" -f
@@ -509,11 +547,11 @@ try {
     $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryJson -Encoding UTF8
 
     $lines = [Collections.Generic.List[string]]::new()
-    $lines.Add(("# WER on {0}, {1} backend, {2}" -f $manifest.name, $Backend, $summary.measuredAt))
+    $lines.Add(("# {0} on {1}, {2} backend, {3}" -f $metricName, $manifest.name, $Backend, $summary.measuredAt))
     $lines.Add('')
     $lines.Add(("Machine: {0}; {1}; driver {2}. {3} files, {4:N2} h of audio. Normaliser: {5}." -f
         $machine.cpu, ($machine.gpu -join ' | '), $machine.driver, $entries.Count, ($totalAudioSeconds / 3600),
-        $(if ($KeepFillers) { 'basic, fillers kept' } else { 'basic, fillers dropped' })))
+        $(if ($Cer) { 'nfkc, punctuation removed' } elseif ($KeepFillers) { 'basic, fillers kept' } else { 'basic, fillers dropped' })))
     $lines.Add('')
     $werSwitches = [Collections.Generic.List[string]]::new()
     if ($SkipBuild) { $werSwitches.Add('-SkipBuild') }
@@ -528,30 +566,30 @@ try {
         else { 'unreadable' }),
         $(if ($werSwitches.Count -gt 0) { $werSwitches -join ', ' } else { 'none' })))
     $lines.Add('')
-    $header = '| Model | ' + (($Styles | ForEach-Object { "WER vs $_" }) -join ' | ') + ' | S / D / I (verbatim) | RTF (' + $Backend + ') |'
+    $header = '| Model | ' + (($Styles | ForEach-Object { "$metricName vs $_" }) -join ' | ') + ' | S / D / I (verbatim) | RTF (' + $Backend + ') |'
     $lines.Add($header)
     $lines.Add('|---|' + (($Styles | ForEach-Object { '---|' }) -join '') + '---|---|')
     foreach ($row in $modelRows) {
         if ($row.failed) { $lines.Add(("| {0} | FAILED (exit {1}) |" -f $row.model, $row.exitCode)); continue }
-        $cells = @($Styles | ForEach-Object { ("{0:F2}%" -f $row.styles[$_].wer) })
+        $cells = @($Styles | ForEach-Object { ("{0:F2}%" -f $row.styles[$_].$metricKey) })
         $firstStyle = $row.styles[$Styles[0]]
         $lines.Add(("| {0} | {1} | {2:N0} / {3:N0} / {4:N0} | {5:F4} |" -f $row.model, ($cells -join ' | '),
             $firstStyle.substitutions, $firstStyle.deletions, $firstStyle.insertions, $row.realTimeFactor))
 
         if ($null -ne $row.tidy -and $null -ne $row.tidy.styles) {
-            $tidyCells = @($Styles | ForEach-Object { ("{0:F2}%" -f $row.tidy.styles[$_].wer) })
+            $tidyCells = @($Styles | ForEach-Object { ("{0:F2}%" -f $row.tidy.styles[$_].$metricKey) })
             $tidyFirst = $row.tidy.styles[$Styles[0]]
             $lines.Add(("| {0}, tidied | {1} | {2:N0} / {3:N0} / {4:N0} | — |" -f $row.model, ($tidyCells -join ' | '),
                 $tidyFirst.substitutions, $tidyFirst.deletions, $tidyFirst.insertions))
             $deltaCells = @($Styles | ForEach-Object {
-                $d = $row.tidy.styles[$_].wer - $row.styles[$_].wer
+                $d = $row.tidy.styles[$_].$metricKey - $row.styles[$_].$metricKey
                 ("**{0}{1:F2}**" -f $(if ($d -ge 0) { '+' } else { '' }), $d)
             })
             $lines.Add(("| the tidy's delta | {0} | | |" -f ($deltaCells -join ' | ')))
         }
     }
     $lines.Add('')
-    $lines.Add('Per file, WER vs ' + $Styles[0] + ':')
+    $lines.Add("Per file, $metricName vs " + $Styles[0] + ':')
     $lines.Add('')
     $lines.Add('| File | Country | ' + (($modelRows | Where-Object { -not $_.failed } | ForEach-Object { $_.model }) -join ' | ') + ' |')
     $lines.Add('|---|---|' + (($modelRows | Where-Object { -not $_.failed } | ForEach-Object { '---|' }) -join ''))
@@ -559,7 +597,7 @@ try {
         $id = [string] $entry.id
         $cells = @($modelRows | Where-Object { -not $_.failed } | ForEach-Object {
             $file = @($_.perFile | Where-Object { $_.id -eq $id }) | Select-Object -First 1
-            if ($file) { ("{0:F2}%" -f $file["wer_$($Styles[0])"]) } else { '—' }
+            if ($file) { ("{0:F2}%" -f $file["${metricKey}_$($Styles[0])"]) } else { '—' }
         })
         $lines.Add(("| {0} | {1} | {2} |" -f $id, $entry.country, ($cells -join ' | ')))
     }
@@ -576,9 +614,9 @@ try {
             $lines.Add('| File | Country | spoken | tidied | Δ | lines | refused | emptied | door |')
             $lines.Add('|---|---|---|---|---|---|---|---|---|')
             foreach ($file in $row.perFile) {
-                $d = $file["tidy_wer_$style"] - $file["wer_$style"]
+                $d = $file["tidy_${metricKey}_$style"] - $file["${metricKey}_$style"]
                 $lines.Add(("| {0} | {1} | {2:F2}% | {3:F2}% | {4}{5:F2} | {6:N0} | {7:N0} | {8:N0} | {9:N0} |" -f
-                    $file.id, $file.country, $file["wer_$style"], $file["tidy_wer_$style"],
+                    $file.id, $file.country, $file["${metricKey}_$style"], $file["tidy_${metricKey}_$style"],
                     $(if ($d -ge 0) { '+' } else { '' }), $d, $file.tidy.segments, $file.tidy.refusedSegments,
                     $file.tidy.emptiedSegments, $file.tidy.replacedWords))
             }
@@ -586,7 +624,11 @@ try {
     }
 
     $lines.Add('')
-    $lines.Add('WER is (S + D + I) / reference words over tokens normalised the same way on both sides; see `uindosill wer --help`.')
+    $lines.Add("$metricName is (S + D + I) / reference $unitWord over tokens normalised the same way on both sides; see ``uindosill wer --help``.")
+    if ($Cer) {
+        $lines.Add('Characters are NFKC-folded, whitespace dropped, punctuation removed and enumerated as runes. A character')
+        $lines.Add('error rate and a word error rate measure different things: never put a figure from here beside a WER.')
+    }
     $lines.Add('Not comparable to leaderboard figures for the same model, which use a richer normaliser. RTF is from the')
     $lines.Add('transcripts'' own processingSec over their audioDurationSec, and is per backend.')
     $summaryMd = Join-Path $OutputDirectory 'summary.md'

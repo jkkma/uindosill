@@ -695,6 +695,21 @@ internal static class Commands
             },
             new OptionSpec
             {
+                Name = "cer",
+                Help = "Score by character instead of by word: the metric for languages written without spaces between " +
+                       "words, where the word rule has no denominator — on Japanese it finds about 3.5 tokens in a sentence " +
+                       "against 22 in an English one. Characters are NFKC-folded, whitespace dropped and punctuation " +
+                       "removed, which is what the published Japanese figures do. A character rate and a word rate measure " +
+                       "different things and must never be quoted beside one another.",
+            },
+            new OptionSpec
+            {
+                Name = "keep-punctuation",
+                Help = "With --cer, count punctuation as characters. Off by default because every published Japanese " +
+                       "figure strips it; turning it on measures whether the model punctuates, which no published number does.",
+            },
+            new OptionSpec
+            {
                 Name = "show",
                 TakesValue = true,
                 ValueName = "n",
