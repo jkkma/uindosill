@@ -267,4 +267,121 @@ public class WerCommandTests
         Assert.Contains("--reference-dir", harness.Out.ToString(), StringComparison.Ordinal);
         Assert.Contains("spells numbers out", harness.Out.ToString(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task CerScoresByCharacterAndSaysSoInTheJson()
+    {
+        using var harness = new Harness();
+        // 群島 -> 離島: one character wrong in the 21 the sentence has once punctuation is stripped.
+        var reference = harness.Write("ref.txt", "群島や湖では、必ずしもヨットは必要ありません。");
+        var hypothesis = harness.WriteHypothesisJson("clip.json", "離島や湖では、必ずしもヨットは必要ありません。");
+
+        var exit = await harness.RunAsync("wer", "--cer", "--reference", reference, "--json", hypothesis);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        using var document = JsonDocument.Parse(harness.Out.ToString());
+        Assert.Equal("cer", document.RootElement.GetProperty("metric").GetString());
+        Assert.Equal("characters", document.RootElement.GetProperty("unit").GetString());
+
+        var scored = document.RootElement.GetProperty("hypotheses")[0].GetProperty("normalised");
+        Assert.Equal("characters", scored.GetProperty("unit").GetString());
+        Assert.Equal(21, scored.GetProperty("reference").GetInt32());
+        Assert.Equal(1, scored.GetProperty("substitutions").GetInt32());
+        Assert.Equal(0, scored.GetProperty("deletions").GetInt32());
+        Assert.Equal(0, scored.GetProperty("insertions").GetInt32());
+        Assert.Equal(1.0 / 21.0, scored.GetProperty("rate").GetDouble(), 6);
+
+        // The key that would let a reader take characters for words is absent by construction,
+        // so a consumer expecting it fails loudly instead of quoting a character rate as a WER.
+        Assert.False(scored.TryGetProperty("referenceWords", out _));
+        Assert.False(scored.TryGetProperty("hypothesisWords", out _));
+    }
+
+    [Fact]
+    public async Task TheWordRuleAndTheCharacterRuleCountTheSameJapaneseSentenceDifferently()
+    {
+        const string Sentence = "これは日本語の文です。単語の切れ目はありません。";
+
+        static async Task<int> ReferenceCountAsync(bool cer)
+        {
+            using var harness = new Harness();
+            var reference = harness.Write("ref.txt", Sentence);
+            var hypothesis = harness.WriteHypothesisJson("clip.json", Sentence);
+            string[] args = cer
+                ? ["wer", "--cer", "--reference", reference, "--json", hypothesis]
+                : ["wer", "--reference", reference, "--json", hypothesis];
+
+            Assert.Equal(ExitCodes.Success, await harness.RunAsync(args));
+            using var document = JsonDocument.Parse(harness.Out.ToString());
+            return document.RootElement.GetProperty("hypotheses")[0]
+                .GetProperty("normalised").GetProperty("reference").GetInt32();
+        }
+
+        // Two against twenty-two: the denominator the word rule does not have, which is the whole
+        // reason the character metric exists.
+        Assert.Equal(2, await ReferenceCountAsync(cer: false));
+        Assert.Equal(22, await ReferenceCountAsync(cer: true));
+    }
+
+    [Fact]
+    public async Task KeepPunctuationCountsTheJapanesePunctuationAsCharacters()
+    {
+        using var harness = new Harness();
+        const string Sentence = "群島や湖では、必ずしもヨットは必要ありません。";
+        var reference = harness.Write("ref.txt", Sentence);
+        var hypothesis = harness.WriteHypothesisJson("clip.json", Sentence);
+
+        var exit = await harness.RunAsync("wer", "--cer", "--keep-punctuation", "--reference", reference, "--json", hypothesis);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        using var document = JsonDocument.Parse(harness.Out.ToString());
+        // The 21 letters, plus 、 and 。 — the two commonest tokens in a Japanese vocabulary and
+        // the ones every published recipe throws away before scoring.
+        Assert.Equal(23, document.RootElement.GetProperty("hypotheses")[0]
+            .GetProperty("normalised").GetProperty("reference").GetInt32());
+    }
+
+    [Fact]
+    public async Task CerNamesItsMetricAndRefusesToBeQuotedBesideAWordRate()
+    {
+        using var harness = new Harness();
+        var reference = harness.Write("ref.txt", "群島や湖では、必ずしもヨットは必要ありません。");
+        var hypothesis = harness.WriteHypothesisJson("clip.json", "離島や湖では、必ずしもヨットは必要ありません。");
+
+        var exit = await harness.RunAsync("wer", "--cer", "--reference", reference, hypothesis);
+        var output = harness.Out.ToString();
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.Contains("CER", output, StringComparison.Ordinal);
+        Assert.Contains("characters", output, StringComparison.Ordinal);
+        Assert.Contains("never quote one beside the other", output, StringComparison.Ordinal);
+        // The word rule's own caveat is about a different normaliser and must not appear here.
+        Assert.DoesNotContain("leaderboard normaliser", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task KeepPunctuationWithoutCerIsRefused()
+    {
+        using var harness = new Harness();
+        var reference = harness.Write("ref.txt", "good morning");
+        var hypothesis = harness.WriteHypothesisJson("clip.json", "good morning");
+
+        var exit = await harness.RunAsync("wer", "--keep-punctuation", "--reference", reference, hypothesis);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains("--keep-punctuation applies to --cer only", harness.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task KeepFillersWithCerIsRefused()
+    {
+        using var harness = new Harness();
+        var reference = harness.Write("ref.txt", "good morning");
+        var hypothesis = harness.WriteHypothesisJson("clip.json", "good morning");
+
+        var exit = await harness.RunAsync("wer", "--cer", "--keep-fillers", "--reference", reference, hypothesis);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains("--keep-fillers is a word rule", harness.Error.ToString(), StringComparison.Ordinal);
+    }
 }
