@@ -507,7 +507,10 @@ def _generate(model, tokenizer, sentences: list[str], num_beams: int) -> tuple[l
     batch = tokenizer(marked, return_tensors="pt", padding=True)
     started = time.time()
     with torch.no_grad():
-        generated = model.generate(**batch, num_beams=num_beams, max_new_tokens=256)
+        # renormalize_logits mirrors the sidecar (translator/engine.py RENORMALIZE_LOGITS): without it a
+        # checkpoint that puts its first-step mass on the banned pad token runs away into repetition at
+        # beam 6, so a smoke that left it off would be comparing two collapses rather than two decodes.
+        generated = model.generate(**batch, num_beams=num_beams, max_new_tokens=256, renormalize_logits=True)
     elapsed = time.time() - started
     return tokenizer.batch_decode(generated, skip_special_tokens=True), elapsed
 

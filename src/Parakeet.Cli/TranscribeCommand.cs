@@ -83,7 +83,7 @@ internal static class TranscribeCommand
         // and it is not one that arrives after a three-hour decode.
         if (translationOptions is not null)
         {
-            TranslatorFactory.Resolve(context, TranslationRequestFrom(parsed), formats);
+            TranslatorFactory.Resolve(context, TranslationRequestFrom(context, parsed), formats);
         }
 
         // And the tidier, for the same reason: "the tidying model is not installed" and "no
@@ -166,7 +166,7 @@ internal static class TranscribeCommand
         // output after the first three have been written is not a refusal.
         await using var translator = translationOptions is null
             ? null
-            : await TranslatorFactory.CreateAsync(context, TranslationRequestFrom(parsed), ct).ConfigureAwait(false);
+            : await TranslatorFactory.CreateAsync(context, TranslationRequestFrom(context, parsed), ct).ConfigureAwait(false);
 
         if (translator is not null)
         {
@@ -294,15 +294,48 @@ internal static class TranscribeCommand
     /// Two copies of this would be two chances for the pre-flight check to resolve a different
     /// model from the one that runs.
     /// </remarks>
-    private static TranslatorRequest TranslationRequestFrom(ParsedCommandLine parsed) => new()
+    private static TranslatorRequest TranslationRequestFrom(CliContext context, ParsedCommandLine parsed)
     {
-        Fake = parsed.HasFlag("fake"),
-        ModelId = parsed.Value("translate-model"),
-        ModelPath = parsed.Value("translate-model-path"),
-        Threads = ParseThreads(parsed.Value("translate-threads"), "--translate-threads"),
-        Backend = parsed.Value("translate-backend"),
-        AllowUnverifiedBackend = parsed.HasFlag("translate-backend-unverified"),
-    };
+        var (recogniserId, recogniserLanguages) = RecogniserFor(context, parsed);
+        return new TranslatorRequest
+        {
+            Fake = parsed.HasFlag("fake"),
+            ModelId = parsed.Value("translate-model"),
+            ModelPath = parsed.Value("translate-model-path"),
+            Threads = ParseThreads(parsed.Value("translate-threads"), "--translate-threads"),
+            Backend = parsed.Value("translate-backend"),
+            AllowUnverifiedBackend = parsed.HasFlag("translate-backend-unverified"),
+            RecogniserId = recogniserId,
+            RecogniserLanguages = recogniserLanguages,
+        };
+    }
+
+    /// <summary>
+    /// The recogniser the flags name, as the translator's choice needs it: its id and the languages
+    /// it declares. Looked up and not resolved — whether it is installed is the engine's question,
+    /// asked where it always was, so the message for a missing recogniser stays the engine's.
+    /// </summary>
+    /// <remarks>
+    /// A model file given by path has no catalogue entry and so declares no languages; the empty
+    /// list says that, and the factory refuses to choose for it rather than guessing. The same is
+    /// true of <c>--fake</c>, which the factory answers before it ever looks.
+    /// </remarks>
+    private static (string Id, IReadOnlyList<string> Languages) RecogniserFor(CliContext context, ParsedCommandLine parsed)
+    {
+        if (parsed.Value("model-path") is { Length: > 0 } path)
+        {
+            return (Path.GetFileName(path), []);
+        }
+
+        if (parsed.Value("model") is { Length: > 0 } id)
+        {
+            return context.Catalog.TryGet(id, out var named) ? (named.Id, named.Languages) : (id, []);
+        }
+
+        return context.Catalog.Recommended is { } recommended
+            ? (recommended.Id, recommended.Languages)
+            : ("the speech model", []);
+    }
 
     /// <summary>Null when <c>--tidy</c> was not given: the whole stage is behind that flag.</summary>
     private static TidyOptions? BuildTidyOptions(ParsedCommandLine parsed)

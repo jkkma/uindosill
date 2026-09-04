@@ -347,6 +347,59 @@ this entry rests on rather than a fresh reading.
 
 As everywhere else here: **no lawyer has read any of this.**
 
+## The Japanese translation weights are CC BY-SA 4.0 (FuguMT), and the export is the first ShareAlike redistribution here
+
+A licence shape this project had not shipped before, added 2026-09-04 with the Japanese
+translator. `staka/fugumt-ja-en` declares `cc-by-sa-4.0` in its card metadata and ships no licence
+file. Creative Commons Attribution-ShareAlike 4.0 International attaches CC BY's seven §3(a)
+elements to any sharing of the material and, in §3(b), one condition CC BY does not have:
+**Adapted Material must be licensed under the same licence** or one Creative Commons lists as
+compatible, its licence must be included or linked, and no additional terms may be offered on it.
+
+**This project adapts the material.** As with the Helsinki-NLP checkpoint, Uindosill does not
+redistribute the original: `scripts/export-translation-onnx.py` exports it, against revision
+`f7ce1128`, into two ONNX graphs in the merged decoder layout, float32 in and float32 out, and the
+result is published to `huggingface.co/jkkma/fugumt-ja-en-onnx`, which is what the catalogue
+downloads. An export is an adaptation, so §3(b) binds that repository, and it is met the way
+§3(b)(1)–(3) ask: the card's metadata declares `cc-by-sa-4.0`, the card and a `LICENSE` file beside
+the graphs state that the export is licensed under CC BY-SA 4.0 with no additional terms, and the
+legal code is linked rather than copied — which is what §3(a)(1)(C) and §3(b)(2) ask for; unlike
+Apache §4(a) and the NVIDIA agreement, neither Creative Commons licence asks for a copy.
+
+**What was read, and what it carries.** The upstream file listing at revision
+`f7ce11286e1fb7a8e1f1692ff3ab68c0f9c3aecb` on 2026-09-04, through the Hub API: `.gitattributes`,
+`README.md`, `config.json`, `generation_config.json`, `pytorch_model.bin`, `source.spm`,
+`special_tokens_map.json`, `target.spm`, `tokenizer_config.json`, `vocab.json`. **No `LICENSE`, no
+`NOTICE`, and no copyright notice anywhere.** The licence is the card's metadata line, and the
+card's text is a description of the model, its two languages, how to run it, a Tatoeba BLEU figure
+and a pointer to *"my repository"* at `github.com/s-taka/fugumt`. That pointer is the only
+designation of a creator the licensor makes, and §3(a)(1)(A)(i) allows identification *"including
+by pseudonym if designated"*, so the creator is identified the way the card identifies them:
+`staka`, `s-taka` on GitHub, the author of FuguMT. **No name is invented to fill the gap**, for the
+reason the Apache entry gives about copyright lines: a credit nobody designated is a false notice in
+front of a user. The finding that there is no copyright notice is a field of the record rather than
+a silence, as it is there.
+
+The seven §3(a) elements live in `CcBySaAttribution` in `src/Parakeet.Core/Licensing/Attribution.cs`,
+render in the application's licence panel through the same `ToPlainText` every other notice uses,
+and are repeated in `NOTICE.md` and in the export repository's card, so every surface a recipient
+can reach carries them. The ShareAlike statement is an eighth required element on that record,
+because a record that cannot be constructed without it cannot ship without it.
+
+**What ShareAlike reaches, on this project's reading.** The weights, and anything made by adapting
+them: the export, a quantised copy of it, a fine-tune. What it does not reach, on this reading, is
+the application that loads the weights and runs them, and the English a user's transcript comes
+back as. Creative Commons' own summary of the condition says it applies to adaptations of the
+material and not to works that merely use or collect it; whether a model's output is an adaptation
+of the model is a question that summary does not settle, and this project's answer — a transcript
+is not — is a reading. It is recorded as one in `Attributions.WeightUsageRestrictions`, beside the
+CC BY restrictions it shares (§2(a)(5)(B)'s ban on effective technological measures applies to
+these files as to the CC BY ones). The distribution as a whole is GPL because of the video player;
+should the reading be wrong in the direction of the application, Creative Commons lists GPLv3 as a
+compatible licence for BY-SA 4.0 Adapted Material, which is the one comfort the two give each other.
+
+As everywhere else here: **no lawyer has read any of this.**
+
 ## ONNX Runtime is MIT, and carries 69 licences that are not
 
 **It ships twice.** Until 2026-08-21 the diariser ran `onnxruntime.dll` from
@@ -953,3 +1006,10 @@ Arabic, Hindi or Thai. `parakeet-tdt_ctc-0.6b-ja`, the second recogniser since 2
 Japanese and nothing else. Advertising either one's languages for the other would be false rather
 than merely optimistic, and the honesty problem does not shrink because there are now two entries —
 it moves from one list to a rule about lists. A test holds every entry to its own coverage.
+
+The two translation entries are the same rule from the other side, since 2026-09-04: each
+recogniser has exactly one translator whose language list covers its own, and that pairing —
+not a picker, and not a guess — is what chooses the translator for a transcript. The many-to-one
+checkpoint lists the European recogniser's 25 languages and the Japanese one lists Japanese; a
+test holds each recogniser to exactly one match, and a recogniser that declares no languages gets
+no translator rather than the wrong one.

@@ -1031,3 +1031,31 @@ the start; `measure-wer.ps1` and the other harnesses that write run records — 
 do the same from 2026-09-02, before they format anything. The vendoring and packaging scripts
 still format in the machine's locale, on purpose: their sizes are read by the person at the
 keyboard. The trap is invisible on the machine that has it and on CI, which runs invariant.
+
+## 43. A Marian target token is a vocabulary piece, and a checkpoint that has no such piece translates the token
+
+`>>eng<<` is entry 693 of `opus-mt-tc-bible-big-mul-deu_eng_nld`'s vocabulary, and putting it in
+front of a source is how a many-to-one checkpoint is told which of its targets to write; leave it
+off and Spanish comes back as fluent German. `staka/fugumt-ja-en` reads one language into one and
+has no such piece at all, so the same prefix is tokenised as text — `>`, `>`, `eng`, `<`, `<` —
+and translated along with the sentence. Neither mistake is an error anywhere: both decode
+fluently. Since 2026-09-04 the sidecar reports whether the loaded vocabulary holds the piece, the
+catalogue declares whether the entry should, and a disagreement is refused at load
+(`SidecarTranscriptTranslator.ApplyTargetToken`); the seam then marks every source or none
+(`TranslationRequest.Build` with a null token). What a `--model-path` checkpoint gets is the
+vocabulary's answer alone.
+
+## 44. Banning the pad token leaves beam search a distribution that does not sum to one, and length normalisation runs away with it
+
+A Marian checkpoint starts decoding on its pad token and bans it from being emitted
+(`bad_words_ids`). Where the model puts most of its first-step mass on that pad, the mask leaves
+every real token at a large negative constant — correctly ordered, but not a probability. Beam
+search divides a hypothesis' cumulative score by its length, so the constant is diluted by
+generating more tokens, and at beam 6 猫はかわいいです。 decodes through `fugumt-ja-en` as *"The
+Cat is slurpy slurp slurb slur slur sl sl s s"*. Greedy decoding was never affected, because greedy
+does not normalise by length, and the shipped checkpoint is not either, because its pad scores
+−10.8 at that step rather than 0.0. `renormalize_logits=True` in `generate` is the fix, measured
+2026-09-04 to be a no-op on the shipped checkpoint and to turn every one of 321 FLEURS sentences
+from a collapse into a translation on the other; it is set in the sidecar and in the export
+script's smoke, and `docs/UNPROVEN.md` § *FuguMT exports cleanly and decodes correctly only below
+beam 5* has the day it was found.

@@ -53,6 +53,13 @@ public sealed record FakeTranslatorOptions
     /// flag, and an echoing fake can never produce one.
     /// </summary>
     public bool DropDigits { get; init; }
+
+    /// <summary>
+    /// The target token the fake declares: the many-to-one family's by default, so everything built
+    /// on top of it is exercised against the string a real translator uses, and null to stand in
+    /// for a single-direction checkpoint, whose sources go bare.
+    /// </summary>
+    public string? TargetToken { get; init; } = ">>eng<<";
 }
 
 /// <summary>
@@ -92,10 +99,11 @@ public sealed class FakeTranscriptTranslator : ITranscriptTranslator
             Backend = _options.Backend,
             DecodeDescription = _options.DecodeDescription,
 
-            // The token the recommended family reads. The fake carries the real one so that
-            // everything built on top of it — the marking, the assertions, the CLI — is exercised
-            // against the string a real translator will use rather than a placeholder.
-            TargetToken = ">>eng<<",
+            // The token the many-to-one family reads, unless a test says otherwise. The fake
+            // carries the real one so that everything built on top of it — the marking, the
+            // assertions, the CLI — is exercised against the string a real translator will use
+            // rather than a placeholder.
+            TargetToken = _options.TargetToken,
             RequiresSourceLanguage = false,
             PreservesWordTimings = false,
             SupportsCancellation = true,

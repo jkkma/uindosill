@@ -11,11 +11,32 @@ internal sealed record TranslatorRequest
     /// <summary>Use the canned translator: real pass, no weights, visibly not English.</summary>
     public bool Fake { get; init; }
 
-    /// <summary>Catalogue id of a translation entry, or null for the only one installed.</summary>
+    /// <summary>
+    /// Catalogue id of a translation entry, or null to choose one: by the recogniser's languages
+    /// when <see cref="RecogniserLanguages"/> is given, and otherwise the only one installed.
+    /// </summary>
     public string? ModelId { get; init; }
 
     /// <summary>A checkpoint directory to load directly instead of a catalogue entry.</summary>
     public string? ModelPath { get; init; }
+
+    /// <summary>
+    /// The languages the recogniser whose transcript is being translated writes, when there is one
+    /// — <c>transcribe --translate</c> — and null for text with no recogniser behind it.
+    /// </summary>
+    /// <remarks>
+    /// Since 2026-09-04 the catalogue holds two translation entries, one per recogniser: the
+    /// many-to-one checkpoint reads the European recogniser's 25 languages and the Japanese one
+    /// reads Japanese. Which one runs is decided by which recogniser wrote the transcript, because
+    /// that is the one fact the pipeline has about the language of what it is translating — the
+    /// transcript's own language field records a request, not a detection. An empty list is a
+    /// recogniser that does not say, which is a sideloaded one, and it is refused rather than
+    /// guessed for.
+    /// </remarks>
+    public IReadOnlyList<string>? RecogniserLanguages { get; init; }
+
+    /// <summary>The recogniser's id, for the messages that name it. Null with <see cref="RecogniserLanguages"/>.</summary>
+    public string? RecogniserId { get; init; }
 
     /// <summary>Intra-op threads for the ONNX sessions, or 0 to let ONNX Runtime choose.</summary>
     public int Threads { get; init; }
@@ -108,6 +129,12 @@ internal static class TranslatorFactory
             IntraOpThreads = request.Threads,
             Provider = ResolveBackend(request),
             SourceLanguages = descriptor?.Languages ?? [],
+
+            // What the catalogue says the checkpoint reads in front of a source, held against what
+            // the sidecar finds in the vocabulary at load. A bare directory declares nothing, and
+            // the sidecar's answer then stands alone.
+            DeclaredTargetToken = descriptor?.TargetToken,
+            HasDeclaredTargetToken = descriptor is not null,
         });
 
         // Disposed on a failed load rather than leaked: the sidecar is a process, and one left
@@ -258,14 +285,7 @@ internal static class TranslatorFactory
         }
         else
         {
-            descriptor = context.Catalog.TranslationModels.Count switch
-            {
-                0 => throw new CliUsageException("The model catalogue has no translation model."),
-                1 => context.Catalog.TranslationModels[0],
-                _ => throw new CliUsageException(
-                    "The catalogue has more than one translation model; name one. Candidates: " +
-                    string.Join(", ", context.Catalog.TranslationModels.Select(m => m.Id))),
-            };
+            descriptor = Choose(context, request);
         }
 
         var path = context.Store.PathFor(descriptor);
@@ -279,6 +299,82 @@ internal static class TranslatorFactory
         RequireFiles(path, descriptor.Id);
         return (path, descriptor);
     }
+
+    /// <summary>
+    /// Which translation entry runs when none was named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One entry is the answer whoever asks, which is how the catalogue stood until 2026-09-04.
+    /// With more than one, the question is what language the text is in, and the pipeline knows
+    /// that in exactly one case: <c>transcribe --translate</c>, where the recogniser that wrote the
+    /// transcript declares what it writes. The entry that reads every language it declares is the
+    /// one — <see cref="ModelCatalog.TranslationModelsFor"/> — and a recogniser that declares
+    /// nothing, which is a sideloaded one, is refused rather than guessed for.
+    /// </para>
+    /// <para>
+    /// A text file says nothing about its language, so <c>translate</c> falls back to the only
+    /// entry installed, and with two installed it asks for <c>--model</c> — the same shape as the
+    /// pre-2026-09-04 refusal, reached one step later.
+    /// </para>
+    /// </remarks>
+    private static ModelDescriptor Choose(CliContext context, TranslatorRequest request)
+    {
+        var candidates = context.Catalog.TranslationModels;
+        if (candidates.Count == 0)
+        {
+            throw new CliUsageException("The model catalogue has no translation model.");
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        var listed = string.Join(", ", candidates.Select(m => $"{m.Id} ({string.Join(" ", m.Languages)})"));
+
+        if (request.RecogniserLanguages is { } languages)
+        {
+            var recogniser = request.RecogniserId ?? "the speech model";
+            if (languages.Count == 0)
+            {
+                throw new CliUsageException(
+                    $"The catalogue has {candidates.Count} translation models and {recogniser} does not say which " +
+                    $"languages it writes, so none can be chosen for it. Name one with {ModelOption(request)}. " +
+                    $"Candidates: {listed}.");
+            }
+
+            var matching = context.Catalog.TranslationModelsFor(languages);
+            return matching.Count switch
+            {
+                1 => matching[0],
+                0 => throw new CliUsageException(
+                    $"No translation model reads what {recogniser} writes ({string.Join(" ", languages)}). " +
+                    $"Candidates: {listed}."),
+                _ => throw new CliUsageException(
+                    $"{matching.Count} translation models read what {recogniser} writes; name one with " +
+                    $"{ModelOption(request)}. Candidates: {string.Join(", ", matching.Select(m => m.Id))}."),
+            };
+        }
+
+        var installed = candidates.Where(context.Store.IsInstalled).ToList();
+        return installed.Count switch
+        {
+            1 => installed[0],
+            0 => throw new CliUsageException(
+                $"A translation model is not installed: the catalogue has {candidates.Count}, and none of them is. " +
+                "Run 'uindosill models download <id>' for the one that reads your text's language. " +
+                $"Candidates: {listed}."),
+            _ => throw new CliUsageException(
+                $"{installed.Count} translation models are installed, and a text file does not say which language " +
+                $"it is in; name one with {ModelOption(request)}. Installed: " +
+                $"{string.Join(", ", installed.Select(m => $"{m.Id} ({string.Join(" ", m.Languages)})"))}."),
+        };
+    }
+
+    /// <summary>The flag that names a translation model, spelled for whichever command is asking.</summary>
+    private static string ModelOption(TranslatorRequest request) =>
+        request.BackendOption == "--backend" ? "--model" : "--translate-model";
 
     /// <summary>
     /// What a caller must be told before a pass runs, given what the translator turned out to be.

@@ -82,6 +82,76 @@ public sealed record CcByAttribution : IModelAttribution
 }
 
 /// <summary>
+/// A CC BY-SA 4.0 notice package: CC BY's seven §3(a) elements, plus the ShareAlike condition
+/// §3(b) attaches to an adaptation.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A record of its own rather than a flag on <see cref="CcByAttribution"/>, on the terms the
+/// NC record gives: a licence that asks for something more is shaped like its own obligations. What
+/// BY-SA asks for beyond BY is §3(b) — an adaptation of the material must itself be licensed under
+/// BY-SA 4.0 or a licence Creative Commons lists as compatible, its licence must be included or
+/// linked, and no additional terms may be offered on it. Exporting a checkpoint to ONNX is
+/// adapting it, so the export this project publishes is Adapted Material and carries the licence
+/// it must; that is <see cref="ShareAlikeNotice"/>, and it names where the adapter's licence is.
+/// </para>
+/// <para>
+/// What ShareAlike does not reach, on this project's reading and no lawyer's: the application that
+/// runs the weights, which is not an adaptation of them, and a user's transcripts. The reading is
+/// recorded in <c>docs/LICENSING.md</c> rather than asserted here.
+/// </para>
+/// </remarks>
+public sealed record CcBySaAttribution : IModelAttribution
+{
+    /// <summary>Element 1: identification of the creator(s), by the name they designate.</summary>
+    public required string Creator { get; init; }
+
+    /// <summary>Element 2: the copyright notice — or the finding that the material carries none.</summary>
+    public required string CopyrightNotice { get; init; }
+
+    /// <summary>Element 3: a notice referring to the licence.</summary>
+    public required string LicenceNotice { get; init; }
+
+    /// <summary>Element 4: a notice referring to the disclaimer of warranties.</summary>
+    public required string WarrantyDisclaimerNotice { get; init; }
+
+    /// <summary>Element 5: a URI to the material.</summary>
+    public required Uri MaterialUri { get; init; }
+
+    /// <summary>Element 6: an indication that the material was modified, and how.</summary>
+    public required string ModificationNotice { get; init; }
+
+    /// <summary>Element 7: the statement of the licence, with a link to its text.</summary>
+    public required string LicenceStatement { get; init; }
+
+    public required Uri LicenceUri { get; init; }
+
+    /// <summary>
+    /// §3(b): the adaptation is licensed under BY-SA 4.0, and where its licence and the
+    /// adaptation itself can be found.
+    /// </summary>
+    public required string ShareAlikeNotice { get; init; }
+
+    /// <summary>Human title of the work, for display.</summary>
+    public required string Title { get; init; }
+
+    public string ToPlainText(string newLine = "\n")
+    {
+        var builder = new StringBuilder();
+        builder.Append(Title).Append(newLine);
+        builder.Append("Creator: ").Append(Creator).Append(newLine);
+        builder.Append(CopyrightNotice).Append(newLine);
+        builder.Append(LicenceNotice).Append(newLine);
+        builder.Append("Licence: ").Append(LicenceStatement).Append(' ').Append(LicenceUri).Append(newLine);
+        builder.Append("Source: ").Append(MaterialUri).Append(newLine);
+        builder.Append("Modifications: ").Append(ModificationNotice).Append(newLine);
+        builder.Append("ShareAlike: ").Append(ShareAlikeNotice).Append(newLine);
+        builder.Append("Warranties: ").Append(WarrantyDisclaimerNotice).Append(newLine);
+        return builder.ToString();
+    }
+}
+
+/// <summary>
 /// An NVIDIA Open Model License notice package.
 /// </summary>
 /// <remarks>
@@ -357,6 +427,12 @@ public static class Attributions
     public const string ParakeetTdtCtc06BJa = "nvidia-parakeet-tdt-ctc-0.6b-ja";
 
     public const string OpusMtBibleBigMulEn = "helsinki-opus-mt-tc-bible-big-mul-deu-eng-nld-onnx";
+
+    /// <summary>
+    /// The Japanese-to-English translation weights: FuguMT, CC BY-SA 4.0, exported to ONNX by this
+    /// project — the catalogue's first ShareAlike entry, added 2026-09-04.
+    /// </summary>
+    public const string FuguMtJaEn = "staka-fugumt-ja-en-onnx";
 
     /// <summary>
     /// The answering model: Gemma 4 26B A4B, Apache-2.0, installed as a third party's GGUF.
@@ -639,6 +715,41 @@ public static class Attributions
                 + "either express or implied (section 7 of the License).",
         },
 
+        // The Japanese translation weights, and the first ShareAlike entry. The card designates no
+        // name beyond the publishing account and its repository, so the creator is identified the
+        // way the card does it, which CC BY-SA 4.0 s.3(a)(1)(A)(i) allows ("including by pseudonym
+        // if designated"). It carries no copyright notice, and none is invented: the finding is
+        // stated, as it is for the Apache entry above.
+        [FuguMtJaEn] = new CcBySaAttribution
+        {
+            Title = "FuguMT ja-en (Japanese-to-English machine translation model weights)",
+            Creator = "staka (s-taka on GitHub), the author of FuguMT, https://github.com/s-taka/fugumt",
+            CopyrightNotice =
+                "The upstream repository was read at the pinned revision f7ce1128 on 2026-09-04 - its file "
+                + "listing and every text file in it - and it carries no copyright notice, so none is reproduced "
+                + "here rather than one being invented.",
+            LicenceNotice =
+                "This material is made available under the Creative Commons Attribution-ShareAlike 4.0 "
+                + "International licence (CC BY-SA 4.0).",
+            WarrantyDisclaimerNotice =
+                "The material is provided as-is and without warranties of any kind, express or implied, to the "
+                + "extent permitted under the CC BY-SA 4.0 disclaimer of warranties and limitation of liability "
+                + "(section 5 of the licence).",
+            MaterialUri = new Uri("https://huggingface.co/staka/fugumt-ja-en"),
+            ModificationNotice =
+                "Modified: the original Marian checkpoint at revision f7ce1128 was exported to ONNX in the "
+                + "merged decoder layout by scripts/export-translation-onnx.py, which splits it into an encoder "
+                + "graph and a decoder graph with past key values exposed. The weights are unchanged and "
+                + "unquantised - float32 in, float32 out. Uindosill downloads the exported graphs from its own "
+                + "repository and does not redistribute the original checkpoint.",
+            ShareAlikeNotice =
+                "The export is an adaptation and is licensed under CC BY-SA 4.0, the same licence as the "
+                + "original, with no additional terms; it is published at "
+                + "https://huggingface.co/jkkma/fugumt-ja-en-onnx with the licence linked from its card.",
+            LicenceStatement = "Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0),",
+            LicenceUri = new Uri("https://creativecommons.org/licenses/by-sa/4.0/legalcode"),
+        },
+
         // The speech-detection graph, and the first MIT entry â€” the fourth licence shape here. MIT
         // asks for the copyright line and the permission text to travel with the material, so the
         // LICENSE file ships at SileroVadLicencePath and this names it. The graph is installed by URL
@@ -718,6 +829,16 @@ public static class Attributions
         "membership rather than a quality claim, and the product must not present them as one. Measured " +
         "on FLEURS into English, 23 of the 24 clear this project's own bar and Slovak falls below it " +
         "by 0.74.",
+
+        // The first ShareAlike licence here, added 2026-09-04 with the Japanese translator. What it
+        // binds is the weights and adaptations of them; what this project reads it as not binding
+        // is stated as a reading, in docs/LICENSING.md, and not as a fact.
+        "CC BY-SA 4.0 s.3(b) attaches ShareAlike to the Japanese translation weights: the ONNX export this " +
+        "product downloads is an adaptation of staka/fugumt-ja-en, is published under the same licence, and " +
+        "any further adaptation of those weights must be too. On this project's reading, recorded in " +
+        "docs/LICENSING.md and read by no lawyer, it reaches the weights and what is made from them and not " +
+        "the application that runs them or a user's transcripts. s.2(a)(5)(B)'s ban on effective " +
+        "technological measures applies to these files as it does to the CC BY 4.0 ones.",
 
         // Model-scoped from the day it was written, and that is why adding a Japanese entry did not
         // reverse a product promise: the sentence named one checkpoint's coverage. It now reads per

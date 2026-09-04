@@ -99,6 +99,93 @@ public sealed class SidecarEngineTests
         Assert.Equal(">>eng<<", translator.Capabilities.TargetToken);
     }
 
+    private const string TranslatorCapabilitiesReadingNoToken =
+        """{"id":{id},"type":"result","capabilities":{"engineName":"marian-onnx-python","modelId":"fugumt-ja-en","backend":"cpu","maxSourceTokens":512,"targetToken":null,"vocabSize":32001,"beams":6,"maxNewTokens":512,"lengthPenalty":1.0,"earlyStopping":false}}""";
+
+    private const string TranslatorCapabilitiesReadingTheToken =
+        """{"id":{id},"type":"result","capabilities":{"engineName":"marian-onnx-python","modelId":"opus-mt","backend":"cpu","maxSourceTokens":512,"targetToken":">>eng<<","vocabSize":58434,"beams":6,"maxNewTokens":512,"lengthPenalty":1.0,"earlyStopping":false}}""";
+
+    [Fact]
+    public async Task TheVocabularysAnswerAboutTheTargetTokenIsWhatTheCapabilitiesCarryAfterLoad()
+    {
+        // A bare directory declares nothing, so the sidecar's reading of the vocabulary stands
+        // alone: this checkpoint has no >>eng<<, the capabilities say so once it has loaded, and
+        // every source it is then given goes bare. Until 2026-09-04 the token was a constant on
+        // this side and a single-direction checkpoint would have had it translated as text.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { TranslatorCapabilitiesReadingNoToken } },
+            new { op = "translate", emit = new[] { """{"id":{id},"type":"result","tokens":9,"text":"The cat is cute.","refused":false}""" } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(TranslatorOptions, sidecar);
+
+        Assert.Equal(">>eng<<", translator.Capabilities.TargetToken);
+        await translator.LoadAsync();
+        Assert.Null(translator.Capabilities.TargetToken);
+
+        var translated = new List<TranscriptSegment>();
+        await foreach (var segment in translator.TranslateAsync([Segment("猫はかわいいです。")], TranslationOptions.Default))
+        {
+            translated.Add(segment);
+        }
+
+        Assert.Equal("The cat is cute.", Assert.Single(translated).Text);
+    }
+
+    [Fact]
+    public async Task ACatalogueDeclarationTheVocabularyContradictsIsRefusedAtLoad()
+    {
+        // Both wrong answers decode without complaint — a token the vocabulary lacks is translated
+        // as text, and a many-to-one checkpoint given none writes its first declared target — so a
+        // catalogue that disagrees with the vocabulary stops the load before a source is built.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { TranslatorCapabilitiesReadingNoToken } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(
+            TranslatorOptions with { DeclaredTargetToken = ">>eng<<", HasDeclaredTargetToken = true },
+            sidecar);
+
+        var refusal = await Assert.ThrowsAsync<PythonSidecarException>(async () => await translator.LoadAsync());
+
+        Assert.Contains("'>>eng<<'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("no such token", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADeclarationTheVocabularyConfirmsLoadsWithTheTokenItDeclared()
+    {
+        // The other direction, and the one every load of the many-to-one checkpoint takes: the
+        // catalogue says >>eng<<, the vocabulary has it, and the capabilities carry it on.
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { TranslatorCapabilitiesReadingTheToken } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(
+            TranslatorOptions with { DeclaredTargetToken = ">>eng<<", HasDeclaredTargetToken = true },
+            sidecar);
+
+        await translator.LoadAsync();
+
+        Assert.Equal(">>eng<<", translator.Capabilities.TargetToken);
+    }
+
+    [Fact]
+    public async Task ADeclarationOfNoTokenTheVocabularyConfirmsLoadsBare()
+    {
+        using var fake = FakeSidecarProcess.Scripted(Script(
+            new { op = "load", emit = new[] { TranslatorCapabilitiesReadingNoToken } }));
+
+        await using var sidecar = new PythonSidecar(fake.Resolution);
+        await using var translator = new SidecarTranscriptTranslator(
+            TranslatorOptions with { DeclaredTargetToken = null, HasDeclaredTargetToken = true },
+            sidecar);
+
+        Assert.Null(translator.Capabilities.TargetToken);
+        await translator.LoadAsync();
+        Assert.Null(translator.Capabilities.TargetToken);
+    }
+
     [Fact]
     public async Task ADecodeInAnotherProcessCannotBeStoppedAndTheCapabilitySaysSo()
     {
@@ -262,10 +349,13 @@ public sealed class SidecarEngineTests
     }
 
     [Fact]
-    public async Task AMissingParityFixtureIsSaidToBeMissingRatherThanFailed()
+    public async Task AMissingParityFixtureIsSaidToBeMissingRatherThanFailedOrPassed()
     {
-        // A stack with no fixture is not a stack that failed the check. Reporting it as a failure
-        // would put a warning in front of people whose only problem is an incomplete install.
+        // A stack with no fixture is not a stack that failed the check — but until 2026-09-04 it
+        // was reported as nothing at all, and with one fixture per checkpoint that silence let a
+        // bundle synced before the Japanese reference existed load that checkpoint on WebGPU
+        // unchecked, with no line to say so. So it is the same "could not be run" the check gives
+        // when it crashes: not a failure, not a pass, and said, with the sidecar's own reason.
         using var fake = FakeSidecarProcess.Scripted(Script(
             new { op = "load", emit = new[] { TranslatorCapabilities } },
             new { op = "parity", emit = new[] { """{"id":{id},"type":"result","available":false,"reason":"no reference committed"}""" } }));
@@ -275,7 +365,12 @@ public sealed class SidecarEngineTests
 
         await translator.LoadAsync();
 
-        Assert.Null(translator.Parity);
+        var parity = Assert.IsType<TranslationParityResult>(translator.Parity);
+        Assert.False(parity.Ran);
+        Assert.False(parity.Passed);
+        Assert.Equal("no reference committed", parity.Reason);
+        Assert.StartsWith("WARNING: the check", parity.Describe(), StringComparison.Ordinal);
+        Assert.Contains("no reference committed", parity.Describe(), StringComparison.Ordinal);
     }
 
     // -- the diariser --------------------------------------------------------------------------

@@ -53,9 +53,14 @@ public class SpeakerGraphPreparationTests
         public string? DescribeTranslator(Parakeet.Core.Translation.ITranscriptTranslator translator) =>
             _inner.DescribeTranslator(translator);
 
-        public bool SupportsTranslation => _inner.SupportsTranslation;
+        public bool SupportsTranslation(Parakeet.Core.Models.ModelDescriptor? recogniser) =>
+            _inner.SupportsTranslation(recogniser);
 
-        public Parakeet.Core.Translation.ITranscriptTranslator? CreateTranslator() => _inner.CreateTranslator();
+        public string? DescribeUnavailableTranslation(Parakeet.Core.Models.ModelDescriptor? recogniser) =>
+            _inner.DescribeUnavailableTranslation(recogniser);
+
+        public Parakeet.Core.Translation.ITranscriptTranslator? CreateTranslator(Parakeet.Core.Models.ModelDescriptor? recogniser) =>
+            _inner.CreateTranslator(recogniser);
 
         public bool SupportsTidying => _inner.SupportsTidying;
 

@@ -627,6 +627,9 @@ foreach ($channel in $Channels) {
             # pipeline that replaced it is torch on both stages with no ONNX path to check against.
             # See bundle-python.ps1's list, where the same three names left together.
             'uindosill_engines/translator/parity-reference.json',
+            # And the Japanese translator's, since 2026-09-04: one fixture per checkpoint, each the
+            # only thing that says a provider reproduces the CPU on that checkpoint.
+            'uindosill_engines/translator/parity-reference.fugumt-ja-en.json',
             'Lib/site-packages/onnxruntime')) {
             $path = Join-Path $bundleDir $required
             if (-not (Test-Path -LiteralPath $path)) {

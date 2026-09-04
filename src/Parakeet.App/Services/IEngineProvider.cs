@@ -183,15 +183,32 @@ public interface IEngineProvider
     string? DescribeUnavailable(ModelTask task);
 
     /// <summary>
-    /// True when this provider can hand out a translator. Shown the same way
-    /// <see cref="SupportsSpeakerLabelling"/> is: the checkbox is disabled with a reason rather
-    /// than hidden, because the reason — a model that has not been downloaded — is one the user
-    /// can act on from the tab next door.
+    /// True when this provider can hand out a translator for what <paramref name="recogniser"/>
+    /// writes. Shown the same way <see cref="SupportsSpeakerLabelling"/> is: the checkbox is
+    /// disabled with a reason rather than hidden, because the reason — a model that has not been
+    /// downloaded — is one the user can act on from the tab next door.
     /// </summary>
-    bool SupportsTranslation { get; }
+    /// <remarks>
+    /// A question about the recogniser since 2026-09-04, when the catalogue gained a second
+    /// translation entry: the European recogniser's transcripts go to the many-to-one checkpoint
+    /// and the Japanese recogniser's to the Japanese one, chosen by
+    /// <see cref="ModelCatalog.TranslationModelsFor"/>. Null is a recogniser nobody has chosen —
+    /// the catalogue's recommendation stands in for it, exactly as it does for Start.
+    /// </remarks>
+    bool SupportsTranslation(ModelDescriptor? recogniser);
 
-    /// <summary>The translator behind the English opt-in, or null when <see cref="SupportsTranslation"/> is false.</summary>
-    ITranscriptTranslator? CreateTranslator();
+    /// <summary>
+    /// Why the English opt-in is not available for <paramref name="recogniser"/>, or null when it
+    /// is. The translation twin of <see cref="DescribeUnavailable"/>, separate because its answer
+    /// depends on which recogniser is selected and the other tasks' do not.
+    /// </summary>
+    string? DescribeUnavailableTranslation(ModelDescriptor? recogniser);
+
+    /// <summary>
+    /// The translator behind the English opt-in for what <paramref name="recogniser"/> writes, or
+    /// null when <see cref="SupportsTranslation"/> is false for it.
+    /// </summary>
+    ITranscriptTranslator? CreateTranslator(ModelDescriptor? recogniser);
 
     /// <summary>
     /// True when this provider can hand out a tidier: the tidying entry is installed and a
@@ -502,9 +519,8 @@ public sealed class EngineProvider : IEngineProvider
                 "Speaker labelling needs its own model, which is not installed yet. Install it from the Models "
                 + "tab: a 31 MiB download with no limit on the number of voices, which needs a free Hugging "
                 + "Face account before it can be fetched."),
-            ModelTask.Translation => (TranslationModel is not null,
-                "An English version needs its own model, which is not installed yet. Install it from the Models tab; "
-                + "it is a 1.34 GiB download and reads 25 languages into English only."),
+            // Translation is answered by DescribeUnavailableTranslation, because its answer depends
+            // on which recogniser is selected and none of these do.
             ModelTask.VoiceActivity => (VoiceActivityModel is not null,
                 "Neural speech detection needs its own model, which is not installed yet. Install it from the Models "
                 + "tab; it is a 2.2 MiB download and hears pauses under music that the loudness gate cannot."),
@@ -539,22 +555,32 @@ public sealed class EngineProvider : IEngineProvider
             return "The model is installed, but this build does not include the language-model engine that runs it.";
         }
 
-        if (task is ModelTask.Diarisation or ModelTask.Translation && !HasBundledPython)
+        if (task is ModelTask.Diarisation && !HasBundledPython)
         {
-            // Not a download, and not something the Models tab can fix. The resolver's own reason
-            // leads, because it names what was actually looked for — the two bundle directories,
-            // or an override that points at nothing — where a sentence written before it looked
-            // can only guess; until 2026-08-22 this guessed "reinstall", which is the wrong advice
-            // when UINDOSILL_PYTHON is set to a path that does not exist.
-            var reason = _python.Value.Reason;
-            return reason is { Length: > 0 }
-                ? "The model is installed, but the Python this feature runs in was not found. " + reason
-                : "The model is installed, but the Python this feature runs in is not beside the application. "
-                  + "It ships with uindosill rather than being something to install, so this copy is incomplete: "
-                  + "reinstalling is the repair.";
+            return DescribeMissingPython();
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The sentence for a sidecar opt-in whose model is installed and whose interpreter is not.
+    /// </summary>
+    /// <remarks>
+    /// Not a download, and not something the Models tab can fix. The resolver's own reason leads,
+    /// because it names what was actually looked for — the two bundle directories, or an override
+    /// that points at nothing — where a sentence written before it looked can only guess; until
+    /// 2026-08-22 this guessed "reinstall", which is the wrong advice when UINDOSILL_PYTHON is set
+    /// to a path that does not exist.
+    /// </remarks>
+    private string DescribeMissingPython()
+    {
+        var reason = _python.Value.Reason;
+        return reason is { Length: > 0 }
+            ? "The model is installed, but the Python this feature runs in was not found. " + reason
+            : "The model is installed, but the Python this feature runs in is not beside the application. "
+              + "It ships with uindosill rather than being something to install, so this copy is incomplete: "
+              + "reinstalling is the repair.";
     }
 
     /// <inheritdoc />
@@ -630,7 +656,8 @@ public sealed class EngineProvider : IEngineProvider
     public bool DiariserRunsInTorch => true;
 
     /// <summary>
-    /// True when the translation checkpoint is installed, and false with a reason when it is not.
+    /// True when the translation checkpoint for what <paramref name="recogniser"/> writes is
+    /// installed, and false with a reason when it is not.
     /// </summary>
     /// <remarks>
     /// A question about the files on disk, like <see cref="SupportsSpeakerLabelling"/> — and here
@@ -640,18 +667,103 @@ public sealed class EngineProvider : IEngineProvider
     /// it does not. And the same second question, for the same reason: the translator runs in the
     /// bundled Python too, so without one there is nothing behind the opt-in.
     /// </remarks>
-    public bool SupportsTranslation => TranslationModel is not null && HasBundledPython;
+    public bool SupportsTranslation(ModelDescriptor? recogniser) =>
+        TranslationModelFor(recogniser, out _) is not null && HasBundledPython;
 
-    private ModelDescriptor? TranslationModel =>
-        ModelCatalog.Default.TranslationModels.FirstOrDefault() is { } model && _store.IsInstalled(model)
-            ? model
-            : null;
+    /// <summary>
+    /// The translation entry for <paramref name="recogniser"/>, installed — or null and the
+    /// sentence that says why not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Which entry is <see cref="ModelCatalog.TranslationModelsFor"/>'s answer, on the recogniser's
+    /// declared languages; a recogniser nobody has chosen is the catalogue's recommendation, as it
+    /// is for Start. One entry in the catalogue is the answer whoever the recogniser is, which is
+    /// how it stood until 2026-09-04 and how a build with one entry still behaves.
+    /// </para>
+    /// <para>
+    /// The reasons are the ones a user can act on, and each names the model it is about: "download
+    /// the Japanese translator" is a different instruction from "download the European one", and a
+    /// sentence that said "the translation model" would send half its readers to the wrong row.
+    /// A recogniser that declares no languages — a sideloaded one — gets the one reason nobody can
+    /// act on from the Models tab, said as such.
+    /// </para>
+    /// </remarks>
+    private ModelDescriptor? TranslationModelFor(ModelDescriptor? recogniser, out string? whyNot)
+    {
+        var catalogue = ModelCatalog.Default;
+        recogniser ??= catalogue.Recommended;
 
-    public ITranscriptTranslator? CreateTranslator()
+        ModelDescriptor? entry;
+        if (catalogue.TranslationModels.Count <= 1)
+        {
+            entry = catalogue.TranslationModels.FirstOrDefault();
+            if (entry is null)
+            {
+                whyNot = "This build's catalogue has no translation model.";
+                return null;
+            }
+        }
+        else if (recogniser is null || recogniser.Languages.Count == 0)
+        {
+            whyNot = "Which translator to use depends on the speech model, and the selected one does not say " +
+                     "which languages it writes. Pick one of the catalogue's speech models on the Models tab.";
+            return null;
+        }
+        else
+        {
+            var matching = catalogue.TranslationModelsFor(recogniser.Languages);
+            if (matching.Count != 1)
+            {
+                whyNot = matching.Count == 0
+                    ? $"No translation model reads what {recogniser.DisplayName} writes."
+                    : $"{matching.Count} translation models read what {recogniser.DisplayName} writes, and nothing " +
+                      "here chooses between them.";
+                return null;
+            }
+
+            entry = matching[0];
+        }
+
+        if (!_store.IsInstalled(entry))
+        {
+            var size = entry.TotalSizeBytes is { } bytes ? $"a {ByteSize.Describe(bytes)} download" : "a download";
+            whyNot = $"An English version needs the '{entry.DisplayName}' model, which is not installed yet. " +
+                     $"Install it from the Models tab; it is {size} and reads " +
+                     $"{DescribeLanguages(entry)} into English only.";
+            return null;
+        }
+
+        whyNot = null;
+        return entry;
+    }
+
+    private static string DescribeLanguages(ModelDescriptor entry) => entry.Languages.Count switch
+    {
+        0 => "its own languages",
+        1 when string.Equals(entry.Languages[0], "ja", StringComparison.OrdinalIgnoreCase) => "Japanese",
+        1 => entry.Languages[0],
+        _ => $"{entry.Languages.Count} languages",
+    };
+
+    /// <inheritdoc />
+    public string? DescribeUnavailableTranslation(ModelDescriptor? recogniser)
+    {
+        if (TranslationModelFor(recogniser, out var whyNot) is null)
+        {
+            return whyNot;
+        }
+
+        // The interpreter is the second question, on the terms DescribeUnavailable gives for the
+        // speaker opt-in: not a download, and not something the Models tab can fix.
+        return HasBundledPython ? null : DescribeMissingPython();
+    }
+
+    public ITranscriptTranslator? CreateTranslator(ModelDescriptor? recogniser)
     {
         // The same all-or-nothing question as above, asked again at the point of use: the Models
         // tab can remove the entry between the window opening and Start being pressed.
-        if (TranslationModel is not { } model || !HasBundledPython)
+        if (TranslationModelFor(recogniser, out _) is not { } model || !HasBundledPython)
         {
             return null;
         }
@@ -666,6 +778,11 @@ public sealed class EngineProvider : IEngineProvider
             // wrong, on 0 of 32 sentences.
             Provider = "auto",
             SourceLanguages = model.Languages,
+
+            // What the catalogue says the checkpoint reads in front of a source, held against what
+            // the sidecar finds in its vocabulary at load.
+            DeclaredTargetToken = model.TargetToken,
+            HasDeclaredTargetToken = true,
         });
     }
 
@@ -807,10 +924,13 @@ public sealed class FakeEngineProvider : IEngineProvider
     public string? DescribeTranslator(ITranscriptTranslator translator) => null;
 
     /// <summary>The canned translator, for the same reason: the English opt-in runs end to end
-    /// here with no 1.34 GiB checkpoint in CI, and its output is visibly not English.</summary>
-    public bool SupportsTranslation => true;
+    /// here with no checkpoint in CI, whoever the recogniser is, and its output is visibly not
+    /// English.</summary>
+    public bool SupportsTranslation(ModelDescriptor? recogniser) => true;
 
-    public ITranscriptTranslator? CreateTranslator() => new FakeTranscriptTranslator(_translator);
+    public string? DescribeUnavailableTranslation(ModelDescriptor? recogniser) => null;
+
+    public ITranscriptTranslator? CreateTranslator(ModelDescriptor? recogniser) => new FakeTranscriptTranslator(_translator);
 
     /// <summary>The canned tidier, so the opt-in, the stage and the panes run end to end with no model in CI.</summary>
     public bool SupportsTidying => true;

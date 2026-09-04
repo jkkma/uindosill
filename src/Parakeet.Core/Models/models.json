@@ -221,7 +221,7 @@
       "id": "opus-mt-tc-bible-big-mul-en-fp32",
       "task": "translation",
       "family": "opus-mt-tc-bible-big-mul-deu_eng_nld",
-      "displayName": "English translation",
+      "displayName": "European to English translation",
       "quantisation": "fp32",
       "directory": "opus-mt-tc-bible-big-mul-en",
       "files": [
@@ -311,7 +311,80 @@
         "sv",
         "uk"
       ],
-      "notes": "Translates a finished transcript into English. It never listens to the audio; it works from the text the recogniser has already produced, so it can follow any of the 25 languages.\n\nIt was tested on 24 languages and does a good job on all of them but Slovak, which came out below the standard set for this feature. Transcripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
+      "targetToken": ">>eng<<",
+      "notes": "Translates a finished transcript into English. It never listens to the audio; it works from the text the recogniser has already produced, so it can follow any of the 25 languages the European recogniser hears. Japanese has a translator of its own, below, and the right one is chosen for the recogniser you pick.\n\nIt was tested on 24 languages and does a good job on all of them but Slovak, which came out below the standard set for this feature. Transcripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
+    },
+    {
+      "id": "fugumt-ja-en-fp32",
+      "task": "translation",
+      "family": "fugumt-ja-en",
+      "displayName": "Japanese to English translation",
+      "quantisation": "fp32",
+      "directory": "fugumt-ja-en",
+      "files": [
+        {
+          "fileName": "config.json",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/config.json",
+          "sizeBytes": 1018,
+          "sha256": "c3c070ad5809fcf390b22a1433e0947e07af55f9ae77369953bb7e91004b806f"
+        },
+        {
+          "fileName": "decoder_model_merged.onnx",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/decoder_model_merged.onnx",
+          "sizeBytes": 233532372,
+          "sha256": "bf47461b20badeaa9607a2840a1e15a9deac1497f9c90692a93d7f707b656a70"
+        },
+        {
+          "fileName": "encoder_model.onnx",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/encoder_model.onnx",
+          "sizeBytes": 142318198,
+          "sha256": "f6e728dffe5186e75c420f72563606d95b7afa2717f9433b8fe8c59d2e40c22e"
+        },
+        {
+          "fileName": "generation_config.json",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/generation_config.json",
+          "sizeBytes": 305,
+          "sha256": "2659b51a88bdf919cda454250e828602098ba4c5bf8bf739d84a4d4ec69500ef"
+        },
+        {
+          "fileName": "source.spm",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/source.spm",
+          "sizeBytes": 796876,
+          "sha256": "2b75a55d81ba5be08d5cc971eecbb03d8efaf66382f2a4f9f0a5fe2fca2b6741"
+        },
+        {
+          "fileName": "special_tokens_map.json",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/special_tokens_map.json",
+          "sizeBytes": 79,
+          "sha256": "2783f25e6fa0bd93f6e621623b33f32d5ab978715fb8c9f2584252b03837a323"
+        },
+        {
+          "fileName": "target.spm",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/target.spm",
+          "sizeBytes": 796876,
+          "sha256": "2b75a55d81ba5be08d5cc971eecbb03d8efaf66382f2a4f9f0a5fe2fca2b6741"
+        },
+        {
+          "fileName": "tokenizer_config.json",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/tokenizer_config.json",
+          "sizeBytes": 886,
+          "sha256": "59d9edc096579e9b35ead15e76ea7b66728ed7b3285fffa09b69d2ad02211a7e"
+        },
+        {
+          "fileName": "vocab.json",
+          "url": "https://huggingface.co/jkkma/fugumt-ja-en-onnx/resolve/9e075eec0a54f17addc95b33dd7835cfcff40c61/vocab.json",
+          "sizeBytes": 893154,
+          "sha256": "4fc8fb849150ee9fb0bbd727887108d18f207e1bc59a56cccba8bd933d895263"
+        }
+      ],
+      "verified": true,
+      "license": "CC-BY-SA-4.0",
+      "attributionId": "staka-fugumt-ja-en-onnx",
+      "recommended": false,
+      "languages": [
+        "ja"
+      ],
+      "notes": "Translates a Japanese transcript into English. It never listens to the audio; it works from the text the Japanese recogniser has already produced, and it reads Japanese only, so it is the translator that runs when that recogniser is picked. The European model above cannot read Japanese, and this one cannot read anything else.\n\nOn clear Japanese read aloud and scored against reference translations, it comes out about six points ahead of the European model on the same sentences, on a hundred-point scale, and loses about four of those points between a perfect transcript and the recogniser's own. Nobody has rated its English by hand.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited and any modified copy of the model is shared under the same licence; Uindosill shows that credit for you.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 361 MiB, downloaded as one set of files."
     },
     {
       "id": "silero-vad-v5.1.2",

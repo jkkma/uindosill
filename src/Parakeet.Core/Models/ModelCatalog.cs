@@ -71,6 +71,33 @@ public sealed class ModelCatalog
     /// <summary>The entries the translation opt-in may load. Empty until a model is integrated.</summary>
     public IReadOnlyList<ModelDescriptor> TranslationModels => _byTask[ModelTask.Translation];
 
+    /// <summary>
+    /// The translation entries that read every one of <paramref name="languages"/>, in manifest
+    /// order. Empty for an empty list: a recogniser that declares no languages is not covered by
+    /// everything, it is unknown, and the caller says so rather than guessing.
+    /// </summary>
+    /// <remarks>
+    /// The rule both the command line and the window choose a translator by, since the catalogue
+    /// gained its second translation entry on 2026-09-04. The recogniser is the one thing in the
+    /// pipeline that knows the language of what it wrote — the transcript's own language field
+    /// records a request, not a detection — so the entry whose list covers the recogniser's is the
+    /// one that runs. Coverage is list membership, compared case-insensitively on BCP-47 tags, and
+    /// says nothing about quality; the catalogue's notes carry what was measured.
+    /// </remarks>
+    public IReadOnlyList<ModelDescriptor> TranslationModelsFor(IReadOnlyList<string> languages)
+    {
+        ArgumentNullException.ThrowIfNull(languages);
+
+        if (languages.Count == 0)
+        {
+            return [];
+        }
+
+        return TranslationModels
+            .Where(m => languages.All(l => m.Languages.Contains(l, StringComparer.OrdinalIgnoreCase)))
+            .ToList();
+    }
+
     /// <summary>The entries the neural speech-detection opt-in may load in place of the energy gate.</summary>
     public IReadOnlyList<ModelDescriptor> VoiceActivityModels => _byTask[ModelTask.VoiceActivity];
 
@@ -245,12 +272,13 @@ public sealed class ModelCatalog
     private static ModelDescriptor ParseModel(JsonElement element)
     {
         var id = RequireString(element, "id");
+        var task = ParseTask(element, id);
         var (files, directory) = ParseFiles(element, id);
 
         return new ModelDescriptor
         {
             Id = id,
-            Task = ParseTask(element, id),
+            Task = task,
             Family = RequireString(element, "family"),
             DisplayName = RequireString(element, "displayName"),
             Quantisation = RequireString(element, "quantisation"),
@@ -260,10 +288,43 @@ public sealed class ModelCatalog
             License = RequireString(element, "license"),
             AttributionIds = ParseAttributionIds(element, id),
             Languages = ParseStringArray(element, "languages"),
+            TargetToken = ParseTargetToken(element, id, task),
             Recommended = element.TryGetProperty("recommended", out var recommended) && recommended.ValueKind == JsonValueKind.True,
             Engine = OptionalString(element, "engine"),
             Notes = OptionalString(element, "notes"),
         };
+    }
+
+    /// <summary>
+    /// A translation entry's <c>targetToken</c>: a non-blank string, or absent for a checkpoint that
+    /// reads none. Refused on any other task, where it would mean nothing and be read by nobody.
+    /// </summary>
+    /// <remarks>
+    /// A blank is refused rather than read as "none", for the reason <c>TranslationRequest</c>
+    /// refuses one: blank is the shape a forgotten token takes, and the way to say a checkpoint
+    /// reads no token is to leave the property out.
+    /// </remarks>
+    private static string? ParseTargetToken(JsonElement element, string id, ModelTask task)
+    {
+        if (!element.TryGetProperty("targetToken", out var token))
+        {
+            return null;
+        }
+
+        if (task != ModelTask.Translation)
+        {
+            throw new InvalidDataException(
+                $"Model '{id}' declares a targetToken, which only a translation entry can have.");
+        }
+
+        if (token.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(token.GetString()))
+        {
+            throw new InvalidDataException(
+                $"Model '{id}' has a targetToken that is not a non-blank string. Leave the property out for a " +
+                "checkpoint that reads no target token.");
+        }
+
+        return token.GetString();
     }
 
     /// <summary>

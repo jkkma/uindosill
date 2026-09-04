@@ -1,0 +1,13 @@
+{
+ "_": "The CPU's translations of parity-sources.fugumt-ja-en.json through the fp32 merged export of staka/fugumt-ja-en at revision f7ce11286e1fb7a8e1f1692ff3ab68c0f9c3aecb, beam 6, renormalize_logits on, produced 2026-09-04 on the laptop with onnxruntime 1.29.0 (CPU wheel), transformers 4.57.6, optimum 2.1.0. What WebGPU and CUDA are held to on this checkpoint.",
+ "family": "fugumt-ja-en",
+ "vocabSize": 32001,
+ "translations": [
+  "On remote islands and lakes, yachts are not necessarily necessary.",
+  "It is said that many Parisians are self-centered, arrogant and rude.",
+  "The smaller the Rosbyce, the lower the star’s activity when it comes to magnetic determination.",
+  "If you are going to the north, visit the shrine of the Virgin of Fatima, the world-famous Holy Land of the Statue of Mary.",
+  "The cat is cute.",
+  "There is a meeting in Tokyo today."
+ ]
+}

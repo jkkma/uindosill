@@ -54,16 +54,48 @@ public class TranslationTests
     }
 
     [Fact]
-    public void ASourceCannotBeBuiltWithoutATargetToken()
+    public void ASourceCannotBeBuiltWithABlankTargetToken()
     {
-        // Blank rather than absent is the shape a bug takes here: a translator whose target token
-        // is unset would otherwise build a source that looks right and decodes without complaint.
+        // Blank is the shape a bug takes here: a translator whose target token is unset would
+        // otherwise build a source that looks right and decodes without complaint.
         var segments = new[] { Spoken(0, 3, "hola") };
 
         Assert.Throws<ArgumentException>(() =>
             TranslationRequest.Build(segments, TranslationOptions.Default, "   "));
-        Assert.Throws<ArgumentNullException>(() =>
-            TranslationRequest.Build(segments, TranslationOptions.Default, null!));
+        Assert.Throws<ArgumentException>(() =>
+            TranslationRequest.Build(segments, TranslationOptions.Default, string.Empty));
+        Assert.Throws<ArgumentException>(() => TranslationRequest.Mark("hola", " "));
+    }
+
+    [Fact]
+    public void ANullTargetTokenIsADeclarationAndTheSourceGoesBare()
+    {
+        // The Japanese checkpoint added 2026-09-04 reads one language into one and its vocabulary
+        // has no >>eng<<: given the token it translates it as text. Null is how a translator says
+        // it reads none, and it is the only way to get a source with nothing in front of it —
+        // which is why null and blank are told apart rather than both refused or both allowed.
+        var segments = new[] { Spoken(0, 3, "猫はかわいいです。"), Spoken(3, 6, "  今日は東京で会議があります。 ") };
+
+        var requests = TranslationRequest.Build(segments, TranslationOptions.Default, null);
+
+        Assert.Equal(["猫はかわいいです。", "今日は東京で会議があります。"], requests.Select(r => r.Source));
+        Assert.True(TranslationRequest.IsMarked(requests[0].Source, null));
+        Assert.Equal("猫はかわいいです。", TranslationRequest.Mark(" 猫はかわいいです。 ", null));
+    }
+
+    [Fact]
+    public async Task ATranslatorThatDeclaresNoTokenIsGivenBareSourcesBySeam()
+    {
+        // The seam applies whatever the capabilities declare, so a translator that declares null
+        // gets bare sources from TranscriptTranslation exactly as one declaring >>eng<< gets marked
+        // ones — the same code path, no special case for either.
+        await using var translator = new FakeTranscriptTranslator(new FakeTranslatorOptions { TargetToken = null });
+        var document = Document(Spoken(0, 3, "猫はかわいいです。"));
+
+        await TranscriptTranslation.TranslateAsync(document, translator, TranslationOptions.Default);
+
+        Assert.Null(translator.Capabilities.TargetToken);
+        Assert.Equal("猫はかわいいです。", Assert.Single(translator.Requests).Source);
     }
 
     [Fact]

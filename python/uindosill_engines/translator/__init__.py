@@ -113,6 +113,12 @@ class Translator:
             # The tokenizer's own declared limit, read rather than guessed. The host refuses a
             # source past it; this side only says what it is.
             "maxSourceTokens": engine.max_source_tokens if engine is not None else None,
+            # What the vocabulary says: whether every source has to begin with `>>eng<<` (a
+            # many-to-one checkpoint) or with nothing (a single-direction one), and how many pieces
+            # the vocabulary has, which is what the parity fixture is matched on. The host checks
+            # the token against what the catalogue declares and refuses a disagreement; see engine.py.
+            "targetToken": engine.target_token if engine is not None else None,
+            "vocabSize": engine.vocab_size if engine is not None else None,
             # The decode, reported so that a transcript's provenance can carry the search that
             # produced it and not only the graph. Six beams is the measured number and not the
             # config file's four; see engine.py.

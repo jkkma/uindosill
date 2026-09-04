@@ -1,0 +1,16 @@
+{
+ "_": "The sources the parity check translates through the Japanese-to-English checkpoint. Four are real output of this project's own Japanese recogniser (parakeet-tdt_ctc-0.6b-ja at q8_0, FLEURS ja_jp audio, the 2026-09-04 end-to-end run) rather than written text, errors included — the first has 離島 where the sentence read aloud said 群島, and the third garbles ロスビー数 — because that is the input the shipping path actually sends. The last two are written: the model card's own example and one plain sentence. None carries a target token: this checkpoint reads one language into one language and its vocabulary has no >>eng<<, so the host sends the sentence bare; a source marked with a token here would be testing a path the product never takes, and the token would be tokenised as text.",
+ "family": "fugumt-ja-en",
+ "model": "staka/fugumt-ja-en",
+ "revision": "f7ce11286e1fb7a8e1f1692ff3ab68c0f9c3aecb",
+ "vocabSize": 32001,
+ "targetToken": null,
+ "sources": [
+  "離島や湖では、必ずしもヨットは必要ありません。",
+  "パリジャンは自己中心的で横柄で失礼な人が多いといわれています。",
+  "ロスビースが小さいほど磁気判定に関して星の活性が低下する訳です。",
+  "また北側に行くなら世界的に有名なマリア像の聖地であるファティマの聖母の聖域神社を訪れましょう。",
+  "猫はかわいいです。",
+  "今日は東京で会議があります。"
+ ]
+}

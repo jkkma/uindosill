@@ -327,7 +327,7 @@ public class TranslationTests
         // question is asked of the whole entry rather than of whichever file arrived first.
         var directory = TestTemp.NewDirectory("uindosill-tr");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.TranslationModels);
+        var model = ModelCatalog.Default.TranslationModels.Single(m => m.Id == "opus-mt-tc-bible-big-mul-en-fp32");
 
         var target = Path.GetDirectoryName(store.PathFor(model, model.Files[0]))!;
         Directory.CreateDirectory(target);
@@ -354,7 +354,7 @@ public class TranslationTests
         // .en and report it as "Finished" — the silent failure the command line refuses.
         var directory = TestTemp.NewDirectory("uindosill-tr");
         var store = new LocalModelStore(directory);
-        var model = Assert.Single(ModelCatalog.Default.TranslationModels);
+        var model = ModelCatalog.Default.TranslationModels.Single(m => m.Id == "opus-mt-tc-bible-big-mul-en-fp32");
 
         Directory.CreateDirectory(Path.GetDirectoryName(store.PathFor(model, model.Files[0]))!);
         foreach (var file in model.Files)
@@ -383,7 +383,7 @@ public class TranslationTests
         var store = new LocalModelStore(directory);
         var main = new MainWindowViewModel(new FakeEngineProvider(), store, ModelCatalog.Default, player: new FakeMediaPlayer());
         var translator = Assert.Single(
-            main.Models.Models, m => m.Descriptor.Task == ModelTask.Translation);
+            main.Models.Models, m => m.Descriptor.Id == "opus-mt-tc-bible-big-mul-en-fp32");
 
         var translation = 0;
         var speakers = 0;
