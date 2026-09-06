@@ -312,6 +312,19 @@ release of each channel first, and tolerates there not being one. Without that s
 would have matched nothing on every release rather than only the first, which is the kind of thing
 that is invisible until somebody measures a download.
 
+> **That paragraph was wrong about the assets for as long as there have been any, and this is what
+> it took to notice — 2026-09-06.** No release has ever carried a delta package: `v1.0.0-rc.10`,
+> `-rc.11` and `-rc.12` each have none. The seeding step above did tolerate there not being a
+> previous release, and then found there never was one: `vpk download github` reads only *stable*
+> releases unless it is given `--pre`, every release here is a prerelease, and it answered "No
+> releases found" against a repository holding three. It exits 0 after that, so the step's own
+> `$LASTEXITCODE` guard never fired and the job stayed green. The flag is now passed and the step
+> counts what it downloaded rather than trusting an exit code — measured against the pinned vpk
+> 1.2.0 that day: 0 releases found without it, 3 with it. **What is still unproven is the delta
+> itself**, which needs a release seeded from a previous one; `docs/UNPROVEN.md` § *No release has
+> shipped a delta package* carries it until then. The sentence about being invisible until somebody
+> measures a download was righter than it knew.
+
 The whole workflow was rehearsed twice on 2026-08-19 through a `workflow_dispatch` draft, and it
 went green both times — `docs/UNPROVEN.md` has what those runs established and the one step they
 could not reach, which is that same delta seeding: `vpk download github` does not see a draft

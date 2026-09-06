@@ -1116,3 +1116,24 @@ minutes earlier. A test that can only reach the interesting interleaving by luck
 defect as noise. `ACancelThatLandsDuringAReadIsStillACancel` reaches it on purpose: the stream
 cancels the token and then throws, so the losing order is the only order, and it fails against the
 old filter every time.
+
+## 48. `vpk download github` ignores prereleases, and exits 0 when it has found nothing
+
+Velopack's seeding command takes `--pre` — *"Get latest pre-release instead of stable"* — and
+without it considers only stable releases. Every release this project publishes is a prerelease,
+marked so deliberately, so the release job's seeding step asked a repository holding three releases
+for a previous package and was told there were none. That is half the trap. The other half is that
+it then **exits 0**: it logs `No releases found`, `Found 0 release(s)` and `No full / applicable
+release was found to download. Aborting.`, and returns success. The step guarded itself with
+`if ($LASTEXITCODE -ne 0)`, which therefore never fired — not even the `::notice::` it would have
+printed — and the job went green having downloaded nothing, on every release from the first to
+`v1.0.0-rc.12`. The cost was silent and entirely borne by users: a 754 MB update on the default
+channel, about 2 GB on `win-cuda`, where a delta is a fraction of either.
+
+Both halves generalise. **A tool that declines to do its job is not obliged to tell your shell
+about it**, so a step whose whole purpose is to fetch something should assert that something
+arrived — counting the files is one line and does not depend on anyone else's exit code. And a
+flag whose default excludes the only kind of release a project makes will read as working
+correctly for as long as nobody looks at the assets. Measured 2026-09-06 against the pinned vpk
+1.2.0 on this repository: without `--pre`, 0 releases found and no files written; with it, 3 found
+and the download starts.
