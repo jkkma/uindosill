@@ -8366,3 +8366,28 @@ evidence that nothing changed — and the installed binary is a different file: 
 byte, 114,400,768 either way, and a different digest**, so size is no evidence here either. The
 routes are cheap to re-drive on a machine with the tools vendored, and until someone does, every
 release from `v1.0.0-rc.12` onwards ships a muxer this project has not exercised.
+
+## No release has shipped a delta package — found 2026-09-06
+
+**What is measured.** `v1.0.0-rc.10`, `-rc.11` and `-rc.12` carry **no `*-delta.nupkg` asset**, so
+every update anyone has ever taken from this project has been a full download: 754 MB on the
+default channel at rc.12, and 1,999 MB on `win-cuda`. `docs/PHASES.md` said the release carries the
+delta packages; it did not.
+
+The cause, measured against the pinned vpk 1.2.0 on this repository the day it was found: `vpk
+download github` reads only *stable* releases unless given `--pre`, and every release here is a
+prerelease. Without the flag it logs `No releases found` and `Found 0 release(s)` against a
+repository holding three, writes nothing, and **exits 0** — so the seeding step's
+`if ($LASTEXITCODE -ne 0)` never fired and the job stayed green through three releases. With the
+flag, the same command reports `Found 3 release(s)` and begins downloading rc.12's full package.
+
+**What is not.** That a delta will now be built, uploaded, and applied. The flag fixes *finding* a
+previous release, which is upstream of everything else; a delta also needs vpk to diff the seeded
+package successfully and the upload glob to match what it produces. None of that can be observed
+until a release runs with a seed available, which is the next one. The step now counts the packages
+it downloaded and warns when there are none, so the next silence of this kind is visible; **that
+warning has itself never fired in a real run.**
+
+The 74 KB figure quoted for rc.1 → rc.2 is a local packing observation from 2026-08-19, recorded
+above; **no published release has ever been diffed against another**, so what a delta costs a real
+user of this application is unknown in both directions.

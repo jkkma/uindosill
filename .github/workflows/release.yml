@@ -120,6 +120,17 @@ jobs:
       # re-downloads the whole application on every update — 77 MB where 74 KB would do. Failure is
       # not fatal and must not be: before the first release there is nothing to download, and a
       # missing delta is a slow update rather than a broken one.
+      #
+      # **`--pre` is what makes it find anything, and it was missing until 2026-09-06.** Every
+      # release this project has published is a prerelease, and without that flag
+      # `vpk download github` considers only stable ones: it reported "No releases found" against a
+      # repository holding three, seeded nothing, and said so nowhere the job could see, because it
+      # exits 0 after giving up. rc.10, rc.11 and rc.12 therefore shipped full packages only — a
+      # 754 MB update on the default channel and about 2 GB on win-cuda, where a delta is a
+      # fraction of it. Measured against the pinned vpk 1.2.0 on this repository the day it was
+      # found: without the flag, "Found 0 release(s)" and nothing written; with it, "Found 3" and
+      # the download begins. **That a delta is then built and uploaded is still unproven** — it
+      # needs a release seeded from a previous one, which is the next one.
       - name: Seed the previous release so deltas can be built
         shell: pwsh
         env:
@@ -130,14 +141,25 @@ jobs:
 
           foreach ($channel in 'win', 'win-cuda') {
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $channel `
-                                       --outputDir packaging/releases --token $env:GH_TOKEN --skip-updates
+                                       --outputDir packaging/releases --token $env:GH_TOKEN `
+                                       --skip-updates --pre
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::notice::No previous '$channel' release to diff against - this release ships full packages only."
             }
           }
 
-          Get-ChildItem packaging/releases -ErrorAction SilentlyContinue |
-            Select-Object Name, Length | Format-Table -AutoSize
+          $seeded = @(Get-ChildItem packaging/releases -Filter *.nupkg -ErrorAction SilentlyContinue)
+          $seeded | Select-Object Name, Length | Format-Table -AutoSize
+
+          # The exit code above cannot report an empty seed and never could: vpk logs "Aborting"
+          # and exits 0 when it finds nothing, so that `if` stays silent and the step goes green
+          # having downloaded nothing. Counting what landed is the only thing that notices. A
+          # warning rather than a failure, because before a channel's first release there is
+          # genuinely nothing to seed — but not silence, which is what hid this for three releases.
+          if ($seeded.Count -eq 0) {
+            Write-Host "::warning::Nothing was seeded, so this release ships full packages only and every user re-downloads the whole application. Expected before a channel's first release; after that it means the seed has stopped finding published releases."
+          }
+
           exit 0
 
       # Both flavours. The script vendors the pinned natives per channel, publishes, drops the
