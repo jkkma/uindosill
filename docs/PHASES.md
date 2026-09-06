@@ -7572,12 +7572,15 @@ has no renderer: a hairline, a grey and a glyph are exactly what it cannot see, 
 only witness to most of these pages (`docs/UNPROVEN.md` § *The Export and Settings tabs and the
 About window*). A scratch host on the same headless platform with Skia drawing switched on —
 `CaptureRenderedFrame` over the canned engines, every user-data path redirected — rendered
-twenty-seven states at the size the window opens at and at its smallest: the queue empty, queued,
-and finished with every pass on; each transcript pane; Export; the Ask tab with nothing chosen,
-with a recording, searching, answered, with its sources open and with a picture; the recordings
-drawer; both halves of Settings; three entries on Models; Updates and the update banner; the
-About window's three panes. The host is not part of this repository. What it found is, with a test
-for each.
+twenty-seven states: at the size the window opens at, the queue empty, queued, with every pass
+ticked, and finished; each of the three transcript panes; Export; the Ask tab with nothing in the
+queue, with the queue's recording chosen, with the drawer open, at a moment in the recording,
+searching, answered, with the answer's sources open, and with a picture; both halves of
+Settings; three entries on Models; Updates and the update banner; the About window's three
+panes; and, at the smallest size the window allows, the Transcribe and Ask tabs. The host is not
+part of this repository; it and its renders are kept as `runs/20260906-window-renders/`,
+gitignored and machine-local like every run record, and its notes name each file. What it found
+is in the repository, with a test for each.
 
 **What the pictures showed, and what changed.**
 
@@ -7619,17 +7622,20 @@ for each.
   was built. It now says which nothing this is: no recording, no row chosen, a row waiting for
   Start, one decoding, one that failed, one with nothing recognised in it. The words are the view
   models'; whether they show is decided in the view, off the drawn list's own count, so the first
-  line to land takes the notice away and a Clear brings it back.
+  line to land takes the notice away and a Clear brings it back. `TranscriptNoticeTests` holds
+  the words per state and the visibility off the count.
 - **The queue row named two of its three passes.** The tidy's provenance had a property and no
   line. Three passes, three lines.
 - **A progress report that landed after the answer** wrote "Reading the transcript… 100%" back
   under it, the same race the queue row guards with a lock. A done entry ignores what arrives
   after it.
 
-**Fourteen tests, 1687 passed and 9 skipped of 1696 tests**, each on the rendered brush or the drawn
-geometry rather than the file: a theme key the theme does not read, a style whose selector matches
-nothing and a notice bound to nothing all load without complaint, which is the failure every one of
-them guards against.
+**Fourteen tests, 1687 passed and 9 skipped of 1696 tests.** Ten of them read the rendered brush or
+the drawn geometry rather than the file: a theme key the theme does not read, a style whose
+selector matches nothing and a notice bound to nothing all load without complaint, which is the
+failure those ten guard against. The other four are view-model tests — the notice's words per
+state and the notifications that move them, and a progress report after completion changing
+nothing.
 
 **What the pictures showed and this leaves as it is.** At the size the window opens, with all three
 passes on and the speaker count shown, the Transcribe tab's transcript area is about 140 units tall
