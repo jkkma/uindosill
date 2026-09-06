@@ -203,4 +203,74 @@ public class ModelInstallerRetryTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => installer.InstallAsync(Descriptor(), ct: cancellation.Token));
     }
+
+    [Fact]
+    public async Task ACancelThatLandsDuringAReadIsStillACancel()
+    {
+        // The same claim as the test above, made without a race. That one cancels on a timer and
+        // passes as long as the token fires during a backoff; the interleaving it cannot aim at is
+        // a cancel arriving *inside* an attempt, so that the attempt's own IOException reaches the
+        // retry loop with the token already set. The loop used to decline that exception — its
+        // filter asked for `!ct.IsCancellationRequested` — and the connection error escaped in
+        // place of the cancellation, which the Models tab shows as a download that failed rather
+        // than one that was stopped. It cost the release job a run on 2026-09-06 before it was
+        // understood, because on a loaded runner the timer above loses that race by itself.
+        using var cancellation = new CancellationTokenSource();
+        var store = new LocalModelStore(TestTemp.NewDirectory("uindosill-flaky"));
+        using var installer = new ModelInstaller(
+            store, new HttpClient(new CancelThenCutHandler(cancellation)));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => installer.InstallAsync(Descriptor(), ct: cancellation.Token));
+    }
+
+    /// <summary>Serves one response that cancels the caller's token and only then dies.</summary>
+    private sealed class CancelThenCutHandler(CancellationTokenSource cancellation) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new CancellingStream(Payload, 512, cancellation)),
+            };
+
+            response.Content.Headers.ContentLength = Payload.Length;
+            return Task.FromResult(response);
+        }
+    }
+
+    /// <summary>
+    /// A stream that hands back a prefix, cancels, and dies — in that order, which is the whole
+    /// point of it: the token is set before the failure it causes reaches the retry loop.
+    /// </summary>
+    private sealed class CancellingStream(byte[] data, int failAfter, CancellationTokenSource cancellation)
+        : Stream
+    {
+        private int _position;
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_position >= failAfter)
+            {
+                cancellation.Cancel();
+                throw new IOException("The response ended prematurely.");
+            }
+
+            var take = Math.Min(count, failAfter - _position);
+            Array.Copy(data, _position, buffer, offset, take);
+            _position += take;
+            return take;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => data.Length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 }
