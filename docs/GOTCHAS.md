@@ -1062,9 +1062,9 @@ beam 5* has the day it was found.
 
 ## 45. A Fluent resource key that exists in the shipped assembly can still change nothing, because the theme folds its Color keys into brushes at load
 
-`Theme/Tokens.axaml` overrides the Fluent theme by key, and its rule since 2026-08-19 has been that
-every key is first found in `Avalonia.Themes.Fluent.dll`, because an override on a key that does
-not exist loads without complaint and changes nothing. Existing is not enough. The scroll bar's
+`Theme/Tokens.axaml` overrides the Fluent theme by key, and its own rule is that every key is first
+found in `Avalonia.Themes.Fluent.dll`, because an override on a key that does not exist loads
+without complaint and changes nothing. Existing is not enough. The scroll bar's
 thumb was overridden through `ScrollBarThumbBackgroundColor` on 2026-09-06 — a `Color` key, present
 in the assembly, the pattern the accent keys use — and the thumb stayed `#7A7A7A`: the theme
 resolves that colour into a brush with `StaticResource` when it loads, so the application's copy

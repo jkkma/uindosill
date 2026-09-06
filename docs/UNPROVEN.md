@@ -8303,8 +8303,10 @@ for each. What belongs here is the gap between a render and a screen, and the on
 recorded rather than changed.
 
 **What is measured.** Twenty-seven states of the window, drawn through the headless platform with
-Skia drawing on, at 1080 × 720 and at 920 × 520, with the canned engines behind them — a scratch
-host, not kept. Every change made from them is held by a test that reads what the window draws:
+Skia drawing on, at 1080 × 720 and at 920 × 520, with the canned engines behind them — a one-off
+host, kept with its renders and its source as `runs/20260906-window-renders/`, whose notes name
+each file and say how to regenerate them. Every change made from them is held by a test that
+reads what the window draws:
 the brush on the scroll bar's thumb and on a text box's border, disabled and under a headless
 pointer; the chips' heights and the cues' word offsets; the disclosure line's checked state and
 the rows it shows; the pills over the Settings halves in both directions; the notice's words per
@@ -8337,5 +8339,6 @@ completion changing nothing.
   either. The strips were placed beside the queue on 2026-08-23 for a reason that still stands,
   and each way of giving the transcript back its column is a decision rather than a fix — the
   strips under the Start button in the queue column, a drop zone that folds to a strip once files
-  are queued, or a measured minimum height, which the arithmetic puts near 730 and therefore
-  above the size the window opens at. None was taken.
+  are queued, or a measured minimum height — at 720 the rest of the tab takes about 580, so a
+  transcript area worth three lines, about 150 with its padding, puts that minimum near 730 and
+  therefore above the size the window opens at. None was taken.

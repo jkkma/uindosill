@@ -29,8 +29,9 @@
 
   SystemAccentColor and its Light/Dark relatives are `Color` resources; Fluent derives brushes from
   them. The rest are brushes. Getting that backwards produces a resource that loads and an app that
-  ignores it, which is the failure mode this file is most exposed to — see the note at the bottom
-  about the three keys that do not exist at all.
+  ignores it, which is the failure mode this file is most exposed to — see the note that opens the
+  Fluent overrides below about the three keys that do not exist at all, and the scroll-bar block at
+  the foot for a key that exists and is still never read.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
