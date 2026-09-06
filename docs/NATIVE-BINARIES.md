@@ -364,17 +364,27 @@ pwsh scripts/vendor-tools.ps1     # about 207 MB down, about 230 MB on disk
 open links; the reverse does the opposite. `BundledTools` asks about each separately rather than
 through one "the tools are present" flag, so a half-drop disables the half it affects and says so.
 
-**The pins, as of 2026-08-23.**
+**The pins, as of 2026-08-23; ffmpeg re-pinned 2026-09-06.**
 
 | | yt-dlp | Deno | ffmpeg |
 |---|---|---|---|
-| Release | `2026.08.19` | `v2.9.5` | `autobuild-2026-08-22-12-58` |
-| Asset | `yt-dlp.exe` | `deno-x86_64-pc-windows-msvc.zip` | `ffmpeg-n9.0.1-6-g9d4ca21220-win64-lgpl-9.0.zip` |
-| Download bytes | 17,840,399 | 42,691,248 | 147,007,729 |
-| Download SHA-256 | `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a` | `171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a` | `20f84639fae87181bb1c9899c34ce05cd3c0b533c68d3ff34206a2615da94f30` |
+| Release | `2026.08.19` | `v2.9.5` | `autobuild-2026-08-31-13-27` |
+| Asset | `yt-dlp.exe` | `deno-x86_64-pc-windows-msvc.zip` | `ffmpeg-n9.0.1-11-ge47273f4d9-win64-lgpl-9.0.zip` |
+| Download bytes | 17,840,399 | 42,691,248 | 147,007,942 |
+| Download SHA-256 | `66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a` | `171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a` | `2484854ad6988d34560f4e6ea7a6ecb9dde0af7c229d2591815d056b04ec4f56` |
 | Installed bytes | 17,840,399 | 97,408,288 | 114,400,768 |
-| Installed SHA-256 | (the same file) | `98f8c2a2d470e4ccb04c935c86ff8050817d877762aec5eaeeb9e409ccb3b9fd` | `8a5ce69fbb74b4c9e0e24c214e3def0e1847a05051a8e1c6d10b1d4a35bd6a65` |
+| Installed SHA-256 | (the same file) | `98f8c2a2d470e4ccb04c935c86ff8050817d877762aec5eaeeb9e409ccb3b9fd` | `63a0b3c76a245bc0d986853612d9ec43a2a2d1f1c7a3fa40ee459c248075b3a6` |
 | Licence | Unlicense (public domain) | MIT | **LGPL-3.0** |
+
+**The ffmpeg pin is a month-end tag because a daily one expires.** BtbN keeps about a fortnight of
+daily autobuilds and retains only the last of each month; `autobuild-2025-12-31` onwards are all
+still published. The first pin here was the daily `autobuild-2026-08-22-12-58`, which was gone by
+2026-09-06 — `v1.0.0-rc.11` packed against it on 2026-08-31 and `v1.0.0-rc.12` failed on a 404 in
+the middle of vendoring, six days later. The installed binary that daily carried was
+`8a5ce69fbb74b4c9e0e24c214e3def0e1847a05051a8e1c6d10b1d4a35bd6a65`, which is what every release up
+to and including rc.11 shipped; the month-end build above is the same `n9.0.1` release branch five
+commits further on, and **exactly the same size** — 114,400,768 bytes either way, so a check that
+compared lengths would have reported no change at all.
 
 **ffmpeg is the LGPL build and not the GPL one beside it, and that is a licence decision rather than
 a preference.** Putting a transcript inside a recording copies every stream and encodes nothing, so
@@ -386,8 +396,15 @@ this application spawns, not a library it links, so it travels as an aggregate u
 
 **The version is the one the rules were measured against.** Every container decision in
 `Parakeet.Core.Muxing.SubtitleMux` — and there are several that a specification would get wrong — was
-measured against FFmpeg 9.0.1, and `n9.0.1-6` is that release branch rather than a master snapshot.
+measured against FFmpeg 9.0.1, and `n9.0.1-11` is that release branch rather than a master snapshot.
 Bumping this pin means re-running those measurements, not just the digests.
+
+**And on 2026-09-06 the pin moved without them being re-run.** The eight input-and-format routes
+were driven on `n9.0.1-6`; the build here is `n9.0.1-11`, five commits along the same release
+branch, taken because the daily that carried `-6` had been deleted upstream and no release could be
+packed until the pin moved. Same branch is not the same binary, and this document's own rule above
+is that the digests are the cheap half. `docs/UNPROVEN.md` § *The muxer's routes have not been
+re-driven on the ffmpeg the pin now names* is the record, and it stands until someone runs them.
 
 **Its zip is nested where Deno's is flat**: `ffmpeg-<version>/bin/ffmpeg.exe` rather than a file at
 the root, which is why the pin carries `Nested` and the extraction recurses. Without that, `7z e`

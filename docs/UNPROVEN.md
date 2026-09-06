@@ -8342,3 +8342,27 @@ completion changing nothing.
   are queued, or a measured minimum height — at 720 the rest of the tab takes about 580, so a
   transcript area worth three lines, about 150 with its padding, puts that minimum near 730 and
   therefore above the size the window opens at. None was taken.
+
+## The muxer's routes have not been re-driven on the ffmpeg the pin now names — 2026-09-06
+
+`SubtitleMux`'s container rules were measured on 2026-08-23 against the ffmpeg the pin then carried,
+`n9.0.1-6-g9d4ca21220`, driven over all eight input-and-format routes. On 2026-09-06 the pin moved
+to `n9.0.1-11-ge47273f4d9` and **those eight routes were not driven again**.
+
+**Why it moved.** BtbN retains about a fortnight of daily autobuilds and, beyond that, only the last
+build of each month. The daily the pin named was deleted upstream between `v1.0.0-rc.11` packing
+against it on 2026-08-31 and `v1.0.0-rc.12` packing on 2026-09-06, which failed in the middle of
+vendoring on a 404 from `scripts/vendor-tools.ps1`. No release could be packed at all until the pin
+named something that still exists, so it now names a month-end tag, which is retained.
+
+**What is measured.** That the new archive and the binary inside it are the bytes this project
+expects: 147,007,942 and `2484854a…`, and 114,400,768 and `63a0b3c7…`, recorded in
+`docs/NATIVE-BINARIES.md` and checked by the vendoring script before anything is unpacked. Nothing
+about behaviour.
+
+**What is not.** Whether the five commits between `-6` and `-11` change any container decision the
+muxer relies on. It is the same `n9.0.1` release branch, which is the reason to expect nothing, not
+evidence that nothing changed — and the installed binary is a different file: **the same size to the
+byte, 114,400,768 either way, and a different digest**, so size is no evidence here either. The
+routes are cheap to re-drive on a machine with the tools vendored, and until someone does, every
+release from `v1.0.0-rc.12` onwards ships a muxer this project has not exercised.
