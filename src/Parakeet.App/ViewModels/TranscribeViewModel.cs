@@ -167,6 +167,33 @@ public sealed partial class TranscribeViewModel : ObservableObject
         OnPropertyChanged(nameof(AddToRecordingNotice));
         OnPropertyChanged(nameof(ExportNotice));
         RefreshSpeakers();
+
+        // The transcript area's stand-in follows the row it stands in for — see TranscriptNotice
+        // — so the row is listened to for as long as it is the chosen one, and the previous row
+        // is let go of first, on the discipline the voices below already keep.
+        if (_watchedJob is not null)
+        {
+            _watchedJob.PropertyChanged -= OnSelectedJobPropertyChanged;
+        }
+
+        _watchedJob = value;
+        if (_watchedJob is not null)
+        {
+            _watchedJob.PropertyChanged += OnSelectedJobPropertyChanged;
+        }
+
+        OnPropertyChanged(nameof(TranscriptNotice));
+    }
+
+    /// <summary>The row <see cref="TranscriptNotice"/> is currently following, so it can stop.</summary>
+    private JobViewModel? _watchedJob;
+
+    private void OnSelectedJobPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(JobViewModel.TranscriptNotice))
+        {
+            OnPropertyChanged(nameof(TranscriptNotice));
+        }
     }
 
     /// <summary>The voices this view model is currently listening to, so it can stop listening.</summary>
@@ -1074,6 +1101,23 @@ public sealed partial class TranscribeViewModel : ObservableObject
         : job.Lines;
 
     /// <summary>
+    /// What stands in the transcript area while it has no lines to draw, on the terms of
+    /// <see cref="AskViewModel.TranscriptNotice"/>: a different nothing said differently.
+    /// </summary>
+    /// <remarks>
+    /// Whether it shows is the view's decision, made off the drawn list's own count, so the text
+    /// here has only to be true of an empty area. Two of the nothings are this queue's — no
+    /// recording at all, and rows with none of them chosen — and the rest are the chosen row's,
+    /// which is why it defers to <see cref="JobViewModel.TranscriptNotice"/> the moment there is
+    /// one: a row that starts decoding or fails before its first line changes what the area
+    /// should say, and the row is the one that knows.
+    /// </remarks>
+    public string TranscriptNotice =>
+        SelectedJob is { } job ? job.TranscriptNotice
+        : HasJobs ? "Choose a file in the queue to read its transcript."
+        : "Drop a recording above, or paste a link, and its words appear here as it is transcribed.";
+
+    /// <summary>
     /// Re-asks what the transcript area should be showing, after the selected row's content
     /// changes underneath it.
     /// </summary>
@@ -1164,6 +1208,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanRunAgain));
         OnPropertyChanged(nameof(StartHint));
+        OnPropertyChanged(nameof(TranscriptNotice));
 
         // The queue is what the long-recording warning is computed over, so both move with it: a
         // three-hour file dropped onto a window whose opt-in is already on has to raise the warning

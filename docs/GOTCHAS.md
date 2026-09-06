@@ -1059,3 +1059,20 @@ does not normalise by length, and the shipped checkpoint is not either, because 
 from a collapse into a translation on the other; it is set in the sidecar and in the export
 script's smoke, and `docs/UNPROVEN.md` § *FuguMT exports cleanly and decodes correctly only below
 beam 5* has the day it was found.
+
+## 45. A Fluent resource key that exists in the shipped assembly can still change nothing, because the theme folds its Color keys into brushes at load
+
+`Theme/Tokens.axaml` overrides the Fluent theme by key, and its rule since 2026-08-19 has been that
+every key is first found in `Avalonia.Themes.Fluent.dll`, because an override on a key that does
+not exist loads without complaint and changes nothing. Existing is not enough. The scroll bar's
+thumb was overridden through `ScrollBarThumbBackgroundColor` on 2026-09-06 — a `Color` key, present
+in the assembly, the pattern the accent keys use — and the thumb stayed `#7A7A7A`: the theme
+resolves that colour into a brush with `StaticResource` when it loads, so the application's copy
+is never consulted, where the accent colours are read dynamically and do take. What the thumb
+reads is `ScrollBarPanningThumbBackground`, a brush, and it took at once. The way to tell the two
+apart is not the assembly and not the render — the first render was read as changed by eye and had
+not — but a test that reads the brush off the control (`ScrollBarTests`), or a runtime probe that
+writes a loud colour into `Application.Current.Resources[key]` and watches whether the control
+follows it. The same probe is how the hover and pressed keys beside it were found to move nothing
+under a pointer in the headless host, which `docs/UNPROVEN.md` records rather than the tokens
+claiming otherwise.

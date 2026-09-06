@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
 using Parakeet.App.Views;
@@ -281,6 +282,38 @@ public class TidyTests
         Assert.True(main.Ask.CanShowTidy);
         Assert.True(main.Ask.CanShowPanes);
         Assert.NotNull(window.FindControl<RadioButton>("AskPaneTidied"));
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The queue row names the tidy beside the labels and the English.
+    /// </summary>
+    /// <remarks>
+    /// The row has said which model and backend produced its speaker labels and its English since
+    /// 2026-08-23, on the rule that a figure is never shown without its backend; the tidy arrived
+    /// on 2026-09-02 with a provenance of its own and no line on the row to say it, so a tidied
+    /// row named two of its three passes. Asserted on the drawn text rather than the property,
+    /// which is the half that was missing.
+    /// </remarks>
+    [AvaloniaFact]
+    public async Task TheQueueRowNamesTheTidyBesideTheLabelsAndTheEnglish()
+    {
+        var (main, viewModel, directory) = Create();
+        var window = new MainWindow { DataContext = main };
+        window.Show();
+
+        viewModel.AddFiles([WriteWav(directory, "a.wav")]);
+        viewModel.TidyUpTranscript = true;
+        await viewModel.StartCommand.ExecuteAsync(null);
+        window.UpdateLayout();
+
+        var job = viewModel.Jobs[0];
+        Assert.Equal("Tidied: fake-tidier on cpu", job.TidyProvenance);
+
+        var line = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == job.TidyProvenance);
+        Assert.True(line.IsVisible);
 
         window.Close();
     }

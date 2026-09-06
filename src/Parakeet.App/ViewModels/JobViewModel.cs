@@ -10,6 +10,7 @@ public sealed partial class JobViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFinished))]
     [NotifyPropertyChangedFor(nameof(ProgressLabel))]
+    [NotifyPropertyChangedFor(nameof(TranscriptNotice))]
     private JobState _state = JobState.Pending;
 
     [ObservableProperty]
@@ -270,6 +271,25 @@ public sealed partial class JobViewModel : ObservableObject
     public bool HasTidy => TidiedTranscript.Length > 0;
 
     public bool IsFinished => State is JobState.Completed or JobState.Failed or JobState.Cancelled;
+
+    /// <summary>
+    /// What the transcript area says of this row while the row has no lines to show it.
+    /// </summary>
+    /// <remarks>
+    /// Read only when <see cref="Lines"/> is empty — the view hides it the moment a line lands —
+    /// so each sentence has only to be true of a row with no words yet, and says which of the
+    /// five reasons for that this is. The finished case is the recording nobody spoke in: a run
+    /// that completed with nothing to draw is not an error, and the row's own warning line
+    /// carries whatever the pipeline said about it.
+    /// </remarks>
+    public string TranscriptNotice => State switch
+    {
+        JobState.Pending => "Waiting for Start. The words appear here as the file is decoded.",
+        JobState.Running => "Decoding. The first words appear here as soon as they are recognised.",
+        JobState.Failed => "This file could not be transcribed. The row in the queue says why.",
+        JobState.Cancelled => "This run was cancelled before any words were recognised.",
+        _ => "Nothing was recognised in this file, so there is no transcript to show.",
+    };
 
     /// <summary>
     /// The percentage shown beside the file name while it is being transcribed, or null when there

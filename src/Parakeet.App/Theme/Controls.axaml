@@ -442,11 +442,21 @@
 
   <!-- Speaker labels: 6px, one of the chip shapes that keeps a corner. Eight styles — four in
        matcha, four in hues of their own; see the speaker-chips block below. The closed-set-of-four
-       rationale retired with the ONNX diariser on 2026-08-27. -->
+       rationale retired with the ONNX diariser on 2026-08-27.
+
+       Every chip carries the same one-unit edge, transparent on the filled ones. Two of the eight
+       are outlines, and an edge that only they had made them two units wider and two taller than
+       the chips beside them: on the strip that names the voices they stood at two heights, and
+       in a transcript every line spoken by an outlined speaker started two units to the right of
+       the lines above and below it. Rendering the window is what showed it — a hairline is not a
+       thing a layout assertion measures — so the edge is on every chip and only its colour
+       varies. -->
   <Style Selector="Border.speaker">
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="Border.speaker TextBlock">
     <Setter Property="FontSize" Value="12" />
@@ -518,9 +528,10 @@
     <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
   </Style>
 
+  <!-- The two outlines colour the edge every chip already has; see Border.speaker above for why
+       the thickness is not set here. -->
   <Style Selector="Border.speaker.chip2">
     <Setter Property="BorderBrush" Value="{DynamicResource Matcha600Brush}" />
-    <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="Border.speaker.chip2 TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource Matcha700Brush}" />
@@ -528,7 +539,6 @@
 
   <Style Selector="Border.speaker.chip3">
     <Setter Property="BorderBrush" Value="{DynamicResource Matcha400Brush}" />
-    <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="Border.speaker.chip3 TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource Matcha600Brush}" />
@@ -603,6 +613,72 @@
   </Style>
   <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Taro200Brush}" />
+  </Style>
+
+  <!-- A chip that cannot be pressed keeps its shape. The window-wide disabled rule at the top of
+       this file paints every disabled button's presenter white inside a grey hairline — right for
+       the standard button, whose whole face that presenter is — and on a pill it left a bare grey
+       glyph on no ground at all: the "?" of a claim the model could not anchor, and every citation
+       chip while the transport is dead, read as stray characters rather than as chips switched
+       off. So the ground and the ink are put back and the whole chip is dimmed instead, at the
+       opacity a provisional transcript line already uses, which says "not now" without changing
+       what the thing is. After the window-wide rule in this file, so it wins the declaration-order
+       tie. -->
+  <Style Selector="Button.chip:disabled">
+    <Setter Property="Opacity" Value="0.55" />
+  </Style>
+  <Style Selector="Button.chip:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Taro100Brush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+
+  <!-- The answer's Sources, folded under a line that opens them. This was an Expander, and the
+       Fluent one drew what Fluent draws: a bordered box the height of a button, with a chevron
+       out of an icon font the window does not ship, under every answer — the one control on the
+       Ask tab not drawn in the design's own terms. A toggle with no chrome does the same job: the
+       label in the family's ink, a chevron drawn as a path so it is the same on every machine,
+       and the list beneath it shown while the toggle is checked. The chevron turns rather than
+       being swapped for a second glyph, which is what says "open" here. Its own template, for
+       the reason the transport button has one: Fluent's fills a checked ToggleButton with the
+       accent, and there is nothing to fill. -->
+  <Style Selector="ToggleButton.disclosure">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0,3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Taro700Brush}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="Ground" Background="Transparent" Padding="{TemplateBinding Padding}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <!-- Nine wide and five tall with a unit of room on every side, so the round caps of a
+                 1.6 stroke stay inside the box instead of being clipped off its edges. -->
+            <Path Name="Chevron" Data="M1 1l4.5 4.5L10 1" Stretch="None" Width="11" Height="7"
+                  Stroke="{DynamicResource Taro600Brush}" StrokeThickness="1.6"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  VerticalAlignment="Center" RenderTransformOrigin="50%,50%" />
+            <!-- Not PART_ContentPresenter. Fluent's ToggleButton theme paints the presenter of
+                 that name in the accent when the button is checked, and it found this one by
+                 name inside a template it did not write: the word "Sources" lit up in a taro
+                 block the moment the list opened. A presenter the theme has no name for is one it
+                 cannot reach. -->
+            <ContentPresenter Name="Label"
+                              Content="{TemplateBinding Content}"
+                              VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToggleButton.disclosure:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource Taro600Brush}" />
+  </Style>
+  <Style Selector="ToggleButton.disclosure:checked /template/ Path#Chevron">
+    <Setter Property="RenderTransform" Value="rotate(180deg)" />
   </Style>
 
   <!-- The transport's play button, which is one of the things in this design that is genuinely a

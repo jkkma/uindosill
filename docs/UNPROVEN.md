@@ -8295,3 +8295,47 @@ different ceiling. Everything else the entry above leaves open is untouched: whe
 off the call they were fitted on, the corpus delta under the joined run with a ceiling of any
 shape, and whether one bad piece should refuse a seven-line run — which this makes rarer without
 answering.
+
+## The window rendered 2026-09-06 — every page drawn with a renderer, none looked at on a screen
+
+`docs/PHASES.md` § *Polished 2026-09-06* has the eleven things the renders showed and what changed
+for each. What belongs here is the gap between a render and a screen, and the one finding that was
+recorded rather than changed.
+
+**What is measured.** Twenty-seven states of the window, drawn through the headless platform with
+Skia drawing on, at 1080 × 720 and at 920 × 520, with the canned engines behind them — a scratch
+host, not kept. Every change made from them is held by a test that reads what the window draws:
+the brush on the scroll bar's thumb and on a text box's border, disabled and under a headless
+pointer; the chips' heights and the cues' word offsets; the disclosure line's checked state and
+the rows it shows; the pills over the Settings halves in both directions; the notice's words per
+state and its visibility off the list's count; the tidy line on the row; a progress report after
+completion changing nothing.
+
+**What is not.**
+
+- **Nothing here has been looked at on a screen.** The renders are the headless platform's at a
+  scaling of 1; the maintainer's display runs at 250%, and no pixel of this has been seen there.
+  The Fluent Expander's chevron rendered as a corner bracket because the icon font it wants is not
+  embedded; whether the machine's own copy of that font drew it correctly before is unknown, and
+  the Expander is gone either way.
+- **The scroll bar's pointer-over, pressed and track keys are set and unobserved.** A runtime
+  probe that swapped keys and watched the thumb confirmed only the resting brush; a headless
+  pointer moved onto the thumb left that brush in place, and the theme reports the bar unexpanded
+  under it. Whether the real compositor expands the bar, and whether it reads those keys when it
+  does, is not known — they are set to the palette's inks so that if it does the colours are the
+  palette's, and `ScrollBarTests` holds only that no grey of the toolkit's returns under the
+  pointer.
+- **The text box's focus state is untouched and unobserved.** The hover ground is held by a
+  headless pointer; the accent underline Fluent draws on focus was not changed and has not been
+  seen beside the rest of this design.
+- **The empty transcript area's words have been read by nobody but their author**, and the
+  "nothing recognised" case — a run that completed with no lines — has not been produced by a real
+  recording, only by the canned engine's empty-text option.
+- **The Transcribe tab's vertical budget is a judgement nobody has made on a screen.** From the
+  render: at 1080 × 720 with all three passes on and the speaker count shown, the transcript area
+  is about 140 units tall; at 920 × 520 it has no height, and the status line under it none
+  either. The strips were placed beside the queue on 2026-08-23 for a reason that still stands,
+  and each way of giving the transcript back its column is a decision rather than a fix — the
+  strips under the Start button in the queue column, a drop zone that folds to a strip once files
+  are queued, or a measured minimum height, which the arithmetic puts near 730 and therefore
+  above the size the window opens at. None was taken.
