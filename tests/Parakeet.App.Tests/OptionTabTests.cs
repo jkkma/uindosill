@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using Parakeet.App.ViewModels;
@@ -355,6 +356,74 @@ public class OptionTabTests
         window.UpdateLayout();
 
         Assert.False(warning.IsVisible);
+    }
+
+    /// <summary>
+    /// The two halves of Settings are switched by the pills every other page switch in this
+    /// window uses, and the toolkit's own tab strip is not drawn.
+    /// </summary>
+    /// <remarks>
+    /// The strip was Fluent's — two words at 20px over a rounded underline — and the one header in
+    /// the product not drawn in the design's terms. The pills bind to the TabControl's own index
+    /// rather than to a view model property, so both directions are asserted: a pill pressed
+    /// opens its half, and an index set from code (which is how the tests above reach Advanced)
+    /// lights its pill.
+    /// </remarks>
+    [AvaloniaFact]
+    public void TheSettingsHalvesAreSwitchedByPillsAndTheToolkitsStripIsNotDrawn()
+    {
+        var window = Open(Settings, out _);
+
+        var subTabs = Drawn<TabControl>(window, "SettingsSubTabs");
+        var general = Drawn<RadioButton>(window, "SettingsGeneral");
+        var advanced = Drawn<RadioButton>(window, "SettingsAdvanced");
+
+        Assert.Equal(true, general.IsChecked);
+        Assert.Equal(false, advanced.IsChecked);
+
+        // The TabControl's own header presenter is collapsed, which is what the headless class
+        // is for; the pills are the only switch a reader sees.
+        var strip = subTabs.GetVisualDescendants().OfType<ItemsPresenter>()
+            .Single(p => p.Name == "PART_ItemsPresenter");
+        Assert.False(strip.IsVisible);
+
+        advanced.IsChecked = true;
+        window.UpdateLayout();
+
+        Assert.Equal(1, subTabs.SelectedIndex);
+        Drawn<DockPanel>(window, "SpeechDetectionRow");
+
+        subTabs.SelectedIndex = 0;
+        window.UpdateLayout();
+
+        Assert.Equal(true, general.IsChecked);
+        Assert.Equal(false, advanced.IsChecked);
+        Drawn<Button>(window, "ShowAbout");
+    }
+
+    /// <summary>
+    /// Thinking before answering is a box like every other on-or-off setting here, and it writes
+    /// through.
+    /// </summary>
+    /// <remarks>
+    /// It was a ToggleSwitch, which Fluent drew with its label above the track and an "Off"
+    /// beside it — the one rounded control on a page of square boxes, and the only one whose
+    /// wording changed with its state. Asserted by name and by binding rather than by label, for
+    /// the reason every write-through test in this file gives.
+    /// </remarks>
+    [AvaloniaFact]
+    public void ThinkingBeforeAnsweringIsABoxAndWritesThrough()
+    {
+        var window = Open(Settings, out var viewModel);
+
+        var box = Drawn<CheckBox>(window, "AskThinking");
+        Assert.Equal("Think before answering", box.Content);
+        Assert.False(viewModel.AskThinking);
+
+        box.IsChecked = true;
+        Assert.True(viewModel.AskThinking);
+
+        Assert.Empty(window.GetVisualDescendants().OfType<ToggleSwitch>());
     }
 
     /// <summary>A file whose header says it is longer than the bound above, written cheaply.</summary>

@@ -428,6 +428,13 @@
                       <TextBlock Text="{Binding TranslationProvenance}" Classes="fine meta"
                                  TextWrapping="Wrap"
                                  IsVisible="{Binding TranslationProvenance, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- And the tidy, on the same terms: the row's third pass arrived on
+                           2026-09-02 with a provenance of its own and no line here to say it, so a
+                           tidied row named the labels and the English it carried and stayed quiet
+                           about the one pass that rewrote its words. -->
+                      <TextBlock Text="{Binding TidyProvenance}" Classes="fine meta"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding TidyProvenance, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -624,11 +631,12 @@
                    Bound to VisibleLines rather than to SelectedJob.Lines, because which of the two
                    collections that is depends on the switcher above. -->
               <Border Classes="panel" Padding="15,13">
+                <Panel>
                 <!-- Named for the code-behind: while a batch runs, new lines keep the view at the
                      end so the newest words are the visible ones — unless the reader has scrolled
                      up, in which case their position is theirs. See FollowTranscript. -->
                 <ScrollViewer Name="TranscriptScroll">
-                  <ItemsControl ItemsSource="{Binding VisibleLines}">
+                  <ItemsControl Name="TranscriptLines" ItemsSource="{Binding VisibleLines}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TranscriptLineViewModel">
                         <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,9">
@@ -655,6 +663,24 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
+
+                <!-- What stands in for the transcript while there is none, on the Ask tab's terms:
+                     that tab has said what its empty pane is waiting for since it was built, and
+                     this one was a blank box with a hairline round it, which on a first launch is
+                     the largest thing in the window and the only one saying nothing. The words
+                     are the view model's, and say which nothing this is — no recording, no row
+                     chosen, a row waiting for Start, one decoding, one that failed. Whether it
+                     shows at all is decided here, off the list's own count, so the notice goes
+                     the moment the first line lands and comes back if a Clear takes them away:
+                     the count matches 0 through the same converter the switchers use to match
+                     their index, which is exactly the comparison it makes. -->
+                <TextBlock Name="TranscribeNotice" Text="{Binding TranscriptNotice}"
+                           IsVisible="{Binding #TranscriptLines.ItemCount, Converter={StaticResource IndexMatch}, ConverterParameter=0}"
+                           Classes="secondary" TextWrapping="Wrap" MaxWidth="380"
+                           LineHeight="20" Margin="26"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextAlignment="Center" />
+                </Panel>
               </Border>
             </DockPanel>
           </Grid>
@@ -711,7 +737,12 @@
 
           <GridSplitter Grid.Column="1" Background="Transparent" />
 
-          <ScrollViewer Grid.Column="2">
+          <!-- Padded on the right, because the notes are the longest paragraphs in the window and
+               ran to the last unit of the column: the final letters of a line sat under the
+               scroll bar, and at the width the window opens at one line's "word" arrived as
+               "wor". The bar overlays the content rather than taking a column of its own, so
+               the room has to be left for it. -->
+          <ScrollViewer Grid.Column="2" Padding="0,0,16,0">
            <!-- Two blocks, and the outer panel is what lets the second one exist. Everything about
                 a catalogue entry is hidden when no entry is highlighted, which is right; the
                 sideloaded section below is about the folder rather than about an entry, and
@@ -1789,8 +1820,16 @@
                                      Text="{Binding ModelLine}"
                                      IsVisible="{Binding ModelLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                          <Expander Header="Sources" IsVisible="{Binding HasSources}">
-                            <ItemsControl ItemsSource="{Binding Sources}"
+                          <!-- The evidence the answer was built from, folded under a disclosure
+                               line rather than an Expander — see ToggleButton.disclosure in
+                               Theme/Controls.axaml for what the Expander drew. The list follows
+                               the toggle's own checked state, which is a fact of this one entry:
+                               a template gives each answer its own name scope, so the name below
+                               resolves to this answer's toggle and no other's. -->
+                          <StackPanel Spacing="2" IsVisible="{Binding HasSources}">
+                            <ToggleButton Name="SourcesToggle" Classes="disclosure" Content="Sources" />
+                            <ItemsControl Name="SourceRows" ItemsSource="{Binding Sources}" Margin="0,3,0,0"
+                                          IsVisible="{Binding #SourcesToggle.IsChecked}"
                                           IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SourceRowViewModel">
@@ -1807,7 +1846,7 @@
                                 </DataTemplate>
                               </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                          </Expander>
+                          </StackPanel>
 
                           <Button Content="Copy answer" Command="{Binding CopyCommand}"
                                   IsVisible="{Binding CanCopy}" HorizontalAlignment="Left" />
@@ -1923,7 +1962,24 @@
                to get speaker labelling working at all, while the device picker and the batch
                size are ways to break it. Splitting the heading is more honest than putting
                either half in the wrong place. -->
-          <TabControl Name="SettingsSubTabs">
+          <!-- The same pill switcher as the headerbar and the About window, over a headless
+               TabControl, because that is what a page switch looks like in this window. What
+               stood here was the toolkit's own tab strip — two words at 20px over a rounded
+               underline — the one header in the product not drawn in the design's terms, and it
+               read as another program's. The pills bind to the TabControl's own index rather than
+               to a view model property: which half of Settings is open is not state anything else
+               reads or saves, and the tests that open Advanced set that index directly. -->
+          <Border DockPanel.Dock="Top" Classes="switcher" Name="SettingsSwitcher"
+                  HorizontalAlignment="Left" Margin="0,0,0,2">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Name="SettingsGeneral" Classes="segment" GroupName="SettingsPane" Content="General"
+                           IsChecked="{Binding #SettingsSubTabs.SelectedIndex, Converter={StaticResource IndexMatch}, ConverterParameter=0}" />
+              <RadioButton Name="SettingsAdvanced" Classes="segment" GroupName="SettingsPane" Content="Advanced"
+                           IsChecked="{Binding #SettingsSubTabs.SelectedIndex, Converter={StaticResource IndexMatch}, ConverterParameter=1}" />
+            </StackPanel>
+          </Border>
+
+          <TabControl Name="SettingsSubTabs" Classes="headless">
 
             <TabItem Header="General">
               <ScrollViewer>
@@ -2013,10 +2069,16 @@
                          Text="The speaker labelling model is only handed out to people who have accepted its terms. Accept them on its page at huggingface.co — the Models tab shows the exact name to search for — then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
 
               <TextBlock Text="ASKING" Classes="section" Margin="0,8,0,0" />
+              <!-- A box, like every other on-or-off setting in this window. It was a ToggleSwitch,
+                   and the toolkit's switch drew its label above the track with an "Off" beside it
+                   — a rounded control with a two-line footprint on a page where every other
+                   yes-or-no is a square box with its words to the right, and the only one that
+                   changed its wording as it changed state. -->
               <DockPanel LastChildFill="True">
-                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,9,0"
-                              Content="Think before answering"
-                              IsChecked="{Binding AskThinking}" />
+                <CheckBox DockPanel.Dock="Left" Name="AskThinking" Margin="0,0,9,0"
+                          Content="Think before answering"
+                          VerticalAlignment="Center"
+                          IsChecked="{Binding AskThinking}" />
                 <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
                            Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
               </DockPanel>

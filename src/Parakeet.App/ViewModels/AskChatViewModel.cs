@@ -662,6 +662,17 @@ public sealed partial class ChatEntryViewModel : ObservableObject
 
     public void OnProgress(AskProgress progress)
     {
+        // A report that arrives after the answer has: Progress<T> posts each one through the
+        // synchronisation context, so the last prefill report can land behind the completion
+        // that already cleared the status line, and it wrote "Reading the transcript… 100%"
+        // back under a finished answer, where it stayed. The same race the queue row guards
+        // against with a lock; here the answer is simply that a done entry has nothing left to
+        // report.
+        if (IsDone)
+        {
+            return;
+        }
+
         if (progress.GeneratedTokens > 0)
         {
             // Answer text is arriving; the stream itself is the indicator now.

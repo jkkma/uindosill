@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Parakeet.App.Services;
@@ -71,6 +72,27 @@ public class AskChatTests
         failed.OnProgress(new AskProgress { ThinkingTokens = 1 });
         failed.Fail("boom");
         Assert.False(failed.IsThinking);
+    }
+
+    [Fact]
+    public void AProgressReportThatLandsAfterTheAnswerChangesNothing()
+    {
+        // Progress<T> posts each report through the synchronisation context, so the last prefill
+        // report can arrive behind the completion that cleared the status line — and it wrote
+        // "Reading the transcript… 100%" back under a finished answer, where it stayed. A done
+        // entry has nothing left to report.
+        var entry = new ChatEntryViewModel("q", _ => Task.CompletedTask);
+        entry.OnProgress(new AskProgress { PrefillTokens = 5, PrefillTotalTokens = 10 });
+        Assert.NotNull(entry.Status);
+
+        entry.Fail("boom");
+        Assert.Null(entry.Status);
+
+        entry.OnProgress(new AskProgress { PrefillTokens = 10, PrefillTotalTokens = 10 });
+        Assert.Null(entry.Status);
+
+        entry.OnProgress(new AskProgress { ThinkingTokens = 1 });
+        Assert.False(entry.IsThinking);
     }
 
     private static (AskChatViewModel Chat, FakeAnswerEngineProvider Provider, List<TimeSpan> Seeks) Chat(
@@ -1315,6 +1337,81 @@ public class AskChatWindowTests
         // is a request to hear the claim.
         Assert.True(player.IsPlaying);
         Assert.True(player.Position >= TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// The answer's sources fold under a disclosure line of the design's own, and open on it.
+    /// </summary>
+    /// <remarks>
+    /// They were under a Fluent Expander, which drew a bordered box the height of a button with a
+    /// chevron out of an icon font the window does not ship — the one control on the Ask tab not
+    /// drawn in the design's terms. The list now follows a chrome-less toggle's own checked
+    /// state, inside the entry's own name scope, and both halves of that are asserted: shut until
+    /// pressed, open after, and no Expander anywhere in the window.
+    /// </remarks>
+    [AvaloniaFact]
+    public async Task TheSourcesFoldUnderADisclosureLineAndOpenWhenItIsPressed()
+    {
+        var (window, viewModel, _) = Open();
+
+        viewModel.Ask.Chat.QuestionText = "tell me about two";
+        await viewModel.Ask.Chat.AskCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var entry = Assert.Single(viewModel.Ask.Chat.Entries);
+        Assert.True(entry.HasSources);
+
+        var toggle = window.GetVisualDescendants()
+            .OfType<Avalonia.Controls.Primitives.ToggleButton>()
+            .Single(t => t.Name == "SourcesToggle");
+        var rows = window.GetVisualDescendants().OfType<ItemsControl>()
+            .Single(i => i.Name == "SourceRows");
+
+        Assert.Contains("disclosure", toggle.Classes);
+        Assert.Equal(false, toggle.IsChecked);
+        Assert.False(rows.IsVisible);
+        Assert.Empty(window.GetVisualDescendants().OfType<Expander>());
+
+        toggle.IsChecked = true;
+        window.UpdateLayout();
+
+        Assert.True(rows.IsVisible);
+        Assert.Equal(entry.Sources.Count, rows.ItemCount);
+    }
+
+    /// <summary>
+    /// A chip that cannot be pressed keeps its ground and dims, rather than losing its shape.
+    /// </summary>
+    /// <remarks>
+    /// The window-wide disabled rule paints a disabled button's presenter white inside a grey
+    /// hairline, which on a pill left a bare grey glyph on nothing: the "?" of a claim the model
+    /// could not anchor, and every citation chip while the transport is dead. Asserted on the
+    /// presenter's rendered brush rather than the style file, because a selector that matches
+    /// nothing loads without complaint and changes nothing.
+    /// </remarks>
+    [AvaloniaFact]
+    public void AChipThatCannotBePressedKeepsItsGroundAndDims()
+    {
+        var (window, _, _) = Open();
+
+        // A suggestion chip, live, then switched off by hand: the state every citation chip takes
+        // while nothing can play.
+        var chip = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Classes.Contains("chip"));
+        var presenter = chip.GetVisualDescendants()
+            .OfType<Avalonia.Controls.Presenters.ContentPresenter>()
+            .Single(p => p.Name == "PART_ContentPresenter");
+
+        var live = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(presenter.Background).Color;
+        Assert.Equal(1.0, chip.Opacity);
+
+        chip.IsEnabled = false;
+        window.UpdateLayout();
+
+        var off = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(presenter.Background).Color;
+        Assert.Equal(live, off);
+        Assert.Equal(0.55, chip.Opacity, 2);
     }
 
     [AvaloniaFact]
