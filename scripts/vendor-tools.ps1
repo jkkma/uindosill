@@ -55,13 +55,21 @@ $denoVersion  = 'v2.9.5'
 # FFmpeg release branch rather than a master snapshot. n9.0.1 is deliberate: it is the version every
 # container rule in `Parakeet.Core.Muxing.SubtitleMux` was measured against.
 #
+# **The tag is a month-end one, and that is the difference between a pin and a countdown.** BtbN
+# keeps roughly a fortnight of dailies and prunes the rest, retaining only the last autobuild of
+# each month — 2025-12-31, 2026-01-31, 2026-02-28 and every one since are still published, while
+# the daily this pin used to name is not. It was `autobuild-2026-08-22-12-58`, and it vanished
+# between rc.11 packing on 2026-08-31 and rc.12 packing on 2026-09-06, which failed the release on
+# a 404 in the middle of vendoring. A daily tag works for as long as it takes to notice, so the pin
+# is a month-end tag and moving it to another daily would only reset the clock.
+#
 # **LGPL and not the GPL build beside it, and that is a licence decision rather than a preference.**
 # Adding a transcript to a media file copies streams and encodes nothing, so nothing here needs a
 # GPL-only encoder — the three subtitle codecs and the two muxers involved are all core FFmpeg. The
 # GPL build ships GPLv3, which this project has no reason to take on; the LGPL one is LGPLv3, 30 MB
 # smaller, and was driven over all eight input-and-format routes before it was kept.
-$ffmpegBuild   = 'autobuild-2026-08-22-12-58'
-$ffmpegVersion = 'n9.0.1-6-g9d4ca21220'
+$ffmpegBuild   = 'autobuild-2026-08-31-13-27'
+$ffmpegVersion = 'n9.0.1-11-ge47273f4d9'
 
 $tools = @(
     [PSCustomObject]@{
@@ -94,10 +102,12 @@ $tools = @(
         # Nested, unlike Deno's flat zip: this one holds ffmpeg-<version>/bin/ffmpeg.exe, so the
         # extraction has to recurse. `7z e` flattens whatever it finds, which is what we want here.
         Nested     = $true
-        Length     = 147007729
-        Sha256     = '20F84639FAE87181BB1C9899C34CE05CD3C0B533C68D3FF34206A2615DA94F30'
+        Length     = 147007942
+        Sha256     = '2484854AD6988D34560F4E6EA7A6ECB9DDE0AF7C229D2591815D056B04EC4F56'
+        # The same size as the build before it, to the byte, and a different file — so a check that
+        # compared lengths would have called the swap a no-op.
         FileLength = 114400768
-        FileSha256 = '8A5CE69FBB74B4C9E0E24C214E3DEF0E1847A05051A8E1C6D10B1D4A35BD6A65'
+        FileSha256 = '63A0B3C76A245BC0D986853612D9EC43A2A2D1F1C7A3FA40EE459C248075B3A6'
         Notice     = 'ffmpeg-LICENSE.txt'
         # Its own directory, and not for tidiness. yt-dlp looks for ffmpeg beside its own executable
         # before it looks at PATH — measured 2026-08-23 — so putting the muxer in tools/ would
