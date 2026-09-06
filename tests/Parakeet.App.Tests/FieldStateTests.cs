@@ -4,7 +4,11 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using Parakeet.App.Services;
+using Parakeet.App.Services.Tools;
+using Parakeet.App.ViewModels;
 using Parakeet.App.Views;
+using Parakeet.Core.Models;
 
 namespace Parakeet.App.Tests;
 
@@ -57,13 +61,32 @@ public class FieldStateTests
     [AvaloniaFact]
     public void AHoveredFieldKeepsItsGround()
     {
-        var viewModel = WindowTests.NewViewModel(out _);
+        // The link box is alive only when this build can fetch links, and that is a question about
+        // the machine rather than about the window: yt-dlp and Deno are looked for under
+        // native/win-x64/tools/, which a developer's clone has and a fresh runner does not. A
+        // disabled control never takes the pointer, so the real fetcher makes this assert a hover
+        // that cannot happen — green where the tools are vendored, red everywhere else, which is
+        // how it reached CI. The fake says this build can fetch, so the box is live wherever the
+        // suite runs.
+        var directory = TestTemp.NewDirectory("uindosill-app");
+        var viewModel = new MainWindowViewModel(
+            new FakeEngineProvider(),
+            new LocalModelStore(directory),
+            ModelCatalog.Default,
+            player: new FakeMediaPlayer(),
+            fetcher: new FakeMediaUrlFetcher(),
+            downloadRoot: directory);
 
         var window = new MainWindow { DataContext = viewModel };
         window.Show();
         window.UpdateLayout();
 
         var box = window.FindControl<TextBox>("LinkBox")!;
+
+        // Named here rather than left to the pointer assertion below, which reports a dead box as
+        // a pointer that missed.
+        Assert.True(box.IsEffectivelyEnabled, "the link box is disabled, so there is no hover to read");
+
         var border = BorderOf(box);
         Assert.Equal(Ground, ColourOf(border.Background));
 

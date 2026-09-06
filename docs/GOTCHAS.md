@@ -1076,3 +1076,18 @@ writes a loud colour into `Application.Current.Resources[key]` and watches wheth
 follows it. The same probe is how the hover and pressed keys beside it were found to move nothing
 under a pointer in the headless host, which `docs/UNPROVEN.md` records rather than the tokens
 claiming otherwise.
+
+## 46. A simulated hover only reaches a control the machine left enabled, so a vendored binary can decide whether a UI test passes
+
+`FieldStateTests.AHoveredFieldKeepsItsGround` moves a pointer onto the Transcribe tab's link box
+and reads the ground it keeps under it. That box is bound to `CanAddUrl`, which is
+`BundledTools.CanFetchUrls` — whether `yt-dlp.exe` and `deno.exe` are found under
+`native/win-x64/tools/` — and a disabled control never takes the pointer. So the assertion held on
+the clone that wrote it, where `vendor-tools.ps1` had run, and could not hold anywhere else: green
+on the machine, red the first time CI saw it, 2026-09-06, saying only *the pointer did not reach
+the field*. It would have failed the release job too, which builds and tests on a fresh Windows
+runner before `package-windows.ps1` vendors anything. `MainWindowViewModel` takes a `fetcher:`, and
+`FakeMediaUrlFetcher` answers `IsAvailable` without consulting a filesystem, so the box is live
+wherever the suite runs. A hover test whose target has a bound `IsEnabled` should assert
+`IsEffectivelyEnabled` first — otherwise the failure blames the pointer for a control that was
+never alive.
