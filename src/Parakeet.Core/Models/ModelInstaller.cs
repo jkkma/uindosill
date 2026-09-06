@@ -449,8 +449,21 @@ public sealed class ModelInstaller : IDisposable
                 await AttemptAsync(resumeOffsetBefore).ConfigureAwait(false);
                 break;
             }
-            catch (Exception exception) when (IsTransient(exception) && !ct.IsCancellationRequested)
+            catch (Exception exception) when (IsTransient(exception))
             {
+                // **A cancel the caller asked for leaves here as a cancel, whatever shape it
+                // arrived in.** This used to be a second half of the `when` clause above —
+                // `&& !ct.IsCancellationRequested` — which is right about an `HttpClient` timeout,
+                // whose `OperationCanceledException` nobody asked for and which must stay
+                // retryable, and wrong about a cancel that lands while an attempt is in flight:
+                // the attempt dies of its own `IOException`, the filter then declines it because
+                // the token is set by the time it runs, and the caller gets a connection error
+                // where it asked for a stop. In the window that reads as a download that
+                // **failed** rather than one that was cancelled. Rethrowing the token's own
+                // cancellation costs one check per failed attempt and leaves the timeout path
+                // exactly as it was, because nobody cancelled that token.
+                ct.ThrowIfCancellationRequested();
+
                 // Progress since the last attempt buys a fresh budget rather than counting against
                 // it: the failure being retried is a connection that dies periodically, not a
                 // request that cannot be served.

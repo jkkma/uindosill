@@ -1091,3 +1091,28 @@ runner before `package-windows.ps1` vendors anything. `MainWindowViewModel` take
 wherever the suite runs. A hover test whose target has a bound `IsEnabled` should assert
 `IsEffectivelyEnabled` first — otherwise the failure blames the pointer for a control that was
 never alive.
+
+## 47. An exception filter that declines on cancellation does not surface the cancellation — it surfaces whatever the cancelled work died of
+
+`ModelInstaller`'s retry loop caught transient failures `when (IsTransient(exception) &&
+!ct.IsCancellationRequested)`. The second half is right about the case it was written for: an
+`HttpClient` timeout arrives as an `OperationCanceledException` that nobody asked for and that must
+stay retryable, so the caller's own token is what tells the two apart. What it misses is the order
+of events when a real cancel lands *during* an attempt. The read fails on its own `IOException`,
+the filter runs afterwards, sees the token set, and declines — so the loop does not retry and does
+not cancel either: the connection error escapes in place of the cancellation, and a download the
+user stopped is reported as one that failed.
+
+A filter is not a place to decide that something else should be thrown. The fix is to catch on
+`IsTransient` alone and make `ct.ThrowIfCancellationRequested()` the first line of the handler, so
+the caller's cancel leaves as a cancel whatever shape it arrived in, and the timeout path is
+untouched because nobody cancelled that token.
+
+**It reads as flakiness, and that is the expensive part.** The test that held this
+(`CancellationIsStillCancellationAndNotARetry`) cancels on a 50 ms timer and passes whenever the
+token fires during a backoff, which is nearly always — it went 12 for 12 on the maintainer's laptop
+while failing a Windows release runner on 2026-09-06, having passed on that same runner twenty
+minutes earlier. A test that can only reach the interesting interleaving by luck reports a real
+defect as noise. `ACancelThatLandsDuringAReadIsStillACancel` reaches it on purpose: the stream
+cancels the token and then throws, so the losing order is the only order, and it fails against the
+old filter every time.
