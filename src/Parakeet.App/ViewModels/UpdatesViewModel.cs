@@ -195,7 +195,19 @@ public sealed partial class UpdatesViewModel : ObservableObject
 
         IsBusy = true;
         Progress = 0;
-        Status = $"Downloading {AvailableVersion}…";
+
+        // **The bar covers more than a download, and it spends most of its time on the part that
+        // moves least.** An update between adjacent versions arrives as a delta — tens of megabytes,
+        // gone in seconds — and is then rebuilt into a whole version against the copy already
+        // installed. That rebuild is minutes of local work reported as a few per cent, and the
+        // extraction after it reports nothing at all. Saying only "Downloading" left the bar
+        // apparently frozen with nothing on screen admitting the download had finished: driven
+        // 2026-09-06, a 31,440,212-byte delta arrived in seconds and the rebuild took 169.7 s, and
+        // it was read as a hang by the person who had built the feature that morning. Naming both
+        // halves is what turns a still bar into the slow half rather than a failure.
+        // `docs/UNPROVEN.md` § *No release has shipped a delta package* has the run.
+        Status = $"Getting {AvailableVersion}. The download is quick; rebuilding it from this copy "
+            + "afterwards takes a few minutes, and the bar barely moves while it does.";
 
         try
         {

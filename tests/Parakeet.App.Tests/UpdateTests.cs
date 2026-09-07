@@ -17,6 +17,8 @@ internal sealed class FakeUpdater : IAppUpdater
     /// <summary>Held open so a test can look at the view model mid-check.</summary>
     public Task? CheckGate { get; set; }
 
+    public Task? DownloadGate { get; set; }
+
     public Exception? DownloadThrows { get; set; }
 
     public int Checks { get; private set; }
@@ -47,18 +49,26 @@ internal sealed class FakeUpdater : IAppUpdater
         return Available;
     }
 
-    public Task DownloadAsync(IProgress<int>? progress, CancellationToken ct)
+    public async Task DownloadAsync(IProgress<int>? progress, CancellationToken ct)
     {
         Downloads++;
         Order.Add("download");
         ProgressWasSupplied = progress is not null;
+
+        // The same shape as CheckGate, and for the same reason: it holds the call open so a test
+        // can read what the window is saying while the download is still running, which is the
+        // only moment that line is on screen.
+        if (DownloadGate is not null)
+        {
+            await DownloadGate;
+        }
+
         if (DownloadThrows is not null)
         {
-            return Task.FromException(DownloadThrows);
+            throw DownloadThrows;
         }
 
         progress?.Report(100);
-        return Task.CompletedTask;
     }
 
     public void ApplyAndRestart()
@@ -245,6 +255,28 @@ public class UpdatesViewModelTests
         // the synchronization context it was built on, so on the UI thread it lands on the UI
         // thread and in a test with no context it lands whenever the thread pool gets to it.
         Assert.True(updater.ProgressWasSupplied);
+    }
+
+    [Fact]
+    public async Task TheLineSaysTheRebuildIsComingAndNotOnlyTheDownload()
+    {
+        // A delta update downloads in seconds and then rebuilds for minutes, reporting almost
+        // nothing while it does — so a line that says only "Downloading" is describing the short
+        // half and leaves the long one looking like a hang, which is how it was read the first
+        // time a published delta was installed. Held here because it is the wording that carries
+        // it: nothing else on that page says the wait is expected.
+        var gate = new TaskCompletionSource();
+        var updater = new FakeUpdater { Available = "1.1.0", DownloadGate = gate.Task };
+        var viewModel = New(updater);
+        await viewModel.CheckOnLaunchAsync();
+
+        var install = viewModel.InstallCommand.ExecuteAsync(null);
+
+        Assert.Contains("1.1.0", viewModel.Status, StringComparison.Ordinal);
+        Assert.Contains("rebuild", viewModel.Status, StringComparison.OrdinalIgnoreCase);
+
+        gate.SetResult();
+        await install;
     }
 
     [Fact]
