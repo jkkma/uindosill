@@ -8391,3 +8391,28 @@ warning has itself never fired in a real run.**
 The 74 KB figure quoted for rc.1 → rc.2 is a local packing observation from 2026-08-19, recorded
 above; **no published release has ever been diffed against another**, so what a delta costs a real
 user of this application is unknown in both directions.
+
+### Answered the same day: `v1.0.0-rc.13` shipped the first two
+
+The next release was cut with the flag in place and **published a delta on both channels** — the
+first this project has ever produced from one release against another:
+
+| channel | delta | full | ratio |
+|---|---|---|---|
+| `win` | 31,440,212 B | 754,205,217 B | 24.0× |
+| `win-cuda` | 31,442,202 B | 1,994,609,299 B | 63.4× |
+
+So seeding, diffing and uploading all work, and an update between two adjacent releases moves about
+30 MB rather than 719 MB or 1.86 GiB. **What remains unproven is the half that happens on a user's
+machine**: no delta has been applied by `Update.exe` in any release, only the locally packed rc.1 →
+rc.2 one recorded above, and a delta that exists is not yet a delta that installs.
+
+**And the same run showed what a working seed does to the publish step.** `packaging/releases` now
+holds the seeded packages as well as the new ones, so the asset glob `UindosillDesktop-*-full.nupkg`
+matched rc.12's two full packages and rc.13 published them alongside its own — **2,748,837,493 bytes
+of a release re-uploading its predecessor**, which is a fifth of every byte this repository's
+releases hold. The glob now carries the version and was checked against the exact filenames that run
+produced: ten assets selected, none of them the previous version's. rc.13's own copies were left in
+place rather than deleted, so that release stays 2.56 GiB larger than it needs to be; deleting them
+is safe — the update feeds name files by version — but it is the maintainer's call and their account
+that has write access.
