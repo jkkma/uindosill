@@ -5237,7 +5237,7 @@ does.
 - **It reads `available` rather than `usable`.** The latter is the sidecar's opinion about what may be chosen *automatically* and excludes DirectML on measured grounds — a different question from what a person may name.
 - **The cost is a sidecar start, so it is probed once, lazily, when the Settings page is opened.** The op reports each engine's `auto` resolution as well as the raw list and pays the engines' imports to do it honestly, which is not a cost to put on every launch of an application most of whose users never open that page. Measured against the real bundle here: `["cpu", "webgpu"]` in 2 s.
 
-**What is still owed for it to work on an installed copy**, and it is the same debt the entry above records: `scripts/bundle-python.ps1` has not been run with the two new pins. The bundle in `%LOCALAPPDATA%\Uindosill\python` carries `onnx` 1.22.0 and `onnxruntime-webgpu` 1.27.0 and **not `onnxscript`**, which `torch.onnx.export(dynamo=True)` needs — so on a shipped install today, choosing WebGPU derives no graph and stops with a refusal naming the missing module. That is the correct failure and not a silent fallback, but it is a failure: the feature is complete in a development tree and blocked on a packaging step everywhere else.
+**What was owed for it to work on an installed copy is paid, in two instalments.** The bundle in `%LOCALAPPDATA%\Uindosill\python` carried `onnx` 1.22.0 and `onnxruntime-webgpu` 1.27.0 and **not `onnxscript`**, which `torch.onnx.export(dynamo=True)` needs, so on a shipped install the WebGPU row derived no graph and stopped with a refusal naming the missing module — the correct failure, and still a failure. `scripts/bundle-python.ps1` ran with the two new pins on 2026-08-28 and `v1.0.0-rc.6` shipped `onnxscript` 0.7.1; **the export was then run against a shipped bundle on 2026-09-07** and wrote both graphs in 62.1 s, after which the route ran and agreed with the torch path turn for turn (*Measured 2026-09-07* below). The feature is no longer complete in a development tree and blocked everywhere else.
 
 **Pinning the model digests used to head this list** and is done: all five entries carry the exact
 byte size and the SHA-256 read from the repository's LFS listing, `"verified": true`, and no entry
@@ -7746,3 +7746,36 @@ prevent.
 **1699 tests, no weights, no display, no network — 1690 passed and 9 skipped.** The line counts
 are the renderer's, taken headlessly like everything else the suite draws, and the two halves of
 the page have not been looked at since the copy changed — the same limit the entry above carries.
+
+### Measured 2026-09-07 — the diariser's graphs derive on a shipped install, and `auto` runs the route it elects
+
+**The last step of this feature that had only ever run in a development tree has run on an installed
+one.** `scripts/bundle-python.ps1` put `onnxscript` in the bundle on 2026-08-28 and `v1.0.0-rc.6`
+shipped it, and there the matter rested: shipping the dependency is not the same as exporting
+against it, so the record said the derivation was untested on an installed build rather than known
+to work on one. A `1.0.0-rc.13` install on the second machine had everything the question needed.
+
+**The export was asked of the shipped bundle over the protocol the Settings row uses**, with nothing
+from a checkout imported — the installed interpreter, the installed `uindosill_engines`, the
+installed weights. It wrote both graphs in **62.1 s**: `segmentation.onnx` at 5,916,316 bytes
+through the torchscript exporter and `embedding.onnx` at 26,830,381 through dynamo, opset 18, with
+a manifest beside them and no `.onnx.data` sidecar.
+
+**Then the route ran, and `auto` chose it.** Over one ten-minute stretch the WebGPU arm returned
+**78 turns against the CPU torch path's 78, identical to 0.000 s on both edges of every turn and on
+every speaker label**, at **2.81×** on the labelling pass — and an `auto` load elected WebGPU,
+ran it, and reported an empty `fellBackFrom`. That is the first real diarisation this project has
+driven through the elected route rather than through a provider named by hand.
+
+**What it does not settle is the part that matters most**, and the record says so where the figures
+are: there is still no DER on either route, the speaker gate is AMI test, and an elementwise
+agreement on one two-speaker clip is precisely the instrument that cannot see a clustering threshold
+being crossed. `docs/UNPROVEN.md` § *The diariser's ONNX route ran from an installed build* has the
+tables and the six things this leaves open, among them that nobody has clicked the row itself.
+
+**The trap it paid for belongs to the harness and not the product.** The first attempt gave the
+child a pipe for stderr and read only stdout; the exporter's diagnostics — 6,822 bytes — filled a
+Windows anonymous pipe at about 4 KB and the child blocked mid-export, at 0% CPU with an empty
+output directory, which reads exactly like a slow export. `PythonSidecar` runs an independent
+`ReadLineAsync` loop on each stream and is not exposed to it. Any driver written against this
+protocol needs two readers or a file for the stream it does not read.

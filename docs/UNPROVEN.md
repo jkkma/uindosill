@@ -6965,8 +6965,11 @@ took the worst of it.
   2026-08-28**: `scripts/bundle-python.ps1` has run with the two new pins, and the published
   `uindosill-python-win-x64.zip` for `v1.0.0-rc.6` was read that day and carries `onnx` 1.22.0,
   `onnxscript` 0.7.1, `onnx_ir` 1.0.0 and `ml_dtypes` 0.6.0. Shipping the dependency is not the
-  same as having run the export against it, and nothing has — so the Settings row that derives the
-  graphs is untested on an installed build rather than known to fail on one.
+  same as having run the export against it. **The other half is discharged as of 2026-09-07**: the
+  export was asked of a `1.0.0-rc.13` install's own bundle and wrote both graphs in 62.1 s, and the
+  route then ran and agreed with torch turn for turn — § *The diariser's ONNX route ran from an
+  installed build* below. What is still untested is the Settings row itself, which nobody has
+  clicked; what was driven is the protocol op behind it.
 - **Transcription and diarisation have not been driven together** with the ONNX embedder. Reading
   the code says they cannot interact — Silero VAD is CPU-only, single-threaded, in a different
   process, and diarisation is a separate second pass that re-reads the file and ignores VAD's
@@ -7536,10 +7539,77 @@ WebGPU ONNX, same process, same audio:
   build. No machine here has refused: every run that elected WebGPU built it. The election is
   covered by `scripts/check-diariser-auto.py` only as far as the provider list — a session that
   builds and then fails, and the `passed_over` list that records it, are both unexercised.
-- **Nothing has been transcribed with `auto` electing WebGPU.** The election was checked against a
-  stubbed provider list and against `resolve_auto` directly, on this desktop, with the graphs
-  faked as empty files. No real diarisation has been driven through the elected route, and this
-  machine has never had the graphs exported at all.
+- **Nothing has been transcribed with `auto` electing WebGPU** — **answered 2026-09-07, and on the
+  laptop rather than here.** The election had been checked against a stubbed provider list and
+  against `resolve_auto` directly, on this desktop, with the graphs faked as empty files. It has now
+  elected WebGPU on a machine with real graphs and run it: 78 turns identical to the torch path with
+  an empty `fellBackFrom`, § *The diariser's ONNX route ran from an installed build* below. **This
+  desktop has still never had the graphs exported at all**, and `cuda` — which is what `auto` would
+  reach for first here — is still elected by nothing that has been driven.
+
+## The diariser's ONNX route ran from an installed build — measured 2026-09-07, laptop
+
+Two claims above said this had never been done: the derivation had never been exercised from a
+`._pth` bundle, and nothing had been transcribed with `auto` electing WebGPU. Both are answered
+here, on one machine and one clip.
+
+**What was driven.** A `1.0.0-rc.13` install, channel `win`, with the pyannote checkpoint in
+`%LOCALAPPDATA%\Uindosill\models`. The installed `python.exe` was started as the application starts
+it — `-u -m uindosill_engines` — and sent the same JSON lines `PythonSidecar` sends. **Nothing from
+a checkout was imported**: interpreter, `uindosill_engines` and weights are all the installed
+copies. The bundle answers protocol 6, CPython 3.12.10, ONNX Runtime 1.27.0, torch 2.13.0+cpu,
+pyannote.audio 4.0.7. The run record is `runs/20260907-diariser-installed/`, gitignored and
+machine-local.
+
+**The export runs on the shipped bundle: 62.1 s**, `parity` off as the application leaves it, both
+graphs into `<model-dir>/onnx/` with a `manifest.json` beside them.
+
+| graph | file | bytes | exporter | sha256 |
+| --- | --- | --- | --- | --- |
+| segmentation | `segmentation.onnx` | 5,916,316 | torchscript | `d72af1ac…` |
+| embedding | `embedding.onnx` | 26,830,381 | dynamo | `89296606…` |
+
+Opset 18, and **no `.onnx.data` sidecar** at this size.
+
+**The route runs, and the answer does not move.** `runs/der/stretches/two-hosts-a.wav`, 600.0 s,
+mono 16 kHz, two speakers — a different cut from the five-minute one in the section above. Three
+loads of the same bundle over the same file, sequentially so the timings do not contend.
+
+| | CPU torch | WebGPU ONNX | `auto` |
+| --- | --- | --- | --- |
+| turns | 78 | 78 | 78 |
+| speakers | 2 | 2 | 2 |
+| max abs Δ turn start | — | **0.000 s** | **0.000 s** |
+| max abs Δ turn end | — | **0.000 s** | **0.000 s** |
+| same speaker label | — | **78 / 78** | **78 / 78** |
+| load | 7.1 s | 7.6 s | 7.4 s |
+| label | 270.6 s | **96.4 s** | 96.3 s |
+| embedding stage | `torch:cpu` | `onnx:webgpu` | `onnx:webgpu` |
+| `fellBackFrom` | `[]` | `[]` | `[]` |
+
+**2.81× on the labelling pass.** Segmentation stays in torch on every arm, which is the design:
+`_install_onnx_route` seats only the embedding graph, on the 2026-08-28 finding that WebGPU is
+8.8× slower on that stage. The segmentation graph is still exported and still required before the
+route installs.
+
+**`auto` elected WebGPU and ran it**, with an empty `fellBackFrom` — the first real diarisation
+driven through the elected route rather than through a provider named outright.
+
+### What this does not establish
+
+- **No DER, on any route, still.** Seventy-eight turns agreeing to 0.000 s says the two routes
+  produce the same answer, not that the answer is right. The speaker gate is AMI test and neither
+  route has been scored on it.
+- **One clip, one machine, two speakers**, with no overlap and no GPU but the 880M.
+- **Not comparable to the 1.57× above.** That is a different cut at half the length, and the stage
+  seating changed the same day it was taken. Two speed-ups on two clips are not a trend.
+- **The Settings row was not clicked.** What ran is the protocol op behind it; the progress it draws
+  on screen is still unseen, and so is its refusal path.
+- **The fall-through still has never fired** on any machine: no WebGPU session here has refused to
+  build, so a non-empty `fellBackFrom` remains unobserved.
+- **`providers` asked with nothing loaded still answers `["cpu"]`**, checked after the graphs
+  existed. It passes a model path only when a diariser is loaded, so that is the honest answer to a
+  question asked without a model rather than a stale election.
 
 ## The Ask tab's default answering model changed — measured 2026-08-28, laptop
 
