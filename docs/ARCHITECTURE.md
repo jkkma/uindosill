@@ -372,6 +372,8 @@ references nothing from `Parakeet.Engine.Python`: a stand-in that shared types w
 stands in for would agree with it by construction, which is the one thing a stand-in must not do.
 It lives under `tools/` rather than `tests/` because `tests/Directory.Build.props` makes every
 project there an xUnit project, and a second entry point would collide with the one xUnit generates.
+`tools/measure-lines` sits beside it for that reason and one more: it needs a Skia-backed headless
+host to count rendered lines with the real typefaces, and a test assembly gets one host, the stub.
 
 **What it cannot reach is anything numerical.** A clone carries no Python, so the suite has no
 weights, no ONNX Runtime and no parity check in it — both fixtures above run at load, on a machine

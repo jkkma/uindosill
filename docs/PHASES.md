@@ -7747,6 +7747,82 @@ prevent.
 are the renderer's, taken headlessly like everything else the suite draws, and the two halves of
 the page have not been looked at since the copy changed — the same limit the entry above carries.
 
+### Changed 2026-09-06 — the Settings page stops quoting measurements
+
+**Every description on the Settings page is shorter, and none of them carries a figure or a hedge
+any more.** The maintainer asked for the descriptions to be shortened, then for the measured figures
+and their hedges to go as well. What left: the 13x speed-up and the same-speakers equivalence under
+the graphics offer; the "nothing here has been measured for accuracy" sentence and both "on what has
+been tried" sentences under `diarisationProvider`; the unmeasured-cost sentence and the "not a speed
+setting" claim it hedged under `diarisationBatchSize`; the 85%, 13.4-of-15.8 GiB and 22.4 tok/s
+figures under `askExpertPlacement`; the twice-as-long laptop figure and its half-measured trade
+under `askEvidence`; the minute quoted for the WebGPU preparation; the "often more thorough" claim
+under *Think before answering*; and the Advanced banner's "every default here was measured, most
+alternatives have not been". Each description now says what the control does and when it takes
+effect, and no more.
+
+**The rule is not weakened, because a sentence that makes no claim has nothing to mark.** What went
+was each claim together with its hedge, never the hedge alone: the graphics offer no longer says it
+is faster, so it no longer has to say on how many recordings. The measurements are unchanged where
+they are recorded — `docs/UNPROVEN.md` § *CUDA joined the diariser's `auto` on an equivalence check*
+for the 13x and the byte-identical RTTMs, § *The expert placement follows the graphics* for the
+26B-A4B figures — and the Models tab's diariser description still carries its own. Two tests moved
+with the copy rather than being deleted: `TheExplanationNamesTheDownloadAndSaysWhatIsUnmeasured`
+became `TheExplanationMakesNoSpeedOrAccuracyClaim`, holding the graphics block to naming the card and
+no speed figure, and the Advanced banner's test now holds the banner to naming no measurement and
+no "dangerous" rather than to naming which side was measured. `Parakeet.App.Tests`: 444 passing,
+one platform skip, unchanged in count.
+
+### Changed 2026-09-06, later — every description the window draws fits in two lines, and a ruler measures it
+
+**The maintainer set a ceiling: two lines for every description in the interface.** "Two lines" is
+a rendered quantity, not a character count — it depends on the typeface, the size and the width the
+block gets — so it was measured rather than estimated. `tools/measure-lines`, new, opens the real
+window on a Skia-backed headless host (the suite's default host has a stub text shaper whose
+advances are fiction, and the tool refuses to report if that is what it measured) and reads every
+wrapped `TextBlock`'s rendered line count on every page — each Models entry highlighted in turn,
+both Settings sub-tabs, the About window — at the window's default width of 1080 and its minimum
+of 920, and exits with the number of blocks that overflow. The first run found 23 of 202: all nine
+catalogue notes (531 to 1,220 characters, 8 to 22 lines), three Ask-tab texts, the Updates network
+note, two About paragraphs, the backend note on the Models tab and seven Settings descriptions. The
+second run found none.
+
+**What the cut cost.** The catalogue notes are one sentence each now: what the model does, the one
+condition on using it, the download size. The accuracy and speed figures, the licence terms and the
+memory arithmetic they carried are in `docs/UNPROVEN.md` and `docs/LICENSING.md`, and the Models
+tab still shows the licence and the languages beside the note. The Advanced banner says once that
+changes apply from the next recording or question, and the descriptions under it no longer each say
+so. "Preparing it now" left the provider description, whose graphics row has its own message block
+for that. The Ask panel's intro no longer says that answers name speakers, and the Updates note no
+longer repeats the About window's promise about the network.
+
+**The ruler is a hand-run check, not a test**, on the FLEURS pattern: CLAUDE.md names the three
+paths that owe it a run, the reminder hook prints the obligation when one is edited, and CI does
+not run it — a Skia host on the Linux runner is untried from here, and a check that could fail on
+fonts rather than on copy is not the check wanted. The suite is unchanged: 1699 tests, nine skipped,
+all green after the cut.
+
+### Changed 2026-09-06, evening — the Models tab keeps its long descriptions
+
+**The two-line ceiling stops at the Models tab.** The maintainer, looking at the one-sentence
+catalogue notes the entry above produced, wanted the long ones back: that tab is where a person
+reads about a model before downloading it, and a sentence is not enough there. The nine notes are
+restored from the commit before the cut — then, on the same instruction that reshaped the Settings
+page, the measurement sentences are taken out of them: the word-error and character-error figures
+under the two recognisers with NVIDIA's own figure beside the Japanese one, the speed multiples and
+their one-recording caveat under the diariser, the Slovak result under the European translator, the
+score comparison and the "nobody has rated its English" line under the Japanese one, and the
+seventeen seconds under the 12B. What stays is what each model does, when to pick it, its licence and
+account conditions, its download size, and the memory guidance under the two large answering models,
+which is fit arithmetic rather than a measurement. The licence paragraph under the speaker model and
+the Japanese translator went too, as noise: the Models tab shows the licence in its own field beside
+the note. The backend note under a highlighted model is restored with them, untouched. Everything
+else the entry
+above says still holds: every other page fits two lines, and `tools/measure-lines` now skips the
+Models tab rather than measuring it, says so in its summary line, and still exits with the number
+of blocks that overflow elsewhere — none. `models.json` no longer owes the ruler a run, so CLAUDE.md
+and the reminder hook name two paths for it rather than three, seven gated paths in all.
+
 ### Measured 2026-09-07 — the diariser's graphs derive on a shipped install, and `auto` runs the route it elects
 
 **The last step of this feature that had only ever run in a development tree has run on an installed
@@ -7779,3 +7855,50 @@ Windows anonymous pipe at about 4 KB and the child blocked mid-export, at 0% CPU
 output directory, which reads exactly like a slow export. `PythonSidecar` runs an independent
 `ReadLineAsync` loop on each stream and is not exposed to it. Any driver written against this
 protocol needs two readers or a file for the stream it does not read.
+
+### Reconciled 2026-09-07 — two machines shortened the same copy on the same day, and only one of them had pushed
+
+**The laptop and the desktop each ran the Settings copy pass on 2026-09-06, neither knowing about
+the other.** The laptop's is the *Polished 2026-09-06, later still* entry above: control labels in
+English, the identifiers moved to a reference line under each row, the paragraphs cut. The
+desktop's is the three *Changed 2026-09-06* entries: the figures and their hedges out at the
+maintainer's request, every description cut to two rendered lines, and `tools/measure-lines` built
+to measure them. The laptop's was committed and pushed; the desktop's was still in the working tree
+when the pull arrived, so the two met as a conflict across `MainWindowViewModel.cs`,
+`MainWindow.axaml` and the tail of this file.
+
+**Resolved string by string, on the rule that the shortest text making no measurement claim wins** —
+which is what both passes were for. The desktop's won under the diariser provider, the batch size,
+the CUDA pack block, `askEvidence` and the Advanced banner: every place a figure or a hedge was
+still standing, the 13x speed-up the laptop's pass had kept among them. The laptop's won under the
+ask model, the ask mode, the expert placement, the Hugging Face token and the tools block, where
+its rewrite was already the shorter, and on both reference lines — the desktop had trimmed that
+prose without knowing the lines existed, so its version was the older idea rather than a considered
+one. `diarisationBatchSize` is neither: the desktop's sentence with the identifiers removed,
+because they now sit on the reference line directly beneath it.
+
+**The banner had to be the desktop's, and that is a merge trap worth naming.** Each description
+used to end with "Takes effect at your next recording"; the desktop cut that from the descriptions
+and moved it to the Advanced banner, which says it once for the whole page. Taking the laptop's
+banner together with the desktop's descriptions would have dropped the sentence from the product
+entirely — a per-hunk merge invites exactly that, because each half reads correctly on its own.
+
+**Measured after the merge: 47 wrapped blocks across seven pages, none over two lines**, at 1080
+and at 920 on the Skia host, so `tools/measure-lines` exits 0. No new copy had to be written to
+reach it. The suite is 1699 tests, nine skipped, all green.
+
+**`SettingsCopyTests` was re-scoped rather than deleted, because its check was sound and its claim
+was not.** The laptop added it to hold the Settings descriptions to three lines, and its remarks
+said the count came off the rendered layout and so was "the number a reader would see". It is not:
+`TestAppBuilder` builds the default headless platform, whose text shaper is a stub with invented
+glyph advances — which is why `tools/measure-lines` exists at all, and why that tool refuses to
+report if it finds itself on the same host. The test still earns its second of CI, since the stub
+runs wide and anything overflowing there has grown by a lot, so what changed is the remarks: they
+now name the host they measure, state that the rendered rule is two lines, and point at the ruler
+that holds it. Deleting it would have cost 105 count edits across this file, and the CI floor with
+them.
+
+**What it does not settle.** Nobody has looked at the merged window. The two-line result is
+measured; the words are not. The descriptions taken from the desktop's pass now sit above reference
+lines that pass never saw — checked here for duplication, not read for tone — and the desktop's
+copy was never reviewed on screen either: the entries above record a ruler run, not a reading.

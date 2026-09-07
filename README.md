@@ -208,6 +208,8 @@ python/
 tools/
   FakeSidecar/                  net10.0   a scripted stand-in for that process, so the tests
                                           need no Python and still run on Linux
+  measure-lines/                net10.0   the window's two-line ruler (Models tab excepted):
+                                          the app on a Skia host, lines counted; hand-run
 tests/                                    one per src project, all runnable on Linux
 attic/                                    the retired C# diariser and translator; unbuilt,
                                           referenced by nothing — see attic/README.md

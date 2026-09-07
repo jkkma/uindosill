@@ -7,21 +7,30 @@ using Parakeet.App.Views;
 namespace Parakeet.App.Tests;
 
 /// <summary>
-/// No description under a setting runs past three lines, measured on what the window draws.
+/// No description under a setting runs past three lines of <i>this host's</i> layout — a coarse
+/// guard, not the product's rule.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The Settings pages explain each control underneath it, and the explanations had grown into
 /// paragraphs — seven lines under one combo box, with sentences about torch device names, an
 /// <c>--backend</c> flag and how much of a mixture-of-experts model is experts. A page of prose
-/// under every row is a page nobody reads, so the rule is three lines and this is what holds it.
+/// under every row is a page nobody reads, and that is the rule this stands under.
 /// </para>
 /// <para>
-/// <b>Counted off the rendered layout rather than off the string.</b> A character budget is a
-/// guess about a font: it has to assume an average glyph width, and it is wrong for a line of
-/// capitals and wrong again if the font size ever moves. <see cref="TextLayout"/> has already
-/// broken the text at the width the control actually got, so its line count is the number a reader
-/// would see.
+/// <b>The count here is not the count a reader sees, and this test claimed it was until
+/// 2026-09-07.</b> <see cref="TextLayout"/> does break the text at the width the control actually
+/// got, but <c>TestAppBuilder</c> builds the default headless platform, whose text shaper is a
+/// stub with synthetic glyph advances — so the width it breaks at is invented, and the line count
+/// with it. It is still worth asserting, because the stub runs wide: a description that overflows
+/// here has grown by a lot, and the check costs a CI second.
+/// </para>
+/// <para>
+/// <b>The rendered rule is two lines, and <c>tools/measure-lines</c> is what measures it</b> — the
+/// same window on a Skia-backed host with the embedded typefaces, every page rather than this one,
+/// at the window's default width and at its minimum, and it refuses to report if it finds itself
+/// on the stub shaper. CLAUDE.md names the paths that owe it a run. This is the cheap floor under
+/// it, which is why the number here is three and the number there is two.
 /// </para>
 /// </remarks>
 public class SettingsCopyTests
