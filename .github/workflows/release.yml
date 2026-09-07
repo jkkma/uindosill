@@ -243,10 +243,19 @@ jobs:
             throw "The CLI zip is $([math]::Round($size / 1MB, 1)) MB. That is the CUDA drop coming along again."
           }
 
+      # Named by version rather than `packaging/releases/` whole, for the reason the publish step's
+      # globs are: since the seeding step began working, that directory also holds the *previous*
+      # release's packages, and uploading the lot doubled this artefact and put about 2.7 GB of
+      # somebody else's release inside a file named after this one. What is listed here is what
+      # this release consists of — the same set the publish step uploads.
       - uses: actions/upload-artifact@v7
         with:
           name: uindosill-release-${{ steps.version.outputs.version }}
-          path: packaging/releases/
+          path: |
+            packaging/releases/UindosillDesktop-*-Setup.exe
+            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-*.nupkg
+            packaging/releases/releases.*.json
+            packaging/releases/uindosill-*.zip
           retention-days: 7
 
       # Only a tag publishes. A workflow_dispatch run builds the same assets and stops at the

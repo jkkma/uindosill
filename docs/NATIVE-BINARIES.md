@@ -399,12 +399,15 @@ this application spawns, not a library it links, so it travels as an aggregate u
 measured against FFmpeg 9.0.1, and `n9.0.1-11` is that release branch rather than a master snapshot.
 Bumping this pin means re-running those measurements, not just the digests.
 
-**And on 2026-09-06 the pin moved without them being re-run.** The eight input-and-format routes
-were driven on `n9.0.1-6`; the build here is `n9.0.1-11`, five commits along the same release
-branch, taken because the daily that carried `-6` had been deleted upstream and no release could be
-packed until the pin moved. Same branch is not the same binary, and this document's own rule above
-is that the digests are the cheap half. `docs/UNPROVEN.md` § *The muxer's routes have not been
-re-driven on the ffmpeg the pin now names* is the record, and it stands until someone runs them.
+**On 2026-09-06 the pin moved to `n9.0.1-11`** — five commits along the same release branch, taken
+because the daily that carried `-6` had been deleted upstream and no release could be packed until
+the pin moved. Same branch is not the same binary, and this document's own rule above is that the
+digests are the cheap half, so **the routes were re-driven against the new binary the same day and
+every one of them behaves as the rules claim**: nine input-and-format combinations planned by
+`SubtitleMux` itself, all exiting 0, word timing preserved on exactly the three routes that promise
+it — 23,283 inline timestamps of 23,283 — and cue counts intact through both `mov_text` and `copy`.
+`docs/UNPROVEN.md` § *The muxer's routes have not been re-driven on the ffmpeg the pin now names*
+has the table, and the two readback mistakes worth avoiding if it is ever done again.
 
 **Its zip is nested where Deno's is flat**: `ffmpeg-<version>/bin/ffmpeg.exe` rather than a file at
 the root, which is why the pin carries `Nested` and the extraction recurses. Without that, `7z e`

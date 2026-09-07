@@ -8367,6 +8367,40 @@ byte, 114,400,768 either way, and a different digest**, so size is no evidence h
 routes are cheap to re-drive on a machine with the tools vendored, and until someone does, every
 release from `v1.0.0-rc.12` onwards ships a muxer this project has not exercised.
 
+### Re-driven the same day — the second machine, ffmpeg n9.0.1-11-ge47273f4d9-20260831
+
+**Every route behaves as the rules claim.** Nine input-and-format combinations were driven through
+`SubtitleMux`'s own planner and argument list — the shipped logic, not a re-reading of it — against
+the newly pinned binary: three inputs (the real podcast `.mp3`, a synthesised `.mp4`, a synthesised
+`.wmv` for the ASF fallback) across all three `MuxableFormats`.
+
+| | container | subtitle codec | word timing | ffmpeg | inline timestamps |
+|---|---|---|---|---|---|
+| audio + `srt` | MP4 | `mov_text` | no | 0 | 0 of 0 |
+| audio + `vtt` | Matroska | `copy` | no | 0 | 0 of 0 |
+| audio + `vtt-words` | Matroska | `copy` | **yes** | 0 | **23,283 of 23,283** |
+| video + `srt` | MP4 | `mov_text` | no | 0 | 0 of 0 |
+| video + `vtt` | Matroska | `copy` | no | 0 | 0 of 0 |
+| video + `vtt-words` | Matroska | `copy` | **yes** | 0 | **23,283 of 23,283** |
+| asf + `srt` | Matroska | `copy` | no | 0 | 0 of 0 |
+| asf + `vtt` | Matroska | `copy` | no | 0 | 0 of 0 |
+| asf + `vtt-words` | Matroska | `copy` | **yes** | 0 | **23,283 of 23,283** |
+
+Cue counts survive both kinds intact: 2,936 in and 2,936 out through `mov_text` into MP4, and 2,936
+in and 2,936 out through `copy` into Matroska. So the container rules, the codec choice and the ASF
+fallback all hold on `-11`, and the entry above is answered for everything except what a *player*
+does with the result, which is a separate gap recorded under § *Putting a transcript back inside a
+recording*.
+
+**Two of those numbers were wrong before they were right, and both errors were in the reading rather
+than in the muxer.** Reading the subtitle stream back with `ffmpeg -i out.mkv -map 0:s:0 -f webvtt`
+returns **0** inline timestamps from a file that contains all 23,283: without `-c copy` ffmpeg
+decodes the stream and re-encodes it through its own WebVTT encoder, which drops every inline tag.
+And counting cues with a `HH:MM:SS.mmm` pattern finds 1,812 of 2,936, because that muxer omits the
+hour field below one hour — the missing 1,124 are written `MM:SS.mmm`. Anyone re-driving this should
+copy on the way out and count `-->` rather than a timestamp shape; the first mistake reads as the
+muxer having silently lost word timing, which is exactly the regression this check exists to find.
+
 ## No release has shipped a delta package — found 2026-09-06
 
 **What is measured.** `v1.0.0-rc.10`, `-rc.11` and `-rc.12` carry **no `*-delta.nupkg` asset**, so
