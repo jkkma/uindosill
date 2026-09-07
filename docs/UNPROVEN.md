@@ -8437,9 +8437,45 @@ first this project has ever produced from one release against another:
 | `win-cuda` | 31,442,202 B | 1,994,609,299 B | 63.4× |
 
 So seeding, diffing and uploading all work, and an update between two adjacent releases moves about
-30 MB rather than 719 MB or 1.86 GiB. **What remains unproven is the half that happens on a user's
-machine**: no delta has been applied by `Update.exe` in any release, only the locally packed rc.1 →
-rc.2 one recorded above, and a delta that exists is not yet a delta that installs.
+30 MB rather than 719 MB or 1.86 GiB.
+
+**And it installs — driven the same evening on the second machine, from the published release.**
+`v1.0.0-rc.12`'s default-channel installer was installed silently, and the application's own Updates
+tab was used to check, download and apply. The whole chain ran:
+
+| | |
+|---|---|
+| installed base | `1.0.0-rc.12`, channel `win`, its package 754,228,325 bytes — the release asset's size exactly |
+| downloaded | `UindosillDesktop-1.0.0-rc.13-delta.nupkg`, **31,440,212 bytes**, in seconds |
+| patched | `Successfully applied 1 delta patches in 169.71329s` — zsdiff, file by file |
+| assembled | a full package rebuilt locally at 754,191,036 bytes |
+| applied | 55,334 app files extracted |
+| result | `current\sq.version` moved to **`1.0.0-rc.13`**, `<channel>win</channel>` unchanged, about four and a half minutes after the download began |
+
+Afterwards `packages\` held only the new full package: the base package and the delta were both
+cleaned up. **So a published delta downloads, patches, assembles, applies and leaves a working
+installation** — the last link in the update chain, and the one no release had ever exercised.
+
+**What that measurement also showed, and it is a user-visible problem rather than a footnote.** A
+delta update trades network for local work, and **only the network half reports progress**. The
+download is seconds; the 169.7 s of patching and the extraction of 55,334 files after it report
+nothing at all, so the window sits on a part-filled bar for minutes with no indication it is doing
+anything. It was read as a hang by the person driving it, who had written the delta feature that
+morning. A full download would have shown a moving bar for the whole of its five-times-longer
+transfer, so **shipping deltas made the update cheaper in bytes and worse to watch**, and the
+release workflow's comment calling a missing delta "a slow update" has it backwards on wall clock.
+Nothing has been changed about this yet.
+
+Two warnings in Velopack's log, neither of which stopped it: `Failed to wait for process (27596) to
+exit (Acceso denegado…). Continuing...`, and three of `Skipping killing self`. The first is the
+updater failing to wait on the running application before applying; it is benign in this run and is
+recorded because it decides whether an update lands cleanly when the application is busy, which this
+one was not.
+
+The reconstructed package is **14,181 bytes smaller** than the published `1.0.0-rc.13` full package
+(754,191,036 against 754,205,217). Rebuilding a zip is not expected to reproduce it byte for byte,
+and the installation it produced runs; **that the two archives hold identical contents was not
+checked** and would need the files compared rather than the archives.
 
 **And the same run showed what a working seed does to the publish step.** `packaging/releases` now
 holds the seeded packages as well as the new ones, so the asset glob `UindosillDesktop-*-full.nupkg`
