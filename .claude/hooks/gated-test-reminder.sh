@@ -57,6 +57,9 @@ case "$p" in
   *uindosill_engines/translator/*) add "CLAUDE.md: the translator has no CI coverage - drive the sidecar parity fixture by hand after this change: one load on CPU and one on webgpu, each reporting parity." ;;
 esac
 case "$p" in
+  */Parakeet.App/Views/*|*/Parakeet.App/ViewModels/*) add "CLAUDE.md: every description the window draws fits in two lines (the Models tab excepted), and the suite cannot measure that - after this change run the ruler (dotnet run --project tools/measure-lines -c Release); its exit code is the number of blocks over two lines, each named." ;;
+esac
+case "$p" in
   */tests/*|tests/*) add "If this change added or removed tests, run python3 scripts/check-test-counts.py after the next test run - three documents quote the count and CI fails on a stale one." ;;
 esac
 

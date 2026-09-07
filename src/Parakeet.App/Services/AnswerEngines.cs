@@ -287,8 +287,8 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         {
             return new AnswerEngineAvailability
             {
-                WhyNot = "Asking needs a language model. Put a model file (.gguf) into the models "
-                    + "folder: the About window shows where that is: and come back here.",
+                WhyNot = "Asking needs a language model: a .gguf file in the models folder named "
+                    + "in About.",
             };
         }
 

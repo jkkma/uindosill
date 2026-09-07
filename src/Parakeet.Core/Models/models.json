@@ -149,7 +149,7 @@
         "sv",
         "uk"
       ],
-      "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nMeasured against transcripts written by people, on real recordings of accented English business calls, roughly one word in ten comes out different. Clear speech and good microphones do better than that; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option, there is no smaller, faster version to trade accuracy for."
+      "notes": "Turns speech into text. It handles 25 European languages and works out which one it is hearing on its own, so there is nothing to choose.\n\nClear speech and good microphones do best; strong accents, people talking over each other and phone-quality audio do worse.\n\n1.34 GiB to download, and it is the only option, there is no smaller, faster version to trade accuracy for."
     },
     {
       "id": "parakeet-tdt-ctc-0.6b-ja-q8_0",
@@ -166,7 +166,7 @@
       "languages": [
         "ja"
       ],
-      "notes": "Turns Japanese speech into Japanese text, with punctuation. Pick it on this tab when the recording is Japanese; the European model above cannot hear Japanese at all, and this one hears nothing else.\n\nOn clear Japanese read aloud in a quiet room, about five and a half characters in a hundred come out wrong — or about nine in a hundred once you count the punctuation it adds, which it gets wrong about as often as the words. Ordinary recordings are harder than that. NVIDIA publishes about six in a hundred for this model, counted their own way on their own recordings, so it is not the same measurement as the one above.\n\nSubtitles are broken the Japanese way, 13 characters to a line, so no line starts with a full stop or a comma, and a line is held on screen into any pause after it so there is time to read it. What does not work is the karaoke-style word highlighting: nothing in a Japanese transcript marks where one word ends and the next begins, so those files carry no word timings at all.\n\n884 MiB to download."
+      "notes": "Turns Japanese speech into Japanese text, with punctuation. Pick it on this tab when the recording is Japanese; the European model above cannot hear Japanese at all, and this one hears nothing else.\n\nSubtitles are broken the Japanese way, 13 characters to a line, so no line starts with a full stop or a comma, and a line is held on screen into any pause after it so there is time to read it. What does not work is the karaoke-style word highlighting: nothing in a Japanese transcript marks where one word ends and the next begins, so those files carry no word timings at all.\n\n884 MiB to download."
     },
     {
       "id": "pyannote-speaker-diarization-community-1",
@@ -215,7 +215,7 @@
       ],
       "recommended": false,
       "languages": [],
-      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself; it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part.\n\nOn a processor it ran at about five times faster than real time on one 17-minute meeting, and about six times on a ten-minute one. On an NVIDIA card the same ten minutes took eight seconds rather than a hundred and eleven, roughly thirteen times quicker, and produced exactly the same speakers and boundaries. Both are single recordings on single computers, so treat the first run on a long recording as the one that tells you. Using the card needs a one-off download; Settings offers it where the machine can.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited, Uindosill shows that credit for you.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
+      "notes": "Works out who is speaking, so a transcript reads as a conversation instead of one block of text. It writes no words itself; it runs alongside the recogniser and reads each file a second time.\n\nIt puts no limit on how many voices it can tell apart, so it suits recordings where several people take part. It can run on an NVIDIA card, which needs a one-off download; Settings offers it where the machine can.\n\nIt needs a free Hugging Face account. Accept the model's terms on its page, then paste an access token into Settings; the download cannot start without one. Choosing it here downloads it for you; nothing is included in Uindosill itself.\n\n31.3 MiB to download, in five files."
     },
     {
       "id": "opus-mt-tc-bible-big-mul-en-fp32",
@@ -312,7 +312,7 @@
         "uk"
       ],
       "targetToken": ">>eng<<",
-      "notes": "Translates a finished transcript into English. It never listens to the audio; it works from the text the recogniser has already produced, so it can follow any of the 25 languages the European recogniser hears. Japanese has a translator of its own, below, and the right one is chosen for the recogniser you pick.\n\nIt was tested on 24 languages and does a good job on all of them but Slovak, which came out below the standard set for this feature. Transcripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
+      "notes": "Translates a finished transcript into English. It never listens to the audio; it works from the text the recogniser has already produced, so it can follow the languages the European recogniser hears. Japanese has a translator of its own, below, and the right one is chosen for the recogniser you pick.\n\nTranscripts that are already in English pass through unchanged.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 1.34 GiB, downloaded as one set of files."
     },
     {
       "id": "fugumt-ja-en-fp32",
@@ -384,7 +384,7 @@
       "languages": [
         "ja"
       ],
-      "notes": "Translates a Japanese transcript into English. It never listens to the audio; it works from the text the Japanese recogniser has already produced, and it reads Japanese only, so it is the translator that runs when that recogniser is picked. The European model above cannot read Japanese, and this one cannot read anything else.\n\nOn clear Japanese read aloud and scored against reference translations, it comes out about six points ahead of the European model on the same sentences, on a hundred-point scale, and loses about four of those points between a perfect transcript and the recogniser's own. Nobody has rated its English by hand.\n\nFree to use for any purpose, including commercial work, as long as the makers are credited and any modified copy of the model is shared under the same licence; Uindosill shows that credit for you.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 361 MiB, downloaded as one set of files."
+      "notes": "Translates a Japanese transcript into English. It never listens to the audio; it works from the text the Japanese recogniser has already produced, and it reads Japanese only, so it is the translator that runs when that recogniser is picked. The European model above cannot read Japanese, and this one cannot read anything else.\n\nTranslating loses the timing of individual words, so the word-by-word subtitle format is not offered on a translated run, the ordinary subtitle formats still are. 361 MiB, downloaded as one set of files."
     },
     {
       "id": "silero-vad-v5.1.2",
@@ -429,7 +429,7 @@
       "license": "Apache-2.0",
       "attributionId": "google-gemma-4-12b-it-qat-gguf",
       "recommended": true,
-      "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\n6.3 GiB to download, and the one to start with. On a laptop with 16 GB of memory it runs entirely on the graphics chip, answers a question in about seventeen seconds, and leaves enough memory free that the rest of the computer stays usable while it does.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
+      "notes": "Answers questions about a finished transcript on the Ask tab. Every claim it makes carries a timestamp you can click to hear the moment it came from.\n\n6.3 GiB to download, and the one to start with. On a laptop with 16 GB of memory it runs entirely on the graphics chip and leaves enough memory free that the rest of the computer stays usable while it does.\n\nThe second file beside it is a small helper that makes answers arrive faster. It is installed automatically and there is nothing to switch on."
     },
     {
       "id": "gemma-4-26b-a4b-it-ud-q4-k-xl",

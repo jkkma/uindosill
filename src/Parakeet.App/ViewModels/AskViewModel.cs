@@ -253,9 +253,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </summary>
     public string? TranscriptNotice =>
         HasTranscript ? null
-        : SelectedRecording is null ? "Choose a recording: the Recordings button above opens the queue. Anything on the Transcribe tab is there, playable straight away."
-        : "This recording has not been transcribed yet. Run it on the Transcribe tab and its words will appear here, "
-          + "each one a place in the recording you can click. It plays either way.";
+        : SelectedRecording is null ? "Choose a recording: the Recordings button above opens the queue."
+        : "This recording has not been transcribed yet. Run it on the Transcribe tab; it plays either way.";
 
     /// <summary>The line the recording is inside right now, or null.</summary>
     public TranscriptLineViewModel? ActiveLine => _activeLine;

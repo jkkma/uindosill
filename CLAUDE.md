@@ -100,6 +100,18 @@ product path skips the check on the CPU, since the CPU is what the reference is,
 `parity.check` through the engine directly; the `webgpu` one is `uindosill translate --backend
 webgpu`, which is silent when it passes and warns when it does not.
 
+**Every description the window draws fits in two lines**, at the window's default width and at its
+minimum — every page but the Models tab, whose catalogue notes are long on purpose — and nothing in
+the suite can check it: `Parakeet.App.Tests` runs on the default headless host, whose text shaper
+is a stub. `tools/measure-lines` opens the window on a Skia host and counts the rendered lines of
+every wrapped block on every other page, the About window included, and exits with the number that
+overflow, each named with its page and its count at both widths. **Run it after any change to
+`src/Parakeet.App/Views/` and after any change to `src/Parakeet.App/ViewModels/`:**
+
+```bash
+dotnet run --project tools/measure-lines -c Release   # exit code is the number of blocks over two lines
+```
+
 **A session here can compile and run the tests.** Do not assume otherwise and hand the maintainer
 unverified code — an earlier handoff said the sandbox had no SDK, and acting on that would have
 shipped a red build.

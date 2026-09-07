@@ -83,17 +83,20 @@ public class CudaPackSettingsTests
     }
 
     [Fact]
-    public void TheExplanationNamesTheDownloadAndSaysWhatIsUnmeasured()
+    public void TheExplanationMakesNoSpeedOrAccuracyClaim()
     {
         var viewModel = NewViewModel();
 
         var text = viewModel.CudaPackExplanation;
 
-        // Whichever state the machine is in, the block must not claim an accuracy result. The
-        // 13x is a speed figure and the identical labels are an equivalence check; no DER has been
-        // scored on any route, and the copy says so rather than implying the labels are better.
-        Assert.Contains("13 times faster", text, StringComparison.Ordinal);
-        Assert.Contains("same speakers", text, StringComparison.Ordinal);
+        // Until 2026-09-06 this held the block to the opposite: that it quoted the 13x speed
+        // figure and the same-speakers equivalence, hedged as one recording. The maintainer took
+        // every measurement figure off the Settings page that day, so what the block must do now
+        // is describe the option without claiming a result — no DER has been scored on any route,
+        // and a copy that names no figure has nothing to hedge. The figures stay in
+        // docs/UNPROVEN.md.
+        Assert.Contains("NVIDIA card", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("faster", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("more accurate", text, StringComparison.OrdinalIgnoreCase);
     }
 

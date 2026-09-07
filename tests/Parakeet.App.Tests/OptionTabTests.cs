@@ -192,14 +192,16 @@ public class OptionTabTests
             .Select(t => t.Text!)
             .ToList();
 
-        Assert.Contains(warning, t => t.Contains("unless you know what they do", StringComparison.Ordinal));
+        var banner = Assert.Single(warning, t => t.Contains("unless you know what they do", StringComparison.Ordinal));
 
-        // And that it does not overclaim in the other direction: the defaults were measured, most
-        // alternatives were not, and the copy says exactly that rather than "these are dangerous"
-        // — or the blanket "none of the alternatives has been", which the same page contradicted
-        // three paragraphs later for the measured ones.
-        Assert.Contains(warning, t => t.Contains("Every default here was measured", StringComparison.Ordinal));
-        Assert.Contains(warning, t => t.Contains("Most alternatives have not been", StringComparison.Ordinal));
+        // Until 2026-09-06 the banner also said which side had been measured — "Every default here
+        // was measured. Most alternatives have not been" — and two asserts held it there. The
+        // maintainer took every measurement statement off the Settings page that day, so the
+        // banner now says what the controls change and what a wrong choice costs, and nothing
+        // about who measured what. What it must still not do is overclaim in either direction:
+        // no "dangerous", and no measurement claim that the page no longer backs.
+        Assert.DoesNotContain("dangerous", banner, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("measured", banner, StringComparison.OrdinalIgnoreCase);
     }
 
     [AvaloniaFact]

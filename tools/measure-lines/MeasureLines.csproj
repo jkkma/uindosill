@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The ruler for the window's copy: every wrapped description the window draws must fit in two
+    lines, at the window's default width and at its minimum, except on the Models tab, whose
+    catalogue notes are long on purpose and are not measured. Nothing in the test suite can check
+    that, because Parakeet.App.Tests runs on the default headless host, whose text shaper is a
+    stub with made-up glyph advances. This opens the same window on a Skia-backed headless host,
+    so the lines are counted with the embedded typefaces, and exits with the number of blocks
+    that overflow. Not in Uindosill.slnx and not run by CI: run it by hand after any change to
+    the window's copy, as CLAUDE.md says.
+
+      dotnet run (with the project flag) tools/measure-lines, in Release; CLAUDE.md has the line.
+
+    It inherits Directory.Build.props and Directory.Packages.props from the repository root like
+    every other project; Avalonia.Skia comes transitively through Parakeet.App.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Uindosill.Tools.MeasureLines</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+    <ProjectReference Include="../../src/Parakeet.App/Parakeet.App.csproj" />
+  </ItemGroup>
+
+</Project>

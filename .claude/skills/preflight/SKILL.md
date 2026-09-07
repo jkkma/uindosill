@@ -50,7 +50,7 @@ the output is captured whole.
    ```bash
    tr -s '[:space:]' ' ' < CLAUDE.md | grep -oiE 'after any change to( [a-z]+){0,4} `[^`]+`'
    ```
-   (five paths on 2026-09-03). Compare that list with the `case` patterns in the hook; the hook's
+   (five paths on 2026-09-03; seven on 2026-09-06, when the window's two-line ruler added two). Compare that list with the `case` patterns in the hook; the hook's
    `tests/` and `.ps1` cases answer other sentences in the same section, so check those sentences
    are still there too. A path named in one and not the other is a finding, and the direction says
    which file needs the line.

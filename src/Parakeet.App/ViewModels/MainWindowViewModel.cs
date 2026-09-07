@@ -897,69 +897,53 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // `SpeakerGraphsInstalled` the same file check the graphics row uses, so the texts
             // cannot disagree about what is on this machine.
             //
-            // No option is recommended over another on accuracy, because no DER exists for any of
-            // them: the routes were measured against each other and agreed, which is an
-            // equivalence rather than an accuracy. **That caveat used to be a sentence on screen —
-            // "nothing here has been measured for accuracy on any option" — and it was this
-            // project talking to itself.** A reader choosing a setting cannot act on it, and it
-            // cost a third of the space this panel has. `docs/UNPROVEN.md` is where it belongs and
-            // where it stayed.
+            // The accuracy sentence that stood here — "nothing here has been measured for accuracy
+            // on any option" — and the equivalence sentences below it left on 2026-09-06 at the
+            // maintainer's request, with every other measurement figure on the Settings page. The
+            // copy says what each option does and makes no speed or accuracy claim, so there is
+            // nothing to hedge; the measurements themselves stay in docs/UNPROVEN.md.
             var text = IsCudaPackInstalled
-                ? "Automatic uses your NVIDIA card, and your processor if the card cannot be used."
+                ? "Automatic is your NVIDIA card through the graphics pack, or your processor if "
+                    + "that fails."
                 : SpeakerGraphsInstalled
-                    ? "Automatic uses your graphics card, and your processor if it cannot be used."
-                    : "Automatic uses your processor, and your graphics card once its one-time "
-                        + "preparation is done.";
+                    ? "Automatic is your graphics card, or your processor if that fails."
+                    : "Automatic is your processor until the graphics preparation is done, then "
+                        + "your graphics card.";
 
             if (offered.Contains("webgpu"))
             {
-                // **The sentence here promised the opposite until 2026-08-28**, and it was
-                // Sortformer's: "it groups voices slightly differently, so the labels will not
-                // match". On the pipeline that ships, the two routes were measured against each
-                // other on a five-minute recording and produced the same turns to the millisecond
-                // with the same speakers, so that warning described a model nobody is choosing.
-                // One recording is not a promise, which is why this says "on what has been tried".
-                //
-                // It is compared against *the processor* rather than against automatic, which is
-                // what it said until 2026-08-28. Automatic is now this same route once the graphs
-                // exist, and a sentence comparing a thing to itself tells a reader nothing.
-                text += " Graphics (WebGPU) finishes sooner.";
+                // **This sentence has made three different claims.** Until 2026-08-28 it was
+                // Sortformer's warning that the labels would not match; from that day it reported
+                // the shipping pipeline's equivalence run — the same turns to the millisecond on a
+                // five-minute recording — hedged as "on what has been tried"; since 2026-09-06 it
+                // says only what the option does, on the terms in the note above.
+                text += " Graphics (WebGPU) uses your graphics card";
 
                 // Only offered as future work when there is work left: after the preparation this
                 // row costs nothing to choose, and telling somebody it takes a minute when it does
                 // not is the kind of small untruth that makes the rest of the panel less believed.
                 text += SpeakerGraphsInstalled
-                    ? string.Empty
-                    : " Preparing it takes about a minute and starts when you choose it.";
-
-                if (IsPreparingSpeakerGraphs)
-                {
-                    text += " Preparing it now.";
-                }
+                    ? "."
+                    : " after a one-time preparation.";
             }
 
             if (offered.Contains("cuda"))
             {
-                // **"Has not been checked" stood here until it stopped being true.** The check is
-                // docs/UNPROVEN.md's 2026-08-28 equivalence entry: six runs of the shipping
-                // pipeline on a ten-minute recording, processor against CUDA, every RTTM
-                // byte-identical — the same measurement the General tab's pack block quotes. One
-                // recording is not a promise, which is why this is the WebGPU sentence's hedge
-                // and not a guarantee.
-                text += " CUDA needs an NVIDIA card.";
+                // **"Has not been checked" stood here until it stopped being true**, and the
+                // 2026-08-28 equivalence run that replaced it — six runs on a ten-minute recording,
+                // processor against CUDA, every RTTM byte-identical, docs/UNPROVEN.md — left the
+                // copy on 2026-09-06 with the rest of the page's measurements. The entry is still
+                // the record; the sentence just no longer quotes it.
+                text += " CUDA needs an NVIDIA card; choosing it without one says so.";
             }
 
-            // **No availability claim, because this list no longer makes one.** While the diariser
-            // was an ONNX graph the rows were filtered by what ONNX Runtime had registered, and the
-            // two sentences that stood here reported that filter's state. `DiariserRunsInTorch` is
-            // unconditionally true since 2026-08-27, so `DiarisationProviders` returns a fixed
-            // torch device list and the probe's answer is never applied — saying "only what this
-            // machine can run is listed" would be asserting a check that does not happen. CUDA is
-            // offered whether or not this torch build has it, and naming it is how somebody finds
-            // out.
-            text += " Choosing one this computer cannot use will say so.";
-
-            return text + " Takes effect at your next recording.";
+            // **No availability claim, because this list makes none.** `DiariserRunsInTorch` is
+            // unconditionally true since 2026-08-27, so `DiarisationProviders` is a fixed torch
+            // device list and the probe's answer is never applied; CUDA is offered whether or not
+            // this torch build has it, which is what the CUDA sentence above says. "Takes effect at
+            // your next recording" left on 2026-09-06 for the Advanced banner, which says it once
+            // for the whole page — two lines per description, measured by tools/measure-lines.
+            return text;
         }
     }
 
@@ -968,8 +952,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // control now applies to the pyannote pipeline, on which neither has been measured — so both
     // sentences left rather than being re-pointed at a model they were never about.
     public string DiarisationBatchSizeExplanation =>
-        "A memory setting, not a speed one: lower it if labelling a long recording runs the "
-        + "machine out of memory. Takes effect at your next recording.";
+        // The identifiers are not repeated here: upstream's 2026-09-06 pass moved them to the
+        // reference line under this control, and a description that repeats the line beneath it
+        // spends one of its two lines saying nothing new.
+        "Fewer windows need less memory, worth choosing if a long recording runs the machine "
+        + "out of it; unset keeps the checkpoint's value.";
 
     // ---- The CUDA pack ------------------------------------------------------------------------
     //
@@ -1018,8 +1005,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (IsCudaPackInstalled)
             {
-                return "Speaker labelling runs on your NVIDIA card: about 13 times faster than the "
-                    + "processor, and the same speakers and boundaries.";
+                return "Speaker labelling runs on your NVIDIA card.";
             }
 
             var manifest = CudaPackManifestOrNull;
@@ -1031,9 +1017,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var download = ByteSize.Describe(manifest.TotalDownloadBytes);
             var disk = ByteSize.Describe(manifest.UnpackedBytes);
 
-            var text = $"Speaker labelling can run on your NVIDIA card: about 13 times faster than "
-                + $"the processor, and the same speakers. Needs a {download} download and about "
-                + $"{disk} on disk, once.";
+            var text = $"Speaker labelling can run on your NVIDIA card: a one-time {download} "
+                + $"download, about {disk} on disk.";
 
             if (!manifest.Verified)
             {

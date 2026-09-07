@@ -61,17 +61,13 @@ public sealed partial class AboutViewModel : ObservableObject
     /// download.
     /// </remarks>
     public string Summary =>
-        "Uindosill turns recordings into text on this machine. The audio, the transcript and the " +
-        "models all stay on your own disk: nothing is uploaded, and no account is needed to " +
-        "transcribe. One optional download — the speaker labelling model — is gated by its maker " +
-        "and needs a free Hugging Face account; everything else fetches without one.";
+        "Uindosill turns recordings into text on this machine. The audio, transcripts and models " +
+        "stay on your own disk, and no account is needed to transcribe.";
 
     /// <inheritdoc cref="Summary" />
     public string NetworkNote =>
-        "The only thing this application does on the network without being asked is check once at " +
-        "launch whether a newer version exists, and that can be switched off on the Updates tab. " +
-        "Everything else that reaches the network: downloading a model, fetching a link, you " +
-        "start yourself.";
+        "Without being asked, this application only checks once at launch for a newer version, " +
+        "which the Updates tab can switch off. Every other download you start yourself.";
 
     /// <summary>
     /// The full notice package, shown in the application because the licences require it to be

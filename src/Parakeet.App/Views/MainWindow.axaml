@@ -1173,7 +1173,7 @@
             <Separator />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
-                       Text="That check is the only thing this application does on the network without being asked. It is one HTTPS request to this project's GitHub releases page, it sends nothing about you or your files, and it downloads nothing until you press the button above. Everything else that reaches the network, downloading a model, you start yourself." />
+                       Text="That launch check is one HTTPS request to this project's GitHub releases page; it sends nothing about you and downloads nothing until you press the button above." />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
                        Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose, so an update never touches them. Uninstalling asks before it removes them." />
@@ -1616,10 +1616,11 @@
                        maintainer's plan): local-only and transient — two promises about what this
                        panel does not do. The third promise that used to sit beside them, that the
                        model never attributes speech, was withdrawn on 2026-08-30: AnswerPromptBuilder
-                       now labels the evidence and tells the model to use the transcript's names, so
-                       the sentence says what happens instead. -->
+                       now labels the evidence and tells the model to use the transcript's names. The
+                       sentence that said so left on 2026-09-06, when every description the window
+                       draws was cut to two lines; tools/measure-lines is the ruler. -->
                   <TextBlock Classes="fine secondary" TextWrapping="Wrap"
-                             Text="Answers arrive as short bullets, each carrying the moment it came from, a timestamp you click to hear it, so every claim is one press from being checked. Everything runs on this computer; the conversation is not saved, so copy an answer to keep it. When the transcript names speakers, answers say who said what using those names — the labels the diariser gave them, or the names you have typed over them." />
+                             Text="Short bullets, each with a timestamp you click to check it. Everything runs here; nothing is saved." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -2080,7 +2081,7 @@
                           VerticalAlignment="Center"
                           IsChecked="{Binding AskThinking}" />
                 <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
-                           Text="The model works through the question privately before it answers. Answers are often more thorough and take noticeably longer. Takes effect at your next question." />
+                           Text="The model reasons privately before answering, which takes longer. Takes effect at your next question." />
               </DockPanel>
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Model" Classes="secondary" VerticalAlignment="Center" />
@@ -2102,7 +2103,7 @@
               <TextBlock Text="ABOUT" Classes="section" />
               <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                          HorizontalAlignment="Left" LineHeight="20"
-                         Text="Which build this is, the licences and notices that come with the models and the components it is built from, and the machine facts a bug report asks for." />
+                         Text="This build, the licences and notices for its models and components, and the machine facts a bug report asks for." />
               <Button Name="ShowAbout" Classes="onPage" Content="About Uindosill"
                       HorizontalAlignment="Left" />
             </StackPanel>
@@ -2127,7 +2128,7 @@
                             Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
                             Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
                       <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="560"
-                                 Text="Leave these alone unless you know what they do: a wrong choice can make transcripts worse or stop a model loading. Every default here was measured. Most alternatives have not been." />
+                                 Text="Leave these alone unless you know what they do: a wrong choice makes transcripts worse or stops a model loading, not always visibly. Changes apply from the next recording or question." />
                     </StackPanel>
                   </Border>
 
@@ -2170,7 +2171,7 @@
                    paragraph nobody can act on. -->
               <TextBlock Name="SegmentationNote" Classes="fine meta" MaxWidth="640"
                          HorizontalAlignment="Left"
-                         Text="Every recording is cut into segments of at most 30 seconds before it is decoded, because the recogniser loses accuracy on longer stretches. A cap above 30 has no effect." />
+                         Text="Recordings are cut into segments of at most 30 seconds before decoding, because the recogniser loses accuracy on longer stretches. A cap above 30 has no effect." />
             </StackPanel>
 
             <!-- There is no spoken-language picker on this page, and that is a decision rather than
@@ -2260,7 +2261,7 @@
                           SelectedItem="{Binding SelectedAskEvidence}" MinWidth="240" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="How much of the transcript each question searches. Searching more takes longer — roughly twice as long — and may find passages a narrower search misses." />
+                         Text="How much of the transcript is searched per question. Searching more takes longer." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
