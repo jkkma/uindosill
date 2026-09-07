@@ -8464,7 +8464,17 @@ anything. It was read as a hang by the person driving it, who had written the de
 morning. A full download would have shown a moving bar for the whole of its five-times-longer
 transfer, so **shipping deltas made the update cheaper in bytes and worse to watch**, and the
 release workflow's comment calling a missing delta "a slow update" has it backwards on wall clock.
-Nothing has been changed about this yet.
+
+**Changed the same evening, in the wording rather than the mechanism** (`docs/PHASES.md` § *Fixed
+2026-09-06, later*). The Updates tab now names both halves before either starts — that the
+download is quick, and that rebuilding it from the installed copy afterwards takes a few minutes
+during which the bar barely moves — so a still bar reads as the slow half rather than as a
+failure. The download, the rebuild and the restart are the same calls in the same order. **Half of
+the wait is still unreported and cannot be reported from here**: the extraction after the restart
+runs under Velopack's own UI, in a process this application does not own. And **the new line has
+been read by a test rather than by a person watching a real delta land** — `UpdateTests` holds the
+download open and asserts what the window says while it runs, which is the only moment that line
+is on screen, and no update has been driven since the wording changed.
 
 Two warnings in Velopack's log, neither of which stopped it: `Failed to wait for process (27596) to
 exit (Acceso denegado…). Continuing...`, and three of `Skipping killing self`. The first is the
@@ -8482,7 +8492,13 @@ holds the seeded packages as well as the new ones, so the asset glob `UindosillD
 matched rc.12's two full packages and rc.13 published them alongside its own — **2,748,837,493 bytes
 of a release re-uploading its predecessor**, which is a fifth of every byte this repository's
 releases hold. The glob now carries the version and was checked against the exact filenames that run
-produced: ten assets selected, none of them the previous version's. rc.13's own copies were left in
-place rather than deleted, so that release stays 2.56 GiB larger than it needs to be; deleting them
-is safe — the update feeds name files by version — but it is the maintainer's call and their account
-that has write access.
+produced: ten assets selected, none of them the previous version's.
+
+**The duplicates are off the release, and the correction is worth stating precisely because the two
+halves of it were established differently.** That they were published is read from the run's own
+log, which lists twelve assets selected and uploaded with rc.12's two full packages among them, and
+from the `gh release create` that followed printing the release URL rather than an error. That they
+are gone is read from the release itself on 2026-09-07: ten assets, none of them the previous
+version's, every one uploaded inside the two minutes the publish step ran. rc.12's own release is
+untouched at its eight. **Who removed them and when is not recorded here** — nothing in the
+workflow deletes a release asset, so it was done by hand between the publish and that reading.
