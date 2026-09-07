@@ -1137,3 +1137,12 @@ flag whose default excludes the only kind of release a project makes will read a
 correctly for as long as nobody looks at the assets. Measured 2026-09-06 against the pinned vpk
 1.2.0 on this repository: without `--pre`, 0 releases found and no files written; with it, 3 found
 and the download starts.
+
+**Fixing it broke the step downstream, which is the part worth remembering.** The seeded packages
+land in the same directory the new ones are built into, so the publish step's
+`UindosillDesktop-*-full.nupkg` — right for every release until then, because that directory had
+only ever held one version — began matching the *previous* release as well. `v1.0.0-rc.13`
+published rc.12's two full packages beside its own, 2,748,837,493 bytes of duplication, on the
+first green run after the seed was repaired. A glob over a shared directory is a bet that nothing
+else will ever be written there, and repairing an upstream step is exactly the thing that changes
+what is written there. The nupkg globs carry the version now.

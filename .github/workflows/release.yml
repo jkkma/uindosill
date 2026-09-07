@@ -281,6 +281,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event_name == 'push' && github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
           DRAFT: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
@@ -289,11 +290,18 @@ jobs:
 
           # nullglob, because the delta glob matches nothing on the very first release and an
           # unexpanded pattern would reach gh as a literal filename and fail the publish.
+          #
+          # **The nupkg globs carry the version, and that became load-bearing on 2026-09-06.** This
+          # directory holds the packages vpk was seeded with as well as the ones just built, so a
+          # bare `UindosillDesktop-*-full.nupkg` matches the *previous* release's packages too:
+          # `v1.0.0-rc.13` published rc.12's two full packages alongside its own, 2,748,837,493
+          # bytes of a release re-uploading its predecessor. It could not happen before the seeding
+          # step began finding anything, which is the same day. One version covers both channels and
+          # both kinds — Velopack names them `<id>-<version>[-<channel>]-<full|delta>.nupkg`.
           shopt -s nullglob
           assets=(
             UindosillDesktop-*-Setup.exe
-            UindosillDesktop-*-full.nupkg
-            UindosillDesktop-*-delta.nupkg
+            UindosillDesktop-"$VERSION"-*.nupkg
             releases.win.json
             releases.win-cuda.json
             uindosill-cli-win-x64.zip

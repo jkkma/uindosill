@@ -320,10 +320,17 @@ that is invisible until somebody measures a download.
 > releases found" against a repository holding three. It exits 0 after that, so the step's own
 > `$LASTEXITCODE` guard never fired and the job stayed green. The flag is now passed and the step
 > counts what it downloaded rather than trusting an exit code — measured against the pinned vpk
-> 1.2.0 that day: 0 releases found without it, 3 with it. **What is still unproven is the delta
-> itself**, which needs a release seeded from a previous one; `docs/UNPROVEN.md` § *No release has
-> shipped a delta package* carries it until then. The sentence about being invisible until somebody
-> measures a download was righter than it knew.
+> 1.2.0 that day: 0 releases found without it, 3 with it. The sentence about being invisible until
+> somebody measures a download was righter than it knew.
+>
+> **`v1.0.0-rc.13`, cut the same day, published the first deltas this project has made**: 31,440,212
+> bytes against a 754,205,217-byte full package on the default channel, and 31,442,202 against
+> 1,994,609,299 on `win-cuda` — 24× and 63×. That run also showed the second half of the defect,
+> which only a working seed could expose: the publish step's `UindosillDesktop-*-full.nupkg` matched
+> the packages vpk had just been seeded *with*, so rc.13 published rc.12's two full packages beside
+> its own, 2,748,837,493 bytes of it. The glob carries the version now. `docs/UNPROVEN.md` § *No
+> release has shipped a delta package* has both measurements and the one thing still untested, which
+> is whether `Update.exe` applies a published delta on a user's machine.
 
 The whole workflow was rehearsed twice on 2026-08-19 through a `workflow_dispatch` draft, and it
 went green both times — `docs/UNPROVEN.md` has what those runs established and the one step they
