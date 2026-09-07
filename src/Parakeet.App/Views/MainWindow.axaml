@@ -1949,7 +1949,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="Everyday choices are on General. Advanced changes how the work is done, and names each setting underneath it. Speaker labels and translation are on the Transcribe tab." />
+                       Text="Everyday choices are on General. Advanced changes how the work is done. Speaker labels and translation are on the Transcribe tab." />
           </StackPanel>
 
           <!-- Two sub-tabs rather than one long page, added 2026-08-29. The page had grown to
@@ -2164,14 +2164,22 @@
                            IsVisible="{Binding SpeechDetectionHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
               </DockPanel>
 
-              <!-- The ceiling the cap sits under, which is a fact about the recogniser rather than
-                   a setting: the cap above chooses a length up to 60 seconds, and the pipeline cuts
-                   at 30 whatever it says. It followed the cap here from the foot of the Transcribe
-                   tab on 2026-08-23, because an explanation of a control on another page is a
-                   paragraph nobody can act on. -->
+              <!-- **What the two boxes above do, and the ceiling the cap sits under.** It explained
+                   only the ceiling until 2026-09-07, and the section had then no sentence anywhere
+                   in it saying what either box changed: a reader met "Fixed windows instead of
+                   speech detection" and "Neural speech detection" and a note about 30 seconds, and
+                   was left to guess what a cut looked like under either. The three states are one
+                   sentence — fixed windows load no detector at all, and without them the box picks
+                   the neural detector over the plain gate.
+
+                   The ceiling is a fact about the recogniser rather than a setting: the cap above
+                   chooses a length up to 60 seconds, and the pipeline cuts at 30 whatever it says.
+                   It followed the cap here from the foot of the Transcribe tab on 2026-08-23,
+                   because an explanation of a control on another page is a paragraph nobody can
+                   act on. -->
               <TextBlock Name="SegmentationNote" Classes="fine meta" MaxWidth="640"
                          HorizontalAlignment="Left"
-                         Text="Recordings are cut into segments of at most 30 seconds before decoding, because the recogniser loses accuracy on longer stretches. A cap above 30 has no effect." />
+                         Text="Speech detection cuts where the talking stops; fixed windows cut on the clock instead. Either way a segment is at most 30 seconds, so a cap above that has no effect." />
             </StackPanel>
 
             <!-- There is no spoken-language picker on this page, and that is a decision rather than
@@ -2187,8 +2195,12 @@
                  It would not have been a translation control either way: the translator behind
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
+              <!-- **All that is left of the reference line.** The identifiers went on 2026-09-07
+                   with the other three; this did not go with them, because it is the one thing
+                   about these three controls that a reader cannot discover without first losing a
+                   setting to it. Said now in the page's English rather than beside a list of keys. -->
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="UseFixedWindows, MaxSegmentSeconds, UseNeuralSpeechDetection · Silero VAD finds the speech · not written to settings.json, so they reset when the window closes." />
+                         Text="These three are not saved, and go back to their defaults when the window closes." />
                   </StackPanel>
 
             <Separator />
@@ -2205,14 +2217,12 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
-              <!-- **The reference line, and why it is a line rather than a paragraph.** Advanced
-                   exists so somebody can find the thing they are about to type somewhere else —
-                   the settings-file key, the command-line flag — which is why the controls above
-                   read as English and this names the identifiers underneath. It used to be four
-                   sentences of prose about torch devices and ONNX Runtime providers, which cost
-                   the page more room than the setting it explained. Same facts, one line. -->
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationProvider · auto, cpu, cuda, webgpu, dml · --backend on uindosill diarise" />
+              <!-- **The reference lines went on 2026-09-07**, at the maintainer's request. Advanced
+                   had named every control twice — once in English above it, once as the
+                   settings-file key, the CLI flag and the library name on a grey line beneath —
+                   and the second naming is what made the page read as jargon over prose. A reader
+                   here is changing a setting, not about to type its key somewhere else. The
+                   page's opening sentence promised them and was corrected with them. -->
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting
@@ -2234,8 +2244,6 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationBatchSizeExplanation}" />
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="diarisationBatchSize · pyannote's segmentation_batch_size and embedding_batch_size, set together" />
             </StackPanel>
 
             <Separator />
@@ -2274,8 +2282,6 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
-              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="askMode · askEvidence · askExpertPlacement" />
             </StackPanel>
 
                 </StackPanel>

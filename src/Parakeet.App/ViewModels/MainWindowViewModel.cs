@@ -726,10 +726,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            // "or the largest" is a fallback and not a gloss on the recommendation, which the
-            // comma alone let it read as: the catalogue recommends a specific entry, and the
-            // largest file is only what happens when that entry is not installed.
-            var rows = new List<AskModelChoice> { new(null, "The recommended model, or the largest if it is missing") };
+            // **The fallback is deliberately not in the label**, since 2026-09-07. This row still
+            // takes the largest file when the recommended entry is not installed; spelling that
+            // out made the row wider than the control holding it, to describe a case a reader
+            // meets only when a download is missing -- and the Models tab is where that shows.
+            var rows = new List<AskModelChoice> { new(null, "The recommended model") };
             if (_llamaAnswerEngines is { } provider)
             {
                 rows.AddRange(provider.AvailableModelFileNames().Select(name => new AskModelChoice(name, name)));
@@ -759,9 +760,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         "Which model answers your questions. Bigger is not always slower. Used from your next "
         + "question.";
 
+    // Named for the row rather than for the enum behind it. This said "Automatic" until
+    // 2026-09-07, which is the spelling of `AskModePreference.Automatic` and of nothing the
+    // reader can see: the row above it reads "Decide from my question", so the description
+    // explained a word that appears nowhere on the page.
     public string AskModeExplanation =>
-        "Automatic reads the whole transcript for summaries and searches only the parts that "
-        + "match for everything else, which is faster.";
+        "Deciding from your question reads the whole transcript for summaries and the matching "
+        + "parts for everything else, which is faster.";
 
     // **What this used to say was true and unusable**: `--cpu-moe`, expert tensors, 13.4 of
     // 15.8 GiB, 22.4 tok/s on CUDA. Every figure in it was measured and none of it told the
@@ -769,7 +774,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // looking for them can find them and the panel does not have to carry them.
     public string AskExpertPlacementExplanation =>
         "Where a large model keeps its bulk: your graphics card is faster, system memory holds "
-        + "more. Automatic decides. Used from your next question.";
+        + "more. Used from your next question.";
 
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
@@ -952,11 +957,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // control now applies to the pyannote pipeline, on which neither has been measured — so both
     // sentences left rather than being re-pointed at a model they were never about.
     public string DiarisationBatchSizeExplanation =>
-        // The identifiers are not repeated here: upstream's 2026-09-06 pass moved them to the
-        // reference line under this control, and a description that repeats the line beneath it
-        // spends one of its two lines saying nothing new.
+        // No identifiers here. They sat on a reference line under this control until
+        // 2026-09-07, when every such line left the page; a description that spends one of its
+        // two lines on `segmentation_batch_size` is not explaining the control to the person
+        // changing it.
         "Fewer windows need less memory, worth choosing if a long recording runs the machine "
-        + "out of it; unset keeps the checkpoint's value.";
+        + "out of it; the model's own setting leaves it alone.";
 
     // ---- The CUDA pack ------------------------------------------------------------------------
     //

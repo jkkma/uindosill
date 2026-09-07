@@ -205,12 +205,13 @@ public class OptionTabTests
     }
 
     [AvaloniaFact]
-    public void TheAdvancedControlsAreNamedByWhatTheyReallyAre()
+    public void TheAdvancedPageNamesNoIdentifiers()
     {
-        // **The reason Advanced exists rather than being a heading.** A power user needs the
-        // settings key, the CLI flag or the library name — "Run on" is prose, `diarisationProvider`
-        // and `--backend` are what they can act on. Asserted on the ones that map to something a
-        // person can type somewhere else.
+        // **Advanced named every control twice until 2026-09-07**: once in English above it, and
+        // again on a grey line beneath carrying the settings-file key, the CLI flag and the
+        // library name. This test asserted their presence for as long as they were held to be the
+        // reason the page existed. The maintainer took all four lines off that day, so it now
+        // holds the opposite, and holds it against their return.
         var window = Open(Settings, out _);
 
         var subTabs = Drawn<TabControl>(window, "SettingsSubTabs");
@@ -221,15 +222,20 @@ public class OptionTabTests
             .Select(t => t.Text)
             .Where(t => t is { Length: > 0 }));
 
-        Assert.Contains("diarisationProvider", text, StringComparison.Ordinal);
-        Assert.Contains("--backend", text, StringComparison.Ordinal);
-        Assert.Contains("segmentation_batch_size", text, StringComparison.Ordinal);
-        Assert.Contains("Silero VAD", text, StringComparison.Ordinal);
-        Assert.Contains("askExpertPlacement", text, StringComparison.Ordinal);
+        foreach (var identifier in new[]
+        {
+            "diarisationProvider", "diarisationBatchSize", "askExpertPlacement", "--backend",
+            "segmentation_batch_size", "embedding_batch_size", "UseFixedWindows",
+            "MaxSegmentSeconds", "UseNeuralSpeechDetection", "settings.json",
+        })
+        {
+            Assert.DoesNotContain(identifier, text, StringComparison.Ordinal);
+        }
 
-        // The one fact about these three that is easy to get wrong and expensive to discover: they
-        // are not written to the settings file at all.
-        Assert.Contains("not written to settings.json", text, StringComparison.Ordinal);
+        // What did not go with them, and why this still asserts something rather than nothing:
+        // losing an Advanced setting to a window close is easy to do and expensive to discover,
+        // so the page says so in its own English.
+        Assert.Contains("go back to their defaults when the window closes", text, StringComparison.Ordinal);
     }
 
     /// <summary>
