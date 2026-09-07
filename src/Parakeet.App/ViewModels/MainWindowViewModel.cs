@@ -756,22 +756,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public string AskModelExplanation =>
-        "Which model answers your questions. Bigger is not always slower, a mixture-of-experts "
-        + "model can answer faster than a smaller dense one. Whichever you pick is used from your "
-        + "next question.";
+        "Which model answers your questions. Bigger is not always slower. Used from your next "
+        + "question.";
 
     public string AskModeExplanation =>
-        "The router. Automatic sends summaries and \"main topics\" to the whole transcript and "
-        + "everything else to the parts that matched, which is faster. A long transcript is "
-        + "covered by an even sample of it, and the answer says so.";
+        "Automatic reads the whole transcript for summaries and searches only the parts that "
+        + "match for everything else, which is faster.";
 
+    // **What this used to say was true and unusable**: `--cpu-moe`, expert tensors, 13.4 of
+    // 15.8 GiB, 22.4 tok/s on CUDA. Every figure in it was measured and none of it told the
+    // person reading it which row to pick. The numbers are in `docs/UNPROVEN.md`, where somebody
+    // looking for them can find them and the panel does not have to carry them.
     public string AskExpertPlacementExplanation =>
-        "Sets --cpu-moe on the llama-server child: whether a mixture-of-experts model's expert "
-        + "tensors are held in system memory instead of on the card. The 26B-A4B is 85% experts, "
-        + "so this moves 13.4 of its 15.8 GiB. Automatic uses a fit rule on Vulkan only; on CUDA "
-        + "it leaves placement to the loader, measured holding that model at 22.4 tok/s with "
-        + "nothing offloaded. Dense models are unaffected, and none of it applies on the CPU "
-        + "backend. Used from your next question.";
+        "Where a large model keeps its bulk: your graphics card is faster, system memory holds "
+        + "more. Automatic decides. Used from your next question.";
 
     public string BackendExplanation =>
         "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
@@ -899,21 +897,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // `SpeakerGraphsInstalled` the same file check the graphics row uses, so the texts
             // cannot disagree about what is on this machine.
             //
-            // "measured for accuracy" rather than "measured": the routes *were* measured against
-            // each other and agreed, which is an equivalence and not an accuracy. No DER exists
-            // for any of them, so none can be recommended over another on accuracy.
+            // No option is recommended over another on accuracy, because no DER exists for any of
+            // them: the routes were measured against each other and agreed, which is an
+            // equivalence rather than an accuracy. **That caveat used to be a sentence on screen —
+            // "nothing here has been measured for accuracy on any option" — and it was this
+            // project talking to itself.** A reader choosing a setting cannot act on it, and it
+            // cost a third of the space this panel has. `docs/UNPROVEN.md` is where it belongs and
+            // where it stayed.
             var text = IsCudaPackInstalled
-                ? "Automatic is your NVIDIA card, through the graphics pack installed on the "
-                    + "General tab — the Graphics (WebGPU) preparation is separate and not needed "
-                    + "for it. It uses your processor instead if the card turns out not to work. "
-                    + "Nothing here has been measured for accuracy on any option."
+                ? "Automatic uses your NVIDIA card, and your processor if the card cannot be used."
                 : SpeakerGraphsInstalled
-                    ? "Automatic is your graphics card, now that its one-time preparation has been "
-                        + "done. It uses your processor instead if the card turns out not to work. "
-                        + "Nothing here has been measured for accuracy on any option."
-                    : "Automatic is your processor. It becomes your graphics card once the one-time "
-                        + "preparation has been done, and goes back to the processor if the card turns "
-                        + "out not to work. Nothing here has been measured for accuracy on any option.";
+                    ? "Automatic uses your graphics card, and your processor if it cannot be used."
+                    : "Automatic uses your processor, and your graphics card once its one-time "
+                        + "preparation is done.";
 
             if (offered.Contains("webgpu"))
             {
@@ -927,17 +923,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // It is compared against *the processor* rather than against automatic, which is
                 // what it said until 2026-08-28. Automatic is now this same route once the graphs
                 // exist, and a sentence comparing a thing to itself tells a reader nothing.
-                text += " Graphics (WebGPU) does the heavy part on your graphics card and finishes "
-                    + "sooner. On what has been tried it gave the same speakers and the same times "
-                    + "as the processor.";
+                text += " Graphics (WebGPU) finishes sooner.";
 
                 // Only offered as future work when there is work left: after the preparation this
                 // row costs nothing to choose, and telling somebody it takes a minute when it does
                 // not is the kind of small untruth that makes the rest of the panel less believed.
                 text += SpeakerGraphsInstalled
-                    ? " Its one-time preparation has been done."
-                    : " It needs a one-time preparation, which starts when you choose it and takes "
-                        + "about a minute.";
+                    ? string.Empty
+                    : " Preparing it takes about a minute and starts when you choose it.";
 
                 if (IsPreparingSpeakerGraphs)
                 {
@@ -953,8 +946,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // byte-identical — the same measurement the General tab's pack block quotes. One
                 // recording is not a promise, which is why this is the WebGPU sentence's hedge
                 // and not a guarantee.
-                text += " CUDA runs on an NVIDIA card. On the one recording tried it gave the same "
-                    + "speakers and the same times as the processor.";
+                text += " CUDA needs an NVIDIA card.";
             }
 
             // **No availability claim, because this list no longer makes one.** While the diariser
@@ -965,8 +957,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // machine can run is listed" would be asserting a check that does not happen. CUDA is
             // offered whether or not this torch build has it, and naming it is how somebody finds
             // out.
-            text += " CUDA is offered whether or not this computer has it; choosing it will say so "
-                + "if it cannot be used.";
+            text += " Choosing one this computer cannot use will say so.";
 
             return text + " Takes effect at your next recording.";
         }
@@ -977,11 +968,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // control now applies to the pyannote pipeline, on which neither has been measured — so both
     // sentences left rather than being re-pointed at a model they were never about.
     public string DiarisationBatchSizeExplanation =>
-        "pyannote's segmentation_batch_size and embedding_batch_size, set together — a memory "
-        + "setting, not a speed one. Fewer windows need less memory, which is worth choosing if "
-        + "labelling a long recording runs the machine out of it. Unset leaves the checkpoint's "
-        + "own value. Neither the cost nor whether it changes the labels has been measured. "
-        + "Takes effect at your next recording.";
+        "A memory setting, not a speed one: lower it if labelling a long recording runs the "
+        + "machine out of memory. Takes effect at your next recording.";
 
     // ---- The CUDA pack ------------------------------------------------------------------------
     //
@@ -1030,10 +1018,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (IsCudaPackInstalled)
             {
-                return "Speaker labelling runs on your NVIDIA card. Measured on one ten-minute "
-                    + "recording it was about 13 times faster than the processor and produced "
-                    + "exactly the same speakers and boundaries. No accuracy score has been taken "
-                    + "on either.";
+                return "Speaker labelling runs on your NVIDIA card: about 13 times faster than the "
+                    + "processor, and the same speakers and boundaries.";
             }
 
             var manifest = CudaPackManifestOrNull;
@@ -1045,10 +1031,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var download = ByteSize.Describe(manifest.TotalDownloadBytes);
             var disk = ByteSize.Describe(manifest.UnpackedBytes);
 
-            var text = $"Speaker labelling can run on your NVIDIA card. It needs a {download} "
-                + $"download and about {disk} on disk, once. Measured on one ten-minute recording "
-                + "it was about 13 times faster than the processor and produced exactly the same "
-                + "speakers and boundaries.";
+            var text = $"Speaker labelling can run on your NVIDIA card: about 13 times faster than "
+                + $"the processor, and the same speakers. Needs a {download} download and about "
+                + $"{disk} on disk, once.";
 
             if (!manifest.Verified)
             {
@@ -1320,11 +1305,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool CanUpdateTools => !IsUpdatingTools;
 
     public string ToolsExplanation =>
-        "YouTube changes how it serves audio, and yt-dlp changes to keep up, often weekly. This "
-        + "fetches the newest yt-dlp and Deno straight from the people who publish them, checks "
-        + "each one against the fingerprint they publish beside it, and keeps the copy that came "
-        + "with Uindosill untouched underneath. If an update ever goes wrong, the versions that "
-        + "shipped are still there.";
+        "YouTube changes how it serves audio, and these change to keep up. This fetches the newest "
+        + "ones and checks them, keeping the copies Uindosill came with in case anything goes wrong.";
 
     /// <summary>
     /// Checks both tools and installs whichever the publisher has moved on from.

@@ -1948,7 +1948,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="Everyday choices are on General. Advanced holds the knobs that change how the work is actually done, named there by what they really are. Switching speaker labels and translation on is on the Transcribe tab." />
+                       Text="Everyday choices are on General. Advanced changes how the work is done, and names each setting underneath it. Speaker labels and translation are on the Transcribe tab." />
           </StackPanel>
 
           <!-- Two sub-tabs rather than one long page, added 2026-08-29. The page had grown to
@@ -2066,7 +2066,7 @@
                          PlaceholderText="hf_…" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="The speaker labelling model is only handed out to people who have accepted its terms. Accept them on its page at huggingface.co — the Models tab shows the exact name to search for — then create a read-only access token on your Hugging Face account and paste it here. It is stored in your settings file as you typed it, and is sent to huggingface.co and nowhere else. Leave this empty if you are not using that model." />
+                         Text="The speaker labelling model needs a Hugging Face account: accept its terms on its page, then paste a read-only token here. It is stored in your settings file, and sent to huggingface.co only." />
 
               <TextBlock Text="ASKING" Classes="section" Margin="0,8,0,0" />
               <!-- A box, like every other on-or-off setting in this window. It was a ToggleSwitch,
@@ -2127,7 +2127,7 @@
                             Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
                             Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
                       <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="560"
-                                 Text="Leave these alone unless you know what they do. They change how the audio is cut, which arithmetic unit each model runs on, and how much it holds at once. A wrong choice makes transcripts worse or stops a model loading, and the effect is not always visible in the result. Every default here was measured. Most alternatives have not been — where one has, the note under its control says which half of the trade the measurement covers." />
+                                 Text="Leave these alone unless you know what they do: a wrong choice can make transcripts worse or stop a model loading. Every default here was measured. Most alternatives have not been." />
                     </StackPanel>
                   </Border>
 
@@ -2187,7 +2187,7 @@
                  the Transcribe tab's opt-in is many-to-one, told the target and never the
                  source. -->
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="UseFixedWindows, MaxSegmentSeconds and UseNeuralSpeechDetection are the segmentation stage. The detector is Silero VAD through Parakeet.Engine.SileroVad; fixed windows bypass it entirely. These three are not written to settings.json and reset when the window closes." />
+                         Text="UseFixedWindows, MaxSegmentSeconds, UseNeuralSpeechDetection · Silero VAD finds the speech · not written to settings.json, so they reset when the window closes." />
                   </StackPanel>
 
             <Separator />
@@ -2198,14 +2198,20 @@
               <TextBlock Text="SPEAKER LABELS" Classes="section" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="diarisationProvider" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Run labelling on" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding DiarisationProviders}"
                           SelectedItem="{Binding SelectedDiarisationProvider}" MinWidth="200" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationProviderExplanation}" />
+              <!-- **The reference line, and why it is a line rather than a paragraph.** Advanced
+                   exists so somebody can find the thing they are about to type somewhere else —
+                   the settings-file key, the command-line flag — which is why the controls above
+                   read as English and this names the identifiers underneath. It used to be four
+                   sentences of prose about torch devices and ONNX Runtime providers, which cost
+                   the page more room than the setting it explained. Same facts, one line. -->
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="Takes auto, cpu or cuda, which name a torch device; webgpu and dml name ONNX Runtime execution providers and need graphs this window derives. --backend on uindosill diarise. A named provider refuses rather than falling back; auto falls through to the cpu." />
+                         Text="diarisationProvider · auto, cpu, cuda, webgpu, dml · --backend on uindosill diarise" />
               <!-- The graphics option's one-time preparation speaks here: what it is doing while it
                    runs, and what went wrong if it could not. Hidden the rest of the time rather
                    than left as an empty line, because a permanently reserved gap under a setting
@@ -2217,7 +2223,7 @@
                    row's terms: a control that vanishes when a different model is picked reads as a
                    bug, and the reason is one a person can act on from the Models tab. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="diarisationBatchSize" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Memory use" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding DiarisationBatchSizes}"
                           SelectedItem="{Binding SelectedDiarisationBatchSize}" MinWidth="220"
                           IsEnabled="{Binding CanSetDiarisationBatchSize}" />
@@ -2227,6 +2233,8 @@
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding DiarisationBatchSizeExplanation}" />
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="diarisationBatchSize · pyannote's segmentation_batch_size and embedding_batch_size, set together" />
             </StackPanel>
 
             <Separator />
@@ -2236,7 +2244,7 @@
                           x:DataType="vm:MainWindowViewModel">
               <TextBlock Text="ASKING" Classes="section" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="askMode" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="What to search" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskModes}"
                           SelectedItem="{Binding SelectedAskMode}" MinWidth="200" />
               </StackPanel>
@@ -2247,24 +2255,26 @@
                    repeatable, and what it costs in finding the right part of the recording is not
                    yet known. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="askEvidence" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="How much to search" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskEvidenceLevels}"
                           SelectedItem="{Binding SelectedAskEvidence}" MinWidth="240" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="How much of the transcript is searched per question. Searching more takes longer — on a laptop, roughly twice as long. Only half of this trade is measured: the time saved is, what it costs in finding the right passage is not." />
+                         Text="How much of the transcript each question searches. Searching more takes longer — roughly twice as long — and may find passages a narrower search misses." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
                    with memory of its own should be holding them. Automatic asks the loader; the
                    two fixed rows are for a machine it reads wrongly. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="askExpertPlacement" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Where the model sits" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskExpertPlacements}"
                           SelectedItem="{Binding SelectedAskExpertPlacement}" MinWidth="200" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding AskExpertPlacementExplanation}" />
+              <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
+                         Text="askMode · askEvidence · askExpertPlacement" />
             </StackPanel>
 
                 </StackPanel>
