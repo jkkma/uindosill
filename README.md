@@ -243,16 +243,19 @@ Why parakeet.cpp and not the obvious alternatives is recorded in
 
 ## Getting it
 
-**`v1.0.0-rc.3`, published 2026-08-23, is the only release so far** — a Windows installer in two
-flavours, the CLI as a zip beside it, and the bundled Python as a third zip for CLI users.
+**`v1.0.0-rc.13`, published 2026-09-06, is the current release** — a Windows installer in two
+flavours, the CLI as a zip beside it, and the bundled Python as a third zip for CLI users. Every
+release so far is a candidate rather than 1.0 itself, and the update check reads that off the
+running version: a build whose own version carries a prerelease label looks for newer candidates,
+so an installed candidate keeps up with the train it is on, while somebody who installs a stable
+1.0.0 is not offered one.
 
-Installing it found five defects, three of them one packaging fault that had silently removed
-whole features from the build. All are fixed on `master` and held by assertions that open the
-built package and require what it promised. `rc.4` was then tagged twice and failed twice in CI,
-the second time on GitHub's 2 GiB per-asset limit — so on 2026-08-25 the release workflow was run
-in dispatch mode with publishing skipped, which built every asset whole for the first time and
-measured the win-cuda installer at 1.959 GB, clearing the limit by about 180 MiB. Until the next
-candidate, rc.3 is worth installing only to look at it.
+**Updating from one candidate to the next moves about 30 MB rather than the whole application**,
+as of rc.13 — the first release this project has published a delta from. On the default channel
+that is 31,440,212 bytes against a 754,205,217-byte full package, and on `win-cuda` 31,442,202
+against 1,994,609,299. Most of the wait is local rather than network: the download takes seconds
+and rebuilding it against the copy already installed takes minutes, which is what the Updates tab
+says before either starts.
 
 The other two routes: build from source above, or take the `uindosill-win-x64` artefact from any
 CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and

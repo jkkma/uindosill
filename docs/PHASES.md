@@ -328,9 +328,18 @@ that is invisible until somebody measures a download.
 > 1,994,609,299 on `win-cuda` — 24× and 63×. That run also showed the second half of the defect,
 > which only a working seed could expose: the publish step's `UindosillDesktop-*-full.nupkg` matched
 > the packages vpk had just been seeded *with*, so rc.13 published rc.12's two full packages beside
-> its own, 2,748,837,493 bytes of it. The glob carries the version now. `docs/UNPROVEN.md` § *No
-> release has shipped a delta package* has both measurements and the one thing still untested, which
-> is whether `Update.exe` applies a published delta on a user's machine.
+> its own, 2,748,837,493 bytes of it. The glob carries the version now, and the duplicates are no
+> longer on the release.
+>
+> **The one thing those measurements left untested was settled the same evening, and it is the last
+> link in the update chain**: a `v1.0.0-rc.12` install was updated to rc.13 through the
+> application's own Updates tab, from the published release. The 31,440,212-byte delta arrived in
+> seconds, `Update.exe` patched for 169.7 s, rebuilt a full package locally and extracted 55,334
+> files, and the installation came out working on rc.13 with its channel unchanged. So a published
+> delta downloads, patches, assembles and applies on a machine that did not build it. What that run
+> exposed instead was that only the network half of it reports progress, which is *Fixed 2026-09-06,
+> later* below. `docs/UNPROVEN.md` § *No release has shipped a delta package* has every measurement
+> and what none of them covers.
 
 The whole workflow was rehearsed twice on 2026-08-19 through a `workflow_dispatch` draft, and it
 went green both times — `docs/UNPROVEN.md` has what those runs established and the one step they
@@ -7666,3 +7675,74 @@ queue under the Start button they configure, a drop zone that shrinks once the q
 a minimum height measured the way `MinWidth` was — so it is recorded in `docs/UNPROVEN.md` § *The
 window rendered 2026-09-06* and not decided here. Nothing in this section has been looked at on a
 screen; the same entry says what a render does not settle.
+
+### Fixed 2026-09-06, later — the update line names the rebuild, because the half that takes the minutes was the half nothing on screen mentioned
+
+Installing `v1.0.0-rc.13` over `v1.0.0-rc.12` was the first time a published delta had been applied
+anywhere, and what it found was the wording rather than the mechanism. **A delta update is quick to
+fetch and slow to assemble**: 31,440,212 bytes arrived in seconds, and rebuilding them into a whole
+version against the installed copy took 169.7 s, reported as a few per cent of one bar. The pane
+said `Downloading 1.0.0-rc.13…` throughout — so the only thing on screen claimed to be doing
+the one thing that had already finished, and a working update read as a hang.
+
+**Shipping deltas made an update cheaper in bytes and worse to watch**, which is the opposite of
+what the release workflow's own comment assumed when it called a missing delta "a slow update": on
+wall clock it is the full download that shows a moving bar for the whole of its five-times-longer
+transfer.
+
+The line names both halves before either starts now — the download is quick, the rebuild that
+follows takes a few minutes, and the bar barely moves while it does — so a still bar reads as the
+slow half rather than as a failure. **Nothing about the mechanism changed**: the download, the
+rebuild and the restart are the same calls in the same order, and a line that promises less is not
+the same fix as one that reports more.
+
+**Half of the wait cannot be reported from here.** After the restart Velopack extracts the rebuilt
+package under its own UI, in a process this application does not own; naming the rebuild is what
+this application can honestly say about the part of the wait it can see.
+
+One test, and it is held open on purpose: `UpdateTests` gates the fake updater's download so it can
+read what the window is saying *while the download is still running*, which is the only moment that
+line is on screen — the same shape as the `CheckGate` already beside it. `docs/UNPROVEN.md` § *No
+release has shipped a delta package* has the run, both phases timed, and the one thing the wording
+has not been through, which is a person watching a real delta land.
+
+### Polished 2026-09-06, later still — the Settings pages stop being named after the settings file
+
+`diarisationProvider`, `diarisationBatchSize`, `askMode`, `askEvidence` and `askExpertPlacement`
+stood as the labels of the controls they belong to, and the explanation under the first ran seven
+lines: the page read as a settings file with prose wrapped round it. The labels are English now —
+Run labelling on, Memory use, What to search, How much to search, Where the model sits — and no
+description runs past three lines.
+
+**The identifiers did not leave, because they were there for a reason.** `OptionTabTests` states it:
+a power user needs the settings key or the command-line flag, and that is what Advanced is for. They
+are a one-line reference under each control instead of the label above it and four sentences of
+prose below —
+
+    diarisationProvider · auto, cpu, cuda, webgpu, dml · --backend on uindosill diarise
+
+— which is the same information in a tenth of the room, under a label that reads as English.
+
+**What left is this project talking to itself.** "Nothing here has been measured for accuracy on any
+option", "On the one recording tried", `pyannote's segmentation_batch_size and
+embedding_batch_size` as an opening clause, and a placement setting that explained `--cpu-moe`, that
+a 26B-A4B is 85% experts, and that it holds 22.4 tok/s on CUDA. Every word of it was true and none
+of it helped somebody choose a row from a list; `docs/UNPROVEN.md` keeps the figures, which is where
+a figure belongs.
+
+**Two things the suite caught being cut too far, and it was right both times.** The CUDA pack block
+says "about 13 times faster" and "the same speakers" again — vaguer copy loses the figure that
+justifies a two-gigabyte download — and the Advanced warning still carries "Every default here was
+measured. Most alternatives have not been." Both fit inside three lines; the old copy was verbose
+rather than informative, and those two sentences were the informative part.
+
+`SettingsCopyTests` holds the rule from here on, and holds it on **what the window draws**:
+`TextLayout.TextLines.Count` after layout, on both halves of the page, rather than a character
+budget that assumes an average glyph width and goes wrong the day a font size moves. It was checked
+against the copy it replaced, where it fails and names the offender, and it asserts it inspected at
+least eight descriptions — a rule that silently finds nothing is the failure mode it exists to
+prevent.
+
+**1699 tests, no weights, no display, no network — 1690 passed and 9 skipped.** The line counts
+are the renderer's, taken headlessly like everything else the suite draws, and the two halves of
+the page have not been looked at since the copy changed — the same limit the entry above carries.
