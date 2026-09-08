@@ -179,7 +179,10 @@ public sealed class SidecarSpeakerLabeller : ISpeakerLabeller
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
         _ownsSidecar = sidecar is null;
-        _sidecar = sidecar ?? new PythonSidecar(PythonRuntime.Resolve());
+        // EnsureUnpacked rather than Resolve: from rc.16 the bundle ships as an archive and is
+        // unpacked on first use, and this — a labeller being built inside a transcription job —
+        // is one of the two places that first use happens.
+        _sidecar = sidecar ?? new PythonSidecar(PythonBundleInstaller.EnsureUnpacked());
     }
 
     /// <summary>

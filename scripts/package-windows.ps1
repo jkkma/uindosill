@@ -363,6 +363,38 @@ if (-not $IsWindows) {
 
 $built = @()
 
+# ---- The bundled Python, assembled once and shipped as one file. --------------------------------
+#
+# **Decision of 2026-09-07, and it is a measurement rather than a preference.** Until rc.15 the
+# bundle went into each channel's publish as a loose directory, which is what Velopack then shipped:
+# 55,256 files out of the package's 55,342 entries. An rc.14 to rc.15 update on the maintainer's
+# desktop — three C# files of settings-page wording — took 10m 05s, of which the download was three
+# seconds. The rest was file count, paid four times over: written into the delta-rebuilt package,
+# read back out of it, extracted into the install directory, then deleted from a temporary tree.
+# One sampled 8-second window showed 929,418 filesystem metadata operations against zero bytes of
+# read or write. The 2.0 GB of CUDA and Vulkan natives beside it is 55 files and cost nothing
+# measurable, which is what proves this was never about size.
+#
+# So the publish carries `python-bundle.zip` and `python-bundle.json`, and the application unpacks
+# the archive once into the user data directory — outside the install tree, so every later update
+# leaves it alone. See `PythonBundleInstaller`.
+#
+# Assembled and zipped **once for all channels** rather than per channel: both channels carry the
+# same CPU bundle (the CUDA pack is a separate download and has never been in here), and the
+# release asset below was already taking whichever channel's copy it found first, which only made
+# sense because they are identical.
+# **The staging directory's leaf name must be `python`, and that is load-bearing rather than
+# tidiness.** `ZipFile.CreateFromDirectory(..., includeBaseDirectory: $true)` names the archive's
+# root after the directory it is given, and the root has to be `python/` — it is what a hand-unpack
+# into `%LOCALAPPDATA%\Uindosill` produces and the subdirectory `PythonBundleInstaller` moves into
+# place. Staging straight into `packaging/python-bundle` produced a `python-bundle/` root and the
+# read-back below caught it on the first real run; hence the nested layout.
+$bundleStagingRoot = Join-Path $OutputDirectory 'python-bundle'
+$bundleStagingDir = Join-Path $bundleStagingRoot 'python'
+$bundleArchive = Join-Path $OutputDirectory 'python-bundle.zip'
+$bundleManifest = Join-Path $OutputDirectory 'python-bundle.json'
+$bundleAssembled = $false
+
 foreach ($channel in $Channels) {
     $backends = $backendsFor[$channel]
     $channelRoot = Join-Path $OutputDirectory $channel
@@ -429,19 +461,28 @@ foreach ($channel in $Channels) {
     Write-Note ("publish: {0} files, {1:N0} MB executable, self-contained and single-file" -f `
         $publishedFiles.Count, ($mainExeBytes / 1MB))
 
-    # The bundled Python, which is where two of this product's three models actually run. It goes
-    # into the publish rather than being packed separately because Velopack ships a directory: what
-    # is here is what a user receives, and `PythonRuntime.Resolve` looks for `<app>/python`.
+    # The bundled Python, which is where two of this product's three models actually run. It is
+    # assembled outside the publish and enters it as `python-bundle.zip` — see the block above the
+    # channel loop for why, which is a measured 10m 05s update that moved three files.
     #
-    # Assembled after the publish on purpose. `dotnet publish` clears its output directory, so a
-    # bundle written first would be deleted by the very next run with -SkipPython.
-    $bundleDir = Join-Path $publishDir 'python'
+    # Assembled after the publish on purpose. `dotnet publish` clears its output directory, so an
+    # archive copied in first would be deleted by the very next run with -SkipPython.
+    $bundleDir = $bundleStagingDir
     if ($SkipPython) {
         Write-Note 'not bundling Python: -SkipPython — speaker labelling and translation will be dead in this build'
     }
-    else {
-        & (Join-Path $PSScriptRoot 'bundle-python.ps1') -Destination $bundleDir
+    elseif (-not $bundleAssembled) {
+        # Never reused between runs. The staging directory is outside the publish now, so nothing
+        # else clears it, and a bundle left over from a previous version would ship silently.
+        if (Test-Path -LiteralPath $bundleStagingRoot) {
+            Remove-Item -LiteralPath $bundleStagingRoot -Recurse -Force
+        }
+
+        & (Join-Path $PSScriptRoot 'bundle-python.ps1') -Destination $bundleStagingDir
         if ($LASTEXITCODE -ne 0) { throw "Assembling the bundled Python failed for channel '$channel'." }
+    }
+    else {
+        Write-Note "python bundle: reusing the one assembled for the first channel"
     }
 
     # The build copies whatever is in native/ into the output, so a machine that has vendored CUDA
@@ -633,7 +674,7 @@ foreach ($channel in $Channels) {
             'Lib/site-packages/onnxruntime')) {
             $path = Join-Path $bundleDir $required
             if (-not (Test-Path -LiteralPath $path)) {
-                throw "python/$required is missing from the publish. Two of this product's models run in " +
+                throw "python/$required is missing from the assembled bundle. Two of this product's models run in " +
                       "that bundle, and the translator's parity reference is what stands between a user and a " +
                       "silently wrong execution provider."
             }
@@ -642,6 +683,93 @@ foreach ($channel in $Channels) {
         $bundleSize = (Get-ChildItem -LiteralPath $bundleDir -Recurse -File |
             Measure-Object -Property Length -Sum).Sum
         Write-Note ("python bundle: {0:N2} GB" -f ($bundleSize / 1GB))
+
+        if (-not $bundleAssembled) {
+            # **One archive, built once, serving both purposes.** The installer's copy and the
+            # separate command-line download below used to be two zips of the same tree; they are
+            # now the same file, so there is one thing to verify and one thing that can be wrong.
+            # `includeBaseDirectory` is what puts `python/` at the root — the whole of the
+            # hand-unpack instruction, and the subdirectory `PythonBundleInstaller` moves into
+            # place after staging.
+            if (Test-Path -LiteralPath $bundleArchive) {
+                Remove-Item -LiteralPath $bundleArchive -Force
+            }
+
+            [System.IO.Compression.ZipFile]::CreateFromDirectory(
+                $bundleDir, $bundleArchive, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+
+            # Read back, for the reason every other artefact here is read back: a zip that assembles
+            # is not a zip that carries what it promises. Files only — a directory entry has an
+            # empty Name — so that the count here is the count the unpack's progress bar counts up
+            # to, and a bar that stops at 55,000 of 55,342 looks like a hang.
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($bundleArchive)
+            try {
+                $files = @($zip.Entries | Where-Object { $_.Name.Length -gt 0 })
+                $entryCount = $files.Count
+
+                # **`[long]` is load-bearing.** `Measure-Object -Sum` returns a Double, and
+                # `ConvertTo-Json` renders a Double as `1397504487.0` — which
+                # `System.Text.Json` refuses to read into the manifest's `long`, throwing rather
+                # than truncating. `PythonRuntime.TryReadArchiveManifest` catches that and returns
+                # null, so the bundle would simply never be found and both opt-ins would be dead on
+                # every installed copy. Caught 2026-09-07 by deserialising a real packed manifest,
+                # not by reading this code.
+                $unpackedBytes = [long](($files | Measure-Object -Property Length -Sum).Sum)
+                $names = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+            }
+            finally { $zip.Dispose() }
+
+            # `python.exe` spelled out because this script builds Windows packages and nothing else;
+            # `PythonRuntime.ExecutableName` is the platform-shaped answer and this is its win-x64
+            # value. The same literal was here before this change, one block further down.
+            if ('python/python.exe' -notin $names) {
+                throw 'python-bundle.zip has no python/python.exe at its root, so neither the ' +
+                      "installer's unpack nor a hand-unpack would produce a bundle anything can find."
+            }
+
+            if (-not ($names | Where-Object {
+                        $_.StartsWith('python/uindosill_engines/', [StringComparison]::Ordinal) })) {
+                throw 'python-bundle.zip carries no uindosill_engines package — half a bundle, ' +
+                      'which would fail on a user machine rather than here.'
+            }
+
+            $archiveBytes = (Get-Item -LiteralPath $bundleArchive).Length
+            $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundleArchive).Hash.ToLowerInvariant()
+
+            # What `PythonRuntime.TryReadArchiveManifest` reads. The digest names the directory the
+            # archive unpacks to, and that is the whole mechanism by which an update which does not
+            # change the bundle costs nothing: the directory is already there, and nothing runs.
+            [ordered]@{
+                id            = $digest
+                archiveBytes  = $archiveBytes
+                unpackedBytes = $unpackedBytes
+                entries       = $entryCount
+            } | ConvertTo-Json | Set-Content -LiteralPath $bundleManifest -Encoding utf8
+
+            # Read back, like every other artefact here — and specifically as text, because the
+            # failure this catches is a *rendering* one. A field that reads `1397504487.0` parses
+            # in PowerShell and in every JSON viewer, and is rejected by the strongly typed reader
+            # on the other end; the only place the two ends meet is this file's bytes.
+            $manifestText = Get-Content -LiteralPath $bundleManifest -Raw
+            foreach ($field in @('archiveBytes', 'unpackedBytes', 'entries')) {
+                if ($manifestText -notmatch "`"$field`"\s*:\s*\d+\s*[,}]") {
+                    throw "python-bundle.json renders '$field' as something other than a plain " +
+                          "integer. System.Text.Json reads these into long and int and throws on a " +
+                          "decimal point, and PythonRuntime treats a manifest it cannot read as no " +
+                          "manifest at all — so the bundle would never be found on an installed " +
+                          "copy. What was written:`n$manifestText"
+                }
+            }
+
+            Write-Note ("python archive: {0:N0} bytes, {1:N0} files, id {2}…" -f `
+                $archiveBytes, $entryCount, $digest.Substring(0, 12))
+            $bundleAssembled = $true
+        }
+
+        Copy-Item -LiteralPath $bundleArchive `
+            -Destination (Join-Path $publishDir 'python-bundle.zip') -Force
+        Copy-Item -LiteralPath $bundleManifest `
+            -Destination (Join-Path $publishDir 'python-bundle.json') -Force
     }
 
     Write-Step "Packing '$channel' $Version"
@@ -850,23 +978,21 @@ Write-Step 'Packing the bundled Python as its own download'
 # set. `includeBaseDirectory` is what puts that root in, and it is the difference between an unpack
 # that works and one that scatters an interpreter across a user's data directory.
 #
-# The installer is untouched by this: its copy is inside the publish where it always was, and an
-# installed desktop application prefers its own over a download that may be a different version.
+# **Since 2026-09-07 this is a copy rather than a second zip of the same tree.** The installer now
+# carries the identical archive — that change is why an update stopped costing ten minutes — so
+# building it twice would mean two artefacts that can disagree, and the one a user hand-unpacks
+# would be the one nobody checked against an install. The checks below therefore run over the file
+# the installer ships, which is the point.
 $bundleZip = Join-Path (Join-Path $OutputDirectory 'releases') 'uindosill-python-win-x64.zip'
-$bundleSource = @($built |
-    ForEach-Object { Join-Path $_.PublishDir 'python' } |
-    Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
 
-if (-not $bundleSource) {
-    Write-Note 'no bundled Python in any publish, so no bundle download was packed (-SkipPython)'
+# `$bundleAssembled` rather than the file's existence: `packaging/` is not cleaned between runs, so
+# an archive left by a previous build sits at that path and a `-SkipPython` run would publish it —
+# a stale bundle, in a release whose installers deliberately carry none.
+if (-not $bundleAssembled) {
+    Write-Note 'no bundled Python was assembled, so no bundle download was packed (-SkipPython)'
 }
 else {
-    # Never appended to: packaging/releases is not cleaned between runs, and CreateFromDirectory
-    # refuses an existing file rather than replacing it.
-    if (Test-Path -LiteralPath $bundleZip) { Remove-Item -LiteralPath $bundleZip -Force }
-
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $bundleSource, $bundleZip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+    Copy-Item -LiteralPath $bundleArchive -Destination $bundleZip -Force
 
     # Read back for the same reason every other artefact here is: a zip that assembles is not a zip
     # that carries what it promises, and the failure mode this catches — an interpreter with no
@@ -887,7 +1013,7 @@ else {
 
         $size = (Get-Item -LiteralPath $bundleZip).Length
         Write-Host ("     {0,-54} {1,13:N0} bytes" -f 'uindosill-python-win-x64.zip', $size)
-        Write-Host "     $($names.Count) entries, from $bundleSource"
+        Write-Host "     $($names.Count) entries, the same archive the installer carries"
     }
     finally { $zip.Dispose() }
 }

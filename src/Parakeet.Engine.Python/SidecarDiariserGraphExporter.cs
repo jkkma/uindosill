@@ -66,7 +66,10 @@ public sealed class SidecarDiariserGraphExporter
     private readonly Func<PythonSidecar> _sidecarFactory;
 
     public SidecarDiariserGraphExporter(Func<PythonSidecar>? sidecarFactory = null) =>
-        _sidecarFactory = sidecarFactory ?? (static () => new PythonSidecar(PythonRuntime.Resolve()));
+        // EnsureUnpacked rather than Resolve: the graph derivation runs the sidecar too, and on a
+        // fresh install it can be the first thing that does.
+        _sidecarFactory = sidecarFactory
+            ?? (static () => new PythonSidecar(PythonBundleInstaller.EnsureUnpacked()));
 
     /// <summary>
     /// Writes both graphs into <paramref name="modelDirectory"/>'s <c>onnx</c> subdirectory and

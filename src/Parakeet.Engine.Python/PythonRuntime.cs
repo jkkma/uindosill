@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Parakeet.Core.Models;
 
 namespace Parakeet.Engine.Python;
@@ -51,6 +53,41 @@ public static class PythonRuntime
     /// <summary>The directory name a bundle takes, in every one of the three places.</summary>
     public const string BundleDirectoryName = "python";
 
+    /// <summary>
+    /// The archive the installer ships instead of a loose bundle, beside the application.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The bundle stopped being a directory in the package on 2026-09-07, and the reason is
+    /// measured.</b> An rc.14 to rc.15 update — three C# files of settings-page wording — took
+    /// 10m 05s on the maintainer's desktop, of which the download was 3 seconds. The rest was file
+    /// count: the package carried 55,342 entries, 55,256 of them this bundle, and every one of them
+    /// was written into the delta-rebuilt package, read back out, extracted into the install
+    /// directory and then deleted from a temporary tree — 929,418 filesystem metadata operations in
+    /// one sampled 8-second window, against zero bytes read or written. The 2.0 GB of CUDA and
+    /// Vulkan natives beside it is 55 files and costs nothing measurable, which is the whole proof
+    /// that this is a file-count problem and not a size one.
+    /// </para>
+    /// <para>
+    /// So the bundle ships as one entry and is unpacked once, on the machine, into the user data
+    /// directory — which is outside the install tree and therefore survives every subsequent
+    /// update. <see cref="ArchiveManifestFileName"/> beside it names the identity of what is
+    /// inside, so an update that does not change the bundle does not re-unpack it.
+    /// </para>
+    /// </remarks>
+    public const string ArchiveFileName = "python-bundle.zip";
+
+    /// <summary>
+    /// The manifest beside <see cref="ArchiveFileName"/>, naming what the archive unpacks to.
+    /// </summary>
+    /// <remarks>
+    /// Read at resolution time, so it has to be small and it has to be cheap: hashing the 1.5 GB
+    /// archive on every launch to discover an identity that a 200-byte file can state is the
+    /// obvious wrong answer. The manifest is written by the packaging script from the archive it
+    /// just built, which is the only place both facts are known at once.
+    /// </remarks>
+    public const string ArchiveManifestFileName = "python-bundle.json";
+
     /// <summary>A directory of CUDA-built packages to put ahead of the bundle's own.</summary>
     public const string CudaPackVariable = "UINDOSILL_PYTHON_CUDA";
 
@@ -78,7 +115,7 @@ public static class PythonRuntime
     /// </remarks>
     public static readonly string[] CudaPackMarker = ["torch", "__init__.py"];
 
-    /// <summary>Which of the three places answered.</summary>
+    /// <summary>Which of the four places answered.</summary>
     public enum BundleSource
     {
         /// <summary>Named by <see cref="InterpreterVariable"/> or <see cref="PackagesVariable"/>.</summary>
@@ -86,6 +123,18 @@ public static class PythonRuntime
 
         /// <summary>The bundle the installer puts beside the application.</summary>
         Application,
+
+        /// <summary>
+        /// The shipped archive, unpacked under <see cref="UserDataPaths.RootDirectory"/> into a
+        /// directory named for the bundle's own identity.
+        /// </summary>
+        /// <remarks>
+        /// This is what an installed copy resolves to from rc.16 on. It ranks with
+        /// <see cref="Application"/> rather than with <see cref="UserData"/> because it *is* the
+        /// application's own bundle — merely unpacked rather than shipped loose — and so must win
+        /// over a hand-unpacked download that may be a different version.
+        /// </remarks>
+        Unpacked,
 
         /// <summary>A downloaded bundle unpacked under <see cref="UserDataPaths.RootDirectory"/>.</summary>
         UserData,
@@ -140,6 +189,7 @@ public static class PythonRuntime
                 _ => $"named by {InterpreterVariable}",
             },
             BundleSource.Application => "bundled beside the application",
+            BundleSource.Unpacked => "shipped with the application, unpacked under " + UserDataPaths.DirectoryName,
             BundleSource.UserData => "downloaded, under " + UserDataPaths.DirectoryName,
             _ => "unknown",
         };
@@ -205,25 +255,38 @@ public static class PythonRuntime
                 with { CudaPackRoot = cudaPack };
         }
 
-        // Beside the application first, then the downloaded bundle. Both are checked before either
-        // is complained about, so the message can name every place that was looked in rather than
-        // only the first — a user who unpacked the download somewhere else needs to be told where
-        // it was expected, not told again that the installer's copy is missing.
+        // Beside the application first, then this build's own archive unpacked into the user data
+        // directory, then a downloaded bundle. All are checked before any is complained about, so
+        // the message can name every place that was looked in rather than only the first — a user
+        // who unpacked the download somewhere else needs to be told where it was expected, not told
+        // again that the installer's copy is missing.
+        var userDataRoot = userDataDirectory ?? UserDataPaths.RootDirectory();
         var applicationBundle = Path.Combine(baseDirectory, BundleDirectoryName);
-        var userDataBundle = Path.Combine(
-            userDataDirectory ?? UserDataPaths.RootDirectory(), BundleDirectoryName);
+        var unpackedBundle = UnpackedDirectory(baseDirectory, userDataRoot);
+        var userDataBundle = Path.Combine(userDataRoot, BundleDirectoryName);
+
+        var places = new List<(string Directory, BundleSource Source)>
+        {
+            (applicationBundle, BundleSource.Application),
+        };
+
+        // Only where this build actually ships an archive. Without a manifest there is no identity
+        // to look under, and guessing one — taking whatever single directory happens to sit in the
+        // user data folder — would let a stale unpack from a different build answer for this one.
+        if (unpackedBundle is not null)
+        {
+            places.Add((unpackedBundle, BundleSource.Unpacked));
+        }
+
+        places.Add((userDataBundle, BundleSource.UserData));
 
         // A directory holding an interpreter but no package is half a bundle, and it is worth its
         // own message: an interrupted unzip and a missing download send a reader in different
-        // directions. Collected rather than thrown from inside the loop, because the second place
+        // directions. Collected rather than thrown from inside the loop, because a later place
         // may still hold a whole one.
         var halves = new List<string>();
 
-        foreach (var (directory, source) in new[]
-                 {
-                     (applicationBundle, BundleSource.Application),
-                     (userDataBundle, BundleSource.UserData),
-                 })
+        foreach (var (directory, source) in places)
         {
             var interpreter = Path.Combine(directory, ExecutableName);
             if (!File.Exists(interpreter))
@@ -254,12 +317,171 @@ public static class PythonRuntime
                 $"{PackagesVariable} if the package lives somewhere else.");
         }
 
+        // An installed copy that ships the archive but has not unpacked it yet is a different
+        // situation from a missing bundle, and it is the one a user is most likely to be in: the
+        // unpack is lazy, so the first speaker or translation request on a fresh install arrives
+        // here. Saying "not installed" would send them to a download they already have.
+        if (FindArchive(baseDirectory) is { } archive)
+        {
+            throw new PythonSidecarException(
+                $"The bundled Python ships with this build as {ArchiveFileName} but has not been " +
+                $"unpacked yet, so it is not at {unpackedBundle ?? userDataBundle}. Speaker " +
+                "labelling and translation run in it, and unpacking is what the first request for " +
+                $"either one does — see {nameof(PythonBundleInstaller)}. The archive is at " +
+                $"{archive}.");
+        }
+
         throw new PythonSidecarException(
             "The bundled Python is not at " + applicationBundle + " or " + userDataBundle + ". " +
             "Speaker labelling and translation run in one, so neither is available until it is " +
             "there. The desktop installer carries a bundle and the command-line zip does not, so " +
             $"unpack the separate bundle download at the second path, or set {InterpreterVariable} " +
             "to a bundle directory, or to an interpreter with this project's requirements installed.");
+    }
+
+    /// <summary>
+    /// What this build's shipped archive unpacks to, and the identity that says whether an unpacked
+    /// copy is already the right one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Id"/> is the archive's SHA-256, computed once by the packaging script rather than
+    /// by every launch. It names the unpacked directory, which is what makes an update that does
+    /// not change the bundle cost nothing: rc.15 to rc.16 moved three C# files and left this
+    /// identical, so the directory already on disk answers and no unpack happens.
+    /// </remarks>
+    public sealed record ArchiveManifest
+    {
+        /// <summary>The archive's SHA-256, lowercase hex. Also the unpacked directory's name.</summary>
+        [JsonPropertyName("id")]
+        public required string Id { get; init; }
+
+        /// <summary>The archive's size on disk, checked before it is opened.</summary>
+        [JsonPropertyName("archiveBytes")]
+        public required long ArchiveBytes { get; init; }
+
+        /// <summary>What the archive unpacks to, for a progress bar to total against.</summary>
+        [JsonPropertyName("unpackedBytes")]
+        public required long UnpackedBytes { get; init; }
+
+        /// <summary>How many entries it carries, for the same reason.</summary>
+        [JsonPropertyName("entries")]
+        public required int Entries { get; init; }
+    }
+
+    /// <summary>The shipped archive beside the application, or null where this build has none.</summary>
+    /// <remarks>
+    /// Null for a run from source, for the command-line zip, and for every build before rc.16.
+    /// All three are ordinary and none of them is an error here: the bundle is simply somewhere
+    /// else, and <see cref="Resolve"/> says so in the language of the place it looked.
+    /// </remarks>
+    public static string? FindArchive(string? baseDirectory = null)
+    {
+        var archive = Path.Combine(baseDirectory ?? AppContext.BaseDirectory, ArchiveFileName);
+        return File.Exists(archive) ? archive : null;
+    }
+
+    /// <summary>
+    /// The manifest beside the shipped archive, or null where either is absent or unreadable.
+    /// </summary>
+    /// <remarks>
+    /// Unreadable is null rather than a throw because this is on the resolution path, and a build
+    /// whose manifest is damaged still has three other places to find a bundle in. The unpack
+    /// itself does throw on a bad manifest — see <see cref="PythonBundleInstaller"/> — because by
+    /// then the manifest is the only thing that says what is being unpacked.
+    /// </remarks>
+    public static ArchiveManifest? TryReadArchiveManifest(string? baseDirectory = null)
+    {
+        var manifest = Path.Combine(
+            baseDirectory ?? AppContext.BaseDirectory, ArchiveManifestFileName);
+
+        if (!File.Exists(manifest))
+        {
+            return null;
+        }
+
+        try
+        {
+            var read = JsonSerializer.Deserialize<ArchiveManifest>(File.ReadAllText(manifest));
+            return read is { Id.Length: > 0 } ? read : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The manifest, or a <see cref="PythonSidecarException"/> saying exactly what is wrong with it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The throwing twin exists because the silent one hid a real fault.</b> The packaging script
+    /// wrote <c>unpackedBytes</c> as <c>1397504487.0</c> — PowerShell's <c>Measure-Object -Sum</c>
+    /// returns a Double and <c>ConvertTo-Json</c> renders it with a decimal point —
+    /// <c>System.Text.Json</c> refused it into a <see cref="long"/>, and
+    /// <see cref="TryReadArchiveManifest"/> turned that into "no manifest", which on an installed
+    /// copy is indistinguishable from a build that ships no archive at all. Found 2026-09-07 by
+    /// deserialising a real packed manifest. The unpack path uses this one, so a manifest that
+    /// cannot be read says why.
+    /// </remarks>
+    public static ArchiveManifest ReadArchiveManifest(string? baseDirectory = null)
+    {
+        var path = Path.Combine(
+            baseDirectory ?? AppContext.BaseDirectory, ArchiveManifestFileName);
+
+        if (!File.Exists(path))
+        {
+            throw new PythonSidecarException(
+                $"{ArchiveFileName} is beside the application but {ArchiveManifestFileName} is not. " +
+                "The manifest names the directory the archive unpacks to and is what the archive is " +
+                "checked against, so the bundle cannot be unpacked without it. This is a packaging " +
+                "fault rather than anything a user did.");
+        }
+
+        ArchiveManifest? read;
+        try
+        {
+            read = JsonSerializer.Deserialize<ArchiveManifest>(File.ReadAllText(path));
+        }
+        catch (JsonException exception)
+        {
+            throw new PythonSidecarException(
+                $"{ArchiveManifestFileName} could not be read: {exception.Message} A number rendered " +
+                "with a decimal point is the way this has gone wrong before — the byte counts are " +
+                "whole numbers and the reader takes them as such. This is a packaging fault.",
+                exception);
+        }
+
+        return read is { Id.Length: > 0 }
+            ? read
+            : throw new PythonSidecarException(
+                $"{ArchiveManifestFileName} parsed but names no bundle id, so there is no directory " +
+                "to unpack into. This is a packaging fault.");
+    }
+
+    /// <summary>
+    /// Where this build's archive unpacks to under the user data directory, or null where this
+    /// build ships no archive.
+    /// </summary>
+    /// <remarks>
+    /// Under <see cref="BundleDirectoryName"/> rather than beside it, so that the hand-unpacked
+    /// download's contract — a whole bundle at <c>&lt;user data&gt;/python</c>, which is what the
+    /// separate download's zip produces and what the CLI's install instruction says — keeps
+    /// working unchanged. A directory named for a digest cannot collide with that bundle's own
+    /// contents.
+    /// </remarks>
+    public static string? UnpackedDirectory(string? baseDirectory = null, string? userDataDirectory = null)
+    {
+        if (TryReadArchiveManifest(baseDirectory) is not { } manifest)
+        {
+            return null;
+        }
+
+        return Path.Combine(
+            userDataDirectory ?? UserDataPaths.RootDirectory(), BundleDirectoryName, manifest.Id);
     }
 
     /// <summary>
@@ -452,7 +674,17 @@ public static class PythonRuntime
         }
     }
 
-    private static string ExecutableName =>
+    /// <summary>
+    /// Where the interpreter sits inside a bundle, which is platform-shaped and not a file name.
+    /// </summary>
+    /// <remarks>
+    /// Public since 2026-09-07 for <see cref="PythonBundleInstaller"/>, which has to decide whether
+    /// a tree it has just unpacked is a bundle before it moves it into place. That is the same
+    /// question <see cref="Resolve"/> asks, and it must be asked with the same answer — a second
+    /// literal <c>python.exe</c> in the installer would be right on Windows and quietly wrong
+    /// everywhere else.
+    /// </remarks>
+    public static string ExecutableName =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "python.exe" : "bin/python3";
 }
 
