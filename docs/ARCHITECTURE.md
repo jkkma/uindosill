@@ -318,12 +318,15 @@ bill is here:
   350 bytes and therefore different digests, while `unpackedBytes` and the entry count were
   identical to the byte. The cause is the bundle's **16,469 `.pyc` files** in 2,171 `__pycache__`
   directories — a `.pyc` header embeds its source's mtime, so a rebuild yields same-length,
-  byte-different files. Since every release is a fresh build, **a user is expected to unpack once
-  per release**, not once per bundle change. That is still lazily, outside the update, and never at
-  all for someone who does not diarise or translate — but it is not free, and the way to make it so
-  is to key the directory on the bundle's *inputs* (the CPython pin, `requirements-bundle.lock.txt`,
-  the `uindosill_engines` source) rather than on the archive's bytes. Not done. See
-  `docs/UNPROVEN.md`.
+  byte-different files. Since every release is a fresh build, **a user unpacks once per release**,
+  not once per bundle change. The way to make it once per bundle change is to key the directory on
+  the bundle's *inputs* (the CPython pin, `requirements-bundle.lock.txt`, the `uindosill_engines`
+  source) rather than on the archive's bytes. Not done.
+- **What that unpack costs, measured against the real archive: 24.2 s** for 55,256 files and
+  1.30 GB, after which the unpacked interpreter answered the host's own handshake — `protocol 6`,
+  CPython 3.12.10, both engines. So the trade is about half a minute once per release, lazily and
+  only for someone who diarises or translates, against the roughly seven minutes of extraction and
+  cleanup those files used to cost inside every update. See `docs/UNPROVEN.md`.
 - **A second thing to version**, and a set of failure modes that did not exist in process — a child
   that will not start, a child that dies mid-request, a library that writes to the wrong handle.
   Every one of them is named above because every one of them had to be handled.
