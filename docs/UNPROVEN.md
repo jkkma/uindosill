@@ -8634,9 +8634,12 @@ into `current/` writes less as well as touching fewer things.
   the evidence for that — but 87 against 55,342 is the mechanism, not the stopwatch.
 - **Whether the trade is right for a user who installs once and diarises once.** The cost is now
   measured (below) and is small, but nobody has watched a real user meet it.
-- **That the CUDA pack still resolves ahead of a bundle unpacked under the same root.** The pack's
-  own two places are untouched and its tests pass, but no run has resolved a pack against a
-  digest-named bundle on a real machine.
+- ~~That the CUDA pack still resolves ahead of a bundle unpacked under the same root.~~ **Measured
+  2026-09-07 on the desktop's own installed `1.0.0-rc.16`**: unpacking the shipped archive into the
+  real `%LOCALAPPDATA%\Uindosill` resolved
+  `CudaPackRoot = C:\Users\ayymanPC\AppData\Local\Uindosill\python-cuda` beside
+  `PackageRoot = …\Uindosill\python\165b9a125d08…`, and the interpreter that landed answered the
+  handshake at `protocol 6`, CPython 3.12.10, both engines. 55,256 files in **21.4 s**.
 
 **The unpack was then driven against the real archive, and it is 24 seconds rather than the minutes
 this document predicted.** `PythonBundleInstaller.EnsureUnpacked` was pointed at the packed

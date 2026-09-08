@@ -250,7 +250,7 @@ public sealed class PythonBundleInstallerTests : IDisposable
     /// telling a user to fetch a download they already have.
     /// </summary>
     [Fact]
-    public void ResolvingBeforeTheUnpackNamesTheArchiveRatherThanADownload()
+    public void ResolvingBeforeTheUnpackDoesNotSendAUserAfterADownloadTheyHave()
     {
         var (appRoot, _) = StageArchive();
         var userData = TestTemp.NewDirectory("uindosill-data");
@@ -259,8 +259,16 @@ public sealed class PythonBundleInstallerTests : IDisposable
             () => PythonRuntime.Resolve(appRoot, userData));
 
         Assert.Contains("has not been unpacked yet", thrown.Message, StringComparison.Ordinal);
-        Assert.Contains(PythonRuntime.ArchiveFileName, thrown.Message, StringComparison.Ordinal);
+
+        // The message a build with no bundle at all gets, which would be wrong here: this build
+        // ships one. Until 2026-09-07 this test also asserted the archive's file name was in the
+        // sentence; the name went when the sentence became something a user reads rather than
+        // something a developer greps, and TheNotYetUnpackedMessageIsWrittenForAReader holds that.
+        Assert.DoesNotContain("unpack the separate bundle download", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(InterpreterVariableName, thrown.Message, StringComparison.Ordinal);
     }
+
+    private static string InterpreterVariableName => PythonRuntime.InterpreterVariable;
 
     /// <summary>
     /// The manifest the packaging script actually wrote on 2026-09-07, byte for byte.
@@ -328,6 +336,68 @@ public sealed class PythonBundleInstallerTests : IDisposable
         Assert.Equal(459567606, manifest.ArchiveBytes);
         Assert.Equal(1397504487, manifest.UnpackedBytes);
         Assert.Equal(55256, manifest.Entries);
+    }
+
+    /// <summary>
+    /// The question the window asks, on the state a fresh install is actually in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is the test rc.16 shipped without, and the defect it would have caught was total.</b>
+    /// The window disabled speaker labelling and translation whenever the resolver found no bundle,
+    /// which on a fresh install of an archive-carrying build is the normal state — so both opt-ins
+    /// were greyed out, and the unpack that would have satisfied them only runs when one of them is
+    /// used. Neither could ever happen, and the reason text beside the checkboxes named a class and
+    /// two absolute paths at a user who could do nothing with either.
+    /// </para>
+    /// <para>
+    /// Every other test here drives the unpack directly, which is exactly why none of them saw it:
+    /// they all begin after the point the window never got past.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AFreshInstallCarryingOnlyTheArchiveCanStillRun()
+    {
+        var (appRoot, _) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+
+        // The resolver's answer, which is what the window used to ask: nothing is unpacked.
+        Assert.False(PythonRuntime.TryResolve(out _, out _, appRoot, userData));
+
+        // The question it should ask: can this run at all? It can — after an unpack it will do.
+        Assert.True(PythonRuntime.CanRun(out var reason, appRoot, userData));
+        Assert.Null(reason);
+    }
+
+    /// <summary>A build with no bundle and no archive is genuinely unavailable, and says why.</summary>
+    [Fact]
+    public void ABuildWithNeitherBundleNorArchiveCannotRunAndGivesAReason()
+    {
+        var appRoot = TestTemp.NewDirectory("uindosill-app");
+        var userData = TestTemp.NewDirectory("uindosill-data");
+
+        Assert.False(PythonRuntime.CanRun(out var reason, appRoot, userData));
+        Assert.NotNull(reason);
+        Assert.Contains("The bundled Python is not at", reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The sentence a user sees while the bundle is still an archive carries no class name and no
+    /// path, because it is read by somebody who can act on neither.
+    /// </summary>
+    [Fact]
+    public void TheNotYetUnpackedMessageIsWrittenForAReader()
+    {
+        var (appRoot, _) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+
+        var thrown = Assert.Throws<PythonSidecarException>(
+            () => PythonRuntime.Resolve(appRoot, userData));
+
+        Assert.Contains("has not been unpacked yet", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(PythonBundleInstaller), thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(":\\", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(PythonRuntime.ArchiveFileName, thrown.Message, StringComparison.Ordinal);
     }
 
     [Fact]

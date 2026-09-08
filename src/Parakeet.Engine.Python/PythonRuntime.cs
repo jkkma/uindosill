@@ -321,14 +321,12 @@ public static class PythonRuntime
         // situation from a missing bundle, and it is the one a user is most likely to be in: the
         // unpack is lazy, so the first speaker or translation request on a fresh install arrives
         // here. Saying "not installed" would send them to a download they already have.
-        if (FindArchive(baseDirectory) is { } archive)
+        if (FindArchive(baseDirectory) is not null)
         {
             throw new PythonSidecarException(
-                $"The bundled Python ships with this build as {ArchiveFileName} but has not been " +
-                $"unpacked yet, so it is not at {unpackedBundle ?? userDataBundle}. Speaker " +
-                "labelling and translation run in it, and unpacking is what the first request for " +
-                $"either one does — see {nameof(PythonBundleInstaller)}. The archive is at " +
-                $"{archive}.");
+                "The bundled Python that speaker labelling and translation run in has not been " +
+                "unpacked yet. Running either one unpacks it, which takes about half a minute and " +
+                "happens once.");
         }
 
         throw new PythonSidecarException(
@@ -366,6 +364,45 @@ public static class PythonRuntime
         /// <summary>How many entries it carries, for the same reason.</summary>
         [JsonPropertyName("entries")]
         public required int Entries { get; init; }
+    }
+
+    /// <summary>
+    /// Whether the sidecar can run — now, or after the shipped archive is unpacked on first use.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This exists because asking <see cref="TryResolve"/> was the wrong question, and rc.16
+    /// shipped with the wrong answer.</b> The window disabled speaker labelling and translation
+    /// whenever the resolver could not find a bundle, and on a fresh install of a build whose
+    /// bundle is still an archive that is exactly the state — so both opt-ins were greyed out, and
+    /// the unpack that would have fixed it only runs when one of them is used. Neither could ever
+    /// happen. The command line was unaffected: it builds a sidecar rather than asking whether it
+    /// could.
+    /// </para>
+    /// <para>
+    /// So availability means "can this feature run", not "is it already unpacked". A build carrying
+    /// the archive can run it; the first run pays about half a minute. What the window must not do
+    /// is unpack from here — this is called while drawing a page, and
+    /// <see cref="PythonBundleInstaller"/> writes 1.3 GB.
+    /// </para>
+    /// </remarks>
+    public static bool CanRun(
+        out string? reason,
+        string? baseDirectory = null,
+        string? userDataDirectory = null)
+    {
+        if (TryResolve(out _, out reason, baseDirectory, userDataDirectory))
+        {
+            return true;
+        }
+
+        if (FindArchive(baseDirectory) is not null)
+        {
+            reason = null;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>The shipped archive beside the application, or null where this build has none.</summary>
