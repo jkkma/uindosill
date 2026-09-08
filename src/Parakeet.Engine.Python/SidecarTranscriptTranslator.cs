@@ -215,7 +215,9 @@ public sealed class SidecarTranscriptTranslator : ITranscriptTranslator
 
         _options = options;
         _ownsSidecar = sidecar is null;
-        _sidecar = sidecar ?? new PythonSidecar(PythonRuntime.Resolve());
+        // EnsureUnpacked rather than Resolve, for the reason SidecarSpeakerLabeller gives: this
+        // is the other place a user's first request unpacks the shipped bundle.
+        _sidecar = sidecar ?? new PythonSidecar(PythonBundleInstaller.EnsureUnpacked());
 
         Capabilities = new TranslatorCapabilities
         {

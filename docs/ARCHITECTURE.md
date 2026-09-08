@@ -298,6 +298,32 @@ bill is here:
   there after `UINDOSILL_PYTHON` and the application's own copy. **Both shipped for the first time
   on 2026-08-23 in `v1.0.0-rc.3`** — the zip is 400.2 MB, the bundle-carrying installers 485.4 MB
   and 1187.9 MB — and nothing has yet been installed or resolved from either. See `docs/UNPROVEN.md`.
+- **The installer stopped carrying it as a directory on 2026-09-07, and that is a measurement.** An
+  rc.14 → rc.15 in-app update on the maintainer's desktop — three C# files of settings-page wording
+  — took **10m 05s**, of which the download was **3 seconds**: a 31.8 MB delta. The rest was file
+  count. The package held **55,342 entries, 55,256 of them the bundle**, and Velopack pays for each
+  one four times — into the delta-rebuilt package, out of it, into the install directory, then out
+  of a temporary tree. One sampled 8-second window showed **929,418 filesystem metadata operations
+  against zero bytes read or written**, and the temp tree drained at **191 files/s**. The 2.0 GB of
+  CUDA and Vulkan natives beside it is **55 files** and costs nothing measurable, which is what
+  proves this was never about size. So the publish now carries `python-bundle.zip` and
+  `python-bundle.json`, and `PythonBundleInstaller` unpacks the archive **once, on first use of
+  speaker labelling or translation**, into `%LOCALAPPDATA%\Uindosill\python\<archive digest>` —
+  outside the install tree, so later updates leave it alone. **Measured 2026-09-07 by packing the
+  changed script: the `win-cuda` full package went from 55,342 entries to 87**, and its uncompressed
+  total from 3.40 GiB to 2.51 GiB, since the bundle now travels as one already-compressed member.
+- **What the digest naming does not buy, measured in the same session.** The intent was that an
+  update leaving the bundle alone would find the directory already there and unpack nothing. It does
+  not hold across *builds*: two runs over an identical package set produced archives differing by
+  350 bytes and therefore different digests, while `unpackedBytes` and the entry count were
+  identical to the byte. The cause is the bundle's **16,469 `.pyc` files** in 2,171 `__pycache__`
+  directories — a `.pyc` header embeds its source's mtime, so a rebuild yields same-length,
+  byte-different files. Since every release is a fresh build, **a user is expected to unpack once
+  per release**, not once per bundle change. That is still lazily, outside the update, and never at
+  all for someone who does not diarise or translate — but it is not free, and the way to make it so
+  is to key the directory on the bundle's *inputs* (the CPython pin, `requirements-bundle.lock.txt`,
+  the `uindosill_engines` source) rather than on the archive's bytes. Not done. See
+  `docs/UNPROVEN.md`.
 - **A second thing to version**, and a set of failure modes that did not exist in process — a child
   that will not start, a child that dies mid-request, a library that writes to the wrong handle.
   Every one of them is named above because every one of them had to be handled.

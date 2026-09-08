@@ -8572,3 +8572,85 @@ are gone is read from the release itself on 2026-09-07: ten assets, none of them
 version's, every one uploaded inside the two minutes the publish step ran. rc.12's own release is
 untouched at its eight. **Who removed them and when is not recorded here** — nothing in the
 workflow deletes a release asset, so it was done by hand between the publish and that reading.
+
+## An in-app update, timed end to end — and why the bundle stopped being a directory
+
+**Measured 2026-09-07 on the RTX 5080 desktop** (`THE-AYYBASE`, Windows 11 10.0.26200), driving the
+Updates tab from an installed `1.0.0-rc.14` on the `win-cuda` channel to `1.0.0-rc.15`. The
+release moves three C# files of settings-page wording and nothing else. **It took 10m 05s**, from
+the download starting at 17:49:32 to the application coming back at 17:59:37.
+
+**Three seconds of that was the download.** The delta arrived complete at 17:49:35 —
+31,799,583 bytes, exactly the size `releases.win-cuda.json` records. Everything after it was local:
+`Update.exe` was sampled with **zero TCP connections open** while the progress bar was still moving.
+
+| Phase | Wall clock | What it cost |
+|---|---|---|
+| Delta download | 3 s | 31.8 MB over the network |
+| Rebuilding the full package from rc.14 + delta | ~3 min | 6,107,185,446 bytes read, 6,098,207,534 written, 242.3 s CPU |
+| Extracting 3.40 GiB / 55,342 entries into `current/` | ~4 min | 1,987,068,669 read, 3,644,659,491 written |
+| Draining a 22,359-file temporary tree | ~2.5 min | 191 files/s |
+
+**The cost is file count, not bytes, and the package's own composition is the proof.** The installed
+`current/` holds 55,335 files:
+
+| Directory | Files | Size |
+|---|---|---|
+| `python` | **55,256** | 1.5 GB |
+| `native` | **55** | 2.0 GB |
+| `licences` | 13 | — |
+| root + `models` | 11 | — |
+
+The native stack is **larger on disk and 1,000× fewer files**, and contributed nothing measurable.
+One 8-second sample during the final phase showed **929,418 filesystem metadata operations against
+zero bytes read and zero written** — about 42 operations per file, which is what a real-time scanner
+in the path looks like. Velopack pays for every entry four times: into the delta-rebuilt package,
+out of it, into the install directory, and out of the temporary tree.
+
+**So `scripts/package-windows.ps1` now puts the bundle in as one `python-bundle.zip`**, and
+`PythonBundleInstaller` unpacks it once into `%LOCALAPPDATA%\Uindosill\python\<archive digest>` on
+the first speaker-labelling or translation request. The digest names the directory, so an update
+that leaves the bundle alone finds it already there.
+
+**The package was then built, and the entry count is now measured rather than predicted.**
+`package-windows.ps1 -Version 1.0.0-rc.16 -Channels win-cuda -SkipVendor`, same machine, same
+evening:
+
+| | rc.15 (loose bundle) | rc.16 (archived) |
+|---|---|---|
+| **Entries in the full nupkg** | **55,342** | **87** |
+| Package bytes | 1,994,576,093 | 1,962,713,193 |
+| Uncompressed total | 3.40 GiB | 2.51 GiB |
+
+The uncompressed total falls as well as the count, because the bundle now travels as one
+already-compressed 459,567,606-byte member rather than 1.5 GB of loose files — so the extraction
+into `current/` writes less as well as touching fewer things.
+
+**What is still unproven, after the pack:**
+
+- **That an update actually gets faster, and by how much.** Nothing has been installed from the
+  built `Setup.exe` and no update has been timed against it. All three slow phases are *argued* to
+  scale with entry count — the 8-second sample of 929,418 metadata operations against zero bytes is
+  the evidence for that — but 87 against 55,342 is the mechanism, not the stopwatch.
+- **What the first-run unpack costs.** It writes 1.30 GB across 55,256 files, so a user's first
+  diarisation after a release is expected to pay minutes once. Whether that beats paying it inside
+  every update is a judgement nobody has tested on a real user.
+- **That the CUDA pack still resolves ahead of a bundle unpacked under the same root.** The pack's
+  own two places are untouched and its tests pass, but no run has resolved a pack against a
+  digest-named bundle on a real machine.
+
+**And one intended property was measured and does not hold.** The digest naming was meant to make an
+update that leaves the bundle alone unpack nothing. Two packaging runs over an identical package set
+produced archives of **459,567,606 and 459,567,956 bytes** — 350 apart, so different digests — while
+`unpackedBytes` (1,397,504,487) and the entry count (55,256) were identical to the byte. The cause
+is the bundle's **16,469 `.pyc` files** across 2,171 `__pycache__` directories: a `.pyc` header
+embeds its source's mtime, so a rebuild yields same-length, byte-different files. Since every
+release is a fresh build, **the realistic expectation is one unpack per release**, not one per
+bundle change. Keying the directory on the bundle's inputs — the CPython pin,
+`requirements-bundle.lock.txt`, the `uindosill_engines` source — would restore the intent; it has
+not been done.
+
+**One incidental confirmation.** The reconstructed rc.15 package is **31,412 bytes smaller** than
+the published one (1,994,576,093 against 1,994,607,505) — the same effect recorded above for rc.13,
+where the gap was 14,181 bytes. Rebuilding a zip does not reproduce it byte for byte; the install it
+produced runs, and **that the two archives hold identical contents was again not checked**.
