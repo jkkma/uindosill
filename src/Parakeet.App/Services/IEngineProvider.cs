@@ -300,8 +300,14 @@ public sealed class EngineProvider : IEngineProvider
         Func<(string? Provider, int? BatchSize)>? diariserSettings = null)
     {
         _store = store ?? new LocalModelStore();
+        // CanRun rather than TryResolve, and the difference is a shipped defect. TryResolve asks
+        // whether a bundle is on disk *now*; from rc.16 the bundle arrives as an archive that is
+        // unpacked on first use, so on a fresh install the honest answer to that question is "no"
+        // — and this window turned that into two greyed-out opt-ins with no way to reach the unpack
+        // that would have satisfied them. Availability is whether the feature can run, which a
+        // build carrying the archive can.
         _python = new Lazy<(bool Found, string? Reason)>(python ?? (() =>
-            PythonRuntime.TryResolve(out _, out var reason) ? (true, null) : (false, reason)));
+            PythonRuntime.CanRun(out var reason) ? (true, null) : (false, reason)));
         _preferredDiarisationModelId = preferredDiarisationModelId ?? (() => null);
         _diariserSettings = diariserSettings ?? (() => (null, null));
     }
