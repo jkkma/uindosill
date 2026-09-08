@@ -7998,9 +7998,20 @@ key the directory on the bundle's inputs — the CPython pin, `requirements-bund
 `uindosill_engines` source — rather than on the archive's bytes. **Not done, and deliberately left
 for a decision rather than bolted on at the end of a long session.**
 
+**The unpack was then driven against the real archive, and it is 24 seconds.** Pointing
+`EnsureUnpacked` at the packed `python-bundle.zip` and a scratch user data directory put **55,256
+files, 1.30 GB, on disk in 24.2 s**, in a digest-named directory whose file count matched the
+manifest exactly — and the unpacked interpreter then answered the real handshake, `protocol 6`,
+CPython 3.12.10, both engines. So the first-use cost is **about half a minute once per release**,
+against the roughly seven minutes of extraction and cleanup the same files used to cost inside
+*every* update. The "expected to pay minutes once" this entry carried an hour earlier was an
+inference from Velopack's extraction time and was wrong: Velopack is slow there because it rebuilds
+the package, extracts it, and drains a temporary tree, with a scanner in the path each pass. One
+sequential unzip is not that.
+
 **What it still does not settle.** No update has been *timed* against the new package: 87 entries
-against 55,342 is the mechanism, not the stopwatch, and all three slow phases are argued to scale
+against 55,342 is the mechanism, not the stopwatch, and the three slow phases are argued to scale
 with entry count rather than shown to. Nothing has been installed from the built Setup.exe. The
-first-run unpack has not been measured either — it writes 1.30 GB across 55,256 files, so a user's
-first diarisation after a release is expected to pay minutes once, and whether that trade beats
-paying it inside every update is a judgement nobody has tested on a real user.
+unpack check ran from a harness rather than from the window or the CLI, so the lazy hook in the
+sidecar factories is still held only by unit tests; and the machine had no CUDA pack, so that pack's
+precedence against a digest-named bundle is still unverified on real hardware.

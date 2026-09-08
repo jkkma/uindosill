@@ -8632,12 +8632,33 @@ into `current/` writes less as well as touching fewer things.
   built `Setup.exe` and no update has been timed against it. All three slow phases are *argued* to
   scale with entry count — the 8-second sample of 929,418 metadata operations against zero bytes is
   the evidence for that — but 87 against 55,342 is the mechanism, not the stopwatch.
-- **What the first-run unpack costs.** It writes 1.30 GB across 55,256 files, so a user's first
-  diarisation after a release is expected to pay minutes once. Whether that beats paying it inside
-  every update is a judgement nobody has tested on a real user.
+- **Whether the trade is right for a user who installs once and diarises once.** The cost is now
+  measured (below) and is small, but nobody has watched a real user meet it.
 - **That the CUDA pack still resolves ahead of a bundle unpacked under the same root.** The pack's
   own two places are untouched and its tests pass, but no run has resolved a pack against a
   digest-named bundle on a real machine.
+
+**The unpack was then driven against the real archive, and it is 24 seconds rather than the minutes
+this document predicted.** `PythonBundleInstaller.EnsureUnpacked` was pointed at the packed
+`python-bundle.zip` in `packaging/win-cuda/publish` and a scratch user data directory: **55,256
+files, 1.30 GB, in 24.2 s** (25.7 s on the first of two runs), landing in a digest-named directory
+whose file count matched the manifest exactly. The unpacked interpreter was then started the way the
+host starts it — `python.exe -u -m uindosill_engines` with `PYTHONPATH` set — and completed the real
+handshake:
+
+    {"id":1,"type":"result","protocol":6,"python":"3.12.10","implementation":"CPython",
+     "platform":"Windows-11-10.0.26200-SP0","engines":["diariser","translator"]}
+
+So the first-use cost is **about half a minute, once per release**, against the roughly seven
+minutes of extraction and cleanup the same files used to cost inside *every* update. The earlier
+"expected to pay minutes once" in this section was an inference from Velopack's extraction time and
+was wrong: Velopack's phase is slow because it rebuilds the package, extracts it, and then drains a
+temporary tree, with a scanner in the path for each pass. One sequential unzip is not that.
+
+**What that check does not cover.** It ran from a test harness, not from the window or the CLI, so
+the lazy hook in the sidecar factories is still only exercised by unit tests. The machine had no
+CUDA pack installed, so `CudaPackRoot` was null and the pack's precedence against a digest-named
+bundle remains unverified on a real machine.
 
 **And one intended property was measured and does not hold.** The digest naming was meant to make an
 update that leaves the bundle alone unpack nothing. Two packaging runs over an identical package set
