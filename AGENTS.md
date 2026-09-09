@@ -121,15 +121,23 @@ a model, neither of which is in the clone. `--fake` exercises the whole pipeline
 
 ## Session fixtures
 
-`.claude/` is committed. A SessionStart hook runs `git pull --ff-only` and its output lands in
-context — read it, and reconcile by hand if it did not fast-forward, because the two machines work
-in tandem. A PostToolUse hook, `.claude/hooks/gated-test-reminder.sh`, prints the matching
-obligation from the section above when a gated path is edited, so a new gated test needs a rule
+`.codex/` and `.agents/skills/` hold the Codex session fixtures. A SessionStart hook runs
+`git pull --ff-only` and its output lands in context — read it, and reconcile by hand if it did
+not fast-forward, because the two machines work
+in tandem. The PreToolUse and PostToolUse entries in `.codex/hooks.json` run
+`.codex/hooks/edit-hooks.py`, which reads every changed path from `tool_input.command`, including
+both ends of a rename. The PostToolUse hook prints the matching obligation from the section above
+when a gated path is edited, so a new gated test needs a rule
 there as well as a line here; where the check is cheap and needs nothing installed it runs it
 instead — an edit to the diariser's election file runs `check-diariser-auto.py`, and an edit to
-any `.ps1` parses that file. A PreToolUse hook, `.claude/hooks/attic-guard.sh`, asks before an
-edit lands under `attic/`, because a retired engine still has files named like the live ones. The
-read-only agents sweep and fix nothing: `claims-auditor` for the numbers, under the rule below;
+any `.ps1` parses that file. The PreToolUse hook blocks edits under `attic/`, because a retired
+engine still has files named like the live ones. Codex cannot present a hook approval prompt:
+an intentional attic edit needs explicit user approval before arranging a scoped exception.
+The `.codex/hooks/attic-guard.sh` and `.codex/hooks/gated-test-reminder.sh` files are compatibility
+wrappers around the same Python entry point. `scripts/check-codex-hooks.py` checks patch routing,
+the blocking response and reminder behavior without changing product files. Run it after a hook change.
+The agent definitions are `.codex/agents/*.toml`; the skills live under `.agents/skills/`.
+The read-only agents sweep and fix nothing: `claims-auditor` for the numbers, under the rule below;
 `reference-auditor` for the names — paths, scripts, counts and the dated pointers into PHASES —
 against the tree; `harness-reviewer` for a changed measurement script, against the gotchas the
 harnesses taught. The user-invoked skills sequence this file and defer to it wherever they
@@ -213,9 +221,11 @@ remote it created, refresh token included: its output is a credential.** It does
 anywhere; if it has been, revoke rclone at `myaccount.google.com/permissions` and run it again. The
 resulting `rclone.conf` never comes near this repository.
 
-**Session memory travels the same way, and per machine — `lab.ps1 drive -Memory <machine>`.**
-Claude Code's own memory for this repository lives outside it, under a key derived from the working
-copy's path, and the route pushes it to `session-memory/<machine>` beside the runs folders. It is
+**Claude Code session memory travels per machine — `lab.ps1 drive -Memory <machine>`.**
+That command only reads Claude Code's memory; it does not transfer Codex memory. No Codex memory
+transfer is implemented here. Claude Code's memory lives outside the repository, under a key
+derived from the working copy's path, and the route pushes it to `session-memory/<machine>` beside
+the runs folders. It is
 **push only** on purpose: each machine has memories the other does not, `MEMORY.md` is an index that
 has to be merged rather than overwritten, and a memory asserting which machine it was written on is
 false on the other one. Pull with `-Fetch session-memory/<machine>` into a scratch folder and merge

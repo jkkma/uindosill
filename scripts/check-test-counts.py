@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Hold the test counts written into the documentation against the counts the suite reports.
 
-Three documents quote a test total, and all three drifted: they said 258 for several commits
-after the suite reached 265, including one commit whose own message said 264. A number nobody
+Three documents originally quoted a test total, and all three drifted: they said 258 for several
+commits after the suite reached 265, including one commit whose own message said 264. A number nobody
 checks is a number that goes stale, and this repository's whole claim is that its figures are
 measured. So the figures get measured here.
 
 What is checked, and against what:
 
-  README.md, CLAUDE.md, docs/PHASES.md   "N tests"       the whole suite's total
+  README.md, CLAUDE.md, AGENTS.md, docs/PHASES.md   "N tests"   the whole suite's total
   docs/PHASES.md                         "N CLI tests"   Parakeet.Cli.Tests alone
   docs/PHASES.md                         "N passed and M skipped"
 
@@ -55,6 +55,7 @@ TRX_NS = "{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}"
 CLAIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ("README.md", r"(\d+)\s+tests\b", ("total",)),
     ("CLAUDE.md", r"(\d+)\s+tests\b", ("total",)),
+    ("AGENTS.md", r"(\d+)\s+tests\b", ("total",)),
     ("docs/PHASES.md", r"(\d+)\s+tests\b", ("total",)),
     ("docs/PHASES.md", r"(\d+)\s+CLI\s+tests\b", ("Parakeet.Cli.Tests",)),
     ("docs/PHASES.md", r"(\d+)\s+passed\s+and\s+(\d+)\s+skipped", ("passed", "skipped")),
