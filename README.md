@@ -336,7 +336,7 @@ The ten notes live in [`docs/`](docs/); the last two rows are at the repository 
 | [V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
 | [PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
 | [NOTICE.md](NOTICE.md) | Third-party notices as shipped: the CC BY weights, the MIT components, GPL libmpv, the CUDA runtime. |
-| [CLAUDE.md](CLAUDE.md) | Working agreement for an agent session: budget, how to build, the one rule. |
+| [AGENTS.md](AGENTS.md) | Working agreement for an agent session: budget, how to build, the one rule. |
 
 ## Licence
 

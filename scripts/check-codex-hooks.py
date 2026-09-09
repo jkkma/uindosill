@@ -114,7 +114,7 @@ class HookChecks(unittest.TestCase):
         self.assertIn("Could not inspect", error.getvalue())
 
     def test_count_guard_rejects_stale_and_missing_agents_claims(self):
-        docs = {"README.md": "7 tests", "CLAUDE.md": "7 tests", "AGENTS.md": "7 tests",
+        docs = {"README.md": "7 tests", "AGENTS.md": "7 tests",
                 "PHASES.md": "7 tests, 3 CLI tests, 6 passed and 1 skipped"}
         totals = {"total": 7, "passed": 6, "skipped": 1, "failed": 0}
         with patch.object(counts, "find_trx", return_value=([ROOT / "results.trx"], [])), \

@@ -1,7 +1,6 @@
 ---
 name: preflight
 description: Run the working agreement's checks in order - the Release build, the tests with a TRX log, the test-count guard and its self-check, the diariser election guard, a parse of every scripts/*.ps1, and a check that the reminder hook still mirrors AGENTS.md - and report each result exactly as it came out. Invoke before a commit or a handoff.
-disable-model-invocation: true
 ---
 
 # Preflight: every check the agreement names, in order, reported as it came out
@@ -12,8 +11,8 @@ section first; this skill only sequences it and adds one check nothing else runs
 
 ## Current state
 
-- Branch: !`git branch --show-current`
-- Working tree: !`git status --short`
+Use the shell tool from the repository root to run `git branch --show-current` and
+`git status --short`. Record their output before running the checks.
 
 ## The rule for reporting
 
@@ -23,6 +22,10 @@ later step because an earlier one failed (the later ones are cheap and independe
 quote a count from a document when the run just produced one.
 
 ## The steps
+
+Run commands from the repository root. Use `python` for Python 3 commands on Windows and
+`python3` on Linux; verify the selected interpreter's version first. Run PowerShell snippets
+with `pwsh -NoProfile` on either platform.
 
 On the desktop on 2026-09-03 a warm Release build took 6 s and the suite 16 s; a cold build and
 another machine take longer, so give each a ten-minute timeout and run them in the foreground so
@@ -46,9 +49,12 @@ the output is captured whole.
    named.
 6. **The hook mirrors the agreement** — AGENTS.md names paths that owe a check "after any change
    to" them, and `.codex/hooks/edit-hooks.py` has a rule for each. The documents wrap
-   at 100 columns and the phrase itself wraps, so join the lines before grepping:
-   ```bash
-   tr -s '[:space:]' ' ' < AGENTS.md | grep -oiE 'after any change to( [a-z]+){0,4} `[^`]+`'
+   at 100 columns and may bold the phrase, so normalize whitespace and bold delimiters first:
+   ```powershell
+   $agreementText = (Get-Content -Raw -LiteralPath AGENTS.md) -replace '\*\*', ''
+   $agreementText = $agreementText -replace '\s+', ' '
+   [regex]::Matches($agreementText, '(?i)after any change to( [a-z]+){0,4} `[^`]+`') |
+       ForEach-Object { $_.Value }
    ```
    (five paths on 2026-09-03; seven on 2026-09-06, when the window's two-line ruler added two). Compare that list with `REMINDERS` and the cheap-check branches in the hook; the hook's
    `tests/` and `.ps1` rules answer other sentences in the same section, so check those sentences
@@ -57,6 +63,10 @@ the output is captured whole.
 
 7. **Codex hooks** — `python3 scripts/check-codex-hooks.py`. Checks multi-file patch routing,
    attic blocking, reminders and the AGENTS.md count guard with synthetic events.
+
+8. **Memory exports** — `pwsh -NoProfile -File scripts/check-drive-memory.ps1`. Checks both
+   Drive entry points using a fake rclone and synthetic notes. No network or user memory access;
+   fixtures remain under `runs/check-drive-memory/`.
 
 ## The table
 
@@ -70,6 +80,7 @@ the output is captured whole.
 | Scripts parse | 0 errors, or each named | |
 | Hook mirrors AGENTS.md | matched, or the odd path out | |
 | Codex hooks | passed, or each failed regression check | |
+| Memory exports | passed, or the failed isolated CLI check | |
 
 Then one line: green throughout, or the list of red rows. What to do about a red row is the
 next conversation, not this skill's.
@@ -78,4 +89,4 @@ next conversation, not this skill's.
 
 It does not run the gated tests (FLEURS, Silero, llama-server), which need assets and are named
 per path by the reminder hook when such a path is edited; it does not transcribe anything; it does
-not push run reports (`/wrap-runs`); and it does not commit.
+not push run reports (`$wrap-runs`); and it does not commit.

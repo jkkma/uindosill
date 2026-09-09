@@ -8,7 +8,7 @@ measured. So the figures get measured here.
 
 What is checked, and against what:
 
-  README.md, CLAUDE.md, AGENTS.md, docs/PHASES.md   "N tests"   the whole suite's total
+  README.md, AGENTS.md, docs/PHASES.md     "N tests"   the whole suite's total
   docs/PHASES.md                         "N CLI tests"   Parakeet.Cli.Tests alone
   docs/PHASES.md                         "N passed and M skipped"
 
@@ -54,7 +54,6 @@ TRX_NS = "{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}"
 # wrapping puts them.
 CLAIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ("README.md", r"(\d+)\s+tests\b", ("total",)),
-    ("CLAUDE.md", r"(\d+)\s+tests\b", ("total",)),
     ("AGENTS.md", r"(\d+)\s+tests\b", ("total",)),
     ("docs/PHASES.md", r"(\d+)\s+tests\b", ("total",)),
     ("docs/PHASES.md", r"(\d+)\s+CLI\s+tests\b", ("Parakeet.Cli.Tests",)),

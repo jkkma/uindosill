@@ -1,10 +1,12 @@
 ---
 name: new-engine
-description: Scaffold a new Parakeet.Engine.<Name> project pair - the src project, its xUnit test project, slnx registration, and the follow-through the working agreement requires (gated-test env var, test-count check, doc lines).
-disable-model-invocation: true
+description: Scaffold a new Parakeet.Engine project pair - the src project, its xUnit test project, slnx registration, and the follow-through the working agreement requires (gated-test env var, test-count check, doc lines).
 ---
 
 # Scaffold a Parakeet.Engine.* project pair
+
+Read AGENTS.md's **"Building and testing"** section first; it governs this skill's checks and
+gated-test obligations. If the files disagree, AGENTS.md wins and this skill needs fixing.
 
 The template is not this file — it is the newest existing engine. **Read one before writing
 anything** (`src/Parakeet.Engine.SileroVad/` and `src/Parakeet.Engine.LlamaServer/` at the time
@@ -55,7 +57,8 @@ file, it will go stale.
 
 - `dotnet build Uindosill.slnx -c Release` — zero warnings, warnings are errors.
 - `dotnet test Uindosill.slnx -c Release`, then **`python3 scripts/check-test-counts.py`** —
-  the count changed, four documents quote it, and the script prints what each must now say.
+  use `python` for Python 3 on Windows. The count changed, three documents quote it
+  (`README.md`, `AGENTS.md`, `docs/PHASES.md`), and the script prints what each must now say.
 - New gated tests mean two additions to **AGENTS.md's "Building and testing" section**: the
   env-var invocation, and a "run them after any change to ..." line. Add the matching path rule
   to `.codex/hooks/edit-hooks.py` so the reminder fires for the new engine too.

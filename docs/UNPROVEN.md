@@ -1096,7 +1096,7 @@ that `Update.exe` cannot apply in the 1.2.0 line. The script warns; nothing enfo
 ### Speaker diarisation — studied 2026-08-16, instrument built 2026-08-17, gate passed 2026-08-18 on meetings only
 
 The pre-v1 study — run 2026-08-16; it lives in the maintainer's diarisation research on the
-Drive, outside this repository the way research does per `CLAUDE.md` — surveyed candidates,
+Drive, outside this repository the way research does per `AGENTS.md` — surveyed candidates,
 licences, gates and routes, with every load-bearing claim re-read at its primary source that day. What it did not and could not
 produce is a single number of this project's own: every DER and RTF in that document is an
 external benchmark on external material, named with its dataset and scoring convention, and none
@@ -1402,7 +1402,7 @@ test meetings through `uindosill der`, with the post-processing fixed on dev and
 collar 0.25 against 13.5963%, **26.7986%** over overlap regions against 26.7926%, and the same
 speaker error, 0.0625. Four of the sixteen meetings agree exactly; the worst per-meeting divergence
 is 0.0335 points. Both gate criteria hold. The run summary is in the maintainer's Drive per
-`CLAUDE.md`; `runs/` is gitignored and machine-local.
+`AGENTS.md`; `runs/` is gitignored and machine-local.
 
 **The port is not bit-identical to the reference and cannot be**, and the three reasons are named
 rather than left to be discovered. The mel featurizer computes its transform in double where
@@ -3064,7 +3064,7 @@ failure that has actually been seen — DirectML wrong on all 32 sentences of th
 line is not read as a quality result.
 
 **It also cannot run in CI**, needing the fp32 checkpoint and an interpreter, which is why
-`CLAUDE.md` asks for a CPU load and a WebGPU load by hand after any change to
+`AGENTS.md` asks for a CPU load and a WebGPU load by hand after any change to
 `python/uindosill_engines/translator/`. Six sentences on demand is what replaced seven hermetic
 checkpoint tests. It is less coverage, recorded as less.
 
@@ -3892,7 +3892,7 @@ The suite passes on this machine both before and after vendoring — **247 tests
 skipped, 0 failed**, Release, from a 0-warning build. The skip is
 `CompressedFormatsExplainWhyTheyCannotBeOpenedHere`, which is `Assert.SkipWhen(IsWindows)` by design
 because Media Foundation handles those formats here. Weights and natives being present changes
-nothing about the suite, which confirms the "no weights" claim in `CLAUDE.md` from the other
+nothing about the suite, which confirms the "no weights" claim in `AGENTS.md` from the other
 direction.
 
 ### Upstream llama.cpp on the second machine — the first model loaded here, and what it needed
@@ -6525,7 +6525,7 @@ code does. The flag is therefore set globally rather than per model.
 
 **What that verification is not.** It was run against the fp32 PyTorch checkpoint out of the
 Hugging Face cache, one sentence per decode as the sidecar does. **The ONNX engine was not loaded on
-CPU or on WebGPU**, which is what `CLAUDE.md` asks for after a translator change, because the
+CPU or on WebGPU**, which is what `AGENTS.md` asks for after a translator change, because the
 shipped translation model is not installed on this machine. That load is owed.
 
 ### Measured on FLEURS the same day — chrF++ 52.53, and no collapse in 321 sentences
@@ -6647,7 +6647,7 @@ four chrF++ points.
 - **Any of it through the application.** The cascade was assembled from the CLI's transcripts and a
   direct call to the translator, because `SidecarTranscriptTranslator.EnglishTargetToken` is a
   compile-time `">>eng<<"` and a single-direction checkpoint takes none. A user cannot run this.
-- **The WebGPU parity load** `CLAUDE.md` requires after a translator change. The CPU load ran and
+- **The WebGPU parity load** `AGENTS.md` requires after a translator change. The CPU load ran and
   translates correctly; WebGPU could not, this machine's interpreter carrying an `onnxruntime` whose
   only providers are `AzureExecutionProvider` and `CPUExecutionProvider`, and the bundled Python that
   has WebGPU not being present in a build-from-source tree.
@@ -6732,7 +6732,7 @@ must not be read against either of FuguMT's.
 - **The cascade for this checkpoint.** The −4.01 penalty of the same day was measured through
   FuguMT; no audio reached the shipped translator here, and a penalty is not known to transfer
   between checkpoints.
-- **Any backend but the CPU.** The WebGPU parity load `CLAUDE.md` requires after a translator change
+- **Any backend but the CPU.** The WebGPU parity load `AGENTS.md` requires after a translator change
   has still not run on this machine, for the provider reason above. **Run the same night**, for
   both checkpoints, 6 of 6 each — the section below.
 
@@ -6766,7 +6766,7 @@ changed. Everything below is the laptop.
   checkpoint's committed reference still reproduces 6 of 6 on the CPU through the per-checkpoint
   engine, so the vocabulary-derived token and the config-derived decode check changed nothing for it.
   **On WebGPU both pass 6 of 6**, through the shipped `onnxruntime-webgpu` 1.27.0 wheel — a copy of
-  the 2026-08-26 bundle with the repository's current engine — which is the parity load `CLAUDE.md`
+  the 2026-08-26 bundle with the repository's current engine — which is the parity load `AGENTS.md`
   asks for, run for both. **The first attempt did not check the Japanese one**: the bundle copy had
   been synced before its reference existed, the sidecar answered "no fixture", and the host said
   nothing, by design. That silence is now the same warning a crashed check gives, and the packaging

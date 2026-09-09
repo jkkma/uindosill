@@ -17,9 +17,9 @@
     bytes agree.
 
     **No URL and no file id appears here, or in anything this prints.** This repository is public.
-    Remote paths are folder *names* under a configured remote, which is all rclone needs, and the
-    name `uindosill` is already public in `CLAUDE.md`. If a future edit wants to paste an id in to
-    disambiguate something, the answer is to rename the folder instead.
+    Remote paths are folder *names* under a configured remote, which is all rclone needs; see
+    `AGENTS.md` for the transfer policy. If a future edit wants to paste an id in to disambiguate
+    something, the answer is to rename the folder instead.
 
     **One-time setup, per machine** — this cannot be scripted, because it ends in a browser:
 
@@ -48,9 +48,9 @@
     .\scripts\sync-drive.ps1 -Research .\out\diarisation-research-2026-08-16
 
 .EXAMPLE
-    # This machine's Claude Code session memory, to session-memory/<machine>. Push only; see the
-    # route for why pulling it is a merge rather than a copy.
-    .\scripts\sync-drive.ps1 -Memory desktop
+    # Curated Codex notes from an explicit folder outside the repository. Push only; review and
+    # merge a fetched export by hand. The global Codex memory store is never an export source.
+    .\scripts\sync-drive.ps1 -Memory desktop -MemorySource C:\session-exports\project-notes
 
 .EXAMPLE
     # On the desktop: fetch the study before starting work against it.
@@ -77,11 +77,16 @@ param(
     [Parameter(ParameterSetName = 'Research', Mandatory)]
     [string] $Research,
 
-    # Push this machine's Claude Code session memory to session-memory/<machine>. Push only:
-    # the route explains why coming back the other way is a merge and not this script's job.
+    # Push curated Codex markdown to session-memory/codex/<machine>. Push only:
+    # review and merge fetched notes by hand rather than overwriting the other machine's memory.
     [Parameter(ParameterSetName = 'Memory', Mandatory)]
     [ValidateSet('laptop', 'desktop')]
     [string] $Memory,
+
+    # An intentionally curated export outside this repository, never the global memory store.
+    [Parameter(ParameterSetName = 'Memory', Mandatory)]
+    [ValidateNotNullOrEmpty()]
+    [string] $MemorySource,
 
     # Pull a folder from under uindosill/ by name — a research folder, or runs-<machine>.
     [Parameter(ParameterSetName = 'Fetch', Mandatory)]
@@ -111,6 +116,42 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repo = Split-Path -Parent $PSScriptRoot
+
+# Validate the export before consulting rclone. Codex memory is global, so discovering and copying
+# it automatically would include unrelated projects. Only an explicitly prepared export travels.
+$memorySourcePath = $null
+if ($PSCmdlet.ParameterSetName -eq 'Memory') {
+    if (-not (Test-Path -LiteralPath $MemorySource -PathType Container)) {
+        throw "Codex memory export folder not found: $MemorySource. " +
+              'Pass -MemorySource with a curated markdown folder outside the repository.'
+    }
+    $resolvedSource = Resolve-Path -LiteralPath $MemorySource
+    if ($resolvedSource.Provider.Name -ne 'FileSystem') {
+        throw '-MemorySource must be a filesystem folder containing curated Codex markdown.'
+    }
+    $memorySourcePath = $resolvedSource.ProviderPath
+    $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    $separator = [IO.Path]::DirectorySeparatorChar
+    $sourcePrefix = $memorySourcePath.TrimEnd([char[]] '\/') + $separator
+    $repoPrefix = [IO.Path]::GetFullPath($repo).TrimEnd([char[]] '\/') + $separator
+    if ($sourcePrefix.StartsWith($repoPrefix, $comparison) -or $repoPrefix.StartsWith($sourcePrefix, $comparison)) {
+        throw '-MemorySource must be outside the repository and cannot contain it. Prepare a curated Codex markdown export there.'
+    }
+
+    $codexRoots = @(Join-Path $HOME '.codex')
+    if ($env:CODEX_HOME) { $codexRoots += $env:CODEX_HOME }
+    foreach ($codexRoot in $codexRoots) {
+        $storePrefix = [IO.Path]::GetFullPath((Join-Path $codexRoot 'memories')).TrimEnd([char[]] '\/') + $separator
+        if ($sourcePrefix.StartsWith($storePrefix, $comparison) -or $storePrefix.StartsWith($sourcePrefix, $comparison)) {
+            throw '-MemorySource cannot include the global Codex memory store. Export only curated project notes to a separate folder.'
+        }
+    }
+
+    $documents = @(Get-ChildItem -LiteralPath $memorySourcePath -Filter *.md -File -Recurse -Force)
+    if ($documents.Count -eq 0) {
+        throw "No markdown in $memorySourcePath. Prepare a curated Codex markdown export before pushing it."
+    }
+}
 
 # The four episodes the maintainer supplied on 2026-08-16, one show, filenames carrying the
 # speaker-count stratification the measurement plan asked for: 2, 3, 5 and 7 voices. Those counts
@@ -180,14 +221,14 @@ switch ($PSCmdlet.ParameterSetName) {
 
     'Runs' {
         # Summaries and their JSON, not the transcripts: the transcripts are large, regenerable and
-        # already covered by CLAUDE.md's rule about what belongs in a run report.
+        # already covered by AGENTS.md's rule about what belongs in a run report.
         $source = Assert-LocalPath (Join-Path $repo 'runs') 'runs/'
         $target = "$root/runs-$Runs"
 
         # `/README.md` is listed separately because `**/*.md` does not match it: rclone's `**` spans
         # path separators but the pattern still requires one, so it matches at depth one and below
         # and never at the root. The folder's index lived only on the Drive until that was noticed,
-        # which is exactly the drift CLAUDE.md's "keep that folder's README current" is about — so
+        # which is exactly the drift AGENTS.md's "keep that folder's README current" is about — so
         # the index is now `runs/README.md` on the machine, regenerable, and travels with the rest.
         Invoke-Rclone -What "runs/ → runs-$Runs" -Arguments (
             @('copy', $source, $target) + $common +
@@ -215,37 +256,21 @@ switch ($PSCmdlet.ParameterSetName) {
     }
 
     'Memory' {
-        # Claude Code keeps its per-project memory outside the repository, under a key that is the
-        # working copy's path with every ':' and '\' replaced by '-'. Derived from $repo rather
-        # than written down: writing it down puts a username in a public repository, and the two
-        # machines' paths differ anyway — which is the whole reason this route is per-machine.
-        $slug = $repo -replace '[:\\]', '-'
-        $profileRoot = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
-        $source = Join-Path $profileRoot (Join-Path '.claude/projects' (Join-Path $slug 'memory'))
+        $source = $memorySourcePath
+        $target = "$root/session-memory/codex/$Memory"
 
-        if (-not (Test-Path -LiteralPath $source)) {
-            throw "No session memory at $source.`n" +
-                  'That folder appears once a Claude Code session has run in this working copy. ' +
-                  'If one has, the key may differ: it is the working copy path with every '':'' ' +
-                  'and ''\'' replaced by ''-''.'
-        }
-        $source = (Resolve-Path -LiteralPath $source).Path
-        $target = "$root/session-memory/$Memory"
-
-        # copy, not sync. The remote also holds the OTHER machine's memory, and files this machine
-        # never had — on 2026-08-17 that folder carried one absent from the desktop entirely — so a
-        # sync would delete them. Nothing up there is this machine's to remove.
-        Invoke-Rclone -What "session memory → session-memory/$Memory" -Arguments (
+        # Copy preserves previously exported notes that this curated folder does not contain.
+        # This route adds or updates files; it never deletes remote notes.
+        Invoke-Rclone -What "Codex notes → session-memory/codex/$Memory" -Arguments (
             @('copy', $source, $target) + $common + @('--include', '*.md')
         )
 
         if ($DryRun) { break }
 
         Write-Host ''
-        Write-Host '  Push only, deliberately. Installing these on the other machine is a MERGE, not a copy:' -ForegroundColor Yellow
-        Write-Host '  MEMORY.md is one line per memory and each machine has entries the other does not, and a' -ForegroundColor Yellow
-        Write-Host '  memory asserting which machine it was written on is false on the other one. Pull with' -ForegroundColor Yellow
-        Write-Host '  -Fetch session-memory/<machine> into a scratch folder and merge by hand.' -ForegroundColor Yellow
+        Write-Host '  Push only. Fetch into a scratch folder, review the notes, and merge them by hand:' -ForegroundColor Yellow
+        Write-Host '  -Fetch session-memory/codex/<machine> -Destination <scratch-folder>' -ForegroundColor Yellow
+        Write-Host '  Each machine has its own context; an export must not replace its memory store.' -ForegroundColor Yellow
     }
 
     'Fetch' {

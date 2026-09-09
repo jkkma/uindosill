@@ -13,7 +13,7 @@ a torch-only pipeline and wrong as a permanent answer on a machine whose only GP
 Radeon: there is no CUDA torch for it and `torch-directml` pins `torch==2.4.1` against this bundle's
 2.13.0, so ONNX Runtime is the only way the GPU gets used at all.
 
-Writes to `runs/diariser-onnx/<variant>/` by default, per CLAUDE.md: nothing a measurement produces
+Writes to `runs/diariser-onnx/<variant>/` by default, per AGENTS.md: nothing a measurement produces
 belongs in the working tree. `--install` writes to `<model-dir>/onnx/` instead, which is where the
 engine looks — the same place the application's own export puts them.
 

@@ -33,7 +33,7 @@ python3 scripts/check-test-counts.py     # the counts above, against the run tha
 ```
 
 That last line is why the number in the comment can be trusted, and CI runs it too. **If you change
-the test count, run it** — it prints what every document should say, and checks all four documents
+the test count, run it** — it prints what every document should say, and checks all three documents
 that quote a count together.
 
 The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
@@ -125,9 +125,9 @@ a model, neither of which is in the clone. `--fake` exercises the whole pipeline
 `git pull --ff-only` and its output lands in context — read it, and reconcile by hand if it did
 not fast-forward, because the two machines work
 in tandem. The PreToolUse and PostToolUse entries in `.codex/hooks.json` run
-`.codex/hooks/edit-hooks.py`, which reads every changed path from `tool_input.command`, including
-both ends of a rename. The PostToolUse hook prints the matching obligation from the section above
-when a gated path is edited, so a new gated test needs a rule
+`.codex/hooks/edit-hooks.py` for `apply_patch`, reading every changed path from
+`tool_input.command`, including both ends of a rename. The PostToolUse hook prints the matching
+obligation from the section above when a gated path is edited, so a new gated test needs a rule
 there as well as a line here; where the check is cheap and needs nothing installed it runs it
 instead — an edit to the diariser's election file runs `check-diariser-auto.py`, and an edit to
 any `.ps1` parses that file. The PreToolUse hook blocks edits under `attic/`, because a retired
@@ -136,14 +136,20 @@ an intentional attic edit needs explicit user approval before arranging a scoped
 The `.codex/hooks/attic-guard.sh` and `.codex/hooks/gated-test-reminder.sh` files are compatibility
 wrappers around the same Python entry point. `scripts/check-codex-hooks.py` checks patch routing,
 the blocking response and reminder behavior without changing product files. Run it after a hook change.
-The agent definitions are `.codex/agents/*.toml`; the skills live under `.agents/skills/`.
+`scripts/check-drive-memory.ps1` checks the memory export route and dispatcher against a fake
+rclone without network access or user memory. Run it after changing that route; its fixtures stay
+under `runs/check-drive-memory/<unique>/`.
+The agent definitions are `.codex/agents/*.toml`; the skills live under `.agents/skills/`, with
+manual invocation configured in each skill's `agents/openai.yaml`. The auditors default to a
+read-only sandbox; their instructions also forbid edits, builds and test runs when a parent
+session supplies broader permissions. Review changed hooks with `/hooks` before relying on them.
 The read-only agents sweep and fix nothing: `claims-auditor` for the numbers, under the rule below;
 `reference-auditor` for the names — paths, scripts, counts and the dated pointers into PHASES —
 against the tree; `harness-reviewer` for a changed measurement script, against the gotchas the
 harnesses taught. The user-invoked skills sequence this file and defer to it wherever they
-disagree: `/new-engine`, `/wrap-runs`, `/preflight` (the build block above as one command, run
+disagree: `$new-engine`, `$wrap-runs`, `$preflight` (the build block above as one command, run
 the way CI runs it — a TRX log for the count script to read, and its self-check — plus a check
-that the reminder hook still mirrors it) and `/record-measurement` (a finished run into UNPROVEN,
+that the reminder hook still mirrors it) and `$record-measurement` (a finished run into UNPROVEN,
 PHASES and the README rows, then `claims-auditor`).
 
 ## The rule this project runs on
@@ -221,16 +227,15 @@ remote it created, refresh token included: its output is a credential.** It does
 anywhere; if it has been, revoke rclone at `myaccount.google.com/permissions` and run it again. The
 resulting `rclone.conf` never comes near this repository.
 
-**Claude Code session memory travels per machine — `lab.ps1 drive -Memory <machine>`.**
-That command only reads Claude Code's memory; it does not transfer Codex memory. No Codex memory
-transfer is implemented here. Claude Code's memory lives outside the repository, under a key
-derived from the working copy's path, and the route pushes it to `session-memory/<machine>` beside
-the runs folders. It is
-**push only** on purpose: each machine has memories the other does not, `MEMORY.md` is an index that
-has to be merged rather than overwritten, and a memory asserting which machine it was written on is
-false on the other one. Pull with `-Fetch session-memory/<machine>` into a scratch folder and merge
-by hand. None of it belongs in this repository — it names machines and sessions, and this repository
-is public.
+**Codex memory exports travel only when asked —
+`lab.ps1 drive -Memory <machine> -MemorySource <folder>`.** Choose a folder outside this repository
+containing the markdown notes selected for this project. The route requires that explicit source;
+it does not discover or export Codex's global memory store, which can include unrelated projects.
+It copies markdown with `--checksum` to `session-memory/codex/<machine>` and supports `-DryRun`.
+It is **push only**: fetch with `-Fetch session-memory/codex/<machine> -Destination <scratch>`
+and review the notes before requesting a memory update on the other machine. Do not overwrite
+Codex's generated memory files. Earlier exports remain in their existing remote folders.
+None of these notes belongs in this public repository.
 
 **Research lives on the Drive, not in this repository — until v1.0 ships, at which point it all
 comes back.** The maintainer's standing convention, named 2026-08-16 when the diarisation study

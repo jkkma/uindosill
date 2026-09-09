@@ -29,7 +29,7 @@ namespace Parakeet.App.Tests;
 /// <b>The rendered rule is two lines, and <c>tools/measure-lines</c> is what measures it</b> — the
 /// same window on a Skia-backed host with the embedded typefaces, every page rather than this one,
 /// at the window's default width and at its minimum, and it refuses to report if it finds itself
-/// on the stub shaper. CLAUDE.md names the paths that owe it a run. This is the cheap floor under
+/// on the stub shaper. AGENTS.md names the paths that owe it a run. This is the cheap floor under
 /// it, which is why the number here is three and the number there is two.
 /// </para>
 /// </remarks>

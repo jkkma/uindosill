@@ -1,21 +1,29 @@
 ---
 name: record-measurement
 description: Land a finished harness run in the documents - the dated block in docs/UNPROVEN.md, the "Measured" entry and the roadmap row in docs/PHASES.md, the two README rows - with every figure copied from the run's own summary and every real-time factor naming its backend, then hand off to claims-auditor. Invoke once a run's summary.md exists under runs/.
-disable-model-invocation: true
 ---
 
 # Record a measurement in the documents
 
 AGENTS.md's **"The rule this project runs on"** governs every line this skill writes: every claim
 measured or marked unproven, every figure measuring the thing it claims, no real-time factor
-without its backend. `/wrap-runs` moves the run reports to the Drive; this skill moves the finding
+without its backend. `$wrap-runs` moves the run reports to the Drive; this skill moves the finding
 into the repository's record. It exists because the request-unit measurement of 2026-09-03 landed
 in UNPROVEN.md and PHASES.md and missed both roadmap rows — the rows a reader meets first — until
 a second commit the same day.
 
 ## 1. Find the run and read its record
 
-Newest entries under `runs/`: !`ls -t runs 2>/dev/null | head -8`
+Use the shell tool from the repository root to list the newest entries under `runs/`.
+In PowerShell (`pwsh -NoProfile` on either platform):
+
+```powershell
+if (Test-Path -LiteralPath runs) {
+    Get-ChildItem -LiteralPath runs |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 8 Name, LastWriteTime
+}
+```
 
 Each harness uses its own shape under `runs/` (AGENTS.md's "Where output goes" lists them). Read
 the run's `summary.md` and `summary.json`. The JSON is the ground truth for every number, because
@@ -56,7 +64,7 @@ decision, the sentence says "decision owed"; it never takes the decision.
 
 Run the `claims-auditor` agent over the documents you touched — one agent, read-only. If you
 added or renamed a heading, run `reference-auditor` after it, not beside it. Report both results
-as they came. Then, if the session is ending, `/wrap-runs`.
+as they came. Then, if the session is ending, `$wrap-runs`.
 
 ## What never happens here
 
