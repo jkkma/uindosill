@@ -55,7 +55,7 @@ file, it will go stale.
 
 - `dotnet build Uindosill.slnx -c Release` — zero warnings, warnings are errors.
 - `dotnet test Uindosill.slnx -c Release`, then **`python3 scripts/check-test-counts.py`** —
-  the count changed, three documents quote it, and the script prints what each must now say.
+  the count changed, four documents quote it, and the script prints what each must now say.
 - New gated tests mean two additions to **CLAUDE.md's "Building and testing" section**: the
   env-var invocation, and a "run them after any change to ..." line. Add the matching path rule
   to `.claude/hooks/gated-test-reminder.sh` so the reminder fires for the new engine too.

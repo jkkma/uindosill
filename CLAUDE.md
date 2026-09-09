@@ -33,8 +33,8 @@ python3 scripts/check-test-counts.py     # the counts above, against the run tha
 ```
 
 That last line is why the number in the comment can be trusted, and CI runs it too. **If you change
-the test count, run it** — it prints what every document should say, and the three that quote a
-count are the three you would otherwise forget.
+the test count, run it** — it prints what every document should say, and checks all four documents
+that quote a count together.
 
 The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
 change to the election in `python/uindosill_engines/diariser/pyannote_engine.py`** (`AUTO_ORDER`,

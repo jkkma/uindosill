@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/edit-hooks.py\" PreToolUse",
+            "commandWindows": "python -c \"import pathlib,runpy,subprocess,sys; sys.argv=['edit-hooks.py','PreToolUse']; runpy.run_path(str(pathlib.Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())/'.codex/hooks/edit-hooks.py'),run_name='__main__')\"",
+            "timeout": 10,
+            "statusMessage": "Checking the edit is not aimed at attic/"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/edit-hooks.py\" PostToolUse",
+            "commandWindows": "python -c \"import pathlib,runpy,subprocess,sys; sys.argv=['edit-hooks.py','PostToolUse']; runpy.run_path(str(pathlib.Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip())/'.codex/hooks/edit-hooks.py'),run_name='__main__')\"",
+            "timeout": 60,
+            "statusMessage": "Checking gated-test obligations and running the cheap guards"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git pull --ff-only 2>&1 || echo \"SessionStart: git pull --ff-only did not fast-forward - the tree is dirty or the branch has diverged; reconcile by hand before working.\"",
+            "timeout": 60,
+            "statusMessage": "Pulling origin (fast-forward only)"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 #!/bin/sh
 # PostToolUse hook (Edit|MultiEdit|Write): the working agreement ties a handful of paths to
-# checks CI cannot run, or runs only after a push, and the tests tree to a count three
+# checks CI cannot run, or runs only after a push, and the tests tree to a count four
 # documents quote. Those rules exist because they get forgotten; this prints the matching
 # reminder into context when such a path is touched - and where the check itself is cheap
 # and needs nothing installed, it runs the check and reports the result instead of asking:
@@ -60,7 +60,7 @@ case "$p" in
   */Parakeet.App/Views/*|*/Parakeet.App/ViewModels/*) add "CLAUDE.md: every description the window draws fits in two lines (the Models tab excepted), and the suite cannot measure that - after this change run the ruler (dotnet run --project tools/measure-lines -c Release); its exit code is the number of blocks over two lines, each named." ;;
 esac
 case "$p" in
-  */tests/*|tests/*) add "If this change added or removed tests, run python3 scripts/check-test-counts.py after the next test run - three documents quote the count and CI fails on a stale one." ;;
+  */tests/*|tests/*) add "If this change added or removed tests, run python3 scripts/check-test-counts.py after the next test run - four documents quote the count and CI fails on a stale one." ;;
 esac
 
 # The diariser's election is pure logic over two filesystem checks, guarded by a script that
