@@ -15,7 +15,7 @@ namespace Parakeet.Core.Tests;
 ///
 /// Nothing here needs a transcript, weights, or a model. When the pinned transcript is present on
 /// a machine, the lab script checks ranges against it; the suite does not, so that CI stays exactly
-/// what CLAUDE.md says it is.
+/// what AGENTS.md says it is.
 /// </summary>
 public class QuestionSetTests
 {

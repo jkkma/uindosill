@@ -1,8 +1,8 @@
 #!/bin/bash
-# PASTE THIS INTO THE "SETUP SCRIPT" FIELD OF THE CLAUDE CODE CLOUD ENVIRONMENT SETTINGS.
+# Codex cloud setup script: run bash scripts/cloud-setup.sh from the checkout root.
 #
-# It is not run from the clone. It lives here so the text is versioned and findable rather than
-# living only in somebody's clipboard.
+# Configure that command in the cloud environment's setup script field. The versioned script
+# also supports pasting its contents there; package restore uses the current Git checkout.
 #
 # Installs .NET SDK 10.0.400 and PowerShell 7.6.4 so a cloud session can build and test.
 #
@@ -100,7 +100,7 @@ done
 
 # Warm the NuGet cache if the clone is already here. Avalonia and xunit.v3 are most of a restore,
 # and the container image keeps ~/.nuget/packages.
-for candidate in /home/user/uindosill "${CLAUDE_PROJECT_DIR:-}" "$PWD"; do
+for candidate in "$PWD" "$(git rev-parse --show-toplevel 2>/dev/null || true)"; do
     if [ -n "$candidate" ] && [ -f "$candidate/Uindosill.slnx" ]; then
         echo "[setup] restoring packages in $candidate"
         (cd "$candidate" && dotnet restore Uindosill.slnx) || echo "[setup] restore failed; the SDK is still installed"

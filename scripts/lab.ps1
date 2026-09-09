@@ -91,6 +91,10 @@
     .\scripts\lab.ps1 drive -Episodes
 
 .EXAMPLE
+    # Curated Codex notes, prepared outside the repository, for review on the other machine.
+    .\scripts\lab.ps1 drive -Memory laptop -MemorySource C:\session-exports\project-notes -DryRun
+
+.EXAMPLE
     # The diarisation development stretches, cut from those episodes and checked against their pins.
     .\scripts\lab.ps1 der -Cut
 
@@ -224,6 +228,7 @@ param(
     # wins over a prefix match. Observed 2026-08-17.
     [ValidateSet('laptop', 'desktop')]
     [string] $Memory,
+    [string] $MemorySource,
 
     [string] $Fetch,
     [switch] $Episodes,

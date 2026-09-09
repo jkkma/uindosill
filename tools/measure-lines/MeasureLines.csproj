@@ -8,9 +8,9 @@
     stub with made-up glyph advances. This opens the same window on a Skia-backed headless host,
     so the lines are counted with the embedded typefaces, and exits with the number of blocks
     that overflow. Not in Uindosill.slnx and not run by CI: run it by hand after any change to
-    the window's copy, as CLAUDE.md says.
+    the window's copy, as AGENTS.md says.
 
-      dotnet run (with the project flag) tools/measure-lines, in Release; CLAUDE.md has the line.
+      dotnet run (with the project flag) tools/measure-lines, in Release; AGENTS.md has the line.
 
     It inherits Directory.Build.props and Directory.Packages.props from the repository root like
     every other project; Avalonia.Skia comes transitively through Parakeet.App.

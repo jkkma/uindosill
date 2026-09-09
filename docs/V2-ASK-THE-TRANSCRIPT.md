@@ -1577,7 +1577,7 @@ present, runs tier 0 for recall@10 once BM25 exists in `Parakeet.Core`, plants t
 diffs every model run's citations against gold. One question was the maintainer's, not this
 document's, and it was taken on 2026-08-24: a labelled file carries about thirty short quotes from
 a podcast, and this repository is public, so **the labelled set lives on the Drive only** — beside
-the research, per `CLAUDE.md`'s convention, pushed and fetched with `lab.ps1 drive`. The in-repo
+the research, per `AGENTS.md`'s convention, pushed and fetched with `lab.ps1 drive`. The in-repo
 `tests/fixtures/csb384/questions.json` stays a template permanently: the suite goes on validating
 the shape both states must have, and `measure-answers.ps1 -QuestionsPath` points at the fetched
 labelled copy when it runs. What the v1.0 research homecoming does with the file is that

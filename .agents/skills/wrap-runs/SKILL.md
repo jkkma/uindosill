@@ -1,7 +1,6 @@
 ---
 name: wrap-runs
 description: End-of-measurement-session wrap-up - push new run summaries and research to the maintainer's Drive over rclone, update the Drive README index, and account for anything too big to travel. Invoke after a measuring session.
-disable-model-invocation: true
 ---
 
 # Wrap up a measuring session
@@ -53,10 +52,12 @@ note current on which working-tree changes are not yet pushed to the repository.
 
 ## 6. Session memory, if asked
 
-`lab.ps1 drive -Memory <machine>` pushes this machine's **Claude Code** session memory to
-`session-memory/<machine>`. It does not transfer Codex memory; that route is not implemented.
-Push only — merging is by hand via `-Fetch` into a scratch folder.
-Do this only when the user asks; it is not part of every wrap-up.
+Only when the user asks, run
+`lab.ps1 drive -Memory <machine> -MemorySource <explicit curated Codex markdown folder outside repo>`.
+The route copies markdown with `--checksum` to `session-memory/codex/<machine>` and is push only.
+The user chooses the source folder; do not discover or export global memory automatically.
+Fetch into a scratch folder for review and merging by hand; do not write into Codex's memory
+internals. This optional transfer is not part of every wrap-up.
 
 ## 7. The line that must never move
 

@@ -512,7 +512,7 @@ would settle it.
 
 **A v1 opt-in that produces an English version of the transcript beside it, decided
 2026-08-19 and not yet built.** The study is in the dated folder `translate-to-english-2026-08-19`,
-beside the other research on the maintainer's Drive, per `CLAUDE.md`.
+beside the other research on the maintainer's Drive, per `AGENTS.md`.
 
 **Four decisions were taken the day the study landed, and the first one overrides its
 recommendation.** *Translation is aboard v1.0*, not v1.1 — the same call the diariser got, and for
@@ -685,7 +685,7 @@ repository ships an artefact no upstream publishes, so the thing that produces i
 code that loads it. The graphs themselves go nowhere near the working tree, and the run's own report
 — the manifest of names, sizes and digests, the verbatim smoke diffs, and the timings — is in the
 dated folder `translation-onnx-export-2026-08-20` beside the other research on the maintainer's
-Drive, per `CLAUDE.md`.
+Drive, per `AGENTS.md`.
 
 **The recorded export failure was a Python version, not a library pair.** `optimum` 2.1.0 against
 `transformers` 4.57.6 failed inside optimum's own config normaliser, which is where the traceback
@@ -854,7 +854,7 @@ Both now have been, in Python outside the working tree, with one thing changed p
 `onnxruntime-gpu` install so that even the binary is held constant. **Nothing shipped moved:**
 `Microsoft.ML.OnnxRuntime` 1.29.0 is still pinned, `Directory.Packages.props` is untouched, and no
 figure here came out of code the product carries. The study is in the dated folder
-`execution-providers-2026-08-20` on the maintainer's Drive, per `CLAUDE.md`.
+`execution-providers-2026-08-20` on the maintainer's Drive, per `AGENTS.md`.
 
 **The instinct behind the ask was that the GPU should win everywhere and the CPU should be the
 fallback. It was tested rather than implemented, and it does not survive either component — for
@@ -2898,7 +2898,7 @@ not a restart, not a second run over the same audio. The window says so, once so
 renamed something rather than as a standing caveat over a feature nobody has used. Why it stops
 there, and what it would cost to go further, is in `docs/UNPROVEN.md`.
 
-**1713 tests, no weights, no display, no network — 1704 passed and 9 skipped.** `CLAUDE.md`'s second
+**1713 tests, no weights, no display, no network — 1704 passed and 9 skipped.** `AGENTS.md`'s second
 count said 949 and had been stale by thirty for some time, because `949 skip` does not match the
 pattern `scripts/check-test-counts.py` looks for; it is reworded to `1713 tests` so the guard now
 covers it.
@@ -3282,7 +3282,7 @@ recorded rather than resolved.
 
 **1713 tests, no weights, no display, no network — 1704 passed and 9 skipped.** The C# suite does
 not run any of this; what covers it is the parity fixture at load on a real machine, which is
-exactly the arrangement `CLAUDE.md` records for the translator.
+exactly the arrangement `AGENTS.md` records for the translator.
 
 ### Built 2026-08-23 — Export and Settings tabs, and Licences retires into an About window
 
@@ -4488,7 +4488,7 @@ The next actions, in order:
 4. ~~**Before v1 ships: a research workflow on how best to implement speaker diarisation in this
    app.**~~ — **the study ran 2026-08-16**; its result lives in the maintainer's diarisation
    research on the Drive, outside this repository the way the v2 research is (moved out the same
-   evening at the maintainer's ask — the convention `CLAUDE.md` now names), and the measurement
+   evening at the maintainer's ask — the convention `AGENTS.md` now names), and the measurement
    design that used to live in this item moved there with it, sharpened. Asked for by
    the maintainer on 2026-08-16, after the WER work; a study, not a build. What it settled: the
    single most consequential unknown resolved — Sortformer runs without NeMo, because although no
@@ -4709,7 +4709,7 @@ The next actions, in order:
    nor the speaker cache, nor the chunk loop, and the cache alone is some 250 lines of tensor
    bookkeeping that this spike deliberately did not port, because the model had to earn it first.
    The report, the code and the cached per-meeting probabilities are in a dated folder beside the
-   other research on the maintainer's Drive, per `CLAUDE.md`; nothing from the spike is in this
+   other research on the maintainer's Drive, per `AGENTS.md`; nothing from the spike is in this
    repository.
 
    **The target domain narrowed to meetings and podcasts on 2026-08-18, and web video is out.**
@@ -4861,7 +4861,7 @@ The next actions, in order:
 
 **The research comes home when v1.0 ships — decided 2026-08-18.** Everything this project has
 measured or studied lives on the maintainer's Drive rather than here, a convention named
-2026-08-16 and recorded in `CLAUDE.md`. It now has an end date: **on the v1.0 release, every
+2026-08-16 and recorded in `AGENTS.md`. It now has an end date: **on the v1.0 release, every
 research folder and run report moves into this repository**, and the Drive reverts to being a
 transfer route between the two machines rather than the place the evidence lives.
 
@@ -4879,7 +4879,7 @@ every study, survey, report and run summary this project has produced — comes 
 publication rather than moved wholesale, because it was written for a private folder and this
 repository has already had one history rewrite to remove things that should not have been in it.
 Second, **session memory is not research data and does not come** — it names machines and sessions,
-and `CLAUDE.md` excludes it for reasons the migration does not change. Third, cached intermediate
+and `AGENTS.md` excludes it for reasons the migration does not change. Third, cached intermediate
 artifacts like those 7.9 MB of probability arrays are regenerable from the model in minutes and may
 be better left out than committed as binaries; that is a judgement about each artifact rather than
 a rule.
@@ -4979,7 +4979,7 @@ rejected in `docs/V2-ASK-THE-TRANSCRIPT.md` § 1; the Ryzen AI runtime and `flex
 redistribution licences, unread; and that AMD's LLM-on-NPU path is ONNX Runtime GenAI hybrid or
 the Lemonade daemon, both shapes v2 already rejected. Cheapest first measurement: AMD's own demo
 on this laptop against the same ten-minute file, its RTF beside 0.035 — a dev-machine experiment,
-not a shippable path. It runs under `CLAUDE.md`'s convention: the product to a dated Drive folder,
+not a shippable path. It runs under `AGENTS.md`'s convention: the product to a dated Drive folder,
 the decision record and the unproven markers here.
 
 **~~A GPU execution provider for the two ONNX Runtime components — asked for 2026-08-20, and the
@@ -5010,7 +5010,7 @@ diariser alone on DirectML on the desktop, 26 seconds a pass on CUDA and unlikel
 against the recorded 16.3368% — if DirectML's probabilities differ from the CPU's the way CUDA's do,
 the rest of the study is about how much re-validation is acceptable rather than about speed.
 **Not before v1.0**, and the reason is the one above: the component with a real speed-up is the one
-whose passed gate the swap moves. It runs under `CLAUDE.md`'s convention — the product to a dated
+whose passed gate the swap moves. It runs under `AGENTS.md`'s convention — the product to a dated
 Drive folder, the decision record and the unproven markers here.
 
 ### Decided 2026-08-26 — a second diariser the user chooses, and the first weights this project will not ship
@@ -7440,7 +7440,7 @@ not the cascade. The shipped translator was not scored on `ja_jp` here, its ONNX
 on this machine, so "better than what ships for Japanese" still rests on Helsinki's published
 figures — **answered the same evening at chrF++ 46.47, a gate pass 6.06 below this one**
 (*Measured 2026-09-04, evening*). The ONNX engine has not been loaded on CPU or WebGPU since the translator changed, which
-`CLAUDE.md` asks for. Criterion two is a person's and is unrated. **And there is no catalogue
+`AGENTS.md` asks for. Criterion two is a person's and is unrated. **And there is no catalogue
 entry**: the graphs are 571.1 MiB in `runs/`, hosted nowhere, so nothing can be pinned and Japanese
 translation is not something a user can turn on yet.
 
@@ -7484,7 +7484,7 @@ this harness's now and is narrower than the published gap. The cascade above rem
 no audio has reached the shipped checkpoint in Japanese. None of it ran
 through the application: `SidecarTranscriptTranslator.EnglishTargetToken` is a compile-time
 `">>eng<<"` and a single-direction checkpoint takes none, so making that per model is what stands
-between this measurement and a user. The WebGPU parity load `CLAUDE.md` requires after a translator
+between this measurement and a user. The WebGPU parity load `AGENTS.md` requires after a translator
 change has still not run — the CPU load did and translates correctly, but this machine's interpreter
 carries an `onnxruntime` whose only providers are Azure and CPU. And FLEURS is read speech in a quiet
 room: no spontaneous Japanese, no overlap, no music, no telephone audio.
@@ -7529,7 +7529,7 @@ choice, and the decision is the maintainer's.
 **What it does not settle.** Neither checkpoint has been rated for adequacy by a person, and the
 gate's second criterion stays declined for v1.0. No audio has reached the shipped translator in
 Japanese, so the morning's −4.01 cascade penalty remains FuguMT's alone and is not known to
-transfer. The CPU is the only backend measured, the WebGPU parity load `CLAUDE.md` asks for after a
+transfer. The CPU is the only backend measured, the WebGPU parity load `AGENTS.md` asks for after a
 translator change having still not run on this machine. And nothing here is a timing figure: the
 same 321 sentences through the same FuguMT graphs took 270.2 s and 117.8 s in two runs, a 2.3x
 spread on identical work with the scores reproducing to the digit, because the harness does not
@@ -7796,7 +7796,7 @@ so. "Preparing it now" left the provider description, whose graphics row has its
 for that. The Ask panel's intro no longer says that answers name speakers, and the Updates note no
 longer repeats the About window's promise about the network.
 
-**The ruler is a hand-run check, not a test**, on the FLEURS pattern: CLAUDE.md names the three
+**The ruler is a hand-run check, not a test**, on the FLEURS pattern: AGENTS.md names the three
 paths that owe it a run, the reminder hook prints the obligation when one is edited, and CI does
 not run it — a Skia host on the Linux runner is untried from here, and a check that could fail on
 fonts rather than on copy is not the check wanted. The suite is unchanged: 1713 tests, nine skipped,
@@ -7820,7 +7820,7 @@ the note. The backend note under a highlighted model is restored with them, unto
 else the entry
 above says still holds: every other page fits two lines, and `tools/measure-lines` now skips the
 Models tab rather than measuring it, says so in its summary line, and still exits with the number
-of blocks that overflow elsewhere — none. `models.json` no longer owes the ruler a run, so CLAUDE.md
+of blocks that overflow elsewhere — none. `models.json` no longer owes the ruler a run, so AGENTS.md
 and the reminder hook name two paths for it rather than three, seven gated paths in all.
 
 ### Measured 2026-09-07 — the diariser's graphs derive on a shipped install, and `auto` runs the route it elects

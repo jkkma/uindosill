@@ -73,7 +73,7 @@ corpus/
 # be moved or deleted by hand. Use the harnesses, which write into runs/, and this does not arise.
 
 # Research fetched from the maintainer's Drive by scripts/sync-drive.ps1 -Fetch, read on disk and
-# never committed: the standing convention in CLAUDE.md keeps research outside this public
+# never committed: the standing convention in AGENTS.md keeps research outside this public
 # repository until v1.0 ships. Scoped to the root, where a fetch lands.
 /*-research-*/
 
@@ -81,15 +81,9 @@ corpus/
 .DS_Store
 Thumbs.db
 
-# Claude Code per-machine overrides; the shared hooks live in .claude/settings.json
-.claude/settings.local.json
-
-# Claude Code runtime droppings. The lock file names a live session id and pid, and worktrees/
-# holds scratch checkouts — machine state, not configuration. Ignored here rather than in
-# .git/info/exclude because that file does not travel with a clone, and this repository is
-# public: a `git add .claude` on a machine without the local exclude would stage them.
-.claude/scheduled_tasks.lock
-.claude/worktrees/
+# Retired agent configuration and any machine-local state left in older working copies.
+/.claude/
+/CLAUDE.md
 
 # Velopack packaging output: scripts/package-windows.ps1 writes the publish, the nupkg, Setup.exe
 # and the release feed under here. Same rule as runs/ — nothing a build produces belongs in the

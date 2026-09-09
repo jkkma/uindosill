@@ -564,7 +564,7 @@ def manifest_digests(variant: Path) -> dict | None:
 def checkpoint_phrase(result: dict) -> str:
     """Which weights produced a score, for the summary rather than only the JSON.
 
-    `summary.md` is what the Drive route carries between machines (`CLAUDE.md` § *Where output
+    `summary.md` is what the Drive route carries between machines (`AGENTS.md` § *Where output
     goes*), and `translation-quality.json` is not, so a summary naming only its variant directory
     arrives on the other machine unable to say which checkpoint the number describes — `fp32` is a
     layout, not an identity. Shared with `measure-cascade.py` so the two summaries say it alike.

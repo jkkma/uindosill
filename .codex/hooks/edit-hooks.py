@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Codex edit hooks: JSON in, hookSpecificOutput out; no third-party dependencies.
 
-Codex supplies apply_patch text in tool_input.command, not Claude's file_path.
+Codex supplies apply_patch text in tool_input.command.
 Read every file header, including both ends of a move. The shell entry points are
 compatibility wrappers; hooks.json invokes Python directly on Windows.
 """
@@ -38,7 +38,7 @@ REMINDERS = (
      "dotnet run --project tools/measure-lines -c Release; every description outside Models "
      "must fit in two lines at both widths."),
     ("/tests/", "if tests were added or removed, run python3 scripts/check-test-counts.py "
-     "after a test run with a TRX log; README.md, CLAUDE.md, AGENTS.md and docs/PHASES.md "
+     "after a test run with a TRX log; README.md, AGENTS.md and docs/PHASES.md "
      "quote the count."),
 )
 
