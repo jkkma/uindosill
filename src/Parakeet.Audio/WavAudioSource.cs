@@ -181,6 +181,14 @@ public sealed class WavAudioSource : IAudioSource
                     break;
 
                 case "data":
+                    // Resolve the placeholder before advancing the chunk walk. Applying ds64
+                    // only after the walk lands inside recordings larger than 4 GiB and treats
+                    // their sample bytes as chunk headers.
+                    if (isRf64 && rf64DataSize >= 0 && (size == uint.MaxValue || size == 0))
+                    {
+                        size = rf64DataSize;
+                    }
+
                     dataOffset = chunkStart;
                     dataLength = size;
                     break;
@@ -196,7 +204,8 @@ public sealed class WavAudioSource : IAudioSource
             // looked at first, and a plausible chunk header there means the chunk really is empty
             // and the walk goes on. Until 2026-08-22 a zero here was refused as "no audio frames"
             // while 0xFFFFFFFF was recovered.
-            if (id == "data" && size == 0 && chunkStart < stream.Length && !LooksLikeChunkHeaderAt(stream, chunkStart))
+            if (id == "data" && size == 0 && !(isRf64 && rf64DataSize >= 0)
+                && chunkStart < stream.Length && !LooksLikeChunkHeaderAt(stream, chunkStart))
             {
                 dataLength = stream.Length - chunkStart;
                 break;
@@ -206,14 +215,16 @@ public sealed class WavAudioSource : IAudioSource
             // A zero-size chunk advances by nothing, and the walk reads the next header from where
             // this one's body would have been; until 2026-08-22 that case stopped the walk, so a
             // zero-size JUNK before the data chunk made a valid file "have no data chunk".
-            var advance = size + (size % 2);
-            var next = chunkStart + advance;
-            if (next > stream.Length)
+            var padding = size % 2;
+            var chunkAvailable = stream.Length - chunkStart;
+            // Check by subtraction before adding: ds64 can declare a size near long.MaxValue,
+            // even when a cut-off recording contains only a few frames.
+            if (size > chunkAvailable || padding > chunkAvailable - size)
             {
                 break;
             }
 
-            stream.Position = next;
+            stream.Position = chunkStart + size + padding;
         }
 
         if (format is null)
@@ -224,11 +235,6 @@ public sealed class WavAudioSource : IAudioSource
         if (dataOffset < 0)
         {
             throw new AudioDecodeException("WAVE file has no data chunk.");
-        }
-
-        if (isRf64 && rf64DataSize >= 0 && (dataLength == uint.MaxValue || dataLength == 0))
-        {
-            dataLength = rf64DataSize;
         }
 
         // A data chunk whose declared size runs past the end of the file is common in

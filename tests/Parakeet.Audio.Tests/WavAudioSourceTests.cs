@@ -170,6 +170,51 @@ public class WavAudioSourceTests
         Assert.Equal(256, samples.Length);
     }
 
+    [Theory]
+    [InlineData("RF64", 16, 16)]
+    [InlineData("BW64", 16, 16)]
+    [InlineData("RF64", 8, 17)]
+    [InlineData("BW64", 8, 17)]
+    public async Task LargeWaveUsesDs64ToSkipAudioAndExcludeTrailingMetadata(string kind, int bits, int extraBytes)
+    {
+        var dataSize = (1L << 32) + extraBytes;
+        using var stream = WavFixtures.SparseLargeWave(kind, dataSize, bits, withMetadata: true);
+
+        // At the old 32-bit skip destination, these audio samples happen to spell an invalid
+        // fmt header. They must never be parsed as metadata. The odd PCM8 case also needs a
+        // pad byte before the real LIST chunk after the audio.
+        await using var source = WavAudioSource.Create(stream);
+
+        Assert.Equal(dataSize / (bits / 8), source.FrameCount);
+        Assert.Equal(16_000, source.SampleRate);
+        Assert.Equal(bits / 8, source.Format.BytesPerSample);
+    }
+
+    [Theory]
+    [InlineData("RF64")]
+    [InlineData("BW64")]
+    public async Task TruncatedLargeWaveRecoversAudioWithoutOverflowingTheChunkOffset(string kind)
+    {
+        using var stream = WavFixtures.SparseLargeWave(kind, dataSize: 128, declaredDataSize: long.MaxValue);
+
+        await using var source = WavAudioSource.Create(stream);
+
+        Assert.Equal(64, source.FrameCount);
+        Assert.Equal(new float[64], await ReadAllAsync(source));
+    }
+
+    [Theory]
+    [InlineData("RF64")]
+    [InlineData("BW64")]
+    public void EmptyDs64DataSizeIsNotReplacedWithTrailingBytes(string kind)
+    {
+        using var stream = WavFixtures.SparseLargeWave(kind, dataSize: 128, declaredDataSize: 0);
+
+        var exception = Assert.Throws<AudioDecodeException>(() => WavAudioSource.Create(stream));
+
+        Assert.Contains("no audio frames", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task UnknownChunksAndOddSizesAreSkipped()
     {
@@ -406,6 +451,97 @@ internal static class WavFixtures
         stream.Write(data);
         stream.Position = 0;
         return stream;
+    }
+
+    public static Stream SparseLargeWave(
+        string kind, long dataSize, int bits = 16, long? declaredDataSize = null, bool withMetadata = false) =>
+        new SparseWaveStream(kind, dataSize, bits, declaredDataSize ?? dataSize, withMetadata);
+
+    /// <summary>A seekable recording with only its header and optional metadata held in memory.</summary>
+    private sealed class SparseWaveStream : Stream
+    {
+        private const int DataOffset = 80;
+        private const long MarkerOffset = DataOffset + (1L << 32);
+        private readonly byte[] _header;
+        private readonly byte[] _metadata;
+        private readonly long _metadataOffset;
+
+        public SparseWaveStream(string kind, long dataSize, int bits, long declaredDataSize, bool withMetadata)
+        {
+            _metadata = withMetadata ? "LIST\u0004\0\0\0INFO"u8.ToArray() : [];
+            _metadataOffset = DataOffset + dataSize + (dataSize % 2);
+            Length = withMetadata ? _metadataOffset + _metadata.Length : DataOffset + dataSize;
+
+            using var header = new MemoryStream();
+            WriteAscii(header, kind);
+            WriteUInt32(header, uint.MaxValue);
+            WriteAscii(header, "WAVE");
+            WriteAscii(header, "ds64");
+            WriteUInt32(header, 28);
+            WriteUInt64(header, (ulong)(Length - 8));
+            WriteUInt64(header, (ulong)declaredDataSize);
+            WriteUInt64(header, (ulong)(declaredDataSize / (bits / 8)));
+            WriteUInt32(header, 0);
+            WriteAscii(header, "fmt ");
+            WriteUInt32(header, 16);
+            WriteUInt16(header, 1);
+            WriteUInt16(header, 1);
+            WriteUInt32(header, 16_000);
+            WriteUInt32(header, (uint)(16_000 * bits / 8));
+            WriteUInt16(header, (ushort)(bits / 8));
+            WriteUInt16(header, (ushort)bits);
+            WriteAscii(header, "data");
+            WriteUInt32(header, uint.MaxValue);
+            _header = header.ToArray();
+            if (_header.Length != DataOffset)
+            {
+                throw new InvalidOperationException("The sparse WAVE header has an incorrect size.");
+            }
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => true;
+
+        public override bool CanWrite => false;
+
+        public override long Length { get; }
+
+        public override long Position { get; set; }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            var count = (int)Math.Min(buffer.Length, Math.Max(0, Length - Position));
+            for (var i = 0; i < count; i++)
+            {
+                var offset = Position + i;
+                buffer[i] = offset < _header.Length ? _header[(int)offset]
+                    : offset >= _metadataOffset && offset - _metadataOffset < _metadata.Length ? _metadata[(int)(offset - _metadataOffset)]
+                    : offset >= MarkerOffset && offset - MarkerOffset < 4 ? "fmt "u8[(int)(offset - MarkerOffset)]
+                    : (byte)0;
+            }
+
+            Position += count;
+            return count;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => Position = (origin switch
+        {
+            SeekOrigin.Begin => 0,
+            SeekOrigin.Current => Position,
+            SeekOrigin.End => Length,
+            _ => throw new ArgumentOutOfRangeException(nameof(origin)),
+        }) + offset;
+
+        public override void Flush()
+        {
+        }
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     public static MemoryStream WithExtraChunks(int frames)

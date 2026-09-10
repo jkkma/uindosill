@@ -415,4 +415,70 @@ public sealed class PythonBundleInstallerTests : IDisposable
 
         Assert.Contains("The bundled Python is not at", thrown.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task EngineConstructionDoesNotResolveOrUnpackAnInterpreter()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-lazy-python");
+        Environment.SetEnvironmentVariable(PythonRuntime.InterpreterVariable, Path.Combine(directory, "missing-python"));
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, directory);
+
+        // This explicit missing interpreter used to throw in either constructor, before the UI
+        // could await a load or process Cancel. Resolution now belongs to asynchronous startup.
+        await using var labeller = new SidecarSpeakerLabeller(new SidecarLabellerOptions { ModelPath = directory });
+        await using var translator = new SidecarTranscriptTranslator(new SidecarTranslatorOptions { ModelDirectory = directory });
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => labeller.LoadAsync(cancellation.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => translator.LoadAsync(cancellation.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task AsynchronousPreparationExtractsAwayFromTheCallingThread()
+    {
+        var (appRoot, _) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+        var called = new TaskCompletionSource<Task<PythonRuntime.Resolution>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callerThread = 0;
+        var reportingThreads = new System.Collections.Concurrent.ConcurrentBag<int>();
+        var progress = new InlineBundleProgress(_ => reportingThreads.Add(Environment.CurrentManagedThreadId));
+        var thread = new Thread(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            called.SetResult(PythonBundleInstaller.EnsureUnpackedAsync(
+                progress, baseDirectory: appRoot, userDataDirectory: userData));
+        });
+        thread.Start();
+
+        var preparation = await called.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await preparation.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotEmpty(reportingThreads);
+        Assert.All(reportingThreads, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
+    public async Task ConcurrentPreparationsReuseTheFirstCompletedExtraction()
+    {
+        var (appRoot, id) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+        var extractions = 0;
+        var progress = new InlineBundleProgress(value =>
+        {
+            if (value.Phase == PythonBundlePhase.Verifying)
+            {
+                Interlocked.Increment(ref extractions);
+            }
+        });
+        var first = PythonBundleInstaller.EnsureUnpackedAsync(progress, baseDirectory: appRoot, userDataDirectory: userData);
+        var second = PythonBundleInstaller.EnsureUnpackedAsync(progress, baseDirectory: appRoot, userDataDirectory: userData);
+
+        var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(1, extractions);
+        Assert.All(results, result => Assert.Equal(Path.Combine(userData, "python", id), result.PackageRoot));
+    }
+
+    private sealed class InlineBundleProgress(Action<PythonBundleProgress> report) : IProgress<PythonBundleProgress>
+    {
+        public void Report(PythonBundleProgress value) => report(value);
+    }
 }

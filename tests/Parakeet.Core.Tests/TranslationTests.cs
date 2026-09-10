@@ -540,6 +540,43 @@ public class TranslationNumeralsTests
         Assert.Empty(TranslationNumerals.Missing("252 Meter", "two hundred and fifty two metres"));
     }
 
+    [Theory]
+    [InlineData("(", ")")]
+    [InlineData("[", "]")]
+    [InlineData("<", ">")]
+    public void LosingABracketedSourceNumberIsReported(string open, string close)
+    {
+        Assert.Equal(
+            ["500"],
+            TranslationNumerals.Missing($"Es kostete {open}500 Euro{close}.", "It cost some money."));
+
+        // The same number elsewhere cannot account for a lost parenthetical repetition.
+        Assert.Equal(
+            ["500"],
+            TranslationNumerals.Missing($"500 Euro {open}500 Euro{close}", "500 euros"));
+    }
+
+    [Theory]
+    [InlineData("(", ")")]
+    [InlineData("[", "]")]
+    [InlineData("<", ">")]
+    public void BracketsOnEitherSideDoNotHideAPreservedNumber(string open, string close)
+    {
+        Assert.Empty(TranslationNumerals.Missing("500 Euro", $"{open}500 euros{close}"));
+        Assert.Empty(TranslationNumerals.Missing($"{open}500 Euro{close}", "500 euros"));
+        Assert.Empty(TranslationNumerals.Missing($"{open}500 Euro{close}", $"{open}500 euros{close}"));
+    }
+
+    [Theory]
+    [InlineData("(five hundred euros)", "500")]
+    [InlineData("[two hundred and fifty-two metres]", "252")]
+    [InlineData("<three point two million>", "3,2")]
+    [InlineData("(1,000 metres)", "1.000")]
+    public void BracketedEnglishKeepsNumberWordAndSeparatorNormalization(string translated, string source)
+    {
+        Assert.Empty(TranslationNumerals.Missing(source, translated));
+    }
+
     [Fact]
     public void SeparatorsAreNotDifferences()
     {

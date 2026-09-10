@@ -63,13 +63,13 @@ public static class DiariserGraphs
 /// </remarks>
 public sealed class SidecarDiariserGraphExporter
 {
+    // Publish the manifest first so both graph names exist only after the final move succeeds.
+    private static readonly string[] DerivedFileNames = ["manifest.json", .. DiariserGraphs.FileNames];
+    private static readonly SemaphoreSlim PublicationGate = new(1, 1);
     private readonly Func<PythonSidecar> _sidecarFactory;
 
     public SidecarDiariserGraphExporter(Func<PythonSidecar>? sidecarFactory = null) =>
-        // EnsureUnpacked rather than Resolve: the graph derivation runs the sidecar too, and on a
-        // fresh install it can be the first thing that does.
-        _sidecarFactory = sidecarFactory
-            ?? (static () => new PythonSidecar(PythonBundleInstaller.EnsureUnpacked()));
+        _sidecarFactory = sidecarFactory ?? (static () => new PythonSidecar());
 
     /// <summary>
     /// Writes both graphs into <paramref name="modelDirectory"/>'s <c>onnx</c> subdirectory and
@@ -95,16 +95,24 @@ public sealed class SidecarDiariserGraphExporter
                 $"The speaker model directory is not at {modelDirectory}.");
         }
 
-        var sidecar = _sidecarFactory();
-        await using (sidecar.ConfigureAwait(false))
+        modelDirectory = Path.GetFullPath(modelDirectory);
+        var directory = DiariserGraphs.DirectoryFor(modelDirectory);
+        var staging = Path.Combine(modelDirectory, $".onnx-export-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+        try
         {
-            try
+            var sidecar = _sidecarFactory();
+            await using (sidecar.ConfigureAwait(false))
             {
                 await sidecar.StartAsync(ct).ConfigureAwait(false);
 
                 var reply = await sidecar.SendAsync(
                     "exportDiariserGraphs",
-                    writer => writer.WriteString("path", modelDirectory),
+                    writer =>
+                    {
+                        writer.WriteString("path", modelDirectory);
+                        writer.WriteString("out", staging);
+                    },
                     progress,
                     ct).ConfigureAwait(false);
 
@@ -114,58 +122,128 @@ public sealed class SidecarDiariserGraphExporter
                     throw new PythonSidecarException("The export returned no manifest.");
                 }
 
-                var directory = manifest.TryGetProperty("out_dir", out var outDir)
-                    && outDir.ValueKind == JsonValueKind.String
-                        ? outDir.GetString()!
-                        : DiariserGraphs.DirectoryFor(modelDirectory);
-
                 // **Checked here as well as in the child**, because "the op returned" and "the two
-                // files a provider needs are on disk" are different claims, and it is this one the
-                // picker is about to act on.
-                if (!DiariserGraphs.AreInstalled(modelDirectory))
+                // files a provider needs are on disk" are different claims. Check this attempt's
+                // files, not an older installed pair or a path supplied by the reply.
+                if (!DerivedFileNames.All(name => File.Exists(Path.Combine(staging, name))))
                 {
                     throw new PythonSidecarException(
-                        $"The export reported success but {directory} does not hold both graphs.");
+                        $"The export reported success but {staging} does not hold both graphs and their manifest.");
                 }
+            }
 
-                return directory;
-            }
-            catch
+            // A cancelled trace can still own its files until the process dies. Dispose the child
+            // before either publishing or cleaning up, including when the request threw above.
+            await PublicationGate.WaitAsync(ct).ConfigureAwait(false);
+            try
             {
-                // A half-written graph is worse than none: it passes the existence check the picker
-                // uses and fails at session creation, which is far from here.
-                CleanUpPartial(modelDirectory);
-                throw;
+                ct.ThrowIfCancellationRequested();
+                Publish(staging, directory);
             }
+            finally
+            {
+                PublicationGate.Release();
+            }
+
+            return directory;
+        }
+        finally
+        {
+            CleanUpOwnedDirectory(staging);
         }
     }
 
-    private static void CleanUpPartial(string modelDirectory)
+    private static void Publish(string staging, string directory)
     {
-        if (DiariserGraphs.AreInstalled(modelDirectory))
+        if (!Directory.Exists(directory))
         {
+            // Same parent, hence same volume: a first installation appears as one complete pair.
+            Directory.Move(staging, directory);
             return;
         }
 
-        var directory = DiariserGraphs.DirectoryFor(modelDirectory);
-        foreach (var name in DiariserGraphs.FileNames)
+        // An existing directory can contain user files. Replace only the export's own names, and
+        // retain the previous pair until every replacement has landed successfully.
+        var backup = Path.Combine(Path.GetDirectoryName(directory)!, $".onnx-backup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(backup);
+        var backedUp = new List<string>();
+        var published = new List<string>();
+        try
         {
-            try
+            foreach (var name in DerivedFileNames)
             {
                 var path = Path.Combine(directory, name);
                 if (File.Exists(path))
                 {
-                    File.Delete(path);
+                    File.Move(path, Path.Combine(backup, name));
+                    backedUp.Add(name);
                 }
             }
-            catch (IOException)
+
+            foreach (var name in DerivedFileNames)
             {
-                // Left behind rather than retried: the next export overwrites, and the check above
-                // is what stops a partial set being offered in the meantime.
+                var path = Path.Combine(staging, name);
+                File.Move(path, Path.Combine(directory, name));
+                published.Add(name);
             }
-            catch (UnauthorizedAccessException)
+        }
+        catch (Exception publicationFailure)
+        {
+            var rollbackFailures = new List<Exception>();
+            foreach (var name in published.AsEnumerable().Reverse())
             {
+                try
+                {
+                    File.Delete(Path.Combine(directory, name));
+                }
+                catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+                {
+                    rollbackFailures.Add(failure);
+                }
             }
+
+            foreach (var name in backedUp.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    File.Move(Path.Combine(backup, name), Path.Combine(directory, name));
+                }
+                catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+                {
+                    rollbackFailures.Add(failure);
+                }
+            }
+
+            if (rollbackFailures.Count > 0)
+            {
+                // Do not delete the only remaining copy of an old graph if restoring it failed.
+                throw new PythonSidecarException(
+                    $"The graphs could not be published or fully restored. Previous files remain at {backup}.",
+                    new AggregateException(new[] { publicationFailure }.Concat(rollbackFailures)));
+            }
+
+            CleanUpOwnedDirectory(backup);
+            throw;
+        }
+
+        CleanUpOwnedDirectory(backup);
+    }
+
+    private static void CleanUpOwnedDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // A leftover private staging directory is never offered as installed graphs.
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

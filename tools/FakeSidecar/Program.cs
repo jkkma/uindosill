@@ -50,6 +50,7 @@ internal static class Program
 
         var output = Console.OpenStandardOutput();
         var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+        using var writtenFiles = new WrittenFiles();
 
         foreach (var line in script.Stderr)
         {
@@ -76,6 +77,10 @@ internal static class Program
             {
                 continue;
             }
+
+            // Export fixtures write only beneath the request's output directory. A held file
+            // stays open until this process exits, including after a result or error is emitted.
+            writtenFiles.Write(rule.Files, request);
 
             // Announced before the delay, so a test can wait for proof that the child has the
             // request in hand. Without it "cancel something in flight" is unwriteable: SendAsync's
@@ -164,10 +169,66 @@ internal static class Program
 
         public List<string> Stderr { get; set; } = [];
 
+        /// <summary>Files written beneath the request's <c>out</c>, before announce or delay.</summary>
+        public List<FileWrite> Files { get; set; } = [];
+
         /// <summary>Wait before emitting, so a test can cancel something that is in flight.</summary>
         public int DelayMilliseconds { get; set; }
 
         /// <summary>Exit with this code after emitting, killing the channel.</summary>
         public int? Exit { get; set; }
+    }
+
+    private sealed class FileWrite
+    {
+        public string Name { get; set; } = "";
+
+        public string Content { get; set; } = "";
+
+        public bool HoldOpen { get; set; }
+    }
+
+    private sealed class WrittenFiles : IDisposable
+    {
+        private readonly List<FileStream> _held = [];
+
+        public void Write(IReadOnlyList<FileWrite> files, string request)
+        {
+            if (files.Count == 0) return;
+
+            using var document = JsonDocument.Parse(request);
+            var directory = document.RootElement.GetProperty("out").GetString()
+                ?? throw new InvalidOperationException("A file-writing rule needs an output directory.");
+            Directory.CreateDirectory(directory);
+            foreach (var file in files)
+            {
+                if (string.IsNullOrEmpty(file.Name) || Path.GetFileName(file.Name) != file.Name
+                    || file.Name is "." or "..")
+                {
+                    throw new InvalidOperationException("A scripted file name must stay in the output directory.");
+                }
+
+                var path = Path.Combine(directory, file.Name);
+                if (file.HoldOpen)
+                {
+                    var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+                    _held.Add(stream);
+                    stream.Write(Encoding.UTF8.GetBytes(file.Content));
+                    stream.Flush();
+                }
+                else
+                {
+                    File.WriteAllText(path, file.Content);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            foreach (var stream in _held)
+            {
+                stream.Dispose();
+            }
+        }
     }
 }

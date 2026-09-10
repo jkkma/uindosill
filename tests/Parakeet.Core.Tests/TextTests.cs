@@ -290,6 +290,11 @@ public class TranscriptNormalizerTests
         Assert.Equal(
             new[] { "a", "b", "c" },
             TranscriptNormalizer.WordErrorRateTokens("a [b c", keepFillers: false));
+
+        // Translation compares these quantities, but the scoring convention still drops them.
+        Assert.Equal(
+            new[] { "cost" },
+            TranscriptNormalizer.WordErrorRateTokens("cost (500 euros) [twelve dollars] <3.2 million>", keepFillers: true));
     }
 
     [Fact]

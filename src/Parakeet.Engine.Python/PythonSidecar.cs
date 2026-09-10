@@ -52,7 +52,7 @@ public sealed class PythonSidecar : IAsyncDisposable
 
     private const int StandardErrorLinesKept = 200;
 
-    private readonly PythonRuntime.Resolution _runtime;
+    private readonly Func<CancellationToken, Task<PythonRuntime.Resolution>> _resolveRuntime;
     private readonly ConcurrentDictionary<int, Pending> _pending = new();
     private readonly Queue<string> _standardError = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -74,7 +74,20 @@ public sealed class PythonSidecar : IAsyncDisposable
     /// </summary>
     private volatile bool _started;
 
-    public PythonSidecar(PythonRuntime.Resolution runtime) => _runtime = runtime;
+    /// <summary>Prepares the bundled interpreter asynchronously when the child is first started.</summary>
+    public PythonSidecar()
+        : this(static ct => PythonBundleInstaller.EnsureUnpackedAsync(ct: ct))
+    {
+    }
+
+    public PythonSidecar(PythonRuntime.Resolution runtime)
+        : this(_ => Task.FromResult(runtime))
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+    }
+
+    internal PythonSidecar(Func<CancellationToken, Task<PythonRuntime.Resolution>> resolveRuntime) =>
+        _resolveRuntime = resolveRuntime;
 
     /// <summary>What the sidecar said about itself at the handshake.</summary>
     public JsonElement? Hello { get; private set; }
@@ -193,9 +206,15 @@ public sealed class PythonSidecar : IAsyncDisposable
 
     private async Task StartLockedAsync(CancellationToken ct)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var runtime = await _resolveRuntime(ct).ConfigureAwait(false);
+        // Preparation can outlive a cancellation or a close. Neither may start a new child.
+        ct.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         var start = new ProcessStartInfo
         {
-            FileName = _runtime.Interpreter,
+            FileName = runtime.Interpreter,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -230,19 +249,19 @@ public sealed class PythonSidecar : IAsyncDisposable
         // Assignment rather than append, because the value is built here and never inherited: a
         // PYTHONPATH the user happens to have set is not something this product should be running
         // code out of.
-        start.Environment["PYTHONPATH"] = _runtime.CudaPackRoot is { Length: > 0 } pack
-            ? pack + Path.PathSeparator + _runtime.PackageRoot
-            : _runtime.PackageRoot;
+        start.Environment["PYTHONPATH"] = runtime.CudaPackRoot is { Length: > 0 } pack
+            ? pack + Path.PathSeparator + runtime.PackageRoot
+            : runtime.PackageRoot;
         start.Environment["PYTHONIOENCODING"] = "utf-8";
 
         try
         {
             _process = Process.Start(start)
-                ?? throw new PythonSidecarException($"Could not start {_runtime.Interpreter}.");
+                ?? throw new PythonSidecarException($"Could not start {runtime.Interpreter}.");
         }
         catch (Exception exc) when (exc is not PythonSidecarException)
         {
-            throw new PythonSidecarException($"Could not start {_runtime.Interpreter}: {exc.Message}", exc);
+            throw new PythonSidecarException($"Could not start {runtime.Interpreter}: {exc.Message}", exc);
         }
 
         // In the operating system's hands as well as this class's: a host that dies without
