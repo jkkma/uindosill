@@ -68,6 +68,10 @@ public sealed record PythonBundleProgress
 /// </remarks>
 public static class PythonBundleInstaller
 {
+    // A settings export and a transcription load can prepare the same bundle concurrently.
+    // Resolve again under the gate so only the first caller writes the shared staging directory.
+    private static readonly SemaphoreSlim UnpackGate = new(1, 1);
+
     /// <summary>
     /// A digest names an unpacked bundle: 64 lowercase hex characters, and nothing else is touched.
     /// </summary>
@@ -107,17 +111,33 @@ public static class PythonBundleInstaller
     /// thread.
     /// </summary>
     /// <remarks>
-    /// This is the one the sidecar's own default factories call, which is what makes the unpack
-    /// lazy in the exact sense the decision meant: it happens when something first asks for a
-    /// sidecar, in whatever thread asked, and a transcription job asks from its own worker. A
-    /// caller on the UI thread would block it — so the window's engine provider must not become
-    /// one, and today is not: both sidecar-backed engines are built inside a job.
+    /// The sidecar calls the asynchronous wrapper at startup. Its factories run on the window's
+    /// thread too, so constructing an engine must not call this synchronous method. Resolution
+    /// and extraction are serialized together to keep concurrent starts out of the same staging
+    /// directory; the caller that waited reuses the bundle the first caller finished.
     /// </remarks>
     public static PythonRuntime.Resolution EnsureUnpacked(
         IProgress<PythonBundleProgress>? progress = null,
         CancellationToken ct = default,
         string? baseDirectory = null,
         string? userDataDirectory = null)
+    {
+        UnpackGate.Wait(ct);
+        try
+        {
+            return ResolveAndUnpack(progress, ct, baseDirectory, userDataDirectory);
+        }
+        finally
+        {
+            UnpackGate.Release();
+        }
+    }
+
+    private static PythonRuntime.Resolution ResolveAndUnpack(
+        IProgress<PythonBundleProgress>? progress,
+        CancellationToken ct,
+        string? baseDirectory,
+        string? userDataDirectory)
     {
         if (PythonRuntime.TryResolve(out var resolved, out _, baseDirectory, userDataDirectory)
             && resolved is not null)

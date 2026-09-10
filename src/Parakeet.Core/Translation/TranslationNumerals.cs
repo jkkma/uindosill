@@ -21,11 +21,11 @@ namespace Parakeet.Core.Translation;
 /// <para>
 /// <b>It compares digits, not text, and the English side is normalised first.</b> A translator that
 /// renders <c>12</c> as <i>twelve</i> has not lost anything, and flagging it would bury the real
-/// case in false alarms — so the English is put through
-/// <see cref="TranscriptNormalizer.WordErrorRateTokens"/>, whose number rule already turns runs of
-/// English cardinal words into digits for exactly this reason on the word-error-rate side. Reusing
-/// it rather than writing a second one is deliberate: two number rules would be two calibrations to
-/// keep in step.
+/// case in false alarms — so the English shares the number rule used by
+/// <see cref="TranscriptNormalizer.WordErrorRateTokens"/>, which turns runs of English cardinal
+/// words into digits for exactly this reason on the word-error-rate side. Bracketed contents stay
+/// in the comparison: parentheses can carry quantities in ordinary translated text. Reusing the
+/// number rule is deliberate: two number rules would be two calibrations to keep in step.
 /// </para>
 /// <para>
 /// <b>Separators are dropped on both sides</b>, because they are the one thing that reliably differs
@@ -157,13 +157,13 @@ public static class TranslationNumerals
     /// <remarks>
     /// Tokenised by the word-error-rate normaliser rather than by a regular expression over the raw
     /// string, because that is what applies the English number-word rule — the whole reason a
-    /// translation rendering <c>12</c> as <i>twelve</i> does not show up here. Fillers are kept:
-    /// dropping them is a scoring convention and has nothing to do with numbers.
+    /// translation rendering <c>12</c> as <i>twelve</i> does not show up here. Fillers and bracketed
+    /// contents are kept: dropping them is a scoring convention and could hide a quantity.
     /// </remarks>
     private static List<string> Numerals(string text)
     {
         var found = new List<string>();
-        foreach (var token in TranscriptNormalizer.WordErrorRateTokens(text, keepFillers: true))
+        foreach (var token in TranscriptNormalizer.NumberComparisonTokens(text))
         {
             var digits = new StringBuilder(token.Length);
             foreach (var character in token)

@@ -108,10 +108,21 @@ public static class TranscriptNormalizer
     /// American spellings and a contraction against its expansion count as errors.
     /// </summary>
     public static string[] WordErrorRateTokens(string text, bool keepFillers)
+        => WordTokens(text, keepFillers, removeBracketed: true);
+
+    /// <summary>
+    /// Reuses the word and English cardinal rules for number comparison, keeping fillers and
+    /// bracketed contents: a parenthetical quantity is still part of the text being translated.
+    /// Only scoring treats those spans as transcriber annotations.
+    /// </summary>
+    internal static string[] NumberComparisonTokens(string text)
+        => WordTokens(text, keepFillers: true, removeBracketed: false);
+
+    private static string[] WordTokens(string text, bool keepFillers, bool removeBracketed)
     {
         if (text is null) throw new ArgumentNullException(nameof(text));
 
-        var stripped = RemoveBracketed(text);
+        var stripped = removeBracketed ? RemoveBracketed(text) : text;
         var tokens = new List<string>();
         var current = new StringBuilder();
 
