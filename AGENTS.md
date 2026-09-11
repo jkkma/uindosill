@@ -39,10 +39,9 @@ that quote a count together.
 The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
 change to the election in `python/uindosill_engines/diariser/pyannote_engine.py`** (`AUTO_ORDER`,
 `resolve_auto`), because it decides which arithmetic unit a user's diarisation runs on; the
-reminder hook runs it for you when that file is edited, and the rule stands for changes made any
-other way. Nothing in CI or the suite parses `scripts/*.ps1` either; the hook parses a script the
-moment it is edited, and before a commit parse them all — the exit code is the number of errors,
-each named:
+check must be run manually when that file is edited. Nothing in CI or the suite parses
+`scripts/*.ps1` either; parse changed scripts manually, and before a commit parse them all — the
+exit code is the number of errors, each named:
 
 ```bash
 pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
@@ -121,18 +120,16 @@ a model, neither of which is in the clone. `--fake` exercises the whole pipeline
 
 ## Session fixtures
 
-`.codex/` and `.agents/skills/` hold the Codex session fixtures. A SessionStart hook runs
-`git pull --ff-only` and its output lands in context — read it, and reconcile by hand if it did
-not fast-forward, because the two machines work
-in tandem. The PreToolUse and PostToolUse entries in `.codex/hooks.json` run
-`.codex/hooks/edit-hooks.py` for `apply_patch`, reading every changed path from
-`tool_input.command`, including both ends of a rename. The PostToolUse hook prints the matching
-obligation from the section above when a gated path is edited, so a new gated test needs a rule
-there as well as a line here; where the check is cheap and needs nothing installed it runs it
-instead — an edit to the diariser's election file runs `check-diariser-auto.py`, and an edit to
-any `.ps1` parses that file. The PreToolUse hook blocks edits under `attic/`, because a retired
-engine still has files named like the live ones. Codex cannot present a hook approval prompt:
-an intentional attic edit needs explicit user approval before arranging a scoped exception.
+`.codex/` and `.agents/skills/` hold the Codex session fixtures. `.codex/hooks.json`
+registers no project hooks: no automatic pull, edit guard or test reminder runs.
+When an update is requested, run `git pull --ff-only` and reconcile by hand if it does not
+fast-forward. Run the checks above manually after the relevant edits.
+The retained `.codex/hooks/edit-hooks.py` helper reads changed paths from a Codex event's
+`tool_input.command`, including both ends of a rename. Its PostToolUse mode reports the matching
+obligations and runs cheap checks; a new gated test still needs a rule there as well as a line
+here so the manual preflight check can compare them. Its PreToolUse mode checks `attic/` edits.
+An intentional attic edit still needs explicit user approval, because a retired engine has files
+named like the live ones.
 The `.codex/hooks/attic-guard.sh` and `.codex/hooks/gated-test-reminder.sh` files are compatibility
 wrappers around the same Python entry point. `scripts/check-codex-hooks.py` checks patch routing,
 the blocking response and reminder behavior without changing product files. Run it after a hook change.
@@ -142,7 +139,8 @@ under `runs/check-drive-memory/<unique>/`.
 The agent definitions are `.codex/agents/*.toml`; the skills live under `.agents/skills/`, with
 manual invocation configured in each skill's `agents/openai.yaml`. The auditors default to a
 read-only sandbox; their instructions also forbid edits, builds and test runs when a parent
-session supplies broader permissions. Review changed hooks with `/hooks` before relying on them.
+session supplies broader permissions. Review any future hook registrations with `/hooks` before
+relying on them.
 The read-only agents sweep and fix nothing: `claims-auditor` for the numbers, under the rule below;
 `reference-auditor` for the names — paths, scripts, counts and the dated pointers into PHASES —
 against the tree; `harness-reviewer` for a changed measurement script, against the gotchas the
