@@ -1,3 +1,4 @@
+using Parakeet.Core.Answers;
 using Parakeet.Core.Transcription;
 
 namespace Parakeet.Engine.LlamaServer;
@@ -146,8 +147,29 @@ public sealed record LlamaServerOptions
     /// </summary>
     public int? ParallelSlots { get; init; }
 
-    /// <summary>Cap on generated tokens per answer.</summary>
+    /// <summary>
+    /// Cap on answer tokens for ordinary requests and intermediate summary notes.
+    /// Final <see cref="SummaryStage.Synthesis"/> uses <see cref="MaxSummaryTokens"/> instead.
+    /// </summary>
     public int MaxAnswerTokens { get; init; } = 1_024;
+
+    /// <summary>
+    /// Positive cap on answer tokens for the final <see cref="SummaryStage.Synthesis"/> pass.
+    /// A final overview combines notes across the recording and has its own allowance;
+    /// section and reduction passes retain <see cref="MaxAnswerTokens"/>. The configured value
+    /// is used exactly, even when smaller than <see cref="MaxAnswerTokens"/>.
+    /// </summary>
+    public int MaxSummaryTokens
+    {
+        get => _maxSummaryTokens;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, 1);
+            _maxSummaryTokens = value;
+        }
+    }
+
+    private readonly int _maxSummaryTokens = 2_048;
 
     /// <summary>
     /// Let the model think before answering, and — since 2026-08-25 — actually decide it: the
@@ -176,12 +198,25 @@ public sealed record LlamaServerOptions
     public bool ThinkBeforeAnswer { get; init; }
 
     /// <summary>
-    /// Extra generation budget for the thinking, on top of <see cref="MaxAnswerTokens"/>, when
-    /// <see cref="ThinkBeforeAnswer"/> is on. The 2,048 default is a dial set from one measured
+    /// Nonnegative cap on reasoning tokens, sent as <c>--reasoning-budget</c> when
+    /// <see cref="ThinkBeforeAnswer"/> is on. This is also added to the applicable answer cap
+    /// (<see cref="MaxSummaryTokens"/> for final synthesis, otherwise <see cref="MaxAnswerTokens"/>)
+    /// for the request's total generation cap, leaving room to answer after reasoning ends.
+    /// Zero gives reasoning no token budget. The 2,048 default is a dial set from one measured
     /// point — the 9B closed a toy question's think block at ~550 tokens (2026-08-16) — not a
     /// measured optimum.
     /// </summary>
-    public int ThinkingBudgetTokens { get; init; } = 2_048;
+    public int ThinkingBudgetTokens
+    {
+        get => _thinkingBudgetTokens;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            _thinkingBudgetTokens = value;
+        }
+    }
+
+    private readonly int _thinkingBudgetTokens = 2_048;
 
     /// <summary>
     /// Constrain decoding to the citation grammar, applied only when

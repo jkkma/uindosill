@@ -8718,3 +8718,75 @@ original audit evidence remains in `runs/audit-20260912/`. These checks do not e
 behavior, installer upgrade/uninstall, recommended Ask-checkpoint quality, or every possible
 external-tool failure. Model loading in native code may still need to finish before cancellation
 can return; the fix waits for it and prevents a subsequent decode.
+
+### Gemma 4 12B video-answer comparison, 2026-09-12
+
+The requested comparison uses CSB388, video `B4C94kLwra8`, and the exact questions
+“Summarize the video” and “what did they say about the zelda remake?”. The input is YouTube's
+automatic English captions: 5,315 segments from 5.239 s through 11,938.040 s in a recording whose
+metadata duration is 3:19:04. It is not a new local transcription or a test of visual understanding.
+The converted input's SHA-256 is
+`831aa80ac1344592583848be6755dc4e77a0053185fb02b82f743ce50c1ba5d5`.
+
+The diagnostic drives the real `AskChatViewModel`, `LlamaServerAnswerEngine`, parser, validator
+and copied-answer path on the laptop, with the installed Gemma 4 12B QAT UD-Q4_K_XL and Vulkan.
+The main model's SHA-256 is
+`90fd44e29e0d7cffeb0fd00dc73cfdab9ed0b0e95306ecf7821ea634c940c370`.
+The original runs used no MTP head: discovery did not match the locally supplied Q8-suffixed
+filename. Later diagnostics pass the installed matching head explicitly and record its hash and
+native load. These are individual quality/workflow checks, not controlled throughput comparisons.
+
+**The baseline's resolving citations did not establish answer quality.** Its overview missed the
+opening Zelda reaction, the named Arjun news, YouTube's monetization discussion and SteamDB/Nexus.
+It also substituted “Final Fantasy VII Rebirth” for an unrelated game discussion. The pointed
+answer found visual praise and the wet-model joke but missed the outfit detail, nostalgia and
+marketing discussion. The supplied Gemini answer is a style and coverage target, not ground truth;
+targeted caption reading also found malformed hour timestamps in that supplied example.
+
+**Real runs found defects that the first green suite did not.** An intermediate section failed on
+valid shorthand citation syntax. A later full attempt read all sections but lost the final answer
+when synthesis joined citation ranges across an unseen gap. A separate draft-review pass repeated
+the unsupported claim that Nintendo failed to mention a jump button; it was removed. Opt-in
+constrained quoting reached its 1,024-token cap without a finished answer on this checkpoint,
+reinforcing the existing decision to keep grammar opt-in. An unbounded thinking run spent its
+entire 3,072-token response allowance without producing an answer, exposing that the 2,048-token
+thinking allowance had only enlarged the total cap and had never been sent to the native server.
+The fixes and source-scope markers are described in `docs/PHASES.md` under *Built 2026-09-12 —
+fuller video answers and complete section summaries*.
+
+**The native thinking cap was qualified on the same 12B Vulkan path.** With the server's reasoning
+budget now set, the model ended thinking and returned a completed five-bullet answer within the
+unchanged total response allowance. It still misread the jump-button discussion as a lack of that
+feature. Fixing termination did not fix that semantic error, and thinking is not a demonstrated
+remedy for it. The four native CPU contract/lifecycle gates also passed on the final build with
+the installed Gemma E4B checkpoint; those tests do not measure the 12B answer's quality.
+
+**The next complete-source attempt still failed to deliver an overview.** All eight section
+passes completed, but the final synthesis expanded early subjects into long paragraphs and
+exhausted its 1,024-token allowance. The app displayed a failure rather than a cut-off summary.
+Its follow-up completed but still invented a marketing omission and expanded the caption's
+ambiguous “FF7R” to a specific game title without support. The final-synthesis allowance and
+brevity instructions were then adjusted.
+
+**The revised synthesis and follow-up both completed.** The later diagnostic reuses the eight
+completed real section outputs only after exact request/prompt/decoding checks and strict source
+revalidation; it then runs fresh synthesis and the follow-up on Gemma 4 12B with Vulkan and its
+explicitly selected MTP head. The overview has eight bullets and the follow-up five. The overview
+now includes Zelda and Arjun, but still omits YouTube monetization, SteamDB/Nexus and the listener
+questions in the supplied comparison. The follow-up still invents a marketing omission about the
+jump button, over-expands “FF7R”, and misses explicit nostalgia/qualified acceptance. An unseen
+overview citation is marked unresolved without losing the surrounding answer. Completed output
+and resolving timestamps do not establish semantic correctness.
+
+The eight original Vulkan section generations total 922.83 s of engine time, excluding model
+load. The later summary request takes 119.97 s including its new load and fresh synthesis but
+excluding those earlier generations; its Zelda follow-up takes 35.33 s on the resident Vulkan
+engine. These are separate single-run components, not an uninterrupted final full-workflow
+measurement, throughput benchmark or controlled speed comparison. The diagnostic reuse facility
+does not add a summary cache to the product.
+
+No Gemini parity, general retrieval
+accuracy, semantic faithfulness guarantee, CUDA behavior or
+new installer qualification follows from these checks. Detailed prompts, model output, source
+pins, failed experiments and regeneration notes remain in the laptop's
+`runs/gemma4-youtube-20260912/`; curated reports use its `runs-laptop` Drive route.

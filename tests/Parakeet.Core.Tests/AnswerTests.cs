@@ -20,6 +20,45 @@ public class CitationParseTests
     }
 
     [Fact]
+    public void ShorthandRangesKeepTheirRawSpellingAndResolveLikeFullyPrefixedRanges()
+    {
+        const string raw = "S12-15";
+        var shorthand = Citation.Parse(raw);
+        Assert.True(Citation.LooksLikeCitation(raw));
+        Assert.Equal(raw, shorthand.Raw);
+        Assert.Equal(12, shorthand.StartSegment);
+        Assert.Equal(15, shorthand.EndSegment);
+
+        // Parsing is deliberately independent of transcript bounds and forward ordering.
+        var document = new TranscriptDocument
+        {
+            Segments = [new() { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "Speech." }],
+            AudioDuration = TimeSpan.FromSeconds(1),
+        };
+        Assert.True(CitationValidator.Resolve(Citation.Parse("S1-1"), document).Check.Passes);
+        foreach (var invalid in new[] { "S3-2", "S0-1", "S1-2", "S1-0" })
+        {
+            Assert.True(Citation.Parse(invalid).IsWellFormed);
+            var resolved = CitationValidator.Resolve(Citation.Parse(invalid), document);
+            Assert.False(resolved.Check.Resolves);
+            Assert.Null(resolved.Start);
+            Assert.Null(resolved.End);
+        }
+    }
+
+    [Fact]
+    public void ShorthandRequiresOnePrefixedStartAndOneUnsignedIntegerEndpoint()
+    {
+        foreach (var raw in new[] { "S12--15", "S12-15-20", "S12-15S", "12-15", "S12-+15", "S12-2147483648", "S12-1 5" })
+        {
+            Assert.False(Citation.LooksLikeCitation(raw));
+            var citation = Citation.Parse(raw);
+            Assert.False(citation.IsWellFormed);
+            Assert.Equal(raw, citation.Raw);
+        }
+    }
+
+    [Fact]
     public void TheUncitedMarkerIsItsOwnThing()
     {
         var uncited = Citation.Parse("?");
@@ -56,6 +95,20 @@ public class CitationParseTests
 
 public class AnswerParserTests
 {
+    [Fact]
+    public void MixedPointFullRangeAndShorthandCitationsParseWithoutLosingTheirRawIds()
+    {
+        var bullet = Assert.Single(AnswerParser.Parse("- Topic: a supported point [S1, S2-S4, S5-7]").Bullets);
+
+        Assert.Equal("a supported point", bullet.Text);
+        Assert.Equal(new[] { "S1", "S2-S4", "S5-7" }, bullet.Citations.Select(citation => citation.Raw));
+        Assert.Equal(new int?[] { 1, 2, 5 }, bullet.Citations.Select(citation => citation.StartSegment));
+        Assert.Equal(new int?[] { 1, 4, 7 }, bullet.Citations.Select(citation => citation.EndSegment));
+        var malformed = Assert.Single(AnswerParser.Parse("- Topic: preserved prose [S5-7x]").Bullets);
+        Assert.Empty(malformed.Citations);
+        Assert.Contains("[S5-7x]", malformed.Text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AGrammarShapedAnswerParsesWhole()
     {
@@ -497,6 +550,62 @@ public class TranscriptPinTests
 
 public class CitationValidatorTests
 {
+    [Fact]
+    public void AnExistingButUnshownCitationKeepsItsSourceTimesWithoutVerifyingItsQuote()
+    {
+        var transcript = Transcript("shown words", "hidden words");
+        var answer = AnswerParser.Parse("- Hidden «hidden words» [S2]");
+        var unscoped = CitationValidator.Validate(answer, transcript);
+        Assert.Null(unscoped.Bullets[0].Citations[0].Check.ShownToModel);
+        Assert.True(unscoped.AllCitationsPass);
+
+        var validation = CitationValidator.Validate(answer, transcript,
+            shownEvidence: [TranscriptWindowBuilder.FromRun(transcript, 1, 1)]);
+        var citation = Assert.Single(Assert.Single(validation.Bullets).Citations);
+        Assert.True(citation.Check.Resolves);
+        Assert.False(citation.Check.ShownToModel);
+        Assert.False(citation.Check.Passes);
+        Assert.False(validation.AllCitationsPass);
+        Assert.Null(citation.Check.QuoteMatches);
+        Assert.Null(validation.Bullets[0].QuoteFound);
+        Assert.Equal("S2", citation.Citation.Raw);
+        Assert.Equal(TimeSpan.FromSeconds(10), citation.Start);
+        Assert.Equal(TimeSpan.FromSeconds(20), citation.End);
+    }
+
+    [Fact]
+    public void ShownScopeCoversContiguousWindowsButNeverFillsAnUnshownGap()
+    {
+        var transcript = Transcript("alpha", "beta", "gamma");
+        var answer = AnswerParser.Parse("- Across the passage «alpha» [S1-S3]");
+        var gap = CitationValidator.Validate(answer, transcript, shownEvidence:
+            [TranscriptWindowBuilder.FromRun(transcript, 1, 1), TranscriptWindowBuilder.FromRun(transcript, 3, 3)]);
+        Assert.False(gap.Bullets[0].Citations[0].Check.ShownToModel);
+        Assert.False(gap.AllCitationsPass);
+
+        var contiguous = CitationValidator.Validate(answer, transcript, shownEvidence:
+            [TranscriptWindowBuilder.FromRun(transcript, 2, 3), TranscriptWindowBuilder.FromRun(transcript, 1, 1)]);
+        Assert.True(contiguous.Bullets[0].Citations[0].Check.ShownToModel);
+        Assert.True(contiguous.Bullets[0].QuoteFound);
+        Assert.True(contiguous.AllCitationsPass);
+
+        var empty = CitationValidator.Validate(answer, transcript, shownEvidence: []);
+        Assert.False(empty.Bullets[0].Citations[0].Check.ShownToModel);
+    }
+
+    [Fact]
+    public void TheLeadAndBulletsAreCheckedAgainstTheSameShownScope()
+    {
+        var transcript = Transcript("alpha", "beta");
+        var answer = AnswerParser.Parse("A lead about beta [S2]\n- Alpha [S1]", allowLead: true);
+        var validation = CitationValidator.Validate(answer, transcript,
+            shownEvidence: [TranscriptWindowBuilder.FromRun(transcript, 1, 1)]);
+
+        Assert.False(validation.Lead!.Citations[0].Check.ShownToModel);
+        Assert.True(validation.Bullets[0].Citations[0].Check.ShownToModel);
+        Assert.False(validation.AllCitationsPass);
+    }
+
     private static TranscriptDocument Transcript(params string[] texts)
     {
         var segments = new List<TranscriptSegment>();

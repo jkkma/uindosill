@@ -17,11 +17,10 @@ namespace Parakeet.Engine.LlamaServer;
 /// <remarks>
 /// <para>
 /// The stream this yields is the model's answer text: <c>AnswerParser</c> stays the single place
-/// structure comes from, and citation trust in the shipped configuration is the validator's,
-/// post-hoc — the template-only decode, temperature 0, no grammar, the one configuration the
-/// 2026-08-24/25 sessions measured clean (docs/UNPROVEN.md). The grammar remains available
-/// (<see cref="LlamaServerOptions.UseGrammar"/>) for models that do not terminate without it,
-/// and thinking mode (<see cref="LlamaServerOptions.ThinkBeforeAnswer"/>) reasons first with the
+/// structure comes from. All asks use template-only greedy decode unless
+/// <see cref="LlamaServerOptions.UseGrammar"/> is set. When selected, the grammar constrains
+/// citation ids to the supplied source windows; parser and validator checks still run afterward.
+/// Thinking mode (<see cref="LlamaServerOptions.ThinkBeforeAnswer"/>) reasons first with the
 /// server's parser keeping the thinking out of this stream. Grammar and thinking never combine:
 /// an eager grammar was measured shaping the think block itself.
 /// </para>
@@ -145,25 +144,24 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         // the check that passes then has checked nothing. Citation trust in this mode is
         // resolve-only: the id still names a real span the reader can click and hear.
         var requireQuote = _options.RequireQuote
-            && request.Mode is not (AnswerMode.WholeTranscript or AnswerMode.Survey);
+            && request.Mode is not (AnswerMode.WholeTranscript or AnswerMode.Survey or AnswerMode.MapReduce);
 
         // Both modes open with a sentence answering the question — see AnswerPromptBuilder for
         // why retrieval gained one on 2026-08-25 — so the grammar admits one in both, since
         // prompt and grammar are two statements of one contract.
-        const bool wantLead = true;
+        var notesOnly = request.SummaryStage is SummaryStage.Section or SummaryStage.Reduction;
+        var wantLead = !notesOnly;
+        var allowAbstain = _options.AllowAbstain && !notesOnly;
 
         var (instruction, userContent) =
-            AnswerPromptBuilder.BuildMessages(request, _options.AllowAbstain, requireQuote);
+            AnswerPromptBuilder.BuildMessages(request, allowAbstain, requireQuote);
 
         // In thinking mode the grammar must stay home: an eager grammar constrains sampling
         // wherever the stream happens to be, and it was measured shaping the think block itself
         // — every grammar-legal token filed as reasoning, content empty (2026-08-16, re-measured
         // 2026-08-24). Citation trust in this mode is the parser's and validator's, post-hoc.
-        var grammar = _options.UseGrammar && !_options.ThinkBeforeAnswer
-            ? AnswerPromptBuilder.BuildGrammar(request.Evidence, _options.AllowAbstain, requireQuote, wantLead)
-            : null;
-        var maxTokens = _options.MaxAnswerTokens
-            + (_options.ThinkBeforeAnswer ? _options.ThinkingBudgetTokens : 0);
+        var grammar = BuildCitationGrammar(request, _options, allowAbstain, requireQuote, wantLead);
+        var maxTokens = GenerationTokenBudget(request, _options);
 
         // A prompt past the context would be truncated server-side in silence, leaving the
         // grammar's ids live for evidence the model never saw. Four characters per token is an
@@ -388,6 +386,37 @@ public sealed partial class LlamaServerAnswerEngine : IAnswerEngine
         }
 
         return line.Length > 160 ? string.Concat(line[..157], "…") : line.ToString();
+    }
+
+    /// <summary>
+    /// Final synthesis has its own answer allowance. All other requests keep the ordinary
+    /// answer cap, and thinking adds the same separately bounded allowance in either case.
+    /// </summary>
+    internal static int GenerationTokenBudget(AskRequest request, LlamaServerOptions options)
+    {
+        var answerTokens = request.SummaryStage == SummaryStage.Synthesis
+            ? options.MaxSummaryTokens
+            : options.MaxAnswerTokens;
+        return checked(answerTokens + (options.ThinkBeforeAnswer ? options.ThinkingBudgetTokens : 0));
+    }
+
+    /// <summary>
+    /// Every request retains the configured grammar preference. Explicitly constrained
+    /// intermediate summary notes forbid uncited markers as well as unseen citation runs.
+    /// Thinking keeps the eager grammar off because it would constrain the reasoning stream;
+    /// post-hoc validation remains necessary in every mode.
+    /// </summary>
+    internal static string? BuildCitationGrammar(
+        AskRequest request, LlamaServerOptions options,
+        bool allowAbstain, bool requireQuote, bool wantLead)
+    {
+        if (options.ThinkBeforeAnswer || !options.UseGrammar)
+        {
+            return null;
+        }
+
+        return AnswerPromptBuilder.BuildGrammar(request.Evidence, allowAbstain, requireQuote, wantLead,
+            allowUncited: request.SummaryStage is not (SummaryStage.Section or SummaryStage.Reduction));
     }
 
     /// <summary>

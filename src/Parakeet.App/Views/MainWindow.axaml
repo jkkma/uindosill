@@ -1756,6 +1756,8 @@
                                   <TextBlock Classes="fine secondary"
                                              Text="{x:Static vm:ChatEntryViewModel.LeadUncitedNotice}"
                                              IsVisible="{Binding IsUncited}" />
+                                  <TextBlock Classes="fine secondary" Text="{Binding QuoteCaveat}"
+                                             IsVisible="{Binding QuoteCaveat, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                   <ItemsControl ItemsSource="{Binding Citations}"
                                                 IsEnabled="{Binding $parent[DockPanel].((vm:AskViewModel)DataContext).CanPlay}">
                                     <ItemsControl.ItemsPanel>

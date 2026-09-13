@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -11,6 +12,7 @@ using Parakeet.App.Views;
 using Parakeet.Core.Answers;
 using Parakeet.Core.Jobs;
 using Parakeet.Core.Models;
+using Parakeet.Core.Retrieval;
 using Parakeet.Core.Transcription;
 using Parakeet.Engine.LlamaServer;
 
@@ -655,6 +657,45 @@ public class AskChatTests
         Assert.False(entry.Lead!.IsUncited);
     }
 
+    [Theory]
+    [InlineData("They said «the budget was rejected» [S1]", false, "the quoted words are not at the time cited")]
+    [InlineData("They said \"the budget was approved\" [S1]", false, "the quoted words here were not checked")]
+    [InlineData("They said «the budget was approved» [?]", false, "quote not checked: no place in the recording to check it against")]
+    [InlineData("They said «the budget was approved» [S1]", true, "quote not checked: cited part was not shown to the model")]
+    public async Task ALeadsQuoteCaveatTravelsIntoTheCopiedAnswer(string lead, bool unshown, string caveat)
+    {
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment
+            {
+                Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved",
+            }],
+        };
+        var answer = AnswerParser.Parse(lead + "\n- Budget: an update was discussed [S1]\n", allowLead: true);
+        string? copied = null;
+        var entry = new ChatEntryViewModel("give me a summary", text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        });
+        entry.Complete(answer,
+            CitationValidator.Validate(answer, transcript, shownEvidence: unshown ? [] : null),
+            [], transcript, _ => { });
+
+        await entry.CopyCommand.ExecuteAsync(null);
+
+        Assert.Equal(caveat, entry.Lead!.QuoteCaveat);
+        Assert.NotNull(copied);
+        // Check the lead's own line: a caveat on a later bullet would not warn about this quote.
+        var leadLine = Assert.Single(copied.Split('\n'), line => line.Contains(entry.Lead.Text, StringComparison.Ordinal));
+        Assert.Contains("[" + caveat + "]", leadLine, StringComparison.Ordinal);
+        if (unshown)
+        {
+            Assert.Contains("[the model cited a part it was not shown]", leadLine, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task TheQuestionPicksTheModeWhenNobodyHasPickedOne()
     {
@@ -695,112 +736,273 @@ public class AskChatTests
     }
 
     [Fact]
-    public async Task ASurveyAnswerSaysItReadASampleRatherThanTheRetrievedParts()
+    public async Task ASectionSummaryNamesItsCoverageOnScreenAndInTheCopiedAnswer()
     {
-        // The provenance line makes a claim about coverage, and it goes into the copied email as
-        // well as the panel. It knew two tiers and a survey is a third: it read a little of all of
-        // the recording where retrieval reads all of a little, so reporting it as "retrieved
-        // parts" understates what the answer saw and misdescribes where it came from.
-        var segments = new List<TranscriptSegment>();
-        for (var i = 0; i < 120; i++)
-        {
-            segments.Add(new TranscriptSegment
-            {
-                Start = TimeSpan.FromSeconds(i * 10),
-                End = TimeSpan.FromSeconds((i * 10) + 10),
-                Text = $"segment {i} about the quarterly budget review " + new string('x', 420),
-            });
-        }
-
-        var job = new JobViewModel("/tmp/long.wav");
-        job.Complete(new JobResult
-        {
-            Job = new TranscriptionJob { InputPath = job.Path },
-            State = JobState.Completed,
-            Document = new TranscriptDocument
-            {
-                Segments = segments,
-                AudioDuration = TimeSpan.FromSeconds(1_200),
-            },
-        });
-
-        var (chat, provider, _) = Chat(job);
+        var (chat, provider) = SectionChat();
+        string? copied = null;
+        chat.CopyToClipboard = text => { copied = text; return Task.CompletedTask; };
         await AskAsync(chat, "give me a summary");
 
-        Assert.Equal(AnswerMode.Survey, provider.LastCreated!.LastRequest!.Mode);
+        Assert.Equal(AnswerMode.MapReduce, provider.Requests[^1].Mode);
 
         var entry = Assert.Single(chat.Entries);
-        Assert.DoesNotContain("retrieved parts", entry.ModelLine, StringComparison.Ordinal);
-        Assert.Contains("even sample", entry.ModelLine, StringComparison.Ordinal);
+        Assert.Null(entry.Failure);
+        Assert.Contains("from summaries of every transcript section", entry.ModelLine, StringComparison.Ordinal);
+        await entry.CopyCommand.ExecuteAsync(null);
+        Assert.NotNull(copied);
+        Assert.Contains("from summaries of every transcript section", copied, StringComparison.Ordinal);
+        Assert.DoesNotContain("even sample", copied, StringComparison.Ordinal);
+        Assert.DoesNotContain("Generated section note", copied, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ALongRecordingIsNotReadWholeAutomaticallyAndTheAnswerSaysSo()
+    public async Task ALongAutomaticSummaryReadsEverySectionBeforeSynthesizingOriginalCitations()
     {
-        // A whole-recording pass on a long transcript is minutes of prefill, and the automatic
-        // path will not start one unasked. What it must not do is answer thinly in silence: the
-        // asker would read a retrieval-shaped summary as the recording being thin.
-        var segments = new List<TranscriptSegment>();
-        for (var i = 0; i < 120; i++)
-        {
-            segments.Add(new TranscriptSegment
-            {
-                Start = TimeSpan.FromSeconds(i * 10),
-                End = TimeSpan.FromSeconds((i * 10) + 10),
-                Text = $"segment {i} about the quarterly budget review " + new string('x', 420),
-            });
-        }
-
-        var job = new JobViewModel("/tmp/long.wav");
-        job.Complete(new JobResult
-        {
-            Job = new TranscriptionJob { InputPath = job.Path },
-            State = JobState.Completed,
-            Document = new TranscriptDocument
-            {
-                SourceName = job.Path,
-                AudioDuration = TimeSpan.FromSeconds(1_200),
-                Segments = segments,
-            },
-        });
-
-        var (chat, provider, _) = Chat(job);
+        var (chat, provider) = SectionChat();
         await AskAsync(chat, "give me a summary");
-
-        // **This is the hole the survey tier filled on 2026-08-27.** Until then the assertion
-        // here was `Assert.Equal(0, provider.Created)` and a failure sentence: a summary request's
-        // words match nothing in an index, so the retrieval fallback came up empty and a reader
-        // asking the most obvious question about a long recording got no answer at all. The
-        // recording is now sampled end to end instead, so there is always evidence and always an
-        // answer.
-        Assert.Equal(1, provider.Created);
-        Assert.Equal(AnswerMode.Survey, provider.LastCreated!.LastRequest!.Mode);
 
         var entry = Assert.Single(chat.Entries);
         Assert.Null(entry.Failure);
         Assert.False(entry.Abstained);
 
-        // The evidence is a sample of the whole, which means it reaches both ends of the
-        // recording — an answer built from the opening minutes is the failure the whole-recording
-        // instruction exists to steer away from, and a survey that only sampled the start would
-        // reintroduce it while looking like a fix.
-        var evidence = provider.LastCreated!.LastRequest!.Evidence;
-        Assert.True(evidence.Count > 1, "a survey of a long recording is more than one window");
-        Assert.Equal(1, evidence[0].FirstSegment);
-        Assert.Equal(120, evidence[^1].LastSegment);
+        var sections = provider.Requests.Where(r => r.SummaryStage == SummaryStage.Section).ToArray();
+        Assert.True(sections.Length > 1, "a long transcript must be read in several bounded requests");
+        Assert.All(sections, request =>
+        {
+            Assert.Equal(AnswerMode.MapReduce, request.Mode);
+            Assert.True(request.Evidence.Sum(w => w.Text.Length) <= 24_000);
+            Assert.True(string.IsNullOrEmpty(request.SummaryNotes));
+        });
+        var readSegments = sections.SelectMany(r => r.Evidence)
+            .SelectMany(w => Enumerable.Range(w.FirstSegment, w.LastSegment - w.FirstSegment + 1));
+        Assert.Equal(Enumerable.Range(1, 120), readSegments);
 
-        // And the reader is told both halves: that it covers all of it, and that it does not
-        // cover every minute. Saying only the first would read as completeness.
-        Assert.NotNull(entry.RoutingNotice);
-        Assert.Contains("even sample", entry.RoutingNotice, StringComparison.Ordinal);
-        Assert.Contains("miss things", entry.RoutingNotice, StringComparison.Ordinal);
+        var synthesis = provider.Requests[^1];
+        Assert.Equal(SummaryStage.Synthesis, synthesis.SummaryStage);
+        Assert.Contains("Generated section note", synthesis.SummaryNotes, StringComparison.Ordinal);
+        Assert.All(synthesis.Evidence, window => Assert.Equal(
+            TranscriptWindowBuilder.FromRun(synthesis.Transcript, window.FirstSegment, window.LastSegment),
+            window));
+        Assert.All(entry.Bullets.SelectMany(b => b.Citations), chip => Assert.True(chip.IsResolved));
+        Assert.Equal(
+            "This recording is long, so I’m reading it in sections before combining the summary.",
+            entry.RoutingNotice);
 
-        // Asking for it explicitly still reads the whole thing — the ceiling is on the
-        // automatic path, never on the person.
+        // The explicit setting still performs one direct whole-transcript request.
+        var requestsBefore = provider.Requests.Count;
         provider.ModePreference = AskModePreference.WholeTranscript;
         await AskAsync(chat, "give me a summary");
-        Assert.Equal(AnswerMode.WholeTranscript, provider.LastCreated!.LastRequest!.Mode);
+        Assert.Equal(requestsBefore + 1, provider.Requests.Count);
+        Assert.Equal(AnswerMode.WholeTranscript, provider.Requests[^1].Mode);
         Assert.Null(chat.Entries[^1].RoutingNotice);
+    }
+
+    [Theory]
+    [InlineData("what about the budget?", false)]
+    [InlineData("Summarize the video", false)]
+    [InlineData("Summarize the video", true)]
+    public async Task StoppingAsTheFinalFrameIsDisplayedDoesNotCompleteTheAnswer(string question, bool longRecording)
+    {
+        var (chat, provider) = SectionChat();
+        if (!longRecording)
+        {
+            chat.SetRecording(Transcribed());
+        }
+
+        var stoppedOnFrame = false;
+        chat.Entries.CollectionChanged += (_, change) =>
+        {
+            foreach (ChatEntryViewModel entry in change.NewItems!)
+            {
+                entry.PropertyChanged += (_, property) =>
+                {
+                    if (property.PropertyName == nameof(ChatEntryViewModel.StreamingText)
+                        && entry.StreamingText is not null)
+                    {
+                        stoppedOnFrame = true;
+                        chat.StopCommand.Execute(null);
+                    }
+                };
+            }
+        };
+
+        // The test engine returns after its final yield without another token check, as a
+        // completed response may do. The application must honor Stop before it publishes it.
+        await AskAsync(chat, question);
+
+        Assert.True(stoppedOnFrame);
+        var stopped = Assert.Single(chat.Entries);
+        Assert.Equal("Stopped.", stopped.Failure);
+        Assert.False(chat.IsAsking);
+        Assert.Null(stopped.StreamingText);
+        Assert.Null(stopped.Lead);
+        Assert.Empty(stopped.Bullets);
+        Assert.Empty(stopped.Sources);
+        Assert.False(stopped.CanCopy);
+        Assert.Equal(longRecording, provider.Requests.Any(request => request.SummaryStage == SummaryStage.Synthesis));
+    }
+
+    [Fact]
+    public async Task StoppingDuringASecondSectionDoesNotPublishTheFirstSectionsNotes()
+    {
+        var secondSection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var seenSections = 0;
+        var (chat, provider) = SectionChat(async (request, _, ct) =>
+        {
+            if (request.SummaryStage == SummaryStage.Section && ++seenSections == 2)
+            {
+                secondSection.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            return SectionAnswer(request);
+        });
+
+        chat.QuestionText = "Summarize the video";
+        var asking = chat.AskCommand.ExecuteAsync(null);
+        await secondSection.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var entry = Assert.Single(chat.Entries);
+        Assert.False(entry.IsDone);
+        Assert.Empty(entry.Bullets);
+        Assert.Null(entry.Lead);
+        Assert.Null(entry.StreamingText);
+        Assert.False(entry.CanCopy);
+        chat.StopCommand.Execute(null);
+        await asking;
+
+        Assert.Equal("Stopped.", entry.Failure);
+        Assert.False(chat.IsAsking);
+        Assert.Empty(entry.Bullets);
+        Assert.False(entry.CanCopy);
+        Assert.DoesNotContain(provider.Requests, r => r.SummaryStage == SummaryStage.Synthesis);
+    }
+
+    [Fact]
+    public async Task SwitchingRecordingsDuringASectionDiscardsItsNotesAndUsesTheNewTranscript()
+    {
+        var secondSection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var seenSections = 0;
+        var (chat, provider) = SectionChat(async (request, _, ct) =>
+        {
+            if (request.SummaryStage == SummaryStage.Section && ++seenSections == 2)
+            {
+                secondSection.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            return SectionAnswer(request);
+        });
+
+        chat.QuestionText = "Summarize the video";
+        var asking = chat.AskCommand.ExecuteAsync(null);
+        await secondSection.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var previousEntry = Assert.Single(chat.Entries);
+        chat.SetRecording(Transcribed("/tmp/new-recording.wav"));
+        await asking;
+
+        Assert.Empty(chat.Entries);
+        Assert.False(previousEntry.CanCopy);
+        Assert.DoesNotContain(provider.Requests, r => r.SummaryStage == SummaryStage.Synthesis);
+        await AskAsync(chat, "what about the axolotl?");
+        var request = provider.Requests[^1];
+        Assert.Equal("/tmp/new-recording.wav", request.Transcript.SourceName);
+        Assert.Equal(AnswerMode.Retrieval, request.Mode);
+        Assert.True(string.IsNullOrEmpty(request.SummaryNotes));
+        Assert.Contains(request.Evidence, w => w.Text.Contains("axolotl", StringComparison.Ordinal));
+        Assert.Null(Assert.Single(chat.Entries).Failure);
+    }
+
+    [Fact]
+    public async Task ASynthesisFailureCannotBeCopiedAsACompleteSummaryAndDropsTheEngine()
+    {
+        var (chat, provider) = SectionChat((request, _, _) => request.SummaryStage == SummaryStage.Synthesis
+            ? Task.FromException<string>(new InvalidOperationException("The synthesizer failed."))
+            : Task.FromResult(SectionAnswer(request)));
+
+        await AskAsync(chat, "Summarize the video");
+        var entry = Assert.Single(chat.Entries);
+        Assert.Equal("The synthesizer failed.", entry.Failure);
+        Assert.False(entry.Abstained);
+        Assert.Empty(entry.Bullets);
+        Assert.Null(entry.Lead);
+        Assert.False(entry.CanCopy);
+        Assert.True(provider.Disposed > 0);
+
+        var createdBefore = provider.Created;
+        chat.SetRecording(Transcribed());
+        await AskAsync(chat, "what about the axolotl?");
+        Assert.Equal(createdBefore + 1, provider.Created);
+        Assert.Null(Assert.Single(chat.Entries).Failure);
+    }
+
+    [Theory]
+    [InlineData("S9999")]
+    [InlineData("S120")]
+    public async Task ASectionCitationThatIsInventedOrNotShownStopsTheSummary(string citation)
+    {
+        // S120 exists in this transcript but is outside the first section. Resolving an id in
+        // the whole document alone cannot establish that this pass had that evidence.
+        var (chat, provider) = SectionChat((request, _, _) => Task.FromResult(
+            request.SummaryStage == SummaryStage.Section
+                ? $"- Fabricated: a claim the section cannot support [{citation}]\n"
+                : SectionAnswer(request)));
+
+        await AskAsync(chat, "Summarize the video");
+        var entry = Assert.Single(chat.Entries);
+        Assert.NotNull(entry.Failure);
+        Assert.False(entry.Abstained);
+        Assert.Empty(entry.Bullets);
+        Assert.Null(entry.Lead);
+        Assert.False(entry.CanCopy);
+        Assert.Single(provider.Requests);
+        Assert.DoesNotContain(provider.Requests, r => r.SummaryStage == SummaryStage.Synthesis);
+    }
+
+    [Fact]
+    public async Task AValidButUnshownRetrievalCitationIsMarkedAndCannotSeekOrCopyATimestamp()
+    {
+        var seeks = new List<TimeSpan>();
+        var (chat, _) = SectionChat((_, _, _) =>
+            Task.FromResult("- Hidden: they discussed «quarterly budget review» [S120]\n"), seeks.Add);
+        string? copied = null;
+        chat.CopyToClipboard = text => { copied = text; return Task.CompletedTask; };
+
+        await AskAsync(chat, "what about the quarterly budget?");
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.Null(entry.Failure);
+        var bullet = Assert.Single(entry.Bullets);
+        Assert.True(bullet.IsUncited);
+        Assert.False(bullet.QuoteVerified);
+        var chip = Assert.Single(bullet.Citations);
+        Assert.False(chip.IsResolved);
+        Assert.Equal("?", chip.Display);
+        Assert.Equal("The model cited a part it was not shown.", chip.Detail);
+        chip.SeekCommand.Execute(null);
+        Assert.Empty(seeks);
+        await entry.CopyCommand.ExecuteAsync(null);
+        Assert.Contains("[unverified]", copied, StringComparison.Ordinal);
+        Assert.Contains("the model cited a part it was not shown", copied, StringComparison.Ordinal);
+        Assert.DoesNotContain("19:50", copied, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFinalSummaryWithOneBroadenedCitationKeepsTheAnswerAndMarksThatCitation()
+    {
+        var (chat, _) = SectionChat((request, _, _) => Task.FromResult(
+            request.SummaryStage == SummaryStage.Section
+                ? $"- Section: a supported note [{request.Evidence[0].CitationId}]\n"
+                : $"- Broad: an overly broad reference [S1-S120]\n- Kept: a supported point [{request.Evidence[0].CitationId}]\n"));
+
+        await AskAsync(chat, "Summarize the video");
+
+        var entry = Assert.Single(chat.Entries);
+        Assert.Null(entry.Failure);
+        Assert.True(entry.IsDone);
+        Assert.True(entry.CanCopy);
+        Assert.Equal(2, entry.Bullets.Count);
+        Assert.True(entry.Bullets[0].IsUncited);
+        Assert.Equal("?", Assert.Single(entry.Bullets[0].Citations).Display);
+        Assert.False(entry.Bullets[1].IsUncited);
+        Assert.True(Assert.Single(entry.Bullets[1].Citations).IsResolved);
     }
 
     [Fact]
@@ -1239,6 +1441,105 @@ public class AskChatTests
         await AskAsync(chat, "again?");
         Assert.Equal(2, provider.Created);
     }
+
+    private static (AskChatViewModel Chat, SectionAnswerProvider Provider) SectionChat(
+        Func<AskRequest, int, CancellationToken, Task<string>>? answer = null,
+        Action<TimeSpan>? seek = null)
+    {
+        var provider = new SectionAnswerProvider(answer);
+        var chat = new AskChatViewModel(provider, null, null, seek ?? (_ => { }));
+        var path = "/tmp/long.wav";
+        var job = new JobViewModel(path);
+        job.Complete(new JobResult
+        {
+            Job = new TranscriptionJob { InputPath = path },
+            State = JobState.Completed,
+            Document = new TranscriptDocument
+            {
+                SourceName = path,
+                AudioDuration = TimeSpan.FromSeconds(1_200),
+                Segments = Enumerable.Range(0, 120).Select(i => new TranscriptSegment
+                {
+                    Start = TimeSpan.FromSeconds(i * 10),
+                    End = TimeSpan.FromSeconds((i + 1) * 10),
+                    Text = $"segment {i} about the quarterly budget review " + new string('x', 420),
+                }).ToArray(),
+            },
+        });
+        chat.SetRecording(job);
+        return (chat, provider);
+    }
+
+    private static string SectionAnswer(AskRequest request)
+    {
+        var text = request.SummaryStage == SummaryStage.Section
+            ? "Generated section note" : "Final synthesized topic";
+        return string.Join('\n', request.Evidence.Select(window =>
+            $"- Topic: {text} [{window.CitationId}]")) + "\n";
+    }
+
+    /// <summary>Records every pass and lets a test block or fail at a specific pipeline stage.</summary>
+    private sealed class SectionAnswerProvider(
+        Func<AskRequest, int, CancellationToken, Task<string>>? answer) : IAnswerEngineProvider
+    {
+        public List<AskRequest> Requests { get; } = [];
+        public int Created { get; private set; }
+        public int Disposed { get; private set; }
+        public bool ThinkingMode => false;
+        public AskModePreference ModePreference { get; set; } = AskModePreference.Automatic;
+        public MoeExpertPlacement ExpertPlacement => MoeExpertPlacement.Automatic;
+        public int EvidenceWindows => 8;
+        public AnswerEngineAvailability Check() => new() { ModelFileName = "section-test-model.gguf" };
+        public IAnswerEngine Create(int promptChars = 0)
+        {
+            Created++;
+            return new SectionAnswerEngine(this, answer);
+        }
+
+        private sealed class SectionAnswerEngine(SectionAnswerProvider provider,
+            Func<AskRequest, int, CancellationToken, Task<string>>? answer) : IAnswerEngine
+        {
+            private bool loaded;
+            private bool disposed;
+            public AnswerEngineCapabilities Capabilities { get; } = new()
+            {
+                EngineName = "section-test", ModelId = "section-test-model", Backend = ComputeBackend.Cpu,
+            };
+
+            public ValueTask LoadAsync(CancellationToken ct = default)
+            {
+                ct.ThrowIfCancellationRequested();
+                loaded = true;
+                return ValueTask.CompletedTask;
+            }
+
+            public async IAsyncEnumerable<string> AskAsync(AskRequest request,
+                IProgress<AskProgress>? progress = null,
+                [EnumeratorCancellation] CancellationToken ct = default)
+            {
+                if (!loaded || disposed)
+                {
+                    throw new InvalidOperationException("The test engine must be loaded and alive.");
+                }
+                ct.ThrowIfCancellationRequested();
+                provider.Requests.Add(request);
+                var response = answer is null ? SectionAnswer(request)
+                    : await answer(request, provider.Requests.Count, ct);
+                ct.ThrowIfCancellationRequested();
+                yield return response;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (!disposed)
+                {
+                    disposed = true;
+                    provider.Disposed++;
+                }
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
 }
 
 /// <summary>The arithmetic both halves of the rebuild decision share.</summary>
@@ -1337,6 +1638,43 @@ public class AskChatWindowTests
         // is a request to hear the claim.
         Assert.True(player.IsPlaying);
         Assert.True(player.Position >= TimeSpan.Zero);
+    }
+
+    [AvaloniaFact]
+    public void LeadQuoteCaveatsAreVisibleThroughTheWindow()
+    {
+        var (window, viewModel, _) = Open();
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment
+            {
+                Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "the budget was approved",
+            }],
+        };
+
+        foreach (var lead in new[]
+        {
+            "They said «the budget was rejected» [S1]",
+            "They said \"the budget was approved\" [S1]",
+        })
+        {
+            var answer = AnswerParser.Parse(lead + "\n- Budget: an update was discussed [S1]\n", allowLead: true);
+            var entry = new ChatEntryViewModel("give me a summary", _ => Task.CompletedTask);
+            entry.Complete(answer, CitationValidator.Validate(answer, transcript), [], transcript, _ => { });
+            viewModel.Ask.Chat.Entries.Add(entry);
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+
+            Assert.NotNull(entry.Lead!.QuoteCaveat);
+            var rendered = Assert.Single(window.GetVisualDescendants().OfType<TextBlock>(),
+                block => ReferenceEquals(block.DataContext, entry.Lead)
+                    && block.Text == entry.Lead.QuoteCaveat);
+            Assert.True(rendered.IsVisible);
+            Assert.All(rendered.GetVisualAncestors().OfType<Control>(), control => Assert.True(control.IsVisible));
+        }
+
+        window.Close();
     }
 
     /// <summary>

@@ -1048,10 +1048,12 @@ pass inside the 9B's window — 40k fits — or a map-reduce over the windows ab
 through the reduce. Which of the two is decided by measuring the 9B's *effective* length on CSB384,
 not its label: RULER puts Llama-3.1-8B's effective length at 32k of a claimed 128k and NoLiMa
 drops it from 76.7 to 14.2 at 32k (research), and nothing says the 9B is different until it is
-run. Between the two paths sits a router that does not exist: a heuristic first — *what did they
+run. The original proposal called for a router between the two paths: a heuristic first — *what did they
 say about, when, did they* → retrieve; *main topics, summarise, overall* → global — and the model
 itself as the classifier if the heuristic fails; unmeasured either way. Both paths cite by id, and
-the global path's citations are the ones decision 6's tests will find wanting first.
+the global path's citations are the ones decision 6's tests will find wanting first. The heuristic
+router was built on 2026-08-25; the current section-summary path is recorded below under
+*Corrected 2026-09-12*.
 
 **Why retrieval at all when the working candidate reads 262k.** Four reasons this document already
 carries in pieces: the laptop cannot prefill 40k in acceptable time (75–190 s per prompt on that
@@ -1117,10 +1119,10 @@ of the recording. That run is in `docs/UNPROVEN.md` with its limits stated — a
 observation on a toy transcript, not a quality claim, and a 0.6B on the same prompt emitted no
 citations at all, which is the ungrammared post-hoc contract behaving as specified.
 
-What it is not: not map-reduce, which remains the laptop's eventual path for long recordings,
-where this section's own table prices a whole-transcript prefill in tens of minutes; and not a
-quality claim — no whole-transcript answer has been scored, and the mode's honest advertisement
-today is the desktop's measured 7.93 s CUDA prefill against the laptop's 467.9–2,104.1 s. Sizing
+That 2026-08-25 build did not include map-reduce, which was then the laptop's proposed path for
+long recordings and was built on 2026-09-12 as recorded below. Its one-pass result was not a
+quality claim: no whole-transcript answer had been scored, and the performance evidence then
+was the desktop's measured 7.93 s CUDA prefill against the laptop's 467.9–2,104.1 s. Sizing
 to the recording matters on the laptop too: a seventeen-minute clip's whole transcript fits the
 16,384 floor, so the opt-in is not desktop-only, merely desktop-shaped at three hours.
 
@@ -1154,19 +1156,19 @@ global question answered from retrieval costs seconds and is visibly thin. Cheap
 wrong beats expensive-and-plausible — the same reasoning this section already applies to the
 global path degrading into "the model saw a tenth of the transcript and guessed the rest".
 
-**The automatic path will not start a long read unasked**, on the rule that the whole transcript
-must fit the context the retrieval tier already allocates (16,384 tokens), so the router never
-commits someone to a bigger cache — or a longer prefill — than the tier they were on when they
-typed. Above that it retrieves and says why. One consequence had to be handled rather than
+**Original cost policy, 2026-08-25; superseded below.** The automatic path initially required the
+whole transcript to fit the context the retrieval tier already allocated (16,384 tokens), so it
+did not allocate a bigger cache for a global question. Above that it retrieved and said why.
+One consequence had to be handled rather than
 inherited: retrieval then usually finds nothing, because the words of a summary request appear in
 no transcript, and reporting that as the abstention would assert *"the recording doesn't answer
 that"* — a claim about the recording, when the truth is a claim about the tier. That case gets an
 explanation instead, and the abstention stays reserved for a question the right tier really could
 not answer.
 
-**Corrected 2026-08-30 — above the affordability rule it surveys now.** "It retrieves and says
+**Historical correction, 2026-08-30 — sampling, replaced on 2026-09-12.** "It retrieves and says
 why" stopped being the behaviour on 2026-08-27, when the third tier landed: a global question over
-a recording that will not fit is answered from an even, position-spread sample of all of it
+a recording that would not fit was answered from an even, position-spread sample of all of it
 (`AnswerMode.Survey`, `SurveyWindowSelector`), the prompt stating the gaps and the panel carrying
 a notice that the answer may miss what was said in between — rather than from the eight windows a
 scorer with nothing to rank on happened to like. The handled consequence above survives beneath
@@ -1174,6 +1176,17 @@ it: a sample with nothing in it still gets the explanation rather than the abste
 stretch of days left more of this register behind — the drafting-head default and the catalogue's
 recommended answering entry (both 2026-08-28) are recorded in `docs/UNPROVEN.md`, the code and its
 tests rather than here; this block is the register's pointer to them.
+
+**Corrected 2026-09-12 — long summaries now read every section.** The CSB388 comparison showed
+the cost of the sample's gaps. Automatic global questions above the one-pass allowance now use
+`AnswerMode.MapReduce`: consecutive transcript sections produce cited notes, then a separate
+synthesis combines them. Notes are labelled as generated and never replace original transcript
+windows; their citations retain the source segment space and cannot bridge unseen gaps. The
+context remains bounded per request, but reading all sections can take longer than sampling.
+Topic questions now select surrounding passages through `TopicWindowSelector`, preserving fine
+source citations rather than sending isolated lexical hits. The source-backed comparison and its
+limits are in `docs/UNPROVEN.md`; this does not establish semantic retrieval or general parity with
+a hosted video assistant.
 
 The setting became three-way — decide from my question (shipped), the parts that matched, the
 whole transcript — and the one-day-old boolean migrates: a stored *true* was a deliberate choice

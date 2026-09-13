@@ -32,10 +32,23 @@ public sealed record AnswerEngineCapabilities
     public int? TrainedContextTokens { get; init; }
 }
 
+/// <summary>Which pass of a complete, bounded transcript summary this request performs.</summary>
+public enum SummaryStage
+{
+    None = 0,
+    Section = 1,
+    Synthesis = 2,
+    /// <summary>Shorten generated section notes for another synthesis pass.</summary>
+    Reduction = 3,
+}
+
 /// <summary>One question against one transcript, with everything the engine may see.</summary>
 public sealed record AskRequest
 {
     public required string Question { get; init; }
+
+    /// <summary>The recording's display title, when the caller has one. Naming only, not evidence.</summary>
+    public string? RecordingName { get; init; }
 
     /// <summary>
     /// The transcript the ids in the answer are meaningful against — the ask's entire world:
@@ -47,6 +60,16 @@ public sealed record AskRequest
     public required TranscriptDocument Transcript { get; init; }
 
     public AnswerMode Mode { get; init; } = AnswerMode.Retrieval;
+
+    /// <summary>Section reads source windows; synthesis reads validated generated notes.</summary>
+    public SummaryStage SummaryStage { get; init; }
+
+    /// <summary>
+    /// Generated notes for a synthesis pass, kept separate from original transcript evidence.
+    /// Their citations were checked against the windows shown to the preceding pass; Evidence
+    /// contains only the original source runs those notes actually cite.
+    /// </summary>
+    public string? SummaryNotes { get; init; }
 
     /// <summary>
     /// What the model sees, in every mode: retrieval passes the windows it chose in rank order,

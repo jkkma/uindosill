@@ -14,8 +14,7 @@ public enum RoutingBasis
     /// <summary>The question names something the index can find.</summary>
     Findable = 2,
 
-    /// <summary>Global by kind, answered from an even sample of the recording because reading it
-    /// all was too expensive to start without being asked.</summary>
+    /// <summary>Global by kind, read in bounded sections because it does not fit the ordinary context.</summary>
     GlobalButTooLong = 3,
 }
 
@@ -27,11 +26,7 @@ public sealed record RoutingDecision
 
     public required RoutingBasis Basis { get; init; }
 
-    /// <summary>User copy, set only when the router did something the asker would not predict —
-    /// today, only when a whole-recording question was answered from retrieved parts because the
-    /// recording was too long to read automatically. Null the rest of the time: the answer's own
-    /// provenance line already says which mode produced it, and a notice on every question is
-    /// noise that teaches nobody anything.</summary>
+    /// <summary>Explains the extra section-reading pass for a long recording. Otherwise null.</summary>
     public string? Notice { get; init; }
 }
 
@@ -99,10 +94,9 @@ public static class QuestionRouter
     /// <param name="question">What the person typed.</param>
     /// <param name="retriever">The index over this transcript — the second rule's evidence.</param>
     /// <param name="wholeTranscriptIsAffordable">
-    /// Whether reading the whole recording is cheap enough to start without being asked. The
-    /// caller decides what that means; the application's answer is that the whole transcript fits
-    /// the context the engine allocates for retrieval anyway, so the automatic path never commits
-    /// a person to a larger cache — or a longer prefill — than the tier they were already on.
+    /// Whether the whole recording fits the ordinary answer context in one pass. When it does
+    /// not, the app reads bounded sections and combines their notes; that takes more requests
+    /// and can take longer, but it does not allocate one large context or sample away speech.
     /// </param>
     public static RoutingDecision Route(
         string question, Bm25Retriever retriever, bool wholeTranscriptIsAffordable)
@@ -124,21 +118,13 @@ public static class QuestionRouter
         {
             return new RoutingDecision
             {
-                // A survey since 2026-08-27, and retrieval before it. The asker wanted the whole
-                // recording; the honest thing to hand them when all of it will not fit is a
-                // thinner pass over all of it, not a thorough pass over the eight windows a
-                // scorer liked — and a global question is the case where the scorer has least to
-                // go on. Reading every minute stays available and stays a decision, because it
-                // was measured at 1,112.6 s of prefill on the second machine.
-                Mode = AnswerMode.Survey,
+                // The app reads all sections and combines their cited notes. The bounded
+                // context controls memory without leaving holes between sampled passages.
+                Mode = AnswerMode.MapReduce,
                 Basis = RoutingBasis.GlobalButTooLong,
 
-                // The one case worth a sentence: the asker wanted the whole recording, did not
-                // get all of it, and would otherwise read a sampled answer as a complete one.
-                Notice = "This recording is long, so the answer below comes from an even sample "
-                    + "across all of it rather than every minute: it may miss things said in "
-                    + "between. For a pass over every word, switch answering to \"the whole "
-                    + "transcript\" in Settings.",
+                // The extra reading stage should explain why the final answer has not started.
+                Notice = "This recording is long, so I’m reading it in sections before combining the summary.",
             };
         }
 
