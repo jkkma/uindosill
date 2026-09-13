@@ -8678,3 +8678,43 @@ not been done.
 the published one (1,994,576,093 against 1,994,607,505) — the same effect recorded above for rc.13,
 where the gap was 14,181 bytes. Rebuilding a zip does not reproduce it byte for byte; the install it
 produced runs, and **that the two archives hold identical contents was again not checked**.
+
+### Desktop audit fixes verified on the laptop, 2026-09-12
+
+The audit at `e4ebaab` reproduced six defects: cold-load shutdown ordering, colliding original and
+tidied CLI filenames, uncancelled link fetching at shutdown, stale transcript-pane controls, stale
+model-removal command state, and an incorrect end-of-recording citation warning. The fixes and
+their regression coverage are recorded in `docs/PHASES.md` under *Fixed 2026-09-12*. The following
+checks used the Release build with those fixes on Windows 11 / Ryzen AI 9 365 / Radeon 880M.
+
+**Cold-load shutdown used the real CPU recogniser.** Shutdown was requested while the f16 model
+was loading. Start and shutdown settled, no recording entered decoding, no transcript or export
+was produced, the session was empty afterward, and backend release succeeded once. This followed
+the production view model and engine provider on a headless dispatcher; it was not a native window
+close gesture. A separate process then transcribed the saved YouTube WAV with f16 on CPU and
+Silero, produced 41 timed words, and exported TXT, Markdown, SRT, VTT, word VTT and JSON. Input,
+ASR-weight and VAD-weight hashes stayed unchanged. This is a workflow check, not an accuracy or
+performance result.
+
+**The original citation reproducer now passes.** The exact saved M4A still decodes to 840,704
+frames at 44.1 kHz, with its sample-derived endpoint 58 ticks (5.8 microseconds) beyond Media
+Foundation's duration. The production validator now reports both `WithinDuration` and
+`AllCitationsPass` true, without changing either timestamp. Tests also cover the earlier measured
+21 ms AAC discrepancy, the fixed 25 ms allowance, and rejection beyond that allowance. A new live
+Ask inference was not needed to rerun this exact duration/validation failure and was not performed.
+
+**Real child-process cancellation and file cleanup were exercised.** The vendored yt-dlp was
+cancelled while fetching the public YouTube sample, and every observed process in its tree had
+exited when cancellation completed. That run stopped before payload download; a second run using
+the same real downloader against a slow local HTTP stream of the pinned Earnings-22 input
+established actual `.part` cleanup. A real FFmpeg subtitle mux of a generated MP4 was cancelled
+while its staging file existed; the observed process tree exited and the staging file disappeared.
+The source audio/video and generated mux input remained hash-identical. The built CLI's original
+`a.wav` / `a.tidy.wav` collision command returned exit 2 with no output and unchanged inputs.
+
+Detailed results, source/binary hashes and regeneration instructions are in the laptop's
+`runs/audit-fixes-20260912/` and its curated report folder on the `runs-laptop` Drive route. The
+original audit evidence remains in `runs/audit-20260912/`. These checks do not establish CUDA
+behavior, installer upgrade/uninstall, recommended Ask-checkpoint quality, or every possible
+external-tool failure. Model loading in native code may still need to finish before cancellation
+can return; the fix waits for it and prevents a subsequent decode.

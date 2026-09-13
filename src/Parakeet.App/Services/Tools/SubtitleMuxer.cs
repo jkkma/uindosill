@@ -137,7 +137,7 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
         }
         catch (OperationCanceledException)
         {
-            Kill(process);
+            await KillAndWaitAsync(process).ConfigureAwait(false);
             Discard(staging);
             throw;
         }
@@ -193,7 +193,7 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
         throw new SubtitleMuxException($"There are already 999 files called {stem}.");
     }
 
-    private static void Kill(Process process)
+    private static async Task KillAndWaitAsync(Process process)
     {
         try
         {
@@ -206,6 +206,14 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
         {
             // Already gone between the check and the kill, which is the normal race.
         }
+        catch (System.ComponentModel.Win32Exception) when (process.HasExited)
+        {
+            // Windows can report a failed kill when the process exited in the meantime.
+        }
+
+        // A kill is asynchronous: the staging file can still be open until the process exits.
+        // The caller's cancellation must not cancel this cleanup wait as well.
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     private static void Discard(string path)

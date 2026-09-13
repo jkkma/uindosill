@@ -367,6 +367,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanLoad))]
     [NotifyPropertyChangedFor(nameof(LoadHint))]
     [NotifyPropertyChangedFor(nameof(CanUnload))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveAll))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveAllCommand))]
     [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
     [NotifyCanExecuteChangedFor(nameof(RemoveSideloadedCommand))]
     [NotifyPropertyChangedFor(nameof(CanMoveIntoPlace))]
@@ -858,6 +860,11 @@ public sealed partial class ModelsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRemoveAll))]
     private void RemoveAll()
     {
+        if (!CanRemoveAll)
+        {
+            return;
+        }
+
         var freed = 0L;
         var removed = 0;
         var skipped = new List<string>();
@@ -970,6 +977,11 @@ public sealed partial class ModelsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSideloaded));
         OnPropertyChanged(nameof(SideloadedSummary));
         OnPropertyChanged(nameof(UninstallNotice));
+        // Downloads and removals update IsInstalled before reaching this shared refresh path.
+        // A button bound to Command needs its own invalidation even when that value is unchanged
+        // by the scan, or its enabled state remains the one from when the window opened.
+        OnPropertyChanged(nameof(CanRemoveAll));
+        RemoveAllCommand.NotifyCanExecuteChanged();
     }
 
     private long _installedBytes;

@@ -121,18 +121,21 @@ internal static class TranscribeCommand
             })
             .ToList();
 
-        // Two inputs that would write one file — the same name in two folders under -o, a.wav
-        // beside a.mp3 — are refused here, as `translate` refuses them, rather than letting the
-        // second replace, skip, or rename itself beside the first after the first was decoded.
-        // Until 2026-08-22 `--overwrite` made that a silent replacement.
-        foreach (var collision in TranscriptWriter.FindOutputCollisions(jobs))
+        // Every destination, including the tidy beside each primary document and the spoken
+        // fallback when translation fails. Checking only the primary stems let a.wav's tidy
+        // overwrite a.tidy.wav's transcript. Include extensions too: .words.vtt can collide with
+        // a plain .vtt from another input even when their stems differ. As with the existing
+        // batch collision refusal, this is checked before decoding under every overwrite policy.
+        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var outputCollisions = PlanOutputFiles(jobs, tidyOptions is not null, translationOptions is not null)
+            .GroupBy(output => output.Path, pathComparer)
+            .Where(group => group.Count() > 1);
+        foreach (var collision in outputCollisions)
         {
-            var first = collision[0];
-            var directory = first.OutputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(first.InputPath)) ?? ".";
             context.WriteError(
-                $"{string.Join(" and ", collision.Select(j => j.InputPath))} would all be written as " +
-                $"{Path.GetFileNameWithoutExtension(first.InputPath) + first.StemSuffix}.<format> in {directory}, and only " +
-                "one of them would survive it. Give them different names, run them separately, or give each its own " +
+                $"{string.Join(" and ", collision.Select(output => $"The {output.Version} from '{output.InputPath}'"))} " +
+                $"would be written to the same file: {collision.Key}. " +
+                "Give the inputs different names, run them separately, or give each its own " +
                 "--out directory.");
             return ExitCodes.UsageError;
         }
@@ -218,6 +221,40 @@ internal static class TranscribeCommand
         var results = await runner.RunAsync(jobs, progress: null, ct).ConfigureAwait(false);
 
         return Report(context, results, quiet);
+    }
+
+    private static IEnumerable<(string InputPath, string Version, string Path)> PlanOutputFiles(
+        IReadOnlyList<TranscriptionJob> jobs, bool tidy, bool translate)
+    {
+        foreach (var job in jobs)
+        {
+            var versions = new List<(TranscriptionJob Job, string Name)>
+            {
+                (job, translate ? "English transcript" : "transcript"),
+            };
+            if (translate)
+            {
+                versions.Add((job with { StemSuffix = string.Empty }, "spoken transcript if translation fails"));
+            }
+
+            if (tidy)
+            {
+                // Uses the writer's own version of the job, including its omitted RTTM output.
+                versions.Add((job.ForTidiedVersion(), "tidied transcript"));
+            }
+
+            foreach (var (version, name) in versions)
+            {
+                var directory = Path.GetFullPath(
+                    version.OutputDirectory ?? Path.GetDirectoryName(Path.GetFullPath(version.InputPath)) ?? ".");
+                var stem = Path.GetFileNameWithoutExtension(version.InputPath) + version.StemSuffix;
+                foreach (var format in version.Formats)
+                {
+                    yield return (version.InputPath, name,
+                        Path.Combine(directory, stem + TranscriptFormats.Get(format).FileExtension));
+                }
+            }
+        }
     }
 
     private static TranscriptionOptions BuildOptions(ParsedCommandLine parsed)

@@ -237,7 +237,7 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
             // The whole tree, because yt-dlp spawns Deno and may spawn a downloader of its own; a
             // cancel that left either running would keep writing into a directory we are about to
             // delete.
-            TryKill(process);
+            await KillAndWaitAsync(process).ConfigureAwait(false);
             TryDelete(into);
             throw;
         }
@@ -275,7 +275,7 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
             uri.ToString());
     }
 
-    private static void TryKill(Process process)
+    private static async Task KillAndWaitAsync(Process process)
     {
         try
         {
@@ -284,11 +284,18 @@ public sealed partial class YtDlpMediaUrlFetcher : IMediaUrlFetcher
                 process.Kill(entireProcessTree: true);
             }
         }
-#pragma warning disable CA1031 // A process that has already gone is the outcome this wanted.
-        catch (Exception)
-#pragma warning restore CA1031
+        catch (InvalidOperationException)
         {
+            // Already gone between the check and the kill.
         }
+        catch (System.ComponentModel.Win32Exception) when (process.HasExited)
+        {
+            // Windows can report a failed kill when the process exited in the meantime.
+        }
+
+        // Kill requests termination; it does not wait for the process or its redirected streams.
+        // Keep cancellation pending until its handles have closed, before deleting partials.
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     private static void TryDelete(string directory)

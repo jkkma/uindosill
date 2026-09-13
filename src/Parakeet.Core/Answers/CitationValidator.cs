@@ -12,7 +12,10 @@ public sealed record CitationCheck
     /// <summary>The cited run contains some non-whitespace text — a citation of silence anchors nothing.</summary>
     public required bool NonEmpty { get; init; }
 
-    /// <summary>The run's end does not pass the recording's end, when the duration is known.</summary>
+    /// <summary>
+    /// The run ends within the known duration, allowing 25 ms of container/sample-clock mismatch
+    /// only when it starts inside the recording.
+    /// </summary>
     public required bool WithinDuration { get; init; }
 
     /// <summary>
@@ -108,6 +111,10 @@ public sealed record AnswerValidation
 /// </summary>
 public static class CitationValidator
 {
+    // UNPROVEN records a 21 ms AAC container/sample-clock mismatch. Allow 25 ms, including
+    // millisecond export rounding; larger disagreements still fail rather than redefining the end.
+    private const long DurationToleranceTicks = 25 * TimeSpan.TicksPerMillisecond;
+
     public static ResolvedCitation Resolve(Citation citation, TranscriptDocument transcript, string? quote = null)
     {
         ArgumentNullException.ThrowIfNull(citation);
@@ -150,8 +157,9 @@ public static class CitationValidator
             }
         }
 
+        var spanStart = transcript.Segments[start - 1].Start;
         var spanEnd = transcript.Segments[end - 1].End;
-        var withinDuration = transcript.AudioDuration is not { } duration || spanEnd <= duration;
+        var withinDuration = IsWithinDuration(spanStart, spanEnd, transcript.AudioDuration);
 
         bool? quoteMatches = null;
         if (quote is not null)
@@ -170,9 +178,23 @@ public static class CitationValidator
                 WithinDuration = withinDuration,
                 QuoteMatches = quoteMatches,
             },
-            Start = transcript.Segments[start - 1].Start,
+            Start = spanStart,
             End = spanEnd,
         };
+    }
+
+    private static bool IsWithinDuration(TimeSpan start, TimeSpan end, TimeSpan? duration)
+    {
+        if (duration is not { } known || end <= known)
+        {
+            return true;
+        }
+
+        // Both ticks are nonnegative here, so subtracting cannot overflow near TimeSpan.MaxValue.
+        return known > TimeSpan.Zero
+            && start >= TimeSpan.Zero
+            && start < known
+            && end.Ticks - known.Ticks <= DurationToleranceTicks;
     }
 
     /// <summary>One bullet — or a lead, which is a bullet — with its citations resolved.</summary>

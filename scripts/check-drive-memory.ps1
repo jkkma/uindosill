@@ -46,6 +46,23 @@ switch ($args[0]) {
 }
 '@ | Set-Content -LiteralPath (Join-Path $fakeBin 'rclone.ps1')
 
+# Catch the parameter binder's own ErrorRecord before the CLI localizes its rendering. Only
+# these identifiers cross the process boundary; no English error text or console encoding is
+# involved, and an accepted invocation still reaches the same fake-rclone trap as every case.
+@'
+param([string] $EntryPoint, [string] $MemorySource)
+try {
+    & $EntryPoint -Runs laptop -MemorySource $MemorySource
+}
+catch {
+    @{
+        FullyQualifiedErrorId = $_.FullyQualifiedErrorId
+        ExceptionType = $_.Exception.GetType().FullName
+    } | ConvertTo-Json -Compress
+    exit 1
+}
+'@ | Set-Content -LiteralPath (Join-Path $fixtureScripts 'parameter-set.ps1')
+
 $pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
 $script:caseNumber = 0
 function Invoke-Fixture([string] $EntryPoint, [string[]] $Arguments) {
@@ -98,7 +115,14 @@ Assert-Rejected @('-Memory', 'laptop', '-MemorySource', $fixture) 'outside the r
 Assert-Rejected @('-Memory', 'laptop', '-MemorySource', $fakeMemory) 'global Codex memory store'
 Assert-Rejected @('-Memory', 'laptop', '-MemorySource', (Join-Path $fakeMemory 'skills')) 'global Codex memory store'
 Assert-Rejected @('-Memory', 'laptop', '-MemorySource', $fakeCodexRoot) 'global Codex memory store'
-Assert-Rejected @('-Runs', 'laptop', '-MemorySource', $export) 'parameter set'
+$conflict = Invoke-Fixture 'parameter-set.ps1' @('-EntryPoint', (Join-Path $fixtureScripts 'sync-drive.ps1'), '-MemorySource', $export)
+Assert-That ($conflict.ExitCode -ne 0) 'Conflicting parameter sets were accepted.'
+$bindingError = $conflict.Output | ConvertFrom-Json
+Assert-That ($bindingError.FullyQualifiedErrorId -eq 'AmbiguousParameterSet,sync-drive.ps1') `
+    "Expected AmbiguousParameterSet, received: $($conflict.Output)"
+Assert-That ($bindingError.ExceptionType -eq 'System.Management.Automation.ParameterBindingException') `
+    "Expected ParameterBindingException, received: $($conflict.Output)"
+Assert-That ($conflict.Calls.Count -eq 0) 'Conflicting parameter sets reached rclone.'
 
 foreach ($entryPoint in @('sync-drive.ps1', 'lab.ps1')) {
     foreach ($dryRun in @($true, $false)) {

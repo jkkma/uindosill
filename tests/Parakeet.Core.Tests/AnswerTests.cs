@@ -1,4 +1,5 @@
 using Parakeet.Core.Answers;
+using Parakeet.Core.Audio;
 using Parakeet.Core.Retrieval;
 using Parakeet.Core.Transcription;
 
@@ -566,6 +567,115 @@ public class CitationValidatorTests
 
         Assert.True(resolved.Check.Resolves);
         Assert.False(resolved.Check.WithinDuration);
+    }
+
+    [Fact]
+    public void AnAacSampleClockEndingPastItsMetadataStillSupportsTheCitation()
+    {
+        // The audit's real 44.1 kHz AAC decoded 840,704 frames, while Media Foundation's
+        // metadata ended 58 ticks earlier. Both values round to 19.064 in the JSON export.
+        var duration = TimeSpan.FromTicks(190_635_770);
+        var sampleEnd = AudioMath.SamplesToTime(840_704, 44_100);
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = duration,
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = sampleEnd, Text = "elephants" }],
+        };
+        var answer = AnswerParser.Parse("- The speaker mentions «elephants» [S1]");
+
+        var validation = CitationValidator.Validate(answer, transcript);
+        var resolved = Assert.Single(Assert.Single(validation.Bullets).Citations);
+
+        Assert.Equal(58L, (sampleEnd - duration).Ticks);
+        Assert.True(resolved.Check.WithinDuration);
+        Assert.True(resolved.Check.QuoteMatches);
+        Assert.True(validation.AllCitationsPass);
+        Assert.Equal(sampleEnd, resolved.End);
+        Assert.Equal(duration, transcript.AudioDuration);
+    }
+
+    [Theory]
+    [InlineData(210_000, true)] // The measured 21 ms AAC discrepancy recorded in UNPROVEN.
+    [InlineData(250_000, true)]
+    [InlineData(250_001, false)]
+    public void TheDurationAllowanceHasAFixedUpperBoundary(long excessTicks, bool expected)
+    {
+        var transcript = Transcript("fine") with
+        {
+            AudioDuration = TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(excessTicks),
+        };
+
+        var resolved = CitationValidator.Resolve(Citation.Parse("S1"), transcript);
+
+        Assert.Equal(expected, resolved.Check.WithinDuration);
+        Assert.Equal(expected, resolved.Check.Passes);
+        Assert.Equal(TimeSpan.FromSeconds(10), resolved.End);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(100_000_000)]
+    [InlineData(100_000_001)]
+    public void TheAllowanceRequiresTheSpanToStartInsideTheRecording(long startTicks)
+    {
+        var duration = TimeSpan.FromSeconds(10);
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = duration,
+            Segments =
+            [
+                new TranscriptSegment
+                {
+                    Start = TimeSpan.FromTicks(startTicks),
+                    End = duration + TimeSpan.FromMilliseconds(1),
+                    Text = "outside the recording",
+                },
+            ],
+        };
+
+        var resolved = CitationValidator.Resolve(Citation.Parse("S1"), transcript);
+
+        Assert.True(resolved.Check.Resolves);
+        Assert.True(resolved.Check.NonEmpty);
+        Assert.False(resolved.Check.WithinDuration);
+        Assert.False(resolved.Check.Passes);
+    }
+
+    [Fact]
+    public void TheDurationAllowanceDoesNotOverflowAtTheTimeSpanLimit()
+    {
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = TimeSpan.MaxValue - TimeSpan.FromTicks(58),
+            Segments =
+            [
+                new TranscriptSegment
+                {
+                    Start = TimeSpan.MaxValue - TimeSpan.FromSeconds(1),
+                    End = TimeSpan.MaxValue,
+                    Text = "the last words",
+                },
+            ],
+        };
+
+        var resolved = CitationValidator.Resolve(Citation.Parse("S1"), transcript);
+
+        Assert.True(resolved.Check.WithinDuration);
+        Assert.Equal(TimeSpan.MaxValue, resolved.End);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AZeroOrNegativeDurationDoesNotGainAnAllowance(long durationTicks)
+    {
+        var transcript = new TranscriptDocument
+        {
+            AudioDuration = TimeSpan.FromTicks(durationTicks),
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromTicks(1), Text = "outside" }],
+        };
+
+        Assert.False(CitationValidator.Resolve(Citation.Parse("S1"), transcript).Check.WithinDuration);
     }
 
     [Fact]

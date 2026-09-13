@@ -348,9 +348,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ModelSession Session { get; }
 
     /// <summary>
-    /// Everything that has to happen before the process may exit: stop a running batch and wait
-    /// for it, then dispose the session, which unloads the model and releases the process-level
-    /// backend while the GPU driver is still alive.
+    /// Everything that has to happen before the process may exit: cancel transcription, downloads
+    /// and exports and await their cleanup, then dispose the session, which unloads the model and
+    /// releases the process-level backend while the GPU driver is still alive.
     /// </summary>
     /// <remarks>
     /// The wait is real. The ABI has no abort hook, so a cancelled batch still finishes the native
@@ -361,16 +361,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </remarks>
     public async Task ShutdownAsync()
     {
-        if (Transcribe.IsRunning)
+        if (Transcribe.IsRunning || Transcribe.IsFetchingUrl)
         {
-            Transcribe.StatusMessage = "Closing: waiting for the segment being decoded to finish…";
-            Transcribe.CancelCommand.Execute(null);
-
-            while (Transcribe.IsRunning)
-            {
-                await Task.Delay(50).ConfigureAwait(true);
-            }
+            Transcribe.StatusMessage = "Closing: waiting for current work to finish…";
         }
+
+        await Transcribe.StopAsync().ConfigureAwait(true);
 
         // The language model's child first: it is a process, the kill is fast, and the job object
         // would catch an abrupt death anyway — this is the orderly version of the same end.
