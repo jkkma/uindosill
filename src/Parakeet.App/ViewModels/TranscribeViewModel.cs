@@ -59,6 +59,9 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private string? _addToRecordingResult;
     private readonly string _downloadRoot;
     private CancellationTokenSource? _cancellation;
+    private TaskCompletionSource? _runFinished;
+    private TaskCompletionSource? _fetchFinished;
+    private bool _isShuttingDown;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStart))]
@@ -87,6 +90,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>Whether a fetch is in flight, which is what shuts the box while it runs.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(CanRunAgain))]
     [NotifyPropertyChangedFor(nameof(CanFetchUrl))]
     [NotifyCanExecuteChangedFor(nameof(FetchUrlCommand))]
     private bool _isFetchingUrl;
@@ -98,6 +103,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VisibleLines))]
     [NotifyPropertyChangedFor(nameof(CanShowTranslation))]
+    [NotifyPropertyChangedFor(nameof(CanShowPanes))]
+    [NotifyPropertyChangedFor(nameof(CanShowTidy))]
     [NotifyPropertyChangedFor(nameof(CanAddToRecording))]
     [NotifyPropertyChangedFor(nameof(AddToRecordingNotice))]
     [NotifyPropertyChangedFor(nameof(CanExportFiles))]
@@ -789,7 +796,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>Whether the transcript of the open recording can be put inside it.</summary>
     public bool CanAddToRecording =>
-        !IsRunning
+        !_isShuttingDown && !IsRunning
         && SelectedJob is { CanExport: true } job
         && !job.IsFromUrl
         && ExportableFormat is not null
@@ -867,7 +874,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAddToRecording))]
     private async Task AddToRecordingAsync(CancellationToken cancellationToken)
     {
-        if (SelectedJob is not { } job
+        if (_isShuttingDown || SelectedJob is not { } job
             || ExportableFormat is not { } formatId
             || job.Named() is not { } document
             || !SubtitleMux.TryPlan(job.Path, formatId, out var plan, out _))
@@ -927,7 +934,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>Whether Export is live: a finished recording is selected and a format is ticked.</summary>
     public bool CanExportFiles =>
-        !IsRunning
+        !_isShuttingDown && !IsRunning
         && SelectedJob is { CanExport: true }
         && Formats.Any(f => f.IsSelected);
 
@@ -990,7 +997,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanExportFiles))]
     private async Task ExportFilesAsync(CancellationToken cancellationToken)
     {
-        if (SelectedJob is not { } job || job.Named() is not { } document)
+        if (_isShuttingDown || SelectedJob is not { } job || job.Named() is not { } document)
         {
             return;
         }
@@ -1154,7 +1161,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// Whether there is a finished run to ask for a second time. See <see cref="RunAgainAsync"/>
     /// for why that is a button of its own rather than something Start decides.
     /// </summary>
-    public bool CanRunAgain => !IsRunning && Jobs.Any(job => job.State == JobState.Completed);
+    public bool CanRunAgain => !_isShuttingDown && !IsRunning && !IsFetchingUrl
+        && Jobs.Any(job => job.State == JobState.Completed);
 
     /// <summary>
     /// True when there is an engine to run with: a session holding a model, or the sessionless
@@ -1184,7 +1192,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// backend for the rest of the process, so doing it on startup would take the backend choice
     /// away from somebody who had not asked for anything yet.
     /// </remarks>
-    public bool CanStart => !IsRunning && HasWorkToDo && (IsModelLoaded || IsModelInstalled);
+    public bool CanStart => !_isShuttingDown && !IsRunning && !IsFetchingUrl
+        && HasWorkToDo && (IsModelLoaded || IsModelInstalled);
 
     /// <summary>
     /// Says why Start is off when the reason is not simply an empty queue. A disabled button with
@@ -1235,6 +1244,11 @@ public sealed partial class TranscribeViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(paths);
 
+        if (_isShuttingDown)
+        {
+            return;
+        }
+
         if (IsRunning)
         {
             StatusMessage = "A batch is running: press Cancel, or wait for it to finish, before adding files.";
@@ -1283,7 +1297,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
     /// <summary>Whether the button is live: something pasted, not already fetching, not running.</summary>
     public bool CanFetchUrl =>
-        CanAddUrl && !IsFetchingUrl && !IsRunning && !string.IsNullOrWhiteSpace(Url);
+        !_isShuttingDown && CanAddUrl && !IsFetchingUrl && !IsRunning && !string.IsNullOrWhiteSpace(Url);
 
     /// <summary>
     /// Fetches the pasted link's audio and queues it.
@@ -1299,11 +1313,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
     {
         var url = Url?.Trim();
 
-        if (string.IsNullOrEmpty(url))
+        if (!CanFetchUrl || string.IsNullOrEmpty(url))
         {
             return;
         }
 
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _fetchFinished = finished;
         IsFetchingUrl = true;
         UrlStatus = "Reading the link";
 
@@ -1351,6 +1367,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 .FetchAudioAsync(url, _downloadRoot, progress, cancellationToken)
                 .ConfigureAwait(true);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (Jobs.Any(j => string.Equals(j.SourceUrl, fetched.SourceUrl, StringComparison.OrdinalIgnoreCase)))
             {
                 Settle("That link is already in the queue.");
@@ -1380,6 +1398,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         finally
         {
             IsFetchingUrl = false;
+            finished.TrySetResult();
         }
     }
 
@@ -1461,7 +1480,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [RelayCommand]
     private Task RunAgainAsync()
     {
-        if (IsRunning || !HasJobs)
+        if (_isShuttingDown || IsRunning || IsFetchingUrl || !HasJobs)
         {
             return Task.CompletedTask;
         }
@@ -1479,10 +1498,33 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [RelayCommand]
     private void Cancel() => _cancellation?.Cancel();
 
+    /// <summary>Stops accepting work, cancels active operations, and waits for their cleanup.</summary>
+    public async Task StopAsync()
+    {
+        _isShuttingDown = true;
+        RefreshQueueState();
+        OnPropertyChanged(nameof(CanFetchUrl));
+        FetchUrlCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanExportFiles));
+        ExportFilesCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanAddToRecording));
+        AddToRecordingCommand.NotifyCanExecuteChanged();
+
+        Cancel();
+        FetchUrlCommand.Cancel();
+        ExportFilesCommand.Cancel();
+        AddToRecordingCommand.Cancel();
+        await Task.WhenAll(
+            _runFinished?.Task ?? Task.CompletedTask,
+            _fetchFinished?.Task ?? Task.CompletedTask,
+            ExportFilesCommand.ExecutionTask ?? Task.CompletedTask,
+            AddToRecordingCommand.ExecutionTask ?? Task.CompletedTask).ConfigureAwait(true);
+    }
+
     [RelayCommand]
     private async Task StartAsync()
     {
-        if (IsRunning || Jobs.Count == 0)
+        if (_isShuttingDown || IsRunning || IsFetchingUrl || Jobs.Count == 0)
         {
             return;
         }
@@ -1493,7 +1535,32 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
-        var selection = _selection();
+        // Loading belongs to the run: Cancel and shutdown must cover it before the first await.
+        using var cancellation = new CancellationTokenSource();
+        _cancellation = cancellation;
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _runFinished = finished;
+        try
+        {
+            IsRunning = true;
+            await StartCoreAsync(_selection(), cancellation.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            StatusMessage = "Cancelled.";
+        }
+        finally
+        {
+            _cancellation = null;
+            IsRunning = false;
+            RefreshQueueState();
+            finished.TrySetResult();
+        }
+    }
+
+    private async Task StartCoreAsync(EngineSelection selection, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
         if (_session is not null)
         {
             // With a session, the loaded engine is what runs — not whichever row happens to be
@@ -1517,7 +1584,13 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
                 try
                 {
-                    await _session.LoadAsync(selection).ConfigureAwait(true);
+                    await _session.LoadAsync(selection, ct).ConfigureAwait(true);
+                    // Native loads may finish despite cancellation; never begin decoding afterward.
+                    ct.ThrowIfCancellationRequested();
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
                 }
 #pragma warning disable CA1031 // A load failure belongs in the status line, not in a crash dialog.
                 catch (Exception exception)
@@ -1607,12 +1680,10 @@ public sealed partial class TranscribeViewModel : ObservableObject
         // offered is a default of two, because a fold nobody asked for is the one thing here that
         // silently merges people.
 
-        IsRunning = true;
         StatusMessage = null;
         LiveTranscript = string.Empty;
 
-        _cancellation = new CancellationTokenSource();
-        var ct = _cancellation.Token;
+        ct.ThrowIfCancellationRequested();
 
         // When the window has a session, the engine belongs to it and outlives this batch, so it is
         // borrowed here and never disposed here — loading is the Models tab's job, and the guard
@@ -1819,14 +1890,6 @@ public sealed partial class TranscribeViewModel : ObservableObject
             {
                 await owned.DisposeAsync().ConfigureAwait(true);
             }
-
-            IsRunning = false;
-            _cancellation?.Dispose();
-            _cancellation = null;
-
-            // The rows the batch just finished are what decide whether Start has anything left to
-            // do and whether 'Run again' has anything to redo, so both are re-asked here.
-            RefreshQueueState();
         }
     }
 

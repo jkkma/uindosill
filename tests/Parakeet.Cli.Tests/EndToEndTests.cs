@@ -108,8 +108,125 @@ public class EndToEndTests
         var error = harness.Error.ToString();
         Assert.Contains(first, error, StringComparison.Ordinal);
         Assert.Contains(second, error, StringComparison.Ordinal);
-        Assert.Contains("clip.<format>", error, StringComparison.Ordinal);
+        Assert.Contains(Path.Combine(output, "clip.txt"), error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(output) && Directory.GetFiles(output).Length > 0);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("--overwrite", false)]
+    [InlineData("--overwrite", true)]
+    [InlineData("--skip-existing", false)]
+    [InlineData("--skip-existing", true)]
+    public async Task ATidyCollidingWithAnotherInputsTranscriptIsRefusedBeforeAnyWrites(string? policy, bool reverse)
+    {
+        using var harness = new Harness();
+        var unrelated = harness.WriteWav("unrelated.wav", (1, true));
+        var first = harness.WriteWav("clip.wav", (1, true));
+        var second = harness.WriteWav("clip.tidy.wav", (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+        Directory.CreateDirectory(output);
+        var occupied = Path.Combine(output, "clip.tidy.txt");
+        await File.WriteAllTextAsync(occupied, "An earlier transcript must survive the refusal.");
+        var arguments = new List<string> { "transcribe", "--fake", "--tidy", "-f", "txt,json", "-o", output };
+        if (policy is not null)
+        {
+            arguments.Add(policy);
+        }
+
+        // The unrelated first item must not get decoded/written before the later collision is
+        // noticed, and either ordering of the colliding inputs must receive the same refusal.
+        arguments.Add(unrelated);
+        arguments.AddRange(reverse ? [second, first] : [first, second]);
+        var exit = await harness.RunAsync([.. arguments]);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        var error = harness.Error.ToString();
+        Assert.Contains(first, error, StringComparison.Ordinal);
+        Assert.Contains(second, error, StringComparison.Ordinal);
+        Assert.Contains(occupied, error, StringComparison.Ordinal);
+        Assert.Contains("tidied transcript", error, StringComparison.Ordinal);
+        Assert.Contains("same file", error, StringComparison.Ordinal);
+        Assert.Empty(harness.Out.ToString());
+        Assert.DoesNotContain("Using the canned engine", error, StringComparison.Ordinal);
+        Assert.Equal(occupied, Assert.Single(Directory.GetFiles(output)));
+        Assert.Equal("An earlier transcript must survive the refusal.", await File.ReadAllTextAsync(occupied));
+    }
+
+    [Fact]
+    public async Task ATidysWordTimedFileCannotCollideWithAnotherInputsPlainVtt()
+    {
+        using var harness = new Harness();
+        var first = harness.WriteWav("clip.wav", (1, true));
+        var second = harness.WriteWav("clip.tidy.words.wav", (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--tidy", "--overwrite",
+            "-f", "vtt,vtt-words", "-o", output, first, second);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains(Path.Combine(output, "clip.tidy.words.vtt"), harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("tidied transcript", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(output));
+    }
+
+    [Fact]
+    public async Task ATranslationFallbackCannotOverwriteAnotherInputsTidy()
+    {
+        using var harness = new Harness();
+        var first = harness.WriteWav("clip.wav", (1, true));
+        var second = harness.WriteWav("clip.tidy.wav", (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--tidy", "--translate", "--overwrite",
+            "-f", "json", "-o", output, first, second);
+
+        Assert.Equal(ExitCodes.UsageError, exit);
+        Assert.Contains(Path.Combine(output, "clip.tidy.json"), harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("if translation fails", harness.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(output));
+    }
+
+    [Fact]
+    public async Task TidyDoesNotReserveATurnsOnlyOutputItWillNeverWrite()
+    {
+        using var harness = new Harness();
+        var first = harness.WriteWav("clip.wav", (1, true));
+        var second = harness.WriteWav("clip.tidy.wav", (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+
+        var exit = await harness.RunAsync("transcribe", "--fake", "--tidy", "--speakers",
+            "-f", "rttm", "-o", output, first, second);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.Equal(new[] { "clip.rttm", "clip.tidy.rttm" },
+            Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DistinctPrimaryAndTidyDestinationsStillWriteEveryVersion(bool translate)
+    {
+        using var harness = new Harness();
+        var first = harness.WriteWav("clip.wav", (1, true));
+        var second = harness.WriteWav("other.wav", (1, true));
+        var output = Path.Combine(harness.Directory, "out");
+        var arguments = new List<string> { "transcribe", "--fake", "--tidy", "--overwrite", "-f", "json", "-o", output };
+        if (translate)
+        {
+            arguments.Add("--translate");
+        }
+
+        arguments.AddRange([first, second]);
+        var exit = await harness.RunAsync([.. arguments]);
+
+        Assert.Equal(ExitCodes.Success, exit);
+        var primarySuffix = translate ? ".en.json" : ".json";
+        var expected = new[] { "clip" + primarySuffix, "clip.tidy.json", "other" + primarySuffix, "other.tidy.json" };
+        Assert.Equal(expected.Order(StringComparer.Ordinal),
+            Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
     [Fact]
