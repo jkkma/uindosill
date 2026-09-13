@@ -141,14 +141,10 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// worse than an empty panel.
     /// </summary>
     /// <summary>
-    /// How much recording a survey may carry, in characters. Four characters per token is the
-    /// estimate <see cref="AnswerContextBudget"/> uses throughout, so the retrieval tier's 16,384
-    /// tokens is about 65,000 characters — and this takes half of it, leaving the instruction, the
-    /// question, the template's own tokens and the whole answer budget the other half. Sized down
-    /// rather than up on purpose: a survey that overflowed the context would be truncated
-    /// server-side in silence, which is the one failure the citation contract cannot survive.
+    /// Each section and each set of generated notes stays within the ordinary answer context.
+    /// Every source window is read; the budget divides the work rather than dropping passages.
     /// </summary>
-    private const int SurveyBudgetChars = 32_000;
+    private const int SummaryBudgetChars = 24_000;
 
     public void SetRecording(JobViewModel? recording)
     {
@@ -263,42 +259,31 @@ public sealed partial class AskChatViewModel : ObservableObject
             _coverWindows ??= TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
 
             var whole = provider.ModePreference == AskModePreference.WholeTranscript;
-            var survey = false;
+            var mapReduce = false;
             RoutingDecision? routed = null;
             if (provider.ModePreference == AskModePreference.Automatic)
             {
-                // Affordable means the recording fits the context the retrieval tier already
-                // allocates: the automatic path never commits someone to a bigger cache — or a
-                // longer prefill — than the tier they were on when they typed the question.
+                // A recording that does not fit this context is read in sections. This bounds
+                // each request's memory; it does not promise the whole summary is quick.
                 var affordable = AnswerContextBudget.ContextTokensFor(PromptChars(question, _coverWindows))
                     <= AnswerContextBudget.Minimum;
 
                 routed = QuestionRouter.Route(question, _retriever, affordable);
                 whole = routed.Mode == AnswerMode.WholeTranscript;
 
-                // The third tier, from 2026-08-27: the question asked about the whole recording
-                // and the whole recording will not fit, so it is answered from an even sample of
-                // all of it rather than from the parts a scorer liked — which, for a question
-                // with nothing to rank on, is the weakest thing retrieval does.
-                survey = routed.Mode == AnswerMode.Survey;
+                mapReduce = routed.Mode == AnswerMode.MapReduce;
                 entry.RoutingNotice = routed.Notice;
             }
 
             var mode = whole ? AnswerMode.WholeTranscript
-                : survey ? AnswerMode.Survey
+                : mapReduce ? AnswerMode.MapReduce
                 : AnswerMode.Retrieval;
 
-            // The whole-transcript path's evidence is the recording tiled once, in the
-            // non-overlapping shape, because retrieval's overlap would send the transcript twice.
-            // The budget is the retrieval tier's own context, which is what makes a survey
-            // affordable by construction: it never commits the reader to a longer prefill than
-            // the tier they were already on. The instruction and the question ride in the same
-            // context, so the allowance below leaves them room.
-            var evidence = whole
+            // Whole and sectioned summaries use the recording tiled once. Topic retrieval keeps
+            // these fine citation windows while adding the surrounding discussion within budget.
+            var evidence = whole || mapReduce
                 ? _coverWindows
-                : survey
-                    ? SurveyWindowSelector.Select(_coverWindows, SurveyBudgetChars)
-                    : [.. _retriever.Retrieve(question, _provider.EvidenceWindows).Select(hit => hit.Window)];
+                : TopicWindowSelector.Select(_coverWindows, question, SummaryBudgetChars, _provider.EvidenceWindows);
 
             if (evidence.Count == 0)
             {
@@ -321,7 +306,10 @@ public sealed partial class AskChatViewModel : ObservableObject
                 return;
             }
 
-            await EnsureEngineAsync(entry, PromptChars(question, evidence), cancellation.Token)
+            await EnsureEngineAsync(entry,
+                mapReduce ? SummaryBudgetChars + 4_096 + question.Length
+                    : PromptChars(question, evidence),
+                cancellation.Token)
                 .ConfigureAwait(true);
 
             // The load await is the window a recording switch can slip through; its cancel may
@@ -339,16 +327,23 @@ public sealed partial class AskChatViewModel : ObservableObject
             var request = new AskRequest
             {
                 Question = question,
+                RecordingName = _recording?.SourceUrl is not null ? _recording.DisplayName : null,
                 Transcript = document,
                 Mode = mode,
                 Evidence = evidence,
                 Language = language,
             };
 
+            if (mapReduce)
+            {
+                request = await PrepareSummaryAsync(request, entry, cancellation.Token).ConfigureAwait(true);
+                cancellation.Token.ThrowIfCancellationRequested();
+            }
+
             // In whole-transcript mode the wait ahead is the prefill, and the progress frames
             // that draw it as a percentage take a beat to start arriving.
             entry.Status = whole ? "Reading the whole transcript…"
-                : survey ? "Reading across the recording…"
+                : mapReduce ? "Writing the summary…"
                 : "Answering…";
 
             // Progress captures this (UI) context at construction, so the engine may report from
@@ -361,6 +356,9 @@ public sealed partial class AskChatViewModel : ObservableObject
                 text.Append(chunk);
                 entry.OnStreamed(text.ToString());
             }
+
+            // Stop can arrive while the last frame is displayed, after the engine's last check.
+            cancellation.Token.ThrowIfCancellationRequested();
 
             // Both modes ask the model to open with a sentence answering the question, so both
             // parse one — a lead is a claim either way, and carries citations either way.
@@ -387,8 +385,8 @@ public sealed partial class AskChatViewModel : ObservableObject
                 // and the model line says what was seen instead.
                 entry.Complete(
                     answer,
-                    CitationValidator.Validate(answer, document),
-                    whole ? [] : evidence,
+                    CitationValidator.Validate(answer, document, shownEvidence: request.Evidence),
+                    whole || mapReduce ? [] : evidence,
                     document,
                     _seekAndPlay);
             }
@@ -461,6 +459,70 @@ public sealed partial class AskChatViewModel : ObservableObject
         }
 
         return chars;
+    }
+
+    private async Task<AskRequest> PrepareSummaryAsync(
+        AskRequest request, ChatEntryViewModel entry, CancellationToken ct)
+    {
+        var sections = TranscriptSummaryBuilder.Partition(request.Evidence, SummaryBudgetChars);
+        var notes = new List<TranscriptSummaryNote>();
+        for (var i = 0; i < sections.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            entry.Status = $"Reading section {i + 1} of {sections.Count}…";
+            var section = request with
+            {
+                Question = "Summarize the main topics and what the speakers said in this section.",
+                Evidence = sections[i],
+                SummaryStage = SummaryStage.Section,
+            };
+            notes.Add(await ReadSummaryNoteAsync(section, ct).ConfigureAwait(true));
+        }
+
+        var groups = TranscriptSummaryBuilder.GroupNotes(notes, SummaryBudgetChars);
+        var round = 0;
+        while (groups.Count > 1)
+        {
+            var reduced = new List<TranscriptSummaryNote>();
+            for (var i = 0; i < groups.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                entry.Status = $"Combining notes {i + 1} of {groups.Count}…";
+                reduced.Add(await ReadSummaryNoteAsync(request with
+                {
+                    Question = "Combine these section notes into concise main-topic notes, retaining their original citations.",
+                    Evidence = groups[i].Evidence,
+                    SummaryNotes = groups[i].Text,
+                    SummaryStage = SummaryStage.Reduction,
+                }, ct).ConfigureAwait(true));
+            }
+
+            TranscriptSummaryBuilder.EnsureReductionProgress(notes, reduced, ++round);
+            notes = reduced;
+            groups = TranscriptSummaryBuilder.GroupNotes(notes, SummaryBudgetChars);
+        }
+
+        ct.ThrowIfCancellationRequested();
+        return request with
+        {
+            Evidence = groups[0].Evidence,
+            SummaryNotes = groups[0].Text,
+            SummaryStage = SummaryStage.Synthesis,
+        };
+    }
+
+    private async Task<TranscriptSummaryNote> ReadSummaryNoteAsync(AskRequest request, CancellationToken ct)
+    {
+        // Intermediate prose stays out of the chat: it is not the user's answer, and a failed
+        // or cancelled section must never leave a partial overview looking complete.
+        var text = new StringBuilder();
+        await foreach (var chunk in _engine!.AskAsync(request, ct: ct).ConfigureAwait(true))
+        {
+            text.Append(chunk);
+        }
+
+        ct.ThrowIfCancellationRequested();
+        return TranscriptSummaryBuilder.CreateNote(text.ToString(), request.Transcript, request.Evidence);
     }
 
     private async Task EnsureEngineAsync(ChatEntryViewModel entry, int promptChars, CancellationToken ct)
@@ -781,6 +843,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         var scope = answer.Mode switch
         {
             AnswerMode.WholeTranscript => "from the whole transcript",
+            AnswerMode.MapReduce => "from summaries of every transcript section",
             AnswerMode.Survey => "from an even sample across the whole recording",
             _ => "from retrieved parts of the transcript",
         };
@@ -813,12 +876,15 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         // the application than inside it.
         if (validation.Lead is { } lead)
         {
-            var leadTimes = lead.Citations.Where(c => c.Check.Resolves).ToList();
+            var leadTimes = lead.Citations.Where(c => c.Check.Resolves && c.Check.ShownToModel != false).ToList();
             text.Append(leadTimes.Count > 0
                 ? "[" + string.Join("; ", leadTimes.Select(c => Range(c.Start!.Value, c.End!.Value))) + "] "
                 : LeadUncitedNotice + " ");
 
-            text.AppendLine(lead.Bullet.Text);
+            text.Append(lead.Bullet.Text);
+            AppendCopyCaveats(text, lead);
+
+            text.AppendLine();
             text.AppendLine();
         }
 
@@ -826,7 +892,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         {
             text.Append("- ");
 
-            var resolved = bullet.Citations.Where(c => c.Check.Resolves).ToList();
+            var resolved = bullet.Citations.Where(c => c.Check.Resolves && c.Check.ShownToModel != false).ToList();
             if (resolved.Count > 0)
             {
                 text.Append('[')
@@ -847,25 +913,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             // appending it again would print it twice. What the copied form still owes a reader
             // is the caveat when the check did not pass, since an email carries no tooltip.
             text.Append(bullet.Bullet.Text);
-
-            // The same caveats the panel shows, because an email carries no tooltip and a claim
-            // must not read more confident away from the application than inside it. All three
-            // of the panel's cases, since 2026-08-30: the checked-and-failed quote, the quote
-            // with no resolving span to check against — the [?]-with-quote bullet a real 9B
-            // produced — and quoted words outside the convention that were never lifted at all.
-            if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
-            {
-                text.Append(" [the quoted words are not at the time cited]");
-            }
-            else if (bullet.Bullet.Quote is not null && bullet.QuoteFound is null)
-            {
-                text.Append(" [quote not checked: no place in the recording to check it against]");
-            }
-            else if (bullet.Bullet.Quote is null
-                && bullet.Bullet.Text.AsSpan().IndexOfAny('"', '“', '”') >= 0)
-            {
-                text.Append(" [the quoted words here were not checked]");
-            }
+            AppendCopyCaveats(text, bullet);
 
             text.AppendLine();
         }
@@ -895,6 +943,32 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         return text.ToString();
     }
 
+    private static void AppendCopyCaveats(StringBuilder text, ResolvedBullet bullet)
+    {
+        // Leads and bullets carry the same checks. Preserve every caveat when copied so a
+        // sentence cannot read more confident away from the application than inside it.
+        if (bullet.Citations.Any(c => c.Check.ShownToModel == false))
+        {
+            text.Append(" [the model cited a part it was not shown]");
+        }
+
+        if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
+        {
+            text.Append(" [the quoted words are not at the time cited]");
+        }
+        else if (bullet.Bullet.Quote is not null && bullet.QuoteFound is null)
+        {
+            text.Append(bullet.Citations.Any(c => c.Check.ShownToModel == false)
+                ? " [quote not checked: cited part was not shown to the model]"
+                : " [quote not checked: no place in the recording to check it against]");
+        }
+        else if (bullet.Bullet.Quote is null
+            && bullet.Bullet.Text.AsSpan().IndexOfAny('"', '“', '”') >= 0)
+        {
+            text.Append(" [the quoted words here were not checked]");
+        }
+    }
+
     private static string Range(TimeSpan start, TimeSpan end) =>
         end - start > TimeSpan.FromSeconds(1)
             ? $"{Timecode.Format(start)}–{Timecode.Format(end)}"
@@ -909,8 +983,9 @@ public sealed class AnswerBulletViewModel
         Label = bullet.Bullet.Label;
         Text = bullet.Bullet.Text;
         Quote = bullet.Bullet.Quote;
-        QuoteVerified = bullet.Citations.Any(c => c.Check.QuoteMatches == true);
-        QuoteChecked = bullet.Citations.Any(c => c.Check.QuoteMatches is not null);
+        QuoteVerified = bullet.Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches == true);
+        QuoteChecked = bullet.Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches is not null);
+        HasUnshownCitation = bullet.Citations.Any(c => c.Check.ShownToModel == false);
         Citations = [.. bullet.Citations.Select(c => new CitationChipViewModel(c, seekAndPlay))];
         IsUncited = bullet.Bullet.IsUncited || Citations.All(c => !c.IsResolved);
 
@@ -939,6 +1014,8 @@ public sealed class AnswerBulletViewModel
     /// <summary>Whether any citation resolved to a span the quote could be checked against. A
     /// claim citing only <c>[?]</c> was never checked, which is not the same as failing.</summary>
     public bool QuoteChecked { get; }
+
+    private bool HasUnshownCitation { get; }
 
     public IReadOnlyList<CitationChipViewModel> Citations { get; }
 
@@ -970,7 +1047,9 @@ public sealed class AnswerBulletViewModel
         ? null
         : QuoteChecked
             ? "the quoted words are not at the time cited"
-            : "quote not checked: no place in the recording to check it against";
+            : HasUnshownCitation
+                ? "quote not checked: cited part was not shown to the model"
+                : "quote not checked: no place in the recording to check it against";
 }
 
 /// <summary>One citation as a chip: a time that seeks, or the unresolved marker that does not.</summary>
@@ -982,8 +1061,8 @@ public sealed partial class CitationChipViewModel
     public CitationChipViewModel(ResolvedCitation citation, Action<TimeSpan> seekAndPlay)
     {
         _seekAndPlay = seekAndPlay;
-        _start = citation.Start;
-        IsResolved = citation.Check.Resolves;
+        IsResolved = citation.Check.Resolves && citation.Check.ShownToModel != false;
+        _start = IsResolved ? citation.Start : null;
 
         Display = IsResolved
             ? citation.End!.Value - citation.Start!.Value > TimeSpan.FromSeconds(1)
@@ -991,7 +1070,9 @@ public sealed partial class CitationChipViewModel
                 : Timecode.Format(citation.Start.Value)
             : "?";
 
-        Detail = !IsResolved
+        Detail = citation.Check.ShownToModel == false
+            ? "The model cited a part it was not shown."
+            : !IsResolved
             ? "The model gave no place in the recording for this."
             : !citation.Check.NonEmpty
                 ? "Points at silence."

@@ -1,3 +1,18 @@
+## Changes in this candidate
+
+- The Ask tab reads long recordings in consecutive sections before combining an overview.
+  Focused questions keep more of the surrounding discussion, and answers include clearer topic
+  labels and source references.
+- Summary and thinking limits now leave room for a completed answer. Citation handling accepts
+  unambiguous shorthand and marks unseen source ranges, while introductory paragraphs retain
+  quote warnings when displayed or copied.
+- Cancellation, shutdown, output-file protection and external-tool cleanup fixes are included.
+
+Long overviews require several model calls and can take considerably longer than focused
+questions. Gemma 4 12B was tested on a three-hour podcast's automatic captions: coverage improved,
+but it still omitted topics and misstated details. This candidate does not claim parity with
+YouTube's Ask feature; timestamps help check an answer and do not guarantee its accuracy.
+
 ## Which file do I want?
 
 **Most people: `UindosillDesktop-win-Setup.exe`.** The desktop application, carrying the CPU and

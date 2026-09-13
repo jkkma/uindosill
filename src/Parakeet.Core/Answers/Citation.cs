@@ -4,7 +4,7 @@ namespace Parakeet.Core.Answers;
 
 /// <summary>
 /// One citation as the model wrote it: an opaque segment id or run of ids — <c>S12</c>,
-/// <c>S12-S15</c> — or the admitted-uncited marker <c>?</c>. The model never writes a
+/// <c>S12-S15</c> (also <c>S12-15</c>) — or the admitted-uncited marker <c>?</c>. The model never writes a
 /// timestamp; the app resolves ids to a <c>TranscriptSegment</c>'s times, and an id that does
 /// not resolve renders as unresolved rather than ever becoming a time a reader might trust.
 /// </summary>
@@ -35,9 +35,9 @@ public sealed record Citation
     public static Citation Uncited { get; } = new() { Raw = "?" };
 
     /// <summary>
-    /// Parses <c>S12</c> and <c>S12-S15</c>. Anything else — including a backwards range, which
-    /// parses and then fails the validator's ordering check — comes back well-formed or not, but
-    /// always with <see cref="Raw"/> preserved.
+    /// Parses <c>S12</c>, <c>S12-S15</c> and the unambiguous shorthand <c>S12-15</c>. A backwards
+    /// range parses and then fails the validator's ordering check. Syntax failures retain
+    /// <see cref="Raw"/> without bounds; successful parses retain it too.
     /// </summary>
     public static Citation Parse(string raw)
     {
@@ -57,7 +57,7 @@ public sealed record Citation
                 : new Citation { Raw = text };
         }
 
-        return TryId(text[..dash], out var first) && TryId(text[(dash + 1)..], out var second)
+        return TryId(text[..dash], out var first) && TryRangeEnd(text[(dash + 1)..], out var second)
             ? new Citation { Raw = text, StartSegment = first, EndSegment = second }
             : new Citation { Raw = text };
     }
@@ -74,8 +74,15 @@ public sealed record Citation
         var dash = text.IndexOf('-', StringComparison.Ordinal);
         return dash < 0
             ? TryId(text, out _)
-            : TryId(text[..dash], out _) && TryId(text[(dash + 1)..], out _);
+            : TryId(text[..dash], out _) && TryRangeEnd(text[(dash + 1)..], out _);
     }
+
+    // A leading S establishes that this is a segment range. The second endpoint may omit it,
+    // as real model output does; a bare number is still never admitted as a point citation.
+    // NumberStyles.None rejects signs and additional separators rather than guessing at them.
+    private static bool TryRangeEnd(string text, out int id) =>
+        TryId(text, out id)
+        || int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out id);
 
     private static bool TryId(string text, out int id)
     {

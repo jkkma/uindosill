@@ -19,6 +19,12 @@ public sealed record CitationCheck
     public required bool WithinDuration { get; init; }
 
     /// <summary>
+    /// Whether every segment in the cited range was shown to this model request. Null when no
+    /// evidence scope was supplied or the citation does not resolve to a checkable source range.
+    /// </summary>
+    public bool? ShownToModel { get; init; }
+
+    /// <summary>
     /// The bullet's verbatim quote appears in the cited span after both go through
     /// <see cref="SearchTokenizer.Normalize"/>. Null when the bullet carries no quote — and when
     /// the citation never resolved, because a quote with no span to check against was never
@@ -27,7 +33,7 @@ public sealed record CitationCheck
     public bool? QuoteMatches { get; init; }
 
     /// <summary>Everything checkable checked out. A failed quote fails this; an absent one does not.</summary>
-    public bool Passes => Resolves && NonEmpty && WithinDuration && QuoteMatches != false;
+    public bool Passes => Resolves && NonEmpty && WithinDuration && ShownToModel != false && QuoteMatches != false;
 }
 
 /// <summary>
@@ -63,8 +69,8 @@ public sealed record ResolvedBullet
     /// Null when there is no quote, or no resolved span to have checked it against.
     /// </summary>
     public bool? QuoteFound =>
-        Citations.Any(c => c.Check.QuoteMatches == true) ? true
-        : Citations.Any(c => c.Check.QuoteMatches == false) ? false
+        Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches == true) ? true
+        : Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches == false) ? false
         : null;
 }
 
@@ -99,7 +105,7 @@ public sealed record AnswerValidation
 
     private static bool Passes(ResolvedBullet bullet) =>
         bullet.Citations.All(c => c.Citation.IsUncitedMarker
-            || (c.Check.Resolves && c.Check.NonEmpty && c.Check.WithinDuration))
+            || (c.Check.Resolves && c.Check.NonEmpty && c.Check.WithinDuration && c.Check.ShownToModel != false))
         && bullet.QuoteFound != false;
 }
 
@@ -211,27 +217,86 @@ public static class CitationValidator
     }
 
     public static AnswerValidation Validate(
-        AnswerDocument answer, TranscriptDocument transcript, bool expectChronological = false)
+        AnswerDocument answer, TranscriptDocument transcript, bool expectChronological = false,
+        IReadOnlyList<TranscriptWindow>? shownEvidence = null)
     {
         ArgumentNullException.ThrowIfNull(answer);
         ArgumentNullException.ThrowIfNull(transcript);
 
+        var shown = shownEvidence?.OrderBy(window => window.FirstSegment)
+            .ThenBy(window => window.LastSegment).ToArray();
+
         var bullets = new List<ResolvedBullet>(answer.Bullets.Count);
         foreach (var bullet in answer.Bullets)
         {
-            bullets.Add(Resolve(bullet, transcript));
+            bullets.Add(ResolveForRequest(bullet));
         }
 
         return new AnswerValidation
         {
             Bullets = bullets,
-            Lead = answer.Lead is { } lead ? Resolve(lead, transcript) : null,
+            Lead = answer.Lead is { } lead ? ResolveForRequest(lead) : null,
 
             // The lead is left out of the chronology check on purpose: it frames the whole
             // recording, so it cites wherever that is established and would fail an ordering
             // the claims under it do keep.
             Monotone = expectChronological ? IsMonotone(bullets) : null,
         };
+
+        ResolvedBullet ResolveForRequest(AnswerBullet bullet)
+        {
+            var resolved = Resolve(bullet, transcript);
+            if (shown is null)
+            {
+                return resolved;
+            }
+
+            return resolved with
+            {
+                Citations = resolved.Citations.Select(citation =>
+                {
+                    bool? wasShown = citation.Check.Resolves
+                        ? WasShown(citation.Citation.StartSegment!.Value, citation.Citation.EndSegment!.Value, shown)
+                        : null;
+                    return citation with
+                    {
+                        Check = citation.Check with
+                        {
+                            ShownToModel = wasShown,
+                            // A verbatim match elsewhere in the recording does not verify a
+                            // claim made from evidence that never included those words.
+                            QuoteMatches = wasShown == false ? null : citation.Check.QuoteMatches,
+                        },
+                    };
+                }).ToArray(),
+            };
+        }
+    }
+
+    private static bool WasShown(int first, int last, IReadOnlyList<TranscriptWindow> shown)
+    {
+        var next = first;
+        foreach (var window in shown)
+        {
+            if (window.LastSegment < next)
+            {
+                continue;
+            }
+
+            if (window.FirstSegment > next)
+            {
+                return false;
+            }
+
+            if (window.LastSegment >= last)
+            {
+                return true;
+            }
+
+            next = window.LastSegment + 1;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -260,7 +325,7 @@ public static class CitationValidator
         {
             foreach (var citation in bullet.Citations)
             {
-                if (!citation.Check.Resolves)
+                if (!citation.Check.Resolves || citation.Check.ShownToModel == false)
                 {
                     continue;
                 }

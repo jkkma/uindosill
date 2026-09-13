@@ -246,6 +246,14 @@ internal sealed class LlamaServerProcess : IAsyncDisposable
         arguments.Add("--reasoning");
         arguments.Add(options.ThinkBeforeAnswer ? "on" : "off");
 
+        if (options.ThinkBeforeAnswer)
+        {
+            // The request's total generation cap includes both thinking and answer tokens.
+            // Bound reasoning itself so it cannot spend the answer's reserved budget.
+            arguments.Add("--reasoning-budget");
+            arguments.Add(options.ThinkingBudgetTokens.ToString(CultureInfo.InvariantCulture));
+        }
+
         if (!options.ThinkBeforeAnswer && options.UseGrammar)
         {
             // The grammar mode only: every generated token stays in content, where the grammar

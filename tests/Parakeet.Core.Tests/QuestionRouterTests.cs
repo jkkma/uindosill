@@ -140,14 +140,14 @@ public class QuestionRouterTests
         var decision = QuestionRouter.Route(
             "give me a summary", Index(), wholeTranscriptIsAffordable: false);
 
-        Assert.Equal(AnswerMode.Survey, decision.Mode);
+        Assert.Equal(AnswerMode.MapReduce, decision.Mode);
         Assert.Equal(RoutingBasis.GlobalButTooLong, decision.Basis);
         Assert.NotNull(decision.Notice);
 
         // The reader is owed both halves: that it covers all of the recording, and that it does
         // not cover every minute of it. A notice with only the first reads as completeness.
-        Assert.Contains("even sample", decision.Notice, StringComparison.Ordinal);
-        Assert.Contains("miss things", decision.Notice, StringComparison.Ordinal);
+        Assert.Contains("reading it in sections", decision.Notice, StringComparison.Ordinal);
+        Assert.Contains("combining the summary", decision.Notice, StringComparison.Ordinal);
 
         // A pointed question is unaffected by the ceiling — retrieval was where it was going.
         var pointed = QuestionRouter.Route(

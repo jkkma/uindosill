@@ -216,7 +216,7 @@ public sealed class FakeAnswerEngine : IAnswerEngine
             yield return $"[{window.CitationId}]\n";
         }
 
-        if (_options.IncludeUncitedBullet)
+        if (_options.IncludeUncitedBullet && request.SummaryStage == SummaryStage.None)
         {
             yield return "- Something the model could not anchor [?]\n";
         }

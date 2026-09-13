@@ -154,6 +154,26 @@ public class LlamaServerArgumentTests
         Assert.Equal("off", grammarMode[grammarMode.IndexOf("--reasoning") + 1]);
     }
 
+    [Theory]
+    [InlineData(0, "0")]
+    [InlineData(317, "317")]
+    public void TheNativeReasoningBudgetIsPassedOnlyWhenThinking(int budget, string nativeBudget)
+    {
+        var options = Options() with { ThinkingBudgetTokens = budget, MaxAnswerTokens = 613 };
+        var thinking = Arguments(options with { ThinkBeforeAnswer = true }, 1, "k");
+
+        Assert.Contains("--reasoning-budget", thinking);
+        Assert.Equal(nativeBudget, thinking[thinking.IndexOf("--reasoning-budget") + 1]);
+        Assert.DoesNotContain("--reasoning-budget", Arguments(options, 1, "k"));
+        Assert.DoesNotContain("--reasoning-budget", Arguments(options with { UseGrammar = true }, 1, "k"));
+    }
+
+    [Fact]
+    public void AReasoningBudgetCannotBeNegative()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Options() with { ThinkingBudgetTokens = -1 });
+    }
+
     [Fact]
     public void VulkanGetsTheBf16KnobUnlessTheCallerSaysOtherwise()
     {
@@ -519,7 +539,7 @@ public class AnswerPromptBuilderTests
 
         Assert.Contains("complete transcript", instruction, StringComparison.Ordinal);
         Assert.Contains("short topic label", instruction, StringComparison.Ordinal);
-        Assert.Contains("whole recording", instruction, StringComparison.Ordinal);
+        Assert.Contains("all the supplied material", instruction, StringComparison.Ordinal);
         // "the parts", not "every part": the grammar admits five ids on a line, and "every"
         // demanded an enumeration a topic in six parts could not sample under it.
         Assert.Contains("Cite the parts", instruction, StringComparison.Ordinal);

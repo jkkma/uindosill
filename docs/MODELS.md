@@ -47,18 +47,17 @@ uindosill models verify   tdt-0.6b-v3-f16
 uindosill models remove   tdt-0.6b-v3-f16
 ```
 
-## The ask model is a file you supply, not a catalogue entry — deliberately, for now
+## Choosing the Ask model
 
-The Ask panel's language model (since 2026-08-24) is whatever `.gguf` file sits in this same
-models folder: the largest wins where several are present, the answer's model line names it, and
-nothing else is consulted. There is no catalogue entry, no download button and no
-recommendation, because `docs/V2-ASK-THE-TRANSCRIPT.md` decision 2 forbids recommending a model
-until its CSB384 measurements have been run — a recommendation is a claim, and the register's
-rule is that claims are measured. When those measurements exist, entries join this catalogue
-under the same discipline as everything above: exact byte size, SHA-256, licence and attribution,
-verified on download and again before an installer would carry one. Until then, a user-supplied
-file keeps the capability available without this application asserting anything about any model
-it has not measured.
+The Models tab includes downloadable answering entries with pinned sizes and SHA-256 digests.
+The catalogue recommends Gemma 4 12B QAT at UD-Q4_K_XL. Its recommendation and measured limits
+are recorded in `docs/UNPROVEN.md`; it does not establish equal answer quality on every recording.
+
+An available model selected in Settings wins. Otherwise the Ask panel chooses the installed
+recommended entry, then falls back to the largest eligible `.gguf`. It searches this models folder
+and its immediate subdirectories, so both catalogue downloads and files supplied by the user are
+available. Drafting heads and weights assigned only to other jobs are excluded from the picker.
+The answer's model line identifies the model that actually answered.
 
 ## The catalogue is data
 
