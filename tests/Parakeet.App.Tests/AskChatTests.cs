@@ -659,6 +659,7 @@ public class AskChatTests
 
     [Theory]
     [InlineData("They said «the budget was rejected» [S1]", false, "the quoted words are not at the time cited")]
+    [InlineData("They said «the budget was rejected» and “impostor” [S1]", false, "the quoted words are not at the time cited; other quoted words here were not checked")]
     [InlineData("They said \"the budget was approved\" [S1]", false, "the quoted words here were not checked")]
     [InlineData("They said «the budget was approved» [?]", false, "quote not checked: no place in the recording to check it against")]
     [InlineData("They said «the budget was approved» [S1]", true, "quote not checked: cited part was not shown to the model")]
@@ -1293,6 +1294,16 @@ public class AskChatTests
         // the recording that this check never made.
         Assert.Contains("at the time cited", wrongQuoteBullet.QuoteCaveat, StringComparison.Ordinal);
         Assert.DoesNotContain("transcript", wrongQuoteBullet.QuoteCaveat, StringComparison.Ordinal);
+
+        // A failed primary quote keeps that specific warning even when another quoted span was
+        // never checked at all. One caveat must not overwrite the other.
+        var wrongAndUnchecked = AnswerParser.Parse(
+            "- A wrong quote «entirely different words» and another «impostor» [S1]\n");
+        var wrongAndUncheckedBullet = new AnswerBulletViewModel(
+            CitationValidator.Validate(wrongAndUnchecked, transcript).Bullets[0], _ => { });
+        Assert.True(wrongAndUncheckedBullet.HasUncheckedQuotedText);
+        Assert.Contains("at the time cited", wrongAndUncheckedBullet.QuoteCaveat, StringComparison.Ordinal);
+        Assert.Contains("other quoted words here were not checked", wrongAndUncheckedBullet.QuoteCaveat, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1333,6 +1344,20 @@ public class AskChatTests
         Assert.False(properBullet.HasUncheckedQuotedText);
         Assert.True(properBullet.QuoteVerified);
         Assert.Null(properBullet.QuoteCaveat);
+
+        // Only the first guillemet span is checked. A later one is deliberately re-marked as
+        // ordinary quoted prose and must retain an explicit unchecked warning beside the verified
+        // primary quote. A label and the extra whitespace after it are removed first; neither may
+        // shift the checked span far enough to hide the later quotation.
+        var mixed = AnswerParser.Parse(
+            "- Topic:   One «the budget was approved» and another “impostor” beside it [S1]\n");
+        var mixedBullet = new AnswerBulletViewModel(
+            CitationValidator.Validate(mixed, transcript).Bullets[0], _ => { });
+        Assert.Equal("Topic", mixedBullet.Label);
+        Assert.StartsWith("One ", mixedBullet.Text, StringComparison.Ordinal);
+        Assert.True(mixedBullet.QuoteVerified);
+        Assert.True(mixedBullet.HasUncheckedQuotedText);
+        Assert.Equal("other quoted words here were not checked", mixedBullet.QuoteCaveat);
     }
 
     [Fact]
@@ -1355,6 +1380,38 @@ public class AskChatTests
 
         Assert.NotNull(copied);
         Assert.Contains("[the quoted words here were not checked]", copied, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASecondUncheckedQuoteCaveatTravelsBesideAVerifiedQuoteIntoTheEmail()
+    {
+        var transcript = new TranscriptDocument
+        {
+            SourceName = "meeting.wav",
+            AudioDuration = TimeSpan.FromSeconds(10),
+            Segments = [new TranscriptSegment
+            {
+                Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "real quote",
+            }],
+        };
+        string? copied = null;
+        var entry = new ChatEntryViewModel("q", text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        });
+        var answer = AnswerParser.Parse(
+            "- One «real quote» and another «impostor» beside it [S1]\n");
+
+        entry.Complete(answer, CitationValidator.Validate(answer, transcript), [], transcript, _ => { });
+        await entry.CopyCommand.ExecuteAsync(null);
+
+        var bullet = Assert.Single(entry.Bullets);
+        Assert.True(bullet.QuoteVerified);
+        Assert.Equal("other quoted words here were not checked", bullet.QuoteCaveat);
+        Assert.NotNull(copied);
+        Assert.Contains("“impostor”", copied, StringComparison.Ordinal);
+        Assert.Contains("[other quoted words here were not checked]", copied, StringComparison.Ordinal);
     }
 
     [Fact]

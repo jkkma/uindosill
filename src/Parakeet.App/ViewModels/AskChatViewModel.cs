@@ -952,20 +952,9 @@ public sealed partial class ChatEntryViewModel : ObservableObject
             text.Append(" [the model cited a part it was not shown]");
         }
 
-        if (bullet.Bullet.Quote is not null && bullet.QuoteFound == false)
+        if (AnswerBulletViewModel.QuoteCaveatFor(bullet) is { } quoteCaveat)
         {
-            text.Append(" [the quoted words are not at the time cited]");
-        }
-        else if (bullet.Bullet.Quote is not null && bullet.QuoteFound is null)
-        {
-            text.Append(bullet.Citations.Any(c => c.Check.ShownToModel == false)
-                ? " [quote not checked: cited part was not shown to the model]"
-                : " [quote not checked: no place in the recording to check it against]");
-        }
-        else if (bullet.Bullet.Quote is null
-            && bullet.Bullet.Text.AsSpan().IndexOfAny('"', '“', '”') >= 0)
-        {
-            text.Append(" [the quoted words here were not checked]");
+            text.Append(" [").Append(quoteCaveat).Append(']');
         }
     }
 
@@ -985,20 +974,19 @@ public sealed class AnswerBulletViewModel
         Quote = bullet.Bullet.Quote;
         QuoteVerified = bullet.Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches == true);
         QuoteChecked = bullet.Citations.Any(c => c.Check.ShownToModel != false && c.Check.QuoteMatches is not null);
-        HasUnshownCitation = bullet.Citations.Any(c => c.Check.ShownToModel == false);
         Citations = [.. bullet.Citations.Select(c => new CitationChipViewModel(c, seekAndPlay))];
         IsUncited = bullet.Bullet.IsUncited || Citations.All(c => !c.IsResolved);
 
-        // A model that ignores the «…» convention still quotes — in ordinary marks, which this
-        // parser does not lift and this check therefore never sees. Measured 2026-08-25: seven
+        // A model that ignores the «…» convention still quotes — in ordinary marks, which the
+        // validator never sees. Measured 2026-08-25: seven
         // of the 9B's ten bullets, every one of them really quoting the transcript. Left alone,
         // such a bullet renders quoted words beside a citation chip with nothing saying they
         // were unchecked, which is precisely the "unverified text dressed as transcript" this
         // panel promises never to show. Detected and said, rather than checked: guessing that
         // a quoted span was meant as a transcript quote would eventually accuse a title or an
         // aside of not being at its cited time, and false is reserved here for checked-and-failed.
-        HasUncheckedQuotedText = bullet.Bullet.Quote is null
-            && Text.AsSpan().IndexOfAny('"', '“', '”') >= 0;
+        HasUncheckedQuotedText = bullet.Bullet.HasUncheckedQuotedText;
+        QuoteCaveat = QuoteCaveatFor(bullet);
     }
 
     public string? Label { get; }
@@ -1014,8 +1002,6 @@ public sealed class AnswerBulletViewModel
     /// <summary>Whether any citation resolved to a span the quote could be checked against. A
     /// claim citing only <c>[?]</c> was never checked, which is not the same as failing.</summary>
     public bool QuoteChecked { get; }
-
-    private bool HasUnshownCitation { get; }
 
     public IReadOnlyList<CitationChipViewModel> Citations { get; }
 
@@ -1041,15 +1027,31 @@ public sealed class AnswerBulletViewModel
     /// the recording that nothing here established. The last case is quoted words that arrived
     /// outside the convention and so were never checked at all — an absence, stated as one.
     /// </summary>
-    public string? QuoteCaveat => Quote is null
-        ? HasUncheckedQuotedText ? "the quoted words here were not checked" : null
-        : QuoteVerified
-        ? null
-        : QuoteChecked
-            ? "the quoted words are not at the time cited"
-            : HasUnshownCitation
-                ? "quote not checked: cited part was not shown to the model"
-                : "quote not checked: no place in the recording to check it against";
+    public string? QuoteCaveat { get; }
+
+    internal static string? QuoteCaveatFor(ResolvedBullet bullet)
+    {
+        string? primary = bullet.Bullet.Quote is null || bullet.QuoteFound == true
+            ? null
+            : bullet.QuoteFound == false
+                ? "the quoted words are not at the time cited"
+                : bullet.Citations.Any(c => c.Check.ShownToModel == false)
+                    ? "quote not checked: cited part was not shown to the model"
+                    : "quote not checked: no place in the recording to check it against";
+        var uncheckedText = !bullet.Bullet.HasUncheckedQuotedText
+            ? null
+            : bullet.Bullet.Quote is null
+                ? "the quoted words here were not checked"
+                : "other quoted words here were not checked";
+
+        return (primary, uncheckedText) switch
+        {
+            (null, null) => null,
+            (not null, null) => primary,
+            (null, not null) => uncheckedText,
+            _ => primary + "; " + uncheckedText,
+        };
+    }
 }
 
 /// <summary>One citation as a chip: a time that seeks, or the unresolved marker that does not.</summary>

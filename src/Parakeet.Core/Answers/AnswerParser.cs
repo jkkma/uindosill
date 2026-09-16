@@ -175,7 +175,7 @@ public static class AnswerParser
         marked = TryStripBulletMarker(line, out var body);
 
         var (text, citations) = ExtractCitations(body);
-        var (remaining, quote, quoteStart) = ExtractQuote(text);
+        var (remaining, quote, quoteStart, quoteEnd) = ExtractQuote(text);
 
         // Guillemets are the answer's reserved quote marks — the grammar excludes them from free
         // text — so any left in the prose after the one quote was lifted are re-marked as plain
@@ -183,7 +183,9 @@ public static class AnswerParser
         // quote's position, which the label search below stops at, survives it.
         remaining = remaining.Replace('«', '“').Replace('»', '”');
 
-        var (finalText, label) = ExtractLabel(remaining, quoteStart);
+        var (finalText, label, textOffset) = ExtractLabel(remaining, quoteStart);
+        var primaryStart = quoteStart < 0 ? -1 : quoteStart - textOffset;
+        var primaryEnd = quoteEnd < 0 ? -1 : quoteEnd - textOffset;
 
         if (finalText.Length == 0 && citations.Count == 0 && quote is null)
         {
@@ -195,6 +197,7 @@ public static class AnswerParser
             Label = label,
             Text = finalText,
             Quote = quote,
+            HasUncheckedQuotedText = ContainsQuoteMarkOutside(finalText, primaryStart, primaryEnd),
             Citations = citations,
         };
     }
@@ -266,25 +269,25 @@ public static class AnswerParser
     /// than as the model's own words, and <see cref="CitationValidator"/> still checks it against
     /// the cited span — what changes is only that the sentence survives.
     /// </remarks>
-    private static (string Text, string? Quote, int QuoteStart) ExtractQuote(string text)
+    private static (string Text, string? Quote, int QuoteStart, int QuoteEnd) ExtractQuote(string text)
     {
         var open = text.IndexOf('«', StringComparison.Ordinal);
         if (open < 0)
         {
-            return (text, null, -1);
+            return (text, null, -1, -1);
         }
 
         var close = text.IndexOf('»', open + 1);
         if (close < 0)
         {
-            return (text, null, -1);
+            return (text, null, -1, -1);
         }
 
         var quote = text[(open + 1)..close].Trim();
-        return quote.Length == 0 ? (text, null, -1) : (text, quote, open);
+        return quote.Length == 0 ? (text, null, -1, -1) : (text, quote, open, close);
     }
 
-    private static (string Text, string? Label) ExtractLabel(string text, int quoteStart)
+    private static (string Text, string? Label, int TextOffset) ExtractLabel(string text, int quoteStart)
     {
         // The grammar's label: up to forty characters before ": ", with brackets and colons
         // excluded by construction. The quote is transcript speech and says what it likes —
@@ -294,16 +297,43 @@ public static class AnswerParser
         var separator = text.IndexOf(": ", StringComparison.Ordinal);
         if (separator is <= 0 or > 40 || (quoteStart >= 0 && separator >= quoteStart))
         {
-            return (text, null);
+            return (text, null, 0);
         }
 
         var candidate = text[..separator];
         if (candidate.Contains('[', StringComparison.Ordinal) || candidate.Contains(']', StringComparison.Ordinal))
         {
-            return (text, null);
+            return (text, null, 0);
         }
 
-        return (text[(separator + 2)..].Trim(), candidate.Trim());
+        var claim = text[(separator + 2)..];
+        var leadingWhitespace = claim.Length - claim.TrimStart().Length;
+        return (claim.Trim(), candidate.Trim(), separator + 2 + leadingWhitespace);
+    }
+
+    /// <summary>
+    /// Finds quotation marks that were not inside the one guillemet span lifted for validation.
+    /// The parser re-marks that span and any later guillemets as ordinary curly quotes, so position
+    /// is what distinguishes the checked pair from quoted words the validator never saw. Ordinary
+    /// marks nested inside the checked span are part of that same verified text and do not create a
+    /// second warning.
+    /// </summary>
+    private static bool ContainsQuoteMarkOutside(string text, int primaryStart, int primaryEnd)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (primaryStart >= 0 && i >= primaryStart && i <= primaryEnd)
+            {
+                continue;
+            }
+
+            if (text[i] is '"' or '“' or '”')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Collapse(string text)

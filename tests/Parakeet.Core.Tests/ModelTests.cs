@@ -849,6 +849,109 @@ public class ModelInstallerTests
     }
 
     [Fact]
+    public async Task CancellationDuringVerificationLeavesACompletePartialThatTheNextInstallPromotes()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('v', 8192));
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var descriptor = Descriptor(Sha256Of(payload), payload.Length);
+        using var cancellation = new CancellationTokenSource();
+        var progress = new InlineModelProgress(value =>
+        {
+            if (value.Phase == ModelInstallPhase.Verifying)
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        using (var installer = new ModelInstaller(store, new HttpClient(new StubHandler(payload))))
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => installer.InstallAsync(descriptor, progress: progress, ct: cancellation.Token));
+        }
+
+        var partPath = store.PathFor(descriptor) + ".part";
+        Assert.Equal(payload.Length, new FileInfo(partPath).Length);
+
+        // A server correctly rejects Range: bytes=<length>- with 416. The retry must hash and
+        // promote the already complete partial without making that doomed request at all.
+        var handler = new EndOfFileRangeHandler(payload);
+        using var retry = new ModelInstaller(store, new HttpClient(handler));
+        var result = await retry.InstallAsync(descriptor);
+
+        Assert.True(result.Resumed);
+        Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(payload, await File.ReadAllBytesAsync(store.PathFor(descriptor)));
+    }
+
+    [Fact]
+    public async Task RangeAtEndWithoutASizePinUses416LengthToPromoteThePartial()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('e', 4096));
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var descriptor = Descriptor(Sha256Of(payload));
+        StagePartial(store, descriptor, payload);
+        var handler = new EndOfFileRangeHandler(payload);
+
+        using var installer = new ModelInstaller(store, new HttpClient(handler));
+        var result = await installer.InstallAsync(descriptor);
+
+        Assert.True(result.Resumed);
+        Assert.Equal([(long)payload.Length], handler.RangeStarts);
+        Assert.Equal(payload, await File.ReadAllBytesAsync(store.PathFor(descriptor)));
+    }
+
+    [Fact]
+    public async Task CorruptCompletePartialRejectedWith416IsDiscardedAndDownloadedOnceFromZero()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('c', 4096));
+        var corrupt = Enumerable.Repeat((byte)'x', payload.Length).ToArray();
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var descriptor = Descriptor(Sha256Of(payload));
+        StagePartial(store, descriptor, corrupt);
+        var handler = new EndOfFileRangeHandler(payload);
+
+        using var installer = new ModelInstaller(store, new HttpClient(handler));
+        var result = await installer.InstallAsync(descriptor);
+
+        Assert.Equal([(long)payload.Length, 0], handler.RangeStarts);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
+        Assert.Equal(payload, await File.ReadAllBytesAsync(store.PathFor(descriptor)));
+    }
+
+    [Fact]
+    public async Task OversizedPartialRejectedWith416RestartsOnceFromZero()
+    {
+        var payload = Encoding.UTF8.GetBytes(new string('o', 4096));
+        using var temp = new TempDirectory();
+        var store = new LocalModelStore(temp.Path);
+        var descriptor = Descriptor(Sha256Of(payload));
+        StagePartial(store, descriptor, [.. payload, 0xff]);
+        var handler = new EndOfFileRangeHandler(payload);
+
+        using var installer = new ModelInstaller(store, new HttpClient(handler));
+        var result = await installer.InstallAsync(descriptor);
+
+        Assert.Equal([(long)payload.Length + 1, 0], handler.RangeStarts);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(Sha256Of(payload), Assert.Single(result.Files).Sha256);
+    }
+
+    private static void StagePartial(LocalModelStore store, ModelDescriptor descriptor, byte[] bytes)
+    {
+        var partPath = store.PathFor(descriptor) + ".part";
+        Directory.CreateDirectory(Path.GetDirectoryName(partPath)!);
+        File.WriteAllBytes(partPath, bytes);
+        File.WriteAllText(
+            partPath + ".json",
+            $$"""{"url":"{{descriptor.Files[0].Url}}"}""");
+    }
+
+    [Fact]
     public async Task ResumeIsAbandonedWhenTheUrlChanged()
     {
         var payload = Encoding.UTF8.GetBytes(new string('z', 2048));
@@ -1116,6 +1219,50 @@ public class ModelInstallerTests
 
             return Task.FromResult(response);
         }
+    }
+
+    /// <summary>Honours ranges and answers a request at or beyond EOF with RFC 9110's 416 shape.</summary>
+    private sealed class EndOfFileRangeHandler(byte[] payload) : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+
+        public List<long> RangeStarts { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestCount++;
+            var from = request.Headers.Range?.Ranges.FirstOrDefault()?.From ?? 0;
+            RangeStarts.Add(from);
+
+            if (from >= payload.Length)
+            {
+                var rejected = new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable)
+                {
+                    Content = new ByteArrayContent([]),
+                };
+                rejected.Content.Headers.ContentRange = new ContentRangeHeaderValue(payload.Length);
+                return Task.FromResult(rejected);
+            }
+
+            var body = payload[(int)from..];
+            var response = new HttpResponseMessage(from > 0 ? HttpStatusCode.PartialContent : HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(body),
+            };
+            response.Content.Headers.ContentLength = body.Length;
+            if (from > 0)
+            {
+                response.Content.Headers.ContentRange = new ContentRangeHeaderValue(from, payload.Length - 1, payload.Length);
+            }
+
+            return Task.FromResult(response);
+        }
+    }
+
+    private sealed class InlineModelProgress(Action<ModelInstallProgress> report) : IProgress<ModelInstallProgress>
+    {
+        public void Report(ModelInstallProgress value) => report(value);
     }
 
     /// <summary>A body that dies partway, the way a dropped connection does.</summary>

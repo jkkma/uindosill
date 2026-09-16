@@ -43,6 +43,13 @@ public sealed record AnswerBullet
     /// </summary>
     public string? Quote { get; init; }
 
+    /// <summary>
+    /// The claim also contains quotation marks outside <see cref="Quote"/>'s checked span.
+    /// Those words remain model prose: the parser preserves them for display but the citation
+    /// validator never treats them as part of the one verbatim quote it checks.
+    /// </summary>
+    public bool HasUncheckedQuotedText { get; init; }
+
     public IReadOnlyList<Citation> Citations { get; init; } = [];
 
     /// <summary>No citation, or only the admitted <c>[?]</c> marker — rendered as uncited either way.</summary>

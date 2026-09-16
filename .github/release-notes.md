@@ -1,17 +1,19 @@
 ## Changes in this candidate
 
-- The Ask tab reads long recordings in consecutive sections before combining an overview.
-  Focused questions keep more of the surrounding discussion, and answers include clearer topic
-  labels and source references.
-- Summary and thinking limits now leave room for a completed answer. Citation handling accepts
-  unambiguous shorthand and marks unseen source ranges, while introductory paragraphs retain
-  quote warnings when displayed or copied.
-- Cancellation, shutdown, output-file protection and external-tool cleanup fixes are included.
+- The bundled Python now loads the installed NVIDIA acceleration pack correctly. Independent
+  package-root overrides also work when the interpreter comes from an unpacked archive.
+- Model removal reports locked-file failures safely, keeps partially removed models visible,
+  and prevents individual models from being removed while a transcription batch is running.
+- Downloads cancelled during verification can use their completed bytes on the next attempt;
+  rejected resume requests no longer leave the download stuck at the end of the file.
+- Ask answers warn about additional unchecked quotations even when the first quote was verified.
+  The warning follows the answer when copied.
+- Adding subtitles to WAVE recordings now uses MKV so PCM audio can stay unchanged. Adding
+  WebVTT to an MP4 with existing captions preserves those captions and the new word timestamps.
+- Completing a link download keeps any new link entered while the download was running.
 
-Long overviews require several model calls and can take considerably longer than focused
-questions. Gemma 4 12B was tested on a three-hour podcast's automatic captions: coverage improved,
-but it still omitted topics and misstated details. This candidate does not claim parity with
-YouTube's Ask feature; timestamps help check an answer and do not guarantee its accuracy.
+Ask answers can still omit topics or misstate details. Timestamps help check an answer and do
+not guarantee its accuracy.
 
 ## Which file do I want?
 

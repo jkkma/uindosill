@@ -74,7 +74,6 @@ public class SubtitleMuxTests
     [Theory]
     [InlineData("/tmp/episode.mp3")]
     [InlineData("/tmp/episode.m4a")]
-    [InlineData("/tmp/episode.wav")]
     public void ARecordingWithNoPictureBecomesAnMp4RatherThanBeingReEncoded(string path)
     {
         // An MP3 cannot hold subtitles — "Only audio streams and pictures are allowed in MP3" — but
@@ -100,6 +99,20 @@ public class SubtitleMuxTests
         Assert.Equal(MuxContainer.Matroska, plan.Container);
         Assert.EndsWith(".subtitled.mkv", plan.OutputPath, StringComparison.Ordinal);
         Assert.Contains("re-encoding", plan.Note, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/tmp/episode.WAV")]
+    [InlineData("/tmp/episode.wave")]
+    [InlineData("/tmp/episode.rf64")]
+    [InlineData("/tmp/episode.bwf")]
+    public void WaveUsesMatroskaSoUnsupportedMp4PcmDoesNotNeedReEncoding(string path)
+    {
+        Assert.True(SubtitleMux.TryPlan(path, "srt", out var plan, out _));
+        Assert.Equal(MuxContainer.Matroska, plan.Container);
+        Assert.EndsWith(".subtitled.mkv", plan.OutputPath, StringComparison.Ordinal);
+        Assert.Equal("copy", plan.SubtitleCodec);
+        Assert.Contains("PCM formats stay unchanged", plan.Note, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -156,10 +169,29 @@ public class SubtitleMuxTests
         // through FFmpeg's WebVTT decoder, which drops every inline timestamp in it.
         Assert.True(SubtitleMux.TryPlan("/tmp/talk.mp4", "vtt-words", out var plan, out _));
 
-        var arguments = SubtitleMux.Arguments(plan, "/tmp/talk.words.vtt", plan.OutputPath);
+        var arguments = SubtitleMux.Arguments(plan, "/tmp/talk.words.vtt", plan.OutputPath, ["webvtt", "ass"]);
 
         Assert.Equal(["-c:s", "copy"], Window(arguments, "-c:s", 2));
         Assert.Equal(["-f", "matroska"], Window(arguments, "-f", 2));
+        Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:s:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void MatroskaConvertsOnlyExistingMovTextAndCopiesTheNewWordTimedTrack()
+    {
+        Assert.True(SubtitleMux.TryPlan("/tmp/talk.mp4", "vtt-words", out var plan, out _));
+        var arguments = SubtitleMux.Arguments(plan, "/tmp/talk.words.vtt", plan.OutputPath,
+            ["webvtt", "mov_text", "ass", "mov_text"]);
+
+        Assert.Equal(["-map", "0", "-map", "1:0"], Window(arguments, "-map", 4));
+        Assert.Equal(["-c", "copy"], Window(arguments, "-c", 2));
+        Assert.Equal(["-c:s", "copy"], Window(arguments, "-c:s", 2));
+        Assert.Equal(["-c:s:1", "srt"], Window(arguments, "-c:s:1", 2));
+        Assert.Equal(["-c:s:3", "srt"], Window(arguments, "-c:s:3", 2));
+        Assert.DoesNotContain("-c:s:0", arguments);
+        Assert.DoesNotContain("-c:s:2", arguments);
+        Assert.DoesNotContain("-c:s:4", arguments);
+        Assert.True(plan.KeepsWordTiming);
     }
 
     /// <summary>The <paramref name="length"/> arguments starting at <paramref name="flag"/>.</summary>

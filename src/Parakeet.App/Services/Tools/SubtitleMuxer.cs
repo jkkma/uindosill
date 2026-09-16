@@ -35,7 +35,7 @@ public interface ISubtitleMuxer
 }
 
 /// <summary>
-/// The real one: the vendored ffmpeg, run as a child process, copying every stream.
+/// The real one: the vendored ffmpeg, copying media and converting incompatible timed-text tracks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -94,6 +94,18 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
             throw new SubtitleMuxException($"The transcript is no longer at {subtitlePath}.");
         }
 
+        IReadOnlyList<string> subtitleCodecs = [];
+        if (plan.Container == MuxContainer.Matroska)
+        {
+            progress?.Report("Checking existing subtitle tracks");
+            var inspected = await RunAsync(ffmpeg,
+                ["-nostdin", "-hide_banner", "-loglevel", "info", "-i", plan.InputPath,
+                    "-map", "0", "-c", "copy", "-t", "0", "-f", "null", "-"],
+                cancellationToken).ConfigureAwait(false);
+            RequireSuccess(inspected);
+            subtitleCodecs = FfmpegStreamInfo.SubtitleCodecs(inspected.Errors);
+        }
+
         var output = Unique(plan.OutputPath);
         var staging = Path.Combine(
             Path.GetDirectoryName(output) ?? ".",
@@ -102,6 +114,27 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
 
         progress?.Report("Adding the transcript to the recording");
 
+        try
+        {
+            var result = await RunAsync(ffmpeg, SubtitleMux.Arguments(plan, subtitlePath, staging, subtitleCodecs),
+                cancellationToken).ConfigureAwait(false);
+            RequireSuccess(result);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(staging, output);
+            return output;
+        }
+        finally
+        {
+            Discard(staging);
+        }
+    }
+
+    private sealed record FfmpegResult(int ExitCode, IReadOnlyList<string> Errors);
+
+    private static async Task<FfmpegResult> RunAsync(
+        string ffmpeg, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var start = new ProcessStartInfo
         {
             FileName = ffmpeg,
@@ -111,54 +144,50 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
             CreateNoWindow = true,
         };
 
-        foreach (var argument in SubtitleMux.Arguments(plan, subtitlePath, staging))
+        foreach (var argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
 
         using var process = new Process { StartInfo = start };
-        var errors = new List<string>();
-
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-            {
-                errors.Add(e.Data);
-            }
-        };
 
         try
         {
             process.Start();
-            process.BeginErrorReadLine();
-            process.BeginOutputReadLine();
+            var errors = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await KillAndWaitAsync(process).ConfigureAwait(false);
+                throw;
+            }
+            finally
+            {
+                await Task.WhenAll(errors, output).ConfigureAwait(false);
+            }
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            return new FfmpegResult(process.ExitCode,
+                (await errors.ConfigureAwait(false)).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is not (SubtitleMuxException or OperationCanceledException))
         {
-            await KillAndWaitAsync(process).ConfigureAwait(false);
-            Discard(staging);
-            throw;
-        }
-        catch (Exception ex) when (ex is not SubtitleMuxException)
-        {
-            Discard(staging);
             throw new SubtitleMuxException($"ffmpeg could not be run: {ex.Message}", ex);
         }
+    }
 
-        if (process.ExitCode != 0)
+    private static void RequireSuccess(FfmpegResult result)
+    {
+        if (result.ExitCode != 0)
         {
-            Discard(staging);
-
             // ffmpeg's last line is the one that says what it refused, and the whole of stderr is
             // a wall nobody will read. Where there is nothing at all, the exit code is all there is.
-            var reason = errors.Count > 0 ? errors[^1] : $"ffmpeg exited with {process.ExitCode}.";
+            var reason = result.Errors.Count > 0 ? result.Errors[^1] : $"ffmpeg exited with {result.ExitCode}.";
             throw new SubtitleMuxException(reason);
         }
-
-        File.Move(staging, output);
-        return output;
     }
 
     /// <summary>

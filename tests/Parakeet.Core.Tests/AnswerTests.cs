@@ -299,6 +299,13 @@ public class AnswerParserTests
         Assert.DoesNotContain('«', bullet.Text);
         Assert.DoesNotContain('»', bullet.Text);
         Assert.Contains("“impostor”", bullet.Text, StringComparison.Ordinal);
+        Assert.True(bullet.HasUncheckedQuotedText);
+
+        var labeled = AnswerParser.Parse("- Claim:   One «real quote» and another «impostor» [S1]\n");
+        Assert.Equal("Claim", labeled.Bullets[0].Label);
+        Assert.True(labeled.Bullets[0].HasUncheckedQuotedText);
+        var labeledPrimary = AnswerParser.Parse("- Claim:   They said «the budget was “approved”» [S1]\n");
+        Assert.False(labeledPrimary.Bullets[0].HasUncheckedQuotedText);
     }
 
     [Fact]
@@ -323,6 +330,12 @@ public class AnswerParserTests
         var middle = AnswerParser.Parse("- There was an «initial two hundred» that was not shaping up [S7]\n");
         Assert.Equal("initial two hundred", middle.Bullets[0].Quote);
         Assert.Equal("There was an “initial two hundred” that was not shaping up", middle.Bullets[0].Text);
+
+        // Ordinary quotation marks nested inside the one checked span belong to that same
+        // verbatim quote. They must not be mistaken for a second, unchecked quotation.
+        var nested = AnswerParser.Parse("- They said «the budget was “approved”» [S7]\n");
+        Assert.Equal("the budget was “approved”", nested.Bullets[0].Quote);
+        Assert.False(nested.Bullets[0].HasUncheckedQuotedText);
     }
 
     [Fact]

@@ -243,12 +243,14 @@ public sealed class PythonRuntimeTests : IDisposable
     public void APackagesOnlyOverrideKeepsTheBundledInterpreterAndSaysSo()
     {
         // Only the package root is named, so the interpreter is still the bundle's — and the
-        // description says so rather than naming a variable nobody set.
+        // description says so rather than naming a variable nobody set. The application's copy
+        // keeps its normal precedence over the hand-downloaded one.
         var bundle = StageBundle();
+        var downloaded = StageBundle();
         var other = StageBundle();
         Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
 
-        var resolved = PythonRuntime.Resolve(bundle, StageNothing());
+        var resolved = PythonRuntime.Resolve(bundle, downloaded);
 
         Assert.Equal(Path.Combine(bundle, "python", ExecutableName), resolved.Interpreter);
         Assert.Equal(Path.Combine(other, "python"), resolved.PackageRoot);
@@ -259,7 +261,23 @@ public sealed class PythonRuntimeTests : IDisposable
     }
 
     [Fact]
-    public void APackagesOnlyOverrideWithNoBundleBlamesTheBundleAndNotAVariableNobodySet()
+    public void APackagesOnlyOverrideUsesTheUserDataInterpreterWhenNoApplicationBundleExists()
+    {
+        var downloaded = StageBundle();
+        var other = StageBundle();
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
+
+        var resolved = PythonRuntime.Resolve(StageNothing(), downloaded);
+
+        Assert.Equal(Path.Combine(downloaded, "python", ExecutableName), resolved.Interpreter);
+        Assert.Equal(Path.Combine(other, "python"), resolved.PackageRoot);
+        Assert.True(resolved.Overridden);
+        Assert.False(resolved.InterpreterOverridden);
+        Assert.True(resolved.PackagesOverridden);
+    }
+
+    [Fact]
+    public void APackagesOnlyOverrideWithNoBundleBlamesTheBundledInterpreterAndNotAVariableNobodySet()
     {
         var other = StageBundle();
         Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, Path.Combine(other, "python"));
@@ -268,7 +286,7 @@ public sealed class PythonRuntimeTests : IDisposable
             () => PythonRuntime.Resolve(StageNothing(), StageNothing()));
 
         Assert.Contains(PythonRuntime.PackagesVariable, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("bundle beside the application", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("bundled interpreter is not at", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain($"{PythonRuntime.InterpreterVariable} points at", failure.Message, StringComparison.Ordinal);
     }
 

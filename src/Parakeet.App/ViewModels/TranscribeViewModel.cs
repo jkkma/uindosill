@@ -1311,7 +1311,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanFetchUrl))]
     private async Task FetchUrlAsync(CancellationToken cancellationToken)
     {
-        var url = Url?.Trim();
+        var submittedText = Url;
+        var url = submittedText?.Trim();
 
         if (!CanFetchUrl || string.IsNullOrEmpty(url))
         {
@@ -1382,7 +1383,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 DisplayName = fetched.Title,
             });
 
-            Url = string.Empty;
+            // Fetching can take minutes. Do not erase the next link if it was pasted while this
+            // one was in flight; clear only the exact field value that started this request.
+            if (string.Equals(Url, submittedText, StringComparison.Ordinal))
+            {
+                Url = string.Empty;
+            }
             Settle(null);
             StatusMessage = $"Added “{fetched.Title}” from the link.";
             RefreshQueueState();

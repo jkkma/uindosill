@@ -153,38 +153,51 @@ public class AuditUiRegressionTests
     }
 
     [AvaloniaFact]
-    public void TheRemoveAllButtonDisablesDuringABatchAndRecoversWhenItEnds()
+    public void ModelRemovalButtonsDisableDuringABatchAndRecoverWhenItEnds()
     {
         var main = NewMain(out var directory);
-        var model = main.Models.SelectedDescriptor!;
-        Install(directory, model);
+        var selected = main.Models.Models.First(model => !model.IsTranscriptionModel);
+        Install(directory, selected.Descriptor);
         main.Models.Refresh();
+        main.Models.Selected = selected;
         main.SelectedTab = 1;
         var window = new MainWindow { DataContext = main };
         window.Show();
         try
         {
-            var button = window.FindControl<Button>("RemoveAllModels")!;
+            var removeAll = window.FindControl<Button>("RemoveAllModels")!;
+            var remove = window.FindControl<Button>("RemoveModel")!;
             Settle(window);
-            AssertRemoveState(main.Models, button, expected: true);
+            AssertRemoveState(main.Models, removeAll, expected: true);
+            Assert.True(main.Models.CanRemoveSelected);
+            Assert.True(main.Models.RemoveCommand.CanExecute(null));
+            Assert.True(remove.IsEffectivelyEnabled);
 
             var commandChanges = 0;
             main.Models.RemoveAllCommand.CanExecuteChanged += (_, _) => commandChanges++;
             main.Transcribe.IsRunning = true;
             Settle(window);
 
-            AssertRemoveState(main.Models, button, expected: false);
+            AssertRemoveState(main.Models, removeAll, expected: false);
+            Assert.False(main.Models.CanRemoveSelected);
+            Assert.False(main.Models.RemoveCommand.CanExecute(null));
+            Assert.False(remove.IsEffectivelyEnabled);
             Assert.True(commandChanges > 0);
 
             // RelayCommand.Execute itself does not check CanExecute. A caller other than the
-            // button must not be able to remove a model while the batch holds it either.
+            // button must not be able to remove an ancillary model while the batch holds it either.
+            main.Models.RemoveCommand.Execute(null);
             main.Models.RemoveAllCommand.Execute(null);
-            Assert.True(new LocalModelStore(directory).IsInstalled(model));
+            Assert.True(new LocalModelStore(directory).IsInstalled(selected.Descriptor));
+            Assert.Contains("batch is running", main.Models.StatusMessage, StringComparison.OrdinalIgnoreCase);
 
             commandChanges = 0;
             main.Transcribe.IsRunning = false;
             Settle(window);
-            AssertRemoveState(main.Models, button, expected: true);
+            AssertRemoveState(main.Models, removeAll, expected: true);
+            Assert.True(main.Models.CanRemoveSelected);
+            Assert.True(main.Models.RemoveCommand.CanExecute(null));
+            Assert.True(remove.IsEffectivelyEnabled);
             Assert.True(commandChanges > 0);
         }
         finally
