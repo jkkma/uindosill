@@ -271,7 +271,7 @@ Three things worth knowing before downloading:
 - **Two flavours.** The default installer carries the CPU and Vulkan backends with the bundled
   Python inside; `win-cuda` adds the NVIDIA CUDA runtime. Take the first unless you know you want
   CUDA. Whichever you install keeps updating from the same channel, recorded at install time.
-- **One of the four models comes with it.** Speech detection (2.2 MiB) is inside the installer, so
+- **Speech detection comes with it.** Its model (2.2 MiB) is inside the installer, so
   that opt-in works the moment you first open the app. **Speaker labelling does not** — it is a
   31 MiB download that needs a free Hugging Face account and an accepted user agreement, so that
   opt-in is dead until you fetch it from the Models tab.
@@ -363,14 +363,17 @@ deliberately. The obligations it creates, including where the corresponding sour
 [LICENSING.md](docs/LICENSING.md), which also says plainly that nobody with a professional opinion
 has read any of it.
 
-**The four sets of model weights carry three different licences, and none of them is the code's:**
+**Model weights carry their own licences:**
 
 | Weights | Licence |
 |---|---|
 | Transcription — `parakeet-tdt-0.6b-v3` | CC BY 4.0 |
+| Japanese transcription — `parakeet-tdt_ctc-0.6b-ja` | CC BY 4.0 |
 | Speaker labelling — `pyannote/speaker-diarization-community-1` | CC BY 4.0 |
 | Translation — Marian / OPUS-MT | Apache-2.0 |
+| Japanese translation — FuguMT | CC BY-SA 4.0 |
 | Speech detection — Silero VAD | MIT |
+| Answering questions and transcript tidy — Gemma 4 | Apache-2.0 |
 
 The NVIDIA Open Model License was the fourth until 2026-08-27, when the Sortformer weights it covered
 were retired; nothing in this product is under it now.

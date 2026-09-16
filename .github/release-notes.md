@@ -71,13 +71,18 @@ for it, and none should be read into it.
 Speech detection ships **inside** both installers, 2.2 MiB of it, so that option works the moment
 you first open the application.
 
-Three things are downloads from the **Models** tab instead:
+The other models are downloads from the **Models** tab:
 
-- **Speech recognition**, 1.34 GiB, and **English translation**, 1.34 GiB. Either one alone would
-  put a release asset past GitHub's 2 GiB limit, which is the whole reason they are not bundled.
+- **European speech recognition**, 1.34 GiB, and **European-to-English translation**, 1.34 GiB.
+  Either one alone would put a release asset past GitHub's 2 GiB limit, which is the whole reason
+  they are not bundled.
+- **Japanese speech recognition** and **Japanese-to-English translation** are separate choices;
+  installing a European model does not add Japanese support.
 - **Speaker labelling**, 31 MiB, which additionally needs a free Hugging Face account and an
   accepted user agreement, because the weights are gated. That option stays inactive until you
   fetch it.
+- **Answering questions** and **cleaning up transcripts** use optional Gemma models, also
+  downloaded separately.
 
 Everything you download lives in `%LOCALAPPDATA%\Uindosill`, outside the application folder, so
 updating and reinstalling never touch it. Uninstalling asks you first, naming the size and the
