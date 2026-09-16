@@ -103,6 +103,13 @@ public sealed class PythonBundleInstallerTests : IDisposable
     private static string Interpreter(string bundle) =>
         Path.Combine(bundle, PythonRuntime.ExecutableName);
 
+    private static string StagePackageRoot()
+    {
+        var root = TestTemp.NewDirectory("uindosill-packages");
+        Directory.CreateDirectory(Path.Combine(root, "uindosill_engines"));
+        return root;
+    }
+
     [Fact]
     public void TheShippedArchiveIsUnpackedUnderTheUserDataDirectoryAndNamedForItsDigest()
     {
@@ -144,6 +151,55 @@ public sealed class PythonBundleInstallerTests : IDisposable
 
         Assert.Equal(unpacked, resolved.PackageRoot);
         Assert.True(File.Exists(marker), "the directory was rebuilt, so the unpack ran a second time");
+    }
+
+    [Fact]
+    public void AFreshArchiveWithAPackagesOnlyOverrideCanRunAndUnpacksItsInterpreter()
+    {
+        var (appRoot, id) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+        var packages = StagePackageRoot();
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, packages);
+
+        Assert.True(PythonRuntime.CanRun(out var reason, appRoot, userData));
+        Assert.Null(reason);
+
+        var resolved = PythonBundleInstaller.EnsureUnpacked(
+            baseDirectory: appRoot, userDataDirectory: userData);
+        var unpacked = Path.Combine(userData, PythonRuntime.BundleDirectoryName, id);
+
+        Assert.Equal(Interpreter(unpacked), resolved.Interpreter);
+        Assert.Equal(packages, resolved.PackageRoot);
+        Assert.True(resolved.Overridden);
+        Assert.False(resolved.InterpreterOverridden);
+        Assert.True(resolved.PackagesOverridden);
+    }
+
+    [Fact]
+    public void AnAlreadyUnpackedArchiveSuppliesThePackagesOnlyOverridesInterpreterWithoutReextracting()
+    {
+        var (appRoot, id) = StageArchive();
+        var userData = TestTemp.NewDirectory("uindosill-data");
+        PythonBundleInstaller.EnsureUnpacked(baseDirectory: appRoot, userDataDirectory: userData);
+
+        var unpacked = Path.Combine(userData, PythonRuntime.BundleDirectoryName, id);
+        var marker = Path.Combine(unpacked, "keep-me");
+        File.WriteAllText(marker, "the existing unpack is reused");
+        var packages = StagePackageRoot();
+        Environment.SetEnvironmentVariable(PythonRuntime.PackagesVariable, packages);
+
+        Assert.True(PythonRuntime.TryResolve(out var before, out var reason, appRoot, userData));
+        Assert.Null(reason);
+        Assert.Equal(Interpreter(unpacked), before!.Interpreter);
+        Assert.Equal(packages, before.PackageRoot);
+
+        var resolved = PythonBundleInstaller.EnsureUnpacked(
+            baseDirectory: appRoot, userDataDirectory: userData);
+
+        Assert.Equal(Interpreter(unpacked), resolved.Interpreter);
+        Assert.Equal(packages, resolved.PackageRoot);
+        Assert.True(resolved.PackagesOverridden);
+        Assert.True(File.Exists(marker), "the existing digest-named bundle was extracted again");
     }
 
     [Fact]

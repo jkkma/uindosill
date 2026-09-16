@@ -421,6 +421,75 @@ public sealed class ModelInstaller : IDisposable
         var partPath = finalPath + PartSuffix;
         var metaPath = finalPath + PartSuffix + ".json";
 
+        void DiscardPartial()
+        {
+            DeleteIfExists(partPath);
+            DeleteIfExists(metaPath);
+        }
+
+        async Task<InstalledFileDigest?> VerifyCompletePartialAsync(long completeLength)
+        {
+            if (!File.Exists(partPath))
+            {
+                return null;
+            }
+
+            var length = new FileInfo(partPath).Length;
+            if (length != completeLength
+                || file.SizeBytes is { } pinnedLength && pinnedLength != completeLength)
+            {
+                DiscardPartial();
+                return null;
+            }
+
+            progress?.Report(Shape(ModelInstallPhase.Verifying, length, length, null, resumed: true));
+            var digest = await ComputeSha256Async(partPath, ct).ConfigureAwait(false);
+            if (file.Sha256 is { } expected
+                && !string.Equals(digest, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                // This is an earlier attempt, not the response just fetched below. Its bytes may
+                // have been damaged after they landed, so throw them away and fetch a clean copy.
+                DiscardPartial();
+                return null;
+            }
+
+            return new InstalledFileDigest
+            {
+                FileName = file.FileName,
+                Sha256 = digest,
+                SizeBytes = length,
+            };
+        }
+
+        (InstalledFileDigest Digest, bool Resumed) PromotePartial(InstalledFileDigest digest)
+        {
+            progress?.Report(Shape(
+                ModelInstallPhase.Installing, digest.SizeBytes, digest.SizeBytes, null, resumed: true));
+            File.Move(partPath, finalPath, overwrite: true);
+            DeleteIfExists(metaPath);
+            return (digest, true);
+        }
+
+        // Cancellation can land after the last byte was flushed and while its digest is being
+        // computed. On the next run that is a complete download, not a range request at EOF. Size
+        // alone only decides whether it is worth hashing; the digest still decides what is installed.
+        var stagedOffset = DetermineResumeOffset(partPath, metaPath, file.Url);
+        if (file.SizeBytes is { } stagedLength && File.Exists(partPath) && stagedOffset >= stagedLength)
+        {
+            if (stagedOffset == stagedLength
+                && await VerifyCompletePartialAsync(stagedLength).ConfigureAwait(false) is { } stagedDigest)
+            {
+                return PromotePartial(stagedDigest);
+            }
+
+            // A partial longer than the manifest pin can never become the pinned file by appending.
+            // VerifyCompletePartialAsync already discards the equal-length corrupt case.
+            if (File.Exists(partPath))
+            {
+                DiscardPartial();
+            }
+        }
+
         // **A dropped connection is retried here, and until 2026-08-29 it took the process with
         // it.** Hugging Face ended a response after 149 KB of a 6.3 GB file; `HttpIOException`
         // came out of the read loop, matched neither of the window's two catch clauses, and
@@ -438,6 +507,7 @@ public sealed class ModelInstaller : IDisposable
         // checks are made against.
         long total = 0;
         var resumed = false;
+        InstalledFileDigest? recovered = null;
 
         const int MaxAttempts = 5;
         var attempt = 0;
@@ -446,7 +516,14 @@ public sealed class ModelInstaller : IDisposable
             var resumeOffsetBefore = DetermineResumeOffset(partPath, metaPath, file.Url);
             try
             {
-                await AttemptAsync(resumeOffsetBefore).ConfigureAwait(false);
+                if (!await AttemptAsync(resumeOffsetBefore).ConfigureAwait(false))
+                {
+                    // A rejected range whose partial was not the complete pinned file was discarded.
+                    // The next pass has no partial and therefore makes one ordinary full request.
+                    attempt = 0;
+                    continue;
+                }
+
                 break;
             }
             catch (Exception exception) when (IsTransient(exception))
@@ -493,56 +570,84 @@ public sealed class ModelInstaller : IDisposable
             }
         }
 
-        async Task AttemptAsync(long resumeOffset)
+        async Task<bool> AttemptAsync(long resumeOffset)
         {
             resumed = resumeOffset > 0;
 
-        progress?.Report(Shape(ModelInstallPhase.Connecting, resumeOffset, file.SizeBytes, null, resumed));
+            progress?.Report(Shape(ModelInstallPhase.Connecting, resumeOffset, file.SizeBytes, null, resumed));
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, file.Url);
-        if (resumeOffset > 0)
-        {
-            request.Headers.Range = new RangeHeaderValue(resumeOffset, null);
-        }
-
-        // <b>Gated entries need the user's own token, and only Hugging Face ever sees it.</b>
-        // Everything in the catalogue downloads anonymously except the pyannote pipeline, whose
-        // repository requires an accepted user agreement — an unauthenticated fetch of it returns
-        // 401 rather than the file. See <see cref="HuggingFaceHost"/> for why the host is checked
-        // here rather than trusted from the entry.
-        if (IsHuggingFace(file.Url) && _huggingFaceToken?.Invoke() is { Length: > 0 } token)
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-
-        using var response = await SendAsync(request, model, file, ct).ConfigureAwait(false);
-
-        if (resumeOffset > 0 && response.StatusCode == HttpStatusCode.PartialContent)
-        {
-            total = response.Content.Headers.ContentRange?.Length
-                ?? (response.Content.Headers.ContentLength is { } length ? resumeOffset + length : 0);
-        }
-        else
-        {
-            // The server ignored the range (or there was nothing to resume): start over rather
-            // than append to a prefix that may not match.
-            resumeOffset = 0;
-            resumed = false;
-            total = response.Content.Headers.ContentLength ?? 0;
-            if (File.Exists(partPath))
+            using var request = new HttpRequestMessage(HttpMethod.Get, file.Url);
+            if (resumeOffset > 0)
             {
-                File.Delete(partPath);
+                request.Headers.Range = new RangeHeaderValue(resumeOffset, null);
             }
+
+            // <b>Gated entries need the user's own token, and only Hugging Face ever sees it.</b>
+            // Everything in the catalogue downloads anonymously except the pyannote pipeline, whose
+            // repository requires an accepted user agreement — an unauthenticated fetch of it returns
+            // 401 rather than the file. See <see cref="HuggingFaceHost"/> for why the host is checked
+            // here rather than trusted from the entry.
+            if (IsHuggingFace(file.Url) && _huggingFaceToken?.Invoke() is { Length: > 0 } token)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            using var response = await SendAsync(
+                request, model, file, ct, acceptRangeNotSatisfiable: resumeOffset > 0).ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                // RFC 9110 lets a 416 carry the current representation length as `bytes */N`. When N
+                // equals the requested offset, the partial may already be the whole file (most notably
+                // when cancellation landed during verification). Hash it before trusting it. Every
+                // other shape is stale or ambiguous, so restart once from zero instead of retrying EOF.
+                var remoteLength = response.Content.Headers.ContentRange?.Length;
+                if (remoteLength == resumeOffset
+                    && await VerifyCompletePartialAsync(resumeOffset).ConfigureAwait(false) is { } digest)
+                {
+                    total = resumeOffset;
+                    recovered = digest;
+                    return true;
+                }
+
+                DiscardPartial();
+                resumed = false;
+                return false;
+            }
+
+            if (resumeOffset > 0 && response.StatusCode == HttpStatusCode.PartialContent)
+            {
+                total = response.Content.Headers.ContentRange?.Length
+                    ?? (response.Content.Headers.ContentLength is { } length ? resumeOffset + length : 0);
+            }
+            else
+            {
+                // The server ignored the range (or there was nothing to resume): start over rather
+                // than append to a prefix that may not match.
+                resumeOffset = 0;
+                resumed = false;
+                total = response.Content.Headers.ContentLength ?? 0;
+                if (File.Exists(partPath))
+                {
+                    File.Delete(partPath);
+                }
+            }
+
+            if (total == 0 && file.SizeBytes is { } expectedSize)
+            {
+                total = expectedSize;
+            }
+
+            WriteResumeMetadata(metaPath, file.Url, response.Headers.ETag?.ToString(), total);
+
+            await DownloadAsync(response, partPath, resumeOffset, resumed, Shape, progress, total, ct)
+                .ConfigureAwait(false);
+            return true;
         }
 
-        if (total == 0 && file.SizeBytes is { } expectedSize)
+        if (recovered is not null)
         {
-            total = expectedSize;
-        }
-
-        WriteResumeMetadata(metaPath, file.Url, response.Headers.ETag?.ToString(), total);
-
-        await DownloadAsync(response, partPath, resumeOffset, resumed, Shape, progress, total, ct).ConfigureAwait(false);
+            return PromotePartial(recovered);
         }
 
         var actualSize = new FileInfo(partPath).Length;
@@ -627,7 +732,11 @@ public sealed class ModelInstaller : IDisposable
             || url.Host.EndsWith("." + HuggingFaceHost, StringComparison.OrdinalIgnoreCase));
 
     private async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request, ModelDescriptor model, ModelFile file, CancellationToken ct)
+        HttpRequestMessage request,
+        ModelDescriptor model,
+        ModelFile file,
+        CancellationToken ct,
+        bool acceptRangeNotSatisfiable = false)
     {
         HttpResponseMessage response;
         try
@@ -639,7 +748,8 @@ public sealed class ModelInstaller : IDisposable
             throw new ModelInstallException($"Could not reach {file.Url} to download '{model.Id}': {ex.Message}", ex);
         }
 
-        if (response.IsSuccessStatusCode)
+        if (response.IsSuccessStatusCode
+            || acceptRangeNotSatisfiable && response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
             return response;
         }

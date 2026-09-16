@@ -295,6 +295,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowEnginePanel))]
     [NotifyPropertyChangedFor(nameof(WhereItRuns))]
     [NotifyPropertyChangedFor(nameof(HasWhereItRuns))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSelected))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
     private ModelViewModel? _selected;
 
     /// <summary>
@@ -379,6 +381,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanLoad))]
     [NotifyPropertyChangedFor(nameof(LoadHint))]
     [NotifyPropertyChangedFor(nameof(CanUnload))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSelected))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
     [NotifyPropertyChangedFor(nameof(CanRemoveAll))]
     [NotifyCanExecuteChangedFor(nameof(RemoveAllCommand))]
     [NotifyPropertyChangedFor(nameof(CanRemoveSideloaded))]
@@ -419,6 +423,27 @@ public sealed partial class ModelsViewModel : ObservableObject
             var installed = store.IsInstalled(m);
             return new ModelViewModel(m, installed, HasStoredFiles(store, m));
         })];
+
+        foreach (var model in Models)
+        {
+            model.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName != nameof(ModelViewModel.CanRemove))
+                {
+                    return;
+                }
+
+                OnPropertyChanged(nameof(CanRemoveAll));
+                RemoveAllCommand.NotifyCanExecuteChanged();
+
+                if (ReferenceEquals(model, Selected))
+                {
+                    OnPropertyChanged(nameof(CanRemoveSelected));
+                    RemoveCommand.NotifyCanExecuteChanged();
+                }
+            };
+        }
+
         Selected = Models.FirstOrDefault(m => m.IsInstalled && m.IsTranscriptionModel)
             ?? Models.FirstOrDefault(m => m.IsTranscriptionModel)
             ?? Models.FirstOrDefault();
@@ -817,11 +842,23 @@ public sealed partial class ModelsViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    /// <summary>Whether the selected catalogue entry can be removed without disturbing active work.</summary>
+    public bool CanRemoveSelected => !IsTranscribing && Selected is { CanRemove: true };
+
+    [RelayCommand(CanExecute = nameof(CanRemoveSelected))]
     private void Remove()
     {
         if (Selected is not { } model)
         {
+            return;
+        }
+
+        // RelayCommand.Execute does not enforce CanExecute for callers that invoke it directly.
+        // The batch can be using any ancillary model selected on the Transcribe tab, so this guard
+        // applies to every catalogue task rather than only to the recogniser.
+        if (IsTranscribing)
+        {
+            StatusMessage = "A batch is running. Its models cannot be removed until it finishes.";
             return;
         }
 
@@ -837,6 +874,11 @@ public sealed partial class ModelsViewModel : ObservableObject
         if (model.IsBusy)
         {
             StatusMessage = "That model is downloading. Cancel the download before removing it.";
+            return;
+        }
+
+        if (!model.HasStoredFiles)
+        {
             return;
         }
 

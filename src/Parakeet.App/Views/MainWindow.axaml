@@ -800,8 +800,8 @@
                         IsEnabled="{Binding Selected.CanDownload}" />
                 <Button Classes="onPage" Content="Cancel" Command="{Binding CancelDownloadCommand}"
                         IsEnabled="{Binding Selected.IsBusy}" />
-                <Button Classes="onPage" Content="Remove" Command="{Binding RemoveCommand}"
-                        IsEnabled="{Binding Selected.CanRemove}" />
+                <Button Name="RemoveModel" Classes="onPage" Content="Remove" Command="{Binding RemoveCommand}"
+                        IsEnabled="{Binding CanRemoveSelected}" />
               </StackPanel>
 
               <!-- ── Which model labels speakers ────────────────────────────────────────

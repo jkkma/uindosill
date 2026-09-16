@@ -138,6 +138,30 @@ public class LinkTests
 
         Assert.False(viewModel.IsFetchingUrl);
         Assert.Single(viewModel.Jobs);
+        Assert.Empty(viewModel.Url!);
+    }
+
+    [Fact]
+    public async Task EditingTheLinkDuringAFetchPreservesTheNextLink()
+    {
+        var (viewModel, fetcher, _) = Create();
+        fetcher.Gate = new TaskCompletionSource();
+        const string fetchingUrl = "https://example.com/watch?v=first";
+        const string nextUrl = "https://example.com/watch?v=next";
+        viewModel.Url = fetchingUrl;
+
+        var fetching = viewModel.FetchUrlCommand.ExecuteAsync(null);
+        Assert.Equal([fetchingUrl], fetcher.Requests);
+
+        viewModel.Url = nextUrl;
+        fetcher.Gate.SetResult();
+        await fetching;
+
+        var job = Assert.Single(viewModel.Jobs);
+        Assert.Equal(fetchingUrl, job.SourceUrl);
+        Assert.Equal(nextUrl, viewModel.Url);
+        Assert.True(viewModel.CanFetchUrl);
+        Assert.True(viewModel.FetchUrlCommand.CanExecute(null));
     }
 
     [Fact]

@@ -185,7 +185,7 @@ public static class PythonRuntime
             BundleSource.Environment => (InterpreterOverridden, PackagesOverridden) switch
             {
                 (true, true) => $"named by {InterpreterVariable} and {PackagesVariable}",
-                (false, true) => $"bundled beside the application, with the package root named by {PackagesVariable}",
+                (false, true) => $"bundled interpreter, with the package root named by {PackagesVariable}",
                 _ => $"named by {InterpreterVariable}",
             },
             BundleSource.Application => "bundled beside the application",
@@ -249,10 +249,29 @@ public static class PythonRuntime
         var interpreterOverride = Environment.GetEnvironmentVariable(InterpreterVariable);
         var packagesOverride = Environment.GetEnvironmentVariable(PackagesVariable);
 
-        if (interpreterOverride is { Length: > 0 } || packagesOverride is { Length: > 0 })
+        if (interpreterOverride is { Length: > 0 })
         {
             return FromEnvironment(interpreterOverride, packagesOverride, baseDirectory)
                 with { CudaPackRoot = cudaPack };
+        }
+
+        return FromBundles(baseDirectory, userDataDirectory, cudaPack, packagesOverride);
+    }
+
+    /// <summary>
+    /// Resolves the interpreter through the normal application, unpacked-archive and user-data
+    /// order, optionally replacing only the package half from the environment.
+    /// </summary>
+    private static Resolution FromBundles(
+        string baseDirectory,
+        string? userDataDirectory,
+        string? cudaPack,
+        string? packagesOverride)
+    {
+        if (packagesOverride is { Length: > 0 } && !HasEngines(packagesOverride))
+        {
+            throw new PythonSidecarException(
+                $"No 'uindosill_engines' package under {packagesOverride}, which {PackagesVariable} names.");
         }
 
         // Beside the application first, then this build's own archive unpacked into the user data
@@ -294,6 +313,18 @@ public static class PythonRuntime
                 continue;
             }
 
+            if (packagesOverride is { Length: > 0 })
+            {
+                return new Resolution
+                {
+                    Interpreter = interpreter,
+                    PackageRoot = packagesOverride,
+                    Source = BundleSource.Environment,
+                    PackagesOverridden = true,
+                    CudaPackRoot = cudaPack,
+                };
+            }
+
             if (HasEngines(directory))
             {
                 return new Resolution
@@ -330,7 +361,9 @@ public static class PythonRuntime
         }
 
         throw new PythonSidecarException(
-            "The bundled Python is not at " + applicationBundle + " or " + userDataBundle + ". " +
+            (packagesOverride is { Length: > 0 }
+                ? $"{PackagesVariable} names the package root {packagesOverride}, and the bundled interpreter is not at "
+                : "The bundled Python is not at ") + applicationBundle + " or " + userDataBundle + ". " +
             "Speaker labelling and translation run in one, so neither is available until it is " +
             "there. The desktop installer carries a bundle and the command-line zip does not, so " +
             $"unpack the separate bundle download at the second path, or set {InterpreterVariable} " +
@@ -396,7 +429,13 @@ public static class PythonRuntime
             return true;
         }
 
-        if (FindArchive(baseDirectory) is not null)
+        // An archive can supply only the bundled interpreter. It cannot repair an explicit bad
+        // interpreter or package override, so keep the resolver's reason in those cases.
+        var interpreterOverride = Environment.GetEnvironmentVariable(InterpreterVariable);
+        var packagesOverride = Environment.GetEnvironmentVariable(PackagesVariable);
+        if (interpreterOverride is not { Length: > 0 }
+            && (packagesOverride is not { Length: > 0 } || HasEngines(packagesOverride))
+            && FindArchive(baseDirectory) is not null)
         {
             reason = null;
             return true;
@@ -533,12 +572,12 @@ public static class PythonRuntime
     /// directory relies on.
     /// </remarks>
     private static Resolution FromEnvironment(
-        string? interpreterOverride, string? packagesOverride, string baseDirectory)
+        string interpreterOverride, string? packagesOverride, string baseDirectory)
     {
         string interpreter;
         string packageRoot;
 
-        if (interpreterOverride is { Length: > 0 } && Directory.Exists(interpreterOverride))
+        if (Directory.Exists(interpreterOverride))
         {
             // The directory form: a bundle, answering both halves unless the package root is named.
             interpreter = Path.Combine(interpreterOverride, ExecutableName);
@@ -561,7 +600,7 @@ public static class PythonRuntime
                       $"{InterpreterVariable} names; set {PackagesVariable} if it lives somewhere else.");
             }
         }
-        else if (interpreterOverride is { Length: > 0 })
+        else
         {
             // The file form. The interpreter is named outright; the package root is named too, or
             // is beside the interpreter — the repository's `python/` next to a venv's interpreter,
@@ -589,35 +628,12 @@ public static class PythonRuntime
                       $"{PackagesVariable} to the directory that holds it.");
             }
         }
-        else
-        {
-            // Only the package root is named, so the interpreter is still the bundle's — and a
-            // bundle that is not there is the bundle's absence, not the fault of a variable nobody
-            // set. Until 2026-08-22 this blamed UINDOSILL_PYTHON.
-            interpreter = Path.Combine(baseDirectory, BundleDirectoryName, ExecutableName);
-            packageRoot = packagesOverride!;
-
-            if (!File.Exists(interpreter))
-            {
-                throw new PythonSidecarException(
-                    $"{PackagesVariable} names the package root {packageRoot}, and the interpreter still comes " +
-                    $"from the bundle beside the application: but there is no {ExecutableName} at {interpreter}. " +
-                    $"Set {InterpreterVariable} as well if the interpreter lives somewhere else.");
-            }
-
-            if (!HasEngines(packageRoot))
-            {
-                throw new PythonSidecarException(
-                    $"No 'uindosill_engines' package under {packageRoot}, which {PackagesVariable} names.");
-            }
-        }
-
         return new Resolution
         {
             Interpreter = interpreter,
             PackageRoot = packageRoot,
             Source = BundleSource.Environment,
-            InterpreterOverridden = interpreterOverride is { Length: > 0 },
+            InterpreterOverridden = true,
             PackagesOverridden = packagesOverride is { Length: > 0 },
         };
     }

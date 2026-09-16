@@ -52,10 +52,10 @@ public sealed record SubtitleMuxPlan
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The rule is: the container follows the format, and nothing is ever re-encoded.</b> A subtitle
+/// <b>The container follows the format; audio and video are never re-encoded.</b> A subtitle
 /// track is added by rewriting the file around the streams it already has, so the audio and the
-/// picture are copied through untouched and the only new bytes are the words. Where a container
-/// cannot hold what was asked for, this says so rather than converting something.
+/// picture are copied through untouched. Existing MP4 timed-text subtitles become SubRip when
+/// moving to Matroska; existing compatible subtitles and new WebVTT are copied unchanged.
 /// </para>
 /// <para>
 /// <b>Every rule below was measured with FFmpeg 9.0.1 on 2026-08-23</b>, because none of it is
@@ -106,8 +106,8 @@ public static class SubtitleMux
     public static IReadOnlyList<string> MuxableFormats { get; } = ["srt", "vtt", "vtt-words"];
 
     /// <summary>
-    /// Extensions whose audio MP4 will not take, measured rather than assumed. Everything else this
-    /// product accepts — MPEG, ISO base media and RIFF/WAVE — copies into an MP4 unchanged.
+    /// Windows Media requires Matroska. WAVE also takes that route because it can contain PCM
+    /// formats such as pcm_u8 that MP4 cannot carry without re-encoding.
     /// </summary>
     private static readonly string[] MatroskaOnlySources = [".wma", ".asf", ".wmv"];
 
@@ -146,7 +146,8 @@ public static class SubtitleMux
         // whose audio MP4 will not take.
         var webVtt = format is "vtt" or "vtt-words";
         var asf = MatroskaOnlySources.Contains(source);
-        var container = webVtt || asf ? MuxContainer.Matroska : MuxContainer.Mp4;
+        var wave = source is ".wav" or ".wave" or ".rf64" or ".bwf";
+        var container = webVtt || asf || wave ? MuxContainer.Matroska : MuxContainer.Mp4;
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(inputPath)) ?? ".";
         var stem = Path.GetFileNameWithoutExtension(inputPath);
@@ -179,8 +180,9 @@ public static class SubtitleMux
     /// <b><c>-map 0</c> takes everything the recording already has</b>, not just its sound. A
     /// podcast's cover art is a video stream, and mapping only the audio would quietly throw it
     /// away — measured on a cover-art MP3 on 2026-08-23, where it survives into both containers.
-    /// <c>-c copy</c> then says the point of the whole exercise: every existing stream is copied
-    /// through, nothing is decoded, and the only new bytes are words.
+    /// <c>-c copy</c> preserves the audio, video and compatible subtitles. Existing MP4 timed text
+    /// needs a per-track conversion to SubRip when moving to Matroska. The new WebVTT track is
+    /// still copied, so its inline word timestamps are never sent through a subtitle decoder.
     /// </para>
     /// <para>
     /// The container is named with <c>-f</c> rather than inferred from the output's extension.
@@ -189,11 +191,15 @@ public static class SubtitleMux
     /// the container that runs.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<string> Arguments(SubtitleMuxPlan plan, string subtitlePath, string outputPath)
+    public static IReadOnlyList<string> Arguments(
+        SubtitleMuxPlan plan,
+        string subtitlePath,
+        string outputPath,
+        IReadOnlyList<string>? existingSubtitleCodecs = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        return
+        List<string> arguments =
         [
             "-nostdin",
             "-hide_banner",
@@ -205,9 +211,27 @@ public static class SubtitleMux
             "-map", "1:0",
             "-c", "copy",
             "-c:s", plan.SubtitleCodec,
-            "-f", plan.Container == MuxContainer.Matroska ? "matroska" : "mp4",
-            outputPath,
         ];
+
+        if (plan.Container == MuxContainer.Matroska && existingSubtitleCodecs is not null)
+        {
+            // -map 0 keeps the original subtitle order; the newly added track follows them.
+            // Override only mov_text. A blanket subtitle conversion would strip inline timing
+            // from both existing WebVTT and the newly added word-timed transcript.
+            for (var i = 0; i < existingSubtitleCodecs.Count; i++)
+            {
+                if (string.Equals(existingSubtitleCodecs[i], "mov_text", StringComparison.Ordinal))
+                {
+                    arguments.Add("-c:s:" + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    arguments.Add("srt");
+                }
+            }
+        }
+
+        arguments.Add("-f");
+        arguments.Add(plan.Container == MuxContainer.Matroska ? "matroska" : "mp4");
+        arguments.Add(outputPath);
+        return arguments;
     }
 
     /// <summary>
@@ -218,6 +242,11 @@ public static class SubtitleMux
     {
         if (container == MuxContainer.Matroska)
         {
+            if (source is ".wav" or ".wave" or ".rf64" or ".bwf")
+            {
+                return "WAVE audio is copied into an MKV so PCM formats stay unchanged.";
+            }
+
             if (asf)
             {
                 return "Windows Media audio cannot go inside an MP4, so this makes an MKV rather "
