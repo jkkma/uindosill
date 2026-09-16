@@ -24,12 +24,73 @@ namespace Parakeet.App.Tests;
 /// </remarks>
 public class RemoveAllModelsTests
 {
+    private sealed class FaultingModelStore(IModelStore inner) : IModelStore
+    {
+        public Func<ModelDescriptor, Exception?>? RemoveFailure { get; init; }
+        public Exception? RemoveSideloadedFileFailure { get; init; }
+        public Exception? RemoveSideloadedDirectoryFailure { get; init; }
+
+        public string RootDirectory => inner.RootDirectory;
+
+        public string PathFor(ModelDescriptor model) => inner.PathFor(model);
+
+        public string PathFor(ModelDescriptor model, ModelFile file) => inner.PathFor(model, file);
+
+        public bool IsInstalled(ModelDescriptor model) => inner.IsInstalled(model);
+
+        public IReadOnlyList<InstalledModel> ListInstalled() => inner.ListInstalled();
+
+        public IReadOnlyList<InstalledModel> ListInstalled(ModelCatalog catalog) => inner.ListInstalled(catalog);
+
+        public bool Remove(ModelDescriptor model)
+        {
+            if (RemoveFailure?.Invoke(model) is { } failure)
+            {
+                throw failure;
+            }
+
+            return inner.Remove(model);
+        }
+
+        public int GatherIntoPlace(ModelDescriptor model) => inner.GatherIntoPlace(model);
+
+        public bool RemoveSideloaded(string fileName) => inner.RemoveSideloaded(fileName);
+
+        public bool RemoveSideloaded(string fileName, ModelCatalog catalog)
+        {
+            if (RemoveSideloadedFileFailure is { } failure)
+            {
+                throw failure;
+            }
+
+            return inner.RemoveSideloaded(fileName, catalog);
+        }
+
+        public IReadOnlyList<SideloadedDirectory> ListSideloadedDirectories(ModelCatalog catalog) =>
+            inner.ListSideloadedDirectories(catalog);
+
+        public bool RemoveSideloadedDirectory(string directoryName, ModelCatalog catalog)
+        {
+            if (RemoveSideloadedDirectoryFailure is { } failure)
+            {
+                throw failure;
+            }
+
+            return inner.RemoveSideloadedDirectory(directoryName, catalog);
+        }
+    }
+
     private static ModelsViewModel NewTab(out string directory)
     {
         directory = TestTemp.NewDirectory("uindosill-removeall");
+        return NewTab(new LocalModelStore(directory));
+    }
+
+    private static ModelsViewModel NewTab(IModelStore store)
+    {
         return new MainWindowViewModel(
             new FakeEngineProvider(),
-            new LocalModelStore(directory),
+            store,
             ModelCatalog.Default,
             player: new FakeMediaPlayer()).Models;
     }
@@ -129,6 +190,176 @@ public class RemoveAllModelsTests
         tab.IsTranscribing = true;
 
         Assert.False(tab.CanRemoveAll);
+    }
+
+    [Fact]
+    public void AFailedSingleRemoveIsReportedAndTheInstalledStateIsRestored()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-remove-one-failure");
+        var model = ModelCatalog.Default.Models[0];
+        Install(directory, model);
+        var local = new LocalModelStore(directory);
+        var store = new FaultingModelStore(local)
+        {
+            RemoveFailure = candidate => candidate.Id == model.Id
+                ? new IOException("The weights are locked.")
+                : null,
+        };
+        var tab = NewTab(store);
+        tab.Selected = tab.Models.Single(candidate => candidate.Id == model.Id);
+
+        tab.RemoveCommand.Execute(null);
+
+        Assert.True(local.IsInstalled(model));
+        Assert.True(tab.Selected.IsInstalled);
+        Assert.Contains(model.DisplayName, tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("could not be removed", tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("locked", tab.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APartiallyDeletedModelRemainsVisibleAndCanBeRetried()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-remove-one-partial");
+        var model = ModelCatalog.Default.Models.First(candidate => candidate.Files.Count > 1);
+        Install(directory, model);
+        var local = new LocalModelStore(directory);
+        var removedFile = local.PathFor(model, model.Files[0]);
+        var remainingFile = local.PathFor(model, model.Files[1]);
+        var failOnce = true;
+        var store = new FaultingModelStore(local)
+        {
+            RemoveFailure = candidate =>
+            {
+                if (candidate.Id != model.Id || !failOnce)
+                {
+                    return null;
+                }
+
+                failOnce = false;
+                File.Delete(removedFile);
+                return new IOException("A later file is locked.");
+            },
+        };
+        var tab = NewTab(store);
+        tab.Selected = tab.Models.Single(candidate => candidate.Id == model.Id);
+
+        tab.RemoveCommand.Execute(null);
+
+        Assert.False(File.Exists(removedFile));
+        Assert.True(File.Exists(remainingFile));
+        Assert.False(local.IsInstalled(model));
+        Assert.False(tab.Selected.IsInstalled);
+        Assert.True(tab.Selected.HasStoredFiles);
+        Assert.True(tab.Selected.CanRemove);
+        Assert.Equal("Incomplete", tab.Selected.Status);
+        Assert.True(tab.CanRemoveAll);
+        Assert.True(tab.RemoveAllCommand.CanExecute(null));
+        Assert.Contains("could not be removed", tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("later file is locked", tab.StatusMessage, StringComparison.Ordinal);
+
+        // A retrying download can also occupy an incomplete directory. It must not be deleted
+        // while its files are being written, even though the remainder stays visible.
+        tab.Selected.IsBusy = true;
+        Assert.False(tab.Selected.CanRemove);
+        Assert.False(tab.CanRemoveAll);
+        tab.RemoveCommand.Execute(null);
+        Assert.True(File.Exists(remainingFile));
+        tab.Selected.IsBusy = false;
+
+        tab.RemoveAllCommand.Execute(null);
+
+        Assert.False(Directory.Exists(local.PathFor(model)));
+        Assert.False(tab.Selected.HasStoredFiles);
+        Assert.False(tab.CanRemoveAll);
+        Assert.Equal("Removed 1 model.", tab.StatusMessage);
+    }
+
+    [Fact]
+    public void RemoveAllContinuesPastAnAccessFailureAndCountsOnlySuccessfulDeletes()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-removeall-partial");
+        var failed = ModelCatalog.Default.Models[0];
+        var removed = ModelCatalog.Default.Models[1];
+        Install(directory, failed);
+        Install(directory, removed);
+        var local = new LocalModelStore(directory);
+        var store = new FaultingModelStore(local)
+        {
+            RemoveFailure = candidate => candidate.Id == failed.Id
+                ? new UnauthorizedAccessException("Access was denied.")
+                : null,
+        };
+        var tab = NewTab(store);
+
+        tab.RemoveAllCommand.Execute(null);
+
+        Assert.True(local.IsInstalled(failed));
+        Assert.False(local.IsInstalled(removed));
+        Assert.True(tab.Models.Single(candidate => candidate.Id == failed.Id).IsInstalled);
+        Assert.False(tab.Models.Single(candidate => candidate.Id == removed.Id).IsInstalled);
+        Assert.True(tab.CanRemoveAll);
+        Assert.StartsWith(
+            $"Removed 1 model, freeing about {ByteSize.Describe(removed.TotalSizeBytes ?? 0)}.",
+            tab.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.Contains(failed.DisplayName, tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Access was denied", tab.StatusMessage, StringComparison.Ordinal);
+
+        tab.RemoveAllCommand.Execute(null);
+
+        Assert.StartsWith("No models were fully removed.", tab.StatusMessage, StringComparison.Ordinal);
+        Assert.True(local.IsInstalled(failed));
+    }
+
+    [Fact]
+    public void AFailedSideloadedFileDeleteIsReportedAndTheRowRemains()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-remove-stray-file-failure");
+        var path = Path.Combine(directory, "withdrawn-model.gguf");
+        File.WriteAllText(path, "weights");
+        var store = new FaultingModelStore(new LocalModelStore(directory))
+        {
+            RemoveSideloadedFileFailure = new IOException("The file is in use."),
+        };
+        var tab = NewTab(store);
+        tab.SelectedSideloaded = Assert.Single(tab.Sideloaded);
+
+        tab.RemoveSideloadedCommand.Execute(null);
+
+        Assert.True(File.Exists(path));
+        Assert.Single(tab.Sideloaded);
+        Assert.Equal("withdrawn-model.gguf", tab.SelectedSideloaded?.Name);
+        Assert.Contains("could not be deleted", tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("in use", tab.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFailedSideloadedDirectoryDeleteIsReportedAndTheRowIsRemeasured()
+    {
+        var directory = TestTemp.NewDirectory("uindosill-remove-stray-directory-failure");
+        var orphan = Path.Combine(directory, "retired-model");
+        Directory.CreateDirectory(orphan);
+        var path = Path.Combine(orphan, "weights.bin");
+        File.WriteAllText(path, "weights");
+        var store = new FaultingModelStore(new LocalModelStore(directory))
+        {
+            RemoveSideloadedDirectoryFailure = new UnauthorizedAccessException("The directory is read-only."),
+        };
+        var tab = NewTab(store);
+        tab.SelectedSideloaded = Assert.Single(tab.Sideloaded);
+
+        // Simulate another writer changing the directory between the scan and the delete. Refresh in
+        // the failure path must replace the stale size along with preserving the row.
+        File.AppendAllText(path, " and more weights");
+        tab.RemoveSideloadedCommand.Execute(null);
+
+        var remaining = Assert.Single(tab.Sideloaded);
+        Assert.True(Directory.Exists(orphan));
+        Assert.Equal(new FileInfo(path).Length, remaining.SizeBytes);
+        Assert.Equal("retired-model", tab.SelectedSideloaded?.Name);
+        Assert.Contains("could not be deleted", tab.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("read-only", tab.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]

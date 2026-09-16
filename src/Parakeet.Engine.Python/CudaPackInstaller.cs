@@ -72,7 +72,7 @@ public sealed class CudaPackException : Exception
 /// parts and moves them into <see cref="PartsDirectoryName"/>; this stages the *unpacked* tree and
 /// moves that into <see cref="PythonRuntime.CudaPackDirectoryName"/>. The second matters more than
 /// it looks: a half-extracted `python-cuda` holding a torch with some of its DLLs would satisfy
-/// <see cref="PythonRuntime.IsCudaPack"/>, go in front of the bundle on <c>PYTHONPATH</c>, and break
+/// <see cref="PythonRuntime.IsCudaPack"/>, go in front of the bundle on <c>sys.path</c>, and break
 /// a diariser that worked yesterday. The directory only ever appears complete.
 /// </para>
 /// <para>
@@ -139,7 +139,7 @@ public sealed class CudaPackInstaller
         {
             throw new CudaPackException(
                 $"This pack carries torch {manifest.TorchVersion} and the bundle pins " +
-                $"{expectedTorchVersion}. The pack goes in front of the bundle on PYTHONPATH, so " +
+                $"{expectedTorchVersion}. The pack's packages are imported before the bundle's, so " +
                 "installing it would run a torch this build has never been measured against. Use a " +
                 "pack built from this version's requirements-bundle.txt.");
         }

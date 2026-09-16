@@ -58,6 +58,9 @@ jobs:
       - name: The diariser's `auto` must elect what it documents
         run: python3 scripts/check-diariser-auto.py
 
+      - name: Isolated Python must import the selected packages
+        run: python3 scripts/check-python-launch.py
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

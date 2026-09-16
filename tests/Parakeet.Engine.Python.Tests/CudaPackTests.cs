@@ -51,7 +51,7 @@ public class CudaPackTests
     public void TheShippedPackCarriesTheBundlesOwnTorchPin()
     {
         // **The pairing this whole feature rests on.** The pack goes ahead of the bundle on
-        // PYTHONPATH, so its torch must be the version `python/requirements-bundle.txt` pins, in a
+        // sys.path, so its torch must be the version `python/requirements-bundle.txt` pins, in a
         // CUDA build. A pack a version ahead would silently run a decode the translator's
         // 8,149-sentence gate does not describe, and nothing downstream would notice.
         var manifest = CudaPackManifest.Shipped;

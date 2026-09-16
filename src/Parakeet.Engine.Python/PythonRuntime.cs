@@ -104,8 +104,8 @@ public static class PythonRuntime
     /// at 2778 MB against 490 MB, `torchcodec` at 38 MB against 23 MB, and `torchaudio` at 9 MB
     /// against 2 MB — and on Windows there are no separate `nvidia_*` distributions at all, the CUDA
     /// libraries living inside `torch/lib`. So the pack is those three directories and their
-    /// dist-info, put ahead of the bundle on <c>PYTHONPATH</c>, which shadows the CPU build without
-    /// touching it: 2.8 GB rather than the 4 GB a second whole bundle would cost, and no change to
+    /// dist-info, put ahead of the bundle on <c>sys.path</c> by the host's isolated bootstrap,
+    /// which shadows the CPU build without touching it: 2.8 GB rather than the 4 GB a second whole bundle would cost, and no change to
     /// the three-place resolution above.
     /// <para>
     /// `torch` alone is checked because it is the package that carries the CUDA libraries and the

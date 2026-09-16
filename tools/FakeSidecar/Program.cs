@@ -9,7 +9,7 @@ namespace Uindosill.FakeSidecar;
 /// <remarks>
 /// <para>
 /// <b>How a test reaches it.</b> The host passes its package root to the child in
-/// <c>PYTHONPATH</c>, and a test constructs the resolution itself, so that variable is a private
+/// the last command-line argument, and a test constructs the resolution itself, so that is a private
 /// channel from one test to one child: the test writes <c>script.json</c> into a temporary
 /// directory and hands that directory over as the package root. No parent-process environment is
 /// touched, so nothing races and no test needs to be serialised against another.
@@ -25,15 +25,12 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
-        // The arguments are the host's — `-u -m uindosill_engines` — and mean nothing here. Read and
-        // ignored rather than left unmentioned, because an executable that silently ignored its
-        // arguments would be indistinguishable from one that failed to receive them.
-        _ = args;
-
-        var root = Environment.GetEnvironmentVariable("PYTHONPATH");
+        // Python consumes the isolated launch options and bootstrap; the final argument is
+        // always the package root, following an optional CUDA overlay.
+        var root = args.LastOrDefault();
         if (string.IsNullOrEmpty(root))
         {
-            Console.Error.WriteLine("FakeSidecar: no PYTHONPATH, so there is no script to run.");
+            Console.Error.WriteLine("FakeSidecar: no package-root argument, so there is no script to run.");
             return 2;
         }
 

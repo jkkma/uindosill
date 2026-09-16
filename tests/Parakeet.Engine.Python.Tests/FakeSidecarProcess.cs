@@ -23,7 +23,7 @@ namespace Parakeet.Engine.Python.Tests;
 /// </para>
 /// <para>
 /// The script travels in a temporary directory handed over as the package root, which the host puts
-/// in the child's <c>PYTHONPATH</c>. That makes it a private channel between one test and one
+/// in the child's last command-line argument. That makes it a private channel between one test and one
 /// child: no shared environment variable, so nothing races and nothing has to be serialised.
 /// </para>
 /// </remarks>

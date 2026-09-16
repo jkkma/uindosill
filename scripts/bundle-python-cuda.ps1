@@ -7,7 +7,7 @@
     **What the pack is, and why it is not a second bundle.** The bundle pins the CPU torch build
     (`python/requirements-bundle.txt`), so the diariser's `auto` elects the CPU on every installed
     copy. This is the artefact that changes that on an NVIDIA machine. It is an *overlay*: a
-    directory put ahead of the bundle on `PYTHONPATH`, which shadows the bundle's `torch` without
+    directory put ahead of the bundle on `sys.path` by the isolated bootstrap, shadowing `torch` without
     replacing a byte of it. Deleting the directory undoes it completely.
 
     **Three packages, because that is what was measured.** On 2026-08-28, on this project's own
