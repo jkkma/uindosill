@@ -17,6 +17,14 @@ public sealed partial class ModelViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanUseForSpeakers))]
     private bool _isInstalled;
 
+    /// <summary>
+    /// Whether this catalogue entry still occupies its final file or directory, including an
+    /// incomplete multi-file entry that is not usable but can still be removed.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRemove))]
+    private bool _hasStoredFiles;
+
     [ObservableProperty]
     private double _progress;
 
@@ -33,6 +41,7 @@ public sealed partial class ModelViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanDownload))]
+    [NotifyPropertyChangedFor(nameof(CanRemove))]
     private bool _isBusy;
 
     /// <summary>
@@ -48,15 +57,18 @@ public sealed partial class ModelViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanUseForSpeakers))]
     private bool _isActiveDiariser;
 
-    public ModelViewModel(ModelDescriptor descriptor, bool installed)
+    public ModelViewModel(ModelDescriptor descriptor, bool installed, bool hasStoredFiles)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         Descriptor = descriptor;
         _isInstalled = installed;
-        _status = installed ? "Installed" : "Not installed";
+        _hasStoredFiles = hasStoredFiles;
+        _status = installed ? "Installed" : hasStoredFiles ? "Incomplete" : "Not installed";
     }
 
     public ModelDescriptor Descriptor { get; }
+
+    public bool CanRemove => HasStoredFiles && !IsBusy;
 
     public string Id => Descriptor.Id;
 
@@ -402,7 +414,11 @@ public sealed partial class ModelsViewModel : ObservableObject
             store,
             huggingFaceToken: () => HuggingFaceToken.Resolve(_settings.Load().HuggingFaceToken));
 
-        Models = [.. catalog.Models.Select(m => new ModelViewModel(m, store.IsInstalled(m)))];
+        Models = [.. catalog.Models.Select(m =>
+        {
+            var installed = store.IsInstalled(m);
+            return new ModelViewModel(m, installed, HasStoredFiles(store, m));
+        })];
         Selected = Models.FirstOrDefault(m => m.IsInstalled && m.IsTranscriptionModel)
             ?? Models.FirstOrDefault(m => m.IsTranscriptionModel)
             ?? Models.FirstOrDefault();
@@ -704,6 +720,8 @@ public sealed partial class ModelsViewModel : ObservableObject
         }
 
         model.IsBusy = true;
+        OnPropertyChanged(nameof(CanRemoveAll));
+        RemoveAllCommand.NotifyCanExecuteChanged();
         model.Status = "Starting";
         StatusMessage = null;
         _cancellation = new CancellationTokenSource();
@@ -816,21 +834,42 @@ public sealed partial class ModelsViewModel : ObservableObject
             return;
         }
 
-        var removed = _store.Remove(model.Descriptor);
-        model.IsInstalled = false;
-        // Removing the active diariser hands the job to whatever is left, or to nothing.
-        SyncActiveDiariser();
-        model.Progress = 0;
-        model.Status = "Not installed";
-        StatusMessage = removed ? $"Removed {model.Id}." : $"{model.Id} was not installed.";
-        Refresh();
+        if (model.IsBusy)
+        {
+            StatusMessage = "That model is downloading. Cancel the download before removing it.";
+            return;
+        }
+
+        try
+        {
+            var removed = _store.Remove(model.Descriptor);
+            StatusMessage = removed ? $"Removed {model.Id}." : $"{model.Id} was not installed.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            StatusMessage = $"{model.DisplayName} could not be removed: {exception.Message}";
+        }
+        finally
+        {
+            // A recursive directory delete can remove some files before another one refuses it.
+            // Re-read the store on every outcome rather than claiming either the old or the intended
+            // state, and resolve the active diariser from what actually remains.
+            Refresh();
+            SyncActiveDiariser();
+
+            if (!model.IsInstalled)
+            {
+                model.Progress = 0;
+                model.Status = model.HasStoredFiles ? "Incomplete" : "Not installed";
+            }
+        }
     }
 
-    /// <summary>Whether there is anything installed for <see cref="RemoveAllCommand"/> to remove.</summary>
-    public bool CanRemoveAll => !IsTranscribing && Models.Any(m => m.IsInstalled);
+    /// <summary>Whether there is any catalogue storage for <see cref="RemoveAllCommand"/> to remove.</summary>
+    public bool CanRemoveAll => !IsTranscribing && Models.Any(m => m.CanRemove);
 
     /// <summary>
-    /// Removes every installed catalogue entry in one action.
+    /// Removes every catalogue entry that still has its final file or directory in one action.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -867,38 +906,79 @@ public sealed partial class ModelsViewModel : ObservableObject
 
         var freed = 0L;
         var removed = 0;
+        var removedIncomplete = false;
         var skipped = new List<string>();
+        var downloading = new List<string>();
+        var failures = new List<string>();
+        var attempted = new List<ModelViewModel>();
 
-        foreach (var model in Models.Where(m => m.IsInstalled).ToList())
+        foreach (var model in Models.Where(m => m.HasStoredFiles).ToList())
         {
+            if (model.IsBusy)
+            {
+                downloading.Add(model.DisplayName);
+                continue;
+            }
+
             if (model.IsLoaded)
             {
                 skipped.Add(model.DisplayName);
                 continue;
             }
 
-            freed += model.Descriptor.TotalSizeBytes ?? 0;
-            if (_store.Remove(model.Descriptor))
-            {
-                removed++;
-            }
+            attempted.Add(model);
 
-            model.IsInstalled = false;
-            model.Progress = 0;
-            model.Status = "Not installed";
+            try
+            {
+                if (_store.Remove(model.Descriptor))
+                {
+                    removed++;
+                    freed += model.Descriptor.TotalSizeBytes ?? 0;
+                    removedIncomplete |= !model.IsInstalled;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Keep going: one locked entry must not prevent the other independent entries from
+                // being removed. Its declared size is not counted because the failed delete may
+                // have removed all, some or none of a multi-file entry.
+                failures.Add($"{model.DisplayName}: {exception.Message}");
+            }
         }
 
+        // The scan is the authority after both successful and partial recursive deletes. It also
+        // restores a failed entry to Installed instead of leaving the optimistic state the button
+        // used to publish.
+        Refresh();
         SyncActiveDiariser();
 
-        StatusMessage = removed == 0
-            ? "Nothing was removed."
-            : $"Removed {removed} {(removed == 1 ? "model" : "models")}, freeing about "
-              + $"{ByteSize.Describe(freed)}."
-              + (skipped.Count > 0
-                  ? $" {string.Join(" and ", skipped)} stayed, being loaded. Unload and try again."
-                  : string.Empty);
+        foreach (var model in attempted.Where(model => !model.IsInstalled))
+        {
+            model.Progress = 0;
+            model.Status = model.HasStoredFiles ? "Incomplete" : "Not installed";
+        }
 
-        Refresh();
+        var result = removed == 0
+            ? failures.Count > 0 ? "No models were fully removed." : "Nothing was removed."
+            : $"Removed {removed} {(removed == 1 ? "model" : "models")}"
+              + (removedIncomplete ? "." : $", freeing about {ByteSize.Describe(freed)}.");
+
+        if (skipped.Count > 0)
+        {
+            result += $" {string.Join(" and ", skipped)} stayed, being loaded. Unload and try again.";
+        }
+
+        if (failures.Count > 0)
+        {
+            result += $" Could not remove {string.Join("; ", failures).TrimEnd('.')}.";
+        }
+
+        if (downloading.Count > 0)
+        {
+            result += $" {string.Join(" and ", downloading)} stayed, being downloaded. Cancel and try again.";
+        }
+
+        StatusMessage = result;
     }
 
     /// <summary>
@@ -923,6 +1003,7 @@ public sealed partial class ModelsViewModel : ObservableObject
         foreach (var model in Models)
         {
             model.IsInstalled = _store.IsInstalled(model.Descriptor);
+            model.HasStoredFiles = HasStoredFiles(_store, model.Descriptor);
         }
 
         var onDisk = _store.ListInstalled(_catalog);
@@ -977,11 +1058,16 @@ public sealed partial class ModelsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSideloaded));
         OnPropertyChanged(nameof(SideloadedSummary));
         OnPropertyChanged(nameof(UninstallNotice));
-        // Downloads and removals update IsInstalled before reaching this shared refresh path.
-        // A button bound to Command needs its own invalidation even when that value is unchanged
-        // by the scan, or its enabled state remains the one from when the window opened.
+        // A button bound to Command needs its own invalidation even when the storage state is
+        // unchanged by the scan, or its enabled state remains the one from when the window opened.
         OnPropertyChanged(nameof(CanRemoveAll));
         RemoveAllCommand.NotifyCanExecuteChanged();
+    }
+
+    private static bool HasStoredFiles(IModelStore store, ModelDescriptor model)
+    {
+        var path = store.PathFor(model);
+        return model.IsMultiFile ? Directory.Exists(path) : File.Exists(path);
     }
 
     private long _installedBytes;
@@ -1226,18 +1312,30 @@ public sealed partial class ModelsViewModel : ObservableObject
             return;
         }
 
-        // A folder is deleted with everything in it, exactly as removing a multi-file entry is, and
-        // through a separate store method: the file path takes bare file names and refuses a
-        // directory, which is what left a retired diariser's 332 MB unreachable from here.
-        var removed = file.IsDirectory
-            ? _store.RemoveSideloadedDirectory(file.Name, _catalog)
-            : _store.RemoveSideloaded(file.Name, _catalog);
+        try
+        {
+            // A folder is deleted with everything in it, exactly as removing a multi-file entry is,
+            // and through a separate store method: the file path takes bare file names and refuses
+            // a directory, which is what left a retired diariser's 332 MB unreachable from here.
+            var removed = file.IsDirectory
+                ? _store.RemoveSideloadedDirectory(file.Name, _catalog)
+                : _store.RemoveSideloaded(file.Name, _catalog);
 
-        StatusMessage = removed
-            ? $"Deleted {file.Name} ({file.SizeLabel})."
-            : $"{file.Name} could not be deleted. It may be in use, or already gone.";
-
-        Refresh();
+            StatusMessage = removed
+                ? $"Deleted {file.Name} ({file.SizeLabel})."
+                : $"{file.Name} could not be deleted. It may be in use, or already gone.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            StatusMessage = $"{file.Name} could not be deleted: {exception.Message}";
+        }
+        finally
+        {
+            // Directory.Delete can fail after deleting part of a tree. Rebuild the list so the row
+            // and its measured size describe what remains instead of what was present before the
+            // click.
+            Refresh();
+        }
     }
 
     private static string Describe(ModelInstallProgress progress)

@@ -27,8 +27,9 @@ so.
 
 ```bash
 dotnet build Uindosill.slnx -c Release   # must be 0 warnings: TreatWarningsAsErrors is on
-dotnet test  Uindosill.slnx -c Release   # 1882 tests, no weights, no display, no network
+dotnet test  Uindosill.slnx -c Release   # 1887 tests, no weights, no display, no network
 python3 scripts/check-diariser-auto.py   # what the diariser's `auto` elects; CI runs it too
+python3 scripts/check-python-launch.py   # isolated package precedence and UTF-8; no weights
 python3 scripts/check-test-counts.py     # the counts above, against the run that just happened
 ```
 
@@ -36,7 +37,12 @@ That last line is why the number in the comment can be trusted, and CI runs it t
 the test count, run it** — it prints what every document should say, and checks all three documents
 that quote a count together.
 
-The diariser line is the sidecar's only guard, since there is no Python suite: **run it after any
+The Python launch check drives the same bootstrap embedded in the host with a real interpreter
+and synthetic packages. CI runs it in isolated mode; `bundle-python.ps1` also runs it against the
+assembled embedded interpreter, whose `._pth` ignores `PYTHONPATH`. An existing interpreter can
+be checked with `--interpreter <python.exe>` without changing its installation.
+
+The diariser line guards provider election without loading weights: **run it after any
 change to the election in `python/uindosill_engines/diariser/pyannote_engine.py`** (`AUTO_ORDER`,
 `resolve_auto`), because it decides which arithmetic unit a user's diarisation runs on; the
 check must be run manually when that file is edited. Nothing in CI or the suite parses
@@ -47,7 +53,7 @@ exit code is the number of errors, each named:
 pwsh -NoProfile -Command '$e = @(); Get-ChildItem scripts/*.ps1 | ForEach-Object { $t = $err = $null; [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null; $e += $err }; $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }; exit $e.Count'
 ```
 
-**Nine of those 1882 tests skip themselves.** Two are platform-specific: the Media Foundation
+**Nine of those 1887 tests skip themselves.** Two are platform-specific: the Media Foundation
 extension list, and the uninstall cleanup's link test, which needs developer mode on Windows and so
 skips on Windows and runs on Linux. The other seven are asked for by name, because a count that
 depends on what is installed cannot be written into a document CI checks:

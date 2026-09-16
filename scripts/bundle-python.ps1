@@ -28,11 +28,10 @@
         and a wheel cache in a directory a user receives — the packages are installed from the
         *host* interpreter with `pip install --target`. Nothing pip-shaped ends up in the bundle.
 
-    **A `._pth` interpreter ignores `PYTHONPATH` entirely**, which the host sets to the package root.
-    That is not a bug here and is worth knowing before it looks like one: a shipped bundle should run
-    the code it shipped with, and `.` in the `._pth` is what finds `uindosill_engines` beside
-    `python.exe`. What it means is that `UINDOSILL_PYTHON_PACKAGES` only bites on a *venv*
-    interpreter, which is the development case it exists for — see `PythonRuntime`.
+    **A `._pth` interpreter ignores `PYTHONPATH` entirely.** The host therefore runs the embedded
+    `sidecar_bootstrap.py` in isolated mode, passing the resolved package roots as arguments. It
+    inserts an optional CUDA overlay before the engine package root and the bundled site-packages.
+    This preserves isolation while allowing the selected overlay to replace the CPU packages.
 
     That second choice is why `-HostPython` must be the same feature version as the embeddable one.
     `--target` resolves wheels for the interpreter running pip, so a 3.13 host would fetch `cp313`
@@ -42,9 +41,9 @@
     is a release job that fails for a reason nobody can read.
 
     **It is verified by being run.** The last step starts the bundle exactly as the .NET host does —
-    `python.exe -u -m uindosill_engines` with `PYTHONPATH` set — and completes the handshake over
-    the real protocol. A bundle that assembles but cannot answer `hello` is a bundle that fails on
-    a user's machine instead of here.
+    the isolated bootstrap and explicit package roots — and completes the handshake over the real
+    protocol. A separate fixture checks external overlay precedence with that same interpreter.
+    A bundle that cannot import the selected packages or answer `hello` fails here.
 
     **What it does not do is choose a size.** Measured 2026-08-21 the package set is about 1.3 GB
     on disk, which is not the ~0.55 GB the migration budgeted: the estimate counted
@@ -340,10 +339,11 @@ Write-Step 'Handshake'
 $handshake = @'
 import json, os, subprocess, sys
 root = sys.argv[1]
+bootstrap = open(sys.argv[3], encoding="utf-8").read()
 child = subprocess.Popen(
-    [os.path.join(root, "python.exe"), "-u", "-m", "uindosill_engines"],
+    [os.path.join(root, "python.exe"), "-I", "-X", "utf8", "-u", "-c", bootstrap, root],
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    env={**os.environ, "PYTHONPATH": root, "PYTHONIOENCODING": "utf-8"},
+    env=os.environ,
     text=True, encoding="utf-8")
 out, err = child.communicate('{"id":1,"op":"hello"}\n{"id":2,"op":"shutdown"}\n', timeout=120)
 lines = [l for l in out.splitlines() if l.strip()]
@@ -376,9 +376,14 @@ if ($protocolSource -notmatch '(?m)^PROTOCOL_VERSION\s*=\s*(\d+)\s*$') {
 $expectedProtocol = [int] $Matches[1]
 Write-Note "expecting protocol $expectedProtocol"
 
-$reply = & $HostPython $handshakeScript (Resolve-Path -LiteralPath $Destination).Path $expectedProtocol
+$bootstrapPath = Join-Path $repo 'src/Parakeet.Engine.Python/sidecar_bootstrap.py'
+$reply = & $HostPython $handshakeScript (Resolve-Path -LiteralPath $Destination).Path $expectedProtocol $bootstrapPath
 if ($LASTEXITCODE -ne 0) { throw "The assembled bundle did not answer the handshake." }
 Write-Note $reply
+
+Write-Step 'Isolated package precedence'
+& $HostPython (Join-Path $repo 'scripts/check-python-launch.py') --interpreter (Join-Path $Destination 'python.exe')
+if ($LASTEXITCODE -ne 0) { throw "The embedded interpreter did not honor the selected package roots." }
 
 $size = (Get-ChildItem -LiteralPath $Destination -Recurse -File | Measure-Object -Property Length -Sum).Sum
 $files = @(Get-ChildItem -LiteralPath $Destination -Recurse -File).Count

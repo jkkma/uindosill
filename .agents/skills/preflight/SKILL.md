@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: Run the working agreement's checks in order - the Release build, the tests with a TRX log, the test-count guard and its self-check, the diariser election guard, a parse of every scripts/*.ps1, and a check that the reminder hook still mirrors AGENTS.md - and report each result exactly as it came out. Invoke before a commit or a handoff.
+description: Run the working agreement's checks in order - the Release build, the tests with a TRX log, the test-count guard and its self-check, the diariser election and isolated Python launch guards, a parse of every scripts/*.ps1, and a check that the reminder hook still mirrors AGENTS.md - and report each result exactly as it came out. Invoke before a commit or a handoff.
 ---
 
 # Preflight: every check the agreement names, in order, reported as it came out
@@ -43,7 +43,9 @@ the output is captured whole.
    a count to the run that just happened; the second proves the guard's own rules still fire. If
    the first fails it prints what each document must say — report that text; do not edit the
    documents unless asked.
-4. **Diariser election** — `python3 scripts/check-diariser-auto.py`. Needs nothing installed.
+4. **Python guards** — `python3 scripts/check-diariser-auto.py` and
+   `python3 scripts/check-python-launch.py`. The latter drives isolated Python with synthetic
+   packages to check import precedence and UTF-8. Neither needs model weights.
 5. **Scripts parse** — the one-liner in AGENTS.md's "Building and testing" section, copied from
    there because that is the ground truth; its exit code is the number of parse errors, each
    named.
@@ -77,6 +79,7 @@ the output is captured whole.
 | Counts (`--no-run`) | ok, or the sentence it printed | |
 | Counts (`--self-check`) | ok, or the rule that did not fire | |
 | Diariser election | its last line | |
+| Python launch | CPU and CUDA fixture precedence, isolation and UTF-8 | |
 | Scripts parse | 0 errors, or each named | |
 | Hook mirrors AGENTS.md | matched, or the odd path out | |
 | Codex hooks | passed, or each failed regression check | |

@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Parakeet.Engine.Python.Tests" />
+    <EmbeddedResource Include="sidecar_bootstrap.py" LogicalName="Parakeet.Engine.Python.sidecar_bootstrap.py" />
   </ItemGroup>
 
   <!--

@@ -216,11 +216,13 @@ behind are swept, once per process, before the first load. The two engines *coul
 constructor takes a sidecar — but neither the command line nor the window passes one, so a run with
 both opt-ins on has two children and two sets of resident weights.
 
-**It is `python -m uindosill_engines`, and the interpreter is the bundled one.** Deliberately not
+**An isolated bootstrap runs `uindosill_engines`, and the interpreter is the bundled one.** Deliberately not
 whatever `python` resolves to on PATH — picking that up is how a working install turns into a
-support thread about somebody's conda environment. The package root reaches the child through
-`PYTHONPATH` rather than through a working directory, because the host's working directory is the
-user's and arbitrary, and which code runs must not depend on it. `UINDOSILL_PYTHON` and
+support thread about somebody's conda environment. The host passes its embedded
+`sidecar_bootstrap.py` with `-I -X utf8 -u -c`, followed by the resolved package roots as separate
+arguments. The bootstrap puts the optional CUDA overlay ahead of the engine package root and
+bundled site-packages. It works with the embedded interpreter's `._pth` isolation, which ignores
+`PYTHONPATH`, and does not add the working directory or user site. `UINDOSILL_PYTHON` and
 `UINDOSILL_PYTHON_PACKAGES` override each half for development and for the measurement harnesses,
 and the resolution records that an override was used: a figure taken against an unknown interpreter
 is a figure nobody can reproduce.
@@ -390,7 +392,7 @@ retired — see `docs/UNPROVEN.md`.
 
 **`tools/FakeSidecar` is a child process that speaks the line protocol from a script on disk.** A
 test writes `script.json` into a temporary directory and hands that directory over as the package
-root, which makes `PYTHONPATH` a private channel from one test to one child: no parent-process
+root as the final launch argument, a private channel from one test to one child: no parent-process
 environment is touched, so nothing races and no test has to be serialised against another.
 
 What it will not do is interpret. It emits the script's lines verbatim, with only `{id}`

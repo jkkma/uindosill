@@ -22,7 +22,7 @@
     "is why these are read off the artefact that shipped rather than assumed to match a rebuild.",
     "",
     "The version is the bundle's own torch pin in its CUDA build. It must stay that way: the pack",
-    "shadows the bundle's torch by sitting ahead of it on PYTHONPATH, and a pack whose version has",
+    "shadows the bundle's torch by sitting ahead of it on sys.path, and a pack whose version has",
     "drifted from python/requirements-bundle.txt would silently run a decode the translator's",
     "8,149-sentence gate does not describe. CudaPackInstaller checks the pair at install."
   ],
