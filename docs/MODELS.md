@@ -7,8 +7,8 @@ folder redirection and roaming profiles keep working. `UINDOSILL_MODELS_DIR` ove
 Never the install directory: a **downloaded** model there is destroyed by every update, which turns
 each patch into a 670 MB re-download.
 
-**One of the four ships inside the installer instead**, and it is a different thing from a download:
-speech detection (2.2 MiB, MIT) sits in `models/` beside the executable, so that opt-in is live on a
+**Speech detection ships inside the installer**, and it is a different thing from a download:
+its model (2.2 MiB, MIT) sits in `models/` beside the executable, so that opt-in is live on a
 fresh install rather than dead until somebody visits a tab. It is replaced with the application on
 every update and removed with it on uninstall, which is right — it belongs to the build, not to the
 user.
