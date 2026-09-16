@@ -13,12 +13,12 @@ accented audio and at least two files over ten minutes. Record RTF, cold load, p
 long-file WER at each quantisation against f16.
 
 **Status:** the first half is done. A 30-second clip decoded correctly on Windows x64 against
-parakeet.cpp v0.5.0 and `tdt-0.6b-v3-f16`, at RTF 0.10 — the full record is in `docs/UNPROVEN.md`.
+parakeet.cpp v0.5.0 and `tdt-0.6b-v3-f16`, at CPU RTF 0.10 — the full record is in `docs/UNPROVEN.md`.
 That settles the question this phase exists to answer: the engine produces correct text through
 these bindings.
 
 The timing and memory half is now done, though not through `bench`. Three real files were measured
-end to end — 30 s, 10 min and 2 h 55 m — giving RTF at three durations (0.1005, 0.0829, 0.0790),
+end to end on the CPU — 30 s, 10 min and 2 h 55 m — giving RTF at three durations (0.1005, 0.0829, 0.0790),
 peak working set at two (2,379 MB and ~2,950 MB), and a working-set profile across three hours
 showing memory peaks mid-run and falls. `scripts/measure-transcribe.ps1` is that harness.
 
@@ -97,7 +97,7 @@ the resolver that turns `--vk-disable-bf16` and its opposite `--vk-bf16` into an
 `CommandLineParser`, 7 holding the fallback line's timing and wording against a stub engine, 6 driving
 `RunOneAsync`, `Report` and the translate verb's file loop directly with a labeller or translator
 made to fail or refuse and a batch made to cancel, and 1 on the anomaly report, which is computed
-before the translation pass — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the RTF 0.10 figure above came
+before the translation pass — because no invocation can reach what they check). `bench` has not yet been pointed at real weights, so the CPU RTF 0.10 figure above came
 from a plain `transcribe` run rather than from a warmed-up timed sweep.
 
 One deviation from the plan worth recording: **`bench` does not sweep thread counts.** The founding
@@ -811,7 +811,7 @@ clears in 23 of 24 languages, one clears, and one is unperformed. `docs/UNPROVEN
 defaulted to `ComputeBackend.Vulkan` unconditionally and persisted nothing, so the CUDA channel —
 818 MB against the default channel's 82 MB, chosen deliberately — started on Vulkan every time, and
 a user who noticed had to change the dropdown on every launch. Against the desktop's measured tiers
-that is RTF 0.0110 where 0.0064 was available, given away twice over.
+that is Vulkan RTF 0.0110 where CUDA RTF 0.0064 was available, given away twice over.
 
 **The default now comes from what is on disk, which is the honest signal.** `cuda` is a directory
 the default channel does not ship, so its presence means somebody went and got it —

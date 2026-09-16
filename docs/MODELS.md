@@ -92,12 +92,18 @@ separate question and `docs/UNPROVEN.md` holds it.
 | Entry | Bytes | SHA-256 |
 |---|---|---|
 | `tdt-0.6b-v3-f16` | 1,441,046,400 | `8ba47343…fc5abb22` |
+| `parakeet-tdt-ctc-0.6b-ja-q8_0` | 927,021,280 | `e4de4f3e…a52dec8b` |
 | `opus-mt-tc-bible-big-mul-en-fp32` | nine files | per file; see `models.json` |
+| `fugumt-ja-en-fp32` | nine files | per file; see `models.json` |
 | `silero-vad-v5.1.2` | 2,327,524 | `2623a295…5bdd788f` |
 | `pyannote-speaker-diarization-community-1` | five files, 32,821,421 | per file; see `models.json` — four from upstream LFS `oid`s, `config.yaml` from its git blob id (see above) |
+| `gemma-4-12b-it-qat-ud-q4-k-xl` | two files | per file; see `models.json` |
+| `gemma-4-26b-a4b-it-ud-q4-k-xl` | two files | per file; see `models.json` |
+| `gemma-4-e4b-it-qat-ud-q4-k-xl` | two files | per file; see `models.json` |
 
-**Five entries, and all five are unquantised.** The catalogue offered f16 plus four quantisations
-of it until 2026-08-20, when the four were withdrawn — a product decision recorded in
+**The European recogniser remains f16; the Japanese recogniser and Gemma entries are quantised.**
+The European catalogue offered f16 plus four quantisations of it until 2026-08-20, when the four
+were withdrawn — a product decision recorded in
 `docs/PHASES.md`, not a quality finding. Their digests are kept here because a pin that was once
 shipped is worth not re-deriving, and because the measurements below are about these exact files:
 
@@ -131,9 +137,10 @@ two until 2026-08-27, and the other was the interesting one: `sortformer-4spk-v2
 bytes, `cc5d606a…52c0062a`, under the **NVIDIA Open Model License** — the one entry in this catalogue
 that was not CC BY 4.0. That licence was revocable where CC BY is not, wanted a copy of its Agreement
 rather than a link, and carried a use restriction about biometric processing. It was retired to
-`attic/sortformer/` with its weights, the Agreement copy went with it, and **this catalogue now has
-no entry under any licence but CC BY 4.0, Apache-2.0 and MIT**. `docs/LICENSING.md` keeps the reading
-of the retired one, and `attic/README.md` says what left with it.
+`attic/sortformer/` with its weights, and the Agreement copy went with it. **The current catalogue
+uses CC BY 4.0, CC BY-SA 4.0, Apache-2.0 and MIT**; FuguMT Japanese translation added the ShareAlike
+licence on 2026-09-04. `docs/LICENSING.md` keeps the reading of the retired one and the FuguMT terms,
+and `attic/README.md` says what left with it.
 
 **Its `quantisation` says `fp32` and nobody has opened its files to check.** The paragraph that stood
 here belonged to the Sortformer export and went to `attic/sortformer/` with it: on that entry the
@@ -186,7 +193,7 @@ what it costs and what it has been measured on** are in `docs/PHASES.md` and `do
 under 2026-08-23 and 2026-09-04; the short form is that it cuts a recording at pauses the energy
 gate cannot hear under music, that it is not free — its own inference was 44% of a Vulkan pass and
 9.5% of a CPU one on the ten-minute podcast, and on eleven hours of earnings calls the whole pass
-took 0.0350 real-time against 0.0201 without it — and that what it has been measured on is one
+took Vulkan RTF 0.0350 against 0.0201 without it — and that what it has been measured on is one
 documentary, one podcast and that eleven-hour corpus, on which it scored 9.71% against `--no-vad`'s
 8.53%. The material it exists for, speech under music, has never been scored against a reference. Installed, it is the default in the app and on the command line alike; `--vad energy`
 asks for the gate, and a transcript's JSON names what cut it (`speechDetector`).
@@ -227,10 +234,10 @@ Every ASR entry and the speech detector are a single file, and that shape is unc
 (**The diariser was on that list until 2026-08-27**, when the single-`.onnx` engine was retired; the
 pipeline that replaced it is a directory.)
 
-An entry may instead list several. **Two do** — the ONNX translation route, which is nine files
-since 2026-08-20: two graphs, two configs and a five-file tokenizer; and the diarisation entry, which
-is five files in three subdirectories since 2026-08-27 and is the reason `directory` exists beside
-`fileName`. The shape shipped in
+An entry may instead list several. Both ONNX translation entries have nine files each; the
+diarisation entry has five files in three subdirectories; and each Gemma entry has two files.
+The diarisation entry, added on 2026-08-27, is the reason `directory` exists beside `fileName`.
+The shape shipped in
 2026-08-20's earlier work with nothing using it, which is the same order the task discriminator and
 the diarisation entry arrived in and for the same reason: the code that has to understand a shape
 ships before the entry that has it, so no build can meet one it does not know. The real entry looks
