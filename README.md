@@ -1,391 +1,201 @@
-﻿<p align="center">
-  <img src="brand/uindosill-mark.png" alt="Uindosill" width="128">
+<p align="center">
+  <img src="brand/uindosill-mark.png" alt="Uindosill logo" width="112">
 </p>
 
 <h1 align="center">Uindosill</h1>
 
 <p align="center">
-  <strong>Local speech-to-text for Windows.</strong><br>
-  Drop in audio or video — get a timestamped transcript, optional speaker labels,<br>
-  an English translation, and a chat panel that answers questions about the recording<br>
-  and cites the moment each answer came from.
+  <strong>Turn recordings into transcripts you can search, translate and question.</strong><br>
+  A Windows desktop app and CLI that run speech recognition and language models on your PC.
+</p>
+
+<p align="center">C# / .NET 10 &nbsp;·&nbsp; Avalonia &nbsp;·&nbsp; Native interop &nbsp;·&nbsp; Python sidecar</p>
+
+<p align="center">
+  <a href="https://github.com/jkkma/uindosill/releases/tag/v1.0.0"><strong>Download 1.0</strong></a>
+  &nbsp;·&nbsp; <a href="#build-and-try-the-pipeline">Try the pipeline</a>
+  &nbsp;·&nbsp; <a href="docs/ARCHITECTURE.md">Architecture</a>
+  &nbsp;·&nbsp; <a href="#documentation">Documentation</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/jkkma/uindosill/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jkkma/uindosill/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4">
-  <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-0078D4">
-  <img alt="Source licence" src="https://img.shields.io/badge/source-MIT-green">
-  <img alt="Video build licence" src="https://img.shields.io/badge/builds%20with%20video-GPLv2%2B-green">
+  <a href="https://github.com/jkkma/uindosill/releases/tag/v1.0.0"><img alt="Stable release 1.0.0" src="https://img.shields.io/badge/release-1.0.0-665C91"></a>
 </p>
 
----
+## From a recording to something useful
 
-## What it does
+Drop in audio or video, or paste a link. Follow the transcript alongside playback, export subtitles,
+or ask a question and jump back to the passage behind the answer.
 
-| | |
+| Capability | What you get |
 |---|---|
-| **Transcribe** | Audio and video files, locally, with NVIDIA Parakeet TDT 0.6B v3 through [`parakeet.cpp`](https://github.com/mudler/parakeet.cpp) — 25 European languages, on CPU, Vulkan or CUDA. Seven output formats: `txt`, `md`, `srt`, `vtt`, word-timed `vtt-words` for karaoke-style highlighting, `json` with timestamps, and `rttm`. |
-| **Japanese** | A second recogniser, opt-in and not installed by default: `parakeet-tdt_ctc-0.6b-ja` (884 MiB, CC BY 4.0), picked on the Models tab, on the same native and the same three backends. It punctuates. **Measured here on 2026-09-04: 5.54 characters in 100 wrong** on 485 read-speech recordings from FLEURS, punctuation removed before scoring, at q8_0 on Vulkan with the neural speech detector — and **9.15 in 100 with the punctuation kept**, because the punctuation it adds is wrong about as often as the characters are. Read speech in a quiet room is the easy case and not your recordings. NVIDIA publishes about 6 in 100 for this model under their own recipe, which is a different corpus, precision and runtime, so the two numbers do not belong side by side. **Translating Japanese into English is a second opt-in download**: `fugumt-ja-en` (361 MiB, CC BY-SA 4.0), exported to ONNX by this project and picked for you the moment the Japanese recogniser is — the European translator cannot read Japanese and this one reads nothing else. **Measured here on 2026-09-04: chrF++ 52.53** over the 321 FLEURS ja_jp sentences at beam 6 on the CPU, six points above the European translator on the same sentences, and **48.46 through the recogniser's own transcripts**, a cascade cost of four points. No person has rated its English, and the translation gate's second criterion stays unperformed; [UNPROVEN.md](docs/UNPROVEN.md) has the rest. Subtitles are broken the Japanese way — 13 full-width characters a line, two lines, under kinsoku shori, so no line opens on a 。 or a 、 — with 13 taken from Netflix's Japanese style guide and exposed as a setting, because it is somebody's house style and not a measured universal. A cue is also held into any **silence** that follows it until it can be read at 4 characters a second — where speech follows immediately there is nothing to take, and the rate stays what the speaker set, which no way of cutting the text can change. What word-timed `vtt-words` cannot do is follow along: nothing in the transcript marks where one Japanese word ends and the next begins, so those cues carry no word timings at all rather than one span over a whole sentence. [PHASES.md](docs/PHASES.md) has why. |
-| **Paste a link** | A URL behaves like a file: the audio track is downloaded and queued. On the Ask tab the picture streams from the link rather than landing on disk, so a three-hour video costs megabytes instead of gigabytes. |
-| **Label who spoke** | Opt-in, off by default. `pyannote/speaker-diarization-community-1` adds `Speaker 1:` to every format and unlocks `rttm`. It clusters rather than tracks, so there is **no ceiling on how many voices** it can separate — and it has been scored on **one meeting**, not on a corpus, which the product says rather than leaving you to assume. |
-| **Translate to English** | Opt-in. A Marian checkpoint exported here to ONNX, decoded at beam 6. The English arrives *beside* the transcript rather than instead of it, sentence for sentence, with the same speakers on both sides. |
-| **Tidy up the transcript** | Opt-in, off by default. A small language model (Gemma 4 E4B, 3.9 GiB) takes fillers, stutters and false starts out of the lines *beside* the recogniser, a few at a time, and every line is held to a delete-only contract against what was spoken: a rewrite that changes or adds a word is refused and the spoken line kept, the one exception a word the recogniser itself doubted. Deleting is what it is for, and since 2026-09-03 there is a bound on how much: a rewrite that drops more than half of a line, or more than four words in a row, is refused as well — without one, on the call that found this, the model read a repeated word as a stutter and took the clause between out of a line, and a whole sentence out of another; the two numbers were fitted on that call and no other. The tidied version sits beside the transcript with the spoken words' timings, and never replaces it. Measured on one laptop and one desktop against eleven hours of human transcripts: 3.4 to 3.5 points worse against the style that writes every stutter down, 2.9 better against the edited style, and the same words are the reason for both. Those figures were measured before the joined run and the ceiling, when one request carried one line; the arrangement that now ships has not been scored on the corpus. What it still owes is in [PHASES.md](docs/PHASES.md). |
-| **Find the speech** | Silero VAD (2.2 MiB, MIT, on the CPU) cuts on pauses in speech rather than on quiet, so narration over a music bed no longer comes out in thirty-second blocks. Default wherever its model is installed; `--vad energy` asks for the loudness gate on purpose. **On eleven hours of English earnings calls it cost accuracy**, measured 2026-09-04: 9.71% against `--no-vad`'s 8.53% on the verbatim transcripts, worse on all ten calls, at a real-time factor of 0.0350 against 0.0201 **on Vulkan**. A separate run on the same corpus and backend put the loudness gate at 10.21%, so on that corpus the detector beats the gate and loses to not segmenting at all. The material it was adopted for — speech over a music bed — has never been scored against a reference in any configuration, and one corpus of continuous speech cannot stand for it, so no default changed. [PHASES.md](docs/PHASES.md) has what that would take. |
-| **Ask the transcript** | A chat panel beside the text. A local `llama-server` answers; topic questions include the surrounding discussion, and long summaries read consecutive sections before combining cited notes. The model cites segment ids the application resolves to times — it never writes a timestamp of its own — a claim it cannot anchor renders as unresolved, and every answer says it was generated, not transcribed. |
-| **Play it back** | The recording plays beside its transcript, one clickable cue per sentence, the spoken line lighting up as it goes, with a find box that marks every mention and steps between them. Video draws its picture too, through a vendored libmpv. |
+| **Transcription** | Timestamped speech recognition through [parakeet.cpp](https://github.com/mudler/parakeet.cpp), on CPU, Vulkan or CUDA. The default model covers 25 European languages; Japanese is a separate, optional model. |
+| **Playback and search** | Clickable transcript cues, the current line highlighted during playback, a find box, and video through libmpv. Links queue the audio for transcription and stream the picture on the Ask tab. |
+| **Speaker labels and translation** | Optional pyannote speaker labels and Marian / FuguMT English translations, displayed beside the original transcript with its timing preserved. |
+| **Questions with citations** | A local llama-server answers questions and summarises the recording. Citations resolve transcript segment IDs to times in application code; unresolved references stay visibly unresolved. |
+| **A separate tidied copy** | Optional removal of fillers and false starts. A checked edit contract rejects unsupported rewrites and excessive deletions, while preserving the original transcript. |
+| **Useful exports** | Plain text, Markdown, SRT, VTT, word-timed VTT, timestamped JSON and speaker-turn RTTM. Translation does not carry word timings; Japanese word-timed VTT has no word tags. |
 
-Speaker labels and translation run in a Python interpreter that ships *inside* the application —
-first packaged in `v1.0.0-rc.3` on 2026-08-23. A build from source carries none, and the code says
-so beside those two opt-ins rather than failing when one is started.
+Generated answers can omit topics or misstate details. Citations make an answer easier to check;
+they do not establish that it is correct. Model quality and its measured limits are recorded in
+[UNPROVEN.md](docs/UNPROVEN.md).
 
-## Measured
+## Try version 1.0
 
-**Speed** — real-time factor, lower is faster. Ten minutes of podcast, `tdt-0.6b-v3-f16`,
-parakeet.cpp v0.5.0. Every figure is the *whole* pass: container decode, resampling and
-segmentation run inside the timed stretch, serialised with the model.
+**Windows x64. Choose the standard installer unless you specifically want NVIDIA CUDA.**
 
-| Machine | CPU | Vulkan | CUDA |
-|---|---:|---:|---:|
-| Desktop — 16-core x64, RTX 5080 | 0.0818 | 0.0110 | **0.0064** |
-| Laptop — Ryzen AI 9 365, Radeon 880M | 0.1417 | 0.0349 | — |
+| Download | Choose it for |
+|---|---|
+| [**Standard installer**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/UindosillDesktop-win-Setup.exe) | Desktop app, CPU and Vulkan backends, and bundled Python. Vulkan supports AMD, Intel and NVIDIA GPUs. |
+| [**CUDA installer**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/UindosillDesktop-win-cuda-Setup.exe) | The same app with NVIDIA's CUDA runtime added. |
+| [**Command-line ZIP**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/uindosill-cli-win-x64.zip) | Batch transcription, subtitle exports, diagnostics and measurement commands. Unzip and add it to your PATH. |
 
-The same ten minutes produced 98 segments and 1,573 words on all three desktop backends, with no
-duplicated or dropped word at any segment join. The Vulkan figure is steady-state — a *first* run
-on a fresh machine spends about seven extra seconds compiling shaders inside what looks like
-decode time. On the laptop, Vulkan does not load the model at all unless bf16 is disabled first,
-an upstream defect in how the driver's bf16 support is requested; that workaround is now the
-default, measured at 0.3% cost and byte-identical transcripts on the RTX 5080, and `--vk-bf16`
-turns it back off.
+1. Install the app. **The installers are unsigned**; Windows will show an unknown-publisher warning.
+2. Open **Models** and download a speech-recognition model. Other models are optional;
+   speaker labelling also requires a Hugging Face account, an accepted user agreement and a token.
+3. Add a recording, choose the outputs you need, and start transcription.
 
-**Accuracy**
+Speech detection is included. Recognition, translation, speaker-labelling and Gemma weights are
+separate downloads. Local inference needs no cloud AI service; model downloads, pasted links and
+updates use the network. The startup update check can be disabled in **Updates**.
 
-| Task | Result | Corpus | Beside it |
-|---|---|---|---|
-| Word error rate | **10.21%** (f16, CUDA, **energy gate**) | Earnings-22 subset — 11 h of accented English earnings calls, human transcripts | 13.40% against the same corpus's non-verbatim transcript style; all five quantisations land within **0.08 points** of one another. This figure predates the neural speech detector, which has been the default since 2026-08-23 and scores **9.71%** on the same corpus and model — and the gate reproduces 10.21% on both machines, so that gap is the detector's and not the backend's |
-| Diarisation error rate | **14.38%** (collar 0.25, overlap scored) — **one meeting, not a corpus** | AMI `ES2004a`, 17.5 min | 18.76% at collar 0. The engine that carried this project's 16.33% over the whole AMI test set was retired on 2026-08-27; see below |
-| Translation | chrF++ clears its per-language bar in **23 of 24** languages, with **zero collapses** | FLEURS `test` — all 8,149 sentences, beam 6 | Margins over each language's floor run +28.15 to +60.53, median +42.76; Slovak misses by 0.74 |
+Downloaded models live in `%LOCALAPPDATA%\Uindosill`, outside the application folder, and survive
+updates and reinstalls. Uninstall cleanup asks before removing them. Stable installations stay
+on stable releases and retain their standard or CUDA update channel.
 
-**The diarisation figure is one meeting rather than a corpus, and that is a change rather than an
-omission.** Until 2026-08-27 speaker labelling was NVIDIA's Streaming Sortformer, which scored
-**16.33%** DER over the whole AMI test set — sixteen meetings — against a best published figure of
-18.8% on the same audio, at 16.3324% on the CPU and 16.3319% on WebGPU, which is why WebGPU was
-chosen automatically over CUDA's faster but divergent 16.1021%. That engine was shelved to
-`attic/sortformer/`, and **not one of those numbers describes what ships now**. The pipeline that
-replaced it has been scored on one of those sixteen meetings, and a single meeting is not a corpus:
-the two figures must not be set beside each other. `docs/UNPROVEN.md` records what a comparable
-number would take, and `docs/PHASES.md` records that the speaker gate is unmet until it exists.
+See the [release guide](https://github.com/jkkma/uindosill/releases/tag/v1.0.0) for the optional
+managed CUDA download for speaker labelling, CLI Python setup, and the files used by the updater.
 
-The translation decode is still held to that standard: it reproduced all 8,149 recorded hypotheses across 24 languages character
-for character.
+## Engineering worth exploring
 
-Slovak is the single language the translation gate fails, by 0.74 of a chrF++ point against
-margins that reach +60 — and it is the one language absent from the model card's source list, so
-the miss was predicted from the record before it was measured. The gate's other criterion, a human
-adequacy rating, was **declined with finality on 2026-08-23**: v1.0 ships with the gate unpassed by
-its own ratified definition rather than with the definition rewritten to fit. Both are the same
-choice, and it is why the 23-of-24 figure never travels without them.
+The application integrates upstream models; the engineering here is the pipeline around them,
+the boundaries between runtimes, and the checks that keep plausible output from hiding a failure.
 
-**Two machines and two ten-minute files is not a benchmark.** Every figure above carries its
-backend, its corpus and its caveats in **[UNPROVEN.md](docs/UNPROVEN.md)** — read that before
-quoting any number from this repository.
+| Design decision | Where it shows up |
+|---|---|
+| **Keep the domain independent** | [`Parakeet.Core`](src/Parakeet.Core) owns contracts and pure logic. MSBuild rejects both NuGet and project dependencies in Core; CI deliberately injects a dependency to verify the guard. |
+| **Make long recordings testable** | [`StreamingSegmenter`](src/Parakeet.Core/Segmentation/StreamingSegmenter.cs) cuts on pauses and bounds segment length. The fake engine uses the real pipeline, so parsing, segmentation, cancellation and formatting can be exercised without weights. |
+| **Treat process boundaries as contracts** | [`Parakeet.Engine.Python`](src/Parakeet.Engine.Python) owns interpreter resolution, JSON-lines IPC and child lifetime. An independent [`FakeSidecar`](tools/FakeSidecar) exercises malformed replies, process death and cancellation. Translation policy stays in C#. |
+| **Resolve evidence in code** | [`CitationValidator`](src/Parakeet.Core/Answers/CitationValidator.cs) resolves references against the transcript. [`TidyContract`](src/Parakeet.Core/Tidying/TidyContract.cs) checks edits against spoken words and bounds deletions. |
+| **Verify what gets shipped** | The release process checks pinned downloads, package contents, generated third-party notices, updater feeds and uploaded asset hashes. The [workflow](.github/workflows/release.yml) builds the packages and produces their verification report. |
 
-## The rule this project runs on
+### Architecture and stack
 
-> **Every claim is either measured or explicitly marked unproven.**
+The runtime flow below uses engine adapters that implement Core's contracts. Core itself has no
+dependency on any adapter.
 
-That is not a slogan; it is enforced. [`UNPROVEN.md`](docs/UNPROVEN.md) is the longest document
-here and exists so no figure can be quoted without its backend and its limits travelling with it.
-`scripts/check-test-counts.py` runs in CI and fails the build when a documented test count drifts
-from what the suite actually reports — including when a sentence is *reworded out of reach of the
-check*, because silently retiring a guard is worse than never having one.
-
-Three habits fall out of it, and they show up throughout the codebase:
-
-- **A provider can be catastrophically wrong and look healthy.** At ONNX Runtime's default
-  settings DirectML scored 53.15% DER while returning plausible speaker turns, a clean exit and a
-  13× speed-up — measured on the diariser retired in August 2026. So the translator checks a
-  committed parity fixture at load on every provider but the CPU, and `dml` is refused by name
-  until a second flag unlocks it. **The diariser no longer has such a check**: it is a torch
-  pipeline with one path, and parity needs two. That is a gap rather than a resolution, and
-  [UNPROVEN.md](docs/UNPROVEN.md) carries it.
-- **An exclusion list fails safely; an inclusion list fails silently.** The first release
-  candidate shipped without three whole features because a packaging step pruned everything it did
-  not recognise. The prune now deletes only *named* backends a channel does not carry, and the
-  read-back opens the built package and requires what it promised.
-- **A fake must not be more forgiving than the real thing.** The test double abstains exactly
-  where the real engine abstains — an earlier version quietly invented its own evidence, which is
-  the shape of fake that lets defects through a green suite.
-
-## Roadmap
-
-| | | |
-|---|---|---|
-| **v1** | File transcription, speaker labels, English translation, speech detection | Built. Released as a candidate |
-| **v2** | Ask the transcript: playback, cues, and a cited chat panel | Built. The catalogue recommends Gemma 4 12B; topic answers include surrounding discussion and long summaries read consecutive sections. Quality limits remain in [UNPROVEN.md](docs/UNPROVEN.md) |
-| **v2 — tidy** | Tidy up the transcript: a small language model takes out fillers and false starts beside the recogniser, every line checked word for word against what was spoken | Built 2026-09-02 and run beside the recogniser on one laptop the same day: nothing refused on 77 lines, the recogniser 31% slower for the company. Its delta on the ten-call WER corpus followed the same evening: +3.43 points against the verbatim transcripts, −2.94 against the edited ones, the whole difference the deletions the contract allows. The criterion reads the edited transcripts, so the first condition is met on one laptop. The unit one request carries was measured across three units on 2026-09-03: joined runs land the tidied copy 83 s after the plain transcript against the segment's 194 s and tidy better under both references, but a refused run refuses every line it carries, so the rule as written keeps the segment on that clause alone — how that clause should read is a decision now rather than a measurement. The desktop's CUDA delta and re-timing followed the same morning: the delta is the laptop's to a twentieth of a point, +3.47 against the verbatim transcripts and −2.89 against the edited ones, on a spoken transcript whose text is byte-identical to the 2026-08-16 baseline's, so the second condition is met on the same reading; the tandem lag is a fifth of the laptop's or less and the tandem still lands first, by 7–12% of the combined time; the recogniser pays 63% for the company over the corpus where the laptop paid 11.5%; and the same rule picks the sentence-run on the desktop and the segment on the laptop, on a refused count that moves by three between identical runs. Decided the same day: the clause counts refused requests, under which the joined run wins on both machines; the joined run is the unit; the tidy ships opt-in in the next release; and the tandem stays on every card. Driving the shipped command over one file the same day found what that unit change had opened: the contract bounded the form of an edit and never its size, so the model took a clause out of one line and a whole sentence out of another, and three lines emptied and disappeared from the pane, their own units accepted and no refusal recorded for them — the per-line empty guard being evaluated over a whole run rather than a line. (That arm refused three requests, none of them the ones carrying those lines.) A ceiling now bounds it per line: more than half a line, or more than four words in a row, is refused. Still owed: the corpus delta and refusal count under the joined run with that ceiling, which no run has scored on either machine; whether the two numbers hold off the one call they were fitted on; and what the ceiling costs in tidying not done — [PHASES.md](docs/PHASES.md) |
-| **v3** | Push-to-talk dictation | Not built, not architected out — [V3-DICTATION.md](docs/V3-DICTATION.md) |
-
-That order is deliberate. The entire Win32 risk surface — global keyboard hooks that get flagged
-as keyloggers, text injection that fails silently under UIPI, overlay windows that steal focus —
-lives on the dictation path and none of it on the file path, which is why dictation is last.
-Asking questions about a transcript sits in front of it because it needs none of that: it reads a
-transcript this product already produces. What it costs instead is a second native stack and an
-honesty problem, since a wrong answer is fluent rather than obviously broken.
-
-## Quick start
-
-Everything here builds and tests on Linux with no weights and no display — a design constraint
-rather than a convenience, since a test needing 670 MB of weights is a test CI will never run.
-
-```bash
-dotnet build Uindosill.slnx
-dotnet test  Uindosill.slnx          # 1905 tests, no weights needed, runs on Linux
-
-# See the whole pipeline work without a model: real WAVE parsing, real segmentation,
-# real subtitle output, canned words.
-dotnet run --project src/Parakeet.Cli -- transcribe --fake -f srt,json recording.wav
+```mermaid
+flowchart LR
+    Hosts["Avalonia desktop · CLI"] --> Pipeline["C# pipeline and contracts<br/>Parakeet.Core"]
+    Pipeline --> ASR["parakeet.cpp<br/>CPU · Vulkan · CUDA"]
+    Pipeline --> VAD["Silero VAD<br/>ONNX Runtime · CPU"]
+    Pipeline --> Python["Python sidecar<br/>pyannote · Marian · FuguMT"]
+    Pipeline --> LLM["llama-server<br/>answers · transcript tidy"]
 ```
 
-Real work needs two things this repository does not contain: the parakeet.cpp native library
-([NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md)) and a GGUF model ([MODELS.md](docs/MODELS.md)).
-Vendor *before* you build — the build is what copies `native/` into the output.
+**C# / .NET 10** · **Avalonia + CommunityToolkit.Mvvm** · **P/Invoke** · **Python / PyTorch / ONNX Runtime** · **Velopack**
+
+Audio decoding uses a managed WAVE/RF64 reader and Windows Media Foundation. The self-contained
+Windows app and CLI cross-build from Linux; native speech recognition is shipped for Windows x64.
+The [architecture notes](docs/ARCHITECTURE.md) explain the contracts and tradeoffs, and
+[engine selection](docs/ENGINE-CHOICE.md) records why parakeet.cpp was chosen.
+
+## Validation, with the limits attached
+
+> Every claim is either measured or explicitly marked unproven.
+
+| Evidence for 1.0 | What it establishes |
+|---|---|
+| [**1905 tests**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Release build with zero warnings or errors; 1896 passed, 9 skipped. The suite runs without model weights or a display. CI also checks that documented counts match TRX results. |
+| [**Linux CI**](https://github.com/jkkma/uindosill/actions/runs/39290354876) | Core isolation, build/tests, Python launch/provider checks, and Windows cross-publishing at the released source commit. |
+| [**Windows bundle checks**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Actual CPU and CUDA-overlay package imports, pyannote Pipeline import, CPU tensor arithmetic, and libmpv DLL/API/create/init checks. These do not exercise GPU inference or video playback. |
+| [**Release verification**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/release-verification.json) | Application asset sizes and hashes, updater feeds, and the exact source commit. Uploaded assets were checked against their local evidence before publication. |
+
+Automated pipeline tests do not measure transcription or translation accuracy. The separate
+[measurement record](docs/UNPROVEN.md) names the hardware, backend, corpus and caveats for each
+speed or quality result. Speaker labelling has been scored on one meeting; translation still has
+an unmet language criterion and no human adequacy rating. [PHASES.md](docs/PHASES.md) records
+these open gates and the deferred dictation work.
+
+## Build and try the pipeline
+
+Use a compatible **.NET 10 SDK**; [`global.json`](global.json) allows roll-forward within .NET 10.
+Building and running the automated suite works on Linux without weights or a display.
 
 ```bash
-pwsh scripts/vendor-natives.ps1           # cpu and vulkan natives, ~18 MB, verified against the pins
-dotnet build Uindosill.slnx -c Release    # copies native/ into the output
-uindosill doctor                          # models installed, and which transcription backends load
+dotnet build Uindosill.slnx -c Release
+dotnet test Uindosill.slnx -c Release
+
+# Use your own PCM WAVE file. Parsing, segmentation and subtitle output are real;
+# --fake supplies canned recognition results without loading a model.
+dotnet run --project src/Parakeet.Cli -c Release -- transcribe --fake -f srt,json recording.wav
+```
+
+Real transcription requires Windows, the [pinned native libraries](docs/NATIVE-BINARIES.md), and
+a [model](docs/MODELS.md). Vendor before building so the native files are copied into the output:
+
+```powershell
+pwsh scripts/vendor-natives.ps1
+dotnet build Uindosill.slnx -c Release
+```
+
+For a container with no toolchain, [`scripts/cloud-setup.sh`](scripts/cloud-setup.sh) provisions
+SDK 10.0.400 and PowerShell 7.6.4. [`AGENTS.md`](AGENTS.md) lists the complete manual checks;
+`pwsh scripts/lab.ps1` lists the available vendoring and measurement tasks.
+
+<details>
+<summary><strong>CLI recipes and runtime setup</strong></summary>
+
+The following commands assume the released CLI is on your PATH. `doctor` probes the native
+speech-recognition backends in child processes, lists installed models and reports supported
+audio extensions. It does not probe the Python engines; those report availability at load.
+
+```powershell
+uindosill doctor
 uindosill models download tdt-0.6b-v3-f16
 uindosill transcribe -f srt,txt *.mp4
 uindosill bench recording.wav
-```
 
-Speaker labels are a separate model and a separate download:
-
-```bash
-uindosill models download pyannote-speaker-diarization-community-1   # 31 MiB; needs a Hugging Face token
+# Speaker labels: download requires an authorised Hugging Face token.
+uindosill models download pyannote-speaker-diarization-community-1
 uindosill transcribe --speakers -f srt,rttm meeting.wav
-uindosill diarise meeting.wav                    # speaker turns only, no transcription
-```
+uindosill diarise --backend cuda meeting.wav
 
-`diarise` exists because scoring a diariser through `transcribe` means paying for an ASR pass that
-contributes nothing to a speaker turn; it is what the AMI measurement runs through, and
-`uindosill der` scores its output.
-
-The translator takes an execution provider — `auto|cpu|cuda|webgpu`, resolved inside the
-sidecar, because the only thing that knows whether a provider will initialise is the ONNX Runtime
-that would have to initialise it:
-
-```bash
-uindosill transcribe --speakers --speaker-backend cpu meeting.wav     # two engines, so two flags
+# Translation models are separate downloads; see the model catalogue.
 uindosill transcribe --translate --translate-backend webgpu call.mp4
-uindosill diarise --backend cuda meeting.wav                          # one engine each, so --backend
 uindosill translate --backend cpu segments.txt
 ```
 
-`doctor` is narrower than it sounds: it probes the three parakeet.cpp backends, each in a child
-process, and reports the runtime, the audio extensions this machine can open and the models
-installed. It does **not** start the Python sidecar, so it says nothing about the speaker and
-English passes — those answer at load, and the window disables both opt-ins with the reason when
-there is no interpreter.
+The installers include Python. CLI users who need speaker labels or translation should also
+download [`uindosill-python-win-x64.zip`](https://github.com/jkkma/uindosill/releases/download/v1.0.0/uindosill-python-win-x64.zip)
+and unpack it into `%LOCALAPPDATA%\Uindosill`, with `python/` directly inside that directory.
+A source build includes no interpreter by default.
 
-## How it's built
+The translator accepts `auto`, `cpu`, `cuda` or `webgpu`; the sidecar resolves availability.
+For transcription with speaker labels, `--speaker-backend` selects the labeller independently
+of the recogniser's `--backend`. Standalone `diarise` and `translate` use `--backend` for their
+single engine. `uindosill --help` lists the commands; add `--help` after a command for its options.
 
-```
-src/
-  Parakeet.Core/                net10.0   contracts + pure logic; no NuGet, no platform, no UI
-  Parakeet.Audio/               net10.0   WAV/RF64 parser + Media Foundation decoding
-  Parakeet.Engine.ParakeetCpp/  net10.0   the ONLY project that touches native ASR interop
-  Parakeet.Engine.Python/       net10.0   the ONLY project that starts the sidecar process
-  Parakeet.Engine.SileroVad/    net10.0   speech detection, ONNX Runtime in process on the CPU
-  Parakeet.Engine.LlamaServer/  net10.0   the v2 answer engine's child llama-server
-  Parakeet.Cli/                 net10.0   transcribe / diarise / translate / models / bench /
-                                          doctor / notice / formats / wer / der / rttm / retrieve
-  Parakeet.App/                 net10.0   Avalonia desktop UI
-python/
-  uindosill_engines/            the sidecar — serve.py + protocol.py + placement.py,
-                                diariser/ and translator/
-tools/
-  FakeSidecar/                  net10.0   a scripted stand-in for that process, so the tests
-                                          need no Python and still run on Linux
-  measure-lines/                net10.0   the window's two-line ruler (Models tab excepted):
-                                          the app on a Skia host, lines counted; hand-run
-tests/                                    one per src project, all runnable on Linux
-attic/                                    the retired C# diariser and translator; unbuilt,
-                                          referenced by nothing — see attic/README.md
-```
+Speech detection defaults to Silero wherever its model is installed. `--vad energy` selects the
+loudness gate and `--no-vad` uses fixed windows with quiet-frame cuts. Japanese subtitle layout
+follows kinsoku rules with a configurable line length; its recogniser does not supply word boundaries.
 
-**The one rule that matters: `Parakeet.Core` references no engine, no platform and no UI.** It is
-enforced by the build rather than by convention — adding a `PackageReference` to
-`Parakeet.Core.csproj` fails the build with an explanation. That seam is what keeps an engine swap
-to one project instead of a rewrite.
-
-A second seam runs alongside it, drawn where it is on purpose: **the sidecar does the two things
-only a model can do** — turn a WAV into speaker turns, and count and translate a string — and is
-told nothing about what either means. The `>>eng<<` target token, the length a source is refused
-against rather than truncated at, the refusal of the word-timed format under `--translate`, the
-speaker count folded down afterwards and every warning owed before a run are all still C#. Moving
-the engines across a process boundary did not move the decisions with them.
-
-### Stack
-
-| Layer | Choice | Why |
-|---|---|---|
-| Runtime | .NET 10 (`net10.0`) | .NET 8 and 9 both reach EOL 2026-11-10. |
-| UI | Avalonia 12.1.1 | Plain `net10.0` TFM on Windows, so the desktop app cross-builds from Linux CI. |
-| MVVM | CommunityToolkit.Mvvm 8.4.2 | Avalonia's documented default; source-generator based. |
-| ASR engine | `mudler/parakeet.cpp` via P/Invoke | MIT, ABI v6, and the only candidate with a published decode-parity result. |
-| The other two models | A bundled Python sidecar — one child process per run, JSON lines over stdin and stdout | The C# ports were ~7,400 lines reimplementing what NVIDIA and HuggingFace already ship. **ONNX Runtime lives in that process: no .NET project in this solution references it.** The translator is an ONNX Runtime model and defaults to WebGPU, which reproduces the CPU's output where CUDA and DirectML do not. The diariser is torch on both stages and defaults to the CPU, because the bundled torch is the CPU build. |
-| Model format | GGUF | `mudler/parakeet-cpp-gguf`, f16 only — the quantisations were withdrawn from the catalogue on 2026-08-20, a product decision the WER measurement above is exactly what made cheap. |
-| Audio decoding | Managed WAVE reader + NAudio 2.3.0 Media Foundation | No ASR library in this space reads audio files. |
-| Deployment | Self-contained + ReadyToRun + single-file, `win-x64` | Managed assemblies inside the executable; the vendored natives are not, and are found by path. No trimming, no NativeAOT. |
-
-Why parakeet.cpp and not the obvious alternatives is recorded in
-[ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md).
-
-## Getting it
-
-**Get version 1.0 from [Releases](https://github.com/jkkma/uindosill/releases)** — a
-Windows installer in two flavours, the CLI as a zip beside it, and the bundled Python as a third
-zip for CLI users. The update check reads the running version: a build whose own version carries
-a prerelease label looks for newer candidates as well as stable releases. A stable installation
-is offered stable releases only.
-
-**The measured rc.12 to rc.13 update moved about 30 MB rather than the whole application.**
-That was the first release this project published a delta from. On the default channel
-that is 31,440,212 bytes against a 754,205,217-byte full package, and on `win-cuda` 31,442,202
-against 1,994,609,299. Most of the wait is local rather than network: the download takes seconds
-and rebuilding it against the copy already installed takes minutes, which is what the Updates tab
-says before either starts. Delta sizes vary with the changes in each candidate.
-
-The other two routes: build from source above, or take the `uindosill-win-x64` artefact from any
-CI run of `master` — a self-contained publish of the CLI and the desktop app with the cpu and
-vulkan natives in place, kept for seven days.
-
-Three things worth knowing before downloading:
-
-- **It is unsigned**, by decision rather than oversight, so expect Windows to warn about an
-  unknown publisher. [PHASES.md](docs/PHASES.md) records what shipping unsigned accepts.
-- **Two flavours.** The default installer carries the CPU and Vulkan backends with the bundled
-  Python inside; `win-cuda` adds the NVIDIA CUDA runtime. Take the first unless you know you want
-  CUDA. Whichever you install keeps updating from the same channel, recorded at install time.
-- **Speech detection comes with it.** Its model (2.2 MiB) is inside the installer, so
-  that opt-in works the moment you first open the app. **Speaker labelling does not** — it is a
-  31 MiB download that needs a free Hugging Face account and an accepted user agreement, so that
-  opt-in is dead until you fetch it from the Models tab.
-  Speech recognition (1.34 GiB), European-to-English translation (1.34 GiB) and the Japanese pair
-  (884 MiB and 361 MiB) are downloads from the Models tab, because a GitHub release asset has to
-  stay under 2 GiB.
-
-**Nothing this application does unattended deletes a file on your disk.** That is a rule rather
-than an observation, and it decides how the folders are arranged: the application installs into
-`%LOCALAPPDATA%\UindosillDesktop`, everything you download lives in `%LOCALAPPDATA%\Uindosill`,
-and the second survives an update and a reinstall — measured byte-identical across an update
-against 4.3 GiB of weights. **Uninstalling is the one thing that can remove it, and it asks
-first**: a dialog naming the size and the folder, with keeping as the default answer, and nothing
-is deleted except on an explicit Yes. Below 64 MiB it does not ask at all. Weights also go when you
-remove them on the Models tab, which is the route that does not depend on that dialog appearing.
-[GOTCHAS.md](docs/GOTCHAS.md) has the reasoning, including the night this ran unattended and was
-withdrawn for breaking the rule above.
-
-The application asks GitHub once, at startup, whether a newer version exists. That is the only
-thing it does on the network unasked: it shows a notice, downloads nothing until you press the
-button, and the Updates tab has a switch that turns the check off.
-
-## Working on it
-
-**In a container with no toolchain.** Paste `scripts/cloud-setup.sh` into the environment's setup
-field: it unpacks a pinned SDK 10.0.400 and PowerShell 7.6.4 from `packages.microsoft.com` Debian
-packages, checks each against the SHA-256 the feed publishes, and warms the NuGet cache — not the
-vendor's installer, because `dot.net` and every host it redirects to are refused by the network
-policy there. A session in such a container builds the solution, runs the full suite and drives
-the `--fake` pipeline end to end. What it cannot do is transcribe anything real.
-
-**The scripts.** `scripts/` holds eighteen PowerShell tasks — five for vendoring, five measurement
-harnesses (speed and memory, the second machine, word error rate against human transcripts,
-diarisation error rate against hand-labelled speaker turns, and the tidy's request unit), two
-transcript comparisons, one that holds `uindosill translate` against the hypotheses the translation
-gate recorded, two for the v2 answer tier, one that moves run reports over rclone, one that
-assembles the bundled Python and one that builds the installer. `scripts/lab.ps1` is one entry
-point for them: run it bare to list the tasks, each with the parameters its own script declares.
-It dispatches and nothing else, so every task stays runnable on its own.
-
-They divide along the same container line. `compare-transcripts.ps1` and `word-distance.ps1` read
-transcript JSONs and need nothing else, so they run anywhere — they align two word streams by
-word-level edit distance, compiled straight from `src/Parakeet.Core/Text/` with `Add-Type`, so no
-build is needed. `vendor-natives.ps1` needs only `pwsh` and a route to `github.com`, which is how
-the Linux CI runner vendors natives before it publishes. `measure-wer.ps1` and the cutting half of
-`measure-der.ps1` need a machine that can transcribe; `measure-second-machine.ps1` probes hardware
-through CIM and `vendor-cuda.ps1` reads a PE import table, so both are Windows throughout.
+</details>
 
 ## Documentation
 
-The ten notes live in [`docs/`](docs/); the last two rows are at the repository root.
-
-| Document | What is in it |
+| Start here | Go deeper |
 |---|---|
-| [UNPROVEN.md](docs/UNPROVEN.md) | Everything asserted here that nobody has measured. **Read first.** |
-| [GOTCHAS.md](docs/GOTCHAS.md) | The silent failures, and where each one is handled in this codebase. |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | The seams, the contracts, and why segmentation is not optional. |
-| [ENGINE-CHOICE.md](docs/ENGINE-CHOICE.md) | Why parakeet.cpp, and not the alternatives that looked obvious. |
-| [NATIVE-BINARIES.md](docs/NATIVE-BINARIES.md) | Vendoring the pinned natives — the scripts, the layout, the digests, and the licence libmpv brings. |
-| [MODELS.md](docs/MODELS.md) | The catalogue, and how to pin a digest properly. |
-| [LICENSING.md](docs/LICENSING.md) | The CC BY 4.0 obligations, which are not "just attribution", and the CUDA EULA reading. |
-| [V2-ASK-THE-TRANSCRIPT.md](docs/V2-ASK-THE-TRANSCRIPT.md) | The open decisions for v2, and the problem that makes it hard. |
-| [V3-DICTATION.md](docs/V3-DICTATION.md) | What v3 will need, and the traps waiting there. |
-| [PHASES.md](docs/PHASES.md) | The phase plan and what is actually done. |
-| [NOTICE.md](NOTICE.md) | Third-party notices as shipped: the CC BY weights, the MIT components, GPL libmpv, the CUDA runtime. |
-| [AGENTS.md](AGENTS.md) | Working agreement for an agent session: budget, how to build, the one rule. |
+| [Architecture](docs/ARCHITECTURE.md) — boundaries, contracts and pipeline | [Engine choice](docs/ENGINE-CHOICE.md) · [Native binaries](docs/NATIVE-BINARIES.md) |
+| [Measurements and open questions](docs/UNPROVEN.md) — evidence with its limits | [Failure catalogue](docs/GOTCHAS.md) · [Phase history](docs/PHASES.md) |
+| [Models](docs/MODELS.md) — coverage, downloads, pins and verification | [Ask the transcript](docs/V2-ASK-THE-TRANSCRIPT.md) · [Future dictation](docs/V3-DICTATION.md) |
+| [Licensing](docs/LICENSING.md) — distribution and model obligations | [Third-party notices](NOTICE.md) · [Working agreement](AGENTS.md) |
 
 ## Licence
 
-**Which licence governs a copy depends on one thing: whether that copy carries the video player.**
-
-| The copy you have | Licence | |
-|---|---|---|
-| This repository's source | **MIT** | |
-| `uindosill-cli-win-x64.zip` and the `uindosill-win-x64` CI artefact | **MIT** | neither vendors the player |
-| The two desktop installers | **GPLv2-or-later** | both carry it |
-
-libmpv, the player behind the Ask tab, is GPLv2-or-later and links FFmpeg-GPL. Putting it in the
-same distribution as this application makes the combined work a GPL distribution — so the binary
-that draws video is GPL and the binaries that do not are not. You can tell which kind of copy you
-have by looking: the About window's Licences pane lists libmpv only when it is there.
-
-**None of that revokes the MIT grant on the source**, and a recipient of a GPL build may take the
-Uindosill source under either set of terms. What cannot be separated from the GPL is the
-*combination* with libmpv. The alternatives were weighed on 2026-08-23 — ship no video, or
-maintain an LGPL mpv build, which exists as no prebuilt Windows binary — and this one was taken
-deliberately. The obligations it creates, including where the corresponding source lives, are in
-[LICENSE](LICENSE), [licences/mpv-WRITTEN-OFFER.txt](licences/mpv-WRITTEN-OFFER.txt) and
-[LICENSING.md](docs/LICENSING.md), which also says plainly that nobody with a professional opinion
-has read any of it.
-
-**Model weights carry their own licences:**
-
-| Weights | Licence |
-|---|---|
-| Transcription — `parakeet-tdt-0.6b-v3` | CC BY 4.0 |
-| Japanese transcription — `parakeet-tdt_ctc-0.6b-ja` | CC BY 4.0 |
-| Speaker labelling — `pyannote/speaker-diarization-community-1` | CC BY 4.0 |
-| Translation — Marian / OPUS-MT | Apache-2.0 |
-| Japanese translation — FuguMT | CC BY-SA 4.0 |
-| Speech detection — Silero VAD | MIT |
-| Answering questions and transcript tidy — Gemma 4 | Apache-2.0 |
-
-The NVIDIA Open Model License was the fourth until 2026-08-27, when the Sortformer weights it covered
-were retired; nothing in this product is under it now.
-
-CC BY 4.0 permits commercial redistribution and bundling but attaches a seven-element notice
-requirement, forbids DRM on the weights, and withholds patent and trademark rights. The NVIDIA
-licence is **not** interchangeable with it: it makes the grant revocable where CC BY 4.0 is
-irrevocable, and incorporates terms naming biometric processing — and speaker diarisation is voice
-biometrics. Every notice is shown inside the application, through the About window's Licences pane
-and `uindosill notice`, not only in this repository. [NOTICE.md](NOTICE.md) carries them;
-[LICENSING.md](docs/LICENSING.md) carries what each obliges.
-
-**Coverage is per model.** `parakeet-tdt-0.6b-v3` covers 25 European languages and does **not**
-cover Chinese, Japanese, Korean, Arabic, Hindi or Thai. `parakeet-tdt_ctc-0.6b-ja`, added
-2026-09-04 as a second, opt-in entry, covers **Japanese and nothing else**. Neither is a general
-recogniser, the Models tab names each for what it hears, and installing one does not extend the
-other. A test holds every entry to its own coverage.
+The repository's source and the CLI distribution are **MIT**. Both desktop installers include
+GPL libmpv and are distributed as **GPLv2-or-later** combinations. Model weights have their own
+licences; see [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and the [licensing notes](docs/LICENSING.md).
+The release's source-provenance packet is explicitly partial: complete exact dependency-source
+reconstruction remains [unproven](docs/UNPROVEN.md#the-corresponding-source-inventory-is-still-incomplete).
