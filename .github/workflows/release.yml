@@ -111,9 +111,43 @@ jobs:
       # that, and a tag pushed on its own would otherwise reach a release with no test run at all.
       # It is also the only place the suite runs on Windows.
       - name: Build and test
+        shell: bash
         run: |
+          set -euo pipefail
           dotnet build Uindosill.slnx --configuration Release
-          dotnet test Uindosill.slnx --configuration Release --no-build
+          dotnet test Uindosill.slnx --configuration Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Check the counts and Python launch rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check-test-counts.py --no-run
+          python scripts/check-test-counts.py --self-check
+          python scripts/check-diariser-auto.py
+          python scripts/check-python-launch.py
+          python scripts/check-codex-hooks.py
+
+      - name: Parse every PowerShell script and check the Drive route
+        shell: pwsh
+        run: |
+          $e = @()
+          Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $t = $err = $null
+            [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null
+            $e += $err
+          }
+          $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }
+          if ($e.Count -ne 0) { throw "$($e.Count) PowerShell parse error(s)." }
+          ./scripts/check-drive-memory.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'The isolated Drive route checks failed.' }
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-test-results-${{ steps.version.outputs.version }}
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+          retention-days: 7
 
       # vpk builds a delta by diffing against packages already present in --outputDir. A fresh
       # runner has none, so without this step every release ships full packages only and every user
@@ -293,9 +327,21 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
           DRAFT: ${{ github.event_name == 'workflow_dispatch' }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           cd packaging/releases
+
+          # A dispatch may name a version that already has a tag. The assets must describe that
+          # exact commit, including when the tag is annotated and needs peeling.
+          refs=$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          if [ -n "$refs" ]; then
+            tagged_commit=$(printf '%s\n' "$refs" | tail -n 1 | cut -f 1)
+            if [ "$tagged_commit" != "$COMMIT_SHA" ]; then
+              echo "::error::$TAG resolves to $tagged_commit, but these assets were built from $COMMIT_SHA."
+              exit 1
+            fi
+          fi
 
           # nullglob, because the delta glob matches nothing on the very first release and an
           # unexpanded pattern would reach gh as a literal filename and fail the publish.
@@ -318,20 +364,28 @@ jobs:
           )
           shopt -u nullglob
 
-          # The five that must always be there. Missing one of the first four is a release nobody
-          # can install or update from; missing the fifth is a release where `uindosill diarise` and
-          # `transcribe --translate` refuse for every command-line user, because the CLI zip carries
-          # no interpreter and this is the download that supplies one (decision, 2026-08-21). Either
-          # way it is cheaper to fail here than to find out after.
+          # Both installer channels, their full packages and feeds, and both command-line zips
+          # must exist. Deltas are optional because a repository may have no previous release.
           for required in \
             UindosillDesktop-win-Setup.exe \
             UindosillDesktop-win-cuda-Setup.exe \
+            "UindosillDesktop-$VERSION-full.nupkg" \
+            "UindosillDesktop-$VERSION-win-cuda-full.nupkg" \
             releases.win.json \
             releases.win-cuda.json \
+            uindosill-cli-win-x64.zip \
             uindosill-python-win-x64.zip
           do
             if [ ! -s "$required" ]; then
               echo "::error::$required was not produced, so this release would be incomplete."
+              exit 1
+            fi
+          done
+
+          for asset in "${assets[@]}"; do
+            size=$(wc -c < "$asset")
+            if [ "$size" -ge 2147483648 ]; then
+              echo "::error::$asset is at or above GitHub's 2 GiB asset limit."
               exit 1
             fi
           done
@@ -345,12 +399,15 @@ jobs:
           # that is nothing but "Full Changelog" leaves a first-time downloader guessing between
           # two installers, a CLI zip, an interpreter zip that only CLI users need, four numbered
           # parts and the update feed. .github/release-notes.md is that guide, and it carries no
-          # byte counts so it cannot go stale against the assets beside it. gh prepends it and
-          # --generate-notes still appends the commit changelog underneath.
-          flags=(--generate-notes --notes-file "$GITHUB_WORKSPACE/.github/release-notes.md")
-          if [ "$PRERELEASE" = "true" ]; then
-            flags+=(--prerelease)
-          fi
+          # byte counts so it cannot go stale against the assets beside it. The generated commit
+          # changelog is appended to the same guide on both creation and retry.
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$TAG" -f target_commitish="$COMMIT_SHA" --jq .body \
+            > "$RUNNER_TEMP/generated-release-notes.md"
+          cat "$GITHUB_WORKSPACE/.github/release-notes.md" "$RUNNER_TEMP/generated-release-notes.md" \
+            > "$RUNNER_TEMP/release-notes.md"
+          flags=(--notes-file "$RUNNER_TEMP/release-notes.md" --target "$COMMIT_SHA" \
+            --prerelease="$PRERELEASE")
 
           if [ "$DRAFT" = "true" ]; then
             # No --verify-tag on this path: a draft names a tag that need not exist yet, and GitHub
@@ -363,9 +420,17 @@ jobs:
 
           # Idempotent, because the alternative is losing half an hour of packaging to a dropped
           # connection on the last step and then having to delete the release by hand to re-run.
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          if gh release view "$TAG" --json isDraft > "$RUNNER_TEMP/release-state.json" 2>/dev/null; then
+            if [ "$DRAFT" = "true" ] && ! jq -e '.isDraft == true' "$RUNNER_TEMP/release-state.json" > /dev/null; then
+              echo "::error::$TAG is already public; a rehearsal cannot replace it."
+              exit 1
+            fi
             echo "::notice::$TAG already has a release; uploading the assets into it."
             gh release upload "$TAG" --clobber "${assets[@]}"
+            # A CUDA-only preparation draft can predate the final application commit and notes.
+            # Retrying must update metadata too, rather than silently retaining an obsolete target.
+            gh release edit "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --target "$COMMIT_SHA" --draft="$DRAFT" --prerelease="$PRERELEASE"
           else
             gh release create "$TAG" --title "$TAG" "${flags[@]}" "${assets[@]}"
           fi

@@ -1,16 +1,14 @@
-## Changes in this candidate
+## Uindosill 1.0
 
-- The bundled Python now loads the installed NVIDIA acceleration pack correctly. Independent
-  package-root overrides also work when the interpreter comes from an unpacked archive.
-- Model removal reports locked-file failures safely, keeps partially removed models visible,
-  and prevents individual models from being removed while a transcription batch is running.
-- Downloads cancelled during verification can use their completed bytes on the next attempt;
-  rejected resume requests no longer leave the download stuck at the end of the file.
-- Ask answers warn about additional unchecked quotations even when the first quote was verified.
-  The warning follows the answer when copied.
-- Adding subtitles to WAVE recordings now uses MKV so PCM audio can stay unchanged. Adding
-  WebVTT to an MP4 with existing captions preserves those captions and the new word timestamps.
-- Completing a link download keeps any new link entered while the download was running.
+Local speech-to-text for 64-bit Windows, with audio and video playback beside the transcript.
+
+- Transcribe European languages or install the optional Japanese recogniser, then export text,
+  Markdown, subtitles or timestamped JSON.
+- Paste a recording's link to download its audio and queue it for transcription.
+- Add optional speaker labels and an English translation beside the spoken transcript.
+- Ask questions about a recording and follow citations back to the relevant moment.
+- Optionally tidy fillers and false starts into a separate copy, with each edit checked against
+  the spoken words.
 
 Ask answers can still omit topics or misstate details. Timestamps help check an answer and do
 not guarantee its accuracy.
@@ -61,10 +59,6 @@ it, and the next launch carries on. The default flavour never starts it by itsel
 The manual path on either flavour — and the way back after a Stop — is the **Set up graphics
 acceleration** button on **Settings, General**, offered only on a machine whose driver reports
 CUDA.
-
-On one ten-minute recording this was about 13 times faster than the processor and produced exactly
-the same speakers and the same boundaries. That is a speed result. No accuracy figure is claimed
-for it, and none should be read into it.
 
 ## What is inside, and what still has to be downloaded
 
