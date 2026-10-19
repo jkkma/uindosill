@@ -1,0 +1,144 @@
+name: CUDA download
+
+# Build the optional download before packaging applications that embed its measured manifest.
+# This workflow only prepares a draft; it never creates a tag or publishes a release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Draft release version, without v (for example 1.0.0)."
+        required: true
+
+env:
+  PIP_NO_CACHE_DIR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  cuda-pack:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Validate the draft version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo '::error::Expected a version such as 1.0.0 or 1.0.0-rc.1.'
+            exit 1
+          fi
+
+      - name: Parse every PowerShell script
+        shell: pwsh
+        run: |
+          $e = @()
+          Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $t = $err = $null
+            [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$err) > $null
+            $e += $err
+          }
+          $e | ForEach-Object { "{0}: {1}" -f $_.Extent.File, $_.Message }
+          exit $e.Count
+
+      - name: Build into an isolated output directory
+        shell: pwsh
+        run: |
+          ./scripts/bundle-python-cuda.ps1 -Destination packaging/cuda-staging `
+            -Package -PackageDirectory packaging/cuda-assets
+          if ($LASTEXITCODE -ne 0) { throw 'The CUDA download build failed.' }
+          Remove-Item -LiteralPath packaging/cuda-staging -Recurse -Force
+
+      - name: Upload only to a draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh release view "$tag" --json isDraft > "$RUNNER_TEMP/cuda-release.json" 2>/dev/null; then
+            if ! jq -e '.isDraft == true' "$RUNNER_TEMP/cuda-release.json" > /dev/null; then
+              echo "::error::$tag is already public; its pinned download must not be replaced."
+              exit 1
+            fi
+          else
+            gh release create "$tag" --draft --target "$COMMIT_SHA" --title "$tag" \
+              --notes 'Release preparation is in progress. The CUDA download is built separately before the application embeds its manifest.'
+          fi
+          gh release upload "$tag" --clobber packaging/cuda-assets/manifest.json \
+            packaging/cuda-assets/uindosill-python-cuda-win-x64.zip.*
+
+      - name: Read back every uploaded byte
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = "v$env:VERSION"
+          $manifest = Get-Content -LiteralPath packaging/cuda-assets/manifest.json -Raw | ConvertFrom-Json
+          $readback = Join-Path $env:RUNNER_TEMP 'cuda-readback'
+          New-Item -ItemType Directory -Force -Path $readback | Out-Null
+          gh release download $tag --pattern manifest.json --dir $readback
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read back the uploaded manifest.' }
+          $manifestDigest = (Get-FileHash packaging/cuda-assets/manifest.json -Algorithm SHA256).Hash
+          if ((Get-FileHash (Join-Path $readback manifest.json) -Algorithm SHA256).Hash -ne $manifestDigest) {
+            throw 'The uploaded manifest differs from the generated manifest.'
+          }
+          $whole = [System.Security.Cryptography.IncrementalHash]::CreateHash(
+            [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+          $buffer = New-Object byte[] (4MB)
+          $total = 0L
+          try {
+            foreach ($part in $manifest.parts) {
+              gh release download $tag --pattern $part.fileName --dir $readback
+              if ($LASTEXITCODE -ne 0) { throw "Could not read back $($part.fileName)." }
+              $path = Join-Path $readback $part.fileName
+              $actual = (Get-Item -LiteralPath $path).Length
+              if ($actual -ne $part.sizeBytes -or $actual -ge 2GB) {
+                throw "The size of $($part.fileName) differs from its manifest or exceeds the asset limit."
+              }
+              $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($digest -ne $part.sha256) { throw "The digest of $($part.fileName) differs from its manifest." }
+              $stream = [System.IO.File]::OpenRead($path)
+              try {
+                while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                  $whole.AppendData($buffer, 0, $read)
+                }
+              } finally { $stream.Dispose() }
+              $total += $actual
+              Remove-Item -LiteralPath $path
+              Write-Host "$($part.fileName): $actual bytes; SHA256 $digest"
+            }
+            $wholeDigest = [Convert]::ToHexString($whole.GetHashAndReset()).ToLowerInvariant()
+          } finally { $whole.Dispose() }
+          if ($total -ne $manifest.archiveBytes -or $wholeDigest -ne $manifest.archiveSha256) {
+            throw 'The uploaded parts do not reconstruct the generated archive.'
+          }
+          [ordered]@{
+            tag = $tag
+            commit = $env:COMMIT_SHA
+            verifiedUtc = [DateTime]::UtcNow.ToString('O', [Globalization.CultureInfo]::InvariantCulture)
+            archiveBytes = $total
+            archiveSha256 = $wholeDigest
+            manifestSha256 = $manifestDigest.ToLowerInvariant()
+            parts = $manifest.parts
+          } | ConvertTo-Json -Depth 5 | Set-Content packaging/cuda-assets/verification.json -Encoding utf8
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cuda-download-verification-${{ inputs.version }}
+          path: |
+            packaging/cuda-assets/manifest.json
+            packaging/cuda-assets/verification.json
+          if-no-files-found: error
+          retention-days: 7

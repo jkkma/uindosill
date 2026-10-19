@@ -4884,6 +4884,13 @@ artifacts like those 7.9 MB of probability arrays are regenerable from the model
 be better left out than committed as binaries; that is a judgement about each artifact rather than
 a rule.
 
+**Deferred for v1.0 — decided 2026-10-19.** During release preparation both configured rclone
+remotes failed the first project-folder lookup with Google Drive API quota errors, so the current
+research and run-report inventory could not be read. The maintainer explicitly deferred this
+migration and authorised publishing v1.0 when the release is validated. The research and reports
+still need to come into the repository after access is restored, with the publication review and
+session-memory exclusion above; no remote material was removed.
+
 ### After v1
 
 **v2 is asking questions about a transcript** and **v3 is push-to-talk dictation.** v2 went in front
