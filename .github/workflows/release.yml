@@ -224,8 +224,32 @@ jobs:
             throw "No assembled Python bundle under packaging/. package-windows.ps1 ran with -SkipPython, or its layout moved."
           }
           Write-Host "checking NOTICE.md against $($bundle.FullName)"
+          # Preserve the measured table even when the guard fails, so an unpinned transitive
+          # update can be reviewed without guessing its version or rebuilding just for metadata.
+          $export = @'
+          import json, runpy, sys
+          from pathlib import Path
+          tool = runpy.run_path('scripts/collect-python-notices.py')
+          bundle = Path(sys.argv[1])
+          rows, problems = tool['collect'](bundle)
+          Path('packaging/python-notices.md').write_text(tool['render'](rows, bundle), encoding='utf-8')
+          Path('packaging/python-notices.json').write_text(json.dumps({'distributions': rows, 'problems': problems}, indent=2), encoding='utf-8')
+          '@
+          python -c $export $bundle.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Could not record the assembled bundle notices.' }
           python scripts/collect-python-notices.py --bundle $bundle.FullName --check
           if ($LASTEXITCODE -ne 0) { throw 'NOTICE.md does not describe the bundle this run built.' }
+
+      - name: Retain the assembled bundle's notice metadata
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundled-python-notices-${{ steps.version.outputs.version }}
+          path: |
+            packaging/python-notices.md
+            packaging/python-notices.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The CLI is not in the installer — decision 3, 2026-08-16: Velopack has no PATH feature, so
       # bundling it would be custom code on install and on uninstall. It ships as the zip beside it,

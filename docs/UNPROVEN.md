@@ -8790,3 +8790,26 @@ accuracy, semantic faithfulness guarantee, CUDA behavior or
 new installer qualification follows from these checks. Detailed prompts, model output, source
 pins, failed experiments and regeneration notes remain in the laptop's
 `runs/gemma4-youtube-20260912/`; curated reports use its `runs-laptop` Drive route.
+
+
+## The stable CUDA download was rebuilt and read back — 2026-10-19
+
+The GitHub repository had the candidate tags but none of their release assets,
+so the former `v1.0.0-rc.10` CUDA download returned 404. The separate `CUDA download` workflow
+rebuilt it from commit `4b5c6013c080b73556809e961d36911df3b0b328` into an isolated output directory
+and uploaded the parts to the `v1.0.0` draft. Its verification report is dated
+`2026-10-19T15:46:11.0244964Z`.
+
+**Measured archive:** 1,961,398,087 bytes across four parts; SHA-256
+`5378e0c916d0d3aee016a7a28ed905a7d3113eaa1bb70a8bc2b53a96e077b461`.
+The unpacked tree is 2,965,563,130 bytes. Its package metadata reports `torch 2.13.0+cu130`,
+`torchaudio 2.11.0+cu130` and `torchcodec 0.17.0+cu130`; torch still matches the bundled CPU pin.
+
+The workflow downloaded every uploaded part and the manifest, checked each byte count and
+SHA-256, and checked the reconstructed archive's SHA-256. The downloaded verification artifact
+was then compared with the manifest and with GitHub's stored asset sizes and SHA-256 digests;
+all agreed. `src/Parakeet.Engine.Python/cuda-pack.json` now pins those exact bytes at `v1.0.0`.
+The older archive's hashes do not describe this rebuild.
+
+This establishes the download's byte identity and torch-version pairing. It adds no new
+inference, diarisation-accuracy or GPU-speed measurement.
