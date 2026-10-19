@@ -955,6 +955,16 @@ public static class Attributions
         },
         new ComponentLicence
         {
+            Component = "Vulkan loader (the video player's companion vulkan-1.dll)",
+            License = "MIT / Apache-2.0",
+            Uri = new Uri("https://github.com/KhronosGroup/Vulkan-Loader"),
+            Notes =
+                "Copyright (c) 2015-2026 The Khronos Group Inc., LunarG, Inc. and Valve Corporation. " +
+                "Extracted from the official runtime components archive, without a system installation. " +
+                "Its VulkanRT-License.txt and the full Apache-License-2.0.txt travel beside the DLL.",
+        },
+        new ComponentLicence
+        {
             Component = "CommunityToolkit.Mvvm",
             License = "MIT",
             Uri = new Uri("https://github.com/CommunityToolkit/dotnet"),

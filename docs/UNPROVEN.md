@@ -8813,3 +8813,24 @@ The older archive's hashes do not describe this rebuild.
 
 This establishes the download's byte identity and torch-version pairing. It adds no new
 inference, diarisation-accuracy or GPU-speed measurement.
+
+## Stable-release player inputs were replaced and measured — 2026-10-19
+
+The old shinchiro `20260814` daily archive returned 404 during the installer workflow.
+The replacement is the same upstream's plain x86-64 `20261019` build, mpv commit
+`6a262d11f63733d37e3ee6d5fafcb1be1ef83952`. The downloaded 31,618,325-byte archive's SHA-256
+matches GitHub's asset digest. Its extracted DLL is 121,097,728 bytes and its header declares
+client API 2.6; `docs/NATIVE-BINARIES.md` records both measured hashes.
+
+Its PE import table names `vulkan-1.dll`, which Windows does not supply. A retained official
+`20260809` build has the same import, so this dependency predates the replacement. The package
+now also carries the x64 loader and notices from LunarG's `1.4.363.0` components ZIP. Its
+18,211,191-byte archive matches the publisher's SHA-256; the loader is 1,729,464 bytes. Nothing
+was installed into the host system. The runtime's own notice and full Apache-2.0 text ship with it.
+
+The release workflow has a fresh-process check using the same absolute-path
+`NativeLibrary.TryLoad` overload as the product, requiring the actual loaded Vulkan module to
+be the shipped sibling, every product export to resolve, and player creation/options/init to
+succeed. **That Windows check and playback with these replacement bytes remain unproven until
+the actual workflow reports them.** The archive measurements establish byte identity and header
+compatibility only. They establish no video, audio, rendering, seeking or GPU behavior.

@@ -73,7 +73,7 @@ cannot be separated from the GPL is the *combination* with libmpv. So:
   kind of copy they have by looking.
 - The GPL notices travel with the binary rather than with the repository.
 
-**Three files ship beside `libmpv-2.dll`, and `scripts/vendor-mpv.ps1` refuses to finish without
+**Three GPL notice files ship beside `libmpv-2.dll`, and `scripts/vendor-mpv.ps1` refuses to finish without
 them.** That refusal is the point: a missing licence notice is a breach that fails silently, which
 is the same reasoning that put the parakeet.cpp `LICENSE` check in `vendor-natives.ps1`.
 
@@ -82,14 +82,17 @@ is the same reasoning that put the parakeet.cpp `LICENSE` check in `vendor-nativ
    distinguishes the GPL-only parts from the LGPL-able ones and says that "None of the cases listed
    above affect the final binary if it's built as LGPL. Linked libraries still can affect the final
    license (for example if FFmpeg was built as GPL)" — which, in this build, it was.
-3. **`mpv-WRITTEN-OFFER.txt`** — how §3 is satisfied. It names the exact revisions of everything
-   GPL in the distribution: the shinchiro build recipe (release `20260814`, asset digest recorded),
-   mpv commit `7b8915bc1d`, and FFmpeg's upstream. All of it is public and reachable from the same
-   place as the binaries, which is §3(a); the three-year written offer of §3(b) is there as well,
-   because belt and braces costs a paragraph.
+3. **`mpv-WRITTEN-OFFER.txt`** — how §3 is satisfied. It records the shinchiro build recipe commit,
+   release `20261019` and asset digest, mpv commit `6a262d11f6`, and FFmpeg commit `c2bbf2b83`.
+   Some other dependency recipes track moving branches, so rerunning the recipe is not claimed
+   to reproduce the binary exactly. The three-year written offer of §3(b) covers the complete
+   corresponding sources.
 
 **The upstream archive carries no licence text at all** — only `libmpv-2.dll` and the headers — so
-all three come from this repository's `licences/` directory. `build/NativeAssets.targets` copies
+those three come from this repository's `licences/` directory. The required sibling Vulkan loader
+adds its own `VulkanRT-License.txt` (MIT/Apache-2.0) and the full `Apache-License-2.0.txt`; the
+loader is extracted from LunarG's runtime components ZIP, without installing it.
+`build/NativeAssets.targets` copies
 `native/**/*.txt` into the build output for exactly this reason, alongside the `LICENSE` glob that
 carries parakeet.cpp's.
 
@@ -722,8 +725,8 @@ carry it. **For libsoxr it is not arguable at all** — the static link closes 6
 has been provided.
 
 **The cheapest correct discharge is a written offer, and this repository already knows the shape.**
-`licences/mpv-WRITTEN-OFFER.txt` satisfies GPLv2 §3(b) for libmpv by naming exact revisions of
-everything GPL in the distribution. §6(c) is the same instrument for the LGPL: an offer valid three
+`licences/mpv-WRITTEN-OFFER.txt` offers the complete corresponding GPL source for libmpv
+under GPLv2 §3(b). §6(c) is the same instrument for the LGPL: an offer valid three
 years to supply the §6(a) materials — for each library, its complete corresponding source, and for
 `soxr_ext.pyd` the "work that uses the Library" in a form allowing relink, which is Python-SoXR's own
 C++ wrapper and is public. §6(d) is the alternative and is *narrower* than it looks: it wants
