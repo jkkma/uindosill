@@ -4,7 +4,7 @@
 .DESCRIPTION
     A fresh PowerShell process uses the same absolute-path NativeLibrary.TryLoad overload as the
     product. The loaded Vulkan module must be the shipped sibling, not a runner SDK/driver copy.
-    Checks the app's exported entry points, API major, options and player creation/initialization.
+    Checks the app's exported entry points, API major, base product options and player initialization.
     No recording, window, GPU rendering or audio/video playback is exercised. Writes its JSON
     report under packaging/ by default, including ordinary failures (a process crash cannot do so).
 #>
@@ -19,7 +19,7 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $NativeRoot) { $NativeRoot = Join-Path $repoRoot 'native' }
 if (-not $ReportPath) { $ReportPath = Join-Path $repoRoot 'packaging/mpv-smoke.json' }
-$report = [ordered]@{ status = 'failed'; scope = 'load, exports, API, options, create and initialize; no playback' }
+$report = [ordered]@{ status = 'failed'; scope = 'load, exports, API, base product options, create and initialize; no playback' }
 
 try {
     if (-not $IsWindows) { throw 'This check needs Windows and the actual x64 player DLLs.' }

@@ -93,3 +93,9 @@ for you when it updates itself. There is nothing useful to do with them by hand.
 the CUDA pack described above — also fetched by the application, never by hand.
 
 ---
+
+The `mpv-dev-*.7z` and `VulkanRT-*-Components.zip` archives preserve verified player build inputs.
+They are for rebuilding, and are not needed to install the application.
+`source-provenance-evidence.zip` preserves partial source revision and build-log evidence;
+complete exact dependency-source reconstruction remains unproven. It is not a complete
+corresponding-source archive.
