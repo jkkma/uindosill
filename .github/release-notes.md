@@ -87,6 +87,8 @@ folder, and keeps the files unless you explicitly answer Yes.
 `UindosillDesktop-*.nupkg` and `releases.*.json` are the update feed. The application fetches them
 for you when it updates itself. There is nothing useful to do with them by hand.
 
+`release-verification.json` records the release files' byte counts, digests and source commit.
+
 `uindosill-python-cuda-win-x64.zip.001` to `.004` and `manifest.json`, when they appear here, are
 the CUDA pack described above — also fetched by the application, never by hand.
 

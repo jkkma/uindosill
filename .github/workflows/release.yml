@@ -277,6 +277,16 @@ jobs:
             throw "The CLI zip is $([math]::Round($size / 1MB, 1)) MB. That is the CUDA drop coming along again."
           }
 
+      - name: Check the release files and update feeds
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/check-release-assets.py --root packaging/releases --version "$VERSION" \
+            --commit "$COMMIT_SHA" --output packaging/releases/release-verification.json
+
       # Named by version rather than `packaging/releases/` whole, for the reason the publish step's
       # globs are: since the seeding step began working, that directory also holds the *previous*
       # release's packages, and uploading the lot doubled this artefact and put about 2.7 GB of
@@ -287,9 +297,13 @@ jobs:
           name: uindosill-release-${{ steps.version.outputs.version }}
           path: |
             packaging/releases/UindosillDesktop-*-Setup.exe
-            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-*.nupkg
+            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-full.nupkg
+            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-delta.nupkg
+            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-win-cuda-full.nupkg
+            packaging/releases/UindosillDesktop-${{ steps.version.outputs.version }}-win-cuda-delta.nupkg
             packaging/releases/releases.*.json
             packaging/releases/uindosill-*.zip
+            packaging/releases/release-verification.json
           retention-days: 7
 
       # Only a tag publishes. A workflow_dispatch run builds the same assets and stops at the
@@ -343,26 +357,26 @@ jobs:
             fi
           fi
 
-          # nullglob, because the delta glob matches nothing on the very first release and an
-          # unexpanded pattern would reach gh as a literal filename and fail the publish.
-          #
           # **The nupkg globs carry the version, and that became load-bearing on 2026-09-06.** This
           # directory holds the packages vpk was seeded with as well as the ones just built, so a
           # bare `UindosillDesktop-*-full.nupkg` matches the *previous* release's packages too:
           # `v1.0.0-rc.13` published rc.12's two full packages alongside its own, 2,748,837,493
-          # bytes of a release re-uploading its predecessor. It could not happen before the seeding
-          # step began finding anything, which is the same day. One version covers both channels and
-          # both kinds — Velopack names them `<id>-<version>[-<channel>]-<full|delta>.nupkg`.
-          shopt -s nullglob
+          # bytes of a release re-uploading its predecessor. Exact filenames also stop 1.0.0-*
+          # from including 1.0.0-rc.* when the first stable release is seeded from a candidate.
           assets=(
-            UindosillDesktop-*-Setup.exe
-            UindosillDesktop-"$VERSION"-*.nupkg
+            UindosillDesktop-win-Setup.exe
+            UindosillDesktop-win-cuda-Setup.exe
+            "UindosillDesktop-$VERSION-full.nupkg"
+            "UindosillDesktop-$VERSION-win-cuda-full.nupkg"
             releases.win.json
             releases.win-cuda.json
             uindosill-cli-win-x64.zip
             uindosill-python-win-x64.zip
+            release-verification.json
           )
-          shopt -u nullglob
+          for delta in "UindosillDesktop-$VERSION-delta.nupkg" "UindosillDesktop-$VERSION-win-cuda-delta.nupkg"; do
+            if [ -s "$delta" ]; then assets+=("$delta"); fi
+          done
 
           # Both installer channels, their full packages and feeds, and both command-line zips
           # must exist. Deltas are optional because a repository may have no previous release.
@@ -395,7 +409,7 @@ jobs:
           # A prerelease tag has to be marked as one. GitHub does not infer it from the tag name, so
           # an unmarked rc becomes the repository's Latest release — which the default update channel
           # would then offer to every stable user.
-          # The asset list is nine files whose names do not explain themselves, and a release body
+          # The asset list has files whose names do not explain themselves, and a release body
           # that is nothing but "Full Changelog" leaves a first-time downloader guessing between
           # two installers, a CLI zip, an interpreter zip that only CLI users need, four numbered
           # parts and the update feed. .github/release-notes.md is that guide, and it carries no
