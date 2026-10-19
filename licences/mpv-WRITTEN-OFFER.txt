@@ -14,9 +14,9 @@ source code carries. See docs/LICENSING.md in the source repository.
 WHERE THE SOURCE IS
 -------------------
 
-GPLv2 section 3(a) is satisfied by making the complete corresponding source of
-every GPL component available from the same places the binaries come from. All
-of it is public, and all of it is pinned to an exact revision:
+The application, mpv and build recipe revisions are recorded below. Some
+linked dependencies track moving branches; the written offer in the following
+section covers their complete corresponding sources as well.
 
   Uindosill itself
       https://github.com/jkkma/uindosill
@@ -26,23 +26,36 @@ of it is public, and all of it is pinned to an exact revision:
 
   libmpv, and the recipe that produced the exact binary shipped
       https://github.com/shinchiro/mpv-winbuild-cmake
-      release tag: 20260814
-      asset:       mpv-dev-x86_64-20260814-git-7b8915bc1d.7z
-      SHA-256:     0af22b28e920620036d3ae08fd9283156dc9af0420bf4df84b0e02282094599c
+      release tag: 20261019
+      asset:       mpv-dev-x86_64-20261019-git-6a262d11f6.7z
+      SHA-256:     ca8604754170db6f1b23139d8449782b1ae294a883211131954d30085985f77b
 
-      That repository is the build system: it records the exact upstream commit
-      of mpv, of FFmpeg and of every other library linked into libmpv-2.dll, and
-      it is what a recipient needs in order to rebuild the identical binary.
+      build recipe commit: 1f8d2e76255abc48f0456d9be99b4cab9c6566e6
+      upstream build run:
+          https://github.com/shinchiro/mpv-winbuild-cmake/actions/runs/39178810344
+
+      The recipe records the repositories and build options for the linked
+      libraries. Some dependency recipes track moving Git branches; this notice
+      does not claim that rerunning them later reproduces byte-identical output.
+      The written offer below also covers the complete corresponding sources.
 
   mpv
       https://github.com/mpv-player/mpv
-      commit: 7b8915bc1d (named in the asset file name above)
+      commit: 6a262d11f63733d37e3ee6d5fafcb1be1ef83952 (named in the asset file name above)
       Its own licensing summary is in mpv-Copyright.txt beside this file.
 
   FFmpeg and the other linked libraries
-      Their upstream repositories and revisions are pinned by the build system
-      named above. FFmpeg's own source is at https://git.ffmpeg.org/ffmpeg.git
-      and https://github.com/FFmpeg/FFmpeg.
+      FFmpeg commit: c2bbf2b83d064313ca3739f81c651553cfbb26fb
+      (also named in the same upstream release's FFmpeg archive).
+      FFmpeg's source is at https://git.ffmpeg.org/ffmpeg.git and
+      https://github.com/FFmpeg/FFmpeg. The other linked libraries' repositories
+      and build options are in the recipe above; request the complete sources
+      under the offer below.
+
+  The sibling Vulkan loader is separate from the GPL components. Its source is
+      https://github.com/KhronosGroup/Vulkan-Loader/tree/vulkan-sdk-1.4.363.0
+      It is distributed under MIT/Apache-2.0 terms, reproduced in
+      VulkanRT-License.txt and Apache-License-2.0.txt beside the DLLs.
 
 
 WRITTEN OFFER

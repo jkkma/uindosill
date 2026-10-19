@@ -195,6 +195,7 @@ notice and `ThirdPartyNotices.txt` in `licences/` cover that copy directly — s
 | llama.cpp (the `llama-server` child process behind the Ask panel; the default channel ships the vulkan drop, win-cuda the CUDA drop) | MIT — Copyright (c) 2023-2026 The ggml authors. The release archives ship no licence file, so the MIT text is fetched from the source tree at the pinned tag and travels at `native/win-x64/llm/<backend>/LICENSE`; `docs/NATIVE-BINARIES.md` holds the pin and the digests | https://github.com/ggml-org/llama.cpp |
 | Avalonia | MIT | https://github.com/AvaloniaUI/Avalonia |
 | NAudio (Windows media decoding only) | MIT | https://github.com/naudio/NAudio |
+| Vulkan loader (`vulkan-1.dll`, the video player's required companion) | MIT / Apache-2.0 — Copyright (c) 2015-2026 The Khronos Group Inc., LunarG, Inc. and Valve Corporation; `VulkanRT-License.txt` and full `Apache-License-2.0.txt` ship beside it | https://github.com/KhronosGroup/Vulkan-Loader |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
 | Instrument Sans (typeface; desktop application only) | OFL-1.1 — Copyright 2022 The Instrument Sans Project Authors; `licences/InstrumentSans-OFL.txt` travels with it | https://github.com/Instrument/instrument-sans |
 | Chivo Mono (typeface; desktop application only) | OFL-1.1 — Copyright 2019 The Chivo Project Authors; `licences/ChivoMono-OFL.txt` travels with it | https://github.com/Omnibus-Type/Chivo |

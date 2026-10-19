@@ -7,9 +7,9 @@ namespace Parakeet.App.Services.Mpv;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The same shape as <c>ParakeetNativeLibrary</c>, scaled down: libmpv has no backends and no
-/// sibling DLLs — the vendored build is one statically linked file — so the search is four
-/// directories and two file names rather than a matrix. The layout it expects is the one
+/// The same shape as <c>ParakeetNativeLibrary</c>, scaled down: libmpv has no
+/// backends; its required Vulkan loader ships beside it. The search is four directories and
+/// two file names rather than a backend matrix. The layout it expects is the one
 /// <c>scripts/vendor-mpv.ps1</c> produces and <c>docs/NATIVE-BINARIES.md</c> describes:
 /// <c>native/win-x64/mpv/libmpv-2.dll</c> beside the application, with its notice beside it.
 /// </para>
@@ -105,7 +105,7 @@ internal static class MpvNativeLibrary
     /// <summary>
     /// Rooted, like the parakeet loader's, and for the recorded reason: a relative path passes
     /// File.Exists against the working directory and then loads without the module-directory
-    /// search. libmpv has no siblings today, so this is cheap insurance rather than a live bug.
+    /// search. The vendored Vulkan loader is a required sibling, verified by the release probe.
     /// </summary>
     private static IEnumerable<string> CandidateDirectories()
     {

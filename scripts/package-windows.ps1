@@ -177,7 +177,7 @@ $companionDrops = @(
        Feature = 'opening a link' }
     @{ Directory = 'ffmpeg'; Files = @('ffmpeg.exe', 'ffmpeg-LICENSE.txt')
        Feature = 'adding a transcript to a recording' }
-    @{ Directory = 'mpv';    Files = @('libmpv-2.dll', 'GPL-2.0.txt', 'mpv-Copyright.txt', 'mpv-WRITTEN-OFFER.txt')
+    @{ Directory = 'mpv';    Files = @('libmpv-2.dll', 'vulkan-1.dll', 'VulkanRT-License.txt', 'Apache-License-2.0.txt', 'GPL-2.0.txt', 'mpv-Copyright.txt', 'mpv-WRITTEN-OFFER.txt')
        Feature = 'playing the picture rather than the sound alone' }
 )
 

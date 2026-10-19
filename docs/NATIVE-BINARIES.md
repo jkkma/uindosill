@@ -242,33 +242,54 @@ half of this section before adding it to a build.
 ```
 native/
   win-x64/
-    mpv/   libmpv-2.dll  GPL-2.0.txt  mpv-Copyright.txt  mpv-WRITTEN-OFFER.txt
+    mpv/   libmpv-2.dll  vulkan-1.dll  GPL-2.0.txt  mpv-Copyright.txt  mpv-WRITTEN-OFFER.txt
+           VulkanRT-License.txt  Apache-License-2.0.txt
 ```
 
 ```bash
-pwsh scripts/vendor-mpv.ps1        # about 31 MB down, 114 MB on disk
+pwsh scripts/vendor-mpv.ps1
+pwsh -NoProfile -File scripts/check-mpv.ps1  # Windows: actual DLL load/API/create/init
 ```
 
-**The pin, as of 2026-08-23.** shinchiro/mpv-winbuild-cmake publishes dated releases and names the
+**The pin, as of 2026-10-19.** shinchiro/mpv-winbuild-cmake publishes dated releases and names the
 mpv commit in the asset:
 
 | | |
 |---|---|
-| Release | `20260814` |
-| Asset | `mpv-dev-x86_64-20260814-git-7b8915bc1d.7z` |
-| Bytes | 31,181,976 |
-| SHA-256 | `0af22b28e920620036d3ae08fd9283156dc9af0420bf4df84b0e02282094599c` |
-| `libmpv-2.dll` bytes | 119,757,824 |
-| `libmpv-2.dll` SHA-256 | `f709c7ca8b183bec76b8158bf0c45c53018c63366750729352612f228ff7bdea` |
-| mpv client API | 2.5 |
+| Release | `20261019` |
+| Asset | `mpv-dev-x86_64-20261019-git-6a262d11f6.7z` |
+| Bytes | 31,618,325 |
+| SHA-256 | `ca8604754170db6f1b23139d8449782b1ae294a883211131954d30085985f77b` |
+| `libmpv-2.dll` bytes | 121,097,728 |
+| `libmpv-2.dll` SHA-256 | `b57cd73984a458e6f1b2e5021d57825487b9e69ea78c9a4111dc7a90279d9764` |
+| mpv client API in the shipped header | 2.6 |
 
 `vendor-mpv.ps1` fails if either digest above stops appearing in this file, the same guard
 `vendor-natives.ps1` carries and for the same reason.
 
-**Why this build and not another.** It is the only Windows libmpv published as a single statically
-linked DLL with no sibling dependencies — the parakeet CUDA drop's three companions are exactly the
-kind of thing that makes a loader path fragile, and this has none. The `-v3` variant in the same
-release targets the x86-64-v3 microarchitecture (AVX2 and friends); **this project takes the plain
+**The Vulkan loader is a required companion.** The PE import table names `vulkan-1.dll`, which
+is not a Windows component. An SDK or graphics driver can hide its absence on a developer's
+machine, so the vendor script also extracts the x64 loader and notice from LunarG's official
+[components archive](https://vulkan.lunarg.com/sdk/home/), without installing it. The release
+probe uses the product's absolute-path `NativeLibrary.TryLoad`, requires the loaded Vulkan
+module to come from this shipped directory, checks every product import, and creates and
+initializes a player with the product's options. It exercises no recording, rendering or GPU.
+
+| Vulkan runtime input | Measured pin |
+|---|---|
+| Version / archive | `1.4.363.0` / `VulkanRT-X64-1.4.363.0-Components.zip` |
+| Archive bytes | 18,211,191 |
+| Archive SHA-256 | `a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a` |
+| x64 `vulkan-1.dll` bytes | 1,729,464 |
+| x64 `vulkan-1.dll` SHA-256 | `e1fcfc9489beefa6a6d9d11d6c7517f6a2b7f16e0d3fb8f4103bee0210f314a3` |
+| `VulkanRT-License.txt` bytes / SHA-256 | 4,008 / `404deb98dabf3e54bf9070d59676b31d69a3da2f9f6e56bdf09ad315c04c718c` |
+
+The runtime's MIT/Apache notices and full Apache-2.0 text travel beside the DLLs. The package
+read-back requires both DLLs and all notices in both channels.
+
+**Why this build and not another.** It is the same upstream and plain x86-64 architecture as
+before; the deleted `20260814` daily release returned 404 during the stable-release build. The
+`-v3` variant in the same release targets the x86-64-v3 microarchitecture (AVX2 and friends); **this project takes the plain
 one**, for the reason the instruction-set section below gives: a v3 baseline can execute AVX2 from a
 static initialiser and kill the process at load on an older CPU, uncatchably, presenting as "the app
 won't launch".
@@ -276,7 +297,7 @@ won't launch".
 **The `.7z` needs 7z on PATH**, which the parakeet `.zip` archives did not. That is upstream's
 choice of container, not a preference here.
 
-**Only `libmpv-2.dll` is unpacked.** The archive also carries `include/mpv/*.h` and an import
+**Only `libmpv-2.dll` is unpacked from the mpv archive.** The archive also carries `include/mpv/*.h` and an import
 library; the headers were read to write `Services/Mpv/MpvNative.cs` and the build has no use for
 either. The interop is hand-written against them rather than taken from a binding package, for the
 reason `Parakeet.Engine.ParakeetCpp` gives: a package's idea of the ABI has to be reconciled with
@@ -305,16 +326,18 @@ Uindosill's own source stays MIT — that is its own file's terms and nothing he
 `NOTICE.md` and `docs/LICENSING.md` say so. `docs/PHASES.md` § *Decided 2026-08-23* records why that
 was preferred to the alternatives.
 
-**What the script enforces, because a licence breach fails silently.** Three notices are copied from
-`licences/` into `native/win-x64/mpv/` beside the DLL, and the run fails if any is missing:
+**What the script enforces, because a licence breach fails silently.** The GPL notices and full
+Apache text are copied from `licences/`, and the Vulkan notice from its pinned archive, into
+`native/win-x64/mpv/` beside the DLLs. The run fails if any is missing:
 
 - `GPL-2.0.txt` — the licence text itself. GPLv2 §1 requires it to travel with the binary.
 - `mpv-Copyright.txt` — mpv's own licensing summary, at the pinned commit.
-- `mpv-WRITTEN-OFFER.txt` — where the corresponding source is, with the exact revisions, plus the
-  three-year written offer GPLv2 §3(b) describes.
+- `mpv-WRITTEN-OFFER.txt` — the known source revisions and build recipe, plus the three-year
+  written offer GPLv2 §3(b) describes.
+- `VulkanRT-License.txt` and `Apache-License-2.0.txt` — the loader's own notices and full Apache text.
 
-The upstream archive contains **no licence text at all**, which is why these come from this
-repository rather than from the download. `build/NativeAssets.targets` was widened to copy
+The mpv archive contains **no licence text at all**, which is why its GPL notices come from this
+repository. The runtime components ZIP supplies its own notice. `build/NativeAssets.targets` was widened to copy
 `native/**/*.txt` so they reach the build output the way the parakeet `LICENSE` does.
 
 **An LGPL libmpv would avoid all of this and does not exist as a prebuilt.** mpv can be built with

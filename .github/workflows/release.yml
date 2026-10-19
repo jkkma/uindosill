@@ -196,6 +196,34 @@ jobs:
 
           exit 0
 
+      # Use a fresh process and the product's NativeLibrary.TryLoad overload. A runner SDK must
+      # not hide libmpv's required Vulkan loader: the probe checks the loaded sibling's path.
+      - name: Validate the pinned player before packing
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          ./scripts/vendor-mpv.ps1
+          pwsh -NoProfile -File scripts/check-mpv.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'The actual player DLLs failed their load/init check.' }
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mpv-smoke-${{ steps.version.outputs.version }}
+          path: packaging/mpv-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mpv-release-inputs-${{ steps.version.outputs.version }}
+          path: |
+            native/archives/mpv-dev-x86_64-*.7z
+            native/archives/VulkanRT-X64-*-Components.zip
+          if-no-files-found: ignore
+          retention-days: 90
+
       # Both flavours. The script vendors the pinned natives per channel, publishes, drops the
       # backend directories the channel does not promise, packs, and then opens each nupkg and
       # asserts its native payload against what that channel claims — including the LICENSE beside
