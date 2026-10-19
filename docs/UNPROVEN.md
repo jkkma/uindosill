@@ -8828,9 +8828,35 @@ now also carries the x64 loader and notices from LunarG's `1.4.363.0` components
 18,211,191-byte archive matches the publisher's SHA-256; the loader is 1,729,464 bytes. Nothing
 was installed into the host system. The runtime's own notice and full Apache-2.0 text ship with it.
 
-The release workflow has a fresh-process check using the same absolute-path
-`NativeLibrary.TryLoad` overload as the product, requiring the actual loaded Vulkan module to
-be the shipped sibling, every product export to resolve, and player creation/options/init to
-succeed. **That Windows check and playback with these replacement bytes remain unproven until
-the actual workflow reports them.** The archive measurements establish byte identity and header
-compatibility only. They establish no video, audio, rendering, seeking or GPU behavior.
+The fresh-process Windows probe passed in
+[release run 39287265978](https://github.com/jkkma/uindosill/actions/runs/39287265978),
+from commit `7c2e8362d29aa01e9df836d3029b4f01b25d0d55`. It uses the same absolute-path
+`NativeLibrary.TryLoad` overload as the product. Both DLL hashes matched their pins, the actual
+loaded Vulkan module was the shipped sibling, client API was 2.6, all 16 unique product exports
+resolved, and the base product options plus player creation/initialization succeeded. The workflow's
+`mpv-smoke-1.0.0` artifact preserves the report. No product loading code needed to change.
+
+**Playback with these replacement bytes remains unproven.** No recording, video rendering,
+audio output, seeking or GPU work was exercised by this load/init probe.
+
+### The corresponding-source inventory is still incomplete
+
+The known build recipe, mpv and FFmpeg revisions and upstream configure/build logs were preserved
+as the explicitly partial `source-provenance-evidence.zip` release asset. The upstream logs and
+artifacts do not establish every linked dependency's exact source revision; some recipe entries
+track moving branches. **A complete exact dependency-source inventory and reconstruction remain
+unproven.** This evidence packet is not a complete corresponding-source archive. The existing
+three-year source offer in `licences/mpv-WRITTEN-OFFER.txt` remains in place; no fulfillment of
+that offer is claimed here.
+
+## Stable-release Python notices were reconciled with the actual bundle — 2026-10-19
+
+The same release run assembled 109 distributions with no notice-collection problems, then stopped
+because the committed generated section differed from that actual bundle. Its retained
+`bundled-python-notices-1.0.0` artifact supplies the exact section now in `NOTICE.md`. The measured
+CPU packages are `torch 2.13.0+cpu`, `torchaudio 2.11.0+cpu` and `torchcodec 0.17.0+cpu`;
+torchcodec was previously recorded as `0.16.0+cpu`. The current table header now also says 109.
+
+This is wheel metadata and notice evidence. The real CPU/CUDA import smoke and final release
+asset/hash checks did not run after the notice guard failed; their success remains unproven
+until a later workflow completes them.

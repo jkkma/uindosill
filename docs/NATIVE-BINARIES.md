@@ -273,7 +273,7 @@ machine, so the vendor script also extracts the x64 loader and notice from Lunar
 [components archive](https://vulkan.lunarg.com/sdk/home/), without installing it. The release
 probe uses the product's absolute-path `NativeLibrary.TryLoad`, requires the loaded Vulkan
 module to come from this shipped directory, checks every product import, and creates and
-initializes a player with the product's options. It exercises no recording, rendering or GPU.
+initializes a player with the base product options. It exercises no recording, rendering or GPU.
 
 | Vulkan runtime input | Measured pin |
 |---|---|
