@@ -301,6 +301,34 @@ jobs:
             throw "The CLI zip is $([math]::Round($size / 1MB, 1)) MB. That is the CUDA drop coming along again."
           }
 
+      - name: Smoke-import the actual Python bundle and CUDA overlay
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # All installer and CLI assets already exist; free only these task-owned staging
+          # directories before extracting the separate CUDA download. Keep Python and releases/.
+          foreach ($path in 'packaging/win', 'packaging/win-cuda', 'packaging/cli-win-x64', 'native') {
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+          }
+          if (Test-Path -LiteralPath packaging/python-bundle.zip) {
+            Remove-Item -LiteralPath packaging/python-bundle.zip
+          }
+          python scripts/check-bundled-python.py --bundle packaging/python-bundle/python `
+            --scratch packaging/import-smoke --repo $env:GITHUB_REPOSITORY `
+            --output packaging/python-import-smoke.json
+          if ($LASTEXITCODE -ne 0) { throw 'The actual Python packages failed their import smoke check.' }
+
+      - name: Retain actual Python import diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-import-smoke-${{ steps.version.outputs.version }}
+          path: packaging/python-import-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Check the release files and update feeds
         shell: bash
         env:
