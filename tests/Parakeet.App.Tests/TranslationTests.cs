@@ -316,8 +316,8 @@ public class TranslationTests
             () => new EngineSelection());
 
         Assert.False(viewModel.CanTranslate);
-        Assert.Contains("not installed", viewModel.TranslationHint, StringComparison.Ordinal);
-        Assert.Contains("Models tab", viewModel.TranslationHint, StringComparison.Ordinal);
+        Assert.Contains("Download", viewModel.TranslationHint, StringComparison.Ordinal);
+        Assert.Contains("Models", viewModel.TranslationHint, StringComparison.Ordinal);
     }
 
     [Fact]

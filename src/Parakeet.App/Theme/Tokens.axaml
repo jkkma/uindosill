@@ -1,10 +1,10 @@
 <!--
   The interface design's tokens, and the Fluent keys they override.
 
-  This is the colour and type system decided 2026-08-19, transcribed from the design's own token
-  sheet. Every value here is a literal from that sheet rather than a value picked here, and the
-  reasoning behind each is in docs/PHASES.md § "Designed 2026-08-19"; what follows is only what a
-  reader needs to change one safely.
+  This colour and type system began with the token sheet decided 2026-08-19. The accent ramps
+  preserve that design; later readability refinements adjust the neutral ink and text roles.
+  docs/PHASES.md § "Designed 2026-08-19" records the original rationale; the notes here describe
+  the current tokens and how to change them safely.
 
   ── Two rules that decide where a colour may go ────────────────────────────────────────────────
 
@@ -162,7 +162,9 @@
   <Color x:Key="Sunken">#F7F8F5</Color>
   <Color x:Key="Ink">#23261F</Color>
   <Color x:Key="InkSecondary">#5A6152</Color>
-  <Color x:Key="InkMeta">#8C9282</Color>
+  <!-- Supporting text is read on white and both accent tints. Keep it dark enough for
+       normal-size text on all three surfaces. -->
+  <Color x:Key="InkMeta">#697260</Color>
 
   <SolidColorBrush x:Key="GroundBrush" Color="{StaticResource Ground}" />
   <SolidColorBrush x:Key="SunkenBrush" Color="{StaticResource Sunken}" />
@@ -253,10 +255,9 @@
   <Color x:Key="SystemAccentColorDark2">#3A4C22</Color>
   <Color x:Key="SystemAccentColorDark3">#2B3919</Color>
 
-  <!-- Rectangles are square. The exceptions are all drawn explicitly where they occur — the
-       switcher pills, the speaker labels, the window buttons — rather than by a radius here. -->
-  <CornerRadius x:Key="ControlCornerRadius">0</CornerRadius>
-  <CornerRadius x:Key="OverlayCornerRadius">0</CornerRadius>
+  <!-- Small control corners soften the content while the native window frame stays square. -->
+  <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
 
   <FontFamily x:Key="ContentControlThemeFontFamily">avares://Uindosill/Assets/Fonts#Instrument Sans</FontFamily>
   <x:Double x:Key="ControlContentThemeFontSize">12.5</x:Double>

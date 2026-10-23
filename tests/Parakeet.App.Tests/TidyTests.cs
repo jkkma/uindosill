@@ -129,7 +129,7 @@ public class TidyTests
         // reporting the last one; it now promises the tidied files beside the plain ones.
         viewModel.SelectedJob = null;
         viewModel.SelectedJob = viewModel.Jobs[0];
-        Assert.Contains(".tidy files", viewModel.ExportNotice, StringComparison.Ordinal);
+        Assert.Contains("cleaned files use .tidy", viewModel.ExportNotice, StringComparison.Ordinal);
         await viewModel.ExportFilesCommand.ExecuteAsync(null);
 
         var tidy = Path.Combine(directory, "a.tidy.txt");

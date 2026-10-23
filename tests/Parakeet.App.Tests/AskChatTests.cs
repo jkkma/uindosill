@@ -1161,14 +1161,14 @@ public class AskChatTests
         // "this recording" to be sent off and transcribe, so the panel says to choose one — the
         // same distinction AskViewModel.TranscriptNotice draws for the tab's other half.
         var noRecording = new AskChatViewModel(new FakeAnswerEngineProvider(), null, null, null);
-        Assert.Contains("Choose a recording", noRecording.PanelNotice, StringComparison.Ordinal);
+        Assert.Contains("Open Recordings", noRecording.PanelNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("this recording first", noRecording.PanelNotice, StringComparison.Ordinal);
         Assert.False(noRecording.IsPanelEnabled);
 
         // And it survives the selection being cleared, which is how a person gets back here.
         noRecording.SetRecording(Transcribed());
         noRecording.SetRecording(null);
-        Assert.Contains("Choose a recording", noRecording.PanelNotice, StringComparison.Ordinal);
+        Assert.Contains("Open Recordings", noRecording.PanelNotice, StringComparison.Ordinal);
 
         var noTranscript = new AskChatViewModel(new FakeAnswerEngineProvider(), null, null, null);
         noTranscript.SetRecording(new JobViewModel("/tmp/raw.wav"));

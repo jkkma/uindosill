@@ -522,17 +522,13 @@ public sealed class EngineProvider : IEngineProvider
             // One entry does this job since the Sortformer entry went to attic/ on 2026-08-27, so
             // the sentence describes it. It is only ever read when it is not installed.
             ModelTask.Diarisation => (DiarisationModel is not null,
-                "Speaker labelling needs its own model, which is not installed yet. Install it from the Models "
-                + "tab: a 31 MiB download with no limit on the number of voices, which needs a free Hugging "
-                + "Face account before it can be fetched."),
+                "Download the speaker model in Models. A Hugging Face account is required."),
             // Translation is answered by DescribeUnavailableTranslation, because its answer depends
             // on which recogniser is selected and none of these do.
             ModelTask.VoiceActivity => (VoiceActivityModel is not null,
-                "Neural speech detection needs its own model, which is not installed yet. Install it from the Models "
-                + "tab; it is a 2.2 MiB download and hears pauses under music that the loudness gate cannot."),
+                "Download the speech detection model in Models."),
             ModelTask.Tidying => (TidyingModel is not null,
-                "Tidying up the transcript needs its own model, which is not installed yet. Install it from the "
-                + "Models tab; it is a 3.9 GiB download and runs beside the speech recogniser."),
+                "Download the transcript cleanup model in Models."),
             // Not every task runs in the sidecar — transcription is parakeet.cpp — so an unhandled
             // one returns nothing rather than falling through to a sentence about a Python it does
             // not use, which would tell somebody to reinstall over a feature that is working.
@@ -558,7 +554,7 @@ public sealed class EngineProvider : IEngineProvider
         // run it in.
         if (task is ModelTask.Tidying && LlamaServerLocator.TryFind() is null)
         {
-            return "The model is installed, but this build does not include the language-model engine that runs it.";
+            return "The model is installed, but this build has no engine to run it.";
         }
 
         if (task is ModelTask.Diarisation && !HasBundledPython)
@@ -583,10 +579,8 @@ public sealed class EngineProvider : IEngineProvider
     {
         var reason = _python.Value.Reason;
         return reason is { Length: > 0 }
-            ? "The model is installed, but the Python this feature runs in was not found. " + reason
-            : "The model is installed, but the Python this feature runs in is not beside the application. "
-              + "It ships with uindosill rather than being something to install, so this copy is incomplete: "
-              + "reinstalling is the repair.";
+            ? "The Python runtime for this model was not found. " + reason
+            : "The bundled Python runtime is missing. Reinstall Uindosill to restore this feature.";
     }
 
     /// <inheritdoc />
@@ -733,10 +727,7 @@ public sealed class EngineProvider : IEngineProvider
 
         if (!_store.IsInstalled(entry))
         {
-            var size = entry.TotalSizeBytes is { } bytes ? $"a {ByteSize.Describe(bytes)} download" : "a download";
-            whyNot = $"An English version needs the '{entry.DisplayName}' model, which is not installed yet. " +
-                     $"Install it from the Models tab; it is {size} and reads " +
-                     $"{DescribeLanguages(entry)} into English only.";
+            whyNot = $"Download '{entry.DisplayName}' in Models to translate {DescribeLanguages(entry)} into English.";
             return null;
         }
 

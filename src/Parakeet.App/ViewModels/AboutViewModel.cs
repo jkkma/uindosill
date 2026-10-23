@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Parakeet.Core.Licensing;
-using Parakeet.Core.Transcription;
 
 namespace Parakeet.App.ViewModels;
 
@@ -52,22 +51,18 @@ public sealed partial class AboutViewModel : ObservableObject
     /// What this application is, in the two sentences somebody opening an About box will read.
     /// </summary>
     /// <remarks>
-    /// The second sentence is the same promise the Updates tab makes, and it is here as well
-    /// because this is where a person comes to find out what a program does on their network. The
-    /// two must not drift: if the launch check ever stops being the only unprompted request, both
-    /// say so. "No account to transcribe" rather than "no account", because the speaker-labelling
+    /// The network note also names setup downloads: the installed NVIDIA build can start its
+    /// acceleration download on launch. "No account to transcribe" rather than "no account", because the speaker-labelling
     /// model is gated by its maker behind a free Hugging Face account (since 2026-08-27, when the
     /// pyannote entry became the only diariser) — an absolute here would be found out at that
     /// download.
     /// </remarks>
     public string Summary =>
-        "Uindosill turns recordings into text on this machine. The audio, transcripts and models " +
-        "stay on your own disk, and no account is needed to transcribe.";
+        "Transcribe recordings on your computer. Audio is processed locally, and no account is needed for transcription.";
 
     /// <inheritdoc cref="Summary" />
     public string NetworkNote =>
-        "Without being asked, this application only checks once at launch for a newer version, " +
-        "which the Updates tab can switch off. Every other download you start yourself.";
+        "Startup update checks can be turned off in Updates. The NVIDIA build can also download speaker acceleration during setup.";
 
     /// <summary>
     /// The full notice package, shown in the application because the licences require it to be
@@ -107,8 +102,7 @@ public sealed partial class AboutViewModel : ObservableObject
     }
 
     public string LicenceNotice =>
-        "Shown here because the licences require the notice to be present where the material is " +
-        "used, not only in a file in the source repository.";
+        "Licence terms and attribution notices for the application, models and third-party components.";
 
     public string EnvironmentSummary =>
         $"{RuntimeInformation.FrameworkDescription} on {RuntimeInformation.OSDescription} " +
@@ -119,8 +113,7 @@ public sealed partial class AboutViewModel : ObservableObject
     /// thread control here would be a slider connected to nothing.
     /// </summary>
     public string ThreadingNote =>
-        $"Decode threads are chosen by the engine. The parakeet.cpp ABI takes no thread count, so this build " +
-        $"cannot cap them at the recommended {DecodeThreadPlanner.MaxRecommended}.";
+        "The transcription engine manages its own threads. This build cannot set a thread limit.";
 
     /// <summary>
     /// Everything on the System pane as one block, which is what the Copy button puts on the

@@ -467,8 +467,8 @@ public class AskTabTests
 
         ask.TranscriptPane = 1;
         Assert.Single(ask.Lines!);
-        Assert.Contains("a sentence at a time", ask.TranslationPaneNotice, StringComparison.Ordinal);
-        Assert.Contains("not marked", ask.TranslationPaneNotice, StringComparison.Ordinal);
+        Assert.Contains("timed by sentence", ask.TranslationPaneNotice, StringComparison.Ordinal);
+        Assert.Contains("Switch to Transcript", ask.TranslationPaneNotice, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -634,7 +634,7 @@ public class AskTabTests
 
         Assert.True(ask.CanPlay);
         Assert.False(ask.HasTranscript);
-        Assert.Contains("has not been transcribed yet", ask.TranscriptNotice, StringComparison.Ordinal);
+        Assert.Contains("Transcribe this recording", ask.TranscriptNotice, StringComparison.Ordinal);
 
         Fill(job);
 
@@ -1525,8 +1525,8 @@ public class AskTabWindowTests
         // exported earlier keep the labels they were written with (since 2026-08-30, when the
         // notice stopped claiming files keep the diariser's own labels — exports render through
         // the renamed view and always did).
-        Assert.Contains("files you export from now on carry them too", notice.Text, StringComparison.Ordinal);
-        Assert.Contains("keep the labels they were written with", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("future exports", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Existing files keep their labels", notice.Text, StringComparison.Ordinal);
     }
 
     /// <summary>Three segments over two speakers, which is what it takes to see a rename land on
@@ -2176,7 +2176,7 @@ public class AskTabWindowTests
         var notice = window.FindControl<TextBlock>("VideoNotice");
         Assert.NotNull(notice);
         Assert.True(notice!.IsVisible);
-        Assert.Contains("no video player", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Video playback is unavailable", notice.Text, StringComparison.Ordinal);
 
         // The sound still plays: the transport is live, and the pane is simply absent.
         Assert.True(viewModel.Ask.CanPlay);

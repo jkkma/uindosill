@@ -279,7 +279,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         {
             return new AnswerEngineAvailability
             {
-                WhyNot = "Asking needs the language-model engine, and this build does not include it.",
+                WhyNot = "This build does not include the engine needed to answer questions.",
             };
         }
 
@@ -287,8 +287,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         {
             return new AnswerEngineAvailability
             {
-                WhyNot = "Asking needs a language model: a .gguf file in the models folder named "
-                    + "in About.",
+                WhyNot = "Install an answering model in Models, or choose an installed model in Settings.",
             };
         }
 
@@ -301,8 +300,7 @@ public sealed class LlamaAnswerEngineProvider : IAnswerEngineProvider
         // the chat verbatim, so it is user copy, not a developer's assertion.
         var model = FindModelFile()
             ?? throw new InvalidOperationException(
-                "The language model file is gone from the models folder. Put a .gguf file back, "
-                + "the About window shows where the folder is.");
+                "The answering model is missing. Download it again in Models, or choose another model in Settings.");
 
         return new LlamaServerAnswerEngine(new LlamaServerOptions
         {

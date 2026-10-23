@@ -62,8 +62,7 @@ public sealed partial class UpdatesViewModel : ObservableObject
 
         _status = updater.IsInstalled
             ? "No check has run yet."
-            : "This copy was not installed by the installer: a build from source, or the zip unpacked by "
-              + "hand: so there is nothing here to update. Newer versions are on the releases page.";
+            : "Automatic updates require an installed copy. Download a newer version from the project's releases page.";
     }
 
     /// <summary>What this build calls itself, shown whether or not anything newer exists.</summary>
@@ -206,8 +205,8 @@ public sealed partial class UpdatesViewModel : ObservableObject
         // it was read as a hang by the person who had built the feature that morning. Naming both
         // halves is what turns a still bar into the slow half rather than a failure.
         // `docs/UNPROVEN.md` § *No release has shipped a delta package* has the run.
-        Status = $"Getting {AvailableVersion}. The download is quick; rebuilding it from this copy "
-            + "afterwards takes a few minutes, and the bar barely moves while it does.";
+        Status = $"Downloading version {AvailableVersion}. Rebuilding the update can take time, "
+            + "and progress may pause while files are prepared.";
 
         try
         {

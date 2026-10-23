@@ -17,8 +17,8 @@
 
   <!--
     The interface designed 2026-08-19, in the shape that design specifies: no OS title bar, a 46px
-    headerbar carrying the application name and a pill view-switcher, and square corners on
-    everything that is not a circle.
+    headerbar carrying the application name and a pill view-switcher. The content uses small
+    control corners; the native window frame stays square.
 
     Colours, type and control geometry are not here — they are in Theme/Tokens.axaml and
     Theme/Controls.axaml, which reach the whole application. What is here is layout and the few
@@ -209,7 +209,8 @@
                into a 9x9 box has no defined answer — Avalonia drew a dot. Left at their natural
                size the three glyphs are also consistent with each other, which uniform scaling of
                three different aspect ratios was not. -->
-          <Button Name="WindowMinimise" WindowDecorationProperties.ElementRole="MinimizeButton" Classes="window" ToolTip.Tip="Minimise">
+          <Button Name="WindowMinimise" WindowDecorationProperties.ElementRole="MinimizeButton" Classes="window" ToolTip.Tip="Minimise"
+                  AutomationProperties.Name="Minimise window">
             <Path StrokeThickness="1.3"
                   StrokeLineCap="Round" Data="M0 0h11" Stretch="None" />
           </Button>
@@ -217,13 +218,15 @@
                front square with the top-right of a second showing behind it. Deliberately the same
                glyph in both window states — a button that changes shape under the pointer is a
                button people misclick, and the tooltip says which way it goes. -->
-          <Button Name="WindowMaximise" WindowDecorationProperties.ElementRole="MaximizeButton" Classes="window" ToolTip.Tip="Maximise">
+          <Button Name="WindowMaximise" WindowDecorationProperties.ElementRole="MaximizeButton" Classes="window" ToolTip.Tip="Maximise"
+                  AutomationProperties.Name="Maximise or restore window">
             <Path StrokeThickness="1.3"
                   StrokeJoin="Round" StrokeLineCap="Round"
                   Data="M0 3.2h7.8v7.8h-7.8z M2.9 3.2v-2.9h7.8v7.8h-2.9"
                   Stretch="None" />
           </Button>
-          <Button Name="WindowClose" WindowDecorationProperties.ElementRole="CloseButton" Classes="window close" ToolTip.Tip="Close">
+          <Button Name="WindowClose" WindowDecorationProperties.ElementRole="CloseButton" Classes="window close" ToolTip.Tip="Close"
+                  AutomationProperties.Name="Close window">
             <Path StrokeThickness="1.3"
                   StrokeLineCap="Round" Data="M0 0l10.5 10.5M10.5 0l-10.5 10.5" Stretch="None" />
           </Button>
@@ -307,6 +310,7 @@
                   Name="DropZone"
                   DragDrop.AllowDrop="{Binding !IsRunning}"
                   Background="{DynamicResource Matcha50Brush}"
+                  CornerRadius="8"
                   Margin="0,0,0,12">
             <!-- The dash is a Rectangle rather than the Border's own edge: in Avalonia 12.1.1
                  StrokeDashArray is a Shape property and Border has no dashed variant, so a border
@@ -314,19 +318,25 @@
                  does not take part in the layout. -->
             <Panel>
               <Rectangle Stroke="{DynamicResource Matcha400Brush}" StrokeThickness="1"
-                         StrokeDashArray="4,3" />
-              <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="18">
-                <Path Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="1.9"
+                         StrokeDashArray="4,3" RadiusX="8" RadiusY="8" />
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,16">
+                <Path Grid.Column="0" Stroke="{DynamicResource Matcha700Brush}" StrokeThickness="1.9"
                       StrokeLineCap="Round" StrokeJoin="Round"
                       Data="M12 3v11m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
-                      Width="19" Height="19" Stretch="Uniform" HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding DropHint}" HorizontalAlignment="Center"
+                      Width="25" Height="25" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,16,0" />
+                <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center">
+                <TextBlock Text="{Binding DropHint}" TextWrapping="Wrap"
                            FontSize="14.5" FontWeight="SemiBold"
                            Foreground="{DynamicResource Matcha700Brush}" />
-                <TextBlock Text="{Binding SupportedExtensionsHint}" HorizontalAlignment="Center"
+                <TextBlock Text="{Binding SupportedExtensionsHint}"
                            Classes="mono meta" FontSize="10.5"
                            IsVisible="{Binding !IsRunning}" />
-              </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="2" Name="BrowseFiles" Content="Browse files…"
+                        Classes="onPage" Margin="16,0,0,0" VerticalAlignment="Center"
+                        IsEnabled="{Binding !IsRunning}"
+                        ToolTip.Tip="Choose audio or video files to add to the queue" />
+              </Grid>
             </Panel>
           </Border>
 
@@ -342,12 +352,13 @@
                   VerticalAlignment="Bottom">
             <StackPanel Spacing="7">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" Text="Or a link" Classes="secondary"
+                <TextBlock Grid.Column="0" Text="Add a link" Classes="secondary"
                            VerticalAlignment="Center" Margin="0,0,10,0" />
                 <TextBox Grid.Column="1" Name="LinkBox" Text="{Binding Url}"
+                         AutomationProperties.Name="Recording link"
                          IsEnabled="{Binding CanAddUrl}"
-                         PlaceholderText="Paste a video or podcast link: the audio is downloaded and transcribed" />
-                <Button Grid.Column="2" Name="FetchLink" Classes="primary" Content="Fetch"
+                         PlaceholderText="Paste a video or podcast link" />
+                <Button Grid.Column="2" Name="FetchLink" Content="Add link"
                         Margin="8,0,0,0"
                         Command="{Binding FetchUrlCommand}"
                         IsEnabled="{Binding CanFetchUrl}" />
@@ -369,6 +380,14 @@
 
             <!-- ── The queue ──────────────────────────────────────────────────────────────── -->
             <DockPanel Grid.Column="0">
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                <TextBlock Text="Recording queue" Classes="section" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Background="{DynamicResource Matcha100Brush}"
+                        CornerRadius="10" Padding="8,2">
+                  <TextBlock Name="QueueCount" Text="{Binding Jobs.Count}" Classes="meta"
+                             Foreground="{DynamicResource Matcha700Brush}" />
+                </Border>
+              </Grid>
               <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="7" Margin="0,10,0,0">
                 <Button Classes="primary" Content="Start" Command="{Binding StartCommand}"
                         IsEnabled="{Binding CanStart}" />
@@ -389,7 +408,8 @@
                          Classes="fine warning" Margin="0,8,0,0"
                          IsVisible="{Binding StartHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-              <ListBox ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
+              <Panel>
+              <ListBox Name="RecordingQueue" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:JobViewModel">
                     <StackPanel Spacing="5">
@@ -439,6 +459,13 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
+              <StackPanel Name="QueueEmptyState" Spacing="6" Margin="24" VerticalAlignment="Center"
+                          IsVisible="{Binding Jobs.Count, Converter={StaticResource IndexMatch}, ConverterParameter=0}">
+                <TextBlock Text="Your recordings appear here" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="Add files or a link, then select Start to transcribe." Classes="secondary"
+                           TextWrapping="Wrap" FontSize="12" LineHeight="18" />
+              </StackPanel>
+              </Panel>
             </DockPanel>
 
             <GridSplitter Grid.Column="1" Background="Transparent" />
@@ -456,16 +483,19 @@
                    Translation first and speakers last, so the strip that grows when ticked — the
                    count field and up to two sentences appear under the speaker box — moves only
                    the transcript below it and never the other opt-in. -->
-              <StackPanel DockPanel.Dock="Top" Spacing="7" Margin="0,0,0,11">
+              <ScrollViewer DockPanel.Dock="Top" MaxHeight="140" Margin="0,0,0,11"
+                            HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Spacing="6">
 
                 <!-- The tidy opt-in, first because it grows nothing: a small language model takes
                      fillers, stutters and false starts out of each line beside the recogniser, and
                      every line is held to a delete-only contract against what was spoken. Off by
                      default; disabled with a reason while its model or the engine is missing. -->
-                <Border Classes="tinted" Padding="10,8">
+                <Border Classes="tinted" Padding="10,3">
                   <DockPanel LastChildFill="True">
                     <CheckBox DockPanel.Dock="Left"
                               Name="TidyUpTranscript"
+                              Classes="transcriptOption"
                               Content="Clean up the transcript"
                               FontWeight="SemiBold"
                               Margin="0,0,9,0"
@@ -486,10 +516,11 @@
                      beside it and that is a finding rather than an omission — the checkpoint is
                      many-to-one, told the target and never the source, so there is nothing for a
                      picker to say. The direction is fixed: into English, never out of it. -->
-                <Border Classes="tinted" Padding="10,8">
+                <Border Classes="tinted" Padding="10,3">
                   <DockPanel LastChildFill="True">
                     <CheckBox DockPanel.Dock="Left"
                               Name="TranslateToEnglish"
+                              Classes="transcriptOption"
                               Content="Translate to English"
                               FontWeight="SemiBold"
                               Margin="0,0,9,0"
@@ -508,7 +539,7 @@
 
                      Matcha, because labelling speakers is a v1 feature. It sits on its own tinted
                      strip so the opt-in reads as a decision rather than another checkbox. -->
-                <Border Classes="tinted" Padding="10,8">
+                <Border Classes="tinted" Padding="10,3">
                   <!-- The outer panel stacks vertically, which is what makes the wrapping below
                        work: a StackPanel measures its children with infinite size along the axis
                        it stacks on, so only the horizontal ones break TextWrapping. -->
@@ -521,6 +552,7 @@
                     <DockPanel LastChildFill="True">
                       <CheckBox DockPanel.Dock="Left"
                                 Name="LabelSpeakers"
+                                Classes="transcriptOption"
                                 Content="Label speakers"
                                 FontWeight="SemiBold"
                                 Margin="0,0,9,0"
@@ -585,6 +617,7 @@
                   </StackPanel>
                 </Border>
               </StackPanel>
+              </ScrollViewer>
 
               <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" TextWrapping="Wrap"
                          Classes="meta" FontSize="11.5" Margin="0,10,0,0" />
@@ -778,11 +811,11 @@
 
               <StackPanel Orientation="Horizontal" Spacing="24">
                 <StackPanel Spacing="3">
-                  <TextBlock Text="LICENCE" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
+                  <TextBlock Text="Licence" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
                   <TextBlock Text="{Binding Selected.Licence}" />
                 </StackPanel>
                 <StackPanel Spacing="3">
-                  <TextBlock Text="LANGUAGES" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
+                  <TextBlock Text="Languages" Classes="section" Foreground="{DynamicResource InkMetaBrush}" />
                   <TextBlock Text="{Binding Selected.Languages}" TextWrapping="Wrap" MaxWidth="420" />
                 </StackPanel>
               </StackPanel>
@@ -853,7 +886,7 @@
                  something the reader had not clicked. -->
             <Border Classes="tinted" Padding="14" IsVisible="{Binding ShowEnginePanel}">
               <StackPanel Spacing="11">
-                <TextBlock Text="SPEECH RECOGNITION ENGINE" Classes="section"
+                <TextBlock Text="Transcription engine" Classes="section"
                            Foreground="{DynamicResource Matcha700Brush}" />
                 <TextBlock Text="{Binding LoadedSummary}" TextWrapping="Wrap" />
 
@@ -897,7 +930,7 @@
                  the disk. -->
             <Border Classes="tinted" Padding="14" IsVisible="{Binding HasSideloaded}">
               <StackPanel Spacing="11">
-                <TextBlock Text="ALSO IN THIS FOLDER" Classes="section"
+                <TextBlock Text="Other files in this folder" Classes="section"
                            Foreground="{DynamicResource Matcha700Brush}" />
                 <TextBlock Text="{Binding SideloadedSummary}" TextWrapping="Wrap" Classes="meta" />
 
@@ -998,10 +1031,23 @@
                  under a left-aligned heading. -->
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="Transcribing writes no files by itself. Tick the formats, choose where they go, and press Export to write them for the recording selected in the queue." />
+                       Text="Choose a recording in the Transcribe queue, select formats and an output folder, then export its transcript." />
 
+            <Border Classes="tinted" Padding="16,13">
+              <StackPanel Spacing="5">
+                <TextBlock Text="Selected recording" Classes="section" />
+                <TextBlock Name="ExportRecording" Text="{Binding SelectedJob.DisplayName}"
+                           FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding SelectedJob.Path}"
+                           IsVisible="{Binding SelectedJob, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="Choose a recording in the Transcribe queue." Classes="secondary"
+                           IsVisible="{Binding SelectedJob, Converter={x:Static ObjectConverters.IsNull}}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="panel" Padding="18,16">
             <StackPanel Spacing="9">
-              <TextBlock Text="OUTPUT FORMATS" Classes="section" />
+              <TextBlock Text="Formats" Classes="section" />
               <ItemsControl ItemsSource="{Binding Formats}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -1016,9 +1062,11 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </StackPanel>
+            </Border>
 
+            <Border Classes="panel" Padding="18,16">
             <StackPanel Spacing="9">
-              <TextBlock Text="WHERE THEY GO" Classes="section" />
+              <TextBlock Text="Save location" Classes="section" />
               <!-- Blank means beside the original, which is what the placeholder says rather than
                    leaving an empty box to be read as an error. The choice outlives the
                    application: MainWindowViewModel saves it as it changes and restores it at
@@ -1028,7 +1076,8 @@
                 <TextBlock Text="Output folder" Classes="secondary" Width="88"
                            VerticalAlignment="Center" />
                 <TextBox Text="{Binding OutputDirectory}" Width="280"
-                         PlaceholderText="beside each input file" />
+                         AutomationProperties.Name="Output folder"
+                         PlaceholderText="Beside the selected recording" />
                 <!-- 30px rather than the 32 a button standing on a page takes, because this one
                      is in a row with a text box and has to match its height.
 
@@ -1057,7 +1106,7 @@
 
                    Absent on a transcript nobody labelled, which is most of them: the pass is
                    opt-in. -->
-              <TextBlock Text="WHO IS SPEAKING" Classes="section" Margin="0,4,0,0"
+              <TextBlock Text="Speaker names" Classes="section" Margin="0,4,0,0"
                          IsVisible="{Binding HasSpeakers}" />
 
               <ItemsControl Name="ExportVoices" ItemsSource="{Binding Speakers}"
@@ -1102,6 +1151,7 @@
                          HorizontalAlignment="Left" TextWrapping="Wrap"
                          Text="{Binding ExportNotice}" />
             </StackPanel>
+            </Border>
 
             <Separator />
 
@@ -1123,13 +1173,13 @@
                  the shape of every interface defect this window has shipped, so the notice is
                  there in the disabled case too, saying which of the several reasons it is. -->
             <StackPanel Spacing="9">
-              <TextBlock Text="INTO THE RECORDING" Classes="section" />
+              <TextBlock Text="Subtitles in the recording" Classes="section" />
 
               <Button Name="AddToRecording" Classes="onPage"
-                      Content="Add transcript to the recording"
+                      Content="Add subtitles to recording"
                       HorizontalAlignment="Left"
                       Command="{Binding AddToRecordingCommand}"
-                      ToolTip.Tip="Writes a new file beside the original with the transcript inside it" />
+                      ToolTip.Tip="Save a new recording with a subtitle track beside the original" />
 
               <TextBlock Name="AddToRecordingNotice" Classes="fine meta" MaxWidth="560"
                          HorizontalAlignment="Left"
@@ -1173,10 +1223,10 @@
             <Separator />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
-                       Text="That launch check is one HTTPS request to this project's GitHub releases page; it sends nothing about you and downloads nothing until you press the button above." />
+                       Text="The startup check contacts GitHub for a newer version. Updates download when you choose Download and restart." />
 
             <TextBlock TextWrapping="Wrap" Classes="secondary" FontSize="12" LineHeight="19.8"
-                       Text="Updating replaces the application's own files. Downloaded models are kept somewhere else on purpose, so an update never touches them. Uninstalling asks before it removes them." />
+                       Text="Updates keep your downloaded models. During uninstall, Uindosill asks before deleting stored models." />
 
           </StackPanel>
         </ScrollViewer>
@@ -1498,14 +1548,15 @@
               <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Margin="0,11,0,0"
                     IsEnabled="{Binding HasTranscript}">
                 <TextBox Grid.Column="0" Name="SearchBox" Text="{Binding SearchTerm}"
-                         PlaceholderText="Find a word: Enter for the next one" />
+                         AutomationProperties.Name="Search transcript"
+                         PlaceholderText="Search transcript…" ToolTip.Tip="Press Enter for the next match" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
                             Margin="9,0,0,0" VerticalAlignment="Center">
                   <TextBlock Name="SearchSummary" Text="{Binding SearchSummary}" Classes="meta"
                              MinWidth="62" TextAlignment="Right" VerticalAlignment="Center" />
-                  <Button Name="PreviousMatch" Content="Previous" ToolTip.Tip="The hit before this one"
+                  <Button Name="PreviousMatch" Content="Previous" ToolTip.Tip="Previous match"
                           Command="{Binding PreviousMatchCommand}" />
-                  <Button Name="NextMatch" Content="Next" ToolTip.Tip="The next hit - or press Enter"
+                  <Button Name="NextMatch" Content="Next" ToolTip.Tip="Next match (Enter)"
                           Command="{Binding NextMatchCommand}" />
                 </StackPanel>
               </Grid>
@@ -1587,7 +1638,7 @@
           <Border Grid.Column="1" Classes="panel">
             <Panel>
               <DockPanel Name="AskPanel" IsEnabled="{Binding Chat.IsPanelEnabled}" Margin="15,14">
-                <TextBlock DockPanel.Dock="Top" Text="ASK THIS TRANSCRIPT" Classes="section" />
+                <TextBlock DockPanel.Dock="Top" Text="Ask this transcript" Classes="section" />
 
                 <!-- The input, and the one line that explains what just happened to the models. -->
                 <StackPanel DockPanel.Dock="Bottom" Spacing="7" Margin="0,12,0,0">
@@ -1596,7 +1647,7 @@
                              IsVisible="{Binding Chat.ResidencyNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   <Grid ColumnDefinitions="*,8,Auto">
                     <TextBox Grid.Column="0" Name="AskInput"
-                             Text="{Binding Chat.QuestionText}"
+                             Text="{Binding Chat.QuestionText}" AutomationProperties.Name="Question about this recording"
                              PlaceholderText="Ask about this recording…" />
                     <Button Grid.Column="2" Name="AskSend" Content="Ask"
                             Command="{Binding Chat.AskCommand}"
@@ -1620,7 +1671,9 @@
                        sentence that said so left on 2026-09-06, when every description the window
                        draws was cut to two lines; tools/measure-lines is the ruler. -->
                   <TextBlock Classes="fine secondary" TextWrapping="Wrap"
-                             Text="Short bullets, each with a timestamp you click to check it. Everything runs here; nothing is saved." />
+                             Text="Ask a question or request a summary. Use timestamps to check answers." />
+                  <TextBlock Classes="fine meta" TextWrapping="Wrap"
+                             Text="Chat clears when you switch recordings or close Uindosill. Copy answers to keep them." />
                   <ItemsControl ItemsSource="{Binding Suggestions}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -1904,13 +1957,13 @@
                 IsVisible="{Binding IsRecordingsDrawerOpen}">
           <DockPanel Margin="13">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,9">
-              <TextBlock Text="RECORDINGS" Classes="section" VerticalAlignment="Center" />
+              <TextBlock Text="Recordings" Classes="section" VerticalAlignment="Center" />
               <Button Grid.Column="1" Name="CloseRecordings" Content="Close"
                       Command="{Binding CloseRecordingsDrawerCommand}" />
             </Grid>
             <TextBlock DockPanel.Dock="Top" Classes="fine meta" Margin="0,0,0,9"
                        IsVisible="{Binding !HasRecordings}"
-                       Text="Nothing in the queue yet. Drop a file on the Transcribe tab and it appears here, playable straight away." />
+                       Text="Add a file or link on Transcribe to play it here. Transcribe it to read and ask questions." />
             <ListBox ItemsSource="{Binding Recordings}" SelectedItem="{Binding SelectedRecording}">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:JobViewModel">
@@ -1951,7 +2004,7 @@
             <TextBlock Text="Settings" Classes="title" />
             <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                        HorizontalAlignment="Left" LineHeight="20"
-                       Text="Everyday choices are on General. Advanced changes how the work is done. Speaker labels and translation are on the Transcribe tab." />
+                       Text="Manage downloads and answering preferences in General. Advanced controls audio processing, speaker labels and model memory." />
           </StackPanel>
 
           <!-- Two sub-tabs rather than one long page, added 2026-08-29. The page had grown to
@@ -2001,7 +2054,7 @@
                    No IsVisible: unlike the CUDA block this applies to every machine, and a build
                    that vendored neither tool says so in the line under the button rather than
                    hiding a control whose absence would be its own puzzle. -->
-              <TextBlock Text="DOWNLOADING FROM LINKS" Classes="section" />
+              <TextBlock Text="Link downloads" Classes="section" />
 
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                          Text="{Binding ToolsExplanation}" />
@@ -2016,7 +2069,8 @@
                          IsVisible="{Binding HasToolsMessage}"
                          Text="{Binding ToolsMessage}" />
 
-              <TextBlock Text="SPEAKER LABELS" Classes="section" Margin="0,8,0,0" />
+              <Separator Margin="0,7" />
+              <TextBlock Text="Speaker labels" Classes="section" Margin="0,8,0,0" />
 
               <!-- The CUDA pack. Drawn only on a machine whose driver has CUDA, or one that already
                    has the pack — a computer that cannot use this is not shown a 1.8 GB download and
@@ -2066,12 +2120,14 @@
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Hugging Face token" Classes="secondary" VerticalAlignment="Center" />
                 <TextBox Text="{Binding HuggingFaceToken}" MinWidth="260" PasswordChar="•"
+                         AutomationProperties.Name="Hugging Face access token"
                          PlaceholderText="hf_…" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="The speaker labelling model needs a Hugging Face account: accept its terms on its page, then paste a read-only token here. It is stored in your settings file, and sent to huggingface.co only." />
+                         Text="Accept the speaker model's terms on Hugging Face, then paste a read-only token. It is saved in settings and sent only to huggingface.co." />
 
-              <TextBlock Text="ASKING" Classes="section" Margin="0,8,0,0" />
+              <Separator Margin="0,7" />
+              <TextBlock Text="Answers" Classes="section" Margin="0,8,0,0" />
               <!-- A box, like every other on-or-off setting in this window. It was a ToggleSwitch,
                    and the toolkit's switch drew its label above the track with an "Off" beside it
                    — a rounded control with a two-line footprint on a page where every other
@@ -2083,7 +2139,7 @@
                           VerticalAlignment="Center"
                           IsChecked="{Binding AskThinking}" />
                 <TextBlock Classes="meta" TextWrapping="Wrap" VerticalAlignment="Center"
-                           Text="The model reasons privately before answering, which takes longer. Takes effect at your next question." />
+                           Text="Allow extra reasoning before the next answer. This can take longer." />
               </DockPanel>
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Model" Classes="secondary" VerticalAlignment="Center" />
@@ -2102,10 +2158,11 @@
                  because a Settings page is where every desktop application in the world puts it,
                  and being findable is the entire job of this button. -->
             <StackPanel Spacing="9">
-              <TextBlock Text="ABOUT" Classes="section" />
+              <Separator Margin="0,7" />
+              <TextBlock Text="About" Classes="section" />
               <TextBlock Classes="secondary" TextWrapping="Wrap" MaxWidth="640"
                          HorizontalAlignment="Left" LineHeight="20"
-                         Text="This build, the licences and notices for its models and components, and the machine facts a bug report asks for." />
+                         Text="Version details, licences and system information for bug reports." />
               <Button Name="ShowAbout" Classes="onPage" Content="About Uindosill"
                       HorizontalAlignment="Left" />
             </StackPanel>
@@ -2130,7 +2187,7 @@
                             Data="M8 2.9l5.6 10.2H2.4z M8 6.6v3.1 M8 11.5v.1"
                             Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Top" />
                       <TextBlock TextWrapping="Wrap" Classes="warning" FontSize="11.5" MaxWidth="560"
-                                 Text="Leave these alone unless you know what they do: a wrong choice makes transcripts worse or stops a model loading, not always visibly. Changes apply from the next recording or question." />
+                                 Text="These settings affect processing, output quality and model loading. Changes apply to the next recording or question." />
                     </StackPanel>
                   </Border>
 
@@ -2138,7 +2195,7 @@
                               x:DataType="vm:TranscribeViewModel">
             <!-- ── How the audio is cut ────────────────────────────────────────────────────── -->
             <StackPanel Spacing="9">
-              <TextBlock Text="HOW THE AUDIO IS CUT" Classes="section" />
+              <TextBlock Text="Audio segments" Classes="section" />
 
               <StackPanel Orientation="Horizontal" Spacing="14">
                 <CheckBox Content="Fixed windows instead of speech detection"
@@ -2181,7 +2238,7 @@
                    act on. -->
               <TextBlock Name="SegmentationNote" Classes="fine meta" MaxWidth="640"
                          HorizontalAlignment="Left"
-                         Text="Speech detection cuts where the talking stops; fixed windows cut on the clock instead. Either way a segment is at most 30 seconds, so a cap above that has no effect." />
+                         Text="Speech detection splits at pauses; fixed windows split at regular intervals. Segments are limited to 30 seconds." />
             </StackPanel>
 
             <!-- There is no spoken-language picker on this page, and that is a decision rather than
@@ -2202,7 +2259,7 @@
                    about these three controls that a reader cannot discover without first losing a
                    setting to it. Said now in the page's English rather than beside a list of keys. -->
               <TextBlock Classes="fine meta" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="These three are not saved, and go back to their defaults when the window closes." />
+                         Text="These audio settings reset when Uindosill closes." />
                   </StackPanel>
 
             <Separator />
@@ -2210,7 +2267,7 @@
               <StackPanel Spacing="9"
                           DataContext="{Binding $parent[Window].DataContext}"
                           x:DataType="vm:MainWindowViewModel">
-              <TextBlock Text="SPEAKER LABELS" Classes="section" />
+              <TextBlock Text="Speaker labels" Classes="section" />
 
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Run labelling on" Classes="secondary" VerticalAlignment="Center" />
@@ -2253,9 +2310,9 @@
               <StackPanel Spacing="9"
                           DataContext="{Binding $parent[Window].DataContext}"
                           x:DataType="vm:MainWindowViewModel">
-              <TextBlock Text="ASKING" Classes="section" />
+              <TextBlock Text="Answers" Classes="section" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="What to search" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Answer source" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskModes}"
                           SelectedItem="{Binding SelectedAskMode}" MinWidth="200" />
               </StackPanel>
@@ -2266,19 +2323,19 @@
                    repeatable, and what it costs in finding the right part of the recording is not
                    yet known. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="How much to search" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Search depth" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskEvidenceLevels}"
                           SelectedItem="{Binding SelectedAskEvidence}" MinWidth="240" />
               </StackPanel>
               <TextBlock Classes="meta" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
-                         Text="How much of the transcript is searched per question. Searching more takes longer." />
+                         Text="Include more matching passages per question. Higher depth can take longer." />
               <!-- The expert placement. Here rather than left as a constant because the constant
                    was the second machine's answer applied to every machine: integrated graphics
                    need the experts in system memory or a large mixture will not load, and a card
                    with memory of its own should be holding them. Automatic asks the loader; the
                    two fixed rows are for a machine it reads wrongly. -->
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Where the model sits" Classes="secondary" VerticalAlignment="Center" />
+                <TextBlock Text="Model memory" Classes="secondary" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding AskExpertPlacements}"
                           SelectedItem="{Binding SelectedAskExpertPlacement}" MinWidth="200" />
               </StackPanel>

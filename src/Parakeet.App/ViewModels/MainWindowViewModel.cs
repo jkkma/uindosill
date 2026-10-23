@@ -664,9 +664,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// someone choosing, not by a developer reading code.</summary>
     public IReadOnlyList<AskModeChoice> AskModes { get; } =
     [
-        new(AskModePreference.Automatic, "Decide from my question"),
-        new(AskModePreference.Retrieval, "The parts that matched"),
-        new(AskModePreference.WholeTranscript, "The whole transcript"),
+        new(AskModePreference.Automatic, "Automatic"),
+        new(AskModePreference.Retrieval, "Matching passages"),
+        new(AskModePreference.WholeTranscript, "Whole transcript"),
     ];
 
     /// <summary>
@@ -676,9 +676,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<AskEvidenceChoice> AskEvidenceLevels { get; } =
     [
-        new(AskEvidenceDepth.Thorough, "Search more of the recording"),
-        new(AskEvidenceDepth.Balanced, "In between"),
-        new(AskEvidenceDepth.Fast, "Answer faster"),
+        new(AskEvidenceDepth.Thorough, "Thorough"),
+        new(AskEvidenceDepth.Balanced, "Balanced"),
+        new(AskEvidenceDepth.Fast, "Fast"),
     ];
 
     /// <summary>The twin of <see cref="SelectedAskMode"/>, and for the same reason.</summary>
@@ -701,9 +701,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<AskExpertPlacementChoice> AskExpertPlacements { get; } =
     [
-        new(MoeExpertPlacement.Automatic, "Decide from my graphics"),
-        new(MoeExpertPlacement.Device, "On the graphics card"),
-        new(MoeExpertPlacement.SystemMemory, "In system memory"),
+        new(MoeExpertPlacement.Automatic, "Automatic"),
+        new(MoeExpertPlacement.Device, "Graphics memory"),
+        new(MoeExpertPlacement.SystemMemory, "System memory"),
     ];
 
     /// <summary>The twin of <see cref="SelectedAskMode"/>, and for the same reason.</summary>
@@ -726,7 +726,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // takes the largest file when the recommended entry is not installed; spelling that
             // out made the row wider than the control holding it, to describe a case a reader
             // meets only when a download is missing -- and the Models tab is where that shows.
-            var rows = new List<AskModelChoice> { new(null, "The recommended model") };
+            var rows = new List<AskModelChoice> { new(null, "Automatic") };
             if (_llamaAnswerEngines is { } provider)
             {
                 rows.AddRange(provider.AvailableModelFileNames().Select(name => new AskModelChoice(name, name)));
@@ -737,7 +737,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (AskModelFileName is { Length: > 0 } chosen
                 && !rows.Any(row => string.Equals(row.FileName, chosen, StringComparison.OrdinalIgnoreCase)))
             {
-                rows.Add(new AskModelChoice(chosen, chosen + " (not in the folder)"));
+                rows.Add(new AskModelChoice(chosen, chosen + " (missing)"));
             }
 
             return rows;
@@ -753,29 +753,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public string AskModelExplanation =>
-        "Which model answers your questions. Bigger is not always slower. Used from your next "
-        + "question.";
+        "Automatic uses the recommended model when installed, otherwise the largest available. Changes apply to your next question.";
 
-    // Named for the row rather than for the enum behind it. This said "Automatic" until
-    // 2026-09-07, which is the spelling of `AskModePreference.Automatic` and of nothing the
-    // reader can see: the row above it reads "Decide from my question", so the description
-    // explained a word that appears nowhere on the page.
+    // Explain the Automatic row in terms of the material the answer will use.
     public string AskModeExplanation =>
-        "Deciding from your question reads the whole transcript for summaries and the matching "
-        + "parts for everything else, which is faster.";
+        "Automatic reads the whole transcript for summaries and matching passages for other questions.";
 
     // **What this used to say was true and unusable**: `--cpu-moe`, expert tensors, 13.4 of
     // 15.8 GiB, 22.4 tok/s on CUDA. Every figure in it was measured and none of it told the
     // person reading it which row to pick. The numbers are in `docs/UNPROVEN.md`, where somebody
     // looking for them can find them and the panel does not have to carry them.
     public string AskExpertPlacementExplanation =>
-        "Where a large model keeps its bulk: your graphics card is faster, system memory holds "
-        + "more. Used from your next question.";
+        "Choose graphics or system memory for large mixture models. Automatic adapts to your graphics hardware.";
 
     public string BackendExplanation =>
-        "Vulkan is the default: it runs on NVIDIA, AMD and Intel with only a normal graphics driver. " +
-        "CUDA is used automatically when this build has it, and needs its own runtime files. " +
-        "CPU always works and is the fallback. Whichever you pick is remembered.";
+        "Vulkan uses a compatible graphics driver; CUDA needs NVIDIA hardware and runtime files. " +
+        "CPU is the fallback. Your choice is saved.";
 
     /// <summary>
     /// The speaker-provider picker's rows. Automatic first, and it is the shipped choice.
@@ -845,10 +838,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </remarks>
     public IReadOnlyList<DiarisationBatchSizeChoice> DiarisationBatchSizes { get; } =
     [
-        new(null, "The model's own setting"),
-        new(8, "8 windows: least memory"),
+        new(null, "Model default"),
+        new(8, "8 windows: lower memory use"),
         new(16, "16 windows"),
-        new(32, "32 windows: most memory"),
+        new(32, "32 windows: higher memory use"),
     ];
 
     /// <summary>The twin of the above.</summary>
@@ -873,7 +866,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // to the built-in one. There is one model, it is not built in, and this property is
             // false only when speaker labelling is unavailable at all — so the sentence named a
             // cause that could not be the cause.
-            : "This setting needs the speaker model installed and the bundled Python present.";
+            : "Install the speaker model and use a build with bundled Python to change memory use.";
 
     /// <summary>
     /// What the choices mean, naming only the ones on offer.
@@ -894,22 +887,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // bundled torch is the CPU build. The sidecar's auto is now a shortlist tried
             // best-first: CUDA where a torch with it is present, which is what the pack installs,
             // then WebGPU where the derived graphs exist, then the processor.
-            // `IsCudaPackInstalled` is the same check the General tab's pack block uses and
-            // `SpeakerGraphsInstalled` the same file check the graphics row uses, so the texts
-            // cannot disagree about what is on this machine.
+            // Disk state does not prove a provider can initialise, so describe the fallback
+            // policy rather than promising which hardware will run the next recording.
             //
             // The accuracy sentence that stood here — "nothing here has been measured for accuracy
             // on any option" — and the equivalence sentences below it left on 2026-09-06 at the
             // maintainer's request, with every other measurement figure on the Settings page. The
             // copy says what each option does and makes no speed or accuracy claim, so there is
             // nothing to hedge; the measurements themselves stay in docs/UNPROVEN.md.
-            var text = IsCudaPackInstalled
-                ? "Automatic is your NVIDIA card through the graphics pack, or your processor if "
-                    + "that fails."
-                : SpeakerGraphsInstalled
-                    ? "Automatic is your graphics card, or your processor if that fails."
-                    : "Automatic is your processor until the graphics preparation is done, then "
-                        + "your graphics card.";
+            var text = "Automatic tries available graphics acceleration, then CPU.";
 
             if (offered.Contains("webgpu"))
             {
@@ -918,14 +904,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // the shipping pipeline's equivalence run — the same turns to the millisecond on a
                 // five-minute recording — hedged as "on what has been tried"; since 2026-09-06 it
                 // says only what the option does, on the terms in the note above.
-                text += " Graphics (WebGPU) uses your graphics card";
-
-                // Only offered as future work when there is work left: after the preparation this
-                // row costs nothing to choose, and telling somebody it takes a minute when it does
-                // not is the kind of small untruth that makes the rest of the panel less believed.
                 text += SpeakerGraphsInstalled
-                    ? "."
-                    : " after a one-time preparation.";
+                    ? " WebGPU uses the prepared speaker model."
+                    : " WebGPU needs a one-time model preparation.";
             }
 
             if (offered.Contains("cuda"))
@@ -935,7 +916,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 // processor against CUDA, every RTTM byte-identical, docs/UNPROVEN.md — left the
                 // copy on 2026-09-06 with the rest of the page's measurements. The entry is still
                 // the record; the sentence just no longer quotes it.
-                text += " CUDA needs an NVIDIA card; choosing it without one says so.";
+                text += " CUDA needs NVIDIA hardware and compatible runtime files.";
             }
 
             // **No availability claim, because this list makes none.** `DiariserRunsInTorch` is
@@ -957,8 +938,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // 2026-09-07, when every such line left the page; a description that spends one of its
         // two lines on `segmentation_batch_size` is not explaining the control to the person
         // changing it.
-        "Fewer windows need less memory, worth choosing if a long recording runs the machine "
-        + "out of it; the model's own setting leaves it alone.";
+        "Process fewer audio windows at once to use less memory. Keep the model default unless you need to reduce memory use.";
 
     // ---- The CUDA pack ------------------------------------------------------------------------
     //
@@ -1007,7 +987,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (IsCudaPackInstalled)
             {
-                return "Speaker labelling runs on your NVIDIA card.";
+                return "NVIDIA acceleration is installed for speaker labelling. Automatic mode can use it.";
             }
 
             var manifest = CudaPackManifestOrNull;
@@ -1118,17 +1098,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 progress,
                 ct).ConfigureAwait(true);
 
-            CudaPackMessage = "Installed. Speaker labelling will use your graphics card from your "
-                + "next recording.";
+            CudaPackMessage = "Installed. Speaker labelling can use NVIDIA acceleration from your next recording.";
         }
         catch (OperationCanceledException)
         {
             // The only thing that cancels this is the Stop button, and Stop records the refusal
             // the launch start honours — so the sentence can promise quiet without checking who
             // asked. See StopCudaPackInstall.
-            CudaPackMessage = "Stopped. What was downloaded is kept — the Set up graphics "
-                + "acceleration button in Settings resumes it — and it will not start again "
-                + "on its own.";
+            CudaPackMessage = "Stopped. Downloaded parts are kept. Resume with Set up graphics acceleration in Settings; "
+                + "it will not restart automatically.";
         }
         catch (Exception exception) when (exception is CudaPackException or ModelInstallException
                                               or IOException or HttpRequestException)
@@ -1217,8 +1195,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 ? string.Empty
                 : $" ({ByteSize.Describe(manifest.TotalDownloadBytes)}, once)";
 
-            return $"Speaker labelling is downloading its graphics acceleration{size} so it can "
-                + $"run on your NVIDIA card. Everything else works while it arrives. {live}";
+            return $"Setting up NVIDIA acceleration for speaker labelling{size}. "
+                + $"You can use Uindosill while it downloads. {live}";
         }
     }
 
@@ -1292,8 +1270,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool CanUpdateTools => !IsUpdatingTools;
 
     public string ToolsExplanation =>
-        "YouTube changes how it serves audio, and these change to keep up. This fetches the newest "
-        + "ones and checks them, keeping the copies Uindosill came with in case anything goes wrong.";
+        "Update yt-dlp and Deno when link downloads stop working. Uindosill checks new downloads "
+        + "and keeps the bundled tools as a fallback.";
 
     /// <summary>
     /// Checks both tools and installs whichever the publisher has moved on from.
