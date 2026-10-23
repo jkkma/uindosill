@@ -126,6 +126,7 @@ jobs:
           python scripts/check-diariser-auto.py
           python scripts/check-python-launch.py
           python scripts/check-codex-hooks.py
+          python scripts/check-release-assets.py --self-check
 
       - name: Parse every PowerShell script and check the Drive route
         shell: pwsh
@@ -367,14 +368,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Check the release files and update feeds
+      # Packing needs the previous full packages to create deltas. GitHubSource resolves each
+      # feed within its own release, so remove predecessor rows after packing and before hashing:
+      # their files remain on the older releases, rather than being uploaded again on this one.
+      - name: Prepare the update feeds and check the release files
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          python scripts/check-release-assets.py --root packaging/releases --version "$VERSION" \
+          python scripts/check-release-assets.py --prepare-feeds --root packaging/releases --version "$VERSION" \
             --commit "$COMMIT_SHA" --output packaging/releases/release-verification.json
 
       # Named by version rather than `packaging/releases/` whole, for the reason the publish step's
