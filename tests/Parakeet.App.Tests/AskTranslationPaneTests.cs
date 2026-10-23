@@ -99,7 +99,7 @@ public class AskTranslationPaneTests
 
         var notice = window.FindControl<TextBlock>("TranslationPaneNotice")!;
         Assert.True(notice.IsVisible);
-        Assert.Contains("Individual words are not marked here", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Switch to Transcript to follow individual spoken words", notice.Text, StringComparison.Ordinal);
 
         viewModel.Ask.TranscriptPane = 0;
         window.UpdateLayout();

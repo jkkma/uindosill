@@ -72,11 +72,11 @@ public class TranscriptNoticeTests
         queue.PropertyChanged += (_, e) => announced.Add(e.PropertyName);
 
         // Nothing at all: the invitation, in the words the drop zone above it uses.
-        Assert.Contains("Drop a recording", queue.TranscriptNotice, StringComparison.Ordinal);
+        Assert.Contains("Add a recording or link", queue.TranscriptNotice, StringComparison.Ordinal);
 
         // Rows, none chosen.
         queue.AddFiles([WriteWav(directory, "a.wav")]);
-        Assert.Contains("Choose a file", queue.TranscriptNotice, StringComparison.Ordinal);
+        Assert.Contains("Select a recording", queue.TranscriptNotice, StringComparison.Ordinal);
         Assert.Contains(nameof(TranscribeViewModel.TranscriptNotice), announced);
 
         // A chosen row speaks for itself, and keeps speaking as it changes: the queue relays the
@@ -98,7 +98,7 @@ public class TranscriptNoticeTests
         announced.Clear();
         queue.Jobs[0].State = JobState.Failed;
         Assert.DoesNotContain(nameof(TranscribeViewModel.TranscriptNotice), announced);
-        Assert.Contains("Choose a file", queue.TranscriptNotice, StringComparison.Ordinal);
+        Assert.Contains("Select a recording", queue.TranscriptNotice, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
@@ -116,7 +116,7 @@ public class TranscriptNoticeTests
 
         Assert.True(notice.IsVisible);
         Assert.Equal(main.Transcribe.TranscriptNotice, notice.Text);
-        Assert.Contains("Drop a recording", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Add a recording or link", notice.Text, StringComparison.Ordinal);
 
         main.Transcribe.AddFiles([WriteWav(directory, "a.wav")]);
         main.Transcribe.SelectedJob = main.Transcribe.Jobs[0];
@@ -140,7 +140,7 @@ public class TranscriptNoticeTests
 
         Assert.Equal(0, lines.ItemCount);
         Assert.True(notice.IsVisible);
-        Assert.Contains("Drop a recording", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Add a recording or link", notice.Text, StringComparison.Ordinal);
 
         window.Close();
     }

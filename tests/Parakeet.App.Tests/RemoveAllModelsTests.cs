@@ -373,7 +373,7 @@ public class RemoveAllModelsTests
         tab.Refresh();
 
         Assert.Contains("Remove them here", tab.UninstallNotice, StringComparison.Ordinal);
-        Assert.DoesNotContain("asks whether to delete", tab.UninstallNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("asks before deleting", tab.UninstallNotice, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -384,18 +384,18 @@ public class RemoveAllModelsTests
         // threshold is read off UninstallPrompt rather than retyped, so this cannot pass while the
         // window promises a question the uninstaller will not ask.
         var empty = ModelsViewModel.NoticeFor(0);
-        Assert.Contains("none here at the moment", empty, StringComparison.Ordinal);
-        Assert.DoesNotContain("asks whether to delete", empty, StringComparison.Ordinal);
+        Assert.Contains("No models are stored here yet", empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("asks before deleting", empty, StringComparison.Ordinal);
 
         // At the threshold exactly, the uninstaller is still silent: it asks strictly above it.
         var small = ModelsViewModel.NoticeFor(UninstallPrompt.AskAboveBytes);
         Assert.Contains("Remove them here", small, StringComparison.Ordinal);
-        Assert.DoesNotContain("asks whether to delete", small, StringComparison.Ordinal);
+        Assert.DoesNotContain("asks before deleting", small, StringComparison.Ordinal);
 
         // One byte over, the question is certain, because the models sit inside the directory the
         // prompt measures: a models total past the threshold puts that directory past it too.
         var large = ModelsViewModel.NoticeFor(UninstallPrompt.AskAboveBytes + 1);
-        Assert.Contains("asks whether to delete", large, StringComparison.Ordinal);
+        Assert.Contains("asks before deleting", large, StringComparison.Ordinal);
         Assert.Contains("keeps them unless you answer Yes", large, StringComparison.Ordinal);
 
         // And no branch says an uninstall leaves them alone, which is what this window, the Updates

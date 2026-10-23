@@ -66,7 +66,7 @@
 
           <Button Grid.Column="1" Name="WindowClose"
                   WindowDecorationProperties.ElementRole="CloseButton"
-                  Classes="window close" ToolTip.Tip="Close">
+                  Classes="window close" ToolTip.Tip="Close" AutomationProperties.Name="Close About window">
             <Path StrokeThickness="1.3"
                   StrokeLineCap="Round" Data="M0 0l10.5 10.5M10.5 0l-10.5 10.5" Stretch="None" />
           </Button>
@@ -169,7 +169,7 @@
               </Border>
 
               <TextBlock TextWrapping="Wrap" Classes="fine meta" LineHeight="17"
-                         Text="Uindosill is free software. The terms it is offered under, and every notice that comes with the models and the components it is built from, are on the Licences pane." />
+                         Text="Uindosill is free software. See Licences for the application terms and notices for its models and components." />
             </StackPanel>
           </ScrollViewer>
         </TabItem>
@@ -211,18 +211,18 @@
               <Border Classes="panel" Padding="15,13">
                 <StackPanel Spacing="12">
                   <StackPanel Spacing="3">
-                    <TextBlock Text="VERSION" Classes="section" />
+                    <TextBlock Text="Version" Classes="section" />
                     <SelectableTextBlock Text="{Binding Version}" Classes="mono" FontSize="11.5" />
                   </StackPanel>
 
                   <StackPanel Spacing="3">
-                    <TextBlock Text="RUNTIME" Classes="section" />
+                    <TextBlock Text="Runtime" Classes="section" />
                     <SelectableTextBlock Name="EnvironmentSummary" Text="{Binding EnvironmentSummary}"
                                          Classes="mono" FontSize="11.5" TextWrapping="Wrap" />
                   </StackPanel>
 
                   <StackPanel Spacing="3">
-                    <TextBlock Text="DECODE THREADS" Classes="section" />
+                    <TextBlock Text="Decode threads" Classes="section" />
                     <TextBlock Name="ThreadingNote" Text="{Binding ThreadingNote}"
                                Classes="secondary" FontSize="11.5" TextWrapping="Wrap"
                                LineHeight="18.5" />
@@ -234,13 +234,13 @@
                        gigabytes are; SETTINGS names one small JSON file, not the directory holding
                        it — which matters, because that directory is the models' parent. -->
                   <StackPanel Spacing="3">
-                    <TextBlock Text="MODELS" Classes="section" />
+                    <TextBlock Text="Models" Classes="section" />
                     <SelectableTextBlock Name="ModelDirectory" Text="{Binding ModelDirectory}"
                                          Classes="mono" FontSize="11" TextWrapping="Wrap" />
                   </StackPanel>
 
                   <StackPanel Spacing="3">
-                    <TextBlock Text="SETTINGS" Classes="section" />
+                    <TextBlock Text="Settings" Classes="section" />
                     <SelectableTextBlock Name="SettingsPath" Text="{Binding SettingsPath}"
                                          Classes="mono" FontSize="11" TextWrapping="Wrap" />
                   </StackPanel>
@@ -249,7 +249,7 @@
 
               <StackPanel Orientation="Horizontal" Spacing="10">
                 <Button Name="CopySystemReport" Classes="onPage" Content="Copy these details"
-                        ToolTip.Tip="Puts all five lines on the clipboard, for pasting into a bug report" />
+                        ToolTip.Tip="Copy version, runtime, thread, model and settings details" />
                 <TextBlock Name="CopyNotice" Text="Copied." Classes="meta"
                            VerticalAlignment="Center" IsVisible="False" />
               </StackPanel>

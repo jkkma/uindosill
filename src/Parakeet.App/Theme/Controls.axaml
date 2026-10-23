@@ -1,6 +1,6 @@
 <!--
-  Control styling for the design decided 2026-08-19, and the reusable text classes the window
-  draws with.
+  Control styling based on the design decided 2026-08-19, with later readability and interaction
+  refinements, and the reusable text classes the window draws with.
 
   Split from Tokens.axaml on a real distinction rather than for tidiness: that file overrides
   Fluent resource *keys*, which reach the whole application by name. This one handles the three
@@ -14,7 +14,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- ── Type roles ──────────────────────────────────────────────────────────────────────────
-       The design's six roles, as classes. Sizes and weights are the token sheet's.
+       Reusable text roles, with sizes and weights refined for readability.
 
        Body is 500 rather than 400, so it is set on TextBlock itself: a style setter loses to any
        local value, so a control that names its own weight still wins. Tabular figures are on for
@@ -36,7 +36,7 @@
 
   <!-- Tab page headings — Notices, Updates, the selected model. -->
   <Style Selector="TextBlock.title">
-    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontSize" Value="22" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="LetterSpacing" Value="-0.255" />
   </Style>
@@ -48,9 +48,8 @@
 
   <!-- OUTPUT FORMATS, IN MEMORY, LICENCE. -->
   <Style Selector="TextBlock.section">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="LetterSpacing" Value="0.55" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
   </Style>
 
@@ -62,14 +61,14 @@
 
   <!-- Status lines, sizes, hints. -->
   <Style Selector="TextBlock.meta">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="11.5" />
     <Setter Property="Foreground" Value="{DynamicResource InkMetaBrush}" />
   </Style>
 
   <!-- The segment-cap note, warnings inside a row. -->
   <Style Selector="TextBlock.fine">
-    <Setter Property="FontSize" Value="10.5" />
-    <Setter Property="LineHeight" Value="16.3" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LineHeight" Value="17" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
@@ -102,9 +101,9 @@
   </Style>
 
   <!-- ── Buttons ─────────────────────────────────────────────────────────────────────────────
-       30px in a row, 32px standing on a page; square; a hairline rather than a fill. -->
+       Compact row controls and roomier page actions, with a hairline rather than a fill. -->
   <Style Selector="Button">
-    <Setter Property="Height" Value="30" />
+    <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="13,0" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="FontWeight" Value="Medium" />
@@ -144,14 +143,14 @@
   </Style>
 
   <Style Selector="Button.onPage">
-    <Setter Property="Height" Value="32" />
+    <Setter Property="Height" Value="34" />
   </Style>
 
   <!-- ── Fields ──────────────────────────────────────────────────────────────────────────────
        30px, square, a hairline that does not change the box. -->
   <Style Selector="TextBox">
-    <Setter Property="MinHeight" Value="30" />
-    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -159,14 +158,14 @@
   </Style>
 
   <Style Selector="NumericUpDown">
-    <Setter Property="MinHeight" Value="30" />
-    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Height" Value="32" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
 
   <Style Selector="ComboBox">
-    <Setter Property="MinHeight" Value="30" />
-    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Height" Value="32" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -213,6 +212,12 @@
     <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
   </Style>
 
+  <!-- Options stay compact so the transcript remains readable at the minimum height. -->
+  <Style Selector="CheckBox.transcriptOption">
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="MinHeight" Value="22" />
+  </Style>
+
   <!-- ── List rows ───────────────────────────────────────────────────────────────────────────
        Square, 9px/10px padding, and the faintest possible "this one" when selected: matcha-50
        with a matcha-200 hairline. There is no ListBoxItemBackgroundSelected key in Fluent 12.1.1,
@@ -223,19 +228,20 @@
     <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="5" />
+    <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="ListBoxItem">
     <Setter Property="Padding" Value="10,9" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Matcha200Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
   </Style>
 
   <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -246,7 +252,7 @@
 
   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
   </Style>
 
   <!-- ── Progress ────────────────────────────────────────────────────────────────────────────
@@ -277,7 +283,7 @@
   </Style>
 
   <Style Selector="RadioButton.segment">
-    <Setter Property="Padding" Value="15,5" />
+    <Setter Property="Padding" Value="14,4" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource InkSecondaryBrush}" />
@@ -287,6 +293,7 @@
       <ControlTemplate>
         <Border Name="Pill"
                 Background="Transparent"
+                BorderBrush="Transparent" BorderThickness="1"
                 CornerRadius="999"
                 Padding="{TemplateBinding Padding}">
           <ContentPresenter Name="PART_ContentPresenter"
@@ -300,6 +307,10 @@
 
   <Style Selector="RadioButton.segment:pointerover /template/ Border#Pill">
     <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
+  </Style>
+
+  <Style Selector="RadioButton.segment:focus-visible /template/ Border#Pill">
+    <Setter Property="BorderBrush" Value="{DynamicResource Matcha600Brush}" />
   </Style>
 
   <Style Selector="RadioButton.segment:checked /template/ Border#Pill">
@@ -396,19 +407,19 @@
   </Style>
 
   <!-- ── Panels and badges ───────────────────────────────────────────────────────────────────
-       Square, and bordered with a hairline. -->
+       Quiet cards with a hairline and small corners. -->
   <Style Selector="Border.panel">
     <Setter Property="Background" Value="{DynamicResource GroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource RuleSeenBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="Border.tinted">
     <Setter Property="Background" Value="{DynamicResource Matcha50Brush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Matcha200Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
   </Style>
 
   <Style Selector="Border.badge">
@@ -703,6 +714,11 @@
   </Style>
   <Style Selector="Button.transport:pointerover /template/ Border#Ground">
     <Setter Property="Background" Value="{DynamicResource Taro700Brush}" />
+  </Style>
+
+  <Style Selector="Button.transport:focus-visible /template/ Border#Ground">
+    <Setter Property="BorderBrush" Value="{DynamicResource GroundBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
   </Style>
   <!-- Disabled in the family's own colours rather than the theme's grey: the button sits on the
        taro-tinted transport strip, and a grey disc there reads as dirt on the design rather than

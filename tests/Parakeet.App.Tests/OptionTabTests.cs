@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
@@ -100,12 +101,13 @@ public class OptionTabTests
 
         var exportNotice = Drawn<TextBlock>(window, "ExportNotice");
         Assert.True(exportNotice.IsVisible);
-        Assert.Contains("Transcribe tab", exportNotice.Text, StringComparison.Ordinal);
+        Assert.Contains("Transcribe queue", exportNotice.Text, StringComparison.Ordinal);
 
-        // The folder box writes through. Blank means "beside each input file", which is why the
+        // The folder box writes through. Blank means beside the selected recording, which is why the
         // placeholder rather than a default is what fills the empty case.
         var folder = window.GetVisualDescendants().OfType<TextBox>()
-            .Single(b => b.PlaceholderText == "beside each input file");
+            .Single(b => AutomationProperties.GetName(b) == "Output folder");
+        Assert.Equal("Beside the selected recording", folder.PlaceholderText);
 
         folder.Text = @"C:\somewhere";
         Assert.Equal(@"C:\somewhere", viewModel.Transcribe.OutputDirectory);
@@ -122,7 +124,7 @@ public class OptionTabTests
         // sat under the list.
         var notice = Drawn<TextBlock>(window, "AddToRecordingNotice");
         Assert.True(notice.IsVisible);
-        Assert.Contains("Transcribe tab", notice.Text, StringComparison.Ordinal);
+        Assert.Contains("Transcribe queue", notice.Text, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
@@ -192,7 +194,7 @@ public class OptionTabTests
             .Select(t => t.Text!)
             .ToList();
 
-        var banner = Assert.Single(warning, t => t.Contains("unless you know what they do", StringComparison.Ordinal));
+        var banner = Assert.Single(warning, t => t.Contains("affect processing, output quality and model loading", StringComparison.Ordinal));
 
         // Until 2026-09-06 the banner also said which side had been measured — "Every default here
         // was measured. Most alternatives have not been" — and two asserts held it there. The
@@ -235,7 +237,7 @@ public class OptionTabTests
         // What did not go with them, and why this still asserts something rather than nothing:
         // losing an Advanced setting to a window close is easy to do and expensive to discover,
         // so the page says so in its own English.
-        Assert.Contains("go back to their defaults when the window closes", text, StringComparison.Ordinal);
+        Assert.Contains("audio settings reset when Uindosill closes", text, StringComparison.Ordinal);
     }
 
     /// <summary>

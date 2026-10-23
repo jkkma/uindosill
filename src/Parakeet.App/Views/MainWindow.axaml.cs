@@ -8,11 +8,14 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Parakeet.App.Services;
 using Parakeet.App.ViewModels;
+using Parakeet.Audio;
 
 namespace Parakeet.App.Views;
 
 public partial class MainWindow : Window
 {
+    private readonly Func<FilePickerOpenOptions, Task<IReadOnlyList<IStorageFile>>>? _openRecordingFiles;
+
     /// <summary>
     /// How often the Ask tab's transport is re-read. Ten times a second: fast enough that the
     /// highlight lands on the line being spoken rather than trailing it, slow enough that a
@@ -87,7 +90,13 @@ public partial class MainWindow : Window
     private bool _resizingPicture;
 
     public MainWindow()
+        : this(null)
     {
+    }
+
+    internal MainWindow(Func<FilePickerOpenOptions, Task<IReadOnlyList<IStorageFile>>>? openRecordingFiles)
+    {
+        _openRecordingFiles = openRecordingFiles;
         InitializeComponent();
 
         var dropZone = this.FindControl<Border>("DropZone");
@@ -95,6 +104,12 @@ public partial class MainWindow : Window
         {
             DragDrop.AddDragOverHandler(dropZone, OnDragOver);
             DragDrop.AddDropHandler(dropZone, OnDrop);
+        }
+
+        var browseFiles = this.FindControl<Button>("BrowseFiles");
+        if (browseFiles is not null)
+        {
+            browseFiles.Click += OnBrowseFiles;
         }
 
         // Both of these are on tabs that are not the one the window opens on — Browse moved to
@@ -1012,6 +1027,53 @@ public partial class MainWindow : Window
         }
 
         _ = new AboutWindow { DataContext = viewModel.About }.ShowDialog(this);
+    }
+
+    private async void OnBrowseFiles(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel || viewModel.Transcribe.IsRunning)
+        {
+            return;
+        }
+
+        try
+        {
+            var options = new FilePickerOpenOptions
+            {
+                Title = "Add recordings",
+                AllowMultiple = true,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Audio and video")
+                    {
+                        Patterns = AudioSources.SupportedExtensions.Select(extension => "*" + extension).ToArray(),
+                    },
+                ],
+            };
+            var files = await (_openRecordingFiles is { } openFiles
+                ? openFiles(options)
+                : StorageProvider.OpenFilePickerAsync(options)).ConfigureAwait(true);
+
+            if (files.Count == 0)
+            {
+                return;
+            }
+
+            var paths = files.Select(file => file.TryGetLocalPath()).OfType<string>().ToArray();
+            if (paths.Length == 0)
+            {
+                viewModel.Transcribe.StatusMessage = "Choose files stored on this computer to add a recording.";
+                return;
+            }
+
+            viewModel.Transcribe.AddFiles(paths);
+        }
+#pragma warning disable CA1031 // A picker that fails must not take the window with it.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            viewModel.Transcribe.StatusMessage = $"Could not open the file picker: {ex.Message}";
+        }
     }
 
     private async void OnBrowseOutput(object? sender, RoutedEventArgs e)

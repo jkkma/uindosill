@@ -243,9 +243,16 @@ public class AppSettingsStoreTests
                 var row = Assert.Single(
                     viewModel.AskExpertPlacements, choice => choice.Placement == placement);
 
-                // The label is what a person reads, so it is neither the enum's spelling nor
-                // either environment variable's name.
-                Assert.NotEqual(placement.ToString(), row.Label);
+                // Automatic is already plain English. The explicit placements need readable
+                // labels rather than enum spellings or environment variable names.
+                if (placement == MoeExpertPlacement.Automatic)
+                {
+                    Assert.Equal("Automatic", row.Label);
+                }
+                else
+                {
+                    Assert.NotEqual(placement.ToString(), row.Label);
+                }
 
                 viewModel.SelectedAskExpertPlacement = row;
                 Assert.Equal(placement, viewModel.AskExpertPlacement);

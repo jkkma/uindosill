@@ -149,8 +149,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </remarks>
     public string? RenameNotice =>
         Speakers is { } voices && voices.Any(v => v.IsRenamed)
-            ? "These names go into the files Export writes from here. Files already written keep the "
-              + "labels they were written with, and a new run starts over."
+            ? "Names apply to future exports. Existing files keep their labels; transcribing again resets names."
             : null;
 
     /// <summary>A tick under Output formats changes what Export writes and what would go inside the recording.</summary>
@@ -443,7 +442,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// says so rather than inviting a gesture <see cref="AddFiles"/> would refuse.
     /// </summary>
     public string DropHint => IsRunning
-        ? "Adding files is off while a batch runs: press Cancel, or wait for it to finish."
+        ? "Batch running. Cancel or wait before adding recordings."
         : "Drop audio or video files here";
 
     /// <summary>Extensions this build can actually open, for the file picker and the drop hint.</summary>
@@ -520,7 +519,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </summary>
     public string? SpeechDetectionHint =>
         !CanUseNeuralSpeechDetection ? _engines.DescribeUnavailable(ModelTask.VoiceActivity)
-        : UseFixedWindows ? "Fixed windows are on, so no detector runs: untick that to cut on speech."
+        : UseFixedWindows ? "Fixed windows bypass speech detection. Turn them off to split at pauses."
         : null;
 
     /// <summary>
@@ -604,10 +603,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 // retired 2026-08-27, whose speaker cache had no long-term anchor. The pipeline
                 // that ships clusters globally and has no such known failure; borrowing the finding
                 // would be quoting one engine's measurement about another.
-                return "Leave this blank and the model works out how many people are talking. "
-                    + "Give a number only if you already know it: the model is never told the "
-                    + "count, so a number merges its labels down to that many afterwards, and a "
-                    + "number below the true count puts two people under one name.";
+                return "Leave this blank to estimate the speaker count. A number only merges extra labels; "
+                    + "too low combines different people.";
             }
 
             if (SpeakerLabelling.DescribeUnreachableCount(limits, count) is { } unreachable)
@@ -617,9 +614,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             return limits.SupportsFixedSpeakerCount
                 ? null
-                : $"{limits.Name} estimates the count itself and cannot be told one, so its "
-                  + $"labels are folded down to {count} afterwards, merging the pair that talk over each other least. "
-                  + "If it finds that many or fewer, nothing is merged.";
+                : $"Labels are folded down to {count} afterwards. The model's estimate is unchanged; "
+                  + "if no extra labels are found, none are merged.";
         }
     }
 
@@ -823,8 +819,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             // window has shipped.
             if (SelectedJob is not { } job)
             {
-                return "Choose a recording in the queue on the Transcribe tab; this writes the transcript of "
-                    + "whichever one is highlighted there.";
+                return "Select a recording in the Transcribe queue to add its subtitles to a new recording.";
             }
 
             if (_muxer.DescribeUnavailable() is { } unavailable)
@@ -839,15 +834,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (job.IsFromUrl)
             {
-                return "This one came from a link, so the recording here is the audio that was "
-                    + "downloaded, kept in a temporary folder. Use Export files above to write its "
-                    + "transcript wherever you want it.";
+                return "Linked recordings use temporary audio files. Use Export above to save their transcripts.";
             }
 
             if (ExportableFormat is not { } format)
             {
-                return "Tick SRT or WebVTT under Output formats above — those are the two a "
-                    + "recording can carry.";
+                return "Select SRT or WebVTT above to add a subtitle track.";
             }
 
             if (!SubtitleMux.TryPlan(job.Path, format, out var plan, out var refusal))
@@ -953,8 +945,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
 
             if (SelectedJob is not { } job)
             {
-                return "Choose a recording in the queue on the Transcribe tab; this writes the files of "
-                    + "whichever one is highlighted there.";
+                return "Select a recording in the Transcribe queue to export its transcript.";
             }
 
             if (!job.CanExport)
@@ -965,20 +956,20 @@ public sealed partial class TranscribeViewModel : ObservableObject
             var ticked = Formats.Count(f => f.IsSelected);
             if (ticked == 0)
             {
-                return "Tick at least one format above.";
+                return "Select at least one output format.";
             }
 
             var where = string.IsNullOrWhiteSpace(OutputDirectory)
                 ? "beside the recording"
                 : $"in {OutputDirectory}";
             var english = job.TranslatedDocument is not null
-                ? $", and the English beside them as {TranslatedInfix} files"
+                ? $"; English files use {TranslatedInfix}"
                 : string.Empty;
             var tidy = job.TidiedDocument is not null
-                ? $", and the tidied version beside them as {TranscriptTidy.FileInfix} files"
+                ? $"; cleaned files use {TranscriptTidy.FileInfix}"
                 : string.Empty;
 
-            return $"Writes {job.DisplayName}'s transcript as {ticked} file{(ticked == 1 ? string.Empty : "s")} {where}{english}{tidy}.";
+            return $"Saves {ticked} format{(ticked == 1 ? string.Empty : "s")} for {job.DisplayName} {where}{english}{tidy}.";
         }
     }
 
@@ -1121,8 +1112,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
     /// </remarks>
     public string TranscriptNotice =>
         SelectedJob is { } job ? job.TranscriptNotice
-        : HasJobs ? "Choose a file in the queue to read its transcript."
-        : "Drop a recording above, or paste a link, and its words appear here as it is transcribed.";
+        : HasJobs ? "Select a recording in the queue to read its transcript."
+        : "Add a recording or link, then press Start to see its transcript here.";
 
     /// <summary>
     /// Re-asks what the transcript area should be showing, after the selected row's content
@@ -1466,6 +1457,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         }
 
         Jobs.Clear();
+        SelectedJob = null;
         LiveTranscript = string.Empty;
         StatusMessage = null;
         RefreshQueueState();

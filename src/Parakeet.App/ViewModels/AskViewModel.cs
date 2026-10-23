@@ -184,8 +184,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </remarks>
     public string? TranslationPaneNotice =>
         IsShowingTranslation
-            ? "The English follows the recording a sentence at a time. Individual words are not marked here, "
-              + "translating loses which word was said when: so switch to Transcript for the word being spoken."
+            ? "English is timed by sentence. Switch to Transcript to follow individual spoken words."
             : null;
 
     public bool HasTranscript => Lines is { Count: > 0 };
@@ -241,9 +240,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </remarks>
     public string? RenameNotice =>
         Speakers is { } voices && voices.Any(v => v.IsRenamed)
-            ? "Names are for reading here; answers on the Ask tab use them, and files you export "
-              + "from now on carry them too. Files exported before the rename keep the labels they "
-              + "were written with, and a new run starts over."
+            ? "Names appear here, in answers and in future exports. Existing files keep their labels; "
+              + "a new transcription resets names."
             : null;
 
     /// <summary>
@@ -253,8 +251,8 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     /// </summary>
     public string? TranscriptNotice =>
         HasTranscript ? null
-        : SelectedRecording is null ? "Choose a recording: the Recordings button above opens the queue."
-        : "This recording has not been transcribed yet. Run it on the Transcribe tab; it plays either way.";
+        : SelectedRecording is null ? "Open Recordings to choose a recording."
+        : "Transcribe this recording to read its transcript. You can play it now.";
 
     /// <summary>The line the recording is inside right now, or null.</summary>
     public TranscriptLineViewModel? ActiveLine => _activeLine;
@@ -419,7 +417,7 @@ public sealed partial class AskViewModel : ObservableObject, IDisposable
     public string? VideoNotice =>
         _player.CanDrawVideo || SelectedRecording is not { } job || !(job.IsFromUrl || LooksLikeVideo(job.Path))
             ? null
-            : "This build has no video player, so if this recording has a picture, only its sound plays.";
+        : "Video playback is unavailable in this build. The recording can still play as audio.";
 
     private static readonly string[] VideoExtensions = [".mp4", ".m4v", ".mov", ".wmv", ".asf", ".mkv", ".webm", ".avi"];
 

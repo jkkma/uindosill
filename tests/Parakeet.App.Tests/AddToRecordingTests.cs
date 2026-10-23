@@ -127,7 +127,7 @@ public class AddToRecordingTests
     }
 
     [Theory]
-    [InlineData("txt", "Tick SRT or WebVTT")]
+    [InlineData("txt", "Select SRT or WebVTT")]
     public void ADisabledButtonAlwaysSaysWhichReasonItIs(string format, string expected)
     {
         // This window's standing rule: a control that cannot be pressed says why, or it is the

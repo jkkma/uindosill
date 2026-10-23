@@ -154,7 +154,7 @@ public class UpdatesViewModelTests
         Assert.False(viewModel.IsSupported);
         Assert.False(viewModel.CanCheck);
         Assert.False(viewModel.CanInstall);
-        Assert.Contains("not installed by the installer", viewModel.Status, StringComparison.Ordinal);
+        Assert.Contains("require an installed copy", viewModel.Status, StringComparison.Ordinal);
     }
 
     [Fact]

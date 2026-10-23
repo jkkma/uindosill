@@ -151,11 +151,10 @@ public sealed partial class ModelViewModel : ObservableObject
     /// </summary>
     public string Provenance => (Descriptor.Verified, Descriptor.IsFullyPinned) switch
     {
-        (true, true) => "Checked. Uindosill knows this file's fingerprint and will refuse the download if it does not match.",
-        (true, false) => "Uindosill knows where this file comes from, but has no fingerprint to check the download against.",
-        (false, true) => "Uindosill has a fingerprint to check the download against, but never confirmed where the file comes from.",
-        (false, false) => "Uindosill cannot check where this file comes from or whether it arrives intact. " +
-                          "You have to allow that explicitly below.",
+        (true, true) => "Known source. The download must match its expected checksum or it will be rejected.",
+        (true, false) => "Known source, but no expected checksum is available to verify the download.",
+        (false, true) => "The download will be checked against its expected checksum, but its source has not been verified.",
+        (false, false) => "Neither the source nor the download checksum can be verified. Allow an unchecked download below to continue.",
         // An entry of several files is pinned only when every one of them is. One unpinned file
         // among nine cannot be reported as "digest pinned": the set is as checked as its weakest
         // member, and this string is the only place a user is told which it is.
@@ -348,8 +347,7 @@ public sealed partial class ModelsViewModel : ObservableObject
             // two claims in one sentence that contradict each other.
             if (model.Descriptor.Task == ModelTask.Answering)
             {
-                return "Runs from the Ask tab, on a finished transcript, after the recogniser's "
-                    + "work is done. There is nothing to load here.";
+                return "Used on the Ask tab after transcription. It loads automatically when you ask a question.";
             }
 
             var used = model.Descriptor.Task switch
@@ -361,7 +359,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 _ => "its own opt-in",
             };
 
-            return $"Runs from {used}, alongside the recogniser. There is nothing to load here.";
+            return $"Used by {used}. It loads automatically when the recording runs.";
         }
     }
 
@@ -572,8 +570,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 // to press a button they do not need is the same defect as one that hides a button
                 // they do — and this one had the additional problem of describing a refusal that no
                 // longer happens.
-                return "Nothing loaded. Transcribing loads it: press Load first only if you want "
-                       + "to choose the backend.";
+                return "Transcription loads a speech model automatically. Load it here to choose the model and backend first.";
             }
 
             var name = _session.Model?.DisplayName ?? "a model";
@@ -606,8 +603,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// than offering a control that silently does nothing.
     /// </summary>
     public string BackendNote => _session?.IsBackendFixed == true
-        ? "The backend is fixed for this process once a model has loaded, restart to change it."
-        : "Choose the backend before loading. It cannot be changed again without restarting.";
+        ? "Restart Uindosill to change the backend after a model has loaded."
+        : "Choose a backend before loading a model. Changing it afterwards requires a restart.";
 
     public bool CanLoad =>
         _session is not null && !_session.IsBusy && !IsTranscribing && Selected is { IsInstalled: true, IsTranscriptionModel: true };
@@ -796,8 +793,7 @@ public sealed partial class ModelsViewModel : ObservableObject
                 StatusMessage = "Installed. Not checked against a published digest, pin these in the catalogue: " +
                                 string.Join("; ", result.Files.Select(f => $"{f.FileName} {f.Sha256}"));
 #else
-                StatusMessage = "Installed. This one could not be checked against a published fingerprint, "
-                                + "because the people who publish it do not list one.";
+                StatusMessage = "Installed. No published checksum was available to verify the download.";
 #endif
             }
         }
@@ -1140,9 +1136,8 @@ public sealed partial class ModelsViewModel : ObservableObject
 
             if (strays.Count > 0)
             {
-                var summary = $"{DescribeCount(strays)} here "
-                    + $"({ByteSize.Describe(strays.Sum(f => f.SizeBytes))}) that no entry above accounts for, "
-                    + "weights from an older version of Uindosill, or things put here by hand.";
+                var summary = $"Outside the catalogue: {DescribeCount(strays)} "
+                    + $"({ByteSize.Describe(strays.Sum(f => f.SizeBytes))}). These may include older models or manually added files.";
 
                 // **It used to end "Nothing uses them", and that became untrue.** The Ask tab picks
                 // the model it answers with by looking in this folder, not by catalogue id, so a
@@ -1154,30 +1149,25 @@ public sealed partial class ModelsViewModel : ObservableObject
                 sentences.Add(strays.Any(f =>
                     f.Name.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase)
                     && !DraftModelLocator.IsDraftHead(f.Name))
-                    ? summary + " The Ask tab answers with a .gguf from this folder, so one of these may "
-                        + "be the model it is using: the Ask tab's own settings say which."
-                    : summary + " Nothing uses them.");
+                    ? summary + " An answering model may be in use; check the selected model in Settings before deleting it."
+                    : summary + " Uindosill does not use these files.");
             }
 
             if (misplaced.Count > 0)
             {
                 var one = misplaced.Count == 1;
                 sentences.Add(
-                    $"{misplaced.Count} file{(one ? " is" : "s are")} the weights of an entry above "
-                    + $"({ByteSize.Describe(misplaced.Sum(f => f.SizeBytes))}), sitting in this folder "
-                    + $"instead of in the entry's own: which is why that entry reads Not installed and "
-                    + $"offers to download {(one ? "it" : "them")} again. Move into place files "
-                    + $"{(one ? "it" : "them")} where the entry expects {(one ? "it" : "them")}, and "
-                    + "nothing is downloaded.");
+                    $"{misplaced.Count} catalogue file{(one ? " is" : "s are")} in the wrong folder "
+                    + $"({ByteSize.Describe(misplaced.Sum(f => f.SizeBytes))}). Use Move into place to install "
+                    + $"{(one ? "it" : "them")} without downloading again.");
             }
 
             if (duplicates.Count > 0)
             {
                 var one = duplicates.Count == 1;
                 sentences.Add(
-                    $"{duplicates.Count} more ({ByteSize.Describe(duplicates.Sum(f => f.SizeBytes))}) "
-                    + $"{(one ? "duplicates an entry" : "duplicate entries")} already installed, whose own "
-                    + $"folder holds the copy in use: so {(one ? "it is" : "they are")} the spare.");
+                    $"{duplicates.Count} file{(one ? " is a spare copy" : "s are spare copies")} of installed models "
+                    + $"({ByteSize.Describe(duplicates.Sum(f => f.SizeBytes))}). Uindosill uses the copies in each model's folder.");
             }
 
             return string.Join(" ", sentences);
@@ -1267,20 +1257,16 @@ public sealed partial class ModelsViewModel : ObservableObject
     {
         if (installedBytes == 0)
         {
-            return "Downloaded models live outside the application folder, so they survive an "
-                + "update and a reinstall. There are none here at the moment.";
+            return "Downloaded models are kept separately from the application and survive updates and reinstalls. "
+                + "No models are stored here yet.";
         }
 
-        var here = $"There is {ByteSize.Describe(installedBytes)} in that folder now. ";
+        var here = $"This folder uses {ByteSize.Describe(installedBytes)}. ";
 
         return installedBytes > UninstallPrompt.AskAboveBytes
-            ? "Downloaded models live outside the application folder, so an update and a "
-              + "reinstall never touch them. " + here
-              + "Uninstalling Uindosill asks whether to delete them, and keeps them unless "
-              + "you answer Yes. You can also remove them here."
-            : "Downloaded models live outside the application folder, so they survive an "
-              + "update and a reinstall. " + here
-              + "Remove them here if you want the space back.";
+            ? here + "Models survive updates and reinstalls. Uninstalling asks before deleting them and keeps them unless "
+              + "you answer Yes. You can also remove them here to free space."
+            : here + "Models survive updates and reinstalls. Remove them here to free space.";
     }
 
     /// <summary>Whether there is a sideloaded file selected to delete.</summary>

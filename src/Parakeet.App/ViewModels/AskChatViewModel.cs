@@ -113,7 +113,7 @@ public sealed partial class AskChatViewModel : ObservableObject
         {
             if (_provider is null)
             {
-                return "Asking needs the language-model engine, and this build does not include it.";
+                return "This build does not include the engine needed to answer questions.";
             }
 
             if (_provider.Check() is { IsAvailable: false } unavailable)
@@ -123,12 +123,11 @@ public sealed partial class AskChatViewModel : ObservableObject
 
             if (_recording is null)
             {
-                return "Choose a recording: the Recordings button above opens the queue. "
-                    + "A finished transcript is what questions are asked of.";
+                return "Open Recordings and select a transcribed recording to ask about it.";
             }
 
             return _document is null
-                ? "Transcribe this recording first: a finished transcript is what questions are asked of."
+                ? "Transcribe this recording first, then ask questions about its transcript."
                 : null;
         }
     }
@@ -576,7 +575,7 @@ public sealed partial class AskChatViewModel : ObservableObject
             return;
         }
 
-        entry.Status = "Loading the model: a large one takes a while…";
+        entry.Status = "Loading the answering model…";
         _engineThinking = _provider.ThinkingMode;
         _engineContextTokens = contextTokens;
         _enginePlacement = _provider.ExpertPlacement;
@@ -720,7 +719,7 @@ public sealed partial class ChatEntryViewModel : ObservableObject
     public bool CanCopy => IsDone && Failure is null && _copyText is not null;
 
     /// <summary>What the abstention says. One sentence, no apology, no invention.</summary>
-    public string AbstainedText => "The recording doesn't answer that.";
+    public string AbstainedText => "No answer was found in the transcript passages checked. Try rephrasing your question.";
 
     public void OnProgress(AskProgress progress)
     {

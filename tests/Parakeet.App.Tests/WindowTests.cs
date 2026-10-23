@@ -165,7 +165,7 @@ public class WindowTests
             .Select(t => t.Text)
             .ToList();
 
-        Assert.Contains(lines, line => line is not null && line.Contains("while a batch runs", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line is not null && line.Contains("Batch running", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, line => line is not null && line.Contains("Drop audio", StringComparison.Ordinal));
 
         // The extension list goes with it. A zone that is not taking files has no business
@@ -609,7 +609,7 @@ public class TranscribeViewModelTests
 
         Assert.Single(viewModel.Jobs);
         Assert.Contains("A batch is running", viewModel.StatusMessage, StringComparison.Ordinal);
-        Assert.Contains("while a batch runs", viewModel.DropHint, StringComparison.Ordinal);
+        Assert.Contains("Batch running", viewModel.DropHint, StringComparison.Ordinal);
 
         await batch;
 
@@ -897,8 +897,8 @@ public class TranscribeViewModelTests
         // download it. Being in the wrong folder is a different problem with a different answer.
         Assert.True(file.IsMisplaced);
         Assert.Equal("gemma-4-26b-a4b-it-ud-q4-k-xl", file.ClaimedBy?.Id);
-        Assert.DoesNotContain("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
-        Assert.DoesNotContain("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not use these files", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("Outside the catalogue", main.Models.SideloadedSummary, StringComparison.Ordinal);
         Assert.Contains("Move into place", main.Models.SideloadedSummary, StringComparison.Ordinal);
     }
 
@@ -998,7 +998,7 @@ public class TranscribeViewModelTests
         Assert.Null(file.ClaimedBy);
 
         // Not a .gguf model anybody answers with, so the original sentence is the true one here.
-        Assert.Contains("Nothing uses them", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.Contains("does not use these files", main.Models.SideloadedSummary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1016,7 +1016,7 @@ public class TranscribeViewModelTests
         Assert.True(main.Models.HasSideloaded);
         var file = Assert.Single(main.Models.Sideloaded);
         Assert.Equal("tdt-0.6b-v3-q8_0.gguf", file.Name);
-        Assert.Contains("no entry above accounts for", main.Models.SideloadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Outside the catalogue", main.Models.SideloadedSummary, StringComparison.Ordinal);
 
         // The uninstall notice measures the folder rather than repeating a sentence typed once.
         // Asserted on the measurement itself rather than on the phrase that carried it, since
@@ -1033,9 +1033,9 @@ public class TranscribeViewModelTests
         // uninstaller is silent, so promising a question here would be the same kind of untruth the
         // 2026-08-29 rewrite removed. The wording for a folder large enough to get the question is
         // held by RemoveAllModelsTests, which reaches it without the disk.
-        Assert.Contains("survive an update and a reinstall", main.Models.UninstallNotice, StringComparison.Ordinal);
+        Assert.Contains("survive updates and reinstalls", main.Models.UninstallNotice, StringComparison.Ordinal);
         Assert.Contains("Remove them here", main.Models.UninstallNotice, StringComparison.Ordinal);
-        Assert.DoesNotContain("asks whether to delete", main.Models.UninstallNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("asks before deleting", main.Models.UninstallNotice, StringComparison.Ordinal);
 
         main.Models.SelectedSideloaded = file;
         Assert.True(main.Models.CanRemoveSideloaded);
@@ -1101,7 +1101,7 @@ public class TranscribeViewModelTests
 
         Assert.False(main.Models.IsLoaded);
         Assert.DoesNotContain("press Load before transcribing", main.Models.LoadedSummary, StringComparison.Ordinal);
-        Assert.Contains("Transcribing loads it", main.Models.LoadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Transcription loads a speech model automatically", main.Models.LoadedSummary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1325,8 +1325,8 @@ public class TranscribeViewModelTests
         var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-vm")), () => true), () => new EngineSelection());
 
         Assert.False(viewModel.CanLabelSpeakers);
-        Assert.Contains("not installed", viewModel.SpeakerHint, StringComparison.Ordinal);
-        Assert.Contains("Models tab", viewModel.SpeakerHint, StringComparison.Ordinal);
+        Assert.Contains("Download the speaker model", viewModel.SpeakerHint, StringComparison.Ordinal);
+        Assert.Contains("Models", viewModel.SpeakerHint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1338,8 +1338,8 @@ public class TranscribeViewModelTests
         var viewModel = new TranscribeViewModel(new EngineProvider(new LocalModelStore(TestTemp.NewDirectory("uindosill-vm")), () => false), () => new EngineSelection());
 
         Assert.False(viewModel.CanUseNeuralSpeechDetection);
-        Assert.Contains("not installed", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
-        Assert.Contains("Models tab", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
+        Assert.Contains("Download the speech detection model", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
+        Assert.Contains("Models", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
         Assert.DoesNotContain("Python", viewModel.SpeechDetectionHint, StringComparison.Ordinal);
     }
 
@@ -1366,7 +1366,7 @@ public class TranscribeViewModelTests
         Assert.Null(after.SpeechDetectionHint);
 
         after.UseFixedWindows = true;
-        Assert.Contains("Fixed windows are on", after.SpeechDetectionHint, StringComparison.Ordinal);
+        Assert.Contains("Fixed windows bypass speech detection", after.SpeechDetectionHint, StringComparison.Ordinal);
 
         after.UseFixedWindows = false;
         Assert.Null(after.SpeechDetectionHint);
@@ -1593,7 +1593,7 @@ public class TranscribeViewModelTests
 
         viewModel.SelectedJob = viewModel.Jobs[0];
         Assert.False(viewModel.CanExportFiles);
-        Assert.Contains("at least one format", viewModel.ExportNotice, StringComparison.Ordinal);
+        Assert.Contains("at least one output format", viewModel.ExportNotice, StringComparison.Ordinal);
 
         // The command guards itself too — a live keyboard shortcut is a button of its own.
         await viewModel.ExportFilesCommand.ExecuteAsync(null);
@@ -1696,7 +1696,7 @@ public class ModelsViewModelTests
 
         // It still has to *say* so, in whatever words: silence here would let an unchecked entry
         // look exactly like a checked one.
-        Assert.Contains("cannot check", model.Provenance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Neither the source nor the download checksum can be verified", model.Provenance, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual(
             new ModelsViewModel(new LocalModelStore(directory), ModelCatalog.Default)
                 .Models.First(m => m.ProvenanceIsVerified).Provenance,
@@ -1876,7 +1876,7 @@ public class ModelsViewModelTests
             session: session,
             backend: () => ComputeBackend.Cuda);
 
-        Assert.Contains("Nothing loaded", viewModel.LoadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Transcription loads a speech model automatically", viewModel.LoadedSummary, StringComparison.Ordinal);
         Assert.False(viewModel.CanUnload);
 
         // Loading is offered only for a model that is actually on disk.
@@ -1899,13 +1899,13 @@ public class ModelsViewModelTests
 
         // The backend cannot change after a load, and the note says that rather than the UI
         // offering a control that quietly does nothing.
-        Assert.Contains("fixed for this process", viewModel.BackendNote, StringComparison.Ordinal);
+        Assert.Contains("Restart Uindosill to change the backend", viewModel.BackendNote, StringComparison.Ordinal);
 
         await viewModel.UnloadCommand.ExecuteAsync(null);
 
         Assert.False(viewModel.IsLoaded);
         Assert.False(viewModel.Models[0].IsLoaded);
-        Assert.Contains("Nothing loaded", viewModel.LoadedSummary, StringComparison.Ordinal);
+        Assert.Contains("Transcription loads a speech model automatically", viewModel.LoadedSummary, StringComparison.Ordinal);
     }
 
     [Fact]

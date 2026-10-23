@@ -66,9 +66,7 @@ public sealed class FfmpegSubtitleMuxer : ISubtitleMuxer
             // User copy, for the same reason as BundledTools.DescribeUnavailable: this sentence
             // shipped to end users in v1.0.0-rc.3, where it named a script from a clone they have
             // no reason to own.
-            : "Uindosill cannot add a transcript to a media file: this copy is missing the tool "
-              + "that writes it in. Reinstalling should restore it. Saving transcripts as separate "
-              + "files still works.";
+            : "The subtitle tool is missing. Reinstall Uindosill to restore it, or export separate subtitle files.";
 
     public async Task<string> MuxAsync(
         SubtitleMuxPlan plan,

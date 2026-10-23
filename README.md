@@ -101,16 +101,16 @@ Windows app and CLI cross-build from Linux; native speech recognition is shipped
 The [architecture notes](docs/ARCHITECTURE.md) explain the contracts and tradeoffs, and
 [engine selection](docs/ENGINE-CHOICE.md) records why parakeet.cpp was chosen.
 
-## Validation, with the limits attached
+## Validation and release evidence
 
 > Every claim is either measured or explicitly marked unproven.
 
-| Evidence for 1.0 | What it establishes |
+| Evidence | What it establishes |
 |---|---|
-| [**1905 tests**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Release build with zero warnings or errors; 1896 passed, 9 skipped. The suite runs without model weights or a display. CI also checks that documented counts match TRX results. |
-| [**Linux CI**](https://github.com/jkkma/uindosill/actions/runs/39290354876) | Core isolation, build/tests, Python launch/provider checks, and Windows cross-publishing at the released source commit. |
-| [**Windows bundle checks**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Actual CPU and CUDA-overlay package imports, pyannote Pipeline import, CPU tensor arithmetic, and libmpv DLL/API/create/init checks. These do not exercise GPU inference or video playback. |
-| [**Release verification**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/release-verification.json) | Application asset sizes and hashes, updater feeds, and the exact source commit. Uploaded assets were checked against their local evidence before publication. |
+| **Current source: 1911 tests** | Release build with zero warnings or errors; 1902 passed, 9 skipped. The suite runs without model weights or a display. CI also checks that documented counts match TRX results. |
+| [**Linux CI for v1.0.0**](https://github.com/jkkma/uindosill/actions/runs/39290354876) | Core isolation, build/tests, Python launch/provider checks, and Windows cross-publishing at the released source commit. |
+| [**Windows bundle checks for v1.0.0**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Actual CPU and CUDA-overlay package imports, pyannote Pipeline import, CPU tensor arithmetic, and libmpv DLL/API/create/init checks. These do not exercise GPU inference or video playback. |
+| [**Release verification for v1.0.0**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/release-verification.json) | Application asset sizes and hashes, updater feeds, and the exact source commit. Uploaded assets were checked against their local evidence before publication. |
 
 Automated pipeline tests do not measure transcription or translation accuracy. The separate
 [measurement record](docs/UNPROVEN.md) names the hardware, backend, corpus and caveats for each

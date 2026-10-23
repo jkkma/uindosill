@@ -148,7 +148,7 @@ public sealed class BundledModelsTests : IDisposable
         // A build from source carries no weights until the packaging script has run, and on one the
         // opt-in has to say so rather than fail at Start.
         Assert.False(provider.SupportsNeuralSpeechDetection);
-        Assert.Contains("Models tab", provider.DescribeUnavailable(ModelTask.VoiceActivity), StringComparison.Ordinal);
+        Assert.Contains("Models", provider.DescribeUnavailable(ModelTask.VoiceActivity), StringComparison.Ordinal);
     }
 
     [Fact]
