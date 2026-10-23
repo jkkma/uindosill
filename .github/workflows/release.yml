@@ -283,7 +283,17 @@ jobs:
       # bundling it would be custom code on install and on uninstall. It ships as the zip beside it,
       # which is the artefact CI has produced all along.
       - name: Publish the CLI for the zip beside the installer
-        run: dotnet publish src/Parakeet.Cli --configuration Release -r win-x64 -o packaging/cli-win-x64
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dotnet publish src/Parakeet.Cli --configuration Release -r win-x64 -o packaging/cli-win-x64 "-p:Version=$env:RELEASE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'CLI publish failed.' }
+
+          [string] $reportedVersion = & ./packaging/cli-win-x64/uindosill.exe --version
+          if ($LASTEXITCODE -ne 0 -or $reportedVersion.Trim() -ne $env:RELEASE_VERSION) {
+            throw "Published CLI reports version '$reportedVersion'; expected '$env:RELEASE_VERSION'."
+          }
 
       # The step above ran after the win-cuda channel was vendored, and build/NativeAssets.targets
       # globs native/** unfiltered — so the CLI publish carries the CUDA drop as well, which would
