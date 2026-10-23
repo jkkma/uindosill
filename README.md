@@ -12,7 +12,7 @@
 <p align="center">C# / .NET 10 &nbsp;·&nbsp; Avalonia &nbsp;·&nbsp; Native interop &nbsp;·&nbsp; Python sidecar</p>
 
 <p align="center">
-  <a href="https://github.com/jkkma/uindosill/releases/tag/v1.0.0"><strong>Download 1.0</strong></a>
+  <a href="https://github.com/jkkma/uindosill/releases/latest"><strong>Download</strong></a>
   &nbsp;·&nbsp; <a href="#build-and-try-the-pipeline">Try the pipeline</a>
   &nbsp;·&nbsp; <a href="docs/ARCHITECTURE.md">Architecture</a>
   &nbsp;·&nbsp; <a href="#documentation">Documentation</a>
@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://github.com/jkkma/uindosill/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jkkma/uindosill/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/jkkma/uindosill/releases/tag/v1.0.0"><img alt="Stable release 1.0.0" src="https://img.shields.io/badge/release-1.0.0-665C91"></a>
+  <a href="https://github.com/jkkma/uindosill/releases/latest"><img alt="Latest stable release" src="https://img.shields.io/github/v/release/jkkma/uindosill?color=665C91"></a>
 </p>
 
 ## From a recording to something useful
@@ -41,15 +41,15 @@ Generated answers can omit topics or misstate details. Citations make an answer 
 they do not establish that it is correct. Model quality and its measured limits are recorded in
 [UNPROVEN.md](docs/UNPROVEN.md).
 
-## Try version 1.0
+## Try Uindosill
 
 **Windows x64. Choose the standard installer unless you specifically want NVIDIA CUDA.**
 
 | Download | Choose it for |
 |---|---|
-| [**Standard installer**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/UindosillDesktop-win-Setup.exe) | Desktop app, CPU and Vulkan backends, and bundled Python. Vulkan supports AMD, Intel and NVIDIA GPUs. |
-| [**CUDA installer**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/UindosillDesktop-win-cuda-Setup.exe) | The same app with NVIDIA's CUDA runtime added. |
-| [**Command-line ZIP**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/uindosill-cli-win-x64.zip) | Batch transcription, subtitle exports, diagnostics and measurement commands. Unzip and add it to your PATH. |
+| [**Standard installer**](https://github.com/jkkma/uindosill/releases/latest/download/UindosillDesktop-win-Setup.exe) | Desktop app, CPU and Vulkan backends, and bundled Python. Vulkan supports AMD, Intel and NVIDIA GPUs. |
+| [**CUDA installer**](https://github.com/jkkma/uindosill/releases/latest/download/UindosillDesktop-win-cuda-Setup.exe) | The same app with NVIDIA's CUDA runtime added. |
+| [**Command-line ZIP**](https://github.com/jkkma/uindosill/releases/latest/download/uindosill-cli-win-x64.zip) | Batch transcription, subtitle exports, diagnostics and measurement commands. Unzip and add it to your PATH. |
 
 1. Install the app. **The installers are unsigned**; Windows will show an unknown-publisher warning.
 2. Open **Models** and download a speech-recognition model. Other models are optional;
@@ -64,7 +64,7 @@ Downloaded models live in `%LOCALAPPDATA%\Uindosill`, outside the application fo
 updates and reinstalls. Uninstall cleanup asks before removing them. Stable installations stay
 on stable releases and retain their standard or CUDA update channel.
 
-See the [release guide](https://github.com/jkkma/uindosill/releases/tag/v1.0.0) for the optional
+See the [release guide](https://github.com/jkkma/uindosill/releases/latest) for the optional
 managed CUDA download for speaker labelling, CLI Python setup, and the files used by the updater.
 
 ## Engineering worth exploring
@@ -168,7 +168,7 @@ uindosill translate --backend cpu segments.txt
 ```
 
 The installers include Python. CLI users who need speaker labels or translation should also
-download [`uindosill-python-win-x64.zip`](https://github.com/jkkma/uindosill/releases/download/v1.0.0/uindosill-python-win-x64.zip)
+download [`uindosill-python-win-x64.zip`](https://github.com/jkkma/uindosill/releases/latest/download/uindosill-python-win-x64.zip)
 and unpack it into `%LOCALAPPDATA%\Uindosill`, with `python/` directly inside that directory.
 A source build includes no interpreter by default.
 

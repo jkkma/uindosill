@@ -431,7 +431,7 @@ foreach ($channel in $Channels) {
         if (Test-Path -LiteralPath $publishDir) { Remove-Item -LiteralPath $publishDir -Recurse -Force }
 
         & dotnet publish (Join-Path $repo 'src/Parakeet.App') `
-            --configuration Release -r $Runtime -o $publishDir --nologo
+            --configuration Release -r $Runtime -o $publishDir --nologo "-p:Version=$Version"
         if ($LASTEXITCODE -ne 0) { throw "Publish failed for channel '$channel'." }
     }
 
@@ -450,6 +450,16 @@ foreach ($channel in $Channels) {
     $mainExePath = Join-Path $publishDir $mainExe
     if (-not (Test-Path -LiteralPath $mainExePath)) {
         throw "$publishDir has no $mainExe. Publishing produced something this cannot package."
+    }
+
+    # Check native PE version resources on Windows, where FileVersionInfo can read them.
+    # This also catches a reused publish whose version differs from the requested package.
+    if ($IsWindows) {
+        $productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($mainExePath).ProductVersion
+        $publishedVersion = ($productVersion -split '\+')[0]
+        if ($publishedVersion -ne $Version) {
+            throw "$mainExe reports version '$productVersion', but this package is $Version. Republish with -p:Version=$Version."
+        }
     }
 
     $mainExeBytes = (Get-Item -LiteralPath $mainExePath).Length
