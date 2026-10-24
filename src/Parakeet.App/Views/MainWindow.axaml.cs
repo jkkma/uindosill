@@ -992,13 +992,22 @@ public partial class MainWindow : Window
         }
 
         var paths = new List<string>();
+        var failures = new List<string>();
         foreach (var item in items)
         {
             // A dropped folder is a reasonable thing to do with a transcription app, so it is
             // expanded rather than ignored; the queue filters out what cannot be opened.
             if (item is IStorageFolder folder && folder.TryGetLocalPath() is { } folderPath)
             {
-                paths.AddRange(Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly));
+                try
+                {
+                    paths.AddRange(Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    failures.Add($"Could not open {folder.Name}: {ex.Message}");
+                }
+
                 continue;
             }
 
@@ -1008,7 +1017,17 @@ public partial class MainWindow : Window
             }
         }
 
-        viewModel.Transcribe.AddFiles(paths);
+        if (paths.Count > 0)
+        {
+            viewModel.Transcribe.AddFiles(paths);
+        }
+
+        if (failures.Count > 0)
+        {
+            var added = paths.Count > 0 ? viewModel.Transcribe.StatusMessage : null;
+            viewModel.Transcribe.StatusMessage = string.Join(" ",
+                failures.Prepend(added).Where(message => !string.IsNullOrEmpty(message)));
+        }
     }
 
     /// <summary>

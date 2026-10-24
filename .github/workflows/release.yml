@@ -296,6 +296,33 @@ jobs:
             throw "Published CLI reports version '$reportedVersion'; expected '$env:RELEASE_VERSION'."
           }
 
+          # Exercise the shipped CLI's real WAV pipeline without downloading recognition weights.
+          $smoke = Join-Path $env:RUNNER_TEMP 'uindosill-cli-smoke'
+          New-Item -ItemType Directory -Force -Path $smoke | Out-Null
+          $env:UINDOSILL_CLI_SMOKE_DIR = $smoke
+          $fixture = @'
+          import math, os, struct, wave
+          from pathlib import Path
+          path = Path(os.environ['UINDOSILL_CLI_SMOKE_DIR']) / 'clip.wav'
+          with wave.open(str(path), 'wb') as audio:
+              audio.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+              audio.writeframes(b''.join(struct.pack('<h', int(8000 * math.sin(2 * math.pi * 220 * i / 16000))) for i in range(16000)))
+          '@
+          python -c $fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the CLI smoke WAV.' }
+          $sentinel = Join-Path $smoke 'clip.txt.tmp'
+          'Keep this unrelated temporary file.' | Set-Content -LiteralPath $sentinel -NoNewline
+          & ./packaging/cli-win-x64/uindosill.exe transcribe --fake --no-vad -f txt,json --out $smoke (Join-Path $smoke 'clip.wav')
+          if ($LASTEXITCODE -ne 0) { throw 'Published CLI fake transcription failed.' }
+          $transcript = Get-Content -Raw -LiteralPath (Join-Path $smoke 'clip.json') | ConvertFrom-Json
+          if (@($transcript.segments).Count -eq 0 -or -not (Get-Content -Raw -LiteralPath (Join-Path $smoke 'clip.txt')).Trim()) {
+            throw 'Published CLI fake transcription produced no words.'
+          }
+          if ((Get-Content -Raw -LiteralPath $sentinel) -ne 'Keep this unrelated temporary file.') {
+            throw 'Published CLI changed an unrelated temporary file.'
+          }
+          Write-Host "Published CLI $reportedVersion passed the WAV/JSON/TXT smoke and preserved the temporary-file sentinel."
+
       # The step above ran after the win-cuda channel was vendored, and build/NativeAssets.targets
       # globs native/** unfiltered — so the CLI publish carries the CUDA drop as well, which would
       # take this zip from ~250 MB to over a gigabyte without anything saying so. The CLI ships the
@@ -365,6 +392,28 @@ jobs:
         with:
           name: python-import-smoke-${{ steps.version.outputs.version }}
           path: packaging/python-import-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Run after the import check frees the large publish/native staging trees. The private
+      # installations are sequential and uninstalled, so both flavours fit on the hosted runner.
+      - name: Install, bootstrap and uninstall both built flavours
+        shell: pwsh
+        timeout-minutes: 20
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          pwsh -NoProfile -File scripts/check-installed-release.ps1 -Version $env:RELEASE_VERSION -Commit $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'The actual Windows installer smoke failed.' }
+
+      - name: Retain actual installer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-smoke-${{ steps.version.outputs.version }}
+          path: |
+            packaging/installer-smoke.json
+            packaging/installer-smoke-*.log
           if-no-files-found: ignore
           retention-days: 7
 

@@ -1,6 +1,8 @@
 using System.Reflection;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -16,6 +18,36 @@ namespace Parakeet.App.Tests;
 
 public class RecordingWorkflowTests
 {
+    [AvaloniaFact]
+    public void AFailedFolderDropKeepsTheWindowAndValidSiblingRecordings()
+    {
+        var missing = TestTemp.NewDirectory("uindosill-missing-drop");
+        Directory.Delete(missing);
+        var first = NewFile("direct.wav");
+        var folder = TestTemp.NewDirectory("uindosill-valid-drop");
+        var second = Path.Combine(folder, "inside.wav");
+        File.WriteAllText(second, "UI fixture");
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateFile(PickedFolder(missing)));
+        transfer.Add(DataTransferItem.CreateFile(PickedFile(first)));
+        transfer.Add(DataTransferItem.CreateFile(PickedFolder(folder)));
+        var main = NewMain();
+        var window = new MainWindow { DataContext = main };
+        window.Show();
+        try
+        {
+            var zone = window.FindControl<Border>("DropZone")!;
+            zone.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, transfer, zone, new Point(), KeyModifiers.None));
+            Settle(window);
+
+            Assert.True(window.IsVisible);
+            Assert.Equal(new[] { first, second }, main.Transcribe.Jobs.Select(job => job.Path));
+            Assert.Contains("Added 2 files", main.Transcribe.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("Could not open " + Path.GetFileName(missing), main.Transcribe.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public void BrowseAddsSeveralLocalRecordingsAndUpdatesTheQueue()
     {
@@ -203,6 +235,19 @@ public class RecordingWorkflowTests
     }
 
     private static IStorageFile PickedFile(string path) => PickedFile(new Uri(path));
+
+    private static IStorageFolder PickedFolder(string path)
+    {
+        var folder = DispatchProxy.Create<IStorageFolder, StorageProxy>();
+        ((StorageProxy)folder).Handler = (method, _) => method!.Name switch
+        {
+            "get_Name" => Path.GetFileName(path),
+            "get_Path" => new Uri(path),
+            "Dispose" => null,
+            _ => throw new NotSupportedException(method.Name),
+        };
+        return folder;
+    }
 
     private static IStorageFile PickedFile(Uri path)
     {

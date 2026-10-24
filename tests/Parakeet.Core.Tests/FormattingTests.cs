@@ -735,6 +735,43 @@ public class WordTimedVttFormatterTests
             StripTags(TranscriptFormats.WordTimedVtt.Format(document)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LiteralMarkupAndSpeakerNamesStayTextWithAndWithoutWordTimings(bool hasWords)
+    {
+        const string Speaker = "<host>&amp;";
+        const string Text = "<b>x</b> &amp; -->";
+        var spoken = Spoken(0, Text);
+        var document = new TranscriptDocument
+        {
+            Segments = [spoken with
+            {
+                Speaker = Speaker,
+                Words = hasWords ? spoken.Words.Select(word => word with { Speaker = Speaker }).ToList() : [],
+            }],
+        };
+
+        var plain = TranscriptFormats.Vtt.Format(document);
+        var timed = TranscriptFormats.WordTimedVtt.Format(document);
+        var plainPayload = Assert.Single(ParseCues(plain)).Payload;
+        var timedPayload = Assert.Single(ParseCues(timed)).Payload;
+
+        Assert.Equal("&lt;host&gt;&amp;amp;: &lt;b&gt;x&lt;/b&gt; &amp;amp; --&gt;", plainPayload);
+        Assert.Equal(Speaker + ": " + Text, System.Net.WebUtility.HtmlDecode(StripTags(timedPayload)));
+        Assert.Equal(plain, StripTags(timed));
+        if (hasWords)
+        {
+            Assert.Equal(3, CountOccurrences(timedPayload, "<c>"));
+            Assert.Equal(2, InlineTimestamps(timedPayload).Count);
+            AssertWebVttOrdering(timed);
+        }
+        else
+        {
+            Assert.Equal(plain, timed);
+        }
+    }
+
     [Fact]
     public void ALineBreakCarriesTheTimestampOntoTheNewLineRatherThanStrandingItAtTheEnd()
     {

@@ -350,17 +350,32 @@ public static class TranscriptWriter
     /// </remarks>
     private static async Task WriteAtomicallyAsync(string path, string content, CancellationToken ct)
     {
-        var staging = path + ".tmp";
+        // The directory keeps the final move on one volume. A unique, exclusively created file
+        // also keeps an unrelated output.txt.tmp (or another writer's staging file) intact.
+        var staging = Path.Combine(Path.GetDirectoryName(path) ?? ".", $".uindosill-{Guid.NewGuid():N}.tmp");
+        var ownsStaging = false;
         try
         {
-            await File.WriteAllTextAsync(staging, content, TextOutput.Utf8NoBom, ct).ConfigureAwait(false);
+            await using (var stream = new FileStream(
+                staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous))
+            {
+                ownsStaging = true;
+                await using var writer = new StreamWriter(stream, TextOutput.Utf8NoBom, leaveOpen: true);
+                await writer.WriteAsync(content.AsMemory(), ct).ConfigureAwait(false);
+                await writer.FlushAsync(ct).ConfigureAwait(false);
+            }
+
+            ct.ThrowIfCancellationRequested();
             File.Move(staging, path, overwrite: true);
         }
         catch
         {
             try
             {
-                File.Delete(staging);
+                if (ownsStaging)
+                {
+                    File.Delete(staging);
+                }
             }
             catch (IOException)
             {

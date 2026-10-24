@@ -56,6 +56,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
     private readonly ModelSession? _session;
     private readonly Parakeet.App.Services.Tools.IMediaUrlFetcher _fetcher;
     private readonly Parakeet.App.Services.Tools.ISubtitleMuxer _muxer;
+    private readonly Func<TranscriptDocument, TranscriptionJob, CancellationToken, Task<IReadOnlyList<string>>> _writeTranscript;
     private string? _addToRecordingResult;
     private readonly string _downloadRoot;
     private CancellationTokenSource? _cancellation;
@@ -199,6 +200,19 @@ public sealed partial class TranscribeViewModel : ObservableObject
         if (e.PropertyName == nameof(JobViewModel.TranscriptNotice))
         {
             OnPropertyChanged(nameof(TranscriptNotice));
+        }
+
+        if (e.PropertyName == nameof(JobViewModel.CanExport))
+        {
+            // Resetting this same row starts a different run without changing SelectedJob.
+            _addToRecordingResult = null;
+            _exportResult = null;
+            OnPropertyChanged(nameof(CanAddToRecording));
+            OnPropertyChanged(nameof(AddToRecordingNotice));
+            OnPropertyChanged(nameof(CanExportFiles));
+            OnPropertyChanged(nameof(ExportNotice));
+            AddToRecordingCommand.NotifyCanExecuteChanged();
+            ExportFilesCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -360,7 +374,8 @@ public sealed partial class TranscribeViewModel : ObservableObject
         ModelSession? session = null,
         Parakeet.App.Services.Tools.IMediaUrlFetcher? fetcher = null,
         string? downloadRoot = null,
-        Parakeet.App.Services.Tools.ISubtitleMuxer? muxer = null)
+        Parakeet.App.Services.Tools.ISubtitleMuxer? muxer = null,
+        Func<TranscriptDocument, TranscriptionJob, CancellationToken, Task<IReadOnlyList<string>>>? writeTranscript = null)
     {
         ArgumentNullException.ThrowIfNull(engines);
         ArgumentNullException.ThrowIfNull(selection);
@@ -370,6 +385,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
         _session = session;
         _fetcher = fetcher ?? new Parakeet.App.Services.Tools.YtDlpMediaUrlFetcher();
         _muxer = muxer ?? new Parakeet.App.Services.Tools.FfmpegSubtitleMuxer();
+        _writeTranscript = writeTranscript ?? (static (document, job, ct) => TranscriptWriter.WriteAsync(document, job, ct: ct));
 
         // Under the user's temp directory rather than beside the application: these are working
         // copies of somebody else's media, they can be large, and nothing downstream keeps them.
@@ -874,6 +890,7 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        var source = job.Document;
         _addToRecordingResult = null;
         OnPropertyChanged(nameof(AddToRecordingNotice));
 
@@ -893,16 +910,28 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 .MuxAsync(plan, scratch, null, cancellationToken)
                 .ConfigureAwait(true);
 
-            job.OutputFiles.Add(written);
-            _addToRecordingResult = $"Added the transcript to {Path.GetFileName(written)}.";
+            if (IsCurrentRun(job, source))
+            {
+                job.OutputFiles.Add(written);
+                if (ReferenceEquals(SelectedJob, job))
+                {
+                    _addToRecordingResult = $"Added the transcript to {Path.GetFileName(written)}.";
+                }
+            }
         }
         catch (OperationCanceledException)
         {
-            _addToRecordingResult = null;
+            if (IsCurrentRun(job, source) && ReferenceEquals(SelectedJob, job))
+            {
+                _addToRecordingResult = null;
+            }
         }
         catch (Exception ex) when (ex is Parakeet.App.Services.Tools.SubtitleMuxException or IOException)
         {
-            _addToRecordingResult = ex.Message;
+            if (IsCurrentRun(job, source) && ReferenceEquals(SelectedJob, job))
+            {
+                _addToRecordingResult = ex.Message;
+            }
         }
         finally
         {
@@ -993,6 +1022,12 @@ public sealed partial class TranscribeViewModel : ObservableObject
             return;
         }
 
+        // Keep every version and its names from the same run. The user can start another run or
+        // clear the queue while a slow disk is writing the first file.
+        var source = job.Document;
+        var english = job.NamedTranslation();
+        var tidied = job.NamedTidy();
+
         // The command guards itself as well as its CanExecute, because ExecuteAsync runs from a
         // shortcut or a test whether or not the button is lit.
         var ticked = Formats.Where(f => f.IsSelected).Select(f => f.Id).ToList();
@@ -1019,14 +1054,14 @@ public sealed partial class TranscribeViewModel : ObservableObject
                 skipped.Add("no RTTM, because this transcript has no speaker turns and the file would be empty");
             }
 
-            written.AddRange(await TranscriptWriter.WriteAsync(document, new TranscriptionJob
+            written.AddRange(await _writeTranscript(document, new TranscriptionJob
             {
                 InputPath = job.Path,
                 Formats = spokenFormats,
                 OutputDirectory = outputDirectory,
-            }, ct: cancellationToken).ConfigureAwait(true));
+            }, cancellationToken).ConfigureAwait(true));
 
-            if (job.NamedTranslation() is { } english)
+            if (english is not null)
             {
                 // No second RTTM either: the turns are the spoken document's fact and that file
                 // is already written above.
@@ -1039,48 +1074,64 @@ public sealed partial class TranscribeViewModel : ObservableObject
                     skipped.Add("no word-timed English, because translation does not carry word timings, that file describes the spoken transcript only");
                 }
 
-                written.AddRange(await TranscriptWriter.WriteAsync(english, new TranscriptionJob
+                written.AddRange(await _writeTranscript(english, new TranscriptionJob
                 {
                     InputPath = job.Path,
                     Formats = englishFormats,
                     OutputDirectory = outputDirectory,
                     StemSuffix = TranslatedInfix,
-                }, ct: cancellationToken).ConfigureAwait(true));
+                }, cancellationToken).ConfigureAwait(true));
             }
 
-            if (job.NamedTidy() is { } tidied)
+            if (tidied is not null)
             {
                 // Every format but the turns-only one: the tidied words carry the spoken words'
                 // timings, so the word-timed file is written for it too, and the turns are the
                 // spoken document's fact, written once above.
-                written.AddRange(await TranscriptWriter.WriteAsync(tidied, new TranscriptionJob
+                written.AddRange(await _writeTranscript(tidied, new TranscriptionJob
                 {
                     InputPath = job.Path,
                     Formats = ticked.Where(id => id != TranscriptFormats.Rttm.Id).ToList(),
                     OutputDirectory = outputDirectory,
                     StemSuffix = TranscriptTidy.FileInfix,
-                }, ct: cancellationToken).ConfigureAwait(true));
+                }, cancellationToken).ConfigureAwait(true));
             }
 
-            job.OutputFiles.AddRange(written);
-
-            var where = outputDirectory is null ? "beside the recording" : $"in {outputDirectory}";
-            _exportResult = $"Wrote {written.Count} file{(written.Count == 1 ? string.Empty : "s")} {where}"
-                + (skipped.Count > 0 ? $", {string.Join("; ", skipped)}." : ".");
+            if (IsCurrentRun(job, source))
+            {
+                job.OutputFiles.AddRange(written);
+                if (ReferenceEquals(SelectedJob, job))
+                {
+                    var where = outputDirectory is null ? "beside the recording" : $"in {outputDirectory}";
+                    _exportResult = $"Wrote {written.Count} file{(written.Count == 1 ? string.Empty : "s")} {where}"
+                        + (skipped.Count > 0 ? $", {string.Join("; ", skipped)}." : ".");
+                }
+            }
         }
         catch (OperationCanceledException)
         {
-            _exportResult = null;
+            if (IsCurrentRun(job, source) && ReferenceEquals(SelectedJob, job))
+            {
+                _exportResult = null;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _exportResult = ex.Message;
+            if (IsCurrentRun(job, source) && ReferenceEquals(SelectedJob, job))
+            {
+                _exportResult = ex.Message;
+            }
         }
         finally
         {
             OnPropertyChanged(nameof(ExportNotice));
         }
     }
+
+    // A completed write belongs to the run it started from, even if that row has since been
+    // reset for another transcription. Selection alone cannot distinguish those two runs.
+    private bool IsCurrentRun(JobViewModel job, TranscriptDocument? source) =>
+        Jobs.Contains(job) && ReferenceEquals(job.Document, source);
 
     /// <summary>
     /// The lines the transcript area draws: the English ones when the switcher is on them and the
