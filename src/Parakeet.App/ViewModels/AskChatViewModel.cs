@@ -59,6 +59,9 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// <summary>The rename map the evidence caches above were built under; see AskCore.</summary>
     private IReadOnlyDictionary<string, string>? _windowNames;
     private CancellationTokenSource? _asking;
+    private TaskCompletionSource? _askFinished;
+    private Task? _releaseTask;
+    private bool _isReleasingEngine;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AskCommand))]
@@ -185,7 +188,8 @@ public sealed partial class AskChatViewModel : ObservableObject
         AskCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanAsk => IsPanelEnabled && !IsAsking && !string.IsNullOrWhiteSpace(QuestionText);
+    private bool CanAsk => IsPanelEnabled && !IsAsking && !_isReleasingEngine
+        && !string.IsNullOrWhiteSpace(QuestionText);
 
     [RelayCommand(CanExecute = nameof(CanAsk))]
     private Task Ask() => AskCore(QuestionText!);
@@ -208,10 +212,9 @@ public sealed partial class AskChatViewModel : ObservableObject
             return;
         }
 
-        // Both halves of the residency probe: a batch that is running, and a batch still inside
-        // its model load — IsRunning is only set once the load await returns, so the session's
-        // own busy flag is what covers the minutes a large model spends loading.
-        if (_transcriptionRunning() || _session is { IsBusy: true })
+        // Both entrances to the recogniser: a running batch and a manual Models-tab load. The
+        // session becomes busy before releasing this model, covering the whole handoff and load.
+        if (_isReleasingEngine || _transcriptionRunning() || _session is { IsBusy: true })
         {
             ResidencyNotice = "Wait for the transcription to finish: the transcriber and the "
                 + "ask model cannot be loaded at the same time.";
@@ -223,9 +226,11 @@ public sealed partial class AskChatViewModel : ObservableObject
         OnPropertyChanged(nameof(HasEntries));
         QuestionText = null;
 
-        IsAsking = true;
         using var cancellation = new CancellationTokenSource();
         _asking = cancellation;
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _askFinished = finished;
+        IsAsking = true;
 
         try
         {
@@ -409,7 +414,9 @@ public sealed partial class AskChatViewModel : ObservableObject
         finally
         {
             _asking = null;
+            _askFinished = null;
             IsAsking = false;
+            finished.TrySetResult();
         }
     }
 
@@ -570,6 +577,8 @@ public sealed partial class AskChatViewModel : ObservableObject
                 + "model. Transcribing again reloads it.";
         }
 
+        ct.ThrowIfCancellationRequested();
+
         if (_engine is not null)
         {
             return;
@@ -610,24 +619,54 @@ public sealed partial class AskChatViewModel : ObservableObject
 
     /// <summary>
     /// Lets go of the language model — the child process is killed, which is the one unload that
-    /// cannot leak. Called when a transcription starts mid-chat and when the window closes.
+    /// cannot leak. Waits for an active request's cleanup, including a cold load whose engine is
+    /// not yet published. Called before recogniser loads, at batch start and when the window closes.
     /// </summary>
-    public async Task ReleaseEngineAsync(string? reason = null)
+    public Task ReleaseEngineAsync(string? reason = null)
     {
         // An ask still inside its cold load has no engine yet, but taking it down deserves the
         // same sentence — "Stopped." with no explanation reads as a defect, not a policy.
         var hadModelWork = _engine is not null || _asking is not null;
-        _asking?.Cancel();
-
-        if (_engine is not null)
-        {
-            await _engine.DisposeAsync().ConfigureAwait(true);
-            _engine = null;
-        }
-
         if (reason is not null && hadModelWork)
         {
             ResidencyNotice = reason;
+        }
+
+        // A transcription start and its model load can both request the same eviction. Every
+        // caller must await the actual release, rather than a second DisposeAsync that returns
+        // early while the first one is still unloading the child.
+        if (_releaseTask is { IsCompleted: false } releasing)
+        {
+            return releasing;
+        }
+
+        _releaseTask = ReleaseEngineCoreAsync();
+        return _releaseTask;
+    }
+
+    private async Task ReleaseEngineCoreAsync()
+    {
+        _isReleasingEngine = true;
+        AskCommand.NotifyCanExecuteChanged();
+        try
+        {
+            _asking?.Cancel();
+
+            // A cold load owns its engine locally until publication. Cancelling it alone does
+            // not unload that engine: wait for AskCore's finally, reached after the loader has
+            // disposed its local child, before the recogniser may start allocating its model.
+            await (_askFinished?.Task ?? Task.CompletedTask).ConfigureAwait(true);
+
+            if (_engine is { } engine)
+            {
+                _engine = null;
+                await engine.DisposeAsync().ConfigureAwait(true);
+            }
+        }
+        finally
+        {
+            _isReleasingEngine = false;
+            AskCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -635,6 +674,10 @@ public sealed partial class AskChatViewModel : ObservableObject
     /// mid-chat takes the language model down with a line saying so.</summary>
     public Task OnTranscriptionStartedAsync() =>
         ReleaseEngineAsync("The ask model was unloaded while transcribing: your next question reloads it.");
+
+    /// <summary>Manual loads and batch autoloads both release the ask model before loading.</summary>
+    public Task OnTranscriptionModelLoadingAsync() =>
+        ReleaseEngineAsync("The ask model was unloaded for the transcriber. Your next question reloads it.");
 
     private Task CopyAsync(string text) => CopyToClipboard?.Invoke(text) ?? Task.CompletedTask;
 }
@@ -949,6 +992,16 @@ public sealed partial class ChatEntryViewModel : ObservableObject
         if (bullet.Citations.Any(c => c.Check.ShownToModel == false))
         {
             text.Append(" [the model cited a part it was not shown]");
+        }
+
+        if (bullet.Citations.Any(c => c.Check.Resolves && c.Check.ShownToModel != false && !c.Check.NonEmpty))
+        {
+            text.Append(" [cited part contains no transcript text]");
+        }
+
+        if (bullet.Citations.Any(c => c.Check.Resolves && c.Check.ShownToModel != false && !c.Check.WithinDuration))
+        {
+            text.Append(" [cited part extends past the end of the recording]");
         }
 
         if (AnswerBulletViewModel.QuoteCaveatFor(bullet) is { } quoteCaveat)

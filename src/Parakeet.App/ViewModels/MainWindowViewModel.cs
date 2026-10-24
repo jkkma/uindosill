@@ -185,6 +185,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             answerEngines ?? _llamaAnswerEngines,
             () => Transcribe.IsRunning);
 
+        // Every recogniser load, including Models > Load, waits for the ask's active request and
+        // its child to finish unloading. ModelSession marks itself busy before calling this, so
+        // another question cannot slip into the handoff before the recogniser starts loading.
+        Session.BeforeLoadAsync = Ask.Chat.OnTranscriptionModelLoadingAsync;
+
         // The output folder outlives the run — chosen once, restored at every launch — but only
         // while the directory is really there: the folder people choose is often a removable
         // drive, and a restored path with nothing behind it would aim every export at a location
@@ -224,10 +229,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 Models.IsTranscribing = Transcribe.IsRunning;
 
-                // The symmetric half of the residency rule: a transcription starting mid-chat
-                // takes the language model's child down. Fire-and-forget because this handler
-                // cannot await and the kill is fast; the chat says what happened, and best-effort
-                // is recorded as such in docs/PHASES.md rather than promised as more.
+                // Cancel immediately when a batch starts. The session's before-load hook above
+                // joins this release and waits for its cleanup before allocating the recogniser;
+                // this synchronous notification handler itself cannot await that handoff.
                 if (Transcribe.IsRunning)
                 {
                     _ = Ask.Chat.OnTranscriptionStartedAsync();

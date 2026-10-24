@@ -107,7 +107,7 @@ The [architecture notes](docs/ARCHITECTURE.md) explain the contracts and tradeof
 
 | Evidence | What it establishes |
 |---|---|
-| **Current source: 1911 tests** | Release build with zero warnings or errors; 1902 passed, 9 skipped. The suite runs without model weights or a display. CI also checks that documented counts match TRX results. |
+| **Current source: 1917 tests** | Release build with zero warnings or errors; 1908 passed, 9 skipped. The suite runs without model weights or a display. CI also checks that documented counts match TRX results. |
 | [**Linux CI for v1.0.0**](https://github.com/jkkma/uindosill/actions/runs/39290354876) | Core isolation, build/tests, Python launch/provider checks, and Windows cross-publishing at the released source commit. |
 | [**Windows bundle checks for v1.0.0**](https://github.com/jkkma/uindosill/actions/runs/39290973886) | Actual CPU and CUDA-overlay package imports, pyannote Pipeline import, CPU tensor arithmetic, and libmpv DLL/API/create/init checks. These do not exercise GPU inference or video playback. |
 | [**Release verification for v1.0.0**](https://github.com/jkkma/uindosill/releases/download/v1.0.0/release-verification.json) | Application asset sizes and hashes, updater feeds, and the exact source commit. Uploaded assets were checked against their local evidence before publication. |

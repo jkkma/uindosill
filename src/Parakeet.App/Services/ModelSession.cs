@@ -44,6 +44,12 @@ public sealed class ModelSession : IAsyncDisposable
     /// <summary>Raised after any change to what is loaded, so a view model can mirror it.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>
+    /// Releases other model work before a recogniser load starts. The session is busy while this
+    /// runs, so a new ask cannot begin in the gap between releasing its model and loading this one.
+    /// </summary>
+    public Func<Task>? BeforeLoadAsync { get; set; }
+
     /// <summary>The loaded engine, or null. Callers borrow it and must not dispose it.</summary>
     public ITranscriptionEngine? Engine => _engine;
 
@@ -92,13 +98,20 @@ public sealed class ModelSession : IAsyncDisposable
             return;
         }
 
-        await UnloadAsync().ConfigureAwait(true);
-
         IsBusy = true;
         Raise();
 
         try
         {
+            if (BeforeLoadAsync is { } beforeLoad)
+            {
+                await beforeLoad().ConfigureAwait(true);
+            }
+
+            ct.ThrowIfCancellationRequested();
+            await UnloadAsync().ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
+
             var engine = _engines.Create(selection);
 
             var stopwatch = Stopwatch.StartNew();

@@ -349,9 +349,8 @@ public class AskChatTests
             transcriptionRunning: () => running,
             options: new FakeAnswerOptions { DisposeGate = disposeGate.Task });
 
-        // A first question makes the ask engine resident; the Models tab then loads the
-        // transcriber beside it, which nothing prevents — loading is that tab's job, and the ask
-        // engine holds no lock on it.
+        // Bypass the window's pre-load handoff to exercise this additional cancellation guard:
+        // a standalone session can be handed to a chat without the window wiring its hook.
         await AskAsync(chat, "what about the budget review?");
         await session.LoadAsync(new EngineSelection { Model = ModelCatalog.Default.Recommended });
         Assert.True(session.IsLoaded);
@@ -436,12 +435,10 @@ public class AskChatTests
     }
 
     [Fact]
-    public async Task ALoadOnTheModelsTabBetweenQuestionsIsUnloadedByTheNextAsk()
+    public async Task ADirectSessionLoadWithoutTheWindowsHandoffIsStillUnloadedByTheNextAsk()
     {
-        // R9 says always — and the reuse fast path used to return before the unload, so a
-        // transcriber loaded from the Models tab between questions stayed resident beside the
-        // held engine for the rest of the session (found 2026-08-30). The next ask keeps its
-        // engine and still enforces the rule, saying so.
+        // A standalone session has no window to wire its pre-load handoff. Keep the next-ask
+        // guard as well; the integrated Models button's immediate eviction has its own tests.
         var session = new ModelSession(new FakeEngineProvider());
         var (chat, provider, _) = Chat(session: session);
 
@@ -1145,6 +1142,56 @@ public class AskChatTests
         // as segment count and hash prefix — the source name and ASR model alone cannot say
         // which segmentation, and a re-transcription moves every id while looking fine.
         Assert.Contains("(3 segments, sha256 ", copied, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, "cited part contains no transcript text")]
+    [InlineData(true, "cited part extends past the end of the recording")]
+    public async Task FailedCitationWarningsSurviveCopyOnBothLeadsAndBulletsAlongsideValidCitations(
+        bool pastDuration, string caveat)
+    {
+        // An empty middle English segment is retained by the translation contract. The cover
+        // window still contains S1-S3, so S2 was shown and resolves while citing no speech.
+        var document = new TranscriptDocument
+        {
+            SourceName = "/tmp/translated.wav", TranslatedTo = "en",
+            TranslationModelId = "translator", AudioDuration = TimeSpan.FromSeconds(pastDuration ? 15 : 30),
+            Segments =
+            [
+                new() { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(10), Text = "The budget was approved." },
+                new() { Start = TimeSpan.FromSeconds(10), End = TimeSpan.FromSeconds(20), Text = pastDuration ? "Another claim." : string.Empty },
+                new() { Start = TimeSpan.FromSeconds(20), End = TimeSpan.FromSeconds(30), Text = "They agreed to meet again." },
+            ],
+        };
+        var shown = TranscriptWindowBuilder.Build(document, TranscriptWindowOptions.Cover);
+        Assert.Equal("S1-S3", Assert.Single(shown).CitationId);
+        var answer = AnswerParser.Parse(
+            "An opening claim [S1, S2]\n- Detail: A supporting claim [S1, S2]", allowLead: true);
+        var validation = CitationValidator.Validate(answer, document, shownEvidence: shown);
+        var failed = validation.Bullets[0].Citations[1];
+        Assert.True(failed.Check.Resolves);
+        Assert.True(failed.Check.ShownToModel);
+        Assert.Null(failed.Check.QuoteMatches);
+        Assert.Equal(pastDuration, failed.Check.NonEmpty);
+        Assert.Equal(!pastDuration, failed.Check.WithinDuration);
+        string? copied = null;
+        var entry = new ChatEntryViewModel("question", text =>
+        {
+            copied = text;
+            return Task.CompletedTask;
+        });
+        entry.Complete(answer, validation, shown, document, _ => { });
+
+        await entry.CopyCommand.ExecuteAsync(null);
+
+        Assert.NotNull(copied);
+        foreach (var claim in new[] { "An opening claim", "A supporting claim" })
+        {
+            var line = Assert.Single(copied.Split('\n'), line => line.Contains(claim, StringComparison.Ordinal));
+            Assert.Contains("[" + caveat + "]", line, StringComparison.Ordinal);
+            Assert.Contains("00:00–00:10", line, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain(pastDuration ? "contains no transcript text" : "extends past the end", copied, StringComparison.Ordinal);
     }
 
     [Fact]
