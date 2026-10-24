@@ -237,6 +237,12 @@ public interface IEngineProvider
     ISpeechDetector? CreateSpeechDetector();
 
     /// <summary>
+    /// Whether this process has already bound its native backend, even if the model failed to
+    /// load afterwards. Providers without a process-wide native binding keep the default answer.
+    /// </summary>
+    bool IsBackendFixed => false;
+
+    /// <summary>
     /// Frees whatever the engine technology keeps alive for the whole process, once every engine
     /// it created has been disposed. For parakeet.cpp that is the process-global compute backend,
     /// which on CUDA must be released while the driver is still up or the process aborts on exit
@@ -249,6 +255,8 @@ public sealed class EngineProvider : IEngineProvider
 {
     private readonly IModelStore _store;
     private readonly Lazy<(bool Found, string? Reason)> _python;
+
+    public bool IsBackendFixed => ParakeetNativeLibrary.LoadedPath is not null;
 
     /// <summary>
     /// <paramref name="hasBundledPython"/> answers "is there an interpreter to run the engines in",

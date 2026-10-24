@@ -25,10 +25,8 @@ namespace Parakeet.Core.Formatting;
 /// styled at all.
 /// </para>
 /// <para>
-/// Nothing here escapes <c>&amp;</c> or <c>&lt;</c>, because <see cref="VttFormatter"/> does not
-/// either and these two outputs have to stay comparable. A transcript word containing either
-/// character would already corrupt the plain <c>vtt</c> file; it is a property of that formatter,
-/// not something introduced here.
+/// Cue text and speaker names use the plain formatter's escaping, so literal markup stays text
+/// in both outputs. Only the generated class spans and timestamps are emitted as tags.
 /// </para>
 /// </remarks>
 public sealed class WordTimedVttFormatter : ITranscriptFormatter
@@ -72,7 +70,7 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
             // VttFormatter puts it — so stripping every tag from this output still reproduces the
             // plain vtt byte for byte. Bare text matches neither :past nor :future, which is right:
             // a name is not spoken, so it never lights up.
-            var prefix = options.Subtitles.SpeakerPrefix(cue.Speaker);
+            var prefix = VttFormatter.EscapeText(options.Subtitles.SpeakerPrefix(cue.Speaker));
 
             if (cue.LineWords.Count == 0)
             {
@@ -88,10 +86,10 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
                         builder.Append(prefix);
                     }
 
-                    // A cue payload line may not start with "-->" and a blank line ends the cue.
+                    // As in the plain formatter, keep markup literal and do not end the cue early.
                     var text = cue.Lines[line];
                     var blank = text.Length == 0 && (line > 0 || prefix.Length == 0);
-                    builder.Append(blank ? " " : text).Append(options.NewLine);
+                    builder.Append(blank ? " " : VttFormatter.EscapeText(text)).Append(options.NewLine);
                 }
             }
             else
@@ -156,7 +154,7 @@ public sealed class WordTimedVttFormatter : ITranscriptFormatter
                     }
                 }
 
-                builder.Append("<c>").Append(words[i].Text.Trim()).Append("</c>");
+                builder.Append("<c>").Append(VttFormatter.EscapeText(words[i].Text.Trim())).Append("</c>");
                 isFirstWord = false;
             }
         }

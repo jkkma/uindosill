@@ -339,6 +339,48 @@ public class TranscriptWriterTests
     }
 
     [Fact]
+    public async Task AnUnrelatedFileAtTheOldStagingNameSurvivesASuccessfulWrite()
+    {
+        using var temp = new TempDirectory();
+        var unrelated = Path.Combine(temp.Path, "input.txt.tmp");
+        await File.WriteAllTextAsync(unrelated, "An unrelated editor's temporary file.");
+        var job = new TranscriptionJob { InputPath = Path.Combine(temp.Path, "input.wav") };
+        var document = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hello" }],
+        };
+
+        var written = await TranscriptWriter.WriteAsync(document, job);
+
+        Assert.Equal("[00:00:00] hello\n", await File.ReadAllTextAsync(Assert.Single(written)));
+        Assert.Equal("An unrelated editor's temporary file.", await File.ReadAllTextAsync(unrelated));
+        Assert.Equal(unrelated, Assert.Single(Directory.GetFiles(temp.Path, "*.tmp")));
+    }
+
+    [Fact]
+    public async Task AFailedFinalMoveCleansUpOnlyTheWritersOwnStagingFile()
+    {
+        using var temp = new TempDirectory();
+        // A directory at the final filename makes the move fail after the staging write finishes.
+        Directory.CreateDirectory(Path.Combine(temp.Path, "input.txt"));
+        var unrelated = Path.Combine(temp.Path, "input.txt.tmp");
+        await File.WriteAllTextAsync(unrelated, "Keep this even when the transcript cannot be saved.");
+        var job = new TranscriptionJob { InputPath = Path.Combine(temp.Path, "input.wav") };
+        var document = new TranscriptDocument
+        {
+            Segments = [new TranscriptSegment { Start = TimeSpan.Zero, End = TimeSpan.FromSeconds(1), Text = "hello" }],
+        };
+
+        var exception = await Record.ExceptionAsync(() => TranscriptWriter.WriteAsync(document, job));
+
+        Assert.True(exception is IOException or UnauthorizedAccessException,
+            $"Expected the move onto a directory to fail, got {exception?.GetType().Name ?? "no exception"}.");
+
+        Assert.Equal("Keep this even when the transcript cannot be saved.", await File.ReadAllTextAsync(unrelated));
+        Assert.Equal(unrelated, Assert.Single(Directory.GetFiles(temp.Path, "*.tmp")));
+    }
+
+    [Fact]
     public void TwoInputsThatWouldWriteOneFileAreFoundBeforeAnythingIsWritten()
     {
         // The same name in two folders under one output directory, and a.wav beside a.mp3 with no

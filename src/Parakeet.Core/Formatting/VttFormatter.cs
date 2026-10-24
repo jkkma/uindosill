@@ -34,8 +34,8 @@ public sealed class VttFormatter : ITranscriptFormatter
 
             // The speaker, once, in front of the first line, as plain text: WebVTT's <v> voice span
             // was considered and not used — see SubtitleOptions.SpeakerPrefixFormat. Empty when the
-            // document carries no speakers, so an unlabelled transcript is byte-identical to before.
-            var prefix = options.Subtitles.SpeakerPrefix(cue.Speaker);
+            // document carries no speakers.
+            var prefix = EscapeText(options.Subtitles.SpeakerPrefix(cue.Speaker));
             for (var line = 0; line < cue.Lines.Count; line++)
             {
                 if (line == 0)
@@ -43,10 +43,10 @@ public sealed class VttFormatter : ITranscriptFormatter
                     builder.Append(prefix);
                 }
 
-                // A cue payload line may not start with "-->" and a blank line ends the cue.
+                // Escaping keeps literal markup and arrows in the text; a blank line ends the cue.
                 var text = cue.Lines[line];
                 var blank = text.Length == 0 && (line > 0 || prefix.Length == 0);
-                builder.Append(blank ? " " : text).Append(options.NewLine);
+                builder.Append(blank ? " " : EscapeText(text)).Append(options.NewLine);
             }
 
             builder.Append(options.NewLine);
@@ -54,6 +54,12 @@ public sealed class VttFormatter : ITranscriptFormatter
 
         return builder.ToString();
     }
+
+    /// <summary>Literal cue text, shared with word-timed output; generated tags bypass this.</summary>
+    internal static string EscapeText(string text) =>
+        text.Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
 
     /// <summary>
     /// <c>WEBVTT</c>, and a <c>NOTE</c> saying so when the cues are a translation rather than what

@@ -603,7 +603,7 @@ public sealed partial class ModelsViewModel : ObservableObject
     /// than offering a control that silently does nothing.
     /// </summary>
     public string BackendNote => _session?.IsBackendFixed == true
-        ? "Restart Uindosill to change the backend after a model has loaded."
+        ? "Restart Uindosill to change the backend after the native library has initialized."
         : "Choose a backend before loading a model. Changing it afterwards requires a restart.";
 
     public bool CanLoad =>

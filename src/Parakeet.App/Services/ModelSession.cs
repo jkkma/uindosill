@@ -39,6 +39,7 @@ public sealed class ModelSession : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(engines);
         _engines = engines;
+        IsBackendFixed = engines.IsBackendFixed;
     }
 
     /// <summary>Raised after any change to what is loaded, so a view model can mirror it.</summary>
@@ -73,9 +74,9 @@ public sealed class ModelSession : IAsyncDisposable
     public bool IsBusy { get; private set; }
 
     /// <summary>
-    /// True once any model has been loaded in this process. After that the native backend cannot
-    /// change, so offering a different one would be offering something that silently does not
-    /// happen.
+    /// True once the native library has bound its backend, including a load that subsequently
+    /// failed or was cancelled. Successful loads from injected engines retain the same restart
+    /// guidance without consulting another provider's process-wide native state.
     /// </summary>
     public bool IsBackendFixed { get; private set; }
 
@@ -138,6 +139,10 @@ public sealed class ModelSession : IAsyncDisposable
         }
         finally
         {
+            // Loading the native library precedes loading and warming up a model. Either later
+            // step can fail or be cancelled after the backend has become fixed for this process.
+            // Ask the provider: a failure before binding must still leave the choice available.
+            IsBackendFixed |= _engines.IsBackendFixed;
             IsBusy = false;
             Raise();
         }
