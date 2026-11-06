@@ -8796,7 +8796,8 @@ pins, failed experiments and regeneration notes remain in the laptop's
 
 The GitHub repository had the candidate tags but none of their release assets,
 so the former `v1.0.0-rc.10` CUDA download returned 404. The separate `CUDA download` workflow
-rebuilt it from commit `4b5c6013c080b73556809e961d36911df3b0b328` into an isolated output directory
+rebuilt it from commit `4b5c6013c080b73556809e961d36911df3b0b328` (`f43dd5a` after the history
+rewrite, same tree) into an isolated output directory
 and uploaded the parts to the `v1.0.0` draft. Its verification report is dated
 `2026-10-19T15:46:11.0244964Z`.
 
@@ -8830,7 +8831,8 @@ was installed into the host system. The runtime's own notice and full Apache-2.0
 
 The fresh-process Windows probe passed in
 [release run 39287265978](https://github.com/jkkma/uindosill/actions/runs/39287265978),
-from commit `7c2e8362d29aa01e9df836d3029b4f01b25d0d55`. It uses the same absolute-path
+from commit `7c2e8362d29aa01e9df836d3029b4f01b25d0d55` (`8211d95` after the history rewrite, same
+tree). It uses the same absolute-path
 `NativeLibrary.TryLoad` overload as the product. Both DLL hashes matched their pins, the actual
 loaded Vulkan module was the shipped sibling, client API was 2.6, all 16 unique product exports
 resolved, and the base product options plus player creation/initialization succeeded. The workflow's
@@ -8860,3 +8862,15 @@ torchcodec was previously recorded as `0.16.0+cpu`. The current table header now
 This is wheel metadata and notice evidence. The real CPU/CUDA import smoke and final release
 asset/hash checks did not run after the notice guard failed; their success remains unproven
 until a later workflow completes them.
+
+**Completed by the publishing runs, read back from their logs on 2026-11-05.** The same workflow
+then ran to the end for v1.0.0 (run 39290973886), v1.0.1 (39900913793) and v1.0.2 (40127380724).
+Each log prints `PASS real CPU/CUDA package roots, torch/torchaudio/pyannote imports and CPU
+arithmetic`, followed by `Checked 8 assets and both update feeds` for v1.0.0 and `Checked 10 assets`
+for each patch. The two extra assets are each patch's delta packages. The v1.0.2 run is also the
+first to install the built installers on the runner. Its log says `win` and `win-cuda` each
+"installed, matched its package, bootstrapped, and uninstalled; user data preserved."
+
+The arithmetic runs on the runner's CPU. For the CUDA overlay this is import evidence, not CUDA
+execution. None of it exercises recognition, diarisation, translation, playback or an update between
+stable releases.

@@ -247,12 +247,14 @@ and review the notes before requesting a memory update on the other machine. Do 
 Codex's generated memory files. Earlier exports remain in their existing remote folders.
 None of these notes belongs in this public repository.
 
-**Research lives on the Drive, not in this repository — until v1.0 ships, at which point it all
-comes back.** The maintainer's standing convention, named 2026-08-16 when the diarisation study
-moved out (the v2 research always lived there), with an end date set 2026-08-18: **on the v1.0
-release, every research folder and run report moves from the Drive into this repository.** Until
-then the rule below is unchanged and a research product still goes to the Drive. Do not start that
-migration early, and do not treat the convention as permanent when writing about it.
+**Research lives on the Drive, not in this repository, until the post-v1.0 migration brings it
+back.** This is the maintainer's standing convention. It was named 2026-08-16, when the diarisation
+study moved out (the v2 research always lived there), and given an end date on 2026-08-18: **on the
+v1.0 release, every research folder and run report moves from the Drive into this repository.**
+v1.0.0 shipped 2026-10-19 without the migration. The Drive could not be read that day, and the
+maintainer deferred the migration rather than the release (`docs/PHASES.md`, *Deferred for v1.0*).
+The migration is still owed. Until it is done, the rule below is unchanged and a research product
+still goes to the Drive. Do not treat the convention as permanent when writing about it.
 
 A research workflow's product — the study, the survey, the report — goes to a dated
 folder inside the Drive `uindosill` folder, beside the v2 research and the runs folders. What

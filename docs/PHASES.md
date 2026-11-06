@@ -140,11 +140,16 @@ why a **Run again** button now carries the other intention. Changing the formats
 speaker opt-in on and wanting the same files back is a real thing to want, and it is a press of its
 own rather than a guess made from a press of Start.
 
-## Phase 5 — ship — **STARTED**
+## Phase 5 — ship — **SHIPPED 2026-10-19, UNSIGNED**
 
 Velopack, signing every PE, SmartScreen reputation, auto-update.
 
-**Status: the installer exists.** Built 2026-08-19 and exercised end to end on the RTX 5080
+**Status: v1.0.0 shipped on 2026-10-19, and v1.0.2 is the current release.** Velopack and the
+auto-update are in every stable release. Signing and SmartScreen reputation are not, by the decision
+recorded below. *Shipped 2026-10-19* at the end of this file records what each release run checked
+and what it did not.
+
+**The installer came first.** Built 2026-08-19 and exercised end to end on the RTX 5080
 desktop — installed, updated one version to the next, and uninstalled, with the 4.295 GiB of
 downloaded weights on that machine hashed before and after every step and identical each time. The
 section *Built 2026-08-19* below says what exists; `docs/UNPROVEN.md` says what that run does and
@@ -8139,3 +8144,60 @@ scope, final-frame cancellation, lead quote warnings, and prompt/token-budget co
 passed on the CPU with the installed Gemma E4B checkpoint. The Gemma 4 12B comparison and its
 remaining quality and latency limits are recorded in `docs/UNPROVEN.md`; evidence stays under
 `runs/gemma4-youtube-20260912/` and its laptop run-report folder.
+
+### Shipped 2026-10-19 — v1.0.0, then 1.0.1 and 1.0.2
+
+Recorded 2026-11-05 from the release runs' own logs.
+
+**v1.0.0 is the first release not marked prerelease.** It was published on 2026-10-19 by release run
+39290973886, after the `v1.0.0-rc.*` series that ended at rc.19. Four earlier dispatches that day
+each stopped at a guard:
+
+| Run | Stopped at | Why | Resolved by |
+|---|---|---|---|
+| 39283208186 | parsing the scripts and checking the Drive route | the isolated Drive-route check failed inside the release preflight | *Isolate Drive fixture checker exit status in release preflight* |
+| 39284362593 | building both installer channels | the player's pinned daily build returned 404 | *Refresh the player pin and bundle its required Vulkan loader*, recorded in `docs/UNPROVEN.md` |
+| 39287265978 | the bundled Python's notice check | `NOTICE.md` did not describe the bundle the run built | *Reconcile stable Python notices with the measured Windows bundle* |
+| 39290353680 | build and test | `CancellingRuntimePreparationAllowsALaterStart` timed out at its 10-second wait | nothing: the next dispatch on the same tree passed |
+
+The last row is a flake that was observed, not a defect that was fixed. The test has not changed
+since. Its 10-second bound on a hosted runner is the likely cause, but that has not been proven.
+
+**v1.0.1, 2026-10-23**, carries the desktop interface refresh. It also checks published binaries
+against the release version and points the README's downloads at the latest stable release. Its
+tag run 39897557980 stopped at the feed check: `releases.win.json` still listed
+`UindosillDesktop-1.0.0-full.nupkg`, and the check refuses any package that is not current in its
+channel. *Keep release update feeds scoped to published packages* fixed the feeds, and run
+39900913793 published.
+
+**v1.0.2, 2026-10-24**, serialises the local model handoffs and keeps citation warnings on copied
+answers. It also ties export feedback to the run that produced it and explains when a backend change
+needs a restart. It survives dropped folders that vanish, leaves unrelated temporary files alone and
+escapes the WebVTT exports correctly. The same commit added `scripts/check-installed-release.ps1` to
+the release workflow. Run 40127380724, dispatched by hand, published it. The tag's own push run
+started two seconds after publication and was cancelled during build and test.
+
+What each publishing run printed:
+
+| Release | Run | Suite | Python import check | Assets and update feeds | Installed on the runner |
+|---|---|---|---|---|---|
+| v1.0.0 | 39290973886 | 0 failed, 9 skipped | PASS | 8 assets, both feeds | not run; the check did not exist yet |
+| v1.0.1 | 39900913793 | 0 failed, 9 skipped | PASS | 10 assets, both feeds | not run |
+| v1.0.2 | 40127380724 | 0 failed, 9 skipped | PASS | 10 assets, both feeds | `win` and `win-cuda` each installed, matched its package, bootstrapped and uninstalled, with user data preserved |
+
+The two extra assets after v1.0.0 are each patch's delta packages. The first release has none.
+The import check is the one `docs/UNPROVEN.md` left open on 2026-10-19 and is closed there. Its
+arithmetic runs on the runner's CPU. **None of these runs exercises:**
+
+- recognition, diarisation or translation on real audio
+- GPU inference
+- playback
+- an update from one stable release to the next
+
+No document here records any of those for the stable builds. Every PE is still unsigned.
+
+**Commit IDs.** The runs record commit IDs from before this repository's history was rewritten,
+which happened between 2026-10-24 and 2026-11-03. Compared on 2026-11-05, each publishing run's
+commit has the same tree as its tag here, so each release was built from exactly the tagged files.
+Commit IDs quoted elsewhere in these documents from before the rewrite no longer resolve. Match them
+by commit subject.
